@@ -504,8 +504,14 @@
 - [x] Add translation keys (ar/en)
 - [x] Write unit tests for ancillary services (10 tests)
 - [x] All 60 tests passing successfully
-- [ ] Integrate AncillarySelection with booking flow
-- [ ] Update payment calculation to include ancillaries
+- [x] Integrate AncillarySelection component into booking page
+- [x] Update booking service to save selected ancillaries
+- [x] Update payment calculation to include ancillaries total
+- [x] Display ancillaries in booking summary
+- [x] Write integration tests for booking with ancillaries (3 tests)
+- [x] All 63 tests passing successfully
+- [ ] Show ancillaries in My Bookings page
+- [ ] Add ability to add/remove ancillaries after booking
 - [ ] Design fare_classes table (economy, business, first with sub-classes)
 - [ ] Implement fare rules engine (restrictions, change fees, cancellation fees)
 

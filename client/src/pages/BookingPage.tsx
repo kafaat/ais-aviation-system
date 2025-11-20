@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Plus, Trash2, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
+import AncillarySelection, { type SelectedAncillary } from "@/components/AncillarySelection";
 
 type Passenger = {
   type: "adult" | "child" | "infant";
@@ -35,6 +36,8 @@ export default function BookingPage() {
   const [passengers, setPassengers] = useState<Passenger[]>([
     { type: "adult", firstName: "", lastName: "" }
   ]);
+  const [selectedAncillaries, setSelectedAncillaries] = useState<SelectedAncillary[]>([]);
+  const [ancillariesTotalCost, setAncillariesTotalCost] = useState(0);
 
   const { data: flight, isLoading } = trpc.flights.getById.useQuery({ id: flightId });
   const createBooking = trpc.bookings.create.useMutation();
@@ -79,6 +82,7 @@ export default function BookingPage() {
         cabinClass,
         passengers,
         sessionId,
+        ancillaries: selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
       });
 
       // Process payment
@@ -121,7 +125,13 @@ export default function BookingPage() {
   }
 
   const price = cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
-  const totalAmount = (price * passengers.length) / 100;
+  const baseAmount = (price * passengers.length) / 100;
+  const totalAmount = baseAmount + (ancillariesTotalCost / 100);
+
+  const handleAncillariesChange = (ancillaries: SelectedAncillary[], totalCost: number) => {
+    setSelectedAncillaries(ancillaries);
+    setAncillariesTotalCost(totalCost);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -243,6 +253,13 @@ export default function BookingPage() {
                 ))}
               </div>
             </Card>
+
+            {/* Ancillary Services */}
+            <AncillarySelection
+              cabinClass={cabinClass}
+              numberOfPassengers={passengers.length}
+              onSelectionChange={handleAncillariesChange}
+            />
           </div>
 
           {/* Booking Summary */}
@@ -284,6 +301,17 @@ export default function BookingPage() {
                     <span className="text-sm">عدد الركاب</span>
                     <span>× {passengers.length}</span>
                   </div>
+                  {ancillariesTotalCost > 0 && (
+                    <>
+                      <div className="flex justify-between items-center mb-2 pt-2 border-t">
+                        <span className="text-sm">الخدمات الإضافية</span>
+                        <span>{(ancillariesTotalCost / 100).toFixed(2)} ر.س</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mb-2">
+                        {selectedAncillaries.length} خدمة مختارة
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between items-center text-lg font-bold mt-4 pt-4 border-t">
                     <span>المجموع</span>
                     <span className="text-primary">{totalAmount.toFixed(2)} ر.س</span>

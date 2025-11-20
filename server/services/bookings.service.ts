@@ -18,6 +18,14 @@ export interface Passenger {
   nationality?: string;
 }
 
+export interface SelectedAncillary {
+  ancillaryServiceId: number;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  passengerId?: number;
+}
+
 export interface CreateBookingInput {
   userId: number;
   flightId: number;
@@ -25,6 +33,7 @@ export interface CreateBookingInput {
   passengers: Passenger[];
   sessionId: string; // For inventory locking
   lockId?: number; // If lock already exists
+  ancillaries?: SelectedAncillary[];
 }
 
 /**
@@ -97,6 +106,19 @@ export async function createBooking(input: CreateBookingInput) {
     }));
     
     await db.createPassengers(passengersData);
+    
+    // Add ancillary services if provided
+    if (input.ancillaries && input.ancillaries.length > 0) {
+      const { addAncillaryToBooking } = await import("./ancillary-services.service");
+      for (const ancillary of input.ancillaries) {
+        await addAncillaryToBooking({
+          bookingId,
+          ancillaryServiceId: ancillary.ancillaryServiceId,
+          quantity: ancillary.quantity,
+          passengerId: ancillary.passengerId,
+        });
+      }
+    }
     
     return {
       bookingId,

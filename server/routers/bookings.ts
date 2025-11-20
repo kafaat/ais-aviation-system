@@ -29,6 +29,15 @@ export const bookingsRouter = router({
         ),
         sessionId: z.string(),
         lockId: z.number().optional(),
+        ancillaries: z.array(
+          z.object({
+            ancillaryServiceId: z.number(),
+            quantity: z.number(),
+            unitPrice: z.number(),
+            totalPrice: z.number(),
+            passengerId: z.number().optional(),
+          })
+        ).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -39,6 +48,7 @@ export const bookingsRouter = router({
         passengers: input.passengers,
         sessionId: input.sessionId,
         lockId: input.lockId,
+        ancillaries: input.ancillaries,
       });
     }),
 
