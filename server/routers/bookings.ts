@@ -27,6 +27,8 @@ export const bookingsRouter = router({
             nationality: z.string().optional(),
           })
         ),
+        sessionId: z.string(),
+        lockId: z.number().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -35,6 +37,8 @@ export const bookingsRouter = router({
         flightId: input.flightId,
         cabinClass: input.cabinClass,
         passengers: input.passengers,
+        sessionId: input.sessionId,
+        lockId: input.lockId,
       });
     }),
 

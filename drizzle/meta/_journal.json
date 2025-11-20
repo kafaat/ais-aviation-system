@@ -50,6 +50,20 @@
       "when": 1763637784622,
       "tag": "0006_cultured_christian_walker",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1763638188587,
+      "tag": "0007_strange_nextwave",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1763638533804,
+      "tag": "0008_loving_nico_minoru",
+      "breakpoints": true
     }
   ]
 }

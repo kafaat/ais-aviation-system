@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import { checkFlightAvailability, calculateFlightPrice } from "./flights.service";
+import { createInventoryLock, releaseInventoryLock, convertLockToBooking, verifyLock } from "./inventory-lock.service";
 
 /**
  * Bookings Service
@@ -22,6 +23,8 @@ export interface CreateBookingInput {
   flightId: number;
   cabinClass: "economy" | "business";
   passengers: Passenger[];
+  sessionId: string; // For inventory locking
+  lockId?: number; // If lock already exists
 }
 
 /**

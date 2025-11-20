@@ -70,11 +70,15 @@ export default function BookingPage() {
     }
 
     try {
+      // Generate session ID for inventory locking
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+      
       // Create booking
       const booking = await createBooking.mutateAsync({
         flightId,
         cabinClass,
         passengers,
+        sessionId,
       });
 
       // Process payment

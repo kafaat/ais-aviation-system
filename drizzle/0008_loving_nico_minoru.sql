@@ -1,0 +1,1 @@
+ALTER TABLE `passengers` ADD `ticketNumber` varchar(13);

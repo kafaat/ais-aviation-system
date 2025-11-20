@@ -61,6 +61,7 @@ describe("Booking APIs", () => {
           lastName: "Doe",
         },
       ],
+      sessionId: `test_session_${Date.now()}`,
     });
 
     expect(booking).toBeDefined();

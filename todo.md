@@ -276,3 +276,80 @@
 - [x] Test loyalty program features (8 tests passing)
 - [x] All 45 tests passing successfully
 - [ ] Create loyalty dashboard UI (pending)
+
+## Critical Gaps - المرحلة 1: الأساسيات الحرجة (Top 3 Priority)
+
+### Inventory Management & Real-time Updates
+- [x] Create inventory_locks table for temporary seat holds
+- [x] Implement seat locking service (inventory-lock.service.ts)
+- [x] Integrate inventory locking with booking flow
+- [x] Add sessionId to booking creation
+- [x] Support lock creation and verification
+- [x] Automatic expired locks cleanup
+- [x] Race condition prevention with active locks check
+
+### E-Ticketing & Documentation
+- [x] Generate IATA-standard ticket numbers (13 digits)
+- [x] Create e-ticket PDF generation service (eticket.service.ts)
+- [x] Design e-ticket PDF template with QR code
+- [x] Generate boarding pass PDF
+- [x] Add ticketNumber field to passengers table
+- [x] Create eticket router with generateETicket and generateBoardingPass endpoints
+- [x] Return PDF as base64 for download
+- [ ] Add ticket validation system (future)
+- [ ] Create ticket/boarding pass email delivery (future)
+
+### Dynamic Pricing & Fare Management
+- [ ] Design fare_rules table (restrictions, penalties, etc)
+- [ ] Create dynamic pricing engine
+- [ ] Implement demand-based pricing algorithm
+- [ ] Add seasonal pricing support
+- [ ] Create fare class management system
+- [ ] Implement revenue management (yield management)
+
+### Multi-Language & Multi-Currency
+- [ ] Add i18n support (react-i18next)
+- [ ] Create translation files (AR, EN)
+- [ ] Implement language switcher in UI
+- [ ] Add multi-currency support in schema
+- [ ] Integrate currency conversion API
+- [ ] Update all prices to support multiple currencies
+- [ ] Add timezone handling for international flights
+
+### Analytics Dashboard
+- [ ] Create comprehensive admin analytics dashboard
+- [ ] Add revenue reports with charts
+- [ ] Implement load factor analysis
+- [ ] Add customer behavior analytics
+- [ ] Create export to Excel/PDF functionality
+- [ ] Add predictive analytics (ML-based forecasting)
+
+## Important Gaps - المرحلة 2: ميزات مهمة
+
+### Passenger Services (PSS)
+- [ ] Add special services requests (meals, wheelchair, etc)
+- [ ] Create special_services table
+- [ ] Implement group bookings system
+- [ ] Add frequent flyer integration with PSS
+- [ ] Create passenger profile management
+
+### Departure Control System (DCS)
+- [ ] Implement baggage handling system
+- [ ] Create baggage tracking table
+- [ ] Add weight & balance calculation
+- [ ] Implement gate assignment system
+- [ ] Add flight delays management dashboard
+- [ ] Create load planning system
+
+### Payment Enhancements
+- [ ] Add PayPal integration
+- [ ] Add Apple Pay / Google Pay support
+- [ ] Implement split payments
+- [ ] Add payment installments (Tabby/Tamara)
+- [ ] Create PCI compliance documentation
+
+### Distribution Channels
+- [ ] Research GDS integration requirements (Amadeus/Sabre)
+- [ ] Create API for travel agents
+- [ ] Add channel management system
+- [ ] Implement OTA integration (future consideration)
