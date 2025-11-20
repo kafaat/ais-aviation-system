@@ -1,4 +1,21 @@
 {
+  "filters": {
+    "advancedFilters": "Advanced Filters",
+    "priceRange": "Price Range",
+    "airlines": "Airlines",
+    "stops": "Stops",
+    "direct": "Direct",
+    "oneStop": "1 Stop",
+    "twoStops": "2+ Stops",
+    "departureTime": "Departure Time",
+    "morning": "Morning",
+    "afternoon": "Afternoon",
+    "evening": "Evening",
+    "night": "Night",
+    "cabinClass": "Cabin Class",
+    "apply": "Apply Filters",
+    "reset": "Reset"
+  },
   "common": {
     "appName": "Aviation Integrated System",
     "search": "Search",
@@ -16,7 +33,9 @@
     "back": "Back",
     "next": "Next",
     "previous": "Previous",
-    "submit": "Submit"
+    "submit": "Submit",
+    "currency": "SAR",
+    "clearAll": "Clear All"
   },
   "nav": {
     "home": "Home",
@@ -62,7 +81,13 @@
     "economy": "Economy Class",
     "business": "Business Class",
     "seatsAvailable": "{{count}} seat(s) available",
-    "bookNow": "Book Now"
+    "bookNow": "Book Now",
+    "comparing": "Comparing Flights",
+    "selectFlight": "Select Flight",
+    "available": "available",
+    "full": "Full",
+    "economy": "Economy",
+    "business": "Business"
   },
   "booking": {
     "title": "Complete Booking",
