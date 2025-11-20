@@ -73,3 +73,13 @@
 - [x] إنشاء manifest.json
 - [x] إضافة دعم offline
 - [x] تحسين أيقونات التطبيق
+
+## Stripe Payment Integration
+
+- [x] إعداد Stripe وإضافة API Keys
+- [x] بناء Payment Intent API
+- [x] إنشاء واجهة الدفع بـ Stripe Elements
+- [x] معالجة المدفوعات بشكل آمن
+- [x] إضافة Stripe Webhooks
+- [x] تحديث نظام الحجز للتكامل مع الدفع
+- [x] اختبار المدفوعات

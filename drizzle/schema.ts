@@ -92,6 +92,8 @@ export const bookings = mysqlTable("bookings", {
   status: mysqlEnum("status", ["pending", "confirmed", "cancelled", "completed"]).default("pending").notNull(),
   totalAmount: int("totalAmount").notNull(), // Total price in SAR cents
   paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "refunded", "failed"]).default("pending").notNull(),
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  stripeCheckoutSessionId: varchar("stripeCheckoutSessionId", { length: 255 }),
   cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
   numberOfPassengers: int("numberOfPassengers").notNull(),
   checkedIn: boolean("checkedIn").default(false).notNull(),

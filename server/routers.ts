@@ -5,6 +5,10 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import * as db from "./db";
+import { stripe, FLIGHT_PRODUCTS } from "./stripe";
+import { getDb } from "./db";
+import { bookings } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 // Admin-only procedure
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -165,6 +169,89 @@ export const appRouter = router({
         await db.updateBookingStatus(input.bookingId, "confirmed");
         
         return { success: true };
+      }),
+  }),
+
+  // Stripe Payment APIs
+  stripe: router({
+    createCheckoutSession: protectedProcedure
+      .input(z.object({
+        bookingId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const database = await getDb();
+        if (!database) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: "Database not available" });
+
+        // Get booking details
+        const booking = await database.select().from(bookings).where(eq(bookings.id, input.bookingId)).limit(1);
+        if (!booking[0]) throw new TRPCError({ code: 'NOT_FOUND', message: "Booking not found" });
+        if (booking[0].userId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: "Unauthorized" });
+        if (booking[0].paymentStatus === "paid") throw new TRPCError({ code: 'BAD_REQUEST', message: "Booking already paid" });
+
+        const bookingData = booking[0];
+        const productName = bookingData.cabinClass === "business" 
+          ? FLIGHT_PRODUCTS.BUSINESS_TICKET.name 
+          : FLIGHT_PRODUCTS.ECONOMY_TICKET.name;
+        const productDescription = bookingData.cabinClass === "business"
+          ? FLIGHT_PRODUCTS.BUSINESS_TICKET.description
+          : FLIGHT_PRODUCTS.ECONOMY_TICKET.description;
+
+        // Create Stripe checkout session
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ['card'],
+          line_items: [
+            {
+              price_data: {
+                currency: 'sar',
+                product_data: {
+                  name: productName,
+                  description: `${productDescription} - ${bookingData.numberOfPassengers} passenger(s) - Ref: ${bookingData.bookingReference}`,
+                  metadata: {
+                    bookingReference: bookingData.bookingReference,
+                    pnr: bookingData.pnr,
+                  },
+                },
+                unit_amount: bookingData.totalAmount,
+              },
+              quantity: 1,
+            },
+          ],
+          mode: 'payment',
+          success_url: `${ctx.req.headers.origin}/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true`,
+          cancel_url: `${ctx.req.headers.origin}/booking/${input.bookingId}?canceled=true`,
+          customer_email: ctx.user.email || undefined,
+          client_reference_id: ctx.user.id.toString(),
+          metadata: {
+            bookingId: input.bookingId.toString(),
+            userId: ctx.user.id.toString(),
+            bookingReference: bookingData.bookingReference,
+            customerEmail: ctx.user.email || '',
+            customerName: ctx.user.name || '',
+          },
+          allow_promotion_codes: true,
+        });
+
+        // Update booking with session ID
+        await database.update(bookings)
+          .set({ stripeCheckoutSessionId: session.id })
+          .where(eq(bookings.id, input.bookingId));
+
+        return {
+          sessionId: session.id,
+          url: session.url,
+        };
+      }),
+
+    verifySession: protectedProcedure
+      .input(z.object({
+        sessionId: z.string(),
+      }))
+      .query(async ({ input }) => {
+        const session = await stripe.checkout.sessions.retrieve(input.sessionId);
+        return {
+          status: session.payment_status,
+          customerEmail: session.customer_email,
+        };
       }),
   }),
 

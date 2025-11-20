@@ -15,6 +15,13 @@
       "when": 1763599332371,
       "tag": "0001_huge_maverick",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1763629873136,
+      "tag": "0002_real_cerise",
+      "breakpoints": true
     }
   ]
 }
