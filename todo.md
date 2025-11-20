@@ -600,3 +600,45 @@
 - [x] Add translation keys (ar/en)
 - [x] All 63 tests passing successfully
 - [ ] Write dedicated tests for ancillary analytics functions
+
+
+## Production-Ready Improvements (Launch Checklist)
+
+### Phase 1: Environment Validation & Health Checks
+- [x] Add Zod validation for all environment variables (already exists in env.ts)
+- [x] Create env.ts with validated schema (already exists)
+- [x] Add health check service (checkDatabase, checkStripe, performHealthChecks)
+- [x] Add health router with 3 endpoints (check, ready, live)
+- [x] Test health checks (3 tests passing)
+
+### Phase 2: Error Handling & Logging
+- [x] Add React Error Boundary component (already exists)
+- [x] Wrap App with ErrorBoundary (already done)
+- [x] Implement unified logging with pino
+- [x] Create logger service with structured logging
+- [x] Add Request ID middleware (requestIdMiddleware)
+- [x] Log all requests with context (requestId, method, path, duration)
+
+### Phase 3: Background Jobs & Cron
+- [x] Install node-cron package
+- [x] Create cron service (cleanupExpiredLocks every 5 min)
+- [x] Add job logging with pino
+- [x] Add manual trigger function for testing
+- [x] Write unit tests for cron jobs (1 test passing)
+
+### Phase 4: Payment Idempotency & Retry Logic
+- [x] Add idempotencyKey to payments table (with unique index)
+- [x] Implement idempotency check in createCheckoutSession
+- [x] Add getPaymentByIdempotencyKey function in db.ts
+- [x] Return existing session if idempotency key matches
+- [x] Write tests for idempotency scenarios (3 tests passing)
+- [x] All 70 tests passing successfully
+
+### Phase 5: Additional Production Enhancements
+- [ ] Add API request timeout (30s default)
+- [ ] Implement circuit breaker for external services
+- [ ] Add database connection pooling configuration
+- [ ] Create graceful shutdown handler (already exists, verify)
+- [ ] Add metrics endpoint for Prometheus (optional)
+- [ ] Document all environment variables in .env.example
+- [ ] Create deployment checklist document

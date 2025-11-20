@@ -338,6 +338,19 @@ export async function updatePaymentStatus(id: number, status: string, transactio
     .where(eq(payments.id, id));
 }
 
+export async function getPaymentByIdempotencyKey(idempotencyKey: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.idempotencyKey, idempotencyKey))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
 // ============ Admin Functions ============
 export async function getAllAirlines() {
   const db = await getDb();

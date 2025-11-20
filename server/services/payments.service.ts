@@ -16,6 +16,7 @@ export interface CreateCheckoutSessionInput {
   userId: number;
   amount: number;
   currency?: string;
+  idempotencyKey?: string; // Optional idempotency key for preventing duplicate payments
 }
 
 /**
@@ -72,6 +73,19 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       },
     });
     
+    // Check for existing payment with same idempotency key
+    if (input.idempotencyKey) {
+      const existingPayment = await db.getPaymentByIdempotencyKey(input.idempotencyKey);
+      if (existingPayment) {
+        // Return existing session instead of creating new one
+        const existingSession = await stripe.checkout.sessions.retrieve(existingPayment.transactionId!);
+        return {
+          sessionId: existingSession.id,
+          url: existingSession.url,
+        };
+      }
+    }
+    
     // Create payment record
     await db.createPayment({
       bookingId: input.bookingId,
@@ -80,6 +94,7 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       status: "pending",
       method: "card",
       transactionId: session.id,
+      idempotencyKey: input.idempotencyKey,
     });
     
     return {

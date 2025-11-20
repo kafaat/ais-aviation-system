@@ -78,6 +78,13 @@
       "when": 1763642931704,
       "tag": "0010_magical_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1763653518681,
+      "tag": "0011_tiny_warlock",
+      "breakpoints": true
     }
   ]
 }

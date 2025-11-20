@@ -163,10 +163,12 @@ export const payments = mysqlTable("payments", {
   method: mysqlEnum("method", ["card", "wallet", "bank_transfer"]).notNull(),
   status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"]).default("pending").notNull(),
   transactionId: varchar("transactionId", { length: 100 }), // External payment gateway transaction ID
+  idempotencyKey: varchar("idempotencyKey", { length: 100 }).unique(), // For preventing duplicate payments
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
   bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  idempotencyKeyIdx: index("idempotency_key_idx").on(table.idempotencyKey),
 }));
 
 export type Payment = typeof payments.$inferSelect;
