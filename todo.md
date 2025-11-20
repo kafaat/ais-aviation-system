@@ -449,3 +449,35 @@
 - [x] Add translation keys for profile page
 - [x] Write unit tests for user preferences service (10 tests)
 - [x] All 50 tests passing successfully
+
+### Phase 14: Loyalty Dashboard UI
+- [x] Create LoyaltyDashboard page component
+- [x] Add loyalty account overview card (tier, miles balance)
+- [x] Create miles transactions history table
+- [x] Add tier progress bar with benefits
+- [x] Create miles redemption calculator
+- [x] Add route to App.tsx
+- [x] Add navigation link to loyalty dashboard
+- [x] Add translation keys (ar/en)
+- [x] Test loyalty dashboard UI
+- [x] All 50 tests passing successfully
+
+### Phase 15: Reviews & Ratings System
+- [ ] Design reviews schema (flight_reviews table)
+- [ ] Create reviews.service.ts
+- [ ] Create reviews router
+- [ ] Add review submission form
+- [ ] Display reviews on flight details
+- [ ] Add rating aggregation
+- [ ] Write unit tests
+- [ ] Update todo.md after completion
+
+### Phase 16: Favorite Flights & Price Alerts
+- [ ] Design favorites schema (favorite_flights table)
+- [ ] Create favorites.service.ts
+- [ ] Create favorites router
+- [ ] Add favorite button to flight cards
+- [ ] Create favorites page
+- [ ] Implement price alert notifications
+- [ ] Write unit tests
+- [ ] Update todo.md after completion

@@ -42,6 +42,7 @@
     "myBookings": "My Bookings",
     "checkIn": "Check-in",
     "profile": "Profile",
+    "loyalty": "Loyalty",
     "admin": "Dashboard"
   },
   "home": {
@@ -278,5 +279,56 @@
       "sms": "SMS Notifications",
       "smsDesc": "Receive booking updates via SMS"
     }
+  },
+  "loyalty": {
+    "title": "Loyalty Program",
+    "subtitle": "Earn miles and enjoy benefits",
+    "loginRequired": "Login Required",
+    "loginRequiredDesc": "Please login to view your loyalty account",
+    "accountOverview": "Account Overview",
+    "memberSince": "Member since {{date}}",
+    "availableMiles": "Available Miles",
+    "totalEarned": "Total Miles Earned",
+    "progressToNext": "Progress to Next Tier",
+    "milesRemaining": "{{miles}} miles remaining to next tier",
+    "tierBenefits": "Tier Benefits",
+    "earnMultiplier": "Earn Multiplier: {{multiplier}}x",
+    "exclusiveBenefits": "{{count}} Exclusive Benefits",
+    "redeemMiles": "Redeem Miles",
+    "redeemDesc": "Use your miles for discounts",
+    "milesToRedeem": "Miles to Redeem",
+    "discountValue": "Discount Value",
+    "redeem": "Redeem",
+    "redeemNote": "10 miles = 1 SAR",
+    "redeemSuccess": "Redeemed successfully! Discount: {{discount}} SAR",
+    "invalidMiles": "Please enter a valid number of miles",
+    "insufficientMiles": "Insufficient miles balance",
+    "transactionHistory": "Transaction History",
+    "transactionHistoryDesc": "View all miles transactions",
+    "noTransactions": "No transactions yet",
+    "date": "Date",
+    "type": "Type",
+    "description": "Description",
+    "miles": "Miles",
+    "balance": "Balance",
+    "transactionTypes": {
+      "earned": "Earned",
+      "redeemed": "Redeemed",
+      "expired": "Expired",
+      "bonus": "Bonus"
+    },
+    "tiers": {
+      "bronze": "Bronze",
+      "silver": "Silver",
+      "gold": "Gold",
+      "platinum": "Platinum"
+    },
+    "howToEarn": "How to Earn Miles",
+    "earnByFlying": "Fly with Us",
+    "earnByFlyingDesc": "Earn 1 mile for every SAR spent",
+    "tierBonus": "Tier Bonuses",
+    "tierBonusDesc": "Get extra multipliers based on your tier",
+    "specialOffers": "Special Offers",
+    "specialOffersDesc": "Exclusive promotional offers for members"
   }
 }

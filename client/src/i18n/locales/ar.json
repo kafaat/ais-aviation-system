@@ -42,6 +42,7 @@
     "myBookings": "حجوزاتي",
     "checkIn": "تسجيل الوصول",
     "profile": "الملف الشخصي",
+    "loyalty": "برنامج الولاء",
     "admin": "لوحة التحكم"
   },
   "home": {
@@ -255,5 +256,56 @@
       "sms": "إشعارات الرسائل النصية",
       "smsDesc": "تلقي تحديثات الحجز عبر الرسائل النصية"
     }
+  },
+  "loyalty": {
+    "title": "برنامج الولاء",
+    "subtitle": "اكسب أميال واستمتع بالمزايا",
+    "loginRequired": "تسجيل الدخول مطلوب",
+    "loginRequiredDesc": "يرجى تسجيل الدخول لعرض حساب الولاء الخاص بك",
+    "accountOverview": "نظرة عامة على الحساب",
+    "memberSince": "عضو منذ {{date}}",
+    "availableMiles": "الأميال المتاحة",
+    "totalEarned": "إجمالي الأميال المكتسبة",
+    "progressToNext": "التقدم إلى المستوى التالي",
+    "milesRemaining": "{{miles}} ميل متبقي للمستوى التالي",
+    "tierBenefits": "مزايا المستوى",
+    "earnMultiplier": "مضاعف الكسب: {{multiplier}}x",
+    "exclusiveBenefits": "{{count}} مزايا حصرية",
+    "redeemMiles": "استرداد الأميال",
+    "redeemDesc": "استخدم أميالك للحصول على خصومات",
+    "milesToRedeem": "الأميال المراد استردادها",
+    "discountValue": "قيمة الخصم",
+    "redeem": "استرداد",
+    "redeemNote": "10 أميال = 1 ريال سعودي",
+    "redeemSuccess": "تم الاسترداد بنجاح! خصم: {{discount}} ر.س",
+    "invalidMiles": "الرجاء إدخال عدد صحيح من الأميال",
+    "insufficientMiles": "رصيد الأميال غير كافٍ",
+    "transactionHistory": "سجل المعاملات",
+    "transactionHistoryDesc": "عرض جميع معاملات الأميال",
+    "noTransactions": "لا توجد معاملات بعد",
+    "date": "التاريخ",
+    "type": "النوع",
+    "description": "الوصف",
+    "miles": "الأميال",
+    "balance": "الرصيد",
+    "transactionTypes": {
+      "earned": "مكتسب",
+      "redeemed": "مسترد",
+      "expired": "منتهي الصلاحية",
+      "bonus": "مكافأة"
+    },
+    "tiers": {
+      "bronze": "برونزي",
+      "silver": "فضي",
+      "gold": "ذهبي",
+      "platinum": "بلاتيني"
+    },
+    "howToEarn": "كيفية كسب الأميال",
+    "earnByFlying": "السفر مع شركتنا",
+    "earnByFlyingDesc": "اكسب 1 ميل لكل ريال سعودي تنفقه",
+    "tierBonus": "مكافآت المستوى",
+    "tierBonusDesc": "احصل على مضاعفات إضافية حسب مستواك",
+    "specialOffers": "عروض خاصة",
+    "specialOffersDesc": "عروض ترويجية حصرية للأعضاء"
   }
 }
