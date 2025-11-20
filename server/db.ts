@@ -243,7 +243,21 @@ export async function getBookingsByUserId(userId: number) {
     .where(eq(bookings.userId, userId))
     .orderBy(desc(bookings.createdAt));
 
-  return result;
+  // Fetch passengers for each booking
+  const bookingsWithPassengers = await Promise.all(
+    result.map(async (booking) => {
+      const bookingPassengers = await db
+        .select()
+        .from(passengers)
+        .where(eq(passengers.bookingId, booking.id));
+      return {
+        ...booking,
+        passengers: bookingPassengers,
+      };
+    })
+  );
+
+  return bookingsWithPassengers;
 }
 
 export async function getBookingByPNR(pnr: string) {

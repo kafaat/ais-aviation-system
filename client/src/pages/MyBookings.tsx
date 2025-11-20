@@ -6,8 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
-import { ChevronLeft, Plane, Calendar, MapPin, XCircle, Edit } from "lucide-react";
+import { ChevronLeft, Plane, Calendar, MapPin, XCircle, Edit, Download, FileText } from "lucide-react";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
+import { DownloadETicketButton, DownloadBoardingPassButton } from "@/components/DownloadTicketButtons";
 import { ModifyBookingDialog } from "@/components/ModifyBookingDialog";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -197,30 +198,43 @@ export default function MyBookings() {
                           تم تسجيل الوصول
                         </Badge>
                       )}
-                      {booking.paymentStatus === "paid" && booking.status !== "cancelled" && booking.status !== "completed" && (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            className="flex-1"
-                            onClick={() => {
-                              setSelectedBooking(booking);
-                              setModifyDialogOpen(true);
-                            }}
-                          >
-                            <Edit className="mr-2 h-4 w-4" />
-                            تعديل
-                          </Button>
-                          <Button
-                            variant="outline"
-                            className="flex-1"
-                            onClick={() => {
-                              setSelectedBooking(booking);
-                              setCancelDialogOpen(true);
-                            }}
-                          >
-                            <XCircle className="mr-2 h-4 w-4" />
-                            إلغاء
-                          </Button>
+                      {booking.paymentStatus === "paid" && (
+                        <div className="space-y-2">
+                          {/* E-Ticket Download Buttons */}
+                          <div className="flex gap-2">
+                            <DownloadETicketButton bookingId={booking.id} passengerId={booking.passengers[0]?.id} />
+                            {(booking.status === "confirmed" || booking.status === "completed") && (
+                              <DownloadBoardingPassButton bookingId={booking.id} passengerId={booking.passengers[0]?.id} />
+                            )}
+                          </div>
+                          
+                          {/* Modify/Cancel Buttons */}
+                          {booking.status !== "cancelled" && booking.status !== "completed" && (
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => {
+                                  setSelectedBooking(booking);
+                                  setModifyDialogOpen(true);
+                                }}
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                تعديل
+                              </Button>
+                              <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => {
+                                  setSelectedBooking(booking);
+                                  setCancelDialogOpen(true);
+                                }}
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                إلغاء
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -353,3 +353,15 @@
 - [ ] Create API for travel agents
 - [ ] Add channel management system
 - [ ] Implement OTA integration (future consideration)
+
+### Phase 7: E-Ticket UI & Multi-Language
+- [x] Add download e-ticket button in My Bookings page
+- [x] Add download boarding pass button in My Bookings page (only for confirmed bookings)
+- [x] Create utility function to convert base64 PDF to download (downloadPDF.ts)
+- [x] Create DownloadTicketButtons component
+- [x] Add passengers data to myBookings API
+- [x] Test e-ticket download functionality
+- [ ] Install react-i18next for multi-language support (future)
+- [ ] Create translation files (ar.json, en.json) (future)
+- [ ] Add language switcher in header (future)
+- [ ] Translate all UI strings (future)
