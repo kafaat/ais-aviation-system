@@ -69,4 +69,41 @@ export const analyticsRouter = router({
   getFlightOccupancy: adminProcedure.query(async () => {
     return await analyticsService.getFlightOccupancyDetails();
   }),
+
+  /**
+   * Get ancillary services KPI metrics
+   */
+  getAncillaryMetrics: adminProcedure
+    .input(
+      z.object({
+        startDate: z.date().optional(),
+        endDate: z.date().optional(),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      return await analyticsService.getAncillaryMetrics(
+        input?.startDate,
+        input?.endDate
+      );
+    }),
+
+  /**
+   * Get ancillary revenue breakdown by category
+   */
+  getAncillaryRevenueByCategory: adminProcedure.query(async () => {
+    return await analyticsService.getAncillaryRevenueByCategory();
+  }),
+
+  /**
+   * Get most popular ancillary services
+   */
+  getPopularAncillaries: adminProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(50).default(10),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      return await analyticsService.getPopularAncillaries(input?.limit || 10);
+    }),
 });

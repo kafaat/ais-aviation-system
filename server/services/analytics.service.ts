@@ -243,3 +243,162 @@ export async function getFlightOccupancyDetails() {
 
   return occupancyDetails;
 }
+
+/**
+ * Ancillary Services Analytics
+ */
+
+export interface AncillaryMetrics {
+  totalAncillaryRevenue: number;
+  ancillaryAttachmentRate: number; // % of bookings with ancillaries
+  averageAncillaryRevenuePerBooking: number;
+  totalAncillariesSold: number;
+}
+
+export interface AncillaryRevenueByCategory {
+  category: string;
+  revenue: number;
+  quantity: number;
+  percentage: number;
+}
+
+export interface PopularAncillary {
+  serviceName: string;
+  category: string;
+  totalSold: number;
+  revenue: number;
+}
+
+/**
+ * Get ancillary services KPI metrics
+ */
+export async function getAncillaryMetrics(
+  startDate?: Date,
+  endDate?: Date
+): Promise<AncillaryMetrics> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const { bookingAncillaries, ancillaryServices } = await import("../../drizzle/schema");
+
+  const dateFilter = startDate && endDate
+    ? and(
+        gte(bookingAncillaries.createdAt, startDate),
+        lte(bookingAncillaries.createdAt, endDate)
+      )
+    : undefined;
+
+  // Total ancillary revenue and quantity
+  const [ancillaryStats] = await db
+    .select({
+      totalRevenue: sql<number>`COALESCE(SUM(${bookingAncillaries.totalPrice}), 0)`,
+      totalQuantity: sql<number>`COALESCE(SUM(${bookingAncillaries.quantity}), 0)`,
+      totalAncillaries: sql<number>`COUNT(*)`,
+    })
+    .from(bookingAncillaries)
+    .where(dateFilter);
+
+  // Total bookings in the same period
+  const bookingDateFilter = startDate && endDate
+    ? and(
+        gte(bookings.createdAt, startDate),
+        lte(bookings.createdAt, endDate)
+      )
+    : undefined;
+
+  const [bookingStats] = await db
+    .select({
+      totalBookings: sql<number>`COUNT(*)`,
+    })
+    .from(bookings)
+    .where(bookingDateFilter);
+
+  // Bookings with ancillaries
+  const [attachmentStats] = await db
+    .select({
+      bookingsWithAncillaries: sql<number>`COUNT(DISTINCT ${bookingAncillaries.bookingId})`,
+    })
+    .from(bookingAncillaries)
+    .where(dateFilter);
+
+  const attachmentRate = bookingStats.totalBookings > 0
+    ? (attachmentStats.bookingsWithAncillaries / bookingStats.totalBookings) * 100
+    : 0;
+
+  const avgRevenuePerBooking = bookingStats.totalBookings > 0
+    ? ancillaryStats.totalRevenue / bookingStats.totalBookings
+    : 0;
+
+  return {
+    totalAncillaryRevenue: ancillaryStats.totalRevenue || 0,
+    ancillaryAttachmentRate: Math.round(attachmentRate * 10) / 10,
+    averageAncillaryRevenuePerBooking: Math.round(avgRevenuePerBooking),
+    totalAncillariesSold: ancillaryStats.totalQuantity || 0,
+  };
+}
+
+/**
+ * Get ancillary revenue breakdown by category
+ */
+export async function getAncillaryRevenueByCategory(): Promise<AncillaryRevenueByCategory[]> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const { bookingAncillaries, ancillaryServices } = await import("../../drizzle/schema");
+
+  const categoryRevenue = await db
+    .select({
+      category: ancillaryServices.category,
+      revenue: sql<number>`SUM(${bookingAncillaries.totalPrice})`,
+      quantity: sql<number>`SUM(${bookingAncillaries.quantity})`,
+    })
+    .from(bookingAncillaries)
+    .innerJoin(ancillaryServices, eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id))
+    .groupBy(ancillaryServices.category)
+    .orderBy(desc(sql`SUM(${bookingAncillaries.totalPrice})`));
+
+  const totalRevenue = categoryRevenue.reduce((sum, row) => sum + (row.revenue || 0), 0);
+
+  return categoryRevenue.map((row) => ({
+    category: row.category,
+    revenue: row.revenue || 0,
+    quantity: row.quantity || 0,
+    percentage: totalRevenue > 0 ? Math.round(((row.revenue || 0) / totalRevenue) * 100 * 10) / 10 : 0,
+  }));
+}
+
+/**
+ * Get most popular ancillary services
+ */
+export async function getPopularAncillaries(limit: number = 10): Promise<PopularAncillary[]> {
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const { bookingAncillaries, ancillaryServices } = await import("../../drizzle/schema");
+
+  const popularServices = await db
+    .select({
+      serviceName: ancillaryServices.name,
+      category: ancillaryServices.category,
+      totalSold: sql<number>`SUM(${bookingAncillaries.quantity})`,
+      revenue: sql<number>`SUM(${bookingAncillaries.totalPrice})`,
+    })
+    .from(bookingAncillaries)
+    .innerJoin(ancillaryServices, eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id))
+    .groupBy(ancillaryServices.id, ancillaryServices.name, ancillaryServices.category)
+    .orderBy(desc(sql`SUM(${bookingAncillaries.quantity})`))
+    .limit(limit);
+
+  return popularServices.map((row) => ({
+    serviceName: row.serviceName,
+    category: row.category,
+    totalSold: row.totalSold || 0,
+    revenue: row.revenue || 0,
+  }));
+}

@@ -14,7 +14,7 @@ const BookingPage = lazy(() => import("./pages/BookingPage"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
 const CheckIn = lazy(() => import("./pages/CheckIn"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
-const AnalyticsDashboard = lazy(() => import("./pages/admin/AnalyticsDashboard"));
+const AnalyticsDashboard = lazy(() => import("./pages/AnalyticsDashboard"));
 const RefundsDashboard = lazy(() => import("./pages/admin/RefundsDashboard"));
 const UserProfile = lazy(() => import("./pages/UserProfile"));
 const LoyaltyDashboard = lazy(() => import("./pages/LoyaltyDashboard"));

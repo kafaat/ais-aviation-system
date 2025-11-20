@@ -579,3 +579,24 @@
 - [ ] Travel agent portal
 - [ ] API for third-party integration
 - [ ] IATA compliance (NDC, ONE Order)
+
+### Ancillary Services Analytics
+- [x] Add ancillary revenue KPIs to analytics service
+- [x] Calculate total ancillary revenue
+- [x] Calculate ancillary attachment rate (% of bookings with ancillaries)
+- [x] Calculate average ancillary revenue per booking
+- [x] Calculate revenue by category (baggage, meals, seats, insurance, lounge, priority_boarding)
+- [x] Get most popular ancillary services
+- [x] Add ancillary analytics endpoints to router (getAncillaryMetrics, getAncillaryRevenueByCategory, getPopularAncillaries)
+- [x] Create comprehensive Analytics Dashboard page
+- [x] Add main KPIs (total bookings, revenue, occupancy, cancellation)
+- [x] Add ancillary KPI cards (revenue, attachment rate, avg per booking, total sold)
+- [x] Add revenue over time line chart
+- [x] Add booking trends bar chart
+- [x] Add revenue by category pie chart
+- [x] Add popular destinations list
+- [x] Add popular ancillaries display
+- [x] Add route and navigation link (/analytics)
+- [x] Add translation keys (ar/en)
+- [x] All 63 tests passing successfully
+- [ ] Write dedicated tests for ancillary analytics functions

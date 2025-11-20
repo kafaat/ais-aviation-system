@@ -43,7 +43,8 @@
     "checkIn": "Check-in",
     "profile": "Profile",
     "loyalty": "Loyalty",
-    "admin": "Dashboard"
+    "admin": "Dashboard",
+    "analytics": "Analytics"
   },
   "home": {
     "hero": {

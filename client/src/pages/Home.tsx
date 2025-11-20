@@ -113,11 +113,18 @@ export default function Home() {
                 </Link>
               )}
               {user?.role === "admin" && (
-                <Link href="/admin">
-                  <a className="text-sm font-medium hover:text-primary transition-colors">
-                    {t('nav.admin')}
-                  </a>
-                </Link>
+                <>
+                  <Link href="/admin">
+                    <a className="text-sm font-medium hover:text-primary transition-colors">
+                      {t('nav.admin')}
+                    </a>
+                  </Link>
+                  <Link href="/analytics">
+                    <a className="text-sm font-medium hover:text-primary transition-colors">
+                      {t('nav.analytics')}
+                    </a>
+                  </Link>
+                </>
               )}
             </nav>
 
