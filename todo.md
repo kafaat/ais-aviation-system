@@ -510,8 +510,15 @@
 - [x] Display ancillaries in booking summary
 - [x] Write integration tests for booking with ancillaries (3 tests)
 - [x] All 63 tests passing successfully
-- [ ] Show ancillaries in My Bookings page
-- [ ] Add ability to add/remove ancillaries after booking
+- [x] Show ancillaries in My Bookings page
+- [x] Create ancillaries display component for booking details (BookingAncillariesDisplay)
+- [x] Add "Manage Extras" button in My Bookings
+- [x] Create modal/dialog for adding ancillaries to existing booking (ManageAncillariesDialog)
+- [x] Implement remove ancillary functionality
+- [x] Real-time updates with optimistic UI
+- [x] All 63 tests passing successfully
+- [ ] Write dedicated tests for post-booking ancillary management
+- [ ] Add payment processing for ancillaries added post-booking
 - [ ] Design fare_classes table (economy, business, first with sub-classes)
 - [ ] Implement fare rules engine (restrictions, change fees, cancellation fees)
 

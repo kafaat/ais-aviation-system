@@ -6,10 +6,12 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
-import { ChevronLeft, Plane, Calendar, MapPin, XCircle, Edit, Download, FileText } from "lucide-react";
+import { ChevronLeft, Plane, Calendar, MapPin, XCircle, Edit, Download, FileText, Package } from "lucide-react";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
 import { DownloadETicketButton, DownloadBoardingPassButton } from "@/components/DownloadTicketButtons";
 import { ModifyBookingDialog } from "@/components/ModifyBookingDialog";
+import { BookingAncillariesDisplay } from "@/components/BookingAncillariesDisplay";
+import { ManageAncillariesDialog } from "@/components/ManageAncillariesDialog";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { getLoginUrl } from "@/const";
@@ -18,6 +20,7 @@ export default function MyBookings() {
   const { user, isAuthenticated, loading } = useAuth();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
+  const [manageAncillariesOpen, setManageAncillariesOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
 
   const { data: bookings, isLoading } = trpc.bookings.myBookings.useQuery(
@@ -226,9 +229,13 @@ export default function MyBookings() {
                             </div>
                           </div>
                           
-                          {/* Modify/Cancel Buttons */}
+                          {/* Ancillaries Display */}
+                          <BookingAncillariesDisplay bookingId={booking.id} />
+                          
+                          {/* Modify/Cancel/Manage Buttons */}
                           {booking.status !== "cancelled" && booking.status !== "completed" && (
-                            <div className="flex gap-2">
+                            <div className="space-y-2">
+                              <div className="flex gap-2">
                               <Button
                                 variant="outline"
                                 className="flex-1"
@@ -250,6 +257,18 @@ export default function MyBookings() {
                               >
                                 <XCircle className="mr-2 h-4 w-4" />
                                 إلغاء
+                              </Button>
+                              </div>
+                              <Button
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => {
+                                  setSelectedBooking(booking);
+                                  setManageAncillariesOpen(true);
+                                }}
+                              >
+                                <Package className="mr-2 h-4 w-4" />
+                                إدارة الخدمات الإضافية
                               </Button>
                             </div>
                           )}
@@ -292,6 +311,17 @@ export default function MyBookings() {
             originName: selectedBooking.originName,
             destinationName: selectedBooking.destinationName,
           }}
+        />
+      )}
+
+      {/* Manage Ancillaries Dialog */}
+      {selectedBooking && (
+        <ManageAncillariesDialog
+          open={manageAncillariesOpen}
+          onOpenChange={setManageAncillariesOpen}
+          bookingId={selectedBooking.id}
+          cabinClass={selectedBooking.cabinClass}
+          numberOfPassengers={selectedBooking.numberOfPassengers}
         />
       )}
     </div>
