@@ -20,6 +20,11 @@ export default function CheckIn() {
     { enabled: false }
   );
 
+  const { data: passengers } = trpc.bookings.getPassengers.useQuery(
+    { bookingId: booking?.id || 0 },
+    { enabled: !!booking?.id }
+  );
+
   const checkInMutation = trpc.bookings.checkIn.useMutation({
     onSuccess: () => {
       toast.success("تم تسجيل الوصول بنجاح!");
@@ -40,8 +45,18 @@ export default function CheckIn() {
   };
 
   const handleCheckIn = async () => {
-    if (!booking) return;
-    await checkInMutation.mutateAsync({ bookingId: booking.id });
+    if (!booking || !passengers) return;
+    
+    // Generate seat assignments for all passengers
+    const seatAssignments = passengers.map((passenger: any, index: number) => ({
+      passengerId: passenger.id,
+      seatNumber: passenger.seatNumber || `${Math.floor(index / 6) + 1}${String.fromCharCode(65 + (index % 6))}`,
+    }));
+    
+    await checkInMutation.mutateAsync({ 
+      bookingId: booking.id,
+      seatAssignments,
+    });
   };
 
   if (!isAuthenticated) {
@@ -128,7 +143,7 @@ export default function CheckIn() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-sm text-muted-foreground">رقم الرحلة</p>
-                        <p className="font-medium">{booking.flight?.flightNumber}</p>
+                        <p className="font-medium">{booking.flightId}</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">رقم الحجز</p>
@@ -147,7 +162,7 @@ export default function CheckIn() {
                     <div className="border-t pt-4">
                       <h3 className="font-semibold mb-3">الركاب</h3>
                       <div className="space-y-2">
-                        {booking.passengers?.map((passenger, index) => (
+                        {passengers?.map((passenger: any, index: number) => (
                           <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
                             <span>
                               {passenger.title} {passenger.firstName} {passenger.lastName}

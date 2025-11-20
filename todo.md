@@ -158,9 +158,11 @@
 - [ ] Request ID + Unified Logging
 
 ### Phase 2: Code Architecture
-- [ ] Split routers by domain (flights, bookings, admin, ai)
-- [ ] Create Services Layer (flights.service.ts, bookings.service.ts, payments.service.ts)
-- [ ] Separate Auth Module
+- [x] Split routers by domain (flights, bookings, admin, analytics, payments, reference)
+- [x] Create Services Layer (flights.service.ts, bookings.service.ts, payments.service.ts)
+- [x] Refactor main routers.ts to use domain routers
+- [x] Write unit tests for services and routers
+- [x] Fix CheckIn.tsx to work with new API structure
 
 ### Phase 3: Security Enhancements
 - [ ] Rate Limiting on /api/trpc and /api/stripe/webhook
