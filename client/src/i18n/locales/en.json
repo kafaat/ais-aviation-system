@@ -90,7 +90,14 @@
     "total": "Total",
     "completeBooking": "Complete Booking & Payment",
     "processing": "Processing...",
-    "termsAgree": "By clicking \"Complete Booking\" you agree to the terms and conditions"
+    "termsAgree": "By clicking \"Complete Booking\" you agree to the terms and conditions",
+    "selectSeats": "Select {{count}} seat(s)"
+  },
+  "seatMap": {
+    "available": "Available",
+    "selected": "Selected",
+    "occupied": "Occupied",
+    "selectedSeats": "Selected Seats"
   },
   "myBookings": {
     "title": "My Bookings",

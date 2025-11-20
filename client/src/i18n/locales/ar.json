@@ -90,7 +90,14 @@
     "total": "المجموع",
     "completeBooking": "إتمام الحجز والدفع",
     "processing": "جاري المعالجة...",
-    "termsAgree": "بالضغط على \"إتمام الحجز\" فإنك توافق على الشروط والأحكام"
+    "termsAgree": "بالضغط على \"إتمام الحجز\" فإنك توافق على الشروط والأحكام",
+    "selectSeats": "اختر {{count}} مقعد"  
+  },
+  "seatMap": {
+    "available": "متاح",
+    "selected": "محدد",
+    "occupied": "محجوز",
+    "selectedSeats": "المقاعد المحددة"
   },
   "myBookings": {
     "title": "حجوزاتي",

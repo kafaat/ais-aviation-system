@@ -57,13 +57,19 @@
 - [x] تحسين Typography والخطوط
 
 ### Interactive Features
-- [ ] إضافة خريطة اختيار المقاعد التفاعلية
+- [x] إضافة خريطة اختيار المقاعد التفاعلية
 - [ ] إضافة معاينة تفصيلية للرحلة
 - [ ] تحسين نماذج الإدخال بـ validation فوري
 - [ ] إضافة loading states محسّنة
 
 ### Performance Optimization
-- [ ] تحسين lazy loading للصور
-- [ ] إضافة code splitting
-- [ ] تحسين bundle size
-- [ ] إضافة caching للبيانات
+- [x] تحسين lazy loading للصور
+- [x] إضافة code splitting
+- [x] تحسين bundle size
+- [x] إضافة caching للبيانات
+
+### PWA Features
+- [x] إضافة Service Worker
+- [x] إنشاء manifest.json
+- [x] إضافة دعم offline
+- [x] تحسين أيقونات التطبيق
