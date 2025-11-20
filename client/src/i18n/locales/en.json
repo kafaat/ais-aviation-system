@@ -41,6 +41,7 @@
     "home": "Home",
     "myBookings": "My Bookings",
     "checkIn": "Check-in",
+    "profile": "Profile",
     "admin": "Dashboard"
   },
   "home": {
@@ -220,5 +221,62 @@
     "email": "Email",
     "phone": "Phone",
     "rights": "All rights reserved"
+  },
+  "profile": {
+    "title": "User Profile",
+    "updateSuccess": "Preferences updated successfully",
+    "tabs": {
+      "travel": "Travel Preferences",
+      "personal": "Personal Information",
+      "notifications": "Notifications"
+    },
+    "travel": {
+      "title": "Travel Preferences",
+      "description": "Save your preferences to speed up booking",
+      "preferredSeat": "Preferred Seat",
+      "window": "Window",
+      "aisle": "Aisle",
+      "middle": "Middle",
+      "preferredClass": "Preferred Class",
+      "economy": "Economy",
+      "business": "Business",
+      "first": "First",
+      "mealPreference": "Meal Preference",
+      "meals": {
+        "regular": "Regular",
+        "vegetarian": "Vegetarian",
+        "vegan": "Vegan",
+        "halal": "Halal",
+        "kosher": "Kosher",
+        "glutenFree": "Gluten Free"
+      },
+      "specialServices": "Special Services",
+      "wheelchair": "Wheelchair Assistance",
+      "extraLegroom": "Extra Legroom"
+    },
+    "personal": {
+      "title": "Personal Information",
+      "description": "Save your personal information for quick booking",
+      "passport": "Passport Information",
+      "passportNumber": "Passport Number",
+      "passportPlaceholder": "Enter passport number",
+      "passportExpiry": "Passport Expiry Date",
+      "selectDate": "Select Date",
+      "nationality": "Nationality",
+      "nationalityPlaceholder": "Enter nationality",
+      "contact": "Contact Information",
+      "phone": "Phone Number",
+      "emergencyContact": "Emergency Contact",
+      "emergencyContactPlaceholder": "Contact name",
+      "emergencyPhone": "Emergency Phone"
+    },
+    "notifications": {
+      "title": "Notification Preferences",
+      "description": "Choose how you want to receive notifications",
+      "email": "Email Notifications",
+      "emailDesc": "Receive booking updates via email",
+      "sms": "SMS Notifications",
+      "smsDesc": "Receive booking updates via SMS"
+    }
   }
 }

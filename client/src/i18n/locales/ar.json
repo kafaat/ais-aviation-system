@@ -1,4 +1,21 @@
 {
+  "filters": {
+    "advancedFilters": "فلاتر متقدمة",
+    "priceRange": "نطاق السعر",
+    "airlines": "شركات الطيران",
+    "stops": "التوقفات",
+    "direct": "مباشر",
+    "oneStop": "توقف واحد",
+    "twoStops": "توقفان أو أكثر",
+    "departureTime": "وقت المغادرة",
+    "morning": "صباحاً",
+    "afternoon": "ظهراً",
+    "evening": "مساءً",
+    "night": "ليلاً",
+    "cabinClass": "درجة السفر",
+    "apply": "تطبيق الفلاتر",
+    "reset": "إعادة تعيين"
+  },
   "common": {
     "appName": "نظام الطيران المتكامل",
     "search": "بحث",
@@ -16,12 +33,15 @@
     "back": "رجوع",
     "next": "التالي",
     "previous": "السابق",
-    "submit": "إرسال"
+    "submit": "إرسال",
+    "currency": "ر.س",
+    "clearAll": "مسح الكل"
   },
   "nav": {
     "home": "الرئيسية",
     "myBookings": "حجوزاتي",
     "checkIn": "تسجيل الوصول",
+    "profile": "الملف الشخصي",
     "admin": "لوحة التحكم"
   },
   "home": {
@@ -178,5 +198,62 @@
     "email": "البريد",
     "phone": "الهاتف",
     "rights": "جميع الحقوق محفوظة"
+  },
+  "profile": {
+    "title": "الملف الشخصي",
+    "updateSuccess": "تم تحديث التفضيلات بنجاح",
+    "tabs": {
+      "travel": "تفضيلات السفر",
+      "personal": "المعلومات الشخصية",
+      "notifications": "الإشعارات"
+    },
+    "travel": {
+      "title": "تفضيلات السفر",
+      "description": "احفظ تفضيلاتك لتسريع عملية الحجز",
+      "preferredSeat": "المقعد المفضل",
+      "window": "نافذة",
+      "aisle": "ممر",
+      "middle": "وسط",
+      "preferredClass": "الدرجة المفضلة",
+      "economy": "اقتصادية",
+      "business": "أعمال",
+      "first": "أولى",
+      "mealPreference": "تفضيلات الوجبات",
+      "meals": {
+        "regular": "عادية",
+        "vegetarian": "نباتية",
+        "vegan": "نباتية صرفة",
+        "halal": "حلال",
+        "kosher": "كوشر",
+        "glutenFree": "خالية من الجلوتين"
+      },
+      "specialServices": "خدمات خاصة",
+      "wheelchair": "مساعدة كرسي متحرك",
+      "extraLegroom": "مساحة إضافية للأرجل"
+    },
+    "personal": {
+      "title": "المعلومات الشخصية",
+      "description": "احفظ معلوماتك الشخصية للحجز السريع",
+      "passport": "معلومات الجواز",
+      "passportNumber": "رقم الجواز",
+      "passportPlaceholder": "أدخل رقم الجواز",
+      "passportExpiry": "تاريخ انتهاء الجواز",
+      "selectDate": "اختر التاريخ",
+      "nationality": "الجنسية",
+      "nationalityPlaceholder": "أدخل الجنسية",
+      "contact": "معلومات الاتصال",
+      "phone": "رقم الهاتف",
+      "emergencyContact": "جهة اتصال الطوارئ",
+      "emergencyContactPlaceholder": "اسم جهة الاتصال",
+      "emergencyPhone": "هاتف الطوارئ"
+    },
+    "notifications": {
+      "title": "تفضيلات الإشعارات",
+      "description": "اختر كيف تريد تلقي الإشعارات",
+      "email": "إشعارات البريد الإلكتروني",
+      "emailDesc": "تلقي تحديثات الحجز عبر البريد الإلكتروني",
+      "sms": "إشعارات الرسائل النصية",
+      "smsDesc": "تلقي تحديثات الحجز عبر الرسائل النصية"
+    }
   }
 }

@@ -64,6 +64,13 @@
       "when": 1763638533804,
       "tag": "0008_loving_nico_minoru",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1763641257446,
+      "tag": "0009_bright_bloodaxe",
+      "breakpoints": true
     }
   ]
 }

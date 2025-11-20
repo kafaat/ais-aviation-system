@@ -98,6 +98,13 @@ export default function Home() {
                   {t('nav.checkIn')}
                 </a>
               </Link>
+              {user && (
+                <Link href="/profile">
+                  <a className="text-sm font-medium hover:text-primary transition-colors">
+                    {t('nav.profile')}
+                  </a>
+                </Link>
+              )}
               {user?.role === "admin" && (
                 <Link href="/admin">
                   <a className="text-sm font-medium hover:text-primary transition-colors">

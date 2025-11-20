@@ -14,6 +14,7 @@ import { referenceRouter } from "./routers/reference";
 import { modificationsRouter } from "./routers/modifications";
 import { loyaltyRouter } from "./routers/loyalty";
 import { eticketRouter } from "./routers/eticket";
+import { userPreferencesRouter } from "./routers/user-preferences";
 
 /**
  * Main Application Router
@@ -44,6 +45,7 @@ export const appRouter = router({
   modifications: modificationsRouter,
   loyalty: loyaltyRouter,
   eticket: eticketRouter,
+  userPreferences: userPreferencesRouter,
 });
 
 export type AppRouter = typeof appRouter;

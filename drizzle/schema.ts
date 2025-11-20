@@ -328,3 +328,44 @@ export const inventoryLocks = mysqlTable("inventory_locks", {
 
 export type InventoryLock = typeof inventoryLocks.$inferSelect;
 export type InsertInventoryLock = typeof inventoryLocks.$inferInsert;
+
+/**
+ * User Preferences table - stores user travel preferences
+ */
+export const userPreferences = mysqlTable("user_preferences", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  
+  // Seat preferences
+  preferredSeatType: mysqlEnum("preferredSeatType", ["window", "aisle", "middle"]),
+  preferredCabinClass: mysqlEnum("preferredCabinClass", ["economy", "business", "first"]),
+  
+  // Meal preferences
+  mealPreference: mysqlEnum("mealPreference", ["regular", "vegetarian", "vegan", "halal", "kosher", "gluten_free"]),
+  
+  // Special services
+  wheelchairAssistance: boolean("wheelchairAssistance").default(false),
+  extraLegroom: boolean("extraLegroom").default(false),
+  
+  // Saved passport info
+  passportNumber: varchar("passportNumber", { length: 50 }),
+  passportExpiry: timestamp("passportExpiry"),
+  nationality: varchar("nationality", { length: 100 }),
+  
+  // Contact preferences
+  phoneNumber: varchar("phoneNumber", { length: 20 }),
+  emergencyContact: varchar("emergencyContact", { length: 100 }),
+  emergencyPhone: varchar("emergencyPhone", { length: 20 }),
+  
+  // Notification preferences
+  emailNotifications: boolean("emailNotifications").default(true),
+  smsNotifications: boolean("smsNotifications").default(false),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+}));
+
+export type UserPreference = typeof userPreferences.$inferSelect;
+export type InsertUserPreference = typeof userPreferences.$inferInsert;

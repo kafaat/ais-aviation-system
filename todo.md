@@ -396,16 +396,56 @@
 - [ ] Create charts for trends and statistics (future)
 
 ### Phase 10: Admin Analytics Dashboard
-- [ ] Create analytics service for KPI calculations
-- [ ] Calculate occupancy rate (overall and per flight)
-- [ ] Calculate daily/monthly revenue
-- [ ] Calculate cancellation rate
-- [ ] Get most popular destinations
-- [ ] Get booking trends over time
-- [ ] Create analytics router
-- [ ] Build Analytics Dashboard UI
-- [ ] Add KPI cards (occupancy, revenue, bookings, cancellations)
-- [ ] Add revenue chart (last 30 days)
-- [ ] Add popular destinations chart
-- [ ] Add booking trends chart
-- [ ] Test analytics calculations
+- [x] Create analytics service for KPI calculations
+- [x] Calculate occupancy rate (overall and per flight)
+- [x] Calculate daily/monthly revenue
+- [x] Calculate cancellation rate
+- [x] Get most popular destinations
+- [x] Get booking trends over time
+- [x] Create analytics router
+- [x] Build Analytics Dashboard UI
+- [x] Add KPI cards (occupancy, revenue, bookings, cancellations)
+- [x] Add revenue chart (last 30 days)
+- [x] Add popular destinations chart
+- [x] Add booking trends chart
+- [x] Test analytics calculations
+
+### Phase 11: Multi-Language Support (i18n)
+- [x] Install react-i18next and i18next packages
+- [x] Create i18n configuration file
+- [x] Create translation files (ar.json, en.json)
+- [x] Translate all UI strings (Home, Search, Booking, etc.)
+- [x] Add language switcher component in header
+- [x] Persist language preference in localStorage
+- [x] Test language switching across all pages
+- [ ] Update email templates to support multiple languages
+
+### Phase 12: Advanced Search Filters
+- [x] Create AdvancedFilters component
+- [x] Add price range filter (min/max slider)
+- [x] Add airlines filter (multi-select)
+- [x] Add stops filter (direct, 1 stop, 2+ stops)
+- [x] Add time preference filter (morning, afternoon, evening, night)
+- [x] Add cabin class filter
+- [x] Integrate filters with SearchResults page
+- [x] Add client-side filtering logic
+- [x] Add sort options (price, duration, departure time)
+- [x] Test all filter combinations
+
+### Phase 13: User Profile & Preferences
+- [x] Create user_preferences table in schema
+- [x] Add seat preferences (window, aisle, middle)
+- [x] Add cabin class preference
+- [x] Add meal preferences (regular, vegetarian, vegan, halal, kosher, gluten-free)
+- [x] Add special services (wheelchair, extra legroom)
+- [x] Add saved passport information
+- [x] Add emergency contact information
+- [x] Add notification preferences (email, SMS)
+- [x] Create user-preferences.service.ts
+- [x] Create user-preferences router
+- [x] Create User Profile page UI
+- [x] Add profile route to App.tsx
+- [x] Add profile link to navigation
+- [x] Add translation keys for profile page
+- [x] Write unit tests for user preferences service (10 tests)
+- [x] All 50 tests passing successfully
