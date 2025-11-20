@@ -1,8 +1,9 @@
-import { describe, expect, it, beforeAll } from "vitest";
+import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { getDb } from "./db";
 import { bookings, flights, airlines, airports } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -35,17 +36,20 @@ function createAuthContext(): { ctx: TrpcContext } {
 
 describe("Stripe Payment Integration", () => {
   let testBookingId: number;
+  // Generate unique 6-character references using timestamp last 3 digits + random
+  const uniqueRef = `T${Date.now().toString().slice(-3)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
+  const uniquePnr = `P${Date.now().toString().slice(-3)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
 
   beforeAll(async () => {
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
-    // Create test booking
+    // Create test booking with unique reference
     const bookingResult = await db.insert(bookings).values({
       userId: 1,
       flightId: 1,
-      bookingReference: "TST123",
-      pnr: "ABC123",
+      bookingReference: uniqueRef,
+      pnr: uniquePnr,
       status: "pending",
       totalAmount: 50000, // 500 SAR
       paymentStatus: "pending",
@@ -57,11 +61,23 @@ describe("Stripe Payment Integration", () => {
     testBookingId = Number(bookingResult[0].insertId);
   });
 
+  afterAll(async () => {
+    // Clean up test data
+    const db = await getDb();
+    if (!db) return;
+    
+    try {
+      await db.delete(bookings).where(eq(bookings.id, testBookingId));
+    } catch (error) {
+      console.error("Error cleaning up test data:", error);
+    }
+  });
+
   it("creates a Stripe checkout session successfully", async () => {
     const { ctx } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
-    const result = await caller.stripe.createCheckoutSession({
+    const result = await caller.payments.createCheckoutSession({
       bookingId: testBookingId,
     });
 
@@ -84,8 +100,8 @@ describe("Stripe Payment Integration", () => {
     const caller = appRouter.createCaller(ctx);
 
     await expect(
-      caller.stripe.createCheckoutSession({ bookingId: testBookingId })
-    ).rejects.toThrow("Booking already paid");
+      caller.payments.createCheckoutSession({ bookingId: testBookingId })
+    ).rejects.toThrow("already paid");
 
     // Reset for other tests
     await db.update(bookings)
@@ -101,7 +117,7 @@ describe("Stripe Payment Integration", () => {
     const caller = appRouter.createCaller(ctx);
 
     await expect(
-      caller.stripe.createCheckoutSession({ bookingId: testBookingId })
-    ).rejects.toThrow("Unauthorized");
+      caller.payments.createCheckoutSession({ bookingId: testBookingId })
+    ).rejects.toThrow("Access denied");
   });
 });

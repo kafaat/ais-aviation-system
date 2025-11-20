@@ -207,3 +207,10 @@
 - [x] Create refunds service and router
 - [x] Test rate limiting (4 tests passing)
 - [x] Apply database migrations
+
+### Bug Fixes: Database Duplicate Entries
+- [x] Fix Stripe test to use unique booking references (6-char limit)
+- [x] Add test data cleanup/isolation (afterAll hooks)
+- [x] Update Stripe test to use payments router (after refactoring)
+- [x] Fix error message expectations in tests
+- [x] All 28 tests passing successfully

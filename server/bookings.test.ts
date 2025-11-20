@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import type { User } from "../drizzle/schema";
+import { getDb } from "./db";
+import { bookings } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 function createAuthenticatedContext(): TrpcContext {
   const user: User = {
@@ -27,6 +30,22 @@ function createAuthenticatedContext(): TrpcContext {
 }
 
 describe("Booking APIs", () => {
+  const createdBookingIds: number[] = [];
+
+  afterAll(async () => {
+    // Clean up test bookings
+    const db = await getDb();
+    if (!db) return;
+    
+    try {
+      for (const bookingId of createdBookingIds) {
+        await db.delete(bookings).where(eq(bookings.id, bookingId));
+      }
+    } catch (error) {
+      console.error("Error cleaning up test bookings:", error);
+    }
+  });
+
   it("should create a booking successfully", async () => {
     const ctx = createAuthenticatedContext();
     const caller = appRouter.createCaller(ctx);
@@ -51,6 +70,9 @@ describe("Booking APIs", () => {
     expect(booking).toHaveProperty("totalAmount");
     expect(booking.bookingReference).toHaveLength(6);
     expect(booking.pnr).toHaveLength(6);
+    
+    // Track for cleanup
+    createdBookingIds.push(booking.bookingId);
   });
 
   it("should get user bookings", async () => {
