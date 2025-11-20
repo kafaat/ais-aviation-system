@@ -71,6 +71,13 @@
       "when": 1763641257446,
       "tag": "0009_bright_bloodaxe",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1763642931704,
+      "tag": "0010_magical_serpent_society",
+      "breakpoints": true
     }
   ]
 }

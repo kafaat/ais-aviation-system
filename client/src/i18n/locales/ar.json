@@ -307,5 +307,21 @@
     "tierBonusDesc": "احصل على مضاعفات إضافية حسب مستواك",
     "specialOffers": "عروض خاصة",
     "specialOffersDesc": "عروض ترويجية حصرية للأعضاء"
+  },
+  "ancillary": {
+    "title": "الخدمات الإضافية",
+    "description": "أضف خدمات إضافية لتحسين تجربة سفرك",
+    "loading": "جاري تحميل الخدمات الإضافية...",
+    "categories": {
+      "baggage": "الحقائب",
+      "meal": "الوجبات",
+      "seat": "المقاعد",
+      "insurance": "التأمين",
+      "lounge": "صالة الانتظار",
+      "priority_boarding": "الصعود الأولوي"
+    },
+    "subtotal": "المجموع الفرعي",
+    "totalExtras": "إجمالي الخدمات الإضافية",
+    "servicesSelected": "خدمة مختارة"
   }
 }

@@ -481,3 +481,88 @@
 - [ ] Implement price alert notifications
 - [ ] Write unit tests
 - [ ] Update todo.md after completion
+
+
+## PSS Comprehensive Review & Completion
+
+### 1. Real-time Inventory Management ✅
+- [x] Inventory locks table (temporary seat holds)
+- [x] Seat locking service with race condition prevention
+- [x] Automatic expired locks cleanup
+- [x] Integration with booking flow
+- [ ] Real-time seat availability updates (WebSocket/SSE)
+- [ ] Inventory sync across multiple booking channels
+- [ ] Waitlist management for fully booked flights
+
+### 2. Fare Classes & Ancillary Services
+- [x] Design ancillary_services table (baggage, meals, seats, insurance, lounge, priority_boarding)
+- [x] Design booking_ancillaries table (links services to bookings)
+- [x] Create ancillary-services.service.ts with full CRUD operations
+- [x] Create ancillary services catalog (13 services seeded)
+- [x] Create ancillary router with APIs (getAvailable, addToBooking, etc.)
+- [x] Create AncillarySelection UI component
+- [x] Add translation keys (ar/en)
+- [x] Write unit tests for ancillary services (10 tests)
+- [x] All 60 tests passing successfully
+- [ ] Integrate AncillarySelection with booking flow
+- [ ] Update payment calculation to include ancillaries
+- [ ] Design fare_classes table (economy, business, first with sub-classes)
+- [ ] Implement fare rules engine (restrictions, change fees, cancellation fees)
+
+### 3. Enhanced Self-Service Management ✅ (Partial)
+- [x] View bookings
+- [x] Modify booking (date change, cabin upgrade)
+- [x] Cancel booking with refund
+- [x] Download e-tickets
+- [x] Download boarding passes
+- [x] Check-in online
+- [ ] Add baggage to existing booking
+- [ ] Change seat after booking
+- [ ] Add special services (meals, wheelchair)
+- [ ] Split PNR (separate passengers)
+- [ ] Group booking management
+
+### 4. Payment Integration & Refund Policies ✅
+- [x] Stripe payment integration
+- [x] Payment webhooks
+- [x] Refund processing
+- [x] Tiered cancellation fees
+- [x] Partial refunds
+- [x] Payment history tracking
+- [ ] Multiple payment methods (PayPal, Apple Pay)
+- [ ] Split payments
+- [ ] Payment installments (Tabby/Tamara)
+- [ ] Voucher/credit system for refunds
+
+### 5. Analytics & Diagnostics Dashboard ✅ (Partial)
+- [x] KPIs (occupancy rate, revenue, bookings, cancellations)
+- [x] Revenue trends chart (last 30 days)
+- [x] Popular destinations chart
+- [x] Booking trends over time
+- [ ] Per-flight profitability analysis
+- [ ] Peak booking times analysis
+- [ ] Customer segmentation (frequent flyers, one-time, etc.)
+- [ ] Revenue per available seat mile (RASM)
+- [ ] Load factor by route
+- [ ] Cancellation reasons analysis
+- [ ] Export reports (PDF/Excel)
+
+### 6. Check-in & Boarding ✅ (Partial)
+- [x] Online check-in
+- [x] Boarding pass generation
+- [x] E-ticket generation
+- [ ] Baggage tag printing
+- [ ] Gate assignment
+- [ ] Boarding sequence management
+- [ ] Flight manifest for crew
+- [ ] Weight & balance calculation
+
+### 7. Additional PSS Features
+- [ ] Multi-city/complex itineraries
+- [ ] Code-share flight support
+- [ ] Frequent flyer tier benefits (priority boarding, extra baggage)
+- [ ] Group booking discounts
+- [ ] Corporate travel accounts
+- [ ] Travel agent portal
+- [ ] API for third-party integration
+- [ ] IATA compliance (NDC, ONE Order)

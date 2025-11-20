@@ -330,5 +330,21 @@
     "tierBonusDesc": "Get extra multipliers based on your tier",
     "specialOffers": "Special Offers",
     "specialOffersDesc": "Exclusive promotional offers for members"
+  },
+  "ancillary": {
+    "title": "Additional Services",
+    "description": "Add extra services to enhance your travel experience",
+    "loading": "Loading additional services...",
+    "categories": {
+      "baggage": "Baggage",
+      "meal": "Meals",
+      "seat": "Seats",
+      "insurance": "Insurance",
+      "lounge": "Lounge",
+      "priority_boarding": "Priority Boarding"
+    },
+    "subtotal": "Subtotal",
+    "totalExtras": "Total Extras",
+    "servicesSelected": "services selected"
   }
 }

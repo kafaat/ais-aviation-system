@@ -369,3 +369,57 @@ export const userPreferences = mysqlTable("user_preferences", {
 
 export type UserPreference = typeof userPreferences.$inferSelect;
 export type InsertUserPreference = typeof userPreferences.$inferInsert;
+
+/**
+ * Ancillary Services Catalog
+ * Defines available add-on services (baggage, meals, seats, insurance)
+ */
+export const ancillaryServices = mysqlTable("ancillary_services", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(), // e.g., "BAG_20KG", "MEAL_VEG", "SEAT_EXTRA_LEG"
+  category: mysqlEnum("category", ["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]).notNull(),
+  name: varchar("name", { length: 255 }).notNull(), // e.g., "20kg Checked Baggage"
+  description: text("description"),
+  price: int("price").notNull(), // Price in SAR cents (e.g., 5000 = 50.00 SAR)
+  currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+  available: boolean("available").default(true).notNull(),
+  // Optional: restrict by cabin class
+  applicableCabinClasses: text("applicableCabinClasses"), // JSON array: ["economy", "business"]
+  // Optional: restrict by route or airline
+  applicableAirlines: text("applicableAirlines"), // JSON array of airline IDs
+  icon: varchar("icon", { length: 255 }), // Icon name or URL
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  categoryIdx: index("category_idx").on(table.category),
+  availableIdx: index("available_idx").on(table.available),
+}));
+
+export type AncillaryService = typeof ancillaryServices.$inferSelect;
+export type InsertAncillaryService = typeof ancillaryServices.$inferInsert;
+
+/**
+ * Booking Ancillaries
+ * Links ancillary services to bookings
+ */
+export const bookingAncillaries = mysqlTable("booking_ancillaries", {
+  id: int("id").autoincrement().primaryKey(),
+  bookingId: int("bookingId").notNull(),
+  passengerId: int("passengerId"), // Optional: link to specific passenger
+  ancillaryServiceId: int("ancillaryServiceId").notNull(),
+  quantity: int("quantity").default(1).notNull(),
+  unitPrice: int("unitPrice").notNull(), // Price at time of purchase (in SAR cents)
+  totalPrice: int("totalPrice").notNull(), // quantity * unitPrice
+  status: mysqlEnum("status", ["active", "cancelled", "refunded"]).default("active").notNull(),
+  // Additional data (e.g., seat number, meal preference)
+  metadata: text("metadata"), // JSON object for flexible data
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  passengerIdIdx: index("passenger_id_idx").on(table.passengerId),
+  ancillaryServiceIdIdx: index("ancillary_service_id_idx").on(table.ancillaryServiceId),
+}));
+
+export type BookingAncillary = typeof bookingAncillaries.$inferSelect;
+export type InsertBookingAncillary = typeof bookingAncillaries.$inferInsert;
