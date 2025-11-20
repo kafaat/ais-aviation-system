@@ -165,14 +165,14 @@
 - [x] Fix CheckIn.tsx to work with new API structure
 
 ### Phase 3: Security Enhancements
-- [ ] Rate Limiting on /api/trpc and /api/stripe/webhook
+- [x] Rate Limiting on /api/trpc and /api/stripe/webhook
 - [ ] Data API Whitelist
 - [ ] Account Lock after failed login attempts
 
 ### Phase 4: Stripe & Database
-- [ ] Stripe Refunds Support
+- [x] Stripe Refunds Support
 - [ ] Payment History Table
-- [ ] Database Indexes (fromAirport, toAirport, departureDate, airlineId)
+- [x] Database Indexes (airlineId, status, composite route+date+status)
 - [ ] Soft Delete for bookings
 
 ### Phase 5: AI Features
@@ -197,3 +197,13 @@
 - [ ] Transaction-based Seeding
 - [ ] Idempotent Seed Script
 - [ ] Default Admin User in Seed
+
+### Phase 3: Security & Performance
+- [x] Install express-rate-limit package
+- [x] Add rate limiting middleware to /api/trpc
+- [x] Add rate limiting to /api/stripe/webhook
+- [x] Add database indexes (airlineId, status, composite route+date+status)
+- [x] Implement Stripe refunds support
+- [x] Create refunds service and router
+- [x] Test rate limiting (4 tests passing)
+- [x] Apply database migrations

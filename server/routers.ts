@@ -7,6 +7,7 @@ import { publicProcedure, router } from "./_core/trpc";
 import { flightsRouter } from "./routers/flights";
 import { bookingsRouter } from "./routers/bookings";
 import { paymentsRouter } from "./routers/payments";
+import { refundsRouter } from "./routers/refunds";
 import { adminRouter } from "./routers/admin";
 import { analyticsRouter } from "./routers/analytics";
 import { referenceRouter } from "./routers/reference";
@@ -33,6 +34,7 @@ export const appRouter = router({
   flights: flightsRouter,
   bookings: bookingsRouter,
   payments: paymentsRouter,
+  refunds: refundsRouter,
   admin: adminRouter,
   analytics: analyticsRouter,
   reference: referenceRouter,

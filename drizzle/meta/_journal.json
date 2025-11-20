@@ -22,6 +22,13 @@
       "when": 1763629873136,
       "tag": "0002_real_cerise",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1763635602868,
+      "tag": "0003_awesome_leo",
+      "breakpoints": true
     }
   ]
 }

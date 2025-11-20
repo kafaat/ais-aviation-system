@@ -75,6 +75,10 @@ export const flights = mysqlTable("flights", {
   flightNumberIdx: index("flight_number_idx").on(table.flightNumber),
   departureTimeIdx: index("departure_time_idx").on(table.departureTime),
   routeIdx: index("route_idx").on(table.originId, table.destinationId),
+  airlineIdx: index("airline_idx").on(table.airlineId),
+  statusIdx: index("status_idx").on(table.status),
+  // Composite index for common search pattern: route + date + status
+  routeDateStatusIdx: index("route_date_status_idx").on(table.originId, table.destinationId, table.departureTime, table.status),
 }));
 
 export type Flight = typeof flights.$inferSelect;
