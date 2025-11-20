@@ -14,7 +14,7 @@ const BookingPage = lazy(() => import("./pages/BookingPage"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
 const CheckIn = lazy(() => import("./pages/CheckIn"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
-const Analytics = lazy(() => import("./pages/Analytics"));
+const AnalyticsDashboard = lazy(() => import("./pages/admin/AnalyticsDashboard"));
 const RefundsDashboard = lazy(() => import("./pages/admin/RefundsDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -46,7 +46,7 @@ function Router() {
         </Route>
         <Route path="/analytics">
           <AdminRoute>
-            <Analytics />
+            <AnalyticsDashboard />
           </AdminRoute>
         </Route>
         <Route path="/admin/refunds">

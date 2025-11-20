@@ -394,3 +394,18 @@
 - [ ] Create admin analytics dashboard (future)
 - [ ] Add KPIs (occupancy rate, daily revenue, cancellation rate) (future)
 - [ ] Create charts for trends and statistics (future)
+
+### Phase 10: Admin Analytics Dashboard
+- [ ] Create analytics service for KPI calculations
+- [ ] Calculate occupancy rate (overall and per flight)
+- [ ] Calculate daily/monthly revenue
+- [ ] Calculate cancellation rate
+- [ ] Get most popular destinations
+- [ ] Get booking trends over time
+- [ ] Create analytics router
+- [ ] Build Analytics Dashboard UI
+- [ ] Add KPI cards (occupancy, revenue, bookings, cancellations)
+- [ ] Add revenue chart (last 30 days)
+- [ ] Add popular destinations chart
+- [ ] Add booking trends chart
+- [ ] Test analytics calculations
