@@ -1,17 +1,10 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, index } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +18,131 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Airlines table
+ */
+export const airlines = mysqlTable("airlines", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., SV, MS)
+  name: varchar("name", { length: 255 }).notNull(),
+  country: varchar("country", { length: 100 }),
+  logo: text("logo"), // URL to airline logo
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Airline = typeof airlines.$inferSelect;
+export type InsertAirline = typeof airlines.$inferInsert;
+
+/**
+ * Airports table
+ */
+export const airports = mysqlTable("airports", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., JED, RUH)
+  name: varchar("name", { length: 255 }).notNull(),
+  city: varchar("city", { length: 100 }).notNull(),
+  country: varchar("country", { length: 100 }).notNull(),
+  timezone: varchar("timezone", { length: 50 }), // e.g., "Asia/Riyadh"
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Airport = typeof airports.$inferSelect;
+export type InsertAirport = typeof airports.$inferInsert;
+
+/**
+ * Flights table
+ */
+export const flights = mysqlTable("flights", {
+  id: int("id").autoincrement().primaryKey(),
+  flightNumber: varchar("flightNumber", { length: 10 }).notNull(),
+  airlineId: int("airlineId").notNull(),
+  originId: int("originId").notNull(),
+  destinationId: int("destinationId").notNull(),
+  departureTime: timestamp("departureTime").notNull(),
+  arrivalTime: timestamp("arrivalTime").notNull(),
+  aircraftType: varchar("aircraftType", { length: 50 }), // e.g., "Boeing 777"
+  status: mysqlEnum("status", ["scheduled", "delayed", "cancelled", "completed"]).default("scheduled").notNull(),
+  economySeats: int("economySeats").notNull(),
+  businessSeats: int("businessSeats").notNull(),
+  economyPrice: int("economyPrice").notNull(), // Price in SAR (stored as integer, e.g., 50000 = 500.00 SAR)
+  businessPrice: int("businessPrice").notNull(),
+  economyAvailable: int("economyAvailable").notNull(),
+  businessAvailable: int("businessAvailable").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  flightNumberIdx: index("flight_number_idx").on(table.flightNumber),
+  departureTimeIdx: index("departure_time_idx").on(table.departureTime),
+  routeIdx: index("route_idx").on(table.originId, table.destinationId),
+}));
+
+export type Flight = typeof flights.$inferSelect;
+export type InsertFlight = typeof flights.$inferInsert;
+
+/**
+ * Bookings table
+ */
+export const bookings = mysqlTable("bookings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  flightId: int("flightId").notNull(),
+  bookingReference: varchar("bookingReference", { length: 6 }).notNull().unique(), // e.g., "ABC123"
+  pnr: varchar("pnr", { length: 6 }).notNull().unique(), // Passenger Name Record
+  status: mysqlEnum("status", ["pending", "confirmed", "cancelled", "completed"]).default("pending").notNull(),
+  totalAmount: int("totalAmount").notNull(), // Total price in SAR cents
+  paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "refunded", "failed"]).default("pending").notNull(),
+  cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+  numberOfPassengers: int("numberOfPassengers").notNull(),
+  checkedIn: boolean("checkedIn").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  pnrIdx: index("pnr_idx").on(table.pnr),
+}));
+
+export type Booking = typeof bookings.$inferSelect;
+export type InsertBooking = typeof bookings.$inferInsert;
+
+/**
+ * Passengers table
+ */
+export const passengers = mysqlTable("passengers", {
+  id: int("id").autoincrement().primaryKey(),
+  bookingId: int("bookingId").notNull(),
+  type: mysqlEnum("type", ["adult", "child", "infant"]).default("adult").notNull(),
+  title: varchar("title", { length: 10 }), // Mr, Mrs, Ms, Dr
+  firstName: varchar("firstName", { length: 100 }).notNull(),
+  lastName: varchar("lastName", { length: 100 }).notNull(),
+  dateOfBirth: timestamp("dateOfBirth"),
+  passportNumber: varchar("passportNumber", { length: 20 }),
+  nationality: varchar("nationality", { length: 3 }), // ISO country code
+  seatNumber: varchar("seatNumber", { length: 5 }), // e.g., "12A"
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+}));
+
+export type Passenger = typeof passengers.$inferSelect;
+export type InsertPassenger = typeof passengers.$inferInsert;
+
+/**
+ * Payments table
+ */
+export const payments = mysqlTable("payments", {
+  id: int("id").autoincrement().primaryKey(),
+  bookingId: int("bookingId").notNull(),
+  amount: int("amount").notNull(), // Amount in SAR cents
+  currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+  method: mysqlEnum("method", ["card", "wallet", "bank_transfer"]).notNull(),
+  status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"]).default("pending").notNull(),
+  transactionId: varchar("transactionId", { length: 100 }), // External payment gateway transaction ID
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+}));
+
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = typeof payments.$inferInsert;
