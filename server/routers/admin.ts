@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import * as db from "../db";
+import * as flightStatusService from "../services/flight-status.service";
 
 /**
  * Admin-only procedure
@@ -125,5 +126,35 @@ export const adminRouter = router({
     .mutation(async ({ input }) => {
       await db.updateBookingStatus(input.bookingId, input.status);
       return { success: true };
+    }),
+
+  /**
+   * Update flight status
+   */
+  updateFlightStatus: adminProcedure
+    .input(
+      z.object({
+        flightId: z.number(),
+        status: z.enum(["scheduled", "delayed", "cancelled", "completed"]),
+        delayMinutes: z.number().optional(),
+        reason: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return await flightStatusService.updateFlightStatus(input);
+    }),
+
+  /**
+   * Cancel flight and refund all bookings
+   */
+  cancelFlightAndRefund: adminProcedure
+    .input(
+      z.object({
+        flightId: z.number(),
+        reason: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return await flightStatusService.cancelFlightAndRefund(input);
     }),
 });

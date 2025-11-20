@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -5,13 +6,16 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
-import { ChevronLeft, Plane, Calendar, MapPin } from "lucide-react";
+import { ChevronLeft, Plane, Calendar, MapPin, XCircle } from "lucide-react";
+import { CancelBookingDialog } from "@/components/CancelBookingDialog";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { getLoginUrl } from "@/const";
 
 export default function MyBookings() {
   const { user, isAuthenticated, loading } = useAuth();
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<any>(null);
 
   const { data: bookings, isLoading } = trpc.bookings.myBookings.useQuery(
     undefined,
@@ -191,6 +195,19 @@ export default function MyBookings() {
                           تم تسجيل الوصول
                         </Badge>
                       )}
+                      {booking.paymentStatus === "paid" && booking.status !== "cancelled" && booking.status !== "completed" && (
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            setSelectedBooking(booking);
+                            setCancelDialogOpen(true);
+                          }}
+                        >
+                          <XCircle className="mr-2 h-4 w-4" />
+                          إلغاء الحجز
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -199,6 +216,20 @@ export default function MyBookings() {
           </div>
         )}
       </div>
+
+      {/* Cancel Booking Dialog */}
+      {selectedBooking && (
+        <CancelBookingDialog
+          bookingId={selectedBooking.id}
+          bookingReference={selectedBooking.bookingReference}
+          totalAmount={selectedBooking.totalAmount}
+          open={cancelDialogOpen}
+          onOpenChange={setCancelDialogOpen}
+          onSuccess={() => {
+            setSelectedBooking(null);
+          }}
+        />
+      )}
     </div>
   );
 }

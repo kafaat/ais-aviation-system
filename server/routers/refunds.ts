@@ -2,6 +2,11 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import * as refundsService from "../services/refunds.service";
+import {
+  getRefundStats,
+  getRefundHistory,
+  getRefundTrends,
+} from "../services/refunds-stats.service";
 
 /**
  * Admin-only procedure
@@ -71,4 +76,32 @@ export const refundsRouter = router({
     .query(async ({ input }) => {
       return await refundsService.isBookingRefundable(input.bookingId);
     }),
+
+  /**
+   * Admin: Get refund statistics
+   */
+  getStats: adminProcedure.query(async () => {
+    return await getRefundStats();
+  }),
+
+  /**
+   * Admin: Get refund history
+   */
+  getHistory: adminProcedure
+    .input(
+      z.object({
+        limit: z.number().optional(),
+        offset: z.number().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      return await getRefundHistory(input);
+    }),
+
+  /**
+   * Admin: Get refund trends
+   */
+  getTrends: adminProcedure.query(async () => {
+    return await getRefundTrends();
+  }),
 });

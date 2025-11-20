@@ -214,3 +214,16 @@
 - [x] Update Stripe test to use payments router (after refactoring)
 - [x] Fix error message expectations in tests
 - [x] All 28 tests passing successfully
+
+### Phase 4: User Experience Enhancements
+- [x] Add booking cancellation UI to My Bookings page
+- [x] Implement refund request dialog (CancelBookingDialog component)
+- [x] Show refund eligibility status
+- [x] Create admin refunds dashboard with statistics
+- [x] Add refund statistics and charts (trends, history table)
+- [x] Implement flight status update system
+- [x] Add notifications for flight changes (owner notifications)
+- [x] Create flight-status.service.ts with updateFlightStatus and cancelFlightAndRefund
+- [x] Add admin endpoints for flight status management
+- [x] Test all new features (3 new tests, all passing)
+- [x] All 31 tests passing successfully
