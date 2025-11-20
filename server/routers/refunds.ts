@@ -7,6 +7,10 @@ import {
   getRefundHistory,
   getRefundTrends,
 } from "../services/refunds-stats.service";
+import { calculateCancellationFee, getAllCancellationTiers } from "../services/cancellation-fees.service";
+import { getDb } from "../db";
+import { bookings, flights } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Admin-only procedure
@@ -76,6 +80,56 @@ export const refundsRouter = router({
     .query(async ({ input }) => {
       return await refundsService.isBookingRefundable(input.bookingId);
     }),
+
+  /**
+   * Calculate cancellation fee for a booking
+   */
+  calculateCancellationFee: protectedProcedure
+    .input(z.object({ bookingId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Get booking details
+      const [booking] = await db
+        .select({
+          totalAmount: bookings.totalAmount,
+          flightId: bookings.flightId,
+        })
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+
+      if (!booking) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      }
+
+      // Get flight departure time
+      const [flight] = await db
+        .select({ departureTime: flights.departureTime })
+        .from(flights)
+        .where(eq(flights.id, booking.flightId))
+        .limit(1);
+
+      if (!flight) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Flight not found",
+        });
+      }
+
+      return calculateCancellationFee(booking.totalAmount, flight.departureTime);
+    }),
+
+  /**
+   * Get cancellation policy tiers
+   */
+  getCancellationPolicy: protectedProcedure.query(() => {
+    return getAllCancellationTiers();
+  }),
 
   /**
    * Admin: Get refund statistics

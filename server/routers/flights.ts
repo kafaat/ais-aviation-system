@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import * as flightsService from "../services/flights.service";
+import { getFlightStatusHistory } from "../services/flight-status.service";
 
 /**
  * Flights Router
@@ -29,5 +30,14 @@ export const flightsRouter = router({
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       return await flightsService.getFlightById(input);
+    }),
+
+  /**
+   * Get flight status history
+   */
+  getStatusHistory: publicProcedure
+    .input(z.object({ flightId: z.number() }))
+    .query(async ({ input }) => {
+      return await getFlightStatusHistory(input.flightId);
     }),
 });

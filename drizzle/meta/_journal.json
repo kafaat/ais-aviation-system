@@ -29,6 +29,13 @@
       "when": 1763635602868,
       "tag": "0003_awesome_leo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1763637220952,
+      "tag": "0004_panoramic_serpent_society",
+      "breakpoints": true
     }
   ]
 }

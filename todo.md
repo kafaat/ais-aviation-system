@@ -227,3 +227,19 @@
 - [x] Add admin endpoints for flight status management
 - [x] Test all new features (3 new tests, all passing)
 - [x] All 31 tests passing successfully
+
+### Phase 5: Advanced Features
+- [x] Implement email notification service (email.service.ts)
+- [x] Send booking confirmation emails (after Stripe payment)
+- [x] Send flight status change notifications (delay/cancellation)
+- [x] Send refund confirmation emails
+- [x] Add partial refund support with cancellation fees
+- [x] Implement tiered cancellation fee structure (0%, 25%, 50%, 75%, 100%)
+- [x] Create cancellation-fees.service.ts calculator
+- [x] Update CancelBookingDialog to show fee breakdown
+- [x] Create flight status timeline UI (FlightStatusTimeline component)
+- [x] Add flight_status_history table to schema
+- [x] Automatically record all status changes in history
+- [x] Add flights.getStatusHistory endpoint
+- [x] Test all new features (6 new tests for cancellation fees)
+- [x] All 37 tests passing successfully

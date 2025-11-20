@@ -2,8 +2,10 @@ import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 import * as db from "../db";
 import { getDb } from "../db";
-import { bookings, payments } from "../../drizzle/schema";
+import { bookings, payments, users, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { sendRefundConfirmation } from "./email.service";
+import { calculateCancellationFee } from "./cancellation-fees.service";
 
 /**
  * Refunds Service
@@ -77,18 +79,53 @@ export async function createRefund(input: CreateRefundInput) {
       });
     }
 
+    // Get flight details to calculate cancellation fee
+    const flightResult = await database
+      .select()
+      .from(flights)
+      .where(eq(flights.id, booking.flightId))
+      .limit(1);
+
+    const flight = flightResult[0];
+    if (!flight) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Flight not found",
+      });
+    }
+
+    // Calculate cancellation fee based on time until departure
+    const feeCalculation = calculateCancellationFee(
+      booking.totalAmount,
+      flight.departureTime
+    );
+
+    // Determine refund amount
+    let refundAmount: number;
+    if (input.amount) {
+      // Admin override: use specified amount
+      refundAmount = input.amount;
+    } else {
+      // Use calculated amount based on cancellation policy
+      refundAmount = feeCalculation.refundAmount;
+    }
+
+    // Check if refund is possible
+    if (refundAmount <= 0) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "No refund available for this booking (flight has departed)",
+      });
+    }
+
     // Create refund in Stripe
     const refundParams: Stripe.RefundCreateParams = {
       payment_intent: booking.stripePaymentIntentId,
+      amount: refundAmount,
       reason: input.reason === "duplicate" ? "duplicate" : 
               input.reason === "fraudulent" ? "fraudulent" : 
               "requested_by_customer",
     };
-
-    // Add amount if partial refund
-    if (input.amount && input.amount < booking.totalAmount) {
-      refundParams.amount = input.amount;
-    }
 
     const refund = await stripe.refunds.create(refundParams);
 
@@ -115,6 +152,39 @@ export async function createRefund(input: CreateRefundInput) {
           status: refund.amount === booking.totalAmount ? "refunded" : "completed",
         })
         .where(eq(payments.id, paymentResult[0].id));
+    }
+
+    // Send refund confirmation email
+    try {
+      const [bookingDetails] = await database
+        .select({
+          bookingReference: bookings.bookingReference,
+          userName: users.name,
+          userEmail: users.email,
+          flightNumber: flights.flightNumber,
+        })
+        .from(bookings)
+        .innerJoin(users, eq(bookings.userId, users.id))
+        .innerJoin(flights, eq(bookings.flightId, flights.id))
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+
+      if (bookingDetails && bookingDetails.userEmail) {
+        await sendRefundConfirmation({
+          passengerName: bookingDetails.userName || 'Passenger',
+          passengerEmail: bookingDetails.userEmail,
+          bookingReference: bookingDetails.bookingReference,
+          flightNumber: bookingDetails.flightNumber,
+          refundAmount: refund.amount || booking.totalAmount,
+          refundReason: input.reason,
+          processingDays: 5,
+        });
+
+        console.log(`[Refund] Confirmation email sent to ${bookingDetails.userEmail}`);
+      }
+    } catch (emailError) {
+      console.error('[Refund] Error sending confirmation email:', emailError);
+      // Don't fail the refund if email fails
     }
 
     return {

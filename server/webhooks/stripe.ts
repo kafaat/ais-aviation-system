@@ -2,8 +2,9 @@ import type { Request, Response } from 'express';
 import Stripe from 'stripe';
 import { stripe } from '../stripe';
 import { getDb } from '../db';
-import { bookings } from '../../drizzle/schema';
+import { bookings, flights, airports, users } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { sendBookingConfirmation } from '../services/email.service';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -89,6 +90,67 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     .where(eq(bookings.id, parseInt(bookingId)));
 
   console.log(`[Webhook] Booking ${bookingId} marked as paid`);
+
+  // Send booking confirmation email
+  try {
+    const [booking] = await db
+      .select({
+        bookingReference: bookings.bookingReference,
+        pnr: bookings.pnr,
+        totalAmount: bookings.totalAmount,
+        cabinClass: bookings.cabinClass,
+        numberOfPassengers: bookings.numberOfPassengers,
+        userName: users.name,
+        userEmail: users.email,
+        flightNumber: flights.flightNumber,
+        departureTime: flights.departureTime,
+        arrivalTime: flights.arrivalTime,
+        originCode: airports.code,
+        originCity: airports.city,
+      })
+      .from(bookings)
+      .innerJoin(users, eq(bookings.userId, users.id))
+      .innerJoin(flights, eq(bookings.flightId, flights.id))
+      .innerJoin(airports, eq(flights.originId, airports.id))
+      .where(eq(bookings.id, parseInt(bookingId)))
+      .limit(1);
+
+    if (booking && booking.userEmail) {
+      // Get destination airport
+      const [flight] = await db
+        .select({ destinationId: flights.destinationId })
+        .from(flights)
+        .innerJoin(bookings, eq(bookings.flightId, flights.id))
+        .where(eq(bookings.id, parseInt(bookingId)))
+        .limit(1);
+
+      const [destAirport] = await db
+        .select({ code: airports.code, city: airports.city })
+        .from(airports)
+        .where(eq(airports.id, flight.destinationId))
+        .limit(1);
+
+      await sendBookingConfirmation({
+        passengerName: booking.userName || 'Passenger',
+        passengerEmail: booking.userEmail,
+        bookingReference: booking.bookingReference,
+        pnr: booking.pnr,
+        flightNumber: booking.flightNumber,
+        origin: `${booking.originCity} (${booking.originCode})`,
+        destination: `${destAirport.city} (${destAirport.code})`,
+        departureTime: booking.departureTime,
+        arrivalTime: booking.arrivalTime,
+        cabinClass: booking.cabinClass,
+        numberOfPassengers: booking.numberOfPassengers,
+        totalAmount: booking.totalAmount,
+      });
+
+      console.log(`[Webhook] Booking confirmation email sent to ${booking.userEmail}`);
+    }
+  } catch (emailError) {
+    console.error('[Webhook] Error sending booking confirmation email:', emailError);
+    // Don't fail the webhook if email fails
+  }
 }
 
 async function handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {

@@ -44,6 +44,12 @@ export function CancelBookingDialog({
       { enabled: open }
     );
 
+  // Calculate cancellation fee
+  const { data: cancellationFee } = trpc.refunds.calculateCancellationFee.useQuery(
+    { bookingId },
+    { enabled: open && refundCheck?.refundable === true }
+  );
+
   // Create refund mutation
   const createRefund = trpc.refunds.create.useMutation({
     onSuccess: () => {
@@ -99,18 +105,58 @@ export function CancelBookingDialog({
           </div>
         ) : (
           <div className="space-y-4 py-4">
-            {/* Refund Amount */}
-            <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">
-                المبلغ المسترد
-              </p>
-              <p className="text-2xl font-bold text-primary">
-                {(totalAmount / 100).toFixed(2)} ر.س
-              </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                سيتم استرداد المبلغ إلى طريقة الدفع الأصلية خلال 5-10 أيام عمل
-              </p>
-            </div>
+            {/* Refund Amount with Cancellation Fee */}
+            {cancellationFee ? (
+              <div className={`p-4 border rounded-lg ${
+                cancellationFee.cancellationFee > 0 
+                  ? 'bg-orange-50 border-orange-200' 
+                  : 'bg-primary/5 border-primary/20'
+              }`}>
+                <p className="text-sm font-semibold mb-3">
+                  {cancellationFee.tier === 'full' 
+                    ? 'استرداد كامل (100%)' 
+                    : `استرداد ${cancellationFee.refundPercentage}%`}
+                </p>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">المبلغ الأصلي:</span>
+                    <span className="font-medium">
+                      {(cancellationFee.totalAmount / 100).toFixed(2)} ر.س
+                    </span>
+                  </div>
+                  
+                  {cancellationFee.cancellationFee > 0 && (
+                    <div className="flex justify-between text-orange-700">
+                      <span>رسوم الإلغاء ({100 - cancellationFee.refundPercentage}%):</span>
+                      <span className="font-medium">
+                        -{(cancellationFee.cancellationFee / 100).toFixed(2)} ر.س
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-between pt-2 border-t">
+                    <span className="font-semibold">المبلغ المسترد:</span>
+                    <span className="text-2xl font-bold text-green-600">
+                      {(cancellationFee.refundAmount / 100).toFixed(2)} ر.س
+                    </span>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-muted-foreground mt-3">
+                  سيتم استرداد المبلغ إلى طريقة الدفع الأصلية خلال 5-10 أيام عمل
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <p className="text-sm text-muted-foreground mb-1">
+                  المبلغ المسترد
+                </p>
+                <p className="text-2xl font-bold text-primary">
+                  {(totalAmount / 100).toFixed(2)} ر.س
+                </p>
+              </div>
+            )}
 
             {/* Cancellation Reason */}
             <div className="space-y-2">
