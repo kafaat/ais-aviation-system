@@ -165,6 +165,23 @@
     "checkInSuccess": "✓ Check-in Successful",
     "checkInSuccessDesc": "You can proceed to the boarding gate"
   },
+  "analytics": {
+    "title": "Analytics Dashboard",
+    "subtitle": "View detailed statistics and performance metrics",
+    "totalRevenue": "Total Revenue",
+    "totalBookings": "Total Bookings",
+    "todayBookings": "Today's Bookings",
+    "avgBookingValue": "Avg Booking Value",
+    "allTime": "All time",
+    "today": "Today",
+    "perBooking": "Per booking",
+    "dailyBookings": "Daily Bookings (Last 30 Days)",
+    "dailyRevenue": "Daily Revenue (Last 30 Days)",
+    "topDestinations": "Top Destinations",
+    "airlinePerformance": "Airline Performance",
+    "bookings": "Bookings",
+    "revenue": "Revenue (SAR)"
+  },
   "admin": {
     "title": "Admin Dashboard",
     "subtitle": "Manage flights and bookings",

@@ -119,3 +119,31 @@
 - [ ] تنبيهات البريد الإلكتروني
 - [ ] إشعارات Push (PWA)
 - [ ] تنبيهات SMS (اختياري)
+
+## KPIs & Analytics Dashboard
+
+### Backend APIs
+- [x] إنشاء Analytics Router
+- [x] API للإحصائيات العامة (Total Bookings, Revenue, etc.)
+- [x] API للرسوم البيانية (Daily bookings, Revenue trends)
+- [x] API لأكثر الوجهات شعبية
+- [x] API لأداء شركات الطيران
+
+### KPI Components
+- [x] مكون Total Revenue
+- [x] مكون Total Bookings
+- [x] مكون Occupancy Rate
+- [x] مكون Average Booking Value
+- [x] مكون Conversion Rate
+
+### Charts & Visualizations
+- [x] رسم بياني للحجوزات اليومية (Line Chart)
+- [x] رسم بياني لتوزيع الإيرادات (Bar Chart)
+- [x] رسم بياني للوجهات الشعبية (Pie Chart)
+- [x] رسم بياني لأداء الشركات (Bar Chart)
+
+### Analytics Dashboard
+- [x] تصميم لوحة التحكم الإحصائية
+- [ ] إضافة فلاتر التاريخ
+- [x] تكامل جميع KPIs والرسوم البيانية
+- [ ] إضافة ميزة التصدير (PDF/Excel)

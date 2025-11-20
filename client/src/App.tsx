@@ -13,6 +13,7 @@ const BookingPage = lazy(() => import("./pages/BookingPage"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
 const CheckIn = lazy(() => import("./pages/CheckIn"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const Analytics = lazy(() => import("./pages/Analytics"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Loading component shown while lazy loading pages
@@ -37,6 +38,7 @@ function Router() {
         <Route path="/my-bookings" component={MyBookings} />
         <Route path="/check-in" component={CheckIn} />
         <Route path="/admin" component={AdminDashboard} />
+        <Route path="/analytics" component={Analytics} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>
