@@ -6,8 +6,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
-import { ChevronLeft, Plane, Calendar, MapPin, XCircle } from "lucide-react";
+import { ChevronLeft, Plane, Calendar, MapPin, XCircle, Edit } from "lucide-react";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
+import { ModifyBookingDialog } from "@/components/ModifyBookingDialog";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { getLoginUrl } from "@/const";
@@ -15,6 +16,7 @@ import { getLoginUrl } from "@/const";
 export default function MyBookings() {
   const { user, isAuthenticated, loading } = useAuth();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
 
   const { data: bookings, isLoading } = trpc.bookings.myBookings.useQuery(
@@ -196,17 +198,30 @@ export default function MyBookings() {
                         </Badge>
                       )}
                       {booking.paymentStatus === "paid" && booking.status !== "cancelled" && booking.status !== "completed" && (
-                        <Button
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => {
-                            setSelectedBooking(booking);
-                            setCancelDialogOpen(true);
-                          }}
-                        >
-                          <XCircle className="mr-2 h-4 w-4" />
-                          إلغاء الحجز
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => {
+                              setSelectedBooking(booking);
+                              setModifyDialogOpen(true);
+                            }}
+                          >
+                            <Edit className="mr-2 h-4 w-4" />
+                            تعديل
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => {
+                              setSelectedBooking(booking);
+                              setCancelDialogOpen(true);
+                            }}
+                          >
+                            <XCircle className="mr-2 h-4 w-4" />
+                            إلغاء
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -227,6 +242,23 @@ export default function MyBookings() {
           onOpenChange={setCancelDialogOpen}
           onSuccess={() => {
             setSelectedBooking(null);
+          }}
+        />
+      )}
+
+      {/* Modify Booking Dialog */}
+      {selectedBooking && (
+        <ModifyBookingDialog
+          open={modifyDialogOpen}
+          onOpenChange={setModifyDialogOpen}
+          booking={{
+            id: selectedBooking.id,
+            bookingReference: selectedBooking.bookingReference,
+            flightNumber: selectedBooking.flightNumber,
+            cabinClass: selectedBooking.cabinClass,
+            totalAmount: selectedBooking.totalAmount,
+            originName: selectedBooking.originName,
+            destinationName: selectedBooking.destinationName,
           }}
         />
       )}

@@ -170,3 +170,123 @@ export const payments = mysqlTable("payments", {
 
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = typeof payments.$inferInsert;
+
+/**
+ * Booking Modification Requests table
+ * Tracks all modification requests for bookings
+ */
+export const bookingModifications = mysqlTable("booking_modifications", {
+  id: int("id").autoincrement().primaryKey(),
+  bookingId: int("bookingId").notNull(),
+  userId: int("userId").notNull(),
+  
+  // Modification type
+  modificationType: mysqlEnum("modificationType", [
+    "change_date",
+    "upgrade_cabin",
+    "change_flight",
+    "add_services"
+  ]).notNull(),
+  
+  // Original values
+  originalFlightId: int("originalFlightId"),
+  originalCabinClass: mysqlEnum("originalCabinClass", ["economy", "business"]),
+  originalAmount: int("originalAmount").notNull(), // in cents
+  
+  // New values
+  newFlightId: int("newFlightId"),
+  newCabinClass: mysqlEnum("newCabinClass", ["economy", "business"]),
+  newAmount: int("newAmount").notNull(), // in cents
+  
+  // Price difference
+  priceDifference: int("priceDifference").notNull(), // positive = pay more, negative = refund
+  modificationFee: int("modificationFee").notNull().default(0), // in cents
+  totalCost: int("totalCost").notNull(), // priceDifference + modificationFee
+  
+  // Status
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "completed"]).notNull().default("pending"),
+  
+  // Payment
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "refunded"]).default("pending"),
+  
+  // Metadata
+  reason: text("reason"),
+  adminNotes: text("adminNotes"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  completedAt: timestamp("completedAt"),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  userIdIdx: index("user_id_idx").on(table.userId),
+  statusIdx: index("status_idx").on(table.status),
+}));
+
+export type BookingModification = typeof bookingModifications.$inferSelect;
+export type InsertBookingModification = typeof bookingModifications.$inferInsert;
+
+/**
+ * Loyalty Accounts table
+ * Tracks user loyalty program membership and tier
+ */
+export const loyaltyAccounts = mysqlTable("loyalty_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  
+  // Miles balance
+  totalMilesEarned: int("totalMilesEarned").notNull().default(0),
+  currentMilesBalance: int("currentMilesBalance").notNull().default(0),
+  milesRedeemed: int("milesRedeemed").notNull().default(0),
+  
+  // Tier system
+  tier: mysqlEnum("tier", ["bronze", "silver", "gold", "platinum"]).notNull().default("bronze"),
+  tierPoints: int("tierPoints").notNull().default(0), // Points for tier qualification
+  
+  // Metadata
+  memberSince: timestamp("memberSince").defaultNow().notNull(),
+  lastActivityAt: timestamp("lastActivityAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  tierIdx: index("tier_idx").on(table.tier),
+}));
+
+export type LoyaltyAccount = typeof loyaltyAccounts.$inferSelect;
+export type InsertLoyaltyAccount = typeof loyaltyAccounts.$inferInsert;
+
+/**
+ * Miles Transactions table
+ * Tracks all miles earning and redemption transactions
+ */
+export const milesTransactions = mysqlTable("miles_transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  loyaltyAccountId: int("loyaltyAccountId").notNull(),
+  
+  // Transaction details
+  type: mysqlEnum("type", ["earn", "redeem", "expire", "bonus", "adjustment"]).notNull(),
+  amount: int("amount").notNull(), // Positive for earn, negative for redeem
+  balanceAfter: int("balanceAfter").notNull(),
+  
+  // Related entities
+  bookingId: int("bookingId"),
+  flightId: int("flightId"),
+  
+  // Description
+  description: text("description").notNull(),
+  reason: text("reason"),
+  
+  // Expiry
+  expiresAt: timestamp("expiresAt"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  loyaltyAccountIdIdx: index("loyalty_account_id_idx").on(table.loyaltyAccountId),
+  typeIdx: index("type_idx").on(table.type),
+}));
+
+export type MilesTransaction = typeof milesTransactions.$inferSelect;
+export type InsertMilesTransaction = typeof milesTransactions.$inferInsert;

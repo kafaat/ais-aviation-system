@@ -11,6 +11,8 @@ import { refundsRouter } from "./routers/refunds";
 import { adminRouter } from "./routers/admin";
 import { analyticsRouter } from "./routers/analytics";
 import { referenceRouter } from "./routers/reference";
+import { modificationsRouter } from "./routers/modifications";
+import { loyaltyRouter } from "./routers/loyalty";
 
 /**
  * Main Application Router
@@ -38,6 +40,8 @@ export const appRouter = router({
   admin: adminRouter,
   analytics: analyticsRouter,
   reference: referenceRouter,
+  modifications: modificationsRouter,
+  loyalty: loyaltyRouter,
 });
 
 export type AppRouter = typeof appRouter;

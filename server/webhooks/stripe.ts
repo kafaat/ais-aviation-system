@@ -5,6 +5,7 @@ import { getDb } from '../db';
 import { bookings, flights, airports, users } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { sendBookingConfirmation } from '../services/email.service';
+import { awardMilesForBooking } from '../services/loyalty.service';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -148,8 +149,41 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       console.log(`[Webhook] Booking confirmation email sent to ${booking.userEmail}`);
     }
   } catch (emailError) {
-    console.error('[Webhook] Error sending booking confirmation email:', emailError);
-    // Don't fail the webhook if email fails
+    console.error('[Webhook] Failed to send booking confirmation email:', emailError);
+  }
+
+  // Award loyalty miles
+  try {
+    const [bookingDetails] = await db
+      .select({
+        userId: bookings.userId,
+        flightId: bookings.flightId,
+        totalAmount: bookings.totalAmount,
+      })
+      .from(bookings)
+      .where(eq(bookings.id, parseInt(bookingId)))
+      .limit(1);
+
+    if (bookingDetails) {
+      const result = await awardMilesForBooking(
+        bookingDetails.userId,
+        parseInt(bookingId),
+        bookingDetails.flightId,
+        bookingDetails.totalAmount
+      );
+
+      console.log(
+        `[Webhook] Awarded ${result.milesEarned} miles to user ${bookingDetails.userId} ` +
+        `(Base: ${result.baseMiles}, Bonus: ${result.bonusMiles})`
+      );
+
+      if (result.tierUpgraded) {
+        console.log(`[Webhook] User ${bookingDetails.userId} upgraded to ${result.newTier} tier!`);
+      }
+    }
+  } catch (loyaltyError) {
+    console.error('[Webhook] Failed to award loyalty miles:', loyaltyError);
+    // Don't fail the webhook if loyalty fails
   }
 }
 

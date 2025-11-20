@@ -36,6 +36,20 @@
       "when": 1763637220952,
       "tag": "0004_panoramic_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1763637528450,
+      "tag": "0005_petite_ares",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1763637784622,
+      "tag": "0006_cultured_christian_walker",
+      "breakpoints": true
     }
   ]
 }

@@ -243,3 +243,36 @@
 - [x] Add flights.getStatusHistory endpoint
 - [x] Test all new features (6 new tests for cancellation fees)
 - [x] All 37 tests passing successfully
+
+### Phase 6: Booking Modification & Advanced Features
+- [x] Design booking modification schema (booking_modifications table)
+- [x] Create booking-modification.service.ts
+- [x] Implement change date functionality with price difference
+- [x] Implement upgrade cabin class functionality
+- [x] Add modification fee calculation (0%, 5%, 10%, 15% based on time)
+- [x] Create ModifyBookingDialog component
+- [x] Add modification history tracking
+- [x] Create modifications router
+- [x] Add modify button to My Bookings page
+- [x] Integrate with Stripe for payment of price differences
+
+### Phase 7: Multi-City Flights
+- [ ] Design multi-city schema (booking_segments table)
+- [ ] Update flight search to support multi-city
+- [ ] Implement smart pricing for multi-city routes
+- [ ] Create multi-city booking flow UI
+- [ ] Add segment management in booking details
+- [ ] Test multi-city booking flow
+
+### Phase 8: Loyalty Program
+- [x] Design loyalty schema (loyalty_accounts, miles_transactions tables)
+- [x] Create loyalty.service.ts
+- [x] Implement miles earning on bookings (1 mile per SAR)
+- [x] Implement miles redemption for discounts
+- [x] Add tier system (Bronze, Silver, Gold, Platinum)
+- [x] Implement tier multipliers (1x, 1.25x, 1.5x, 2x)
+- [x] Auto-award miles after successful payment (Stripe webhook)
+- [x] Create loyalty router
+- [x] Test loyalty program features (8 tests passing)
+- [x] All 45 tests passing successfully
+- [ ] Create loyalty dashboard UI (pending)
