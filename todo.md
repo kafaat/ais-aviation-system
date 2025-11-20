@@ -38,6 +38,32 @@
 ### Testing & Deployment
 - [x] كتابة اختبارات Vitest للـ APIs
 - [x] اختبار واجهة المستخدم
-- [ ] حفظ checkpoint
-- [ ] رفع المشروع إلى GitHub
-- [ ] كتابة الوثائق (README.md)
+- [x] حفظ checkpoint
+- [x] رفع المشروع إلى GitHub
+- [x] كتابة الوثائق (README.md)
+
+## UI/UX Enhancements
+
+### Internationalization (i18n)
+- [x] إضافة مكتبة i18next
+- [x] إنشاء ملفات الترجمة (العربية والإنجليزية)
+- [x] إضافة مبدل اللغة في الواجهة
+- [x] تطبيق الترجمة على جميع الصفحات
+
+### Visual Design Improvements
+- [x] إضافة رسوم متحركة للانتقالات
+- [x] تحسين نظام الألوان والتدرجات
+- [x] إضافة تأثيرات hover وfocus محسّنة
+- [x] تحسين Typography والخطوط
+
+### Interactive Features
+- [ ] إضافة خريطة اختيار المقاعد التفاعلية
+- [ ] إضافة معاينة تفصيلية للرحلة
+- [ ] تحسين نماذج الإدخال بـ validation فوري
+- [ ] إضافة loading states محسّنة
+
+### Performance Optimization
+- [ ] تحسين lazy loading للصور
+- [ ] إضافة code splitting
+- [ ] تحسين bundle size
+- [ ] إضافة caching للبيانات

@@ -1,0 +1,175 @@
+{
+  "common": {
+    "appName": "Aviation Integrated System",
+    "search": "Search",
+    "login": "Login",
+    "logout": "Logout",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "success": "Operation successful",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit"
+  },
+  "nav": {
+    "home": "Home",
+    "myBookings": "My Bookings",
+    "checkIn": "Check-in",
+    "admin": "Dashboard"
+  },
+  "home": {
+    "hero": {
+      "title": "Book Your Next Flight",
+      "subtitle": "Discover the best deals on flights worldwide"
+    },
+    "search": {
+      "from": "From",
+      "to": "To",
+      "departureDate": "Departure Date",
+      "selectCity": "Select City",
+      "selectDate": "Select Date",
+      "searchFlights": "Search Flights"
+    },
+    "features": {
+      "title": "Why Choose Us?",
+      "secure": {
+        "title": "Secure Booking",
+        "description": "We guarantee a safe booking experience with the latest security technologies"
+      },
+      "support": {
+        "title": "24/7 Support",
+        "description": "Support team available 24/7 to help you anytime"
+      },
+      "destinations": {
+        "title": "Global Destinations",
+        "description": "Book flights to over 1000 destinations worldwide"
+      }
+    }
+  },
+  "search": {
+    "title": "Search Results",
+    "noFlights": "No Flights Available",
+    "noFlightsDesc": "Sorry, we couldn't find any available flights for this route on the selected date",
+    "foundFlights": "Found {{count}} available flight(s)",
+    "directFlight": "Direct Flight",
+    "economy": "Economy Class",
+    "business": "Business Class",
+    "seatsAvailable": "{{count}} seat(s) available",
+    "bookNow": "Book Now"
+  },
+  "booking": {
+    "title": "Complete Booking",
+    "passengerInfo": "Passenger Information",
+    "addPassenger": "Add Passenger",
+    "passenger": "Passenger",
+    "passengerType": "Passenger Type",
+    "adult": "Adult",
+    "child": "Child",
+    "infant": "Infant",
+    "title": "Title",
+    "mr": "Mr",
+    "mrs": "Mrs",
+    "ms": "Ms",
+    "firstName": "First Name",
+    "lastName": "Last Name",
+    "passportNumber": "Passport Number (Optional)",
+    "nationality": "Nationality (Optional)",
+    "summary": "Booking Summary",
+    "flightNumber": "Flight Number",
+    "route": "Route",
+    "class": "Class",
+    "passengers": "Passengers",
+    "ticketPrice": "Ticket Price",
+    "total": "Total",
+    "completeBooking": "Complete Booking & Payment",
+    "processing": "Processing...",
+    "termsAgree": "By clicking \"Complete Booking\" you agree to the terms and conditions"
+  },
+  "myBookings": {
+    "title": "My Bookings",
+    "subtitle": "View and manage all your bookings",
+    "noBookings": "No Bookings",
+    "noBookingsDesc": "You haven't made any bookings yet",
+    "bookingRef": "Booking Reference",
+    "pnr": "PNR",
+    "from": "From",
+    "to": "To",
+    "departureDate": "Departure Date",
+    "totalAmount": "Total Amount",
+    "checkInNow": "Check-in",
+    "checkedIn": "Checked In",
+    "status": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "cancelled": "Cancelled",
+      "completed": "Completed"
+    },
+    "payment": {
+      "pending": "Pending",
+      "paid": "Paid",
+      "refunded": "Refunded",
+      "failed": "Failed"
+    }
+  },
+  "checkIn": {
+    "title": "Check-in",
+    "subtitle": "Enter your PNR to check-in",
+    "pnrLabel": "Booking Reference (PNR)",
+    "pnrPlaceholder": "Enter PNR (6 characters)",
+    "pnrHint": "You can find your PNR in the booking confirmation email",
+    "search": "Search",
+    "notFound": "Booking Not Found",
+    "notFoundDesc": "Please verify your PNR and try again",
+    "bookingDetails": "Booking Details",
+    "passengers": "Passengers",
+    "checkInButton": "Check-in",
+    "checkInSuccess": "✓ Check-in Successful",
+    "checkInSuccessDesc": "You can proceed to the boarding gate"
+  },
+  "admin": {
+    "title": "Admin Dashboard",
+    "subtitle": "Manage flights and bookings",
+    "addFlight": "Add New Flight",
+    "totalFlights": "Total Flights",
+    "todayBookings": "Today's Bookings",
+    "revenue": "Revenue",
+    "flightForm": {
+      "title": "Add New Flight",
+      "flightNumber": "Flight Number",
+      "airline": "Airline",
+      "origin": "Origin Airport",
+      "destination": "Destination Airport",
+      "departureTime": "Departure Time",
+      "arrivalTime": "Arrival Time",
+      "economySeats": "Economy Seats",
+      "businessSeats": "Business Seats",
+      "economyPrice": "Economy Price (SAR)",
+      "businessPrice": "Business Price (SAR)",
+      "submit": "Add Flight",
+      "submitting": "Adding...",
+      "cancel": "Cancel"
+    }
+  },
+  "footer": {
+    "description": "Aviation Integrated System for ticket booking and flight management",
+    "quickLinks": "Quick Links",
+    "about": "About Us",
+    "contact": "Contact Us",
+    "terms": "Terms & Conditions",
+    "services": "Our Services",
+    "bookTickets": "Book Tickets",
+    "manageBookings": "Manage Bookings",
+    "checkIn": "Check-in",
+    "contactUs": "Contact Us",
+    "email": "Email",
+    "phone": "Phone",
+    "rights": "All rights reserved"
+  }
+}

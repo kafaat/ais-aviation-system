@@ -1,0 +1,175 @@
+{
+  "common": {
+    "appName": "نظام الطيران المتكامل",
+    "search": "بحث",
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "loading": "جاري التحميل...",
+    "error": "حدث خطأ",
+    "success": "تمت العملية بنجاح",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "save": "حفظ",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "add": "إضافة",
+    "back": "رجوع",
+    "next": "التالي",
+    "previous": "السابق",
+    "submit": "إرسال"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "myBookings": "حجوزاتي",
+    "checkIn": "تسجيل الوصول",
+    "admin": "لوحة التحكم"
+  },
+  "home": {
+    "hero": {
+      "title": "احجز رحلتك القادمة",
+      "subtitle": "اكتشف أفضل العروض على رحلات الطيران حول العالم"
+    },
+    "search": {
+      "from": "من",
+      "to": "إلى",
+      "departureDate": "تاريخ المغادرة",
+      "selectCity": "اختر المدينة",
+      "selectDate": "اختر التاريخ",
+      "searchFlights": "بحث عن رحلات"
+    },
+    "features": {
+      "title": "لماذا تختارنا؟",
+      "secure": {
+        "title": "حجز آمن",
+        "description": "نضمن لك تجربة حجز آمنة ومحمية بأحدث تقنيات الأمان"
+      },
+      "support": {
+        "title": "دعم على مدار الساعة",
+        "description": "فريق الدعم متاح 24/7 لمساعدتك في أي وقت"
+      },
+      "destinations": {
+        "title": "وجهات عالمية",
+        "description": "احجز رحلات إلى أكثر من 1000 وجهة حول العالم"
+      }
+    }
+  },
+  "search": {
+    "title": "نتائج البحث",
+    "noFlights": "لا توجد رحلات متاحة",
+    "noFlightsDesc": "عذراً، لم نجد أي رحلات متاحة لهذا المسار في التاريخ المحدد",
+    "foundFlights": "وجدنا {{count}} رحلة متاحة",
+    "directFlight": "رحلة مباشرة",
+    "economy": "الدرجة السياحية",
+    "business": "درجة الأعمال",
+    "seatsAvailable": "{{count}} مقعد متاح",
+    "bookNow": "احجز الآن"
+  },
+  "booking": {
+    "title": "إكمال الحجز",
+    "passengerInfo": "معلومات الركاب",
+    "addPassenger": "إضافة راكب",
+    "passenger": "الراكب",
+    "passengerType": "نوع الراكب",
+    "adult": "بالغ",
+    "child": "طفل",
+    "infant": "رضيع",
+    "title": "اللقب",
+    "mr": "السيد",
+    "mrs": "السيدة",
+    "ms": "الآنسة",
+    "firstName": "الاسم الأول",
+    "lastName": "اسم العائلة",
+    "passportNumber": "رقم الجواز (اختياري)",
+    "nationality": "الجنسية (اختياري)",
+    "summary": "ملخص الحجز",
+    "flightNumber": "رقم الرحلة",
+    "route": "المسار",
+    "class": "الدرجة",
+    "passengers": "عدد الركاب",
+    "ticketPrice": "سعر التذكرة",
+    "total": "المجموع",
+    "completeBooking": "إتمام الحجز والدفع",
+    "processing": "جاري المعالجة...",
+    "termsAgree": "بالضغط على \"إتمام الحجز\" فإنك توافق على الشروط والأحكام"
+  },
+  "myBookings": {
+    "title": "حجوزاتي",
+    "subtitle": "عرض وإدارة جميع حجوزاتك",
+    "noBookings": "لا توجد حجوزات",
+    "noBookingsDesc": "لم تقم بأي حجوزات بعد",
+    "bookingRef": "رقم الحجز",
+    "pnr": "PNR",
+    "from": "من",
+    "to": "إلى",
+    "departureDate": "تاريخ المغادرة",
+    "totalAmount": "المبلغ الإجمالي",
+    "checkInNow": "تسجيل الوصول",
+    "checkedIn": "تم تسجيل الوصول",
+    "status": {
+      "pending": "قيد الانتظار",
+      "confirmed": "مؤكد",
+      "cancelled": "ملغي",
+      "completed": "مكتمل"
+    },
+    "payment": {
+      "pending": "معلق",
+      "paid": "مدفوع",
+      "refunded": "مسترد",
+      "failed": "فشل"
+    }
+  },
+  "checkIn": {
+    "title": "تسجيل الوصول",
+    "subtitle": "أدخل رقم PNR لتسجيل الوصول",
+    "pnrLabel": "رقم الحجز (PNR)",
+    "pnrPlaceholder": "أدخل رقم PNR (6 أحرف)",
+    "pnrHint": "يمكنك العثور على رقم PNR في رسالة تأكيد الحجز",
+    "search": "بحث",
+    "notFound": "لم يتم العثور على حجز",
+    "notFoundDesc": "تأكد من رقم PNR وحاول مرة أخرى",
+    "bookingDetails": "تفاصيل الحجز",
+    "passengers": "الركاب",
+    "checkInButton": "تسجيل الوصول",
+    "checkInSuccess": "✓ تم تسجيل الوصول بنجاح",
+    "checkInSuccessDesc": "يمكنك التوجه إلى بوابة الصعود"
+  },
+  "admin": {
+    "title": "لوحة التحكم الإدارية",
+    "subtitle": "إدارة الرحلات والحجوزات",
+    "addFlight": "إضافة رحلة جديدة",
+    "totalFlights": "إجمالي الرحلات",
+    "todayBookings": "الحجوزات اليوم",
+    "revenue": "الإيرادات",
+    "flightForm": {
+      "title": "إضافة رحلة جديدة",
+      "flightNumber": "رقم الرحلة",
+      "airline": "شركة الطيران",
+      "origin": "مطار المغادرة",
+      "destination": "مطار الوصول",
+      "departureTime": "وقت المغادرة",
+      "arrivalTime": "وقت الوصول",
+      "economySeats": "عدد مقاعد الدرجة السياحية",
+      "businessSeats": "عدد مقاعد درجة الأعمال",
+      "economyPrice": "سعر الدرجة السياحية (ر.س)",
+      "businessPrice": "سعر درجة الأعمال (ر.س)",
+      "submit": "إضافة الرحلة",
+      "submitting": "جاري الإضافة...",
+      "cancel": "إلغاء"
+    }
+  },
+  "footer": {
+    "description": "نظام الطيران المتكامل لحجز التذاكر وإدارة الرحلات",
+    "quickLinks": "روابط سريعة",
+    "about": "عن الشركة",
+    "contact": "اتصل بنا",
+    "terms": "الشروط والأحكام",
+    "services": "خدماتنا",
+    "bookTickets": "حجز التذاكر",
+    "manageBookings": "إدارة الحجوزات",
+    "checkIn": "تسجيل الوصول",
+    "contactUs": "تواصل معنا",
+    "email": "البريد",
+    "phone": "الهاتف",
+    "rights": "جميع الحقوق محفوظة"
+  }
+}

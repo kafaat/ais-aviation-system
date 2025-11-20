@@ -1,256 +1,361 @@
 import { useState } from "react";
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useTranslation } from "react-i18next";
+import { motion } from "framer-motion";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plane, Calendar as CalendarIcon, MapPin, Users, Shield, Clock, Globe } from "lucide-react";
-import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
-import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Link, useLocation } from "wouter";
-import { trpc } from "@/lib/trpc";
+import { Plane, MapPin, Calendar as CalendarIcon, Shield, Clock, Globe as GlobeIcon } from "lucide-react";
+import { format } from "date-fns";
+import { ar, enUS } from "date-fns/locale";
+import { APP_LOGO } from "@/const";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getLoginUrl } from "@/const";
+
+const fadeIn = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0.6 }
+};
+
+const staggerContainer = {
+  animate: {
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
 
 export default function Home() {
-  const { user, isAuthenticated } = useAuth();
-  const [, navigate] = useLocation();
+  const { t, i18n } = useTranslation();
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  
+  const [originId, setOriginId] = useState<string>("");
+  const [destinationId, setDestinationId] = useState<string>("");
   const [departureDate, setDepartureDate] = useState<Date>();
-  const [origin, setOrigin] = useState("");
-  const [destination, setDestination] = useState("");
 
   const { data: airports } = trpc.reference.airports.useQuery();
 
   const handleSearch = () => {
-    if (origin && destination && departureDate) {
+    if (originId && destinationId && departureDate) {
       const params = new URLSearchParams({
-        origin,
-        destination,
+        origin: originId,
+        destination: destinationId,
         date: departureDate.toISOString(),
       });
-      navigate(`/search?${params.toString()}`);
+      setLocation(`/search?${params.toString()}`);
     }
   };
 
+  const currentLocale = i18n.language === 'ar' ? ar : enUS;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
+      <motion.header 
+        initial={{ y: -100 }}
+        animate={{ y: 0 }}
+        transition={{ type: "spring", stiffness: 100 }}
+        className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm"
+      >
         <div className="container py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Plane className="h-8 w-8 text-primary" />
-              <h1 className="text-2xl font-bold text-primary">{APP_TITLE}</h1>
-            </div>
-            <nav className="flex items-center gap-6">
+            <Link href="/">
+              <div className="flex items-center gap-3 cursor-pointer group">
+                <motion.div
+                  whileHover={{ rotate: 360 }}
+                  transition={{ duration: 0.6 }}
+                >
+                  <Plane className="h-8 w-8 text-primary" />
+                </motion.div>
+                <div>
+                  <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
+                    {t('common.appName')}
+                  </h1>
+                  <p className="text-xs text-muted-foreground">AIS</p>
+                </div>
+              </div>
+            </Link>
+
+            <nav className="hidden md:flex items-center gap-6">
               <Link href="/">
                 <a className="text-sm font-medium hover:text-primary transition-colors">
-                  الرئيسية
+                  {t('nav.home')}
                 </a>
               </Link>
-              {isAuthenticated ? (
-                <>
-                  <Link href="/my-bookings">
-                    <a className="text-sm font-medium hover:text-primary transition-colors">
-                      حجوزاتي
-                    </a>
-                  </Link>
-                  <Link href="/check-in">
-                    <a className="text-sm font-medium hover:text-primary transition-colors">
-                      تسجيل الوصول
-                    </a>
-                  </Link>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground">{user?.name}</span>
-                  </div>
-                </>
-              ) : (
-                <Button asChild variant="default">
-                  <a href={getLoginUrl()}>تسجيل الدخول</a>
-                </Button>
+              <Link href="/my-bookings">
+                <a className="text-sm font-medium hover:text-primary transition-colors">
+                  {t('nav.myBookings')}
+                </a>
+              </Link>
+              <Link href="/check-in">
+                <a className="text-sm font-medium hover:text-primary transition-colors">
+                  {t('nav.checkIn')}
+                </a>
+              </Link>
+              {user?.role === "admin" && (
+                <Link href="/admin">
+                  <a className="text-sm font-medium hover:text-primary transition-colors">
+                    {t('nav.admin')}
+                  </a>
+                </Link>
               )}
             </nav>
+
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher />
+              {user ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground hidden md:block">
+                    {user.name}
+                  </span>
+                </div>
+              ) : (
+                <Button asChild size="sm">
+                  <a href={getLoginUrl()}>{t('common.login')}</a>
+                </Button>
+              )}
+            </div>
           </div>
         </div>
-      </header>
+      </motion.header>
 
       {/* Hero Section */}
-      <section className="py-20">
-        <div className="container">
-          <div className="text-center mb-12">
-            <h2 className="text-5xl font-bold text-gray-900 mb-4">
-              احجز رحلتك القادمة
-            </h2>
-            <p className="text-xl text-gray-600">
-              اكتشف أفضل العروض على رحلات الطيران حول العالم
-            </p>
-          </div>
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-blue-500/5 to-purple-500/5" />
+        <div className="container py-20 relative">
+          <motion.div 
+            className="max-w-3xl mx-auto text-center mb-12"
+            {...fadeIn}
+          >
+            <motion.h2 
+              className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-primary via-blue-600 to-purple-600 bg-clip-text text-transparent"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8 }}
+            >
+              {t('home.hero.title')}
+            </motion.h2>
+            <motion.p 
+              className="text-xl text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.8 }}
+            >
+              {t('home.hero.subtitle')}
+            </motion.p>
+          </motion.div>
 
           {/* Search Card */}
-          <Card className="max-w-4xl mx-auto p-8 shadow-2xl">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {/* Origin */}
-              <div className="space-y-2">
-                <Label htmlFor="origin" className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  من
-                </Label>
-                <Select value={origin} onValueChange={setOrigin}>
-                  <SelectTrigger id="origin">
-                    <SelectValue placeholder="اختر المدينة" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {airports?.map((airport) => (
-                      <SelectItem key={airport.id} value={airport.id.toString()}>
-                        {airport.city} ({airport.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.8 }}
+          >
+            <Card className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    {t('home.search.from')}
+                  </label>
+                  <Select value={originId} onValueChange={setOriginId}>
+                    <SelectTrigger className="h-12">
+                      <SelectValue placeholder={t('home.search.selectCity')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {airports?.map((airport) => (
+                        <SelectItem key={airport.id} value={airport.id.toString()}>
+                          {airport.city} ({airport.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    {t('home.search.to')}
+                  </label>
+                  <Select value={destinationId} onValueChange={setDestinationId}>
+                    <SelectTrigger className="h-12">
+                      <SelectValue placeholder={t('home.search.selectCity')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {airports?.map((airport) => (
+                        <SelectItem key={airport.id} value={airport.id.toString()}>
+                          {airport.city} ({airport.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4 text-primary" />
+                    {t('home.search.departureDate')}
+                  </label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="w-full h-12 justify-start text-left font-normal"
+                      >
+                        {departureDate ? (
+                          format(departureDate, "PPP", { locale: currentLocale })
+                        ) : (
+                          <span className="text-muted-foreground">{t('home.search.selectDate')}</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={departureDate}
+                        onSelect={setDepartureDate}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
 
-              {/* Destination */}
-              <div className="space-y-2">
-                <Label htmlFor="destination" className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  إلى
-                </Label>
-                <Select value={destination} onValueChange={setDestination}>
-                  <SelectTrigger id="destination">
-                    <SelectValue placeholder="اختر المدينة" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {airports?.map((airport) => (
-                      <SelectItem key={airport.id} value={airport.id.toString()}>
-                        {airport.city} ({airport.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Date */}
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <CalendarIcon className="h-4 w-4" />
-                  تاريخ المغادرة
-                </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start text-right font-normal"
-                    >
-                      {departureDate ? (
-                        format(departureDate, "PPP", { locale: ar })
-                      ) : (
-                        <span>اختر التاريخ</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={departureDate}
-                      onSelect={setDepartureDate}
-                      disabled={(date) => date < new Date()}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              {/* Search Button */}
-              <div className="flex items-end">
+              <motion.div 
+                className="mt-6"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
                 <Button 
                   onClick={handleSearch} 
-                  className="w-full h-10"
-                  disabled={!origin || !destination || !departureDate}
+                  size="lg" 
+                  className="w-full h-14 text-lg font-semibold shadow-lg"
+                  disabled={!originId || !destinationId || !departureDate}
                 >
-                  بحث عن رحلات
+                  {t('home.search.searchFlights')}
                 </Button>
-              </div>
-            </div>
-          </Card>
+              </motion.div>
+            </Card>
+          </motion.div>
         </div>
       </section>
 
-      {/* Features */}
+      {/* Features Section */}
       <section className="py-20 bg-white">
         <div className="container">
-          <h3 className="text-3xl font-bold text-center mb-12">لماذا تختارنا؟</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-                <Shield className="h-8 w-8 text-primary" />
-              </div>
-              <h4 className="text-xl font-semibold mb-2">حجز آمن</h4>
-              <p className="text-gray-600">
-                نضمن لك تجربة حجز آمنة ومحمية بأحدث تقنيات الأمان
-              </p>
-            </Card>
+          <motion.h3 
+            className="text-3xl font-bold text-center mb-12"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+          >
+            {t('home.features.title')}
+          </motion.h3>
 
-            <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-                <Clock className="h-8 w-8 text-primary" />
-              </div>
-              <h4 className="text-xl font-semibold mb-2">دعم على مدار الساعة</h4>
-              <p className="text-gray-600">
-                فريق الدعم متاح 24/7 لمساعدتك في أي وقت
-              </p>
-            </Card>
-
-            <Card className="p-6 text-center hover:shadow-lg transition-shadow">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-                <Globe className="h-8 w-8 text-primary" />
-              </div>
-              <h4 className="text-xl font-semibold mb-2">وجهات عالمية</h4>
-              <p className="text-gray-600">
-                احجز رحلات إلى أكثر من 1000 وجهة حول العالم
-              </p>
-            </Card>
-          </div>
+          <motion.div 
+            className="grid grid-cols-1 md:grid-cols-3 gap-8"
+            variants={staggerContainer}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+          >
+            {[
+              {
+                icon: Shield,
+                title: t('home.features.secure.title'),
+                description: t('home.features.secure.description'),
+                color: "text-green-600",
+                bgColor: "bg-green-100"
+              },
+              {
+                icon: Clock,
+                title: t('home.features.support.title'),
+                description: t('home.features.support.description'),
+                color: "text-blue-600",
+                bgColor: "bg-blue-100"
+              },
+              {
+                icon: GlobeIcon,
+                title: t('home.features.destinations.title'),
+                description: t('home.features.destinations.description'),
+                color: "text-purple-600",
+                bgColor: "bg-purple-100"
+              }
+            ].map((feature, index) => (
+              <motion.div
+                key={index}
+                variants={fadeIn}
+                whileHover={{ y: -10, transition: { duration: 0.3 } }}
+              >
+                <Card className="p-8 text-center hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-white to-gray-50">
+                  <motion.div 
+                    className={`inline-flex p-4 rounded-full ${feature.bgColor} mb-6`}
+                    whileHover={{ rotate: 360 }}
+                    transition={{ duration: 0.6 }}
+                  >
+                    <feature.icon className={`h-8 w-8 ${feature.color}`} />
+                  </motion.div>
+                  <h4 className="text-xl font-semibold mb-3">{feature.title}</h4>
+                  <p className="text-muted-foreground leading-relaxed">
+                    {feature.description}
+                  </p>
+                </Card>
+              </motion.div>
+            ))}
+          </motion.div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      <footer className="bg-slate-900 text-white py-12">
         <div className="container">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
-              <h5 className="font-bold mb-4">{APP_TITLE}</h5>
-              <p className="text-gray-400 text-sm">
-                نظام الطيران المتكامل لحجز التذاكر وإدارة الرحلات
+              <div className="flex items-center gap-2 mb-4">
+                <Plane className="h-6 w-6" />
+                <h3 className="font-bold text-lg">{t('common.appName')}</h3>
+              </div>
+              <p className="text-sm text-gray-400">
+                {t('footer.description')}
               </p>
             </div>
+
             <div>
-              <h5 className="font-bold mb-4">روابط سريعة</h5>
+              <h4 className="font-semibold mb-4">{t('footer.quickLinks')}</h4>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white">عن الشركة</a></li>
-                <li><a href="#" className="hover:text-white">اتصل بنا</a></li>
-                <li><a href="#" className="hover:text-white">الشروط والأحكام</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">{t('footer.about')}</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">{t('footer.contact')}</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">{t('footer.terms')}</a></li>
               </ul>
             </div>
+
             <div>
-              <h5 className="font-bold mb-4">خدماتنا</h5>
+              <h4 className="font-semibold mb-4">{t('footer.services')}</h4>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white">حجز التذاكر</a></li>
-                <li><a href="#" className="hover:text-white">إدارة الحجوزات</a></li>
-                <li><a href="#" className="hover:text-white">تسجيل الوصول</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">{t('footer.bookTickets')}</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">{t('footer.manageBookings')}</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">{t('footer.checkIn')}</a></li>
               </ul>
             </div>
+
             <div>
-              <h5 className="font-bold mb-4">تواصل معنا</h5>
+              <h4 className="font-semibold mb-4">{t('footer.contactUs')}</h4>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li>البريد: info@ais.com</li>
-                <li>الهاتف: +966 11 234 5678</li>
+                <li>{t('footer.email')}: info@ais.com</li>
+                <li>{t('footer.phone')}: +966 11 234 5678</li>
               </ul>
             </div>
           </div>
+
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2025 {APP_TITLE}. جميع الحقوق محفوظة.</p>
+            © 2025 AIS - {t('footer.rights')}
           </div>
         </div>
       </footer>
