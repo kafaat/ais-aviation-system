@@ -65,6 +65,38 @@ async function startServer() {
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
   });
+
+  // Graceful shutdown
+  const gracefulShutdown = async (signal: string) => {
+    console.log(`\n${signal} received. Starting graceful shutdown...`);
+    
+    server.close(async () => {
+      console.log("HTTP server closed.");
+      
+      // Close database connections
+      try {
+        const { getDb } = await import("../db.js");
+        const db = await getDb();
+        if (db) {
+          console.log("Database connections closed.");
+        }
+      } catch (error) {
+        console.error("Error closing database:", error);
+      }
+      
+      console.log("Graceful shutdown completed.");
+      process.exit(0);
+    });
+    
+    // Force shutdown after 10 seconds
+    setTimeout(() => {
+      console.error("Forceful shutdown after timeout.");
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 
 startServer().catch(console.error);

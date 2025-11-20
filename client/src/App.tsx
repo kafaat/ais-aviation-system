@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { Loader2 } from "lucide-react";
+import { AdminRoute } from "./components/AdminRoute";
 
 // Lazy load pages for better performance and code splitting
 const Home = lazy(() => import("./pages/Home"));
@@ -37,8 +38,16 @@ function Router() {
         <Route path="/booking/:id" component={BookingPage} />
         <Route path="/my-bookings" component={MyBookings} />
         <Route path="/check-in" component={CheckIn} />
-        <Route path="/admin" component={AdminDashboard} />
-        <Route path="/analytics" component={Analytics} />
+        <Route path="/admin">
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        </Route>
+        <Route path="/analytics">
+          <AdminRoute>
+            <Analytics />
+          </AdminRoute>
+        </Route>
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

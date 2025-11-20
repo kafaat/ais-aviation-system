@@ -147,3 +147,51 @@
 - [ ] إضافة فلاتر التاريخ
 - [x] تكامل جميع KPIs والرسوم البيانية
 - [ ] إضافة ميزة التصدير (PDF/Excel)
+
+## Comprehensive System Improvements (Based on Deep Analysis)
+
+### Phase 1: Critical Foundations
+- [x] ENV Validation with Zod
+- [x] Graceful Shutdown
+- [x] Cookie Security (httpOnly, secure, sameSite)
+- [x] Admin Route Guards
+- [ ] Request ID + Unified Logging
+
+### Phase 2: Code Architecture
+- [ ] Split routers by domain (flights, bookings, admin, ai)
+- [ ] Create Services Layer (flights.service.ts, bookings.service.ts, payments.service.ts)
+- [ ] Separate Auth Module
+
+### Phase 3: Security Enhancements
+- [ ] Rate Limiting on /api/trpc and /api/stripe/webhook
+- [ ] Data API Whitelist
+- [ ] Account Lock after failed login attempts
+
+### Phase 4: Stripe & Database
+- [ ] Stripe Refunds Support
+- [ ] Payment History Table
+- [ ] Database Indexes (fromAirport, toAirport, departureDate, airlineId)
+- [ ] Soft Delete for bookings
+
+### Phase 5: AI Features
+- [ ] AI Logging (with PII masking)
+- [ ] AI Guardrails (message length, content filtering)
+- [ ] Chat History in DB (ai_sessions, ai_messages)
+- [ ] Suggested Messages in AI Chat
+- [ ] Stop Generation Button
+
+### Phase 6: Performance & UX
+- [ ] Caching for flight search results
+- [ ] Loading Skeletons for pages
+- [ ] Mobile Responsive SeatMap
+- [ ] Mobile Responsive Map (zoom & pan)
+- [ ] Seat Layout from Backend (based on aircraft type)
+- [ ] Legend for SeatMap colors
+- [ ] Accessibility (Keyboard navigation + ARIA labels)
+
+### Phase 7: Testing
+- [ ] Integration Tests for AI (systemRouter)
+- [ ] E2E Tests with Playwright (search → select → book → pay)
+- [ ] Transaction-based Seeding
+- [ ] Idempotent Seed Script
+- [ ] Default Admin User in Seed
