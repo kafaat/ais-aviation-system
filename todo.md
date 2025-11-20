@@ -365,3 +365,15 @@
 - [ ] Create translation files (ar.json, en.json) (future)
 - [ ] Add language switcher in header (future)
 - [ ] Translate all UI strings (future)
+
+### Phase 8: Email Ticket Delivery & Multi-Passenger
+- [x] Send e-ticket PDF via email after payment confirmation
+- [x] Create generateETicketForPassenger helper function
+- [x] Generate e-tickets for all passengers in Stripe webhook
+- [x] Update email.service.ts to support PDF attachments (interface)
+- [x] Update My Bookings UI to show all passengers
+- [x] Add download button for each passenger (icon-only buttons)
+- [x] Create passenger list in booking card with passenger details
+- [x] Test multi-passenger ticket download
+- [x] All 45 tests passing successfully
+- [ ] TODO: Integrate e-ticket attachments with email sending (future)

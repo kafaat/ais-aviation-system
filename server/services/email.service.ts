@@ -15,6 +15,11 @@ export interface EmailTemplate {
   subject: string;
   html: string;
   text?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | string;
+    contentType?: string;
+  }>;
 }
 
 export interface BookingConfirmationData {

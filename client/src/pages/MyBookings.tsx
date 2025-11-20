@@ -199,13 +199,31 @@ export default function MyBookings() {
                         </Badge>
                       )}
                       {booking.paymentStatus === "paid" && (
-                        <div className="space-y-2">
-                          {/* E-Ticket Download Buttons */}
-                          <div className="flex gap-2">
-                            <DownloadETicketButton bookingId={booking.id} passengerId={booking.passengers[0]?.id} />
-                            {(booking.status === "confirmed" || booking.status === "completed") && (
-                              <DownloadBoardingPassButton bookingId={booking.id} passengerId={booking.passengers[0]?.id} />
-                            )}
+                        <div className="space-y-3">
+                          {/* Passengers List with Download Buttons */}
+                          <div className="border-t pt-3">
+                            <p className="text-sm font-medium mb-2">الركاب ({booking.passengers.length})</p>
+                            <div className="space-y-2">
+                              {booking.passengers.map((passenger: any, index: number) => (
+                                <div key={passenger.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                  <div className="flex-1">
+                                    <p className="text-sm font-medium">
+                                      {index + 1}. {passenger.firstName} {passenger.lastName}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {passenger.type === "adult" ? "بالغ" : passenger.type === "child" ? "طفل" : "رضيع"}
+                                      {passenger.seatNumber && ` • مقعد ${passenger.seatNumber}`}
+                                    </p>
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <DownloadETicketButton bookingId={booking.id} passengerId={passenger.id} />
+                                    {(booking.status === "confirmed" || booking.status === "completed") && (
+                                      <DownloadBoardingPassButton bookingId={booking.id} passengerId={passenger.id} />
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                           
                           {/* Modify/Cancel Buttons */}

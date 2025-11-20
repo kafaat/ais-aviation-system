@@ -6,6 +6,8 @@ import { bookings, flights, airports, users } from '../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { sendBookingConfirmation } from '../services/email.service';
 import { awardMilesForBooking } from '../services/loyalty.service';
+import { generateETicketForPassenger } from '../services/eticket.service';
+import { passengers } from '../../drizzle/schema';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -147,6 +149,33 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       });
 
       console.log(`[Webhook] Booking confirmation email sent to ${booking.userEmail}`);
+      
+      // Generate and attach e-tickets for all passengers
+      try {
+        const bookingPassengers = await db
+          .select()
+          .from(passengers)
+          .where(eq(passengers.bookingId, parseInt(bookingId)));
+
+        if (bookingPassengers.length > 0) {
+          const eticketAttachments = await Promise.all(
+            bookingPassengers.map(async (passenger) => {
+              const pdf = await generateETicketForPassenger(parseInt(bookingId), passenger.id);
+              return {
+                filename: `eticket-${booking.bookingReference}-${passenger.firstName}.pdf`,
+                content: pdf, // Already base64 string
+                contentType: 'application/pdf',
+              };
+            })
+          );
+
+          // TODO: Re-send email with e-ticket attachments
+          // This requires updating sendBookingConfirmation to support attachments
+          console.log(`[Webhook] Generated ${eticketAttachments.length} e-ticket PDFs for booking ${bookingId}`);
+        }
+      } catch (eticketError) {
+        console.error('[Webhook] Failed to generate e-tickets:', eticketError);
+      }
     }
   } catch (emailError) {
     console.error('[Webhook] Failed to send booking confirmation email:', emailError);

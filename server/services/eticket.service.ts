@@ -304,3 +304,116 @@ export async function generateBoardingPassPDF(passData: BoardingPassData): Promi
     }
   });
 }
+
+/**
+ * Generate E-Ticket PDF from booking and passenger IDs
+ * Helper function for email attachments
+ */
+export async function generateETicketForPassenger(
+  bookingId: number,
+  passengerId: number
+): Promise<string> {
+  const { getDb } = await import("../db");
+  const { bookings, flights, airports, passengers, airlines } = await import("../../drizzle/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+
+  // Get booking details
+  const [booking] = await database
+    .select({
+      bookingReference: bookings.bookingReference,
+      pnr: bookings.pnr,
+      cabinClass: bookings.cabinClass,
+      totalAmount: bookings.totalAmount,
+      flightNumber: flights.flightNumber,
+      airlineId: flights.airlineId,
+      departureTime: flights.departureTime,
+      arrivalTime: flights.arrivalTime,
+      originId: flights.originId,
+      destinationId: flights.destinationId,
+    })
+    .from(bookings)
+    .innerJoin(flights, eq(bookings.flightId, flights.id))
+    .where(eq(bookings.id, bookingId))
+    .limit(1);
+
+  if (!booking) {
+    throw new Error("Booking not found");
+  }
+
+  // Get passenger details
+  const [passenger] = await database
+    .select()
+    .from(passengers)
+    .where(eq(passengers.id, passengerId))
+    .limit(1);
+
+  if (!passenger || passenger.bookingId !== bookingId) {
+    throw new Error("Passenger not found");
+  }
+
+  // Get airport details
+  const [origin] = await database
+    .select()
+    .from(airports)
+    .where(eq(airports.id, booking.originId))
+    .limit(1);
+
+  const [destination] = await database
+    .select()
+    .from(airports)
+    .where(eq(airports.id, booking.destinationId))
+    .limit(1);
+
+  if (!origin || !destination) {
+    throw new Error("Airport not found");
+  }
+
+  // Get airline details
+  const [airline] = await database
+    .select()
+    .from(airlines)
+    .where(eq(airlines.id, booking.airlineId))
+    .limit(1);
+
+  const airlineName = airline?.name || "Unknown Airline";
+
+  // Generate ticket number if not exists
+  const ticketNumber = passenger.ticketNumber || generateTicketNumber();
+
+  // Update passenger with ticket number
+  if (!passenger.ticketNumber) {
+    await database
+      .update(passengers)
+      .set({ ticketNumber })
+      .where(eq(passengers.id, passenger.id));
+  }
+
+  // Generate PDF
+  const pdfBuffer = await generateETicketPDF({
+    passengerName: `${passenger.firstName} ${passenger.lastName}`,
+    passengerType: passenger.type,
+    ticketNumber,
+    bookingReference: booking.bookingReference,
+    pnr: booking.pnr,
+    flightNumber: booking.flightNumber,
+    airline: airlineName,
+    origin: origin.city,
+    originCode: origin.code,
+    destination: destination.city,
+    destinationCode: destination.code,
+    departureTime: booking.departureTime,
+    arrivalTime: booking.arrivalTime,
+    cabinClass: booking.cabinClass,
+    seatNumber: passenger.seatNumber || undefined,
+    baggageAllowance: booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
+    totalAmount: booking.totalAmount,
+    currency: "SAR",
+    issueDate: new Date(),
+  });
+
+  // Return PDF as base64
+  return pdfBuffer.toString("base64");
+}

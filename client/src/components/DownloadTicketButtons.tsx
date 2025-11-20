@@ -40,12 +40,11 @@ export function DownloadETicketButton({ bookingId, passengerId }: DownloadETicke
   return (
     <Button
       variant="default"
-      className="flex-1"
+      size="sm"
       onClick={handleDownload}
       disabled={isDownloading || !passengerId}
     >
-      <Download className="mr-2 h-4 w-4" />
-      {isDownloading ? "جاري التحميل..." : "تحميل التذكرة"}
+      <Download className="h-3 w-3" />
     </Button>
   );
 }
@@ -85,12 +84,11 @@ export function DownloadBoardingPassButton({ bookingId, passengerId }: DownloadB
   return (
     <Button
       variant="outline"
-      className="flex-1"
+      size="sm"
       onClick={handleDownload}
       disabled={isDownloading || !passengerId}
     >
-      <FileText className="mr-2 h-4 w-4" />
-      {isDownloading ? "جاري التحميل..." : "بطاقة الصعود"}
+      <FileText className="h-3 w-3" />
     </Button>
   );
 }
