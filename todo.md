@@ -377,3 +377,20 @@
 - [x] Test multi-passenger ticket download
 - [x] All 45 tests passing successfully
 - [ ] TODO: Integrate e-ticket attachments with email sending (future)
+
+### Phase 9: Complete System Features
+- [x] Complete email integration with PDF attachments
+- [x] Update sendBookingConfirmation to accept attachments parameter
+- [x] Send e-tickets as PDF attachments in confirmation email (single email with all tickets)
+- [x] Refactor Stripe webhook to generate tickets before sending email
+- [x] Implement dynamic pricing engine
+- [x] Create dynamic-pricing.service.ts with occupancy and time-based pricing
+- [x] Add occupancy-based multipliers (0%, 10%, 25%, 40%)
+- [x] Add time-based multipliers (-5% early bird, +10%, +20%, +35%)
+- [x] Update calculateFlightPrice to use dynamic pricing
+- [x] Update all callers of calculateFlightPrice to handle async
+- [x] Update tests for dynamic pricing
+- [x] All 45 tests passing successfully
+- [ ] Create admin analytics dashboard (future)
+- [ ] Add KPIs (occupancy rate, daily revenue, cancellation rate) (future)
+- [ ] Create charts for trends and statistics (future)

@@ -35,6 +35,11 @@ export interface BookingConfirmationData {
   cabinClass: string;
   numberOfPassengers: number;
   totalAmount: number;
+  attachments?: Array<{
+    filename: string;
+    content: string; // base64 PDF
+    contentType?: string;
+  }>;
 }
 
 export interface FlightStatusChangeData {
@@ -87,6 +92,11 @@ export async function sendBookingConfirmation(
     const template: EmailTemplate = {
       to: data.passengerEmail,
       subject: `تأكيد الحجز - ${data.bookingReference}`,
+      attachments: data.attachments?.map(att => ({
+        filename: att.filename,
+        content: Buffer.from(att.content, 'base64'),
+        contentType: att.contentType || 'application/pdf',
+      })),
       text: `
 مرحباً ${data.passengerName},
 

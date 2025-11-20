@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
+import { calculateDynamicPrice, calculateOccupancyRate, getDaysUntilDeparture } from "./dynamic-pricing.service";
 
 /**
  * Flights Service
@@ -86,16 +87,53 @@ export async function checkFlightAvailability(
 }
 
 /**
- * Calculate flight price
+ * Calculate flight price with dynamic pricing
  */
-export function calculateFlightPrice(
+export async function calculateFlightPrice(
   flight: NonNullable<Awaited<ReturnType<typeof db.getFlightById>>>,
   cabinClass: "economy" | "business",
   passengerCount: number
-): number {
-  const pricePerSeat = cabinClass === "economy" 
+): Promise<{price: number; pricing?: any}> {
+  const basePrice = cabinClass === "economy" 
     ? flight.economyPrice 
     : flight.businessPrice;
   
-  return pricePerSeat * passengerCount;
+  try {
+    // Calculate occupancy rate
+    const totalSeats = cabinClass === "economy" 
+      ? flight.economySeats 
+      : flight.businessSeats;
+    const occupancyRate = await calculateOccupancyRate(flight.id, totalSeats);
+    
+    // Calculate days until departure
+    const daysUntilDeparture = getDaysUntilDeparture(flight.departureTime);
+    
+    // Get dynamic price for single seat
+    const pricingResult = calculateDynamicPrice({
+      basePrice,
+      occupancyRate,
+      daysUntilDeparture,
+      cabinClass,
+    });
+    
+    // Multiply by passenger count
+    const totalPrice = pricingResult.finalPrice * passengerCount;
+    
+    return {
+      price: totalPrice,
+      pricing: {
+        ...pricingResult,
+        finalPrice: totalPrice,
+        perPassenger: pricingResult.finalPrice,
+        occupancyRate,
+        daysUntilDeparture,
+      },
+    };
+  } catch (error) {
+    console.error("Error calculating dynamic price:", error);
+    // Fallback to base price if dynamic pricing fails
+    return {
+      price: basePrice * passengerCount,
+    };
+  }
 }

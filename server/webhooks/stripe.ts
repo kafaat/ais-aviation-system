@@ -133,6 +133,32 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         .where(eq(airports.id, flight.destinationId))
         .limit(1);
 
+      // Generate e-tickets for all passengers
+      let eticketAttachments: Array<{filename: string; content: string; contentType?: string}> = [];
+      try {
+        const bookingPassengers = await db
+          .select()
+          .from(passengers)
+          .where(eq(passengers.bookingId, parseInt(bookingId)));
+
+        if (bookingPassengers.length > 0) {
+          eticketAttachments = await Promise.all(
+            bookingPassengers.map(async (passenger) => {
+              const pdf = await generateETicketForPassenger(parseInt(bookingId), passenger.id);
+              return {
+                filename: `eticket-${booking.bookingReference}-${passenger.firstName}.pdf`,
+                content: pdf, // Already base64 string
+                contentType: 'application/pdf',
+              };
+            })
+          );
+          console.log(`[Webhook] Generated ${eticketAttachments.length} e-ticket PDFs`);
+        }
+      } catch (eticketError) {
+        console.error('[Webhook] Failed to generate e-tickets:', eticketError);
+      }
+
+      // Send booking confirmation email with e-ticket attachments
       await sendBookingConfirmation({
         passengerName: booking.userName || 'Passenger',
         passengerEmail: booking.userEmail,
@@ -146,36 +172,10 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         cabinClass: booking.cabinClass,
         numberOfPassengers: booking.numberOfPassengers,
         totalAmount: booking.totalAmount,
+        attachments: eticketAttachments.length > 0 ? eticketAttachments : undefined,
       });
 
-      console.log(`[Webhook] Booking confirmation email sent to ${booking.userEmail}`);
-      
-      // Generate and attach e-tickets for all passengers
-      try {
-        const bookingPassengers = await db
-          .select()
-          .from(passengers)
-          .where(eq(passengers.bookingId, parseInt(bookingId)));
-
-        if (bookingPassengers.length > 0) {
-          const eticketAttachments = await Promise.all(
-            bookingPassengers.map(async (passenger) => {
-              const pdf = await generateETicketForPassenger(parseInt(bookingId), passenger.id);
-              return {
-                filename: `eticket-${booking.bookingReference}-${passenger.firstName}.pdf`,
-                content: pdf, // Already base64 string
-                contentType: 'application/pdf',
-              };
-            })
-          );
-
-          // TODO: Re-send email with e-ticket attachments
-          // This requires updating sendBookingConfirmation to support attachments
-          console.log(`[Webhook] Generated ${eticketAttachments.length} e-ticket PDFs for booking ${bookingId}`);
-        }
-      } catch (eticketError) {
-        console.error('[Webhook] Failed to generate e-tickets:', eticketError);
-      }
+      console.log(`[Webhook] Sent booking confirmation${eticketAttachments.length > 0 ? ` with ${eticketAttachments.length} e-ticket PDFs` : ''} to ${booking.userEmail}`);
     }
   } catch (emailError) {
     console.error('[Webhook] Failed to send booking confirmation email:', emailError);

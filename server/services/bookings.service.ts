@@ -46,12 +46,17 @@ export async function createBooking(input: CreateBookingInput) {
       });
     }
     
-    // Calculate total amount
-    const totalAmount = calculateFlightPrice(
+    // Calculate total amount with dynamic pricing
+    const pricingResult = await calculateFlightPrice(
       flight!,
       input.cabinClass,
       input.passengers.length
     );
+    const totalAmount = pricingResult.price;
+    
+    if (pricingResult.pricing) {
+      console.log(`[Booking] Dynamic pricing applied: ${pricingResult.pricing.adjustmentPercentage}% adjustment (Occupancy: ${pricingResult.pricing.occupancyRate}%, Days until departure: ${pricingResult.pricing.daysUntilDeparture})`);
+    }
     
     // Generate booking reference and PNR
     const bookingReference = db.generateBookingReference();
