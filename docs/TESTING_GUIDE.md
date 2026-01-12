@@ -139,7 +139,7 @@ For continuous integration, set environment variables in your CI/CD platform:
 
 ### GitHub Actions Example
 
-``yaml
+```yaml
 name: Tests
 on: [push, pull_request]
 
