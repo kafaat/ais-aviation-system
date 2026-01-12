@@ -9,7 +9,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "super_admin", "airline_admin", "finance", "ops", "support"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -520,3 +520,142 @@ export const priceAlertHistory = mysqlTable("price_alert_history", {
 
 export type PriceAlertHistory = typeof priceAlertHistory.$inferSelect;
 export type InsertPriceAlertHistory = typeof priceAlertHistory.$inferInsert;
+
+/**
+ * Audit Logs
+ * Track all sensitive operations for security and compliance
+ */
+export const auditLogs = mysqlTable("audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // Event identification
+  eventId: varchar("eventId", { length: 64 }).notNull().unique(), // Unique identifier for the event
+  eventType: varchar("eventType", { length: 100 }).notNull(), // e.g., "BOOKING_CREATED", "PAYMENT_PROCESSED", "USER_ROLE_CHANGED"
+  eventCategory: mysqlEnum("eventCategory", [
+    "auth",
+    "booking",
+    "payment",
+    "user_management",
+    "flight_management",
+    "refund",
+    "modification",
+    "access",
+    "system"
+  ]).notNull(),
+  
+  // Outcome and severity
+  outcome: mysqlEnum("outcome", ["success", "failure", "error"]).notNull(),
+  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).default("low").notNull(),
+  
+  // Actor information
+  userId: int("userId"), // User who performed the action
+  userRole: varchar("userRole", { length: 50 }), // Role at time of action
+  actorType: mysqlEnum("actorType", ["user", "admin", "system", "api"]).default("user").notNull(),
+  
+  // Request context
+  sourceIp: varchar("sourceIp", { length: 45 }), // IPv4 or IPv6
+  userAgent: text("userAgent"),
+  requestId: varchar("requestId", { length: 64 }), // For correlation
+  
+  // Resource information
+  resourceType: varchar("resourceType", { length: 100 }), // e.g., "booking", "flight", "user"
+  resourceId: varchar("resourceId", { length: 100 }), // ID of the affected resource
+  
+  // Change details
+  previousValue: text("previousValue"), // JSON of old state (for updates)
+  newValue: text("newValue"), // JSON of new state
+  changeDescription: text("changeDescription"), // Human-readable description
+  
+  // Metadata
+  metadata: text("metadata"), // Additional JSON data
+  
+  // Timestamps
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  eventTypeIdx: index("event_type_idx").on(table.eventType),
+  eventCategoryIdx: index("event_category_idx").on(table.eventCategory),
+  userIdIdx: index("user_id_idx").on(table.userId),
+  resourceTypeIdx: index("resource_type_idx").on(table.resourceType),
+  resourceIdIdx: index("resource_id_idx").on(table.resourceId),
+  timestampIdx: index("timestamp_idx").on(table.timestamp),
+  outcomeIdx: index("outcome_idx").on(table.outcome),
+  severityIdx: index("severity_idx").on(table.severity),
+  // Composite index for common queries
+  categoryOutcomeIdx: index("category_outcome_idx").on(table.eventCategory, table.outcome),
+}));
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
+/**
+ * Booking Status History
+ * Tracks all status transitions for bookings (state machine)
+ */
+export const bookingStatusHistory = mysqlTable("booking_status_history", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // Booking reference
+  bookingId: int("bookingId").notNull(),
+  bookingReference: varchar("bookingReference", { length: 6 }).notNull(),
+  
+  // State transition
+  previousStatus: mysqlEnum("previousStatus", [
+    "initiated",
+    "pending",
+    "reserved",
+    "paid",
+    "confirmed",
+    "checked_in",
+    "boarded",
+    "completed",
+    "cancelled",
+    "refunded",
+    "expired",
+    "payment_failed",
+    "no_show"
+  ]),
+  newStatus: mysqlEnum("newStatus", [
+    "initiated",
+    "pending",
+    "reserved",
+    "paid",
+    "confirmed",
+    "checked_in",
+    "boarded",
+    "completed",
+    "cancelled",
+    "refunded",
+    "expired",
+    "payment_failed",
+    "no_show"
+  ]).notNull(),
+  
+  // Transition metadata
+  transitionReason: text("transitionReason"), // Why the status changed
+  isValidTransition: boolean("isValidTransition").default(true).notNull(),
+  
+  // Actor information
+  changedBy: int("changedBy"), // User ID who triggered the change
+  changedByRole: varchar("changedByRole", { length: 50 }), // Role at time of change
+  actorType: mysqlEnum("actorType", ["user", "admin", "system", "payment_gateway"]).default("system").notNull(),
+  
+  // Additional context
+  paymentIntentId: varchar("paymentIntentId", { length: 255 }), // If triggered by payment
+  metadata: text("metadata"), // Additional JSON data
+  
+  // Timestamps
+  transitionedAt: timestamp("transitionedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  bookingReferenceIdx: index("booking_reference_idx").on(table.bookingReference),
+  newStatusIdx: index("new_status_idx").on(table.newStatus),
+  transitionedAtIdx: index("transitioned_at_idx").on(table.transitionedAt),
+  changedByIdx: index("changed_by_idx").on(table.changedBy),
+  // Composite index for common queries
+  bookingStatusIdx: index("booking_status_idx").on(table.bookingId, table.newStatus),
+}));
+
+export type BookingStatusHistory = typeof bookingStatusHistory.$inferSelect;
+export type InsertBookingStatusHistory = typeof bookingStatusHistory.$inferInsert;
