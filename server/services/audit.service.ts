@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { db } from "../db";
+import { getDb } from "../db";
 import { auditLogs, CRITICAL_AUDIT_EVENTS } from "../../drizzle/audit-log-schema";
 
 /**
@@ -32,6 +32,12 @@ export interface AuditLogInput {
 export async function createAuditLog(input: AuditLogInput): Promise<void> {
   try {
     const eventId = nanoid(32);
+    const db = await getDb();
+    
+    if (!db) {
+      console.error("[AUDIT] Database not available, cannot create audit log");
+      return;
+    }
     
     await db.insert(auditLogs).values({
       eventId,
@@ -124,6 +130,7 @@ export async function logPaymentEvent(
   bookingId: number,
   userId: number,
   amount: number,
+  currency: string = "SAR",
   sourceIp?: string,
   userAgent?: string,
   errorMessage?: string
@@ -136,11 +143,11 @@ export async function logPaymentEvent(
     actorType: "user",
     resourceType: "payment",
     resourceId: bookingId.toString(),
-    newValue: { amount, currency: "SAR" },
+    newValue: { amount, currency },
     sourceIp,
     userAgent,
     errorMessage,
-    description: `Payment of ${amount} SAR ${eventType.toLowerCase()}`,
+    description: `Payment of ${amount} ${currency} ${eventType.toLowerCase()}`,
   });
 }
 

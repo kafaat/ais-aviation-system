@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { TRPCError } from "@trpc/server";
+import crypto from "crypto";
 
 /**
  * Payment Security Service
@@ -7,7 +8,7 @@ import { TRPCError } from "@trpc/server";
  */
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
-  apiVersion: "2024-12-18.acacia",
+  apiVersion: "2025-11-17.clover",
 });
 
 /**
@@ -42,11 +43,15 @@ const processedIdempotencyKeys = new Map<string, {
 // Clean up old keys every hour
 setInterval(() => {
   const oneHourAgo = Date.now() - 60 * 60 * 1000;
-  for (const [key, value] of processedIdempotencyKeys.entries()) {
+  const keysToDelete: string[] = [];
+  
+  processedIdempotencyKeys.forEach((value, key) => {
     if (value.timestamp < oneHourAgo) {
-      processedIdempotencyKeys.delete(key);
+      keysToDelete.push(key);
     }
-  }
+  });
+  
+  keysToDelete.forEach(key => processedIdempotencyKeys.delete(key));
 }, 60 * 60 * 1000);
 
 /**
@@ -180,7 +185,6 @@ export async function verifyPaymentIntentOwnership(
  * Calculate hash for webhook event deduplication
  */
 export function calculateEventHash(event: Stripe.Event): string {
-  const crypto = require("crypto");
   const data = JSON.stringify({
     id: event.id,
     type: event.type,
@@ -197,11 +201,15 @@ const processedWebhookEvents = new Map<string, number>();
 // Clean up old events every hour
 setInterval(() => {
   const oneHourAgo = Date.now() - 60 * 60 * 1000;
-  for (const [eventId, timestamp] of processedWebhookEvents.entries()) {
+  const eventsToDelete: string[] = [];
+  
+  processedWebhookEvents.forEach((timestamp, eventId) => {
     if (timestamp < oneHourAgo) {
-      processedWebhookEvents.delete(eventId);
+      eventsToDelete.push(eventId);
     }
-  }
+  });
+  
+  eventsToDelete.forEach(eventId => processedWebhookEvents.delete(eventId));
 }, 60 * 60 * 1000);
 
 /**

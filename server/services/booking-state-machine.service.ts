@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
-import { db } from "../db";
+import { eq, desc } from "drizzle-orm";
+import { getDb } from "../db";
 import { bookingStatusHistory, isValidTransition } from "../../drizzle/booking-status-history-schema";
 import { logBookingEvent } from "./audit.service";
 
@@ -38,6 +39,9 @@ export interface StatusTransitionInput {
  * Get current status of a booking
  */
 export async function getCurrentBookingStatus(bookingId: number): Promise<BookingStatus | null> {
+  const db = await getDb();
+  if (!db) return null;
+  
   const history = await db
     .select()
     .from(bookingStatusHistory)
@@ -56,6 +60,9 @@ export async function getCurrentBookingStatus(bookingId: number): Promise<Bookin
  * Get status history for a booking
  */
 export async function getBookingStatusHistory(bookingId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
   return await db
     .select()
     .from(bookingStatusHistory)
@@ -77,6 +84,14 @@ export async function transitionBookingStatus(input: StatusTransitionInput): Pro
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: `Invalid status transition from ${currentStatus || 'null'} to ${input.newStatus}`,
+      });
+    }
+    
+    const db = await getDb();
+    if (!db) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
       });
     }
     
@@ -241,6 +256,3 @@ export async function expireBooking(
     actorType: "system",
   });
 }
-
-// Import statements for db operations
-import { eq, desc } from "drizzle-orm";
