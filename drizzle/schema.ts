@@ -437,3 +437,19 @@ export {
   type InsertUserCurrencyPreference,
   type SupportedCurrency,
 } from "./schema-currency";
+
+// Export security-related tables and types
+export {
+  loginAttempts,
+  accountLocks,
+  securityEvents,
+  ipBlacklist,
+  type LoginAttempt,
+  type InsertLoginAttempt,
+  type AccountLock,
+  type InsertAccountLock,
+  type SecurityEvent,
+  type InsertSecurityEvent,
+  type IpBlacklist,
+  type InsertIpBlacklist,
+} from "./schema-security";

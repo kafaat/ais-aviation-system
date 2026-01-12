@@ -18,6 +18,7 @@ import { userPreferencesRouter } from "./routers/user-preferences";
 import { ancillaryRouter } from "./routers/ancillary";
 import { healthRouter } from "./routers/health";
 import { currencyRouter } from "./routers/currency";
+import { securityRouter } from "./routers/security";
 
 /**
  * Main Application Router
@@ -52,6 +53,7 @@ export const appRouter = router({
   ancillary: ancillaryRouter,
   health: healthRouter,
   currency: currencyRouter,
+  security: securityRouter,
 });
 
 export type AppRouter = typeof appRouter;
