@@ -32,9 +32,9 @@ export function CurrencyProvider({ children }: CurrencyProviderProps) {
 
   useEffect(() => {
     if (exchangeRates && currency !== "SAR") {
-      const rate = exchangeRates.find((r: any) => r.targetCurrency === currency);
+      const rate = exchangeRates.find((r) => r.currency === currency);
       if (rate) {
-        setExchangeRate(Number(rate.rate));
+        setExchangeRate(rate.rate);
       }
     } else if (currency === "SAR") {
       setExchangeRate(1.0);

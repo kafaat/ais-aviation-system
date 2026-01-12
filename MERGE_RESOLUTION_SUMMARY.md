@@ -14,8 +14,8 @@ Successfully resolved all merge conflicts between `copilot/implement-priorities`
 - **Conflict**: API method name and property name differences
 - **Resolution**:
   - Used `getAllExchangeRates` (not `getExchangeRates`)
-  - Used `targetCurrency` property (not `currency`)
-  - Cast rate to Number for type safety
+  - Used `currency` property (the service transforms `targetCurrency` to `currency` in the response)
+  - Kept `rate` as number (service already returns parsed float)
 - **Impact**: Aligns with server API implementation
 
 ### 3. client/src/main.tsx
