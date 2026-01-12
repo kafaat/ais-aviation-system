@@ -1,115 +1,131 @@
 import { z } from "zod";
-import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
-import { SUPPORTED_CURRENCIES } from "../../drizzle/schema";
-import {
-  getAllExchangeRates,
-  convertFromSAR,
-  convertToSAR,
-  formatCurrency,
-  getUserPreferredCurrency,
-  setUserPreferredCurrency,
-} from "../services/currency.service";
+import { publicProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
+import * as currencyService from "../services/currency.service";
+import { SUPPORTED_CURRENCIES } from "../../drizzle/schema-currency";
 
 /**
  * Currency Router
- * Handles multi-currency operations
+ * Handles currency conversion and exchange rate APIs
  */
+
 export const currencyRouter = router({
   /**
    * Get all supported currencies
    */
-  getSupportedCurrencies: publicProcedure.query(() => {
-    return SUPPORTED_CURRENCIES;
+  getSupportedCurrencies: publicProcedure.query(async () => {
+    return currencyService.getSupportedCurrencies();
   }),
 
   /**
-   * Get all current exchange rates
+   * Get exchange rate for a specific currency
    */
-  getExchangeRates: publicProcedure.query(async () => {
-    return await getAllExchangeRates();
+  getExchangeRate: publicProcedure
+    .input(
+      z.object({
+        targetCurrency: z.enum(["SAR", "USD", "EUR", "GBP", "AED", "KWD", "BHD", "OMR", "QAR", "EGP"]),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const rate = await currencyService.getExchangeRate(input.targetCurrency);
+        return {
+          baseCurrency: "SAR",
+          targetCurrency: input.targetCurrency,
+          rate,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get exchange rate",
+        });
+      }
+    }),
+
+  /**
+   * Get all exchange rates
+   */
+  getAllExchangeRates: publicProcedure.query(async () => {
+    try {
+      return await currencyService.getAllExchangeRates();
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get exchange rates",
+      });
+    }
   }),
 
   /**
-   * Convert amount from SAR to another currency
+   * Convert amount from SAR to target currency
    */
   convertFromSAR: publicProcedure
     .input(
       z.object({
         amountInSAR: z.number().int().positive(),
-        targetCurrency: z.enum([
-          "SAR", "USD", "EUR", "GBP", "AED", "KWD", "BHD", "OMR", "QAR", "EGP"
-        ]),
+        targetCurrency: z.enum(["SAR", "USD", "EUR", "GBP", "AED", "KWD", "BHD", "OMR", "QAR", "EGP"]),
       })
     )
     .query(async ({ input }) => {
-      const convertedAmount = await convertFromSAR(input.amountInSAR, input.targetCurrency);
-      const formatted = formatCurrency(convertedAmount, input.targetCurrency);
-      
-      return {
-        amountInCents: convertedAmount,
-        formatted,
-      };
+      try {
+        const convertedAmount = await currencyService.convertFromSAR(
+          input.amountInSAR,
+          input.targetCurrency
+        );
+        return {
+          amountInSAR: input.amountInSAR,
+          amountInTargetCurrency: convertedAmount,
+          targetCurrency: input.targetCurrency,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to convert currency",
+        });
+      }
     }),
 
   /**
-   * Convert amount to SAR from another currency
+   * Convert amount to SAR from source currency
    */
   convertToSAR: publicProcedure
     .input(
       z.object({
-        amount: z.number().int().positive(),
-        sourceCurrency: z.enum([
-          "SAR", "USD", "EUR", "GBP", "AED", "KWD", "BHD", "OMR", "QAR", "EGP"
-        ]),
+        amountInSourceCurrency: z.number().int().positive(),
+        sourceCurrency: z.enum(["SAR", "USD", "EUR", "GBP", "AED", "KWD", "BHD", "OMR", "QAR", "EGP"]),
       })
     )
     .query(async ({ input }) => {
-      const convertedAmount = await convertToSAR(input.amount, input.sourceCurrency);
-      const formatted = formatCurrency(convertedAmount, "SAR");
-      
-      return {
-        amountInCents: convertedAmount,
-        formatted,
-      };
+      try {
+        const convertedAmount = await currencyService.convertToSAR(
+          input.amountInSourceCurrency,
+          input.sourceCurrency
+        );
+        return {
+          amountInSourceCurrency: input.amountInSourceCurrency,
+          amountInSAR: convertedAmount,
+          sourceCurrency: input.sourceCurrency,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to convert currency",
+        });
+      }
     }),
 
   /**
-   * Format amount with currency symbol
+   * Manually trigger exchange rate update (admin only)
    */
-  formatAmount: publicProcedure
-    .input(
-      z.object({
-        amountInCents: z.number().int(),
-        currency: z.enum([
-          "SAR", "USD", "EUR", "GBP", "AED", "KWD", "BHD", "OMR", "QAR", "EGP"
-        ]),
-      })
-    )
-    .query(({ input }) => {
-      return formatCurrency(input.amountInCents, input.currency);
-    }),
-
-  /**
-   * Get user's preferred currency
-   */
-  getUserPreference: protectedProcedure.query(async ({ ctx }) => {
-    const currency = await getUserPreferredCurrency(ctx.user.id);
-    return { preferredCurrency: currency };
+  updateExchangeRates: publicProcedure.mutation(async () => {
+    try {
+      await currencyService.fetchLatestExchangeRates();
+      return { success: true, message: "Exchange rates updated successfully" };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to update exchange rates",
+      });
+    }
   }),
-
-  /**
-   * Set user's preferred currency
-   */
-  setUserPreference: protectedProcedure
-    .input(
-      z.object({
-        currency: z.enum([
-          "SAR", "USD", "EUR", "GBP", "AED", "KWD", "BHD", "OMR", "QAR", "EGP"
-        ]),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      await setUserPreferredCurrency(ctx.user.id, input.currency);
-      return { success: true, preferredCurrency: input.currency };
-    }),
 });

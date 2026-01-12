@@ -1,17 +1,16 @@
-import { eq, and, gte, desc } from "drizzle-orm";
+import { eq, and, gte, desc, lte } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   loginAttempts,
   accountLocks,
   securityEvents,
   ipBlacklist,
-  users,
   type InsertLoginAttempt,
   type InsertAccountLock,
   type InsertSecurityEvent,
   type InsertIpBlacklist,
 } from "../../drizzle/schema";
-import { logger, logError, logInfo } from "../_core/logger";
+import { logAuth, logSecurity, logger } from "../_core/logger";
 
 /**
  * Account Lock Service
@@ -28,6 +27,7 @@ const ATTEMPT_WINDOW_MINUTES = 15; // Check attempts in last 15 minutes
 export async function recordLoginAttempt(data: {
   email?: string;
   openId?: string;
+  userId?: number;
   ipAddress: string;
   userAgent?: string;
   success: boolean;
@@ -49,18 +49,83 @@ export async function recordLoginAttempt(data: {
 
   // Log the attempt
   if (data.success) {
-    logInfo("Login successful", { email: data.email, ip: data.ipAddress });
+    logAuth("login", data.userId, { email: data.email, ip: data.ipAddress });
   } else {
-    logger.warn({
+    logAuth("failed_login", data.userId, {
       email: data.email,
       ip: data.ipAddress,
       reason: data.failureReason,
-    }, "Login failed");
+    });
   }
 
   // Check if account should be locked
-  if (!data.success && (data.email || data.openId)) {
-    await checkAndLockAccount(data.email, data.openId, data.ipAddress);
+  if (!data.success) {
+    if (data.userId) {
+      await checkAndLockAccount(data.userId, data.email, data.openId, data.ipAddress);
+    } else {
+      // For failed attempts without userId (e.g., invalid email), check IP-based rate limiting
+      await checkAndBlockIp(data.ipAddress, data.email, data.openId);
+    }
+  }
+}
+
+/**
+ * Check IP-based failed attempts and block if threshold exceeded
+ */
+async function checkAndBlockIp(
+  ipAddress: string,
+  email?: string,
+  openId?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Calculate time window
+  const windowStart = new Date();
+  windowStart.setMinutes(windowStart.getMinutes() - ATTEMPT_WINDOW_MINUTES);
+
+  // Count all failed attempts from this IP in the time window
+  const failedAttempts = await db
+    .select()
+    .from(loginAttempts)
+    .where(
+      and(
+        eq(loginAttempts.ipAddress, ipAddress),
+        eq(loginAttempts.success, false),
+        gte(loginAttempts.attemptedAt, windowStart)
+      )
+    );
+
+  // If threshold exceeded, block the IP
+  if (failedAttempts.length >= MAX_FAILED_ATTEMPTS) {
+    logSecurity(
+      "IP blocked due to multiple failed login attempts",
+      "high",
+      {
+        ipAddress,
+        email,
+        openId,
+        attempts: failedAttempts.length,
+      }
+    );
+
+    // Block the IP
+    await blockIpAddress(
+      ipAddress,
+      `Automatic block after ${failedAttempts.length} failed login attempts`,
+      "system",
+      LOCKOUT_DURATION_MINUTES
+    );
+
+    // Create security event
+    await recordSecurityEvent({
+      eventType: "ip_blocked",
+      severity: "high",
+      ipAddress,
+      description: `IP blocked after ${failedAttempts.length} failed login attempts`,
+      metadata: JSON.stringify({ email, openId, attempts: failedAttempts.length }),
+      actionTaken: `IP blocked for ${LOCKOUT_DURATION_MINUTES} minutes`,
+    });
   }
 }
 
@@ -68,6 +133,7 @@ export async function recordLoginAttempt(data: {
  * Check failed attempts and lock account if threshold exceeded
  */
 async function checkAndLockAccount(
+  userId: number,
   email?: string,
   openId?: string,
   ipAddress?: string
@@ -110,38 +176,25 @@ async function checkAndLockAccount(
 
   // If threshold exceeded, lock the account
   if (failedAttempts.length >= MAX_FAILED_ATTEMPTS) {
-    // Try to get user ID
-    let userId: number | undefined;
-    
-    if (openId) {
-      const user = await db
-        .select()
-        .from(users)
-        .where(eq(users.openId, openId))
-        .limit(1);
-      
-      if (user.length > 0) {
-        userId = user[0].id;
+    logSecurity(
+      "Account locked due to multiple failed login attempts",
+      "high",
+      {
+        userId,
+        email,
+        openId,
+        attempts: failedAttempts.length,
+        ipAddress,
       }
-    } else if (email) {
-      const user = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
-      
-      if (user.length > 0) {
-        userId = user[0].id;
-      }
-    }
+    );
 
-    logger.warn({
-      email,
-      openId,
+    // Lock the account
+    await lockAccount(
       userId,
-      attempts: failedAttempts.length,
-      ipAddress,
-    }, "Account locked due to multiple failed login attempts");
+      `Automatic lock after ${failedAttempts.length} failed login attempts`,
+      "system",
+      LOCKOUT_DURATION_MINUTES
+    );
 
     // Create security event
     await recordSecurityEvent({
@@ -153,16 +206,6 @@ async function checkAndLockAccount(
       metadata: JSON.stringify({ email, openId, attempts: failedAttempts.length }),
       actionTaken: `Account locked for ${LOCKOUT_DURATION_MINUTES} minutes`,
     });
-
-    // Lock the account if we have a user ID
-    if (userId) {
-      await lockAccount(
-        userId,
-        `Multiple failed login attempts (${failedAttempts.length})`,
-        "system",
-        LOCKOUT_DURATION_MINUTES
-      );
-    }
   }
 }
 
@@ -194,7 +237,7 @@ export async function lockAccount(
 
   await db.insert(accountLocks).values(lock);
 
-  logger.warn({ userId, reason, lockedBy }, "Account locked");
+  logSecurity("Account locked", "high", { userId, reason, lockedBy });
 }
 
 /**
@@ -253,7 +296,29 @@ export async function unlockAccount(userId: number, unlockedBy: string): Promise
       )
     );
 
-  logInfo("Account unlocked", { userId, unlockedBy });
+  logSecurity("Account unlocked", "medium", { userId, unlockedBy });
+}
+
+/**
+ * Get active lock for a user
+ */
+export async function getAccountLock(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const locks = await db
+    .select()
+    .from(accountLocks)
+    .where(
+      and(
+        eq(accountLocks.userId, userId),
+        eq(accountLocks.isActive, true)
+      )
+    )
+    .orderBy(desc(accountLocks.createdAt))
+    .limit(1);
+
+  return locks.length > 0 ? locks[0] : null;
 }
 
 /**
@@ -313,7 +378,7 @@ export async function blockIpAddress(
 
   await db.insert(ipBlacklist).values(block);
 
-  logger.warn({ ipAddress, reason, blockedBy }, "IP address blocked");
+  logSecurity("IP address blocked", "high", { ipAddress, reason, blockedBy });
 }
 
 /**
@@ -371,7 +436,7 @@ export async function unblockIpAddress(ipAddress: string, unblockedBy: string): 
       )
     );
 
-  logInfo("IP address unblocked", { ipAddress, unblockedBy });
+  logSecurity("IP address unblocked", "medium", { ipAddress, unblockedBy });
 }
 
 /**
@@ -389,7 +454,7 @@ export async function getRecentSecurityEvents(limit: number = 50) {
 }
 
 /**
- * Get locked accounts
+ * Get all locked accounts
  */
 export async function getLockedAccounts() {
   const db = await getDb();
@@ -403,35 +468,57 @@ export async function getLockedAccounts() {
 }
 
 /**
- * Get login attempts for a user
+ * Get all blocked IPs
  */
-export async function getUserLoginAttempts(userId: number, limit: number = 20) {
+export async function getBlockedIps() {
   const db = await getDb();
   if (!db) return [];
 
-  // Get user's email/openId
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  if (user.length === 0) return [];
-
-  const conditions = [];
-  if (user[0].email) {
-    conditions.push(eq(loginAttempts.email, user[0].email));
-  }
-  if (user[0].openId) {
-    conditions.push(eq(loginAttempts.openId, user[0].openId));
-  }
-
-  if (conditions.length === 0) return [];
-
   return await db
     .select()
-    .from(loginAttempts)
-    .where(and(...conditions))
-    .orderBy(desc(loginAttempts.attemptedAt))
-    .limit(limit);
+    .from(ipBlacklist)
+    .where(eq(ipBlacklist.isActive, true))
+    .orderBy(desc(ipBlacklist.createdAt));
+}
+
+/**
+ * Clean up expired locks and blocks (run periodically)
+ */
+export async function cleanupExpiredLocks(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const now = new Date();
+
+  // Auto-unlock expired account locks
+  const expiredLocks = await db
+    .select()
+    .from(accountLocks)
+    .where(
+      and(
+        eq(accountLocks.isActive, true),
+        lte(accountLocks.autoUnlockAt!, now)
+      )
+    );
+
+  for (const lock of expiredLocks) {
+    await unlockAccount(lock.userId, "system");
+  }
+
+  // Auto-unblock expired IP blocks
+  const expiredBlocks = await db
+    .select()
+    .from(ipBlacklist)
+    .where(
+      and(
+        eq(ipBlacklist.isActive, true),
+        lte(ipBlacklist.autoUnblockAt!, now)
+      )
+    );
+
+  for (const block of expiredBlocks) {
+    await unblockIpAddress(block.ipAddress, "system");
+  }
+
+  logger.info(`Cleaned up ${expiredLocks.length} expired locks and ${expiredBlocks.length} expired IP blocks`);
 }

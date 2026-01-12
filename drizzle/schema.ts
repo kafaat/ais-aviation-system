@@ -426,201 +426,31 @@ export const bookingAncillaries = mysqlTable("booking_ancillaries", {
 export type BookingAncillary = typeof bookingAncillaries.$inferSelect;
 export type InsertBookingAncillary = typeof bookingAncillaries.$inferInsert;
 
-/**
- * Exchange Rates table
- * Stores currency exchange rates for multi-currency support
- */
-export const exchangeRates = mysqlTable("exchange_rates", {
-  id: int("id").autoincrement().primaryKey(),
-  
-  // Currency codes (ISO 4217)
-  baseCurrency: varchar("baseCurrency", { length: 3 }).notNull().default("SAR"), // Base currency (SAR)
-  targetCurrency: varchar("targetCurrency", { length: 3 }).notNull(), // Target currency (USD, EUR, etc.)
-  
-  // Exchange rate (e.g., 1 SAR = 0.27 USD)
-  rate: decimal("rate", { precision: 10, scale: 6 }).notNull(),
-  
-  // Metadata
-  source: varchar("source", { length: 100 }), // API source (e.g., "exchangerate-api.com")
-  lastUpdated: timestamp("lastUpdated").defaultNow().notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => ({
-  // Composite unique index to prevent duplicate currency pairs
-  currencyPairIdx: index("currency_pair_idx").on(table.baseCurrency, table.targetCurrency),
-  targetCurrencyIdx: index("target_currency_idx").on(table.targetCurrency),
-}));
 
-export type ExchangeRate = typeof exchangeRates.$inferSelect;
-export type InsertExchangeRate = typeof exchangeRates.$inferInsert;
+// Export currency-related tables and types
+export { 
+  exchangeRates, 
+  userCurrencyPreferences,
+  SUPPORTED_CURRENCIES,
+  type ExchangeRate,
+  type InsertExchangeRate,
+  type UserCurrencyPreference,
+  type InsertUserCurrencyPreference,
+  type SupportedCurrency,
+} from "./schema-currency";
 
-/**
- * User Currency Preferences table
- * Stores user's preferred currency for display
- */
-export const userCurrencyPreferences = mysqlTable("user_currency_preferences", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull().unique(),
-  preferredCurrency: varchar("preferredCurrency", { length: 3 }).notNull().default("SAR"),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => ({
-  userIdIdx: index("user_id_idx").on(table.userId),
-}));
-
-export type UserCurrencyPreference = typeof userCurrencyPreferences.$inferSelect;
-export type InsertUserCurrencyPreference = typeof userCurrencyPreferences.$inferInsert;
-
-/**
- * Supported currencies configuration
- */
-export const SUPPORTED_CURRENCIES = [
-  { code: "SAR", name: "Saudi Riyal", symbol: "﷼", flag: "🇸🇦" },
-  { code: "USD", name: "US Dollar", symbol: "$", flag: "🇺🇸" },
-  { code: "EUR", name: "Euro", symbol: "€", flag: "🇪🇺" },
-  { code: "GBP", name: "British Pound", symbol: "£", flag: "🇬🇧" },
-  { code: "AED", name: "UAE Dirham", symbol: "د.إ", flag: "🇦🇪" },
-  { code: "KWD", name: "Kuwaiti Dinar", symbol: "د.ك", flag: "🇰🇼" },
-  { code: "BHD", name: "Bahraini Dinar", symbol: "د.ب", flag: "🇧🇭" },
-  { code: "OMR", name: "Omani Rial", symbol: "ر.ع.", flag: "🇴🇲" },
-  { code: "QAR", name: "Qatari Riyal", symbol: "ر.ق", flag: "🇶🇦" },
-  { code: "EGP", name: "Egyptian Pound", symbol: "ج.م", flag: "🇪🇬" },
-] as const;
-
-export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number]["code"];
-
-/**
- * Login Attempts table
- * Tracks failed login attempts for account security
- */
-export const loginAttempts = mysqlTable("login_attempts", {
-  id: int("id").autoincrement().primaryKey(),
-  
-  // User identification
-  email: varchar("email", { length: 320 }),
-  openId: varchar("openId", { length: 64 }),
-  
-  // Attempt details
-  ipAddress: varchar("ipAddress", { length: 45 }).notNull(), // IPv6 max length
-  userAgent: text("userAgent"),
-  
-  // Result
-  success: boolean("success").notNull(),
-  failureReason: varchar("failureReason", { length: 255 }),
-  
-  // Timestamp
-  attemptedAt: timestamp("attemptedAt").defaultNow().notNull(),
-}, (table) => ({
-  emailIdx: index("email_idx").on(table.email),
-  openIdIdx: index("open_id_idx").on(table.openId),
-  ipAddressIdx: index("ip_address_idx").on(table.ipAddress),
-  attemptedAtIdx: index("attempted_at_idx").on(table.attemptedAt),
-}));
-
-export type LoginAttempt = typeof loginAttempts.$inferSelect;
-export type InsertLoginAttempt = typeof loginAttempts.$inferInsert;
-
-/**
- * Account Locks table
- * Tracks locked accounts due to suspicious activity
- */
-export const accountLocks = mysqlTable("account_locks", {
-  id: int("id").autoincrement().primaryKey(),
-  
-  // User identification
-  userId: int("userId").notNull().unique(),
-  
-  // Lock details
-  reason: varchar("reason", { length: 255 }).notNull(),
-  lockedBy: varchar("lockedBy", { length: 50 }).notNull(), // "system" or admin user ID
-  
-  // Lock status
-  isActive: boolean("isActive").default(true).notNull(),
-  
-  // Unlock details
-  unlockedAt: timestamp("unlockedAt"),
-  unlockedBy: varchar("unlockedBy", { length: 50 }),
-  
-  // Auto-unlock
-  autoUnlockAt: timestamp("autoUnlockAt"), // Automatic unlock time
-  
-  // Timestamps
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, (table) => ({
-  userIdIdx: index("user_id_idx").on(table.userId),
-  isActiveIdx: index("is_active_idx").on(table.isActive),
-}));
-
-export type AccountLock = typeof accountLocks.$inferSelect;
-export type InsertAccountLock = typeof accountLocks.$inferInsert;
-
-/**
- * Security Events table
- * Logs security-related events for audit trail
- */
-export const securityEvents = mysqlTable("security_events", {
-  id: int("id").autoincrement().primaryKey(),
-  
-  // Event details
-  eventType: varchar("eventType", { length: 100 }).notNull(), // e.g., "account_locked", "suspicious_login"
-  severity: varchar("severity", { length: 20 }).notNull(), // "low", "medium", "high", "critical"
-  
-  // User/IP details
-  userId: int("userId"),
-  ipAddress: varchar("ipAddress", { length: 45 }),
-  userAgent: text("userAgent"),
-  
-  // Event data
-  description: text("description"),
-  metadata: text("metadata"), // JSON string for additional data
-  
-  // Action taken
-  actionTaken: varchar("actionTaken", { length: 255 }),
-  
-  // Timestamp
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => ({
-  eventTypeIdx: index("event_type_idx").on(table.eventType),
-  severityIdx: index("severity_idx").on(table.severity),
-  userIdIdx: index("user_id_idx").on(table.userId),
-  ipAddressIdx: index("ip_address_idx").on(table.ipAddress),
-  createdAtIdx: index("created_at_idx").on(table.createdAt),
-}));
-
-export type SecurityEvent = typeof securityEvents.$inferSelect;
-export type InsertSecurityEvent = typeof securityEvents.$inferInsert;
-
-/**
- * IP Blacklist table
- * Tracks blocked IP addresses
- */
-export const ipBlacklist = mysqlTable("ip_blacklist", {
-  id: int("id").autoincrement().primaryKey(),
-  
-  // IP details
-  ipAddress: varchar("ipAddress", { length: 45 }).notNull().unique(),
-  
-  // Block details
-  reason: text("reason").notNull(),
-  blockedBy: varchar("blockedBy", { length: 50 }).notNull(), // "system" or admin user ID
-  
-  // Block status
-  isActive: boolean("isActive").default(true).notNull(),
-  
-  // Unblock details
-  unblockedAt: timestamp("unblockedAt"),
-  unblockedBy: varchar("unblockedBy", { length: 50 }),
-  
-  // Auto-unblock
-  autoUnblockAt: timestamp("autoUnblockAt"),
-  
-  // Timestamps
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, (table) => ({
-  ipAddressIdx: index("ip_address_idx").on(table.ipAddress),
-  isActiveIdx: index("is_active_idx").on(table.isActive),
-}));
-
-export type IpBlacklist = typeof ipBlacklist.$inferSelect;
-export type InsertIpBlacklist = typeof ipBlacklist.$inferInsert;
+// Export security-related tables and types
+export {
+  loginAttempts,
+  accountLocks,
+  securityEvents,
+  ipBlacklist,
+  type LoginAttempt,
+  type InsertLoginAttempt,
+  type AccountLock,
+  type InsertAccountLock,
+  type SecurityEvent,
+  type InsertSecurityEvent,
+  type IpBlacklist,
+  type InsertIpBlacklist,
+} from "./schema-security";
