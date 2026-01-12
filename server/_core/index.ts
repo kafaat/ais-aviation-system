@@ -9,6 +9,8 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { handleStripeWebhook } from '../webhooks/stripe';
 import { apiLimiter, webhookLimiter } from './rateLimiter';
+import { initializeExchangeRates, scheduleExchangeRateUpdates } from '../services/currency.service';
+import { logger } from './logger';
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -65,8 +67,16 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // Initialize currency exchange rates
+    try {
+      await initializeExchangeRates();
+      scheduleExchangeRateUpdates();
+    } catch (error) {
+      logger.error({ err: error }, "Failed to initialize currency service");
+    }
   });
 
   // Graceful shutdown

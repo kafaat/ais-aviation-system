@@ -17,6 +17,7 @@ import { eticketRouter } from "./routers/eticket";
 import { userPreferencesRouter } from "./routers/user-preferences";
 import { ancillaryRouter } from "./routers/ancillary";
 import { healthRouter } from "./routers/health";
+import { currencyRouter } from "./routers/currency";
 
 /**
  * Main Application Router
@@ -50,6 +51,7 @@ export const appRouter = router({
   userPreferences: userPreferencesRouter,
   ancillary: ancillaryRouter,
   health: healthRouter,
+  currency: currencyRouter,
 });
 
 export type AppRouter = typeof appRouter;
