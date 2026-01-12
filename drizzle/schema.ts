@@ -520,3 +520,7 @@ export const priceAlertHistory = mysqlTable("price_alert_history", {
 
 export type PriceAlertHistory = typeof priceAlertHistory.$inferSelect;
 export type InsertPriceAlertHistory = typeof priceAlertHistory.$inferInsert;
+
+// Import new schema tables
+export { bookingStatusHistory, type BookingStatusHistory, type InsertBookingStatusHistory } from "./booking-status-history-schema";
+export { auditLogs, type AuditLog, type InsertAuditLog } from "./audit-log-schema";
