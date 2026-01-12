@@ -4,7 +4,7 @@ import {
   getExchangeRate,
   convertFromSAR,
   formatCurrency,
-} from "../services/currency.service";
+} from "../../services/new-features/currency.service";
 
 describe("Currency Service", () => {
   beforeAll(async () => {

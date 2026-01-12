@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { maskPII, maskSensitiveFields } from "../_core/unified-logger";
+import { maskPII, maskSensitiveFields } from "../../_core/unified-logger";
 
 describe("Unified Logger - PII Masking", () => {
   describe("maskPII", () => {
