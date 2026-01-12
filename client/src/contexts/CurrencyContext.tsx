@@ -28,7 +28,7 @@ export function CurrencyProvider({ children }: CurrencyProviderProps) {
   const [exchangeRate, setExchangeRate] = useState<number>(1.0);
 
   // Fetch all exchange rates
-  const { data: exchangeRates } = trpc.currency.getExchangeRates.useQuery();
+  const { data: exchangeRates } = trpc.currency.getAllExchangeRates.useQuery();
 
   useEffect(() => {
     if (exchangeRates && currency !== "SAR") {

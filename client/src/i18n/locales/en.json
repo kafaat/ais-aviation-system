@@ -347,5 +347,20 @@
     "subtotal": "Subtotal",
     "totalExtras": "Total Extras",
     "servicesSelected": "services selected"
+  },
+  "currency": {
+    "title": "Currency",
+    "selectCurrency": "Select Currency",
+    "loading": "Loading currencies...",
+    "sar": "Saudi Riyal",
+    "usd": "US Dollar",
+    "eur": "Euro",
+    "gbp": "British Pound",
+    "aed": "UAE Dirham",
+    "kwd": "Kuwaiti Dinar",
+    "bhd": "Bahraini Dinar",
+    "omr": "Omani Rial",
+    "qar": "Qatari Riyal",
+    "egp": "Egyptian Pound"
   }
 }
