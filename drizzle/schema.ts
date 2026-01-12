@@ -425,3 +425,98 @@ export const bookingAncillaries = mysqlTable("booking_ancillaries", {
 
 export type BookingAncillary = typeof bookingAncillaries.$inferSelect;
 export type InsertBookingAncillary = typeof bookingAncillaries.$inferInsert;
+
+/**
+ * Flight Reviews
+ * User reviews and ratings for flights
+ */
+export const flightReviews = mysqlTable("flight_reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  flightId: int("flightId").notNull(),
+  bookingId: int("bookingId"), // Optional: link to booking for verified reviews
+  rating: int("rating").notNull(), // 1-5 stars
+  // Individual aspect ratings
+  comfortRating: int("comfortRating"), // 1-5
+  serviceRating: int("serviceRating"), // 1-5
+  valueRating: int("valueRating"), // 1-5
+  // Review content
+  title: varchar("title", { length: 200 }),
+  comment: text("comment"),
+  // Helpful votes
+  helpfulCount: int("helpfulCount").default(0).notNull(),
+  // Verification
+  isVerified: boolean("isVerified").default(false).notNull(), // True if linked to actual booking
+  // Moderation
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "hidden"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  flightIdIdx: index("flight_id_idx").on(table.flightId),
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  ratingIdx: index("rating_idx").on(table.rating),
+  statusIdx: index("status_idx").on(table.status),
+  // Unique constraint: one review per user per flight
+  userFlightUnique: index("user_flight_unique").on(table.userId, table.flightId),
+}));
+
+export type FlightReview = typeof flightReviews.$inferSelect;
+export type InsertFlightReview = typeof flightReviews.$inferInsert;
+
+/**
+ * Favorite Flights
+ * User's saved favorite flight routes
+ */
+export const favoriteFlights = mysqlTable("favorite_flights", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  originId: int("originId").notNull(),
+  destinationId: int("destinationId").notNull(),
+  // Optional: specific flight or just the route
+  airlineId: int("airlineId"), // Favorite specific airline
+  cabinClass: mysqlEnum("cabinClass", ["economy", "business"]),
+  // Price alert settings
+  enablePriceAlert: boolean("enablePriceAlert").default(false).notNull(),
+  maxPrice: int("maxPrice"), // Alert when price drops below this (in SAR cents)
+  lastAlertSent: timestamp("lastAlertSent"),
+  // Notification preferences
+  emailNotifications: boolean("emailNotifications").default(true).notNull(),
+  // Additional notes
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  routeIdx: index("route_idx").on(table.originId, table.destinationId),
+  airlineIdIdx: index("airline_id_idx").on(table.airlineId),
+  priceAlertIdx: index("price_alert_idx").on(table.enablePriceAlert, table.maxPrice),
+  // Unique constraint: one favorite per user per route/airline combination
+  userRouteFavoriteUnique: index("user_route_favorite_unique").on(table.userId, table.originId, table.destinationId, table.airlineId),
+}));
+
+export type FavoriteFlight = typeof favoriteFlights.$inferSelect;
+export type InsertFavoriteFlight = typeof favoriteFlights.$inferInsert;
+
+/**
+ * Price Alert History
+ * Track when price alerts were triggered
+ */
+export const priceAlertHistory = mysqlTable("price_alert_history", {
+  id: int("id").autoincrement().primaryKey(),
+  favoriteFlightId: int("favoriteFlightId").notNull(),
+  flightId: int("flightId").notNull(), // The specific flight that triggered the alert
+  previousPrice: int("previousPrice").notNull(), // Previous lowest price
+  newPrice: int("newPrice").notNull(), // New lower price
+  priceChange: int("priceChange").notNull(), // Difference (negative number)
+  alertSent: boolean("alertSent").default(false).notNull(),
+  sentAt: timestamp("sentAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  favoriteFlightIdIdx: index("favorite_flight_id_idx").on(table.favoriteFlightId),
+  flightIdIdx: index("flight_id_idx").on(table.flightId),
+  createdAtIdx: index("created_at_idx").on(table.createdAt),
+}));
+
+export type PriceAlertHistory = typeof priceAlertHistory.$inferSelect;
+export type InsertPriceAlertHistory = typeof priceAlertHistory.$inferInsert;
