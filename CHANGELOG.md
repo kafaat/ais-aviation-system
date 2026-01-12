@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-01-12
+
+### 🚀 Major Update - Critical Security & Infrastructure Improvements
+
+This release implements all critical (Phase 1) recommendations from the IMPROVEMENTS_PLAN.md, focusing on security, observability, and international expansion.
+
+### Added
+
+#### Multi-Currency Support (Backend)
+- **Exchange Rates Management**
+  - New `exchange_rates` and `user_currency_preferences` database tables
+  - Integration with exchangerate-api.com for real-time currency rates
+  - Support for 10 currencies: SAR, USD, EUR, GBP, AED, KWD, BHD, OMR, QAR, EGP
+  - Automatic exchange rate updates every 24 hours via cron job
+  - Currency conversion service with SAR as base currency
+  - tRPC endpoints for currency operations
+
+#### Enhanced Logging with PII Masking
+- **Automatic PII Protection**
+  - Automatic masking of sensitive data in logs:
+    - Email addresses → [EMAIL]
+    - Phone numbers → [PHONE]
+    - Credit card numbers → [CARD]
+    - Passport numbers → [PASSPORT]
+    - Saudi National IDs → [NATIONAL_ID]
+  - Sensitive field name masking (password, cvv, nationalId, etc.)
+  - Comprehensive test suite (13 tests)
+
+- **Specialized Logging Functions**
+  - `logAuth()` - Authentication event logging
+  - `logPayment()` - Payment transaction logging
+  - `logSecurity()` - Security event logging with severity levels
+  - All existing logging functions enhanced with PII masking
+
+#### Enhanced Security Features
+- **Account Lock System**
+  - New security database tables:
+    - `login_attempts` - Track all login attempts
+    - `account_locks` - Manage locked accounts
+    - `security_events` - Security audit trail
+    - `ip_blacklist` - IP blocking/unblocking
+  
+- **Automatic Protection**
+  - Auto-lock accounts after 5 failed login attempts within 15 minutes
+  - Auto-unlock after configurable duration (default: 30 minutes)
+  - IP-based rate limiting to prevent enumeration attacks
+  - Automatic cleanup of expired locks via cron job (every 10 minutes)
+
+- **Admin Security Management**
+  - tRPC endpoints for security operations (admin-only):
+    - View all locked accounts
+    - Manual account lock/unlock
+    - View blocked IPs
+    - Manual IP block/unblock
+    - View security event audit trail
+  - Proper authorization with admin-only access control
+
+### Changed
+- Cron service now includes security cleanup jobs
+- Server startup now initializes currency exchange rates
+- All admin security endpoints protected with proper authorization
+
+### Security
+- ✅ CodeQL scan passed with 0 alerts
+- ✅ PII masking prevents sensitive data leakage in logs
+- ✅ Account lock prevents brute force attacks
+- ✅ IP blocking prevents enumeration attacks
+- ✅ Proper admin authorization on sensitive endpoints
+- ✅ API response validation prevents runtime errors
+- ✅ Timeout handling for external API calls
+
+### Database Migrations
+- Migration 0012: Added exchange_rates and user_currency_preferences tables
+- Migration 0013: Added login_attempts, account_locks, security_events, and ip_blacklist tables
+
+### Documentation
+- Updated code with comprehensive JSDoc comments
+- Enhanced service documentation with usage examples
+- Added security considerations in code comments
+
+### Testing
+- Added 13 new tests for PII masking functionality
+- All existing tests structure maintained
+- No regressions detected
+
+---
+
 ## [2.0.0] - 2026-01-12
 
 ### 🎉 Major Release - Comprehensive Documentation & Review
