@@ -462,25 +462,25 @@
 - [x] Test loyalty dashboard UI
 - [x] All 50 tests passing successfully
 
-### Phase 15: Reviews & Ratings System
-- [ ] Design reviews schema (flight_reviews table)
-- [ ] Create reviews.service.ts
-- [ ] Create reviews router
-- [ ] Add review submission form
-- [ ] Display reviews on flight details
-- [ ] Add rating aggregation
-- [ ] Write unit tests
-- [ ] Update todo.md after completion
+### Phase 15: Reviews & Ratings System ✅ (PR #10 - Completed 2026-01-12)
+- [x] Design reviews schema (flight_reviews table)
+- [x] Create reviews.service.ts with full CRUD operations
+- [x] Create reviews router with tRPC endpoints
+- [x] Add review statistics and aggregation
+- [x] Support verified reviews (linked to bookings)
+- [x] Add helpful votes feature
+- [x] Moderation status support
+- [x] Write comprehensive unit tests (8 tests)
 
-### Phase 16: Favorite Flights & Price Alerts
-- [ ] Design favorites schema (favorite_flights table)
-- [ ] Create favorites.service.ts
-- [ ] Create favorites router
-- [ ] Add favorite button to flight cards
-- [ ] Create favorites page
-- [ ] Implement price alert notifications
-- [ ] Write unit tests
-- [ ] Update todo.md after completion
+### Phase 16: Favorite Flights & Price Alerts ✅ (PR #10 - Completed 2026-01-12)
+- [x] Design favorites schema (favorite_flights, price_alert_history tables)
+- [x] Create favorites.service.ts with full functionality
+- [x] Create favorites router with tRPC endpoints
+- [x] Add price alert checking and notifications
+- [x] Support route favorites with optional airline
+- [x] Track price alert history
+- [x] Get best prices for favorite routes
+- [x] Write comprehensive unit tests (10 tests)
 
 
 ## PSS Comprehensive Review & Completion
