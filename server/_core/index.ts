@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { handleStripeWebhook } from '../webhooks/stripe';
 import { apiLimiter, webhookLimiter } from './rateLimiter';
+import { initializeExchangeRates, scheduleExchangeRateUpdates } from '../services/currency.service';
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -67,6 +68,12 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // Initialize currency exchange rates
+    initializeExchangeRates();
+    
+    // Schedule periodic exchange rate updates (every 24 hours)
+    scheduleExchangeRateUpdates();
   });
 
   // Graceful shutdown
