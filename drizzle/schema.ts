@@ -426,6 +426,7 @@ export const bookingAncillaries = mysqlTable("booking_ancillaries", {
 export type BookingAncillary = typeof bookingAncillaries.$inferSelect;
 export type InsertBookingAncillary = typeof bookingAncillaries.$inferInsert;
 
+
 // Export currency-related tables and types
 export { 
   exchangeRates, 
