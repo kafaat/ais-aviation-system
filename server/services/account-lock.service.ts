@@ -59,8 +59,73 @@ export async function recordLoginAttempt(data: {
   }
 
   // Check if account should be locked
-  if (!data.success && data.userId) {
-    await checkAndLockAccount(data.userId, data.email, data.openId, data.ipAddress);
+  if (!data.success) {
+    if (data.userId) {
+      await checkAndLockAccount(data.userId, data.email, data.openId, data.ipAddress);
+    } else {
+      // For failed attempts without userId (e.g., invalid email), check IP-based rate limiting
+      await checkAndBlockIp(data.ipAddress, data.email, data.openId);
+    }
+  }
+}
+
+/**
+ * Check IP-based failed attempts and block if threshold exceeded
+ */
+async function checkAndBlockIp(
+  ipAddress: string,
+  email?: string,
+  openId?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Calculate time window
+  const windowStart = new Date();
+  windowStart.setMinutes(windowStart.getMinutes() - ATTEMPT_WINDOW_MINUTES);
+
+  // Count all failed attempts from this IP in the time window
+  const failedAttempts = await db
+    .select()
+    .from(loginAttempts)
+    .where(
+      and(
+        eq(loginAttempts.ipAddress, ipAddress),
+        eq(loginAttempts.success, false),
+        gte(loginAttempts.attemptedAt, windowStart)
+      )
+    );
+
+  // If threshold exceeded, block the IP
+  if (failedAttempts.length >= MAX_FAILED_ATTEMPTS) {
+    logSecurity(
+      "IP blocked due to multiple failed login attempts",
+      "high",
+      {
+        ipAddress,
+        email,
+        openId,
+        attempts: failedAttempts.length,
+      }
+    );
+
+    // Block the IP
+    await blockIpAddress(
+      ipAddress,
+      `Automatic block after ${failedAttempts.length} failed login attempts`,
+      "system",
+      LOCKOUT_DURATION_MINUTES
+    );
+
+    // Create security event
+    await recordSecurityEvent({
+      eventType: "ip_blocked",
+      severity: "high",
+      ipAddress,
+      description: `IP blocked after ${failedAttempts.length} failed login attempts`,
+      metadata: JSON.stringify({ email, openId, attempts: failedAttempts.length }),
+      actionTaken: `IP blocked for ${LOCKOUT_DURATION_MINUTES} minutes`,
+    });
   }
 }
 

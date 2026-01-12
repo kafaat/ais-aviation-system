@@ -18,7 +18,15 @@ const CACHE_DURATION_HOURS = 24; // Update rates every 24 hours
 export async function fetchLatestExchangeRates(): Promise<void> {
   try {
     logger.info("[Currency] Fetching latest exchange rates...");
-    const response = await axios.get(EXCHANGE_RATE_API_URL);
+    const response = await axios.get(EXCHANGE_RATE_API_URL, {
+      timeout: 10000, // 10 second timeout
+    });
+    
+    // Validate response structure
+    if (!response.data || !response.data.rates || typeof response.data.rates !== 'object') {
+      throw new Error("Invalid API response structure");
+    }
+    
     const rates = response.data.rates;
     
     const db = await getDb();

@@ -1,7 +1,18 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import * as accountLockService from "../services/account-lock.service";
+
+/**
+ * Admin-only procedure for security operations
+ * Ensures only users with admin role can access these routes
+ */
+const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+  }
+  return next({ ctx });
+});
 
 /**
  * Security Router
@@ -12,7 +23,7 @@ export const securityRouter = router({
   /**
    * Get all locked accounts (admin only)
    */
-  getLockedAccounts: publicProcedure.query(async () => {
+  getLockedAccounts: adminProcedure.query(async () => {
     try {
       return await accountLockService.getLockedAccounts();
     } catch (error) {
@@ -26,7 +37,7 @@ export const securityRouter = router({
   /**
    * Get all blocked IPs (admin only)
    */
-  getBlockedIps: publicProcedure.query(async () => {
+  getBlockedIps: adminProcedure.query(async () => {
     try {
       return await accountLockService.getBlockedIps();
     } catch (error) {
@@ -40,7 +51,7 @@ export const securityRouter = router({
   /**
    * Get recent security events (admin only)
    */
-  getSecurityEvents: publicProcedure
+  getSecurityEvents: adminProcedure
     .input(
       z.object({
         limit: z.number().min(1).max(200).optional().default(50),
@@ -58,9 +69,9 @@ export const securityRouter = router({
     }),
 
   /**
-   * Check if account is locked
+   * Check if account is locked (protected, user can check their own account)
    */
-  isAccountLocked: publicProcedure
+  isAccountLocked: protectedProcedure
     .input(
       z.object({
         userId: z.number().int().positive(),
@@ -85,7 +96,7 @@ export const securityRouter = router({
   /**
    * Unlock an account (admin only)
    */
-  unlockAccount: publicProcedure
+  unlockAccount: adminProcedure
     .input(
       z.object({
         userId: z.number().int().positive(),
@@ -107,7 +118,7 @@ export const securityRouter = router({
   /**
    * Lock an account (admin only)
    */
-  lockAccount: publicProcedure
+  lockAccount: adminProcedure
     .input(
       z.object({
         userId: z.number().int().positive(),
@@ -134,9 +145,9 @@ export const securityRouter = router({
     }),
 
   /**
-   * Check if IP is blocked
+   * Check if IP is blocked (admin only)
    */
-  isIpBlocked: publicProcedure
+  isIpBlocked: adminProcedure
     .input(
       z.object({
         ipAddress: z.string(),
@@ -156,7 +167,7 @@ export const securityRouter = router({
   /**
    * Block an IP address (admin only)
    */
-  blockIp: publicProcedure
+  blockIp: adminProcedure
     .input(
       z.object({
         ipAddress: z.string(),
@@ -185,7 +196,7 @@ export const securityRouter = router({
   /**
    * Unblock an IP address (admin only)
    */
-  unblockIp: publicProcedure
+  unblockIp: adminProcedure
     .input(
       z.object({
         ipAddress: z.string(),
