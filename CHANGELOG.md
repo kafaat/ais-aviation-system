@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+#### New Features (PR #10)
+- **Reviews & Ratings System** - Complete flight review functionality
+  - Flight-specific reviews with multi-dimensional ratings (overall, comfort, service, value)
+  - Verified reviews linked to actual bookings
+  - Review statistics and rating distribution
+  - Helpful votes tracking
+  - User review history
+  - Moderation status support
+  - Comprehensive service layer with full CRUD operations
+  - tRPC API integration with input validation
+
+- **Favorite Flights & Price Alerts** - Save and monitor flight preferences
+  - Save favorite flight routes with optional airline and cabin class
+  - Price alert configuration with custom thresholds
+  - Automatic price monitoring and tracking
+  - Price drop notifications with email preferences
+  - Price alert history tracking
+  - Best price discovery for saved routes
+  - Full tRPC API integration
+  - Comprehensive service layer with database integration
+
+#### Technical Improvements (PR #10)
+- Complete database schema for reviews (flight_reviews table)
+- Complete database schema for favorites (favorite_flights, price_alert_history tables)
+- 18 comprehensive unit tests (8 for reviews, 10 for favorites)
+- Input validation with Zod schemas
+- User ownership verification for security
+- Proper error handling and logging
+- Database indexes for performance
+
+---
+
 ## [2.0.0] - 2026-01-12
 
 ### 🎉 Major Release - Comprehensive Documentation & Review
