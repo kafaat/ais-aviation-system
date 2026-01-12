@@ -17,6 +17,8 @@ import { eticketRouter } from "./routers/eticket";
 import { userPreferencesRouter } from "./routers/user-preferences";
 import { ancillaryRouter } from "./routers/ancillary";
 import { healthRouter } from "./routers/health";
+import { reviewsRouter } from "./routers/reviews";
+import { favoritesRouter } from "./routers/favorites";
 
 /**
  * Main Application Router
@@ -50,6 +52,8 @@ export const appRouter = router({
   userPreferences: userPreferencesRouter,
   ancillary: ancillaryRouter,
   health: healthRouter,
+  reviews: reviewsRouter,
+  favorites: favoritesRouter,
 });
 
 export type AppRouter = typeof appRouter;
