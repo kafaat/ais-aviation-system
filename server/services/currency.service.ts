@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { getDb } from "../db";
-import { exchangeRates, userCurrencyPreferences, type InsertExchangeRate, type SupportedCurrency, SUPPORTED_CURRENCIES } from "../../drizzle/schema";
+import { exchangeRates, type InsertExchangeRate, type SupportedCurrency, SUPPORTED_CURRENCIES } from "../../drizzle/schema-currency";
 import axios from "axios";
 import { logger } from "../_core/logger";
 
@@ -17,7 +17,16 @@ const CACHE_DURATION_HOURS = 24; // Update rates every 24 hours
  */
 export async function fetchLatestExchangeRates(): Promise<void> {
   try {
-    const response = await axios.get(EXCHANGE_RATE_API_URL);
+    logger.info("[Currency] Fetching latest exchange rates...");
+    const response = await axios.get(EXCHANGE_RATE_API_URL, {
+      timeout: 10000, // 10 second timeout
+    });
+    
+    // Validate response structure
+    if (!response.data || !response.data.rates || typeof response.data.rates !== 'object') {
+      throw new Error("Invalid API response structure");
+    }
+    
     const rates = response.data.rates;
     
     const db = await getDb();
@@ -95,6 +104,7 @@ export async function getExchangeRate(targetCurrency: SupportedCurrency): Promis
 
   if (result.length === 0) {
     // If rate not found, fetch latest rates and try again
+    logger.info(`[Currency] Rate not found for ${targetCurrency}, fetching latest rates...`);
     await fetchLatestExchangeRates();
     
     const retryResult = await db
@@ -213,55 +223,15 @@ export async function getAllExchangeRates() {
 }
 
 /**
- * Get user's preferred currency
+ * Get all supported currencies
  */
-export async function getUserPreferredCurrency(userId: number): Promise<SupportedCurrency> {
-  const db = await getDb();
-  if (!db) return "SAR"; // Default to SAR
-
-  const result = await db
-    .select()
-    .from(userCurrencyPreferences)
-    .where(eq(userCurrencyPreferences.userId, userId))
-    .limit(1);
-
-  if (result.length === 0) return "SAR";
-
-  return result[0].preferredCurrency as SupportedCurrency;
-}
-
-/**
- * Set user's preferred currency
- */
-export async function setUserPreferredCurrency(
-  userId: number,
-  currency: SupportedCurrency
-): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Check if preference exists
-  const existing = await db
-    .select()
-    .from(userCurrencyPreferences)
-    .where(eq(userCurrencyPreferences.userId, userId))
-    .limit(1);
-
-  if (existing.length > 0) {
-    // Update existing preference
-    await db
-      .update(userCurrencyPreferences)
-      .set({ preferredCurrency: currency })
-      .where(eq(userCurrencyPreferences.userId, userId));
-  } else {
-    // Insert new preference
-    await db.insert(userCurrencyPreferences).values({
-      userId,
-      preferredCurrency: currency,
-    });
-  }
-
-  logger.info({ userId, currency }, "[Currency] User preferred currency updated");
+export function getSupportedCurrencies() {
+  return SUPPORTED_CURRENCIES.map(c => ({
+    code: c.code,
+    name: c.name,
+    symbol: c.symbol,
+    flag: c.flag,
+  }));
 }
 
 /**

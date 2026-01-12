@@ -85,6 +85,20 @@
       "when": 1763653518681,
       "tag": "0011_tiny_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1768243246719,
+      "tag": "0012_cute_cerebro",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1768243538518,
+      "tag": "0013_daffy_doctor_spectrum",
+      "breakpoints": true
     }
   ]
 }

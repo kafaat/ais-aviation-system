@@ -1,81 +1,167 @@
 import { z } from "zod";
-import { router, adminProcedure } from "../_core/trpc";
-import {
-  getRecentSecurityEvents,
-  getLockedAccounts,
-  unlockAccount,
-  blockIpAddress,
-  unblockIpAddress,
-  getUserLoginAttempts,
-  isAccountLocked,
-  isIpBlocked,
-} from "../services/account-lock.service";
+import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
+import * as accountLockService from "../services/account-lock.service";
+
+/**
+ * Admin-only procedure for security operations
+ * Ensures only users with admin role can access these routes
+ */
+const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+  }
+  return next({ ctx });
+});
 
 /**
  * Security Router
- * Admin endpoints for security monitoring and management
+ * Handles security-related operations (admin only)
  */
+
 export const securityRouter = router({
+  /**
+   * Get all locked accounts (admin only)
+   */
+  getLockedAccounts: adminProcedure.query(async () => {
+    try {
+      return await accountLockService.getLockedAccounts();
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get locked accounts",
+      });
+    }
+  }),
+
+  /**
+   * Get all blocked IPs (admin only)
+   */
+  getBlockedIps: adminProcedure.query(async () => {
+    try {
+      return await accountLockService.getBlockedIps();
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to get blocked IPs",
+      });
+    }
+  }),
+
   /**
    * Get recent security events (admin only)
    */
   getSecurityEvents: adminProcedure
     .input(
       z.object({
-        limit: z.number().int().positive().max(200).optional().default(50),
+        limit: z.number().min(1).max(200).optional().default(50),
       })
     )
     .query(async ({ input }) => {
-      return await getRecentSecurityEvents(input.limit);
+      try {
+        return await accountLockService.getRecentSecurityEvents(input.limit);
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get security events",
+        });
+      }
     }),
 
   /**
-   * Get all locked accounts (admin only)
+   * Check if account is locked (protected, user can check their own account)
    */
-  getLockedAccounts: adminProcedure.query(async () => {
-    return await getLockedAccounts();
-  }),
+  isAccountLocked: protectedProcedure
+    .input(
+      z.object({
+        userId: z.number().int().positive(),
+      })
+    )
+    .query(async ({ input }) => {
+      try {
+        const isLocked = await accountLockService.isAccountLocked(input.userId);
+        const lock = isLocked ? await accountLockService.getAccountLock(input.userId) : null;
+        return {
+          isLocked,
+          lock,
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to check account lock status",
+        });
+      }
+    }),
 
   /**
-   * Unlock a user account (admin only)
+   * Unlock an account (admin only)
    */
   unlockAccount: adminProcedure
     .input(
       z.object({
         userId: z.number().int().positive(),
+        unlockedBy: z.string(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      await unlockAccount(input.userId, `admin-${ctx.user.id}`);
-      return { success: true };
+    .mutation(async ({ input }) => {
+      try {
+        await accountLockService.unlockAccount(input.userId, input.unlockedBy);
+        return { success: true, message: "Account unlocked successfully" };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to unlock account",
+        });
+      }
     }),
 
   /**
-   * Check if account is locked (admin only)
+   * Lock an account (admin only)
    */
-  checkAccountLock: adminProcedure
+  lockAccount: adminProcedure
     .input(
       z.object({
         userId: z.number().int().positive(),
+        reason: z.string().min(1).max(255),
+        lockedBy: z.string(),
+        autoUnlockMinutes: z.number().int().positive().optional(),
       })
     )
-    .query(async ({ input }) => {
-      const isLocked = await isAccountLocked(input.userId);
-      return { isLocked };
+    .mutation(async ({ input }) => {
+      try {
+        await accountLockService.lockAccount(
+          input.userId,
+          input.reason,
+          input.lockedBy,
+          input.autoUnlockMinutes
+        );
+        return { success: true, message: "Account locked successfully" };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to lock account",
+        });
+      }
     }),
 
   /**
-   * Get login attempts for a user (admin only)
+   * Check if IP is blocked (admin only)
    */
-  getUserLoginAttempts: adminProcedure
+  isIpBlocked: adminProcedure
     .input(
       z.object({
-        userId: z.number().int().positive(),
-        limit: z.number().int().positive().max(100).optional().default(20),
+        ipAddress: z.string(),
       })
     )
     .query(async ({ input }) => {
-      return await getUserLoginAttempts(input.userId, input.limit);
+      try {
+        return await accountLockService.isIpBlocked(input.ipAddress);
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to check IP block status",
+        });
+      }
     }),
 
   /**
@@ -84,19 +170,27 @@ export const securityRouter = router({
   blockIp: adminProcedure
     .input(
       z.object({
-        ipAddress: z.string().regex(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i, "Invalid IP address"),
-        reason: z.string().min(1).max(500),
+        ipAddress: z.string(),
+        reason: z.string().min(1),
+        blockedBy: z.string(),
         autoUnblockMinutes: z.number().int().positive().optional(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      await blockIpAddress(
-        input.ipAddress,
-        input.reason,
-        `admin-${ctx.user.id}`,
-        input.autoUnblockMinutes
-      );
-      return { success: true };
+    .mutation(async ({ input }) => {
+      try {
+        await accountLockService.blockIpAddress(
+          input.ipAddress,
+          input.reason,
+          input.blockedBy,
+          input.autoUnblockMinutes
+        );
+        return { success: true, message: "IP address blocked successfully" };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to block IP address",
+        });
+      }
     }),
 
   /**
@@ -105,25 +199,19 @@ export const securityRouter = router({
   unblockIp: adminProcedure
     .input(
       z.object({
-        ipAddress: z.string().regex(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i, "Invalid IP address"),
+        ipAddress: z.string(),
+        unblockedBy: z.string(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      await unblockIpAddress(input.ipAddress, `admin-${ctx.user.id}`);
-      return { success: true };
-    }),
-
-  /**
-   * Check if IP is blocked (admin only)
-   */
-  checkIpBlock: adminProcedure
-    .input(
-      z.object({
-        ipAddress: z.string().regex(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^(?:[A-F0-9]{1,4}:){7}[A-F0-9]{1,4}$/i, "Invalid IP address"),
-      })
-    )
-    .query(async ({ input }) => {
-      const isBlocked = await isIpBlocked(input.ipAddress);
-      return { isBlocked };
+    .mutation(async ({ input }) => {
+      try {
+        await accountLockService.unblockIpAddress(input.ipAddress, input.unblockedBy);
+        return { success: true, message: "IP address unblocked successfully" };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to unblock IP address",
+        });
+      }
     }),
 });

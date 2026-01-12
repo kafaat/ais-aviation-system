@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import { inventoryLocks } from "../../drizzle/schema";
 import { lt } from "drizzle-orm";
 import { logger, logInfo, logError } from "../_core/logger";
+import { cleanupExpiredLocks as cleanupSecurityLocks } from "./account-lock.service";
 
 /**
  * Clean up expired inventory locks
@@ -43,10 +44,16 @@ export async function cleanupExpiredLocks() {
 export function startCronJobs() {
   logger.info("Starting cron jobs...");
 
-  // Clean up expired locks every 5 minutes
+  // Clean up expired inventory locks every 5 minutes
   cron.schedule("*/5 * * * *", async () => {
     logger.debug("Running cron job: cleanupExpiredLocks");
     await cleanupExpiredLocks();
+  });
+
+  // Clean up expired security locks and IP blocks every 10 minutes
+  cron.schedule("*/10 * * * *", async () => {
+    logger.debug("Running cron job: cleanupSecurityLocks");
+    await cleanupSecurityLocks();
   });
 
   logger.info("Cron jobs started successfully");
@@ -58,5 +65,6 @@ export function startCronJobs() {
 export async function triggerCronJobs() {
   logger.info("Manually triggering cron jobs");
   await cleanupExpiredLocks();
+  await cleanupSecurityLocks();
   logger.info("Cron jobs completed");
 }
