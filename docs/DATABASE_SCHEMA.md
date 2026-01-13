@@ -607,12 +607,16 @@ ANALYZE TABLE flights, bookings, passengers;
 -- تحسين الجداول
 OPTIMIZE TABLE flights, bookings;
 
--- عرض حجم الجداول
+-- عرض حجم الجداول (InnoDB specific للدقة الأفضل)
 SELECT 
   table_name,
-  ROUND(((data_length + index_length) / 1024 / 1024), 2) AS "Size (MB)"
+  engine,
+  ROUND(((data_length + index_length) / 1024 / 1024), 2) AS "Size (MB)",
+  ROUND((data_length / 1024 / 1024), 2) AS "Data (MB)",
+  ROUND((index_length / 1024 / 1024), 2) AS "Index (MB)"
 FROM information_schema.TABLES
 WHERE table_schema = "ais_aviation"
+  AND engine = 'InnoDB'
 ORDER BY (data_length + index_length) DESC;
 ```
 

@@ -63,9 +63,14 @@ logger.info({ duration, operation: 'someOperation' });
 #### 3. Database Performance
 
 ```sql
--- تفعيل Slow Query Log
+-- تفعيل Slow Query Log (للتطوير - استخدم session-level في الإنتاج)
+-- ⚠️ تحذير: تغيير الإعدادات العامة (GLOBAL) يؤثر على جميع الاتصالات
+-- للتطوير فقط:
 SET GLOBAL slow_query_log = 'ON';
 SET GLOBAL long_query_time = 0.5; -- استعلامات أبطأ من 0.5s
+
+-- للإنتاج، يُنصح باستخدام إعدادات على مستوى الجلسة:
+SET SESSION long_query_time = 0.5;
 
 -- عرض الاستعلامات البطيئة
 SELECT * FROM mysql.slow_log 

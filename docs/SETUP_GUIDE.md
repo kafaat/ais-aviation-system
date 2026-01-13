@@ -76,7 +76,9 @@ brew install node@22
 # تحديث النظام
 sudo apt update && sudo apt upgrade -y
 
-# تثبيت Node.js 22
+# تثبيت Node.js 22 من المستودع الرسمي
+# ⚠️ تحذير: تأكد من صحة المصدر قبل التنفيذ بـ sudo
+# يُنصح بمراجعة السكربت على https://github.com/nodesource/distributions
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
