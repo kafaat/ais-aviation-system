@@ -65,6 +65,7 @@ df -h
 ### Problem: `pnpm install` fails
 
 **Symptoms:**
+
 ```
 ERR_PNPM_FETCH_404 GET https://registry.npmjs.org/...
 ```
@@ -72,6 +73,7 @@ ERR_PNPM_FETCH_404 GET https://registry.npmjs.org/...
 **Solutions:**
 
 1. **Clear pnpm cache:**
+
 ```bash
 pnpm store prune
 rm -rf node_modules pnpm-lock.yaml
@@ -79,11 +81,13 @@ pnpm install
 ```
 
 2. **Check network/proxy settings:**
+
 ```bash
 pnpm config set registry https://registry.npmjs.org/
 ```
 
 3. **Use different Node version:**
+
 ```bash
 nvm install 22
 nvm use 22
@@ -95,6 +99,7 @@ pnpm install
 ### Problem: TypeScript compilation errors after install
 
 **Symptoms:**
+
 ```
 error TS2307: Cannot find module '@/components/...'
 ```
@@ -102,17 +107,20 @@ error TS2307: Cannot find module '@/components/...'
 **Solutions:**
 
 1. **Regenerate TypeScript declarations:**
+
 ```bash
 pnpm check
 ```
 
 2. **Clean build cache:**
+
 ```bash
 rm -rf dist .tsbuildinfo
 pnpm build
 ```
 
 3. **Check tsconfig.json paths:**
+
 ```json
 {
   "compilerOptions": {
@@ -130,6 +138,7 @@ pnpm build
 ### Problem: "Database connection failed"
 
 **Symptoms:**
+
 ```
 Error: connect ECONNREFUSED 127.0.0.1:3306
 ```
@@ -137,6 +146,7 @@ Error: connect ECONNREFUSED 127.0.0.1:3306
 **Solutions:**
 
 1. **Check if MySQL is running:**
+
 ```bash
 # macOS/Linux
 sudo systemctl status mysql
@@ -148,6 +158,7 @@ sudo systemctl start mysql
 ```
 
 2. **Verify DATABASE_URL in .env:**
+
 ```bash
 # Correct format:
 DATABASE_URL=mysql://username:password@localhost:3306/database_name
@@ -157,6 +168,7 @@ mysql -h localhost -u username -p database_name
 ```
 
 3. **Check firewall/network:**
+
 ```bash
 # Test port accessibility
 telnet localhost 3306
@@ -169,6 +181,7 @@ nc -zv localhost 3306
 ### Problem: "Table doesn't exist" errors
 
 **Symptoms:**
+
 ```
 Error: Table 'ais_aviation.flights' doesn't exist
 ```
@@ -176,11 +189,13 @@ Error: Table 'ais_aviation.flights' doesn't exist
 **Solutions:**
 
 1. **Run migrations:**
+
 ```bash
 pnpm db:push
 ```
 
 2. **Verify database schema:**
+
 ```bash
 mysql -u root -p
 USE ais_aviation;
@@ -188,6 +203,7 @@ SHOW TABLES;
 ```
 
 3. **Reset database (development only):**
+
 ```bash
 # WARNING: This deletes all data!
 mysql -u root -p -e "DROP DATABASE ais_aviation; CREATE DATABASE ais_aviation;"
@@ -200,6 +216,7 @@ npx tsx scripts/seed-data.mjs
 ### Problem: Migration failures
 
 **Symptoms:**
+
 ```
 Error applying migration: Duplicate column name 'status'
 ```
@@ -207,12 +224,14 @@ Error applying migration: Duplicate column name 'status'
 **Solutions:**
 
 1. **Check migration history:**
+
 ```bash
 pnpm drizzle-kit studio
 # View __drizzle_migrations table
 ```
 
 2. **Manual migration rollback:**
+
 ```sql
 -- View migrations
 SELECT * FROM __drizzle_migrations ORDER BY id DESC;
@@ -222,6 +241,7 @@ SELECT * FROM __drizzle_migrations ORDER BY id DESC;
 ```
 
 3. **Regenerate migrations:**
+
 ```bash
 rm -rf drizzle/migrations
 pnpm drizzle-kit generate
@@ -235,6 +255,7 @@ pnpm drizzle-kit migrate
 ### Problem: 401 Unauthorized
 
 **Symptoms:**
+
 ```json
 {
   "error": {
@@ -247,19 +268,22 @@ pnpm drizzle-kit migrate
 **Solutions:**
 
 1. **Check cookie:**
+
 ```javascript
 // In browser console
-document.cookie
+document.cookie;
 // Should contain 'auth_token=...'
 ```
 
 2. **Verify JWT_SECRET:**
+
 ```bash
 # .env file should have JWT_SECRET
 cat .env | grep JWT_SECRET
 ```
 
 3. **Re-authenticate:**
+
 ```bash
 # Clear cookies and log in again
 # In browser: DevTools > Application > Cookies > Clear
@@ -270,6 +294,7 @@ cat .env | grep JWT_SECRET
 ### Problem: 500 Internal Server Error
 
 **Symptoms:**
+
 ```json
 {
   "error": {
@@ -282,6 +307,7 @@ cat .env | grep JWT_SECRET
 **Solutions:**
 
 1. **Check server logs:**
+
 ```bash
 # If using pnpm dev
 # Logs appear in terminal
@@ -291,6 +317,7 @@ tail -f logs/error.log
 ```
 
 2. **Enable debug mode:**
+
 ```bash
 # In .env
 LOG_LEVEL=debug
@@ -301,6 +328,7 @@ pnpm dev
 ```
 
 3. **Check error stack trace:**
+
 ```typescript
 // Look for error details in server console
 // Example error might show:
@@ -312,6 +340,7 @@ pnpm dev
 ### Problem: CORS errors
 
 **Symptoms:**
+
 ```
 Access to fetch at 'http://localhost:3000/api/trpc' has been blocked by CORS policy
 ```
@@ -319,20 +348,25 @@ Access to fetch at 'http://localhost:3000/api/trpc' has been blocked by CORS pol
 **Solutions:**
 
 1. **Check FRONTEND_URL in .env:**
+
 ```bash
 FRONTEND_URL=http://localhost:3000
 ```
 
 2. **Verify CORS configuration:**
+
 ```typescript
 // server/_core/index.ts
-app.use(cors({
-  origin: process.env.FRONTEND_URL,
-  credentials: true,
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  })
+);
 ```
 
 3. **Use correct protocol (http vs https):**
+
 ```bash
 # Development: http://localhost:3000
 # Production: https://your-domain.com
@@ -345,6 +379,7 @@ app.use(cors({
 ### Problem: White screen / App won't load
 
 **Symptoms:**
+
 - Blank page
 - No errors in console
 - Network tab shows no requests
@@ -352,12 +387,14 @@ app.use(cors({
 **Solutions:**
 
 1. **Check browser console:**
+
 ```
 F12 > Console tab
 # Look for JavaScript errors
 ```
 
 2. **Clear browser cache:**
+
 ```
 Ctrl+Shift+Delete > Clear cache
 # or
@@ -365,6 +402,7 @@ Hard reload: Ctrl+Shift+R
 ```
 
 3. **Rebuild frontend:**
+
 ```bash
 rm -rf dist client/dist
 pnpm build
@@ -375,6 +413,7 @@ pnpm build
 ### Problem: Components not rendering / style issues
 
 **Symptoms:**
+
 - UI looks broken
 - Components appear unstyled
 - Tailwind classes not working
@@ -382,6 +421,7 @@ pnpm build
 **Solutions:**
 
 1. **Check Tailwind configuration:**
+
 ```bash
 # Ensure tailwind is installed
 pnpm list tailwindcss
@@ -391,12 +431,14 @@ pnpm dev
 ```
 
 2. **Verify CSS imports:**
+
 ```typescript
 // client/src/main.tsx should have:
-import './index.css'
+import "./index.css";
 ```
 
 3. **Clear Vite cache:**
+
 ```bash
 rm -rf node_modules/.vite
 pnpm dev
@@ -407,6 +449,7 @@ pnpm dev
 ### Problem: React Query / tRPC errors
 
 **Symptoms:**
+
 ```
 useQuery is not a function
 trpc.flights.search is undefined
@@ -415,13 +458,15 @@ trpc.flights.search is undefined
 **Solutions:**
 
 1. **Verify tRPC client setup:**
+
 ```typescript
 // client/src/lib/trpc.ts
-import { createTRPCReact } from '@trpc/react-query';
+import { createTRPCReact } from "@trpc/react-query";
 export const trpc = createTRPCReact<AppRouter>();
 ```
 
 2. **Check Provider wrapping:**
+
 ```typescript
 // client/src/main.tsx
 <QueryClientProvider client={queryClient}>
@@ -432,6 +477,7 @@ export const trpc = createTRPCReact<AppRouter>();
 ```
 
 3. **Ensure router types are exported:**
+
 ```typescript
 // server/routers.ts
 export type AppRouter = typeof appRouter;
@@ -444,26 +490,30 @@ export type AppRouter = typeof appRouter;
 ### Problem: Stripe checkout doesn't open
 
 **Symptoms:**
+
 - Payment button does nothing
 - No redirect to Stripe
 
 **Solutions:**
 
 1. **Verify STRIPE_SECRET_KEY:**
+
 ```bash
 cat .env | grep STRIPE_SECRET_KEY
 # Should start with sk_test_ or sk_live_
 ```
 
 2. **Check Stripe initialization:**
+
 ```typescript
 // server/stripe.ts
 if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY not set');
+  throw new Error("STRIPE_SECRET_KEY not set");
 }
 ```
 
 3. **Test Stripe connection:**
+
 ```bash
 # Install Stripe CLI
 stripe login
@@ -475,6 +525,7 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 ### Problem: Webhook signature verification failed
 
 **Symptoms:**
+
 ```
 Stripe webhook signature verification failed
 ```
@@ -482,6 +533,7 @@ Stripe webhook signature verification failed
 **Solutions:**
 
 1. **Use correct webhook secret:**
+
 ```bash
 # Get from Stripe CLI
 stripe listen
@@ -492,15 +544,18 @@ STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
 2. **Check webhook endpoint:**
+
 ```typescript
 // Should be raw body, not parsed JSON
-app.post('/api/stripe/webhook', 
-  express.raw({ type: 'application/json' }),
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
   handleStripeWebhook
 );
 ```
 
 3. **Verify Stripe CLI forwarding:**
+
 ```bash
 stripe listen --forward-to localhost:3000/api/stripe/webhook --print-secret
 ```
@@ -510,23 +565,27 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook --print-secret
 ### Problem: Payment succeeds but booking not confirmed
 
 **Symptoms:**
+
 - Money charged
 - Booking still in "pending" status
 
 **Solutions:**
 
 1. **Check webhook logs:**
+
 ```bash
 # Server logs should show:
 # "Webhook received: checkout.session.completed"
 ```
 
 2. **Manually trigger webhook:**
+
 ```bash
 stripe trigger checkout.session.completed
 ```
 
 3. **Check database:**
+
 ```sql
 SELECT * FROM payments WHERE booking_id = ?;
 SELECT * FROM bookings WHERE id = ?;
@@ -539,12 +598,14 @@ SELECT * FROM bookings WHERE id = ?;
 ### Problem: Slow API responses
 
 **Symptoms:**
+
 - Requests taking >1 second
 - Timeouts
 
 **Solutions:**
 
 1. **Enable query logging:**
+
 ```typescript
 // drizzle.config.ts
 export default {
@@ -555,12 +616,14 @@ export default {
 ```
 
 2. **Check for missing indexes:**
+
 ```sql
 EXPLAIN SELECT * FROM flights WHERE origin_airport_id = 1;
 -- Should show "Using index"
 ```
 
 3. **Add database indexes:**
+
 ```sql
 CREATE INDEX idx_flight_route ON flights(origin_airport_id, destination_airport_id);
 CREATE INDEX idx_booking_user ON bookings(user_id);
@@ -571,17 +634,20 @@ CREATE INDEX idx_booking_user ON bookings(user_id);
 ### Problem: High memory usage
 
 **Symptoms:**
+
 - Server crashes
 - "JavaScript heap out of memory"
 
 **Solutions:**
 
 1. **Increase Node.js memory:**
+
 ```bash
 NODE_OPTIONS=--max-old-space-size=4096 pnpm dev
 ```
 
 2. **Check for memory leaks:**
+
 ```bash
 # Use Node inspector
 node --inspect server/_core/index.ts
@@ -589,9 +655,10 @@ node --inspect server/_core/index.ts
 ```
 
 3. **Review database connection pooling:**
+
 ```typescript
 // Ensure connections are properly closed
-await db.transaction(async (tx) => {
+await db.transaction(async tx => {
   // ... operations
 }); // Auto-closes connection
 ```
@@ -603,6 +670,7 @@ await db.transaction(async (tx) => {
 ### Problem: Build fails in production
 
 **Symptoms:**
+
 ```
 Error: Cannot find module './config'
 ```
@@ -610,18 +678,21 @@ Error: Cannot find module './config'
 **Solutions:**
 
 1. **Check TypeScript compilation:**
+
 ```bash
 pnpm check
 pnpm build
 ```
 
 2. **Ensure all dependencies in package.json:**
+
 ```bash
 # Check for missing dependencies
 pnpm install --frozen-lockfile
 ```
 
 3. **Verify environment variables:**
+
 ```bash
 # Production should have all required vars
 node -e "require('dotenv').config(); console.log(process.env.DATABASE_URL)"
@@ -632,6 +703,7 @@ node -e "require('dotenv').config(); console.log(process.env.DATABASE_URL)"
 ### Problem: Docker container fails to start
 
 **Symptoms:**
+
 ```
 Container exited with code 1
 ```
@@ -639,11 +711,13 @@ Container exited with code 1
 **Solutions:**
 
 1. **Check Docker logs:**
+
 ```bash
 docker logs <container_id>
 ```
 
 2. **Verify Dockerfile:**
+
 ```dockerfile
 # Ensure all build steps complete
 FROM node:22-alpine
@@ -656,6 +730,7 @@ CMD ["pnpm", "start"]
 ```
 
 3. **Test build locally:**
+
 ```bash
 docker build -t ais-test .
 docker run -p 3000:3000 ais-test
@@ -670,10 +745,11 @@ docker run -p 3000:3000 ais-test
 **Cause:** Accessing user data without checking authentication
 
 **Fix:**
+
 ```typescript
 // Always check if user exists
 if (!ctx.user) {
-  throw new TRPCError({ code: 'UNAUTHORIZED' });
+  throw new TRPCError({ code: "UNAUTHORIZED" });
 }
 const userId = ctx.user.id; // Now safe
 ```
@@ -685,6 +761,7 @@ const userId = ctx.user.id; // Now safe
 **Cause:** No available seats
 
 **Fix:**
+
 ```typescript
 // Check availability before booking
 const flight = await db.query.flights.findFirst({
@@ -693,8 +770,8 @@ const flight = await db.query.flights.findFirst({
 
 if (flight.availableSeats < passengers.length) {
   throw new TRPCError({
-    code: 'BAD_REQUEST',
-    message: 'Not enough seats available',
+    code: "BAD_REQUEST",
+    message: "Not enough seats available",
   });
 }
 ```
@@ -706,6 +783,7 @@ if (flight.availableSeats < passengers.length) {
 **Cause:** Duplicate payment attempt
 
 **Fix:**
+
 ```typescript
 // This is expected behavior - return existing payment
 const existing = await getPaymentByIdempotencyKey(key);
@@ -731,11 +809,11 @@ ENABLE_QUERY_LOGGING=true
 
 ```typescript
 // Enable Drizzle debug mode
-import { drizzle } from 'drizzle-orm/mysql2';
+import { drizzle } from "drizzle-orm/mysql2";
 
 const db = drizzle(connection, {
   logger: {
-    logQuery: (query) => console.log('Query:', query),
+    logQuery: query => console.log("Query:", query),
   },
 });
 ```
@@ -777,11 +855,13 @@ curl -X POST http://localhost:3000/api/trpc/flights.search \
 ## Bug Report
 
 **Environment:**
+
 - Node.js: v22.0.0
 - Database: MySQL 8.0
 - OS: Ubuntu 22.04
 
 **Steps to Reproduce:**
+
 1. Start server with `pnpm dev`
 2. Navigate to /flights
 3. Click "Search" button
@@ -794,9 +874,11 @@ Flight results should appear
 
 **Error Message:**
 ```
+
 Error: Cannot connect to database
-  at Connection.connect (db.ts:45)
-  ...
+at Connection.connect (db.ts:45)
+...
+
 ```
 
 **Additional Context:**
@@ -836,6 +918,7 @@ htop  # if installed
 ---
 
 **Remember:** Most issues can be solved by:
+
 1. Reading error messages carefully
 2. Checking environment variables
 3. Restarting the server

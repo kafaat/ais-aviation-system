@@ -1,6 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
-import { calculateDynamicPrice, calculateOccupancyRate, getDaysUntilDeparture } from "./dynamic-pricing.service";
+import {
+  calculateDynamicPrice,
+  calculateOccupancyRate,
+  getDaysUntilDeparture,
+} from "./dynamic-pricing.service";
 
 /**
  * Flights Service
@@ -38,14 +42,14 @@ export async function searchFlights(input: SearchFlightsInput) {
 export async function getFlightById(input: GetFlightInput) {
   try {
     const flight = await db.getFlightById(input.id);
-    
+
     if (!flight) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Flight not found",
       });
     }
-    
+
     return flight;
   } catch (error) {
     if (error instanceof TRPCError) {
@@ -66,20 +70,24 @@ export async function checkFlightAvailability(
   flightId: number,
   cabinClass: "economy" | "business",
   requiredSeats: number
-): Promise<{ available: boolean; flight: Awaited<ReturnType<typeof db.getFlightById>> }> {
+): Promise<{
+  available: boolean;
+  flight: Awaited<ReturnType<typeof db.getFlightById>>;
+}> {
   const flight = await db.getFlightById(flightId);
-  
+
   if (!flight) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Flight not found",
     });
   }
-  
-  const availableSeats = cabinClass === "economy" 
-    ? flight.economyAvailable 
-    : flight.businessAvailable;
-  
+
+  const availableSeats =
+    cabinClass === "economy"
+      ? flight.economyAvailable
+      : flight.businessAvailable;
+
   return {
     available: availableSeats >= requiredSeats,
     flight,
@@ -93,21 +101,19 @@ export async function calculateFlightPrice(
   flight: NonNullable<Awaited<ReturnType<typeof db.getFlightById>>>,
   cabinClass: "economy" | "business",
   passengerCount: number
-): Promise<{price: number; pricing?: any}> {
-  const basePrice = cabinClass === "economy" 
-    ? flight.economyPrice 
-    : flight.businessPrice;
-  
+): Promise<{ price: number; pricing?: any }> {
+  const basePrice =
+    cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
+
   try {
     // Calculate occupancy rate
-    const totalSeats = cabinClass === "economy" 
-      ? flight.economySeats 
-      : flight.businessSeats;
+    const totalSeats =
+      cabinClass === "economy" ? flight.economySeats : flight.businessSeats;
     const occupancyRate = await calculateOccupancyRate(flight.id, totalSeats);
-    
+
     // Calculate days until departure
     const daysUntilDeparture = getDaysUntilDeparture(flight.departureTime);
-    
+
     // Get dynamic price for single seat
     const pricingResult = calculateDynamicPrice({
       basePrice,
@@ -115,10 +121,10 @@ export async function calculateFlightPrice(
       daysUntilDeparture,
       cabinClass,
     });
-    
+
     // Multiply by passenger count
     const totalPrice = pricingResult.finalPrice * passengerCount;
-    
+
     return {
       price: totalPrice,
       pricing: {

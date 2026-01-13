@@ -16,7 +16,7 @@ export const apiLimiter = rateLimit({
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   // Skip rate limiting for local development
-  skip: (req) => {
+  skip: req => {
     const isDevelopment = process.env.NODE_ENV !== "production";
     const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1";
     return isDevelopment && isLocalhost;
@@ -34,7 +34,7 @@ export const strictLimiter = rateLimit({
   message: "Too many attempts from this IP, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
+  skip: req => {
     const isDevelopment = process.env.NODE_ENV !== "production";
     const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1";
     return isDevelopment && isLocalhost;
@@ -52,7 +52,7 @@ export const webhookLimiter = rateLimit({
   message: "Too many webhook requests, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
+  skip: req => {
     const isDevelopment = process.env.NODE_ENV !== "production";
     const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1";
     return isDevelopment && isLocalhost;
@@ -69,7 +69,7 @@ export const authLimiter = rateLimit({
   message: "Too many login attempts from this IP, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
+  skip: req => {
     const isDevelopment = process.env.NODE_ENV !== "production";
     const isLocalhost = req.ip === "127.0.0.1" || req.ip === "::1";
     return isDevelopment && isLocalhost;

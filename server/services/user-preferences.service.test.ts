@@ -19,7 +19,9 @@ describe("User Preferences Service", () => {
     // Cleanup any existing test data before starting
     const db = await getDb();
     if (db) {
-      await db.delete(userPreferences).where(eq(userPreferences.userId, testUserId));
+      await db
+        .delete(userPreferences)
+        .where(eq(userPreferences.userId, testUserId));
     }
   });
 
@@ -27,7 +29,9 @@ describe("User Preferences Service", () => {
     // Cleanup test data
     const db = await getDb();
     if (db) {
-      await db.delete(userPreferences).where(eq(userPreferences.userId, testUserId));
+      await db
+        .delete(userPreferences)
+        .where(eq(userPreferences.userId, testUserId));
     }
   });
 
@@ -55,7 +59,7 @@ describe("User Preferences Service", () => {
 
   it("should retrieve existing user preferences", async () => {
     const prefs = await getUserPreferences(testUserId);
-    
+
     expect(prefs).toBeDefined();
     expect(prefs?.userId).toBe(testUserId);
     expect(prefs?.preferredSeatType).toBe("window");
@@ -75,7 +79,7 @@ describe("User Preferences Service", () => {
 
   it("should update passport information", async () => {
     const expiryDate = new Date("2030-12-31");
-    
+
     await updatePassportInfo(testUserId, {
       passportNumber: "A12345678",
       passportExpiry: expiryDate,
@@ -83,7 +87,7 @@ describe("User Preferences Service", () => {
     });
 
     const passportInfo = await getSavedPassportInfo(testUserId);
-    
+
     expect(passportInfo).toBeDefined();
     expect(passportInfo?.passportNumber).toBe("A12345678");
     expect(passportInfo?.nationality).toBe("Saudi Arabia");
@@ -92,14 +96,14 @@ describe("User Preferences Service", () => {
 
   it("should get saved passport info", async () => {
     const passportInfo = await getSavedPassportInfo(testUserId);
-    
+
     expect(passportInfo).toBeDefined();
     expect(passportInfo?.passportNumber).toBe("A12345678");
   });
 
   it("should get notification preferences with defaults", async () => {
     const notifPrefs = await getNotificationPreferences(testUserId);
-    
+
     expect(notifPrefs).toBeDefined();
     expect(notifPrefs.emailNotifications).toBe(true); // Default
     expect(notifPrefs.smsNotifications).toBe(false); // Default
@@ -112,14 +116,14 @@ describe("User Preferences Service", () => {
     });
 
     const notifPrefs = await getNotificationPreferences(testUserId);
-    
+
     expect(notifPrefs.emailNotifications).toBe(false);
     expect(notifPrefs.smsNotifications).toBe(true);
   });
 
   it("should delete user preferences", async () => {
     await deleteUserPreferences(testUserId);
-    
+
     const prefs = await getUserPreferences(testUserId);
     expect(prefs).toBeNull();
   });

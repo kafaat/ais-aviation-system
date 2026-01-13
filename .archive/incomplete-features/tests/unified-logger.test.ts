@@ -6,7 +6,7 @@ describe("Unified Logger - PII Masking", () => {
     it("should mask email addresses", () => {
       const text = "Contact us at support@example.com or admin@test.org";
       const masked = maskPII(text);
-      
+
       expect(masked).not.toContain("support@example.com");
       expect(masked).not.toContain("admin@test.org");
       expect(masked).toContain("[EMAIL]");
@@ -15,14 +15,14 @@ describe("Unified Logger - PII Masking", () => {
     it("should mask phone numbers", () => {
       const text = "Call us at +966 50 123 4567 or 0501234567";
       const masked = maskPII(text);
-      
+
       expect(masked).toContain("[PHONE]");
     });
 
     it("should mask credit card numbers", () => {
       const text = "Card number: 4532 1234 5678 9010";
       const masked = maskPII(text);
-      
+
       expect(masked).not.toContain("4532 1234 5678 9010");
       expect(masked).toContain("[CARD]");
     });
@@ -30,21 +30,22 @@ describe("Unified Logger - PII Masking", () => {
     it("should mask passport numbers", () => {
       const text = "Passport: A1234567";
       const masked = maskPII(text);
-      
+
       expect(masked).toContain("[PASSPORT]");
     });
 
     it("should mask Saudi National IDs", () => {
       const text = "National ID: 1234567890";
       const masked = maskPII(text);
-      
+
       expect(masked).toContain("[NATIONAL_ID]");
     });
 
     it("should handle text with multiple PII types", () => {
-      const text = "User email@test.com with phone +966501234567 and card 4532123456789010";
+      const text =
+        "User email@test.com with phone +966501234567 and card 4532123456789010";
       const masked = maskPII(text);
-      
+
       expect(masked).toContain("[EMAIL]");
       expect(masked).toContain("[PHONE]");
       expect(masked).toContain("[CARD]");
@@ -53,7 +54,7 @@ describe("Unified Logger - PII Masking", () => {
     it("should not mask non-PII text", () => {
       const text = "This is a normal message without PII";
       const masked = maskPII(text);
-      
+
       expect(masked).toBe(text);
     });
   });
@@ -65,9 +66,9 @@ describe("Unified Logger - PII Masking", () => {
         password: "secret123",
         email: "john@example.com",
       };
-      
+
       const masked = maskSensitiveFields(obj);
-      
+
       expect(masked.password).toBe("[REDACTED]");
       expect(masked.username).toBe("john");
       expect(masked.email).toContain("[EMAIL]"); // Email is masked by PII masking
@@ -78,9 +79,9 @@ describe("Unified Logger - PII Masking", () => {
         name: "John Doe",
         passportNumber: "A1234567",
       };
-      
+
       const masked = maskSensitiveFields(obj);
-      
+
       expect(masked.passportNumber).toBe("[REDACTED]");
       expect(masked.name).toBe("John Doe");
     });
@@ -90,9 +91,9 @@ describe("Unified Logger - PII Masking", () => {
         name: "John Doe",
         creditCard: "4532123456789010",
       };
-      
+
       const masked = maskSensitiveFields(obj);
-      
+
       expect(masked.creditCard).toBe("[REDACTED]");
     });
 
@@ -107,9 +108,9 @@ describe("Unified Logger - PII Masking", () => {
           creditCard: "4532123456789010",
         },
       };
-      
+
       const masked = maskSensitiveFields(obj);
-      
+
       expect(masked.user.password).toBe("[REDACTED]");
       expect(masked.payment.creditCard).toBe("[REDACTED]");
       expect(masked.user.name).toBe("John");
@@ -123,9 +124,9 @@ describe("Unified Logger - PII Masking", () => {
           { name: "Jane", password: "secret2" },
         ],
       };
-      
+
       const masked = maskSensitiveFields(obj);
-      
+
       expect(masked.users[0].password).toBe("[REDACTED]");
       expect(masked.users[1].password).toBe("[REDACTED]");
       expect(masked.users[0].name).toBe("John");
@@ -138,9 +139,9 @@ describe("Unified Logger - PII Masking", () => {
         email: null,
         phone: undefined,
       };
-      
+
       const masked = maskSensitiveFields(obj);
-      
+
       expect(masked.name).toBe("John");
       expect(masked.email).toBeNull();
       expect(masked.phone).toBeUndefined();
@@ -156,9 +157,9 @@ describe("Unified Logger - PII Masking", () => {
         cvv: "123",
         pin: "1234",
       };
-      
+
       const masked = maskSensitiveFields(obj);
-      
+
       expect(masked.password).toBe("[REDACTED]");
       expect(masked.passportNumber).toBe("[REDACTED]");
       expect(masked.nationalId).toBe("[REDACTED]");

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { apiLimiter, webhookLimiter, authLimiter, strictLimiter } from "./rateLimiter";
+import {
+  apiLimiter,
+  webhookLimiter,
+  authLimiter,
+  strictLimiter,
+} from "./rateLimiter";
 
 describe("Rate Limiter Configuration", () => {
   describe("apiLimiter", () => {

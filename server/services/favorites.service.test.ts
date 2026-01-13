@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getDb } from "../db";
-import { favoriteFlights, users, flights, airlines, airports } from "../../drizzle/schema";
+import {
+  favoriteFlights,
+  users,
+  flights,
+  airlines,
+  airports,
+} from "../../drizzle/schema";
 import * as favoritesService from "./favorites.service";
 import { eq } from "drizzle-orm";
 
@@ -72,7 +78,9 @@ describe("Favorites Service", () => {
   afterAll(async () => {
     if (!db) return;
     // Cleanup
-    await db.delete(favoriteFlights).where(eq(favoriteFlights.userId, testUserId));
+    await db
+      .delete(favoriteFlights)
+      .where(eq(favoriteFlights.userId, testUserId));
     await db.delete(flights).where(eq(flights.id, testFlightId));
     await db.delete(airlines).where(eq(airlines.id, testAirlineId));
     await db.delete(airports).where(eq(airports.id, testOriginId));
@@ -145,7 +153,10 @@ describe("Favorites Service", () => {
     const favorites = await favoritesService.getUserFavorites(testUserId);
     const favoriteId = favorites[0].favorite.id;
 
-    const prices = await favoritesService.getBestPricesForFavorite(favoriteId, testUserId);
+    const prices = await favoritesService.getBestPricesForFavorite(
+      favoriteId,
+      testUserId
+    );
     expect(prices).toBeDefined();
     expect(prices.lowestPrice).toBeLessThanOrEqual(40000);
     expect(prices.totalFlights).toBeGreaterThan(0);
@@ -161,7 +172,10 @@ describe("Favorites Service", () => {
     const favorites = await favoritesService.getUserFavorites(testUserId);
     const favoriteId = favorites[0].favorite.id;
 
-    const history = await favoritesService.getPriceAlertHistory(favoriteId, testUserId);
+    const history = await favoritesService.getPriceAlertHistory(
+      favoriteId,
+      testUserId
+    );
     expect(Array.isArray(history)).toBe(true);
   });
 
@@ -174,7 +188,10 @@ describe("Favorites Service", () => {
       // No airlineId, different from main favorite
     });
 
-    const result = await favoritesService.deleteFavorite(tempFavorite.id!, testUserId);
+    const result = await favoritesService.deleteFavorite(
+      tempFavorite.id!,
+      testUserId
+    );
     expect(result.success).toBe(true);
 
     // Verify deletion

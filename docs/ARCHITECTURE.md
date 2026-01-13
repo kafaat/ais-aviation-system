@@ -74,6 +74,7 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
 ```
 
 **Benefits:**
+
 - Clear separation of concerns
 - Easy to test each layer independently
 - Maintainable and scalable codebase
@@ -111,33 +112,33 @@ No need for manual API documentation or type definitions!
 
 ### Backend Stack
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Runtime** | Node.js 22 | JavaScript runtime |
-| **Framework** | Express 4 | Web server |
-| **API Layer** | tRPC 11 | Type-safe RPC framework |
-| **Database ORM** | Drizzle | Type-safe database queries |
-| **Database** | MySQL 8 / TiDB | Relational database |
-| **Validation** | Zod 4 | Runtime type validation |
-| **Payments** | Stripe API | Payment processing |
-| **Auth** | Manus OAuth | Authentication service |
-| **Logging** | Pino | Structured logging |
-| **Testing** | Vitest | Unit & integration tests |
+| Component        | Technology     | Purpose                    |
+| ---------------- | -------------- | -------------------------- |
+| **Runtime**      | Node.js 22     | JavaScript runtime         |
+| **Framework**    | Express 4      | Web server                 |
+| **API Layer**    | tRPC 11        | Type-safe RPC framework    |
+| **Database ORM** | Drizzle        | Type-safe database queries |
+| **Database**     | MySQL 8 / TiDB | Relational database        |
+| **Validation**   | Zod 4          | Runtime type validation    |
+| **Payments**     | Stripe API     | Payment processing         |
+| **Auth**         | Manus OAuth    | Authentication service     |
+| **Logging**      | Pino           | Structured logging         |
+| **Testing**      | Vitest         | Unit & integration tests   |
 
 ### Frontend Stack
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Framework** | React 19 | UI library |
-| **Language** | TypeScript 5.9 | Type-safe JavaScript |
-| **Build Tool** | Vite 7 | Fast build & HMR |
-| **Styling** | Tailwind CSS 4 | Utility-first CSS |
-| **Components** | shadcn/ui | Pre-built components |
-| **Routing** | Wouter | Client-side routing |
-| **State** | React Query | Server state management |
-| **Forms** | React Hook Form | Form management |
-| **i18n** | react-i18next | Internationalization |
-| **Icons** | Lucide React | Icon library |
+| Component      | Technology      | Purpose                 |
+| -------------- | --------------- | ----------------------- |
+| **Framework**  | React 19        | UI library              |
+| **Language**   | TypeScript 5.9  | Type-safe JavaScript    |
+| **Build Tool** | Vite 7          | Fast build & HMR        |
+| **Styling**    | Tailwind CSS 4  | Utility-first CSS       |
+| **Components** | shadcn/ui       | Pre-built components    |
+| **Routing**    | Wouter          | Client-side routing     |
+| **State**      | React Query     | Server state management |
+| **Forms**      | React Hook Form | Form management         |
+| **i18n**       | react-i18next   | Internationalization    |
+| **Icons**      | Lucide React    | Icon library            |
 
 ### DevOps & Tools
 
@@ -163,23 +164,24 @@ No need for manual API documentation or type definitions!
 ┌──────────┐       ┌──────────┐       ┌──────────┐
 │ LOYALTY  │       │PASSENGERS│       │ AIRLINES │
 │ ACCOUNTS │       └──────────┘       └──────────┘
-└──────────┘            │                   
+└──────────┘            │
      │                  │              ┌──────────┐
      │                  │              │ AIRPORTS │
      ▼                  ▼              └──────────┘
-┌──────────┐       ┌──────────┐            
-│  MILES   │       │ PAYMENTS │            
-│TRANSACT. │       └──────────┘            
-└──────────┘            │                  
-                        ▼                  
-                   ┌──────────┐            
-                   │ REFUNDS  │            
-                   └──────────┘            
+┌──────────┐       ┌──────────┐
+│  MILES   │       │ PAYMENTS │
+│TRANSACT. │       └──────────┘
+└──────────┘            │
+                        ▼
+                   ┌──────────┐
+                   │ REFUNDS  │
+                   └──────────┘
 ```
 
 ### Core Tables
 
 #### 1. **users**
+
 Stores user accounts and authentication data.
 
 ```sql
@@ -194,6 +196,7 @@ CREATE TABLE users (
 ```
 
 #### 2. **flights**
+
 Flight schedules and availability.
 
 ```sql
@@ -210,7 +213,7 @@ CREATE TABLE flights (
   available_seats INT,
   total_seats INT,
   cabin_class ENUM('economy', 'business', 'first'),
-  
+
   INDEX idx_route_date (origin_airport_id, destination_airport_id, departure_time),
   INDEX idx_airline (airline_id),
   INDEX idx_status (status)
@@ -218,6 +221,7 @@ CREATE TABLE flights (
 ```
 
 #### 3. **bookings**
+
 Customer reservations and booking details.
 
 ```sql
@@ -230,7 +234,7 @@ CREATE TABLE bookings (
   status ENUM('pending', 'confirmed', 'cancelled', 'completed'),
   total_amount DECIMAL(10,2),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  
+
   INDEX idx_user (user_id),
   INDEX idx_flight (flight_id),
   INDEX idx_reference (booking_reference)
@@ -238,6 +242,7 @@ CREATE TABLE bookings (
 ```
 
 #### 4. **passengers**
+
 Individual passenger details for bookings.
 
 ```sql
@@ -251,12 +256,13 @@ CREATE TABLE passengers (
   date_of_birth DATE,
   ticket_number VARCHAR(13),
   seat_number VARCHAR(5),
-  
+
   INDEX idx_booking (booking_id)
 );
 ```
 
 #### 5. **payments**
+
 Payment transactions and history.
 
 ```sql
@@ -270,7 +276,7 @@ CREATE TABLE payments (
   status ENUM('pending', 'succeeded', 'failed', 'refunded'),
   idempotency_key VARCHAR(255) UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  
+
   INDEX idx_booking (booking_id),
   INDEX idx_stripe_session (stripe_session_id)
 );
@@ -279,17 +285,21 @@ CREATE TABLE payments (
 ### Advanced Features Tables
 
 #### Loyalty Program
+
 - **loyalty_accounts** - User loyalty account info
 - **miles_transactions** - Miles earning/spending history
 
 #### Inventory Management
+
 - **inventory_locks** - Temporary seat holds during booking
 
 #### Service Management
+
 - **ancillary_services** - Extra services catalog (meals, baggage, etc.)
 - **booking_ancillaries** - Services added to bookings
 
 #### User Preferences
+
 - **user_preferences** - Seat preferences, meal choices, etc.
 
 ---
@@ -301,23 +311,23 @@ CREATE TABLE payments (
 ```typescript
 export const appRouter = router({
   // Public APIs
-  flights: flightsRouter,           // Search, list, details
-  airlines: airlinesRouter,         // Airline information
-  airports: airportsRouter,         // Airport data
-  
+  flights: flightsRouter, // Search, list, details
+  airlines: airlinesRouter, // Airline information
+  airports: airportsRouter, // Airport data
+
   // Protected APIs (require authentication)
-  bookings: bookingsRouter,         // User bookings
-  payments: paymentsRouter,         // Payment processing
-  loyalty: loyaltyRouter,           // Loyalty program
-  profile: profileRouter,           // User profile
-  
+  bookings: bookingsRouter, // User bookings
+  payments: paymentsRouter, // Payment processing
+  loyalty: loyaltyRouter, // Loyalty program
+  profile: profileRouter, // User profile
+
   // Admin APIs (require admin role)
-  admin: adminRouter,               // System management
-  analytics: analyticsRouter,       // Reports & analytics
-  
+  admin: adminRouter, // System management
+  analytics: analyticsRouter, // Reports & analytics
+
   // System APIs
-  health: healthRouter,             // Health checks
-  system: systemRouter,             // System info
+  health: healthRouter, // Health checks
+  system: systemRouter, // System info
 });
 ```
 
@@ -447,16 +457,16 @@ User Action → Event Handler → tRPC Mutation/Query
 
 ### Security Measures
 
-| Layer | Protection | Implementation |
-|-------|-----------|----------------|
-| **Transport** | HTTPS only | Nginx/Load Balancer |
-| **Cookies** | httpOnly, Secure, SameSite | Cookie middleware |
-| **CSRF** | SameSite cookies | Express cookies |
-| **Rate Limiting** | 100 req/15min | express-rate-limit |
-| **Input Validation** | Zod schemas | tRPC input |
-| **SQL Injection** | Parameterized queries | Drizzle ORM |
-| **XSS** | React auto-escaping | React rendering |
-| **Secrets** | Environment variables | .env file |
+| Layer                | Protection                 | Implementation      |
+| -------------------- | -------------------------- | ------------------- |
+| **Transport**        | HTTPS only                 | Nginx/Load Balancer |
+| **Cookies**          | httpOnly, Secure, SameSite | Cookie middleware   |
+| **CSRF**             | SameSite cookies           | Express cookies     |
+| **Rate Limiting**    | 100 req/15min              | express-rate-limit  |
+| **Input Validation** | Zod schemas                | tRPC input          |
+| **SQL Injection**    | Parameterized queries      | Drizzle ORM         |
+| **XSS**              | React auto-escaping        | React rendering     |
+| **Secrets**          | Environment variables      | .env file           |
 
 ### Data Privacy
 
@@ -621,6 +631,7 @@ CMD ["pnpm", "start"]
 ### Monitoring
 
 Recommended tools:
+
 - **Application:** New Relic, DataDog
 - **Database:** Percona Monitoring
 - **Logs:** ELK Stack (Elasticsearch, Logstash, Kibana)

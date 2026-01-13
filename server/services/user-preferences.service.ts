@@ -1,11 +1,17 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { userPreferences, type InsertUserPreference, type UserPreference } from "../../drizzle/schema";
+import {
+  userPreferences,
+  type InsertUserPreference,
+  type UserPreference,
+} from "../../drizzle/schema";
 
 /**
  * Get user preferences by user ID
  */
-export async function getUserPreferences(userId: number): Promise<UserPreference | null> {
+export async function getUserPreferences(
+  userId: number
+): Promise<UserPreference | null> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -23,7 +29,9 @@ export async function getUserPreferences(userId: number): Promise<UserPreference
  */
 export async function upsertUserPreferences(
   userId: number,
-  data: Partial<Omit<InsertUserPreference, "userId" | "id" | "createdAt" | "updatedAt">>
+  data: Partial<
+    Omit<InsertUserPreference, "userId" | "id" | "createdAt" | "updatedAt">
+  >
 ): Promise<UserPreference> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
@@ -107,7 +115,7 @@ export async function getNotificationPreferences(userId: number): Promise<{
   smsNotifications: boolean;
 }> {
   const prefs = await getUserPreferences(userId);
-  
+
   return {
     emailNotifications: prefs?.emailNotifications ?? true,
     smsNotifications: prefs?.smsNotifications ?? false,

@@ -10,7 +10,10 @@ import * as flightStatusService from "../services/flight-status.service";
  */
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== "admin") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Admin access required",
+    });
   }
   return next({ ctx });
 });
@@ -78,7 +81,8 @@ export const adminRouter = router({
     const database = await db.getDb();
     if (!database) throw new Error("Database not available");
 
-    const { bookings, flights, airports, users } = await import("../../drizzle/schema");
+    const { bookings, flights, airports, users } =
+      await import("../../drizzle/schema");
     const { eq, desc, sql } = await import("drizzle-orm");
 
     const result = await database

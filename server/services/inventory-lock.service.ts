@@ -29,7 +29,7 @@ export async function createInventoryLock(
 
     // Check available seats (considering active locks)
     const available = await getAvailableSeats(flightId, cabinClass);
-    
+
     if (available < numberOfSeats) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -139,7 +139,7 @@ export async function releaseExpiredLocks(): Promise<number> {
       );
 
     const affectedRows = (result as any).affectedRows || 0;
-    
+
     if (affectedRows > 0) {
       console.log(`[Inventory] Released ${affectedRows} expired locks`);
     }
@@ -182,9 +182,8 @@ export async function getAvailableSeats(
       });
     }
 
-    const totalCapacity = cabinClass === "economy" 
-      ? flight.economySeats 
-      : flight.businessSeats;
+    const totalCapacity =
+      cabinClass === "economy" ? flight.economySeats : flight.businessSeats;
 
     // Count active locks for this flight and cabin class
     const [lockResult] = await database
@@ -205,7 +204,7 @@ export async function getAvailableSeats(
     // Count confirmed bookings (this should come from bookings table)
     // For now, we'll use the flight's availableSeats field
     // In a real system, you'd query the bookings table
-    
+
     const available = totalCapacity - lockedSeats;
 
     return Math.max(0, available);

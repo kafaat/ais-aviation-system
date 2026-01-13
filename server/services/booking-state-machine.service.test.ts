@@ -246,7 +246,7 @@ describe("Booking State Machine Service", () => {
         "no_show",
       ];
 
-      states.forEach((state) => {
+      states.forEach(state => {
         expect(STATUS_DESCRIPTIONS[state]).toBeDefined();
         expect(STATUS_DESCRIPTIONS[state].length).toBeGreaterThan(0);
       });
@@ -256,7 +256,7 @@ describe("Booking State Machine Service", () => {
   describe("getStateMachineDiagram", () => {
     it("should return state machine diagram", () => {
       const diagram = getStateMachineDiagram();
-      
+
       expect(diagram).toContain("Booking State Machine");
       expect(diagram).toContain("INITIATED");
       expect(diagram).toContain("COMPLETED");

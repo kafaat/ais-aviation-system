@@ -18,8 +18,12 @@ describe("Loyalty Service", () => {
     // Cleanup test data
     const db = await getDb();
     if (db) {
-      await db.delete(milesTransactions).where(eq(milesTransactions.userId, testUserId));
-      await db.delete(loyaltyAccounts).where(eq(loyaltyAccounts.userId, testUserId));
+      await db
+        .delete(milesTransactions)
+        .where(eq(milesTransactions.userId, testUserId));
+      await db
+        .delete(loyaltyAccounts)
+        .where(eq(loyaltyAccounts.userId, testUserId));
     }
   });
 
@@ -105,9 +109,9 @@ describe("Loyalty Service", () => {
   });
 
   it("should throw error when redeeming more miles than available", async () => {
-    await expect(
-      redeemMiles(testUserId, 999999999)
-    ).rejects.toThrow("Insufficient miles balance");
+    await expect(redeemMiles(testUserId, 999999999)).rejects.toThrow(
+      "Insufficient miles balance"
+    );
   });
 
   it("should get loyalty account details with next tier info", async () => {

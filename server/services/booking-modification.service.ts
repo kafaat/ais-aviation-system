@@ -32,7 +32,8 @@ function calculateModificationFee(
   departureTime: Date
 ): number {
   const now = new Date();
-  const hoursUntilDeparture = (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+  const hoursUntilDeparture =
+    (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
   let feePercentage: number;
 
@@ -72,10 +73,7 @@ export async function requestChangeFlightDate(input: ChangeFlightDateInput) {
       .select()
       .from(bookings)
       .where(
-        and(
-          eq(bookings.id, input.bookingId),
-          eq(bookings.userId, input.userId)
-        )
+        and(eq(bookings.id, input.bookingId), eq(bookings.userId, input.userId))
       )
       .limit(1);
 
@@ -130,9 +128,10 @@ export async function requestChangeFlightDate(input: ChangeFlightDateInput) {
     }
 
     // Calculate new price
-    const pricePerSeat = booking.cabinClass === "economy" 
-      ? newFlight.economyPrice 
-      : newFlight.businessPrice;
+    const pricePerSeat =
+      booking.cabinClass === "economy"
+        ? newFlight.economyPrice
+        : newFlight.businessPrice;
     const newAmount = pricePerSeat * booking.numberOfPassengers;
 
     // Calculate price difference
@@ -199,10 +198,7 @@ export async function requestUpgradeCabin(input: UpgradeCabinInput) {
       .select()
       .from(bookings)
       .where(
-        and(
-          eq(bookings.id, input.bookingId),
-          eq(bookings.userId, input.userId)
-        )
+        and(eq(bookings.id, input.bookingId), eq(bookings.userId, input.userId))
       )
       .limit(1);
 
