@@ -21,18 +21,32 @@ interface SeatMapProps {
   maxSeats?: number;
 }
 
-export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps) {
+export function SeatMap({
+  cabinClass,
+  onSeatSelect,
+  maxSeats = 1,
+}: SeatMapProps) {
   const { t } = useTranslation();
-  
+
   // Generate seat map
   const generateSeats = (): Seat[] => {
     const seats: Seat[] = [];
     const rows = cabinClass === "business" ? 5 : 20;
-    const columns = cabinClass === "business" ? ["A", "B", "C", "D"] : ["A", "B", "C", "D", "E", "F"];
-    
+    const columns =
+      cabinClass === "business"
+        ? ["A", "B", "C", "D"]
+        : ["A", "B", "C", "D", "E", "F"];
+
     // Simulate some occupied seats
     const occupiedSeats = new Set([
-      "1A", "1B", "3C", "5D", "7A", "10B", "12E", "15F"
+      "1A",
+      "1B",
+      "3C",
+      "5D",
+      "7A",
+      "10B",
+      "12E",
+      "15F",
     ]);
 
     for (let row = 1; row <= rows; row++) {
@@ -47,7 +61,7 @@ export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps
         });
       }
     }
-    
+
     return seats;
   };
 
@@ -59,25 +73,27 @@ export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps
       const newSeats = prev.map(seat => {
         if (seat.id === seatId) {
           if (seat.status === "occupied") return seat;
-          
+
           // Check if we can select more seats
-          const currentSelected = prev.filter(s => s.status === "selected").length;
-          
+          const currentSelected = prev.filter(
+            s => s.status === "selected"
+          ).length;
+
           if (seat.status === "available" && currentSelected >= maxSeats) {
             return seat; // Can't select more
           }
-          
+
           return {
             ...seat,
-            status: seat.status === "available" ? "selected" : "available"
+            status: seat.status === "available" ? "selected" : "available",
           } as Seat;
         }
         return seat;
       });
-      
+
       const selected = newSeats.filter(s => s.status === "selected");
       onSeatSelect?.(selected);
-      
+
       return newSeats;
     });
   };
@@ -93,17 +109,22 @@ export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps
     }
   };
 
-  const columns = cabinClass === "business" ? ["A", "B", "C", "D"] : ["A", "B", "C", "D", "E", "F"];
+  const columns =
+    cabinClass === "business"
+      ? ["A", "B", "C", "D"]
+      : ["A", "B", "C", "D", "E", "F"];
   const rows = cabinClass === "business" ? 5 : 20;
 
   return (
     <Card className="p-6">
       <div className="mb-6">
         <h3 className="text-lg font-semibold mb-2">
-          {cabinClass === "business" ? t('search.business') : t('search.economy')}
+          {cabinClass === "business"
+            ? t("search.business")
+            : t("search.economy")}
         </h3>
         <p className="text-sm text-muted-foreground">
-          {t('booking.selectSeats', { count: maxSeats })}
+          {t("booking.selectSeats", { count: maxSeats })}
         </p>
       </div>
 
@@ -111,15 +132,15 @@ export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps
       <div className="flex gap-6 mb-6 flex-wrap">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded border-2 bg-green-100 border-green-300" />
-          <span className="text-sm">{t('seatMap.available')}</span>
+          <span className="text-sm">{t("seatMap.available")}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded border-2 bg-primary border-primary" />
-          <span className="text-sm">{t('seatMap.selected')}</span>
+          <span className="text-sm">{t("seatMap.selected")}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded border-2 bg-gray-200 border-gray-300" />
-          <span className="text-sm">{t('seatMap.occupied')}</span>
+          <span className="text-sm">{t("seatMap.occupied")}</span>
         </div>
       </div>
 
@@ -130,13 +151,19 @@ export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps
           <div className="flex gap-2 mb-2 justify-center">
             <div className="w-8" /> {/* Row number spacer */}
             {columns.slice(0, Math.ceil(columns.length / 2)).map(col => (
-              <div key={col} className="w-10 text-center text-sm font-medium text-muted-foreground">
+              <div
+                key={col}
+                className="w-10 text-center text-sm font-medium text-muted-foreground"
+              >
                 {col}
               </div>
             ))}
             <div className="w-12" /> {/* Aisle */}
             {columns.slice(Math.ceil(columns.length / 2)).map(col => (
-              <div key={col} className="w-10 text-center text-sm font-medium text-muted-foreground">
+              <div
+                key={col}
+                className="w-10 text-center text-sm font-medium text-muted-foreground"
+              >
                 {col}
               </div>
             ))}
@@ -159,7 +186,9 @@ export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps
                 {leftSeats.map(seat => (
                   <motion.button
                     key={seat.id}
-                    whileHover={seat.status !== "occupied" ? { scale: 1.1 } : {}}
+                    whileHover={
+                      seat.status !== "occupied" ? { scale: 1.1 } : {}
+                    }
                     whileTap={seat.status !== "occupied" ? { scale: 0.95 } : {}}
                     onClick={() => handleSeatClick(seat.id)}
                     disabled={seat.status === "occupied"}
@@ -181,7 +210,9 @@ export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps
                 {rightSeats.map(seat => (
                   <motion.button
                     key={seat.id}
-                    whileHover={seat.status !== "occupied" ? { scale: 1.1 } : {}}
+                    whileHover={
+                      seat.status !== "occupied" ? { scale: 1.1 } : {}
+                    }
                     whileTap={seat.status !== "occupied" ? { scale: 0.95 } : {}}
                     onClick={() => handleSeatClick(seat.id)}
                     disabled={seat.status === "occupied"}
@@ -206,10 +237,13 @@ export function SeatMap({ cabinClass, onSeatSelect, maxSeats = 1 }: SeatMapProps
           animate={{ opacity: 1, y: 0 }}
           className="mt-6 p-4 bg-primary/10 rounded-lg"
         >
-          <p className="font-medium mb-2">{t('seatMap.selectedSeats')}:</p>
+          <p className="font-medium mb-2">{t("seatMap.selectedSeats")}:</p>
           <div className="flex gap-2 flex-wrap">
             {selectedSeats.map(seat => (
-              <span key={seat.id} className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm">
+              <span
+                key={seat.id}
+                className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm"
+              >
                 {seat.id}
               </span>
             ))}

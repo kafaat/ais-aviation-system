@@ -18,7 +18,7 @@ export const logger = pino({
         },
       },
   formatters: {
-    level: (label) => {
+    level: label => {
       return { level: label };
     },
   },
@@ -28,7 +28,11 @@ export const logger = pino({
 /**
  * Create a child logger with request context
  */
-export function createRequestLogger(requestId: string, method: string, path: string) {
+export function createRequestLogger(
+  requestId: string,
+  method: string,
+  path: string
+) {
   return logger.child({
     requestId,
     method,

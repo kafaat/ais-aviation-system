@@ -1,7 +1,7 @@
 /**
  * Email Notification Service
  * Handles sending emails to passengers for various events
- * 
+ *
  * Note: This is a mock implementation for demonstration.
  * In production, integrate with a real email service like:
  * - SendGrid
@@ -74,11 +74,13 @@ async function sendEmail(template: EmailTemplate): Promise<boolean> {
   console.log("[Email Service] Sending email:");
   console.log(`  To: ${template.to}`);
   console.log(`  Subject: ${template.subject}`);
-  console.log(`  Content: ${template.text || template.html.substring(0, 100)}...`);
-  
+  console.log(
+    `  Content: ${template.text || template.html.substring(0, 100)}...`
+  );
+
   // Simulate email sending delay
   await new Promise(resolve => setTimeout(resolve, 100));
-  
+
   return true;
 }
 
@@ -94,8 +96,8 @@ export async function sendBookingConfirmation(
       subject: `تأكيد الحجز - ${data.bookingReference}`,
       attachments: data.attachments?.map(att => ({
         filename: att.filename,
-        content: Buffer.from(att.content, 'base64'),
-        contentType: att.contentType || 'application/pdf',
+        content: Buffer.from(att.content, "base64"),
+        contentType: att.contentType || "application/pdf",
       })),
       text: `
 مرحباً ${data.passengerName},
@@ -108,9 +110,9 @@ export async function sendBookingConfirmation(
 - رقم الرحلة: ${data.flightNumber}
 - من: ${data.origin}
 - إلى: ${data.destination}
-- تاريخ المغادرة: ${data.departureTime.toLocaleString('ar-SA')}
-- تاريخ الوصول: ${data.arrivalTime.toLocaleString('ar-SA')}
-- الدرجة: ${data.cabinClass === 'economy' ? 'اقتصادية' : 'أعمال'}
+- تاريخ المغادرة: ${data.departureTime.toLocaleString("ar-SA")}
+- تاريخ الوصول: ${data.arrivalTime.toLocaleString("ar-SA")}
+- الدرجة: ${data.cabinClass === "economy" ? "اقتصادية" : "أعمال"}
 - عدد الركاب: ${data.numberOfPassengers}
 - المبلغ الإجمالي: ${(data.totalAmount / 100).toFixed(2)} ر.س
 
@@ -148,9 +150,9 @@ export async function sendBookingConfirmation(
       <div class="detail"><span class="label">رقم الرحلة:</span> ${data.flightNumber}</div>
       <div class="detail"><span class="label">من:</span> ${data.origin}</div>
       <div class="detail"><span class="label">إلى:</span> ${data.destination}</div>
-      <div class="detail"><span class="label">تاريخ المغادرة:</span> ${data.departureTime.toLocaleString('ar-SA')}</div>
-      <div class="detail"><span class="label">تاريخ الوصول:</span> ${data.arrivalTime.toLocaleString('ar-SA')}</div>
-      <div class="detail"><span class="label">الدرجة:</span> ${data.cabinClass === 'economy' ? 'اقتصادية' : 'أعمال'}</div>
+      <div class="detail"><span class="label">تاريخ المغادرة:</span> ${data.departureTime.toLocaleString("ar-SA")}</div>
+      <div class="detail"><span class="label">تاريخ الوصول:</span> ${data.arrivalTime.toLocaleString("ar-SA")}</div>
+      <div class="detail"><span class="label">الدرجة:</span> ${data.cabinClass === "economy" ? "اقتصادية" : "أعمال"}</div>
       <div class="detail"><span class="label">عدد الركاب:</span> ${data.numberOfPassengers}</div>
       <div class="detail"><span class="label">المبلغ الإجمالي:</span> ${(data.totalAmount / 100).toFixed(2)} ر.س</div>
     </div>
@@ -178,15 +180,18 @@ export async function sendFlightStatusChange(
   data: FlightStatusChangeData
 ): Promise<boolean> {
   try {
-    const statusText = {
-      delayed: 'تأخرت',
-      cancelled: 'ألغيت',
-      completed: 'اكتملت',
-      scheduled: 'مجدولة',
-    }[data.newStatus] || data.newStatus;
+    const statusText =
+      {
+        delayed: "تأخرت",
+        cancelled: "ألغيت",
+        completed: "اكتملت",
+        scheduled: "مجدولة",
+      }[data.newStatus] || data.newStatus;
 
-    const delayText = data.delayMinutes ? ` لمدة ${data.delayMinutes} دقيقة` : '';
-    const reasonText = data.reason ? `\n\nالسبب: ${data.reason}` : '';
+    const delayText = data.delayMinutes
+      ? ` لمدة ${data.delayMinutes} دقيقة`
+      : "";
+    const reasonText = data.reason ? `\n\nالسبب: ${data.reason}` : "";
 
     const template: EmailTemplate = {
       to: data.passengerEmail,
@@ -236,7 +241,7 @@ export async function sendFlightStatusChange(
       <div class="detail"><span class="label">المسار:</span> ${data.origin} → ${data.destination}</div>
       
       <div class="detail status">الحالة الجديدة: ${statusText}${delayText}</div>
-      ${data.reason ? `<div class="detail"><span class="label">السبب:</span> ${data.reason}</div>` : ''}
+      ${data.reason ? `<div class="detail"><span class="label">السبب:</span> ${data.reason}</div>` : ""}
       
       <p>نعتذر عن أي إزعاج قد يسببه هذا التغيير.</p>
     </div>
@@ -275,7 +280,7 @@ export async function sendRefundConfirmation(
 - رقم الحجز: ${data.bookingReference}
 - رقم الرحلة: ${data.flightNumber}
 - المبلغ المسترد: ${(data.refundAmount / 100).toFixed(2)} ر.س
-${data.refundReason ? `- السبب: ${data.refundReason}` : ''}
+${data.refundReason ? `- السبب: ${data.refundReason}` : ""}
 
 سيتم إرجاع المبلغ إلى طريقة الدفع الأصلية خلال ${data.processingDays} أيام عمل.
 
@@ -310,7 +315,7 @@ ${data.refundReason ? `- السبب: ${data.refundReason}` : ''}
       <div class="detail"><span class="label">رقم الحجز:</span> ${data.bookingReference}</div>
       <div class="detail"><span class="label">رقم الرحلة:</span> ${data.flightNumber}</div>
       <div class="detail amount">المبلغ المسترد: ${(data.refundAmount / 100).toFixed(2)} ر.س</div>
-      ${data.refundReason ? `<div class="detail"><span class="label">السبب:</span> ${data.refundReason}</div>` : ''}
+      ${data.refundReason ? `<div class="detail"><span class="label">السبب:</span> ${data.refundReason}</div>` : ""}
       
       <p>سيتم إرجاع المبلغ إلى طريقة الدفع الأصلية خلال <strong>${data.processingDays} أيام عمل</strong>.</p>
     </div>

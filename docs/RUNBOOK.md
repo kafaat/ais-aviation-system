@@ -1,6 +1,7 @@
 # AIS Aviation System – Developer Runbook (مختصر)
 
 خطوات أساسية:
+
 1. تشغيل مهاجرات Drizzle بعد إضافة الجداول:
    - flights / flight_instances / seat_inventory
    - loyalty_accounts / loyalty_transactions

@@ -24,7 +24,10 @@ export const loyaltyRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return await loyaltyService.getMilesTransactions(ctx.user.id, input.limit);
+      return await loyaltyService.getMilesTransactions(
+        ctx.user.id,
+        input.limit
+      );
     }),
 
   /**

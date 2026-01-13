@@ -29,10 +29,9 @@ export const favoritesRouter = router({
   /**
    * Get user's favorite flights
    */
-  getAll: protectedProcedure
-    .query(async ({ ctx }) => {
-      return await favoritesService.getUserFavorites(ctx.userId);
-    }),
+  getAll: protectedProcedure.query(async ({ ctx }) => {
+    return await favoritesService.getUserFavorites(ctx.userId);
+  }),
 
   /**
    * Update favorite settings
@@ -65,7 +64,10 @@ export const favoritesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return await favoritesService.deleteFavorite(input.favoriteId, ctx.userId);
+      return await favoritesService.deleteFavorite(
+        input.favoriteId,
+        ctx.userId
+      );
     }),
 
   /**
@@ -96,7 +98,10 @@ export const favoritesRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return await favoritesService.getPriceAlertHistory(input.favoriteId, ctx.userId);
+      return await favoritesService.getPriceAlertHistory(
+        input.favoriteId,
+        ctx.userId
+      );
     }),
 
   /**
@@ -109,18 +114,20 @@ export const favoritesRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return await favoritesService.getBestPricesForFavorite(input.favoriteId, ctx.userId);
+      return await favoritesService.getBestPricesForFavorite(
+        input.favoriteId,
+        ctx.userId
+      );
     }),
 
   /**
    * Check for price alerts and notify (admin only - for cron job)
    */
-  checkPriceAlerts: protectedProcedure
-    .mutation(async ({ ctx }) => {
-      // Only allow admins to trigger this
-      if (ctx.user?.role !== "admin") {
-        throw new Error("Unauthorized");
-      }
-      return await favoritesService.checkPriceAlertsAndNotify();
-    }),
+  checkPriceAlerts: protectedProcedure.mutation(async ({ ctx }) => {
+    // Only allow admins to trigger this
+    if (ctx.user?.role !== "admin") {
+      throw new Error("Unauthorized");
+    }
+    return await favoritesService.checkPriceAlertsAndNotify();
+  }),
 });

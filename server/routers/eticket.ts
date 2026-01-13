@@ -1,8 +1,18 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { generateETicketPDF, generateBoardingPassPDF, generateTicketNumber } from "../services/eticket.service";
+import {
+  generateETicketPDF,
+  generateBoardingPassPDF,
+  generateTicketNumber,
+} from "../services/eticket.service";
 import { getDb } from "../db";
-import { bookings, flights, airports, passengers, airlines } from "../../drizzle/schema";
+import {
+  bookings,
+  flights,
+  airports,
+  passengers,
+  airlines,
+} from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -124,7 +134,8 @@ export const eticketRouter = router({
         arrivalTime: booking.arrivalTime,
         cabinClass: booking.cabinClass,
         seatNumber: passenger.seatNumber || undefined,
-        baggageAllowance: booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
+        baggageAllowance:
+          booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
         totalAmount: booking.totalAmount,
         currency: "SAR",
         issueDate: new Date(),
@@ -252,7 +263,8 @@ export const eticketRouter = router({
         arrivalTime: booking.arrivalTime,
         cabinClass: booking.cabinClass,
         seatNumber: passenger.seatNumber || undefined,
-        baggageAllowance: booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
+        baggageAllowance:
+          booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
         totalAmount: booking.totalAmount,
         currency: "SAR",
         issueDate: new Date(),

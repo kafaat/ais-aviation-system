@@ -70,23 +70,25 @@ export async function getDashboardOverview(startDate: Date, endDate: Date) {
     .from(dailyMetrics)
     .where(
       and(
-        gte(dailyMetrics.date, startDate.toISOString().split('T')[0]),
-        lte(dailyMetrics.date, endDate.toISOString().split('T')[0])
+        gte(dailyMetrics.date, startDate.toISOString().split("T")[0]),
+        lte(dailyMetrics.date, endDate.toISOString().split("T")[0])
       )
     );
 
-  return metrics[0] || {
-    totalBookings: 0,
-    confirmedBookings: 0,
-    cancelledBookings: 0,
-    totalRevenue: 0,
-    confirmedRevenue: 0,
-    refundedAmount: 0,
-    newUsers: 0,
-    activeUsers: 0,
-    totalFlights: 0,
-    totalSeatsBooked: 0,
-  };
+  return (
+    metrics[0] || {
+      totalBookings: 0,
+      confirmedBookings: 0,
+      cancelledBookings: 0,
+      totalRevenue: 0,
+      confirmedRevenue: 0,
+      refundedAmount: 0,
+      newUsers: 0,
+      activeUsers: 0,
+      totalFlights: 0,
+      totalSeatsBooked: 0,
+    }
+  );
 }
 
 /**
@@ -101,8 +103,8 @@ export async function getDailyMetrics(startDate: Date, endDate: Date) {
     .from(dailyMetrics)
     .where(
       and(
-        gte(dailyMetrics.date, startDate.toISOString().split('T')[0]),
-        lte(dailyMetrics.date, endDate.toISOString().split('T')[0])
+        gte(dailyMetrics.date, startDate.toISOString().split("T")[0]),
+        lte(dailyMetrics.date, endDate.toISOString().split("T")[0])
       )
     )
     .orderBy(dailyMetrics.date);
@@ -143,8 +145,8 @@ export async function getBookingTrends(startDate: Date, endDate: Date) {
     .from(dailyMetrics)
     .where(
       and(
-        gte(dailyMetrics.date, startDate.toISOString().split('T')[0]),
-        lte(dailyMetrics.date, endDate.toISOString().split('T')[0])
+        gte(dailyMetrics.date, startDate.toISOString().split("T")[0]),
+        lte(dailyMetrics.date, endDate.toISOString().split("T")[0])
       )
     )
     .orderBy(dailyMetrics.date);
@@ -169,8 +171,8 @@ export async function getRevenueTrends(startDate: Date, endDate: Date) {
     .from(dailyMetrics)
     .where(
       and(
-        gte(dailyMetrics.date, startDate.toISOString().split('T')[0]),
-        lte(dailyMetrics.date, endDate.toISOString().split('T')[0])
+        gte(dailyMetrics.date, startDate.toISOString().split("T")[0]),
+        lte(dailyMetrics.date, endDate.toISOString().split("T")[0])
       )
     )
     .orderBy(dailyMetrics.date);
@@ -194,8 +196,8 @@ export async function getUserGrowthTrends(startDate: Date, endDate: Date) {
     .from(dailyMetrics)
     .where(
       and(
-        gte(dailyMetrics.date, startDate.toISOString().split('T')[0]),
-        lte(dailyMetrics.date, endDate.toISOString().split('T')[0])
+        gte(dailyMetrics.date, startDate.toISOString().split("T")[0]),
+        lte(dailyMetrics.date, endDate.toISOString().split("T")[0])
       )
     )
     .orderBy(dailyMetrics.date);
@@ -210,10 +212,10 @@ export async function calculateDailyMetrics(date: Date): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const dateStr = date.toISOString().split('T')[0];
+  const dateStr = date.toISOString().split("T")[0];
   const nextDay = new Date(date);
   nextDay.setDate(nextDay.getDate() + 1);
-  const nextDayStr = nextDay.toISOString().split('T')[0];
+  const nextDayStr = nextDay.toISOString().split("T")[0];
 
   // Count bookings
   const bookingStats = await db
@@ -319,10 +321,7 @@ export async function getRealTimeStats() {
     })
     .from(payments)
     .where(
-      and(
-        gte(payments.createdAt, today),
-        eq(payments.status, "succeeded")
-      )
+      and(gte(payments.createdAt, today), eq(payments.status, "succeeded"))
     );
 
   return {

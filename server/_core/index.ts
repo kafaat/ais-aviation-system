@@ -7,8 +7,8 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { handleStripeWebhook } from '../webhooks/stripe';
-import { apiLimiter, webhookLimiter } from './rateLimiter';
+import { handleStripeWebhook } from "../webhooks/stripe";
+import { apiLimiter, webhookLimiter } from "./rateLimiter";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -32,11 +32,16 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  
+
   // Stripe webhook MUST be registered BEFORE express.json() to preserve raw body
   // Apply rate limiting to webhook endpoint
-  app.post('/api/stripe/webhook', webhookLimiter, express.raw({ type: 'application/json' }), handleStripeWebhook);
-  
+  app.post(
+    "/api/stripe/webhook",
+    webhookLimiter,
+    express.raw({ type: "application/json" }),
+    handleStripeWebhook
+  );
+
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -72,10 +77,10 @@ async function startServer() {
   // Graceful shutdown
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received. Starting graceful shutdown...`);
-    
+
     server.close(async () => {
       console.log("HTTP server closed.");
-      
+
       // Close database connections
       try {
         const { getDb } = await import("../db.js");
@@ -86,11 +91,11 @@ async function startServer() {
       } catch (error) {
         console.error("Error closing database:", error);
       }
-      
+
       console.log("Graceful shutdown completed.");
       process.exit(0);
     });
-    
+
     // Force shutdown after 10 seconds
     setTimeout(() => {
       console.error("Forceful shutdown after timeout.");

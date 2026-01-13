@@ -88,6 +88,7 @@
 **الخطوة 1: تشغيل الهجرات (Migrations)**
 
 يجب تشغيل هجرات Drizzle بعد إضافة الجداول الجديدة التالية:
+
 - جداول الرحلات: `flights`, `flight_instances`, `seat_inventory`
 - جداول الولاء: `loyalty_accounts`, `loyalty_transactions`
 - جداول المقاعد: `seat_maps`, `seat_map_seats`, `flight_instance_seats`

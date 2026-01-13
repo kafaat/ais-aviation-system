@@ -1,5 +1,9 @@
 import { publicProcedure, router } from "../_core/trpc";
-import { performHealthChecks, isReady, isAlive } from "../services/health.service";
+import {
+  performHealthChecks,
+  isReady,
+  isAlive,
+} from "../services/health.service";
 
 /**
  * Health check router

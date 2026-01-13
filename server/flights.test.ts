@@ -56,8 +56,8 @@ describe("Flight APIs", () => {
     const ctx = createMockContext();
     const caller = appRouter.createCaller(ctx);
 
-    await expect(
-      caller.flights.getById({ id: 99999 })
-    ).rejects.toThrow("Flight not found");
+    await expect(caller.flights.getById({ id: 99999 })).rejects.toThrow(
+      "Flight not found"
+    );
   });
 });

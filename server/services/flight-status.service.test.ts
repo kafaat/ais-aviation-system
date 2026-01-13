@@ -1,5 +1,8 @@
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import { updateFlightStatus, cancelFlightAndRefund } from "./flight-status.service";
+import {
+  updateFlightStatus,
+  cancelFlightAndRefund,
+} from "./flight-status.service";
 import { getDb } from "../db";
 import { flights, bookings, users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";

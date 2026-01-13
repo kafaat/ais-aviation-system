@@ -25,8 +25,19 @@ export const userPreferencesRouter = router({
     .input(
       z.object({
         preferredSeatType: z.enum(["window", "aisle", "middle"]).optional(),
-        preferredCabinClass: z.enum(["economy", "business", "first"]).optional(),
-        mealPreference: z.enum(["regular", "vegetarian", "vegan", "halal", "kosher", "gluten_free"]).optional(),
+        preferredCabinClass: z
+          .enum(["economy", "business", "first"])
+          .optional(),
+        mealPreference: z
+          .enum([
+            "regular",
+            "vegetarian",
+            "vegan",
+            "halal",
+            "kosher",
+            "gluten_free",
+          ])
+          .optional(),
         wheelchairAssistance: z.boolean().optional(),
         extraLegroom: z.boolean().optional(),
         passportNumber: z.string().optional(),
