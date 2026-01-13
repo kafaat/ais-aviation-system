@@ -11,7 +11,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, ArrowUpCircle, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  Calendar,
+  ArrowUpCircle,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface ModifyBookingDialogProps {
@@ -28,7 +34,11 @@ interface ModifyBookingDialogProps {
   };
 }
 
-export function ModifyBookingDialog({ open, onOpenChange, booking }: ModifyBookingDialogProps) {
+export function ModifyBookingDialog({
+  open,
+  onOpenChange,
+  booking,
+}: ModifyBookingDialogProps) {
   const [selectedTab, setSelectedTab] = useState<"date" | "upgrade">("date");
   const [selectedFlightId, setSelectedFlightId] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -36,44 +46,50 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: ModifyBooki
   const utils = trpc.useUtils();
 
   // Search for alternative flights on the same route
-  const { data: alternativeFlights, isLoading: isSearching } = trpc.flights.search.useQuery(
-    {
-      originId: 0, // We'll need to pass the actual IDs
-      destinationId: 0,
-      departureDate: new Date(),
-    },
-    { enabled: selectedTab === "date" && open }
-  );
+  const { data: alternativeFlights, isLoading: isSearching } =
+    trpc.flights.search.useQuery(
+      {
+        originId: 0, // We'll need to pass the actual IDs
+        destinationId: 0,
+        departureDate: new Date(),
+      },
+      { enabled: selectedTab === "date" && open }
+    );
 
-  const requestChangeDateMutation = trpc.modifications.requestChangeDate.useMutation({
-    onSuccess: async (data) => {
-      if (data.requiresPayment && data.totalCost > 0) {
-        toast.success("Modification request created! Redirecting to payment...");
-        // TODO: Create Stripe payment intent for the difference
-      } else if (data.totalCost < 0) {
-        toast.success(`Modification approved! You'll receive a refund of ${Math.abs(data.totalCost / 100)} SAR`);
-      } else {
-        toast.success("Modification request submitted successfully!");
-      }
-      await utils.bookings.myBookings.invalidate();
-      onOpenChange(false);
-      setIsProcessing(false);
-    },
-    onError: (error) => {
-      toast.error(error.message || "Failed to request modification");
-      setIsProcessing(false);
-    },
-  });
+  const requestChangeDateMutation =
+    trpc.modifications.requestChangeDate.useMutation({
+      onSuccess: async data => {
+        if (data.requiresPayment && data.totalCost > 0) {
+          toast.success(
+            "Modification request created! Redirecting to payment..."
+          );
+          // TODO: Create Stripe payment intent for the difference
+        } else if (data.totalCost < 0) {
+          toast.success(
+            `Modification approved! You'll receive a refund of ${Math.abs(data.totalCost / 100)} SAR`
+          );
+        } else {
+          toast.success("Modification request submitted successfully!");
+        }
+        await utils.bookings.myBookings.invalidate();
+        onOpenChange(false);
+        setIsProcessing(false);
+      },
+      onError: error => {
+        toast.error(error.message || "Failed to request modification");
+        setIsProcessing(false);
+      },
+    });
 
   const requestUpgradeMutation = trpc.modifications.requestUpgrade.useMutation({
-    onSuccess: async (data) => {
+    onSuccess: async data => {
       toast.success("Upgrade request created! Redirecting to payment...");
       // TODO: Create Stripe payment intent for upgrade
       await utils.bookings.myBookings.invalidate();
       onOpenChange(false);
       setIsProcessing(false);
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || "Failed to request upgrade");
       setIsProcessing(false);
     },
@@ -110,17 +126,25 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: ModifyBooki
             <Badge variant="outline">{booking.bookingReference}</Badge>
           </DialogTitle>
           <DialogDescription>
-            رحلة {booking.flightNumber} • {booking.originName} → {booking.destinationName}
+            رحلة {booking.flightNumber} • {booking.originName} →{" "}
+            {booking.destinationName}
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as "date" | "upgrade")}>
+        <Tabs
+          value={selectedTab}
+          onValueChange={v => setSelectedTab(v as "date" | "upgrade")}
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="date" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               تغيير التاريخ
             </TabsTrigger>
-            <TabsTrigger value="upgrade" className="flex items-center gap-2" disabled={booking.cabinClass === "business"}>
+            <TabsTrigger
+              value="upgrade"
+              className="flex items-center gap-2"
+              disabled={booking.cabinClass === "business"}
+            >
               <ArrowUpCircle className="h-4 w-4" />
               ترقية الدرجة
             </TabsTrigger>
@@ -173,12 +197,20 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: ModifyBooki
 
             <div className="space-y-3">
               <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-sm text-muted-foreground">السعر الحالي (درجة الاقتصاد)</span>
-                <span className="font-medium">{(booking.totalAmount / 100).toFixed(2)} ر.س</span>
+                <span className="text-sm text-muted-foreground">
+                  السعر الحالي (درجة الاقتصاد)
+                </span>
+                <span className="font-medium">
+                  {(booking.totalAmount / 100).toFixed(2)} ر.س
+                </span>
               </div>
               <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-sm text-muted-foreground">السعر بعد الترقية (تقديري)</span>
-                <span className="font-medium">{((booking.totalAmount * 2) / 100).toFixed(2)} ر.س</span>
+                <span className="text-sm text-muted-foreground">
+                  السعر بعد الترقية (تقديري)
+                </span>
+                <span className="font-medium">
+                  {((booking.totalAmount * 2) / 100).toFixed(2)} ر.س
+                </span>
               </div>
               <div className="flex justify-between items-center py-2">
                 <span className="text-sm font-medium">الفرق المطلوب دفعه</span>
@@ -208,7 +240,11 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: ModifyBooki
         </Tabs>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isProcessing}>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isProcessing}
+          >
             إلغاء
           </Button>
           {selectedTab === "upgrade" && booking.cabinClass !== "business" && (

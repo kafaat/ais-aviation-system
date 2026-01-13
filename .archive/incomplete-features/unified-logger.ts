@@ -10,17 +10,26 @@ import { getRequestId } from "./request-id.middleware";
 // PII patterns to mask
 const PII_PATTERNS = [
   // Email addresses
-  { pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, replacement: "[EMAIL]" },
-  
+  {
+    pattern: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
+    replacement: "[EMAIL]",
+  },
+
   // Phone numbers (various formats)
-  { pattern: /\b(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, replacement: "[PHONE]" },
-  
+  {
+    pattern: /\b(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
+    replacement: "[PHONE]",
+  },
+
   // Credit card numbers (basic pattern)
-  { pattern: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, replacement: "[CARD]" },
-  
+  {
+    pattern: /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
+    replacement: "[CARD]",
+  },
+
   // Passport numbers (basic pattern)
   { pattern: /\b[A-Z]{1,2}\d{6,9}\b/g, replacement: "[PASSPORT]" },
-  
+
   // Saudi National ID (10 digits)
   { pattern: /\b[12]\d{9}\b/g, replacement: "[NATIONAL_ID]" },
 ];
@@ -42,11 +51,11 @@ const SENSITIVE_FIELDS = [
  */
 function maskPII(text: string): string {
   let masked = text;
-  
+
   for (const { pattern, replacement } of PII_PATTERNS) {
     masked = masked.replace(pattern, replacement);
   }
-  
+
   return masked;
 }
 
@@ -57,13 +66,13 @@ function maskSensitiveFields(obj: any): any {
   if (typeof obj !== "object" || obj === null) {
     return obj;
   }
-  
+
   if (Array.isArray(obj)) {
     return obj.map(maskSensitiveFields);
   }
-  
+
   const masked: any = {};
-  
+
   for (const [key, value] of Object.entries(obj)) {
     if (SENSITIVE_FIELDS.includes(key.toLowerCase())) {
       masked[key] = "[REDACTED]";
@@ -75,7 +84,7 @@ function maskSensitiveFields(obj: any): any {
       masked[key] = value;
     }
   }
-  
+
   return masked;
 }
 
@@ -85,18 +94,21 @@ function maskSensitiveFields(obj: any): any {
 const baseLogger = pino({
   level: process.env.LOG_LEVEL || "info",
   formatters: {
-    level: (label) => {
+    level: label => {
       return { level: label.toUpperCase() };
     },
   },
-  transport: process.env.NODE_ENV === "development" ? {
-    target: "pino-pretty",
-    options: {
-      colorize: true,
-      translateTime: "SYS:standard",
-      ignore: "pid,hostname",
-    },
-  } : undefined,
+  transport:
+    process.env.NODE_ENV === "development"
+      ? {
+          target: "pino-pretty",
+          options: {
+            colorize: true,
+            translateTime: "SYS:standard",
+            ignore: "pid,hostname",
+          },
+        }
+      : undefined,
 });
 
 /**
@@ -125,7 +137,11 @@ class UnifiedLogger {
   /**
    * Log with automatic PII masking
    */
-  private logWithMasking(level: "debug" | "info" | "warn" | "error", message: string, data?: any) {
+  private logWithMasking(
+    level: "debug" | "info" | "warn" | "error",
+    message: string,
+    data?: any
+  ) {
     const maskedMessage = maskPII(message);
     const maskedData = data ? maskSensitiveFields(data) : undefined;
 
@@ -149,11 +165,14 @@ class UnifiedLogger {
   }
 
   error(message: string, error?: Error | any) {
-    const errorData = error instanceof Error ? {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    } : error;
+    const errorData =
+      error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+          }
+        : error;
 
     this.logWithMasking("error", message, errorData);
   }
@@ -186,7 +205,12 @@ class UnifiedLogger {
   /**
    * Log external API call
    */
-  logExternalAPI(service: string, endpoint: string, duration?: number, error?: Error) {
+  logExternalAPI(
+    service: string,
+    endpoint: string,
+    duration?: number,
+    error?: Error
+  ) {
     if (error) {
       this.error(`External API Error: ${service}`, {
         service,
@@ -206,7 +230,11 @@ class UnifiedLogger {
   /**
    * Log authentication event
    */
-  logAuth(event: "login" | "logout" | "failed_login", userId?: number, details?: any) {
+  logAuth(
+    event: "login" | "logout" | "failed_login",
+    userId?: number,
+    details?: any
+  ) {
     this.info(`Auth Event: ${event}`, {
       event,
       userId,
@@ -229,7 +257,11 @@ class UnifiedLogger {
   /**
    * Log security event
    */
-  logSecurity(event: string, severity: "low" | "medium" | "high" | "critical", details?: any) {
+  logSecurity(
+    event: string,
+    severity: "low" | "medium" | "high" | "critical",
+    details?: any
+  ) {
     this.warn(`Security Event: ${event}`, {
       event,
       severity,

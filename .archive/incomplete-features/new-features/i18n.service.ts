@@ -206,7 +206,14 @@ export async function setEntityTranslations(
   translatedBy: string = "system"
 ): Promise<void> {
   for (const [fieldName, value] of Object.entries(translations)) {
-    await setTranslation(contentType, entityId, fieldName, locale, value, translatedBy);
+    await setTranslation(
+      contentType,
+      entityId,
+      fieldName,
+      locale,
+      value,
+      translatedBy
+    );
   }
 }
 

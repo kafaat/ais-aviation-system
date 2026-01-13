@@ -47,12 +47,13 @@ export async function getKPIMetrics(
     throw new Error("Database not available");
   }
 
-  const dateFilter = startDate && endDate
-    ? and(
-        gte(bookings.createdAt, startDate),
-        lte(bookings.createdAt, endDate)
-      )
-    : undefined;
+  const dateFilter =
+    startDate && endDate
+      ? and(
+          gte(bookings.createdAt, startDate),
+          lte(bookings.createdAt, endDate)
+        )
+      : undefined;
 
   // Total bookings and revenue
   const [bookingStats] = await db
@@ -73,9 +74,12 @@ export async function getKPIMetrics(
     .from(bookings)
     .where(dateFilter);
 
-  const cancellationRate = cancellationStats.totalBookings > 0
-    ? (cancellationStats.cancelledBookings / cancellationStats.totalBookings) * 100
-    : 0;
+  const cancellationRate =
+    cancellationStats.totalBookings > 0
+      ? (cancellationStats.cancelledBookings /
+          cancellationStats.totalBookings) *
+        100
+      : 0;
 
   // Average occupancy rate (simplified - across all flights with bookings)
   const [occupancyStats] = await db
@@ -85,16 +89,12 @@ export async function getKPIMetrics(
     })
     .from(bookings)
     .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(
-      and(
-        dateFilter,
-        sql`${bookings.status} != 'cancelled'`
-      )
-    );
+    .where(and(dateFilter, sql`${bookings.status} != 'cancelled'`));
 
-  const averageOccupancyRate = occupancyStats.totalSeats > 0
-    ? (occupancyStats.bookedSeats / occupancyStats.totalSeats) * 100
-    : 0;
+  const averageOccupancyRate =
+    occupancyStats.totalSeats > 0
+      ? (occupancyStats.bookedSeats / occupancyStats.totalSeats) * 100
+      : 0;
 
   return {
     totalBookings: bookingStats.totalBookings || 0,
@@ -135,7 +135,7 @@ export async function getRevenueOverTime(
     .groupBy(sql`DATE(${bookings.createdAt})`)
     .orderBy(sql`DATE(${bookings.createdAt})`);
 
-  return revenueData.map((row) => ({
+  return revenueData.map(row => ({
     date: row.date,
     revenue: row.revenue || 0,
     bookings: row.bookings || 0,
@@ -169,7 +169,7 @@ export async function getPopularDestinations(
     .orderBy(desc(sql`COUNT(${bookings.id})`))
     .limit(limit);
 
-  return popularDests.map((row) => ({
+  return popularDests.map(row => ({
     airportCode: row.airportCode,
     airportName: row.airportName,
     city: row.city,
@@ -203,7 +203,7 @@ export async function getBookingTrends(
     .groupBy(sql`DATE(${bookings.createdAt})`)
     .orderBy(sql`DATE(${bookings.createdAt})`);
 
-  return trends.map((row) => ({
+  return trends.map(row => ({
     date: row.date,
     bookings: row.bookings || 0,
     passengers: row.passengers || 0,
@@ -237,8 +237,18 @@ export async function getFlightOccupancyDetails() {
       )
     )
     .where(gte(flights.departureTime, new Date()))
-    .groupBy(flights.id, flights.flightNumber, flights.departureTime, flights.economySeats, flights.businessSeats)
-    .orderBy(desc(sql`ROUND((COALESCE(SUM(${bookings.numberOfPassengers}), 0) / (${flights.economySeats} + ${flights.businessSeats})) * 100, 1)`))
+    .groupBy(
+      flights.id,
+      flights.flightNumber,
+      flights.departureTime,
+      flights.economySeats,
+      flights.businessSeats
+    )
+    .orderBy(
+      desc(
+        sql`ROUND((COALESCE(SUM(${bookings.numberOfPassengers}), 0) / (${flights.economySeats} + ${flights.businessSeats})) * 100, 1)`
+      )
+    )
     .limit(20);
 
   return occupancyDetails;
@@ -281,14 +291,16 @@ export async function getAncillaryMetrics(
     throw new Error("Database not available");
   }
 
-  const { bookingAncillaries, ancillaryServices } = await import("../../drizzle/schema");
+  const { bookingAncillaries, ancillaryServices } =
+    await import("../../drizzle/schema");
 
-  const dateFilter = startDate && endDate
-    ? and(
-        gte(bookingAncillaries.createdAt, startDate),
-        lte(bookingAncillaries.createdAt, endDate)
-      )
-    : undefined;
+  const dateFilter =
+    startDate && endDate
+      ? and(
+          gte(bookingAncillaries.createdAt, startDate),
+          lte(bookingAncillaries.createdAt, endDate)
+        )
+      : undefined;
 
   // Total ancillary revenue and quantity
   const [ancillaryStats] = await db
@@ -301,12 +313,13 @@ export async function getAncillaryMetrics(
     .where(dateFilter);
 
   // Total bookings in the same period
-  const bookingDateFilter = startDate && endDate
-    ? and(
-        gte(bookings.createdAt, startDate),
-        lte(bookings.createdAt, endDate)
-      )
-    : undefined;
+  const bookingDateFilter =
+    startDate && endDate
+      ? and(
+          gte(bookings.createdAt, startDate),
+          lte(bookings.createdAt, endDate)
+        )
+      : undefined;
 
   const [bookingStats] = await db
     .select({
@@ -323,13 +336,16 @@ export async function getAncillaryMetrics(
     .from(bookingAncillaries)
     .where(dateFilter);
 
-  const attachmentRate = bookingStats.totalBookings > 0
-    ? (attachmentStats.bookingsWithAncillaries / bookingStats.totalBookings) * 100
-    : 0;
+  const attachmentRate =
+    bookingStats.totalBookings > 0
+      ? (attachmentStats.bookingsWithAncillaries / bookingStats.totalBookings) *
+        100
+      : 0;
 
-  const avgRevenuePerBooking = bookingStats.totalBookings > 0
-    ? ancillaryStats.totalRevenue / bookingStats.totalBookings
-    : 0;
+  const avgRevenuePerBooking =
+    bookingStats.totalBookings > 0
+      ? ancillaryStats.totalRevenue / bookingStats.totalBookings
+      : 0;
 
   return {
     totalAncillaryRevenue: ancillaryStats.totalRevenue || 0,
@@ -342,13 +358,16 @@ export async function getAncillaryMetrics(
 /**
  * Get ancillary revenue breakdown by category
  */
-export async function getAncillaryRevenueByCategory(): Promise<AncillaryRevenueByCategory[]> {
+export async function getAncillaryRevenueByCategory(): Promise<
+  AncillaryRevenueByCategory[]
+> {
   const db = await getDb();
   if (!db) {
     throw new Error("Database not available");
   }
 
-  const { bookingAncillaries, ancillaryServices } = await import("../../drizzle/schema");
+  const { bookingAncillaries, ancillaryServices } =
+    await import("../../drizzle/schema");
 
   const categoryRevenue = await db
     .select({
@@ -357,30 +376,42 @@ export async function getAncillaryRevenueByCategory(): Promise<AncillaryRevenueB
       quantity: sql<number>`SUM(${bookingAncillaries.quantity})`,
     })
     .from(bookingAncillaries)
-    .innerJoin(ancillaryServices, eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id))
+    .innerJoin(
+      ancillaryServices,
+      eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id)
+    )
     .groupBy(ancillaryServices.category)
     .orderBy(desc(sql`SUM(${bookingAncillaries.totalPrice})`));
 
-  const totalRevenue = categoryRevenue.reduce((sum, row) => sum + (row.revenue || 0), 0);
+  const totalRevenue = categoryRevenue.reduce(
+    (sum, row) => sum + (row.revenue || 0),
+    0
+  );
 
-  return categoryRevenue.map((row) => ({
+  return categoryRevenue.map(row => ({
     category: row.category,
     revenue: row.revenue || 0,
     quantity: row.quantity || 0,
-    percentage: totalRevenue > 0 ? Math.round(((row.revenue || 0) / totalRevenue) * 100 * 10) / 10 : 0,
+    percentage:
+      totalRevenue > 0
+        ? Math.round(((row.revenue || 0) / totalRevenue) * 100 * 10) / 10
+        : 0,
   }));
 }
 
 /**
  * Get most popular ancillary services
  */
-export async function getPopularAncillaries(limit: number = 10): Promise<PopularAncillary[]> {
+export async function getPopularAncillaries(
+  limit: number = 10
+): Promise<PopularAncillary[]> {
   const db = await getDb();
   if (!db) {
     throw new Error("Database not available");
   }
 
-  const { bookingAncillaries, ancillaryServices } = await import("../../drizzle/schema");
+  const { bookingAncillaries, ancillaryServices } =
+    await import("../../drizzle/schema");
 
   const popularServices = await db
     .select({
@@ -390,12 +421,19 @@ export async function getPopularAncillaries(limit: number = 10): Promise<Popular
       revenue: sql<number>`SUM(${bookingAncillaries.totalPrice})`,
     })
     .from(bookingAncillaries)
-    .innerJoin(ancillaryServices, eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id))
-    .groupBy(ancillaryServices.id, ancillaryServices.name, ancillaryServices.category)
+    .innerJoin(
+      ancillaryServices,
+      eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id)
+    )
+    .groupBy(
+      ancillaryServices.id,
+      ancillaryServices.name,
+      ancillaryServices.category
+    )
     .orderBy(desc(sql`SUM(${bookingAncillaries.quantity})`))
     .limit(limit);
 
-  return popularServices.map((row) => ({
+  return popularServices.map(row => ({
     serviceName: row.serviceName,
     category: row.category,
     totalSold: row.totalSold || 0,

@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getDb } from "../db";
-import { flightReviews, users, flights, bookings, airlines, airports } from "../../drizzle/schema";
+import {
+  flightReviews,
+  users,
+  flights,
+  bookings,
+  airlines,
+  airports,
+} from "../../drizzle/schema";
 import * as reviewsService from "./reviews.service";
 import { eq } from "drizzle-orm";
 

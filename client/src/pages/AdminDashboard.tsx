@@ -5,11 +5,26 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Link } from "wouter";
-import { ChevronLeft, Plus, Plane, Calendar as CalendarIcon } from "lucide-react";
+import {
+  ChevronLeft,
+  Plus,
+  Plane,
+  Calendar as CalendarIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -33,7 +48,7 @@ export default function AdminDashboard() {
 
   const { data: airlines } = trpc.reference.airlines.useQuery();
   const { data: airports } = trpc.reference.airports.useQuery();
-  
+
   const createFlightMutation = trpc.admin.createFlight.useMutation({
     onSuccess: () => {
       toast.success("تم إضافة الرحلة بنجاح!");
@@ -50,7 +65,7 @@ export default function AdminDashboard() {
       setEconomyPrice("");
       setBusinessPrice("");
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || "حدث خطأ أثناء إضافة الرحلة");
     },
   });
@@ -144,7 +159,7 @@ export default function AdminDashboard() {
                 <Label>رقم الرحلة</Label>
                 <Input
                   value={flightNumber}
-                  onChange={(e) => setFlightNumber(e.target.value)}
+                  onChange={e => setFlightNumber(e.target.value)}
                   placeholder="مثال: SV123"
                 />
               </div>
@@ -156,8 +171,11 @@ export default function AdminDashboard() {
                     <SelectValue placeholder="اختر شركة الطيران" />
                   </SelectTrigger>
                   <SelectContent>
-                    {airlines?.map((airline) => (
-                      <SelectItem key={airline.id} value={airline.id.toString()}>
+                    {airlines?.map(airline => (
+                      <SelectItem
+                        key={airline.id}
+                        value={airline.id.toString()}
+                      >
                         {airline.name} ({airline.code})
                       </SelectItem>
                     ))}
@@ -172,8 +190,11 @@ export default function AdminDashboard() {
                     <SelectValue placeholder="اختر المطار" />
                   </SelectTrigger>
                   <SelectContent>
-                    {airports?.map((airport) => (
-                      <SelectItem key={airport.id} value={airport.id.toString()}>
+                    {airports?.map(airport => (
+                      <SelectItem
+                        key={airport.id}
+                        value={airport.id.toString()}
+                      >
                         {airport.city} ({airport.code})
                       </SelectItem>
                     ))}
@@ -188,8 +209,11 @@ export default function AdminDashboard() {
                     <SelectValue placeholder="اختر المطار" />
                   </SelectTrigger>
                   <SelectContent>
-                    {airports?.map((airport) => (
-                      <SelectItem key={airport.id} value={airport.id.toString()}>
+                    {airports?.map(airport => (
+                      <SelectItem
+                        key={airport.id}
+                        value={airport.id.toString()}
+                      >
                         {airport.city} ({airport.code})
                       </SelectItem>
                     ))}
@@ -202,7 +226,9 @@ export default function AdminDashboard() {
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start">
-                      {departureTime ? format(departureTime, "PPP HH:mm", { locale: ar }) : "اختر الوقت"}
+                      {departureTime
+                        ? format(departureTime, "PPP HH:mm", { locale: ar })
+                        : "اختر الوقت"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -221,7 +247,9 @@ export default function AdminDashboard() {
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start">
-                      {arrivalTime ? format(arrivalTime, "PPP HH:mm", { locale: ar }) : "اختر الوقت"}
+                      {arrivalTime
+                        ? format(arrivalTime, "PPP HH:mm", { locale: ar })
+                        : "اختر الوقت"}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -240,7 +268,7 @@ export default function AdminDashboard() {
                 <Input
                   type="number"
                   value={economySeats}
-                  onChange={(e) => setEconomySeats(e.target.value)}
+                  onChange={e => setEconomySeats(e.target.value)}
                   placeholder="150"
                 />
               </div>
@@ -250,7 +278,7 @@ export default function AdminDashboard() {
                 <Input
                   type="number"
                   value={businessSeats}
-                  onChange={(e) => setBusinessSeats(e.target.value)}
+                  onChange={e => setBusinessSeats(e.target.value)}
                   placeholder="30"
                 />
               </div>
@@ -261,7 +289,7 @@ export default function AdminDashboard() {
                   type="number"
                   step="0.01"
                   value={economyPrice}
-                  onChange={(e) => setEconomyPrice(e.target.value)}
+                  onChange={e => setEconomyPrice(e.target.value)}
                   placeholder="500.00"
                 />
               </div>
@@ -272,23 +300,22 @@ export default function AdminDashboard() {
                   type="number"
                   step="0.01"
                   value={businessPrice}
-                  onChange={(e) => setBusinessPrice(e.target.value)}
+                  onChange={e => setBusinessPrice(e.target.value)}
                   placeholder="1500.00"
                 />
               </div>
             </div>
 
             <div className="flex gap-3 mt-6">
-              <Button 
+              <Button
                 onClick={handleSubmit}
                 disabled={createFlightMutation.isPending}
               >
-                {createFlightMutation.isPending ? "جاري الإضافة..." : "إضافة الرحلة"}
+                {createFlightMutation.isPending
+                  ? "جاري الإضافة..."
+                  : "إضافة الرحلة"}
               </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => setShowAddFlight(false)}
-              >
+              <Button variant="outline" onClick={() => setShowAddFlight(false)}>
                 إلغاء
               </Button>
             </div>

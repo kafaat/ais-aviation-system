@@ -1,7 +1,23 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
 import { trpc } from "../lib/trpc";
 
-type SupportedCurrency = "SAR" | "USD" | "EUR" | "GBP" | "AED" | "KWD" | "BHD" | "OMR" | "QAR" | "EGP";
+type SupportedCurrency =
+  | "SAR"
+  | "USD"
+  | "EUR"
+  | "GBP"
+  | "AED"
+  | "KWD"
+  | "BHD"
+  | "OMR"
+  | "QAR"
+  | "EGP";
 
 interface CurrencyContextType {
   currency: SupportedCurrency;
@@ -12,7 +28,9 @@ interface CurrencyContextType {
   isLoading: boolean;
 }
 
-const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
+const CurrencyContext = createContext<CurrencyContextType | undefined>(
+  undefined
+);
 
 interface CurrencyProviderProps {
   children: ReactNode;
@@ -29,10 +47,11 @@ export function CurrencyProvider({ children }: CurrencyProviderProps) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // Fetch exchange rate when currency changes
-  const { data: rateData, isLoading: rateLoading } = trpc.currency.getExchangeRate.useQuery(
-    { targetCurrency: currency },
-    { enabled: currency !== "SAR" }
-  );
+  const { data: rateData, isLoading: rateLoading } =
+    trpc.currency.getExchangeRate.useQuery(
+      { targetCurrency: currency },
+      { enabled: currency !== "SAR" }
+    );
 
   useEffect(() => {
     if (rateData) {
@@ -88,7 +107,11 @@ export function CurrencyProvider({ children }: CurrencyProviderProps) {
     isLoading,
   };
 
-  return <CurrencyContext.Provider value={value}>{children}</CurrencyContext.Provider>;
+  return (
+    <CurrencyContext.Provider value={value}>
+      {children}
+    </CurrencyContext.Provider>
+  );
 }
 
 export function useCurrency() {

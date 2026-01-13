@@ -36,7 +36,7 @@ describe("Booking APIs", () => {
     // Clean up test bookings
     const db = await getDb();
     if (!db) return;
-    
+
     try {
       for (const bookingId of createdBookingIds) {
         await db.delete(bookings).where(eq(bookings.id, bookingId));
@@ -71,7 +71,7 @@ describe("Booking APIs", () => {
     expect(booking).toHaveProperty("totalAmount");
     expect(booking.bookingReference).toHaveLength(6);
     expect(booking.pnr).toHaveLength(6);
-    
+
     // Track for cleanup
     createdBookingIds.push(booking.bookingId);
   });

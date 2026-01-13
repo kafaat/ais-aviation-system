@@ -26,7 +26,11 @@ interface FlightComparisonProps {
   onSelect: (flight: Flight) => void;
 }
 
-export function FlightComparison({ flights, onRemove, onSelect }: FlightComparisonProps) {
+export function FlightComparison({
+  flights,
+  onRemove,
+  onSelect,
+}: FlightComparisonProps) {
   const { t } = useTranslation();
 
   if (flights.length === 0) {
@@ -34,14 +38,14 @@ export function FlightComparison({ flights, onRemove, onSelect }: FlightComparis
   }
 
   const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
+    return new Date(date).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const formatPrice = (price: number) => {
-    return `${(price / 100).toFixed(2)} ${t('common.currency')}`;
+    return `${(price / 100).toFixed(2)} ${t("common.currency")}`;
   };
 
   const calculateDuration = (departure: Date, arrival: Date) => {
@@ -59,13 +63,15 @@ export function FlightComparison({ flights, onRemove, onSelect }: FlightComparis
     >
       <div className="container">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">{t('flights.comparing')} ({flights.length})</h3>
+          <h3 className="text-lg font-semibold">
+            {t("flights.comparing")} ({flights.length})
+          </h3>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => flights.forEach(f => onRemove(f.id))}
           >
-            {t('common.clearAll')}
+            {t("common.clearAll")}
           </Button>
         </div>
 
@@ -86,52 +92,69 @@ export function FlightComparison({ flights, onRemove, onSelect }: FlightComparis
                   <Plane className="h-4 w-4" />
                   {flight.flightNumber}
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">{flight.airline.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {flight.airline.name}
+                </p>
               </CardHeader>
 
               <CardContent className="space-y-3">
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="font-semibold">{flight.origin.code}</p>
-                    <p className="text-sm text-muted-foreground">{formatTime(flight.departureTime)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatTime(flight.departureTime)}
+                    </p>
                   </div>
                   <div className="text-center">
                     <Clock className="h-4 w-4 mx-auto text-muted-foreground" />
                     <p className="text-xs text-muted-foreground">
-                      {calculateDuration(flight.departureTime, flight.arrivalTime)}
+                      {calculateDuration(
+                        flight.departureTime,
+                        flight.arrivalTime
+                      )}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold">{flight.destination.code}</p>
-                    <p className="text-sm text-muted-foreground">{formatTime(flight.arrivalTime)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatTime(flight.arrivalTime)}
+                    </p>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm">{t('flights.economy')}</span>
+                    <span className="text-sm">{t("flights.economy")}</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">{formatPrice(flight.economyPrice)}</span>
+                      <span className="font-semibold">
+                        {formatPrice(flight.economyPrice)}
+                      </span>
                       {flight.economyAvailable > 0 ? (
                         <Badge variant="outline" className="text-xs">
-                          {flight.economyAvailable} {t('flights.available')}
+                          {flight.economyAvailable} {t("flights.available")}
                         </Badge>
                       ) : (
-                        <Badge variant="destructive" className="text-xs">{t('flights.full')}</Badge>
+                        <Badge variant="destructive" className="text-xs">
+                          {t("flights.full")}
+                        </Badge>
                       )}
                     </div>
                   </div>
 
                   <div className="flex justify-between items-center">
-                    <span className="text-sm">{t('flights.business')}</span>
+                    <span className="text-sm">{t("flights.business")}</span>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">{formatPrice(flight.businessPrice)}</span>
+                      <span className="font-semibold">
+                        {formatPrice(flight.businessPrice)}
+                      </span>
                       {flight.businessAvailable > 0 ? (
                         <Badge variant="outline" className="text-xs">
-                          {flight.businessAvailable} {t('flights.available')}
+                          {flight.businessAvailable} {t("flights.available")}
                         </Badge>
                       ) : (
-                        <Badge variant="destructive" className="text-xs">{t('flights.full')}</Badge>
+                        <Badge variant="destructive" className="text-xs">
+                          {t("flights.full")}
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -140,10 +163,13 @@ export function FlightComparison({ flights, onRemove, onSelect }: FlightComparis
                 <Button
                   className="w-full"
                   onClick={() => onSelect(flight)}
-                  disabled={flight.economyAvailable === 0 && flight.businessAvailable === 0}
+                  disabled={
+                    flight.economyAvailable === 0 &&
+                    flight.businessAvailable === 0
+                  }
                 >
                   <Check className="h-4 w-4 mr-2" />
-                  {t('flights.selectFlight')}
+                  {t("flights.selectFlight")}
                 </Button>
               </CardContent>
             </Card>

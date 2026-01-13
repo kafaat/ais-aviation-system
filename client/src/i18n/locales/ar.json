@@ -113,7 +113,7 @@
     "completeBooking": "إتمام الحجز والدفع",
     "processing": "جاري المعالجة...",
     "termsAgree": "بالضغط على \"إتمام الحجز\" فإنك توافق على الشروط والأحكام",
-    "selectSeats": "اختر {{count}} مقعد"  
+    "selectSeats": "اختر {{count}} مقعد"
   },
   "seatMap": {
     "available": "متاح",

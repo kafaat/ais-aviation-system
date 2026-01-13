@@ -179,11 +179,11 @@ tail -f logs/combined.log
 
 ```typescript
 // In code, enable Drizzle logger
-import { drizzle } from 'drizzle-orm/mysql2';
+import { drizzle } from "drizzle-orm/mysql2";
 
 const db = drizzle(connection, {
   logger: {
-    logQuery: (query) => console.log('Query:', query),
+    logQuery: query => console.log("Query:", query),
   },
 });
 ```
@@ -251,10 +251,10 @@ git push origin feature/new-feature
 
 ```typescript
 // 1. Edit drizzle/schema.ts
-export const newTable = mysqlTable('new_table', {
-  id: int('id').primaryKey().autoincrement(),
-  name: varchar('name', { length: 255 }).notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
+export const newTable = mysqlTable("new_table", {
+  id: int("id").primaryKey().autoincrement(),
+  name: varchar("name", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // 2. Generate migration
@@ -268,15 +268,15 @@ export const newTable = mysqlTable('new_table', {
 
 ```typescript
 // server/routers/example.ts
-import { router, publicProcedure } from '../_core/trpc';
-import { z } from 'zod';
+import { router, publicProcedure } from "../_core/trpc";
+import { z } from "zod";
 
 export const exampleRouter = router({
   getData: publicProcedure
     .input(z.object({ id: z.number() }))
     .query(async ({ input }) => {
       // Your logic here
-      return { id: input.id, data: '...' };
+      return { id: input.id, data: "..." };
     }),
 });
 
@@ -293,7 +293,7 @@ export const appRouter = router({
 // client/src/pages/NewPage.tsx
 export function NewPage() {
   const { data } = trpc.example.getData.useQuery({ id: 1 });
-  
+
   return (
     <div>
       <h1>New Page</h1>
@@ -303,7 +303,7 @@ export function NewPage() {
 }
 
 // Add route in client/src/App.tsx
-<Route path="/new" component={NewPage} />
+<Route path="/new" component={NewPage} />;
 ```
 
 ---
@@ -439,6 +439,7 @@ curl http://localhost:3000/api/health/check
 ---
 
 **Remember:** Most issues are solved by:
+
 1. Reading the error message
 2. Checking environment variables
 3. Restarting the server

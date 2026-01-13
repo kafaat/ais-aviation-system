@@ -122,9 +122,12 @@ export async function createRefund(input: CreateRefundInput) {
     const refundParams: Stripe.RefundCreateParams = {
       payment_intent: booking.stripePaymentIntentId,
       amount: refundAmount,
-      reason: input.reason === "duplicate" ? "duplicate" : 
-              input.reason === "fraudulent" ? "fraudulent" : 
-              "requested_by_customer",
+      reason:
+        input.reason === "duplicate"
+          ? "duplicate"
+          : input.reason === "fraudulent"
+            ? "fraudulent"
+            : "requested_by_customer",
     };
 
     const refund = await stripe.refunds.create(refundParams);
@@ -133,8 +136,10 @@ export async function createRefund(input: CreateRefundInput) {
     await database
       .update(bookings)
       .set({
-        paymentStatus: refund.amount === booking.totalAmount ? "refunded" : "paid",
-        status: refund.amount === booking.totalAmount ? "cancelled" : booking.status,
+        paymentStatus:
+          refund.amount === booking.totalAmount ? "refunded" : "paid",
+        status:
+          refund.amount === booking.totalAmount ? "cancelled" : booking.status,
       })
       .where(eq(bookings.id, input.bookingId));
 
@@ -149,7 +154,8 @@ export async function createRefund(input: CreateRefundInput) {
       await database
         .update(payments)
         .set({
-          status: refund.amount === booking.totalAmount ? "refunded" : "completed",
+          status:
+            refund.amount === booking.totalAmount ? "refunded" : "completed",
         })
         .where(eq(payments.id, paymentResult[0].id));
     }
@@ -171,7 +177,7 @@ export async function createRefund(input: CreateRefundInput) {
 
       if (bookingDetails && bookingDetails.userEmail) {
         await sendRefundConfirmation({
-          passengerName: bookingDetails.userName || 'Passenger',
+          passengerName: bookingDetails.userName || "Passenger",
           passengerEmail: bookingDetails.userEmail,
           bookingReference: bookingDetails.bookingReference,
           flightNumber: bookingDetails.flightNumber,
@@ -180,10 +186,12 @@ export async function createRefund(input: CreateRefundInput) {
           processingDays: 5,
         });
 
-        console.log(`[Refund] Confirmation email sent to ${bookingDetails.userEmail}`);
+        console.log(
+          `[Refund] Confirmation email sent to ${bookingDetails.userEmail}`
+        );
       }
     } catch (emailError) {
-      console.error('[Refund] Error sending confirmation email:', emailError);
+      console.error("[Refund] Error sending confirmation email:", emailError);
       // Don't fail the refund if email fails
     }
 

@@ -4,25 +4,23 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { logger } from "../services/logger.service";
 
 // CSRF Protection configuration
-const {
-  invalidCsrfTokenError,
-  generateToken,
-  doubleCsrfProtection,
-} = doubleCsrf({
-  getSecret: () => process.env.CSRF_SECRET || "default-csrf-secret-change-in-production",
-  cookieName: "__Host-csrf",
-  cookieOptions: {
-    httpOnly: true,
-    sameSite: "strict",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  },
-  size: 64,
-  ignoredMethods: ["GET", "HEAD", "OPTIONS"],
-  getTokenFromRequest: (req) => {
-    return req.headers["x-csrf-token"] as string;
-  },
-});
+const { invalidCsrfTokenError, generateToken, doubleCsrfProtection } =
+  doubleCsrf({
+    getSecret: () =>
+      process.env.CSRF_SECRET || "default-csrf-secret-change-in-production",
+    cookieName: "__Host-csrf",
+    cookieOptions: {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+    },
+    size: 64,
+    ignoredMethods: ["GET", "HEAD", "OPTIONS"],
+    getTokenFromRequest: req => {
+      return req.headers["x-csrf-token"] as string;
+    },
+  });
 
 /**
  * Configure security headers using Helmet
@@ -35,14 +33,19 @@ export function configureSecurityHeaders(app: Express): void {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            "https://fonts.googleapis.com",
+          ],
           fontSrc: ["'self'", "https://fonts.gstatic.com"],
           imgSrc: ["'self'", "data:", "https:", "blob:"],
           scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Needed for React dev
           connectSrc: ["'self'", "https://api.stripe.com"],
           frameSrc: ["'self'", "https://js.stripe.com"],
           objectSrc: ["'none'"],
-          upgradeInsecureRequests: process.env.NODE_ENV === "production" ? [] : null,
+          upgradeInsecureRequests:
+            process.env.NODE_ENV === "production" ? [] : null,
         },
       },
       // Cross-Origin-Embedder-Policy
@@ -141,7 +144,7 @@ export function configureCORS(app: Express): void {
  */
 export function getSecureCookieOptions() {
   const isProduction = process.env.NODE_ENV === "production";
-  
+
   return {
     httpOnly: true,
     secure: isProduction,
@@ -173,7 +176,11 @@ export function verifyStripeWebhookSignature(
 /**
  * Input sanitization middleware
  */
-export function sanitizeInput(req: Request, res: Response, next: NextFunction): void {
+export function sanitizeInput(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
   // Basic XSS prevention - remove script tags and event handlers
   const sanitize = (obj: any): any => {
     if (typeof obj === "string") {
@@ -238,12 +245,18 @@ export function validateSecurityConfiguration(): void {
   }
 
   // Check Stripe webhook secret
-  if (!process.env.STRIPE_WEBHOOK_SECRET && process.env.NODE_ENV === "production") {
+  if (
+    !process.env.STRIPE_WEBHOOK_SECRET &&
+    process.env.NODE_ENV === "production"
+  ) {
     issues.push("STRIPE_WEBHOOK_SECRET must be set in production");
   }
 
   // Check secure cookies
-  if (process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "true") {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.COOKIE_SECURE !== "true"
+  ) {
     issues.push("COOKIE_SECURE should be true in production");
   }
 
