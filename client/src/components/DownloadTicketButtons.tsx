@@ -10,7 +10,10 @@ interface DownloadETicketButtonProps {
   passengerId?: number;
 }
 
-export function DownloadETicketButton({ bookingId, passengerId }: DownloadETicketButtonProps) {
+export function DownloadETicketButton({
+  bookingId,
+  passengerId,
+}: DownloadETicketButtonProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const generateETicket = trpc.eticket.generateETicket.useMutation();
 
@@ -54,7 +57,10 @@ interface DownloadBoardingPassButtonProps {
   passengerId?: number;
 }
 
-export function DownloadBoardingPassButton({ bookingId, passengerId }: DownloadBoardingPassButtonProps) {
+export function DownloadBoardingPassButton({
+  bookingId,
+  passengerId,
+}: DownloadBoardingPassButtonProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const generateBoardingPass = trpc.eticket.generateBoardingPass.useMutation();
 

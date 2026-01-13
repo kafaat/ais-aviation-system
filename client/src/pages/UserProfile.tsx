@@ -3,16 +3,32 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { User, Settings, Bell, Plane, Save, Loader2 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -21,16 +37,18 @@ export default function UserProfile() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
 
-  const { data: preferences, isLoading } = trpc.userPreferences.getMyPreferences.useQuery();
-  const updatePreferences = trpc.userPreferences.updateMyPreferences.useMutation({
-    onSuccess: () => {
-      utils.userPreferences.getMyPreferences.invalidate();
-      toast.success(t("profile.updateSuccess"));
-    },
-    onError: (error) => {
-      toast.error(t("common.error") + ": " + error.message);
-    },
-  });
+  const { data: preferences, isLoading } =
+    trpc.userPreferences.getMyPreferences.useQuery();
+  const updatePreferences =
+    trpc.userPreferences.updateMyPreferences.useMutation({
+      onSuccess: () => {
+        utils.userPreferences.getMyPreferences.invalidate();
+        toast.success(t("profile.updateSuccess"));
+      },
+      onError: error => {
+        toast.error(t("common.error") + ": " + error.message);
+      },
+    });
 
   const [formData, setFormData] = useState({
     preferredSeatType: preferences?.preferredSeatType || "window",
@@ -119,7 +137,9 @@ export default function UserProfile() {
             <Card>
               <CardHeader>
                 <CardTitle>{t("profile.travel.title")}</CardTitle>
-                <CardDescription>{t("profile.travel.description")}</CardDescription>
+                <CardDescription>
+                  {t("profile.travel.description")}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Seat Preference */}
@@ -127,17 +147,26 @@ export default function UserProfile() {
                   <Label>{t("profile.travel.preferredSeat")}</Label>
                   <Select
                     value={formData.preferredSeatType}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, preferredSeatType: value as any })
+                    onValueChange={value =>
+                      setFormData({
+                        ...formData,
+                        preferredSeatType: value as any,
+                      })
                     }
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="window">{t("profile.travel.window")}</SelectItem>
-                      <SelectItem value="aisle">{t("profile.travel.aisle")}</SelectItem>
-                      <SelectItem value="middle">{t("profile.travel.middle")}</SelectItem>
+                      <SelectItem value="window">
+                        {t("profile.travel.window")}
+                      </SelectItem>
+                      <SelectItem value="aisle">
+                        {t("profile.travel.aisle")}
+                      </SelectItem>
+                      <SelectItem value="middle">
+                        {t("profile.travel.middle")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -147,17 +176,26 @@ export default function UserProfile() {
                   <Label>{t("profile.travel.preferredClass")}</Label>
                   <Select
                     value={formData.preferredCabinClass}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, preferredCabinClass: value as any })
+                    onValueChange={value =>
+                      setFormData({
+                        ...formData,
+                        preferredCabinClass: value as any,
+                      })
                     }
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="economy">{t("profile.travel.economy")}</SelectItem>
-                      <SelectItem value="business">{t("profile.travel.business")}</SelectItem>
-                      <SelectItem value="first">{t("profile.travel.first")}</SelectItem>
+                      <SelectItem value="economy">
+                        {t("profile.travel.economy")}
+                      </SelectItem>
+                      <SelectItem value="business">
+                        {t("profile.travel.business")}
+                      </SelectItem>
+                      <SelectItem value="first">
+                        {t("profile.travel.first")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -167,7 +205,7 @@ export default function UserProfile() {
                   <Label>{t("profile.travel.mealPreference")}</Label>
                   <Select
                     value={formData.mealPreference}
-                    onValueChange={(value) =>
+                    onValueChange={value =>
                       setFormData({ ...formData, mealPreference: value as any })
                     }
                   >
@@ -175,12 +213,24 @@ export default function UserProfile() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="regular">{t("profile.travel.meals.regular")}</SelectItem>
-                      <SelectItem value="vegetarian">{t("profile.travel.meals.vegetarian")}</SelectItem>
-                      <SelectItem value="vegan">{t("profile.travel.meals.vegan")}</SelectItem>
-                      <SelectItem value="halal">{t("profile.travel.meals.halal")}</SelectItem>
-                      <SelectItem value="kosher">{t("profile.travel.meals.kosher")}</SelectItem>
-                      <SelectItem value="gluten_free">{t("profile.travel.meals.glutenFree")}</SelectItem>
+                      <SelectItem value="regular">
+                        {t("profile.travel.meals.regular")}
+                      </SelectItem>
+                      <SelectItem value="vegetarian">
+                        {t("profile.travel.meals.vegetarian")}
+                      </SelectItem>
+                      <SelectItem value="vegan">
+                        {t("profile.travel.meals.vegan")}
+                      </SelectItem>
+                      <SelectItem value="halal">
+                        {t("profile.travel.meals.halal")}
+                      </SelectItem>
+                      <SelectItem value="kosher">
+                        {t("profile.travel.meals.kosher")}
+                      </SelectItem>
+                      <SelectItem value="gluten_free">
+                        {t("profile.travel.meals.glutenFree")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -189,19 +239,26 @@ export default function UserProfile() {
                 <div className="space-y-4">
                   <Label>{t("profile.travel.specialServices")}</Label>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">{t("profile.travel.wheelchair")}</span>
+                    <span className="text-sm">
+                      {t("profile.travel.wheelchair")}
+                    </span>
                     <Switch
                       checked={formData.wheelchairAssistance}
-                      onCheckedChange={(checked) =>
-                        setFormData({ ...formData, wheelchairAssistance: checked })
+                      onCheckedChange={checked =>
+                        setFormData({
+                          ...formData,
+                          wheelchairAssistance: checked,
+                        })
                       }
                     />
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">{t("profile.travel.extraLegroom")}</span>
+                    <span className="text-sm">
+                      {t("profile.travel.extraLegroom")}
+                    </span>
                     <Switch
                       checked={formData.extraLegroom}
-                      onCheckedChange={(checked) =>
+                      onCheckedChange={checked =>
                         setFormData({ ...formData, extraLegroom: checked })
                       }
                     />
@@ -216,19 +273,26 @@ export default function UserProfile() {
             <Card>
               <CardHeader>
                 <CardTitle>{t("profile.personal.title")}</CardTitle>
-                <CardDescription>{t("profile.personal.description")}</CardDescription>
+                <CardDescription>
+                  {t("profile.personal.description")}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Passport Info */}
                 <div className="space-y-4">
-                  <Label className="text-base font-semibold">{t("profile.personal.passport")}</Label>
-                  
+                  <Label className="text-base font-semibold">
+                    {t("profile.personal.passport")}
+                  </Label>
+
                   <div className="space-y-2">
                     <Label>{t("profile.personal.passportNumber")}</Label>
                     <Input
                       value={formData.passportNumber}
-                      onChange={(e) =>
-                        setFormData({ ...formData, passportNumber: e.target.value })
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          passportNumber: e.target.value,
+                        })
                       }
                       placeholder={t("profile.personal.passportPlaceholder")}
                     />
@@ -238,9 +302,14 @@ export default function UserProfile() {
                     <Label>{t("profile.personal.passportExpiry")}</Label>
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start text-left">
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left"
+                        >
                           {formData.passportExpiry
-                            ? format(formData.passportExpiry, "PPP", { locale: i18n.language === "ar" ? ar : undefined })
+                            ? format(formData.passportExpiry, "PPP", {
+                                locale: i18n.language === "ar" ? ar : undefined,
+                              })
                             : t("profile.personal.selectDate")}
                         </Button>
                       </PopoverTrigger>
@@ -248,7 +317,7 @@ export default function UserProfile() {
                         <Calendar
                           mode="single"
                           selected={formData.passportExpiry}
-                          onSelect={(date) =>
+                          onSelect={date =>
                             setFormData({ ...formData, passportExpiry: date })
                           }
                         />
@@ -260,8 +329,11 @@ export default function UserProfile() {
                     <Label>{t("profile.personal.nationality")}</Label>
                     <Input
                       value={formData.nationality}
-                      onChange={(e) =>
-                        setFormData({ ...formData, nationality: e.target.value })
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          nationality: e.target.value,
+                        })
                       }
                       placeholder={t("profile.personal.nationalityPlaceholder")}
                     />
@@ -270,14 +342,19 @@ export default function UserProfile() {
 
                 {/* Contact Info */}
                 <div className="space-y-4">
-                  <Label className="text-base font-semibold">{t("profile.personal.contact")}</Label>
-                  
+                  <Label className="text-base font-semibold">
+                    {t("profile.personal.contact")}
+                  </Label>
+
                   <div className="space-y-2">
                     <Label>{t("profile.personal.phone")}</Label>
                     <Input
                       value={formData.phoneNumber}
-                      onChange={(e) =>
-                        setFormData({ ...formData, phoneNumber: e.target.value })
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          phoneNumber: e.target.value,
+                        })
                       }
                       placeholder="+966 5X XXX XXXX"
                     />
@@ -287,10 +364,15 @@ export default function UserProfile() {
                     <Label>{t("profile.personal.emergencyContact")}</Label>
                     <Input
                       value={formData.emergencyContact}
-                      onChange={(e) =>
-                        setFormData({ ...formData, emergencyContact: e.target.value })
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          emergencyContact: e.target.value,
+                        })
                       }
-                      placeholder={t("profile.personal.emergencyContactPlaceholder")}
+                      placeholder={t(
+                        "profile.personal.emergencyContactPlaceholder"
+                      )}
                     />
                   </div>
 
@@ -298,8 +380,11 @@ export default function UserProfile() {
                     <Label>{t("profile.personal.emergencyPhone")}</Label>
                     <Input
                       value={formData.emergencyPhone}
-                      onChange={(e) =>
-                        setFormData({ ...formData, emergencyPhone: e.target.value })
+                      onChange={e =>
+                        setFormData({
+                          ...formData,
+                          emergencyPhone: e.target.value,
+                        })
                       }
                       placeholder="+966 5X XXX XXXX"
                     />
@@ -314,19 +399,23 @@ export default function UserProfile() {
             <Card>
               <CardHeader>
                 <CardTitle>{t("profile.notifications.title")}</CardTitle>
-                <CardDescription>{t("profile.notifications.description")}</CardDescription>
+                <CardDescription>
+                  {t("profile.notifications.description")}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{t("profile.notifications.email")}</p>
+                    <p className="font-medium">
+                      {t("profile.notifications.email")}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {t("profile.notifications.emailDesc")}
                     </p>
                   </div>
                   <Switch
                     checked={formData.emailNotifications}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={checked =>
                       setFormData({ ...formData, emailNotifications: checked })
                     }
                   />
@@ -334,14 +423,16 @@ export default function UserProfile() {
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{t("profile.notifications.sms")}</p>
+                    <p className="font-medium">
+                      {t("profile.notifications.sms")}
+                    </p>
                     <p className="text-sm text-muted-foreground">
                       {t("profile.notifications.smsDesc")}
                     </p>
                   </div>
                   <Switch
                     checked={formData.smsNotifications}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={checked =>
                       setFormData({ ...formData, smsNotifications: checked })
                     }
                   />

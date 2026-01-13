@@ -44,10 +44,10 @@ export function getSessionCookieOptions(
   // - secure: Only send over HTTPS in production
   // - sameSite: 'lax' for better CSRF protection (use 'none' only if needed for cross-site)
   // - path: Cookie available for all routes
-  
+
   const isProduction = process.env.NODE_ENV === "production";
   const isSecure = isSecureRequest(req);
-  
+
   return {
     httpOnly: true,
     path: "/",

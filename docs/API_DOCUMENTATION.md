@@ -28,19 +28,19 @@ The AIS API is built with tRPC, providing end-to-end type safety between client 
 ### API Client Usage
 
 ```typescript
-import { trpc } from '@/lib/trpc';
+import { trpc } from "@/lib/trpc";
 
 // Query (GET-like operation)
 const { data, isLoading, error } = trpc.flights.search.useQuery({
-  origin: 'RUH',
-  destination: 'JED',
-  date: '2026-02-15',
+  origin: "RUH",
+  destination: "JED",
+  date: "2026-02-15",
 });
 
 // Mutation (POST/PUT/DELETE-like operation)
 const createBooking = trpc.bookings.create.useMutation({
-  onSuccess: (data) => console.log('Booking created:', data),
-  onError: (error) => console.error('Error:', error.message),
+  onSuccess: data => console.log("Booking created:", data),
+  onError: error => console.error("Error:", error.message),
 });
 ```
 
@@ -77,6 +77,7 @@ Search for available flights based on criteria.
 **Type:** Query (Public)
 
 **Input:**
+
 ```typescript
 {
   origin: string;              // Airport code (e.g., 'RUH')
@@ -89,6 +90,7 @@ Search for available flights based on criteria.
 ```
 
 **Response:**
+
 ```typescript
 {
   flights: Array<{
@@ -112,24 +114,25 @@ Search for available flights based on criteria.
       name: string;
       city: string;
     };
-    departureTime: string;     // ISO timestamp
-    arrivalTime: string;       // ISO timestamp
-    duration: number;          // Minutes
-    price: number;             // Base price in SAR
+    departureTime: string; // ISO timestamp
+    arrivalTime: string; // ISO timestamp
+    duration: number; // Minutes
+    price: number; // Base price in SAR
     availableSeats: number;
-    cabinClass: 'economy' | 'business' | 'first';
-    status: 'scheduled' | 'delayed' | 'cancelled';
+    cabinClass: "economy" | "business" | "first";
+    status: "scheduled" | "delayed" | "cancelled";
   }>;
 }
 ```
 
 **Example:**
+
 ```typescript
 const { data } = trpc.flights.search.useQuery({
-  origin: 'RUH',
-  destination: 'JED',
-  departureDate: '2026-02-15',
-  cabinClass: 'economy',
+  origin: "RUH",
+  destination: "JED",
+  departureDate: "2026-02-15",
+  cabinClass: "economy",
   passengers: 2,
 });
 ```
@@ -144,13 +147,15 @@ Get detailed information about a specific flight.
 **Type:** Query (Public)
 
 **Input:**
+
 ```typescript
 {
-  id: number;  // Flight ID
+  id: number; // Flight ID
 }
 ```
 
 **Response:**
+
 ```typescript
 {
   id: number;
@@ -184,6 +189,7 @@ List all flights with filtering options.
 **Type:** Query (Admin)
 
 **Input:**
+
 ```typescript
 {
   page?: number;           // Default: 1
@@ -198,6 +204,7 @@ List all flights with filtering options.
 ```
 
 **Response:**
+
 ```typescript
 {
   flights: Array<Flight>;
@@ -220,6 +227,7 @@ Create a new flight booking.
 **Type:** Mutation (Protected)
 
 **Input:**
+
 ```typescript
 {
   flightId: number;
@@ -247,37 +255,45 @@ Create a new flight booking.
 ```
 
 **Response:**
+
 ```typescript
 {
   id: number;
-  bookingReference: string;  // 6-char unique code
-  pnr: string;               // 6-char PNR
-  status: 'pending';
+  bookingReference: string; // 6-char unique code
+  pnr: string; // 6-char PNR
+  status: "pending";
   totalAmount: number;
-  flight: { /* flight details */ };
-  passengers: Array<{ /* passenger details */ }>;
+  flight: {
+    /* flight details */
+  }
+  passengers: Array<{
+    /* passenger details */
+  }>;
   createdAt: string;
-  paymentUrl: string;        // Stripe checkout URL
+  paymentUrl: string; // Stripe checkout URL
 }
 ```
 
 **Example:**
+
 ```typescript
 const createBooking = trpc.bookings.create.useMutation();
 
 createBooking.mutate({
   flightId: 123,
-  passengers: [{
-    firstName: 'Ahmed',
-    lastName: 'AlSalem',
-    passportNumber: 'A12345678',
-    nationality: 'SA',
-    dateOfBirth: '1990-01-01',
-    gender: 'male',
-  }],
+  passengers: [
+    {
+      firstName: "Ahmed",
+      lastName: "AlSalem",
+      passportNumber: "A12345678",
+      nationality: "SA",
+      dateOfBirth: "1990-01-01",
+      gender: "male",
+    },
+  ],
   contactInfo: {
-    email: 'ahmed@example.com',
-    phone: '+966501234567',
+    email: "ahmed@example.com",
+    phone: "+966501234567",
   },
 });
 ```
@@ -292,6 +308,7 @@ Retrieve all bookings for the authenticated user.
 **Type:** Query (Protected)
 
 **Input:**
+
 ```typescript
 {
   status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
@@ -301,6 +318,7 @@ Retrieve all bookings for the authenticated user.
 ```
 
 **Response:**
+
 ```typescript
 {
   bookings: Array<{
@@ -342,6 +360,7 @@ Get full details of a specific booking.
 **Type:** Query (Protected)
 
 **Input:**
+
 ```typescript
 {
   id: number;
@@ -349,6 +368,7 @@ Get full details of a specific booking.
 ```
 
 **Response:**
+
 ```typescript
 {
   id: number;
@@ -377,6 +397,7 @@ Modify an existing booking (change date or upgrade class).
 **Type:** Mutation (Protected)
 
 **Input:**
+
 ```typescript
 {
   bookingId: number;
@@ -387,6 +408,7 @@ Modify an existing booking (change date or upgrade class).
 ```
 
 **Response:**
+
 ```typescript
 {
   success: boolean;
@@ -407,6 +429,7 @@ Cancel a booking and request refund.
 **Type:** Mutation (Protected)
 
 **Input:**
+
 ```typescript
 {
   bookingId: number;
@@ -415,12 +438,13 @@ Cancel a booking and request refund.
 ```
 
 **Response:**
+
 ```typescript
 {
   success: boolean;
   refundAmount: number;
   cancellationFee: number;
-  refundETA: string;         // Estimated refund date
+  refundETA: string; // Estimated refund date
 }
 ```
 
@@ -434,17 +458,19 @@ Perform online check-in and select seats.
 **Type:** Mutation (Protected)
 
 **Input:**
+
 ```typescript
 {
   bookingId: number;
   seatSelections: Array<{
     passengerId: number;
-    seatNumber: string;      // e.g., '12A'
+    seatNumber: string; // e.g., '12A'
   }>;
 }
 ```
 
 **Response:**
+
 ```typescript
 {
   success: boolean;
@@ -455,7 +481,7 @@ Perform online check-in and select seats.
     boardingGroup: string;
     boardingTime: string;
     gate?: string;
-    downloadUrl: string;     // PDF download link
+    downloadUrl: string; // PDF download link
   }>;
 }
 ```
@@ -472,6 +498,7 @@ Create a Stripe checkout session for payment.
 **Type:** Mutation (Protected)
 
 **Input:**
+
 ```typescript
 {
   bookingId: number;
@@ -479,10 +506,11 @@ Create a Stripe checkout session for payment.
 ```
 
 **Response:**
+
 ```typescript
 {
   sessionId: string;
-  url: string;               // Redirect user to this URL
+  url: string; // Redirect user to this URL
   expiresAt: string;
 }
 ```
@@ -497,6 +525,7 @@ Check payment status for a booking.
 **Type:** Query (Protected)
 
 **Input:**
+
 ```typescript
 {
   bookingId: number;
@@ -504,6 +533,7 @@ Check payment status for a booking.
 ```
 
 **Response:**
+
 ```typescript
 {
   status: 'pending' | 'succeeded' | 'failed' | 'refunded';
@@ -526,13 +556,14 @@ Get user's loyalty account details.
 **Type:** Query (Protected)
 
 **Response:**
+
 ```typescript
 {
   id: number;
   userId: number;
   milesBalance: number;
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
-  tierProgress: number;      // % to next tier
+  tier: "bronze" | "silver" | "gold" | "platinum";
+  tierProgress: number; // % to next tier
   tierExpiry: string;
   joinedAt: string;
 }
@@ -548,6 +579,7 @@ Get miles transaction history.
 **Type:** Query (Protected)
 
 **Input:**
+
 ```typescript
 {
   page?: number;
@@ -556,11 +588,12 @@ Get miles transaction history.
 ```
 
 **Response:**
+
 ```typescript
 {
   transactions: Array<{
     id: number;
-    type: 'earned' | 'redeemed' | 'expired';
+    type: "earned" | "redeemed" | "expired";
     amount: number;
     description: string;
     bookingId?: number;
@@ -580,6 +613,7 @@ Redeem miles for booking discount.
 **Type:** Mutation (Protected)
 
 **Input:**
+
 ```typescript
 {
   bookingId: number;
@@ -588,6 +622,7 @@ Redeem miles for booking discount.
 ```
 
 **Response:**
+
 ```typescript
 {
   success: boolean;
@@ -608,26 +643,28 @@ Create a new flight schedule.
 **Type:** Mutation (Admin)
 
 **Input:**
+
 ```typescript
 {
   flightNumber: string;
   airlineId: number;
   originAirportId: number;
   destinationAirportId: number;
-  departureTime: string;     // ISO timestamp
+  departureTime: string; // ISO timestamp
   arrivalTime: string;
   basePrice: number;
   totalSeats: number;
-  cabinClass: 'economy' | 'business' | 'first';
+  cabinClass: "economy" | "business" | "first";
 }
 ```
 
 **Response:**
+
 ```typescript
 {
   id: number;
   flightNumber: string;
-  status: 'scheduled';
+  status: "scheduled";
   createdAt: string;
 }
 ```
@@ -642,6 +679,7 @@ Update flight details or status.
 **Type:** Mutation (Admin)
 
 **Input:**
+
 ```typescript
 {
   id: number;
@@ -654,10 +692,13 @@ Update flight details or status.
 ```
 
 **Response:**
+
 ```typescript
 {
   success: boolean;
-  flight: { /* updated flight details */ };
+  flight: {
+    /* updated flight details */
+  }
 }
 ```
 
@@ -671,6 +712,7 @@ Retrieve all bookings with filtering (admin view).
 **Type:** Query (Admin)
 
 **Input:**
+
 ```typescript
 {
   page?: number;
@@ -684,6 +726,7 @@ Retrieve all bookings with filtering (admin view).
 ```
 
 **Response:**
+
 ```typescript
 {
   bookings: Array<{
@@ -692,8 +735,10 @@ Retrieve all bookings with filtering (admin view).
     pnr: string;
     status: string;
     totalAmount: number;
-    passenger: string;         // Primary passenger name
-    flight: { /* flight summary */ };
+    passenger: string; // Primary passenger name
+    flight: {
+      /* flight summary */
+    };
     createdAt: string;
   }>;
   total: number;
@@ -714,6 +759,7 @@ Get key performance indicators for admin dashboard.
 **Type:** Query (Admin)
 
 **Input:**
+
 ```typescript
 {
   dateFrom?: string;
@@ -722,12 +768,13 @@ Get key performance indicators for admin dashboard.
 ```
 
 **Response:**
+
 ```typescript
 {
   totalBookings: number;
   totalRevenue: number;
-  occupancyRate: number;     // Percentage
-  cancellationRate: number;  // Percentage
+  occupancyRate: number; // Percentage
+  cancellationRate: number; // Percentage
   avgBookingValue: number;
   newCustomers: number;
   returningCustomers: number;
@@ -744,15 +791,17 @@ Get revenue data over time for charts.
 **Type:** Query (Admin)
 
 **Input:**
+
 ```typescript
 {
-  period: 'daily' | 'weekly' | 'monthly';
+  period: "daily" | "weekly" | "monthly";
   dateFrom: string;
   dateTo: string;
 }
 ```
 
 **Response:**
+
 ```typescript
 {
   data: Array<{
@@ -773,6 +822,7 @@ Get most booked routes.
 **Type:** Query (Admin)
 
 **Input:**
+
 ```typescript
 {
   limit?: number;            // Default: 10
@@ -782,10 +832,11 @@ Get most booked routes.
 ```
 
 **Response:**
+
 ```typescript
 {
   destinations: Array<{
-    route: string;           // e.g., "RUH → JED"
+    route: string; // e.g., "RUH → JED"
     bookings: number;
     revenue: number;
     occupancyRate: number;
@@ -813,14 +864,14 @@ All errors follow this structure:
 
 ### Error Codes
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| `BAD_REQUEST` | 400 | Invalid input parameters |
-| `UNAUTHORIZED` | 401 | Authentication required |
-| `FORBIDDEN` | 403 | Insufficient permissions |
-| `NOT_FOUND` | 404 | Resource not found |
-| `CONFLICT` | 409 | Resource conflict (e.g., duplicate) |
-| `INTERNAL_SERVER_ERROR` | 500 | Server error |
+| Code                    | HTTP Status | Description                         |
+| ----------------------- | ----------- | ----------------------------------- |
+| `BAD_REQUEST`           | 400         | Invalid input parameters            |
+| `UNAUTHORIZED`          | 401         | Authentication required             |
+| `FORBIDDEN`             | 403         | Insufficient permissions            |
+| `NOT_FOUND`             | 404         | Resource not found                  |
+| `CONFLICT`              | 409         | Resource conflict (e.g., duplicate) |
+| `INTERNAL_SERVER_ERROR` | 500         | Server error                        |
 
 ### Example Error Response
 
@@ -875,10 +926,12 @@ X-RateLimit-Reset: 1609459200
 All list endpoints support pagination:
 
 **Query Parameters:**
+
 - `page`: Page number (default: 1)
 - `limit`: Items per page (default: 20, max: 100)
 
 **Response:**
+
 ```typescript
 {
   data: Array<T>;
@@ -889,7 +942,7 @@ All list endpoints support pagination:
     totalPages: number;
     hasNext: boolean;
     hasPrev: boolean;
-  };
+  }
 }
 ```
 
@@ -900,6 +953,7 @@ All list endpoints support pagination:
 The API currently uses version 2.0. Future breaking changes will be introduced as new versions.
 
 **Version Header (future):**
+
 ```http
 X-API-Version: 2.0
 ```
@@ -909,6 +963,7 @@ X-API-Version: 2.0
 ## Support
 
 For API issues or questions:
+
 - Email: api-support@ais.com
 - Documentation: https://ais-aviation-system.manus.space/docs
 - GitHub Issues: https://github.com/kafaat/ais-aviation-system/issues

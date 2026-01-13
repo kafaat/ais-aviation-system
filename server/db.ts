@@ -1,12 +1,22 @@
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, users, 
-  airlines, airports, flights, bookings, passengers, payments,
-  type InsertAirline, type InsertAirport, type InsertFlight,
-  type InsertBooking, type InsertPassenger, type InsertPayment
+import {
+  InsertUser,
+  users,
+  airlines,
+  airports,
+  flights,
+  bookings,
+  passengers,
+  payments,
+  type InsertAirline,
+  type InsertAirport,
+  type InsertFlight,
+  type InsertBooking,
+  type InsertPassenger,
+  type InsertPayment,
 } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -61,8 +71,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = "admin";
+      updateSet.role = "admin";
     }
 
     if (!values.lastSignedIn) {
@@ -89,7 +99,11 @@ export async function getUserByOpenId(openId: string) {
     return undefined;
   }
 
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
@@ -245,7 +259,7 @@ export async function getBookingsByUserId(userId: number) {
 
   // Fetch passengers for each booking
   const bookingsWithPassengers = await Promise.all(
-    result.map(async (booking) => {
+    result.map(async booking => {
       const bookingPassengers = await db
         .select()
         .from(passengers)
@@ -323,7 +337,11 @@ export async function createPayment(data: InsertPayment) {
   return result;
 }
 
-export async function updatePaymentStatus(id: number, status: string, transactionId?: string) {
+export async function updatePaymentStatus(
+  id: number,
+  status: string,
+  transactionId?: string
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -332,10 +350,7 @@ export async function updatePaymentStatus(id: number, status: string, transactio
     updateData.transactionId = transactionId;
   }
 
-  await db
-    .update(payments)
-    .set(updateData)
-    .where(eq(payments.id, id));
+  await db.update(payments).set(updateData).where(eq(payments.id, id));
 }
 
 export async function getPaymentByIdempotencyKey(idempotencyKey: string) {
@@ -374,7 +389,11 @@ export async function createFlight(data: InsertFlight) {
   return result;
 }
 
-export async function updateFlightAvailability(flightId: number, cabinClass: string, seats: number) {
+export async function updateFlightAvailability(
+  flightId: number,
+  cabinClass: string,
+  seats: number
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -393,8 +412,8 @@ export async function updateFlightAvailability(flightId: number, cabinClass: str
 
 // Helper function to generate unique booking reference
 export function generateBookingReference(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let result = '';
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let result = "";
   for (let i = 0; i < 6; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }

@@ -45,6 +45,7 @@ User → OAuth Server (Manus) → JWT Token → Backend Validation → Access Gr
 ### JWT Token Security
 
 **Configuration:**
+
 ```typescript
 {
   algorithm: 'HS256',
@@ -55,6 +56,7 @@ User → OAuth Server (Manus) → JWT Token → Backend Validation → Access Gr
 ```
 
 **Token Storage:**
+
 - **httpOnly Cookie** - Prevents XSS attacks
 - **Secure Flag** - HTTPS only in production
 - **SameSite: 'lax'** - CSRF protection
@@ -67,6 +69,7 @@ User → OAuth Server (Manus) → JWT Token → Backend Validation → Access Gr
 3. **Admin** - Admin role required
 
 **Example Implementation:**
+
 ```typescript
 // Public endpoint
 export const publicProcedure = t.procedure;
@@ -74,7 +77,7 @@ export const publicProcedure = t.procedure;
 // Protected endpoint
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   if (!ctx.user) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
@@ -82,7 +85,7 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
 // Admin endpoint
 export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   if (!ctx.user.isAdmin) {
-    throw new TRPCError({ code: 'FORBIDDEN' });
+    throw new TRPCError({ code: "FORBIDDEN" });
   }
   return next();
 });
@@ -102,10 +105,12 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 ### Encryption
 
 **In Transit:**
+
 - **TLS 1.3** for all HTTPS connections
 - **Minimum cipher suite:** TLS_AES_256_GCM_SHA384
 
 **At Rest:**
+
 - Database encryption (MySQL native encryption)
 - Sensitive fields hashed (passwords, if stored)
 - Payment data tokenized (Stripe)
@@ -113,6 +118,7 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 ### PII (Personally Identifiable Information)
 
 **Identified PII Fields:**
+
 - Email addresses
 - Phone numbers
 - Passport numbers
@@ -122,15 +128,17 @@ export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
 **Protection Measures:**
 
 1. **Logging Redaction:**
+
 ```typescript
 // Automatic PII masking in logs
 logger.info({
-  email: 'user@example.com',  // Logged as: 'u***@example.com'
-  phone: '+966501234567',     // Logged as: '+966*****4567'
+  email: "user@example.com", // Logged as: 'u***@example.com'
+  phone: "+966501234567", // Logged as: '+966*****4567'
 });
 ```
 
 2. **Database Access Control:**
+
 ```sql
 -- Principle of least privilege
 GRANT SELECT, INSERT, UPDATE ON bookings TO 'app_user';
@@ -138,6 +146,7 @@ REVOKE DELETE ON bookings FROM 'app_user';
 ```
 
 3. **Data Retention:**
+
 - Active bookings: Indefinite
 - Completed bookings: 7 years (compliance)
 - Cancelled bookings: 2 years
@@ -155,19 +164,28 @@ All inputs validated using Zod schemas:
 ```typescript
 const bookingSchema = z.object({
   flightId: z.number().positive(),
-  passengers: z.array(z.object({
-    firstName: z.string().min(1).max(100),
-    lastName: z.string().min(1).max(100),
-    passportNumber: z.string().regex(/^[A-Z0-9]{6,20}$/),
-    email: z.string().email().optional(),
-    phone: z.string().regex(/^\+?[1-9]\d{1,14}$/).optional(),
-  })).min(1).max(9),
+  passengers: z
+    .array(
+      z.object({
+        firstName: z.string().min(1).max(100),
+        lastName: z.string().min(1).max(100),
+        passportNumber: z.string().regex(/^[A-Z0-9]{6,20}$/),
+        email: z.string().email().optional(),
+        phone: z
+          .string()
+          .regex(/^\+?[1-9]\d{1,14}$/)
+          .optional(),
+      })
+    )
+    .min(1)
+    .max(9),
 });
 ```
 
 ### SQL Injection Prevention
 
 **Using Drizzle ORM:**
+
 ```typescript
 // ✅ SAFE - Parameterized query
 await db.select().from(flights).where(eq(flights.id, flightId));
@@ -179,6 +197,7 @@ await db.execute(sql`SELECT * FROM flights WHERE id = ${flightId}`);
 ### XSS Prevention
 
 **React Auto-Escaping:**
+
 ```tsx
 // ✅ SAFE - React escapes by default
 <div>{userInput}</div>
@@ -190,11 +209,12 @@ await db.execute(sql`SELECT * FROM flights WHERE id = ${flightId}`);
 ### CSRF Protection
 
 **SameSite Cookies:**
+
 ```typescript
-res.cookie('auth_token', token, {
+res.cookie("auth_token", token, {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax',  // CSRF protection
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax", // CSRF protection
   maxAge: 7 * 24 * 60 * 60 * 1000,
 });
 ```
@@ -206,32 +226,30 @@ res.cookie('auth_token', token, {
 ### PCI DSS Compliance
 
 **Stripe Integration:**
+
 - **No card data** touches our servers
 - Stripe is **PCI DSS Level 1 certified**
 - All payments processed via Stripe Checkout
 - Tokenization for saved cards
 
 **Webhook Security:**
+
 ```typescript
-import { stripe } from './stripe';
+import { stripe } from "./stripe";
 
 export async function handleStripeWebhook(req: Request, res: Response) {
-  const sig = req.headers['stripe-signature'];
+  const sig = req.headers["stripe-signature"];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  
+
   try {
     // Verify webhook signature
-    const event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      webhookSecret
-    );
-    
+    const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+
     // Process verified event
     await processPaymentEvent(event);
   } catch (err) {
-    logger.error('Webhook signature verification failed');
-    return res.status(400).send('Invalid signature');
+    logger.error("Webhook signature verification failed");
+    return res.status(400).send("Invalid signature");
   }
 }
 ```
@@ -266,7 +284,7 @@ const booking = await db.query.bookings.findFirst({
 });
 
 if (!booking) {
-  throw new TRPCError({ code: 'FORBIDDEN' });
+  throw new TRPCError({ code: "FORBIDDEN" });
 }
 
 // Process refund
@@ -279,21 +297,23 @@ if (!booking) {
 ### Rate Limiting
 
 **Implementation:**
+
 ```typescript
-import rateLimit from 'express-rate-limit';
+import rateLimit from "express-rate-limit";
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // 100 requests per window
-  message: 'Too many requests, please try again later',
+  message: "Too many requests, please try again later",
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-app.use('/api/trpc', apiLimiter);
+app.use("/api/trpc", apiLimiter);
 ```
 
 **Custom Limits:**
+
 - Public APIs: 100 req/15min
 - Authenticated: 200 req/15min
 - Admin: 500 req/15min
@@ -306,7 +326,7 @@ Every request gets a unique ID for tracing:
 ```typescript
 export function requestIdMiddleware(req, res, next) {
   req.id = nanoid(16);
-  res.setHeader('X-Request-ID', req.id);
+  res.setHeader("X-Request-ID", req.id);
   next();
 }
 ```
@@ -314,12 +334,14 @@ export function requestIdMiddleware(req, res, next) {
 ### CORS Configuration
 
 ```typescript
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 ```
 
 ---
@@ -335,10 +357,13 @@ const connectionConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  ssl: process.env.NODE_ENV === 'production' ? {
-    rejectUnauthorized: true,
-    ca: fs.readFileSync('/path/to/ca-cert.pem'),
-  } : false,
+  ssl:
+    process.env.NODE_ENV === "production"
+      ? {
+          rejectUnauthorized: true,
+          ca: fs.readFileSync("/path/to/ca-cert.pem"),
+        }
+      : false,
 };
 ```
 
@@ -378,11 +403,11 @@ Track all sensitive operations:
 ```typescript
 await db.insert(auditLog).values({
   userId: ctx.user.id,
-  action: 'booking_cancelled',
-  resourceType: 'booking',
+  action: "booking_cancelled",
+  resourceType: "booking",
   resourceId: bookingId,
   ipAddress: req.ip,
-  userAgent: req.headers['user-agent'],
+  userAgent: req.headers["user-agent"],
   timestamp: new Date(),
 });
 ```
@@ -404,10 +429,11 @@ const db = mysql.connect('mysql://root:admin123@localhost/db');
 ```
 
 **Validation:**
+
 ```typescript
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
-  STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_"),
   JWT_SECRET: z.string().min(32),
 });
 
@@ -439,10 +465,10 @@ COPY --from=builder /app/dist ./dist
 ### HTTPS Enforcement
 
 ```typescript
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === "production") {
   app.use((req, res, next) => {
-    if (req.header('x-forwarded-proto') !== 'https') {
-      return res.redirect(`https://${req.header('host')}${req.url}`);
+    if (req.header("x-forwarded-proto") !== "https") {
+      return res.redirect(`https://${req.header("host")}${req.url}`);
     }
     next();
   });
@@ -517,12 +543,12 @@ pnpm update
 
 ### Emergency Contacts
 
-| Role | Contact | Availability |
-|------|---------|--------------|
-| Security Lead | security@ais.com | 24/7 |
-| DevOps Team | devops@ais.com | 24/7 |
-| Database Admin | dba@ais.com | Business hours |
-| Legal Team | legal@ais.com | Business hours |
+| Role           | Contact          | Availability   |
+| -------------- | ---------------- | -------------- |
+| Security Lead  | security@ais.com | 24/7           |
+| DevOps Team    | devops@ais.com   | 24/7           |
+| Database Admin | dba@ais.com      | Business hours |
+| Legal Team     | legal@ais.com    | Business hours |
 
 ### Data Breach Response
 
@@ -539,6 +565,7 @@ pnpm update
 ### Security Monitoring
 
 **Key Metrics:**
+
 - Failed login attempts
 - Rate limit violations
 - Payment failures
@@ -547,8 +574,9 @@ pnpm update
 - API error rates
 
 **Alerting Thresholds:**
-- >10 failed logins/minute
-- >5 payment failures from same IP
+
+- > 10 failed logins/minute
+- > 5 payment failures from same IP
 - Unusual admin activity
 - Database performance degradation
 - Suspicious SQL patterns
@@ -589,12 +617,14 @@ pnpm update
 ### GDPR (General Data Protection Regulation)
 
 **User Rights:**
+
 1. **Right to Access** - Download personal data
 2. **Right to Rectification** - Update incorrect data
 3. **Right to Erasure** - Delete account and data
 4. **Right to Portability** - Export data in standard format
 
 **Implementation:**
+
 ```typescript
 // Data export
 export async function exportUserData(userId: number) {
@@ -609,9 +639,12 @@ export async function exportUserData(userId: number) {
 
 // Data deletion
 export async function deleteUserData(userId: number) {
-  await db.transaction(async (tx) => {
+  await db.transaction(async tx => {
     await tx.delete(loyaltyAccounts).where(eq(loyaltyAccounts.userId, userId));
-    await tx.update(bookings).set({ userId: null }).where(eq(bookings.userId, userId));
+    await tx
+      .update(bookings)
+      .set({ userId: null })
+      .where(eq(bookings.userId, userId));
     await tx.delete(users).where(eq(users.id, userId));
   });
 }
@@ -620,6 +653,7 @@ export async function deleteUserData(userId: number) {
 ### PCI DSS (Payment Card Industry Data Security Standard)
 
 **Compliance through Stripe:**
+
 - All card data processed by Stripe (PCI Level 1)
 - No card numbers stored on our servers
 - Tokenization for recurring payments

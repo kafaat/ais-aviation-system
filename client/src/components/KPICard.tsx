@@ -21,7 +21,14 @@ const colorClasses = {
   orange: "bg-orange-500/10 text-orange-600",
 };
 
-export function KPICard({ title, value, subtitle, icon: Icon, trend, color = "blue" }: KPICardProps) {
+export function KPICard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  trend,
+  color = "blue",
+}: KPICardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}

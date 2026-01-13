@@ -10,15 +10,15 @@ This document describes the security features implemented in the AIS Aviation Sy
 
 The system implements a comprehensive role hierarchy with 7 distinct roles:
 
-| Role | Level | Description | Key Capabilities |
-|------|-------|-------------|------------------|
-| **user** | 1 | Regular customer | Book flights, manage own bookings |
-| **support** | 2 | Customer support | View/modify all bookings, process refunds |
-| **ops** | 3 | Operations team | Update flight status, manage schedules |
-| **finance** | 4 | Finance team | Access financial data, update pricing |
-| **airline_admin** | 5 | Airline management | Manage flights, routes, pricing |
-| **admin** | 6 | System administrator | Full system access except user management |
-| **super_admin** | 7 | Super administrator | Complete system control, user role management |
+| Role              | Level | Description          | Key Capabilities                              |
+| ----------------- | ----- | -------------------- | --------------------------------------------- |
+| **user**          | 1     | Regular customer     | Book flights, manage own bookings             |
+| **support**       | 2     | Customer support     | View/modify all bookings, process refunds     |
+| **ops**           | 3     | Operations team      | Update flight status, manage schedules        |
+| **finance**       | 4     | Finance team         | Access financial data, update pricing         |
+| **airline_admin** | 5     | Airline management   | Manage flights, routes, pricing               |
+| **admin**         | 6     | System administrator | Full system access except user management     |
+| **super_admin**   | 7     | Super administrator  | Complete system control, user role management |
 
 ### Role Implementation
 
@@ -164,8 +164,8 @@ import { transitionBookingStatus } from "../services/booking-state-machine.servi
 const result = await transitionBookingStatus(
   bookingId,
   bookingReference,
-  "pending",    // current status
-  "paid",       // new status
+  "pending", // current status
+  "paid", // new status
   {
     reason: "Payment successful via Stripe",
     changedBy: userId,
@@ -203,6 +203,7 @@ The system uses Helmet.js to set secure HTTP headers:
 ### CORS Configuration
 
 Strict origin validation:
+
 ```typescript
 const allowedOrigins = [
   "http://localhost:3000",
@@ -214,6 +215,7 @@ const allowedOrigins = [
 ## 🔑 Secure Cookie Configuration
 
 Production cookie settings:
+
 ```typescript
 {
   httpOnly: true,        // Prevents JavaScript access
@@ -268,6 +270,7 @@ COOKIE_SAME_SITE=strict
 ### Password Requirements
 
 While OAuth is used, service passwords should:
+
 - Minimum 12 characters
 - Include uppercase, lowercase, numbers, special chars
 - Not contain common patterns
@@ -283,12 +286,13 @@ While OAuth is used, service passwords should:
 ### Input Validation
 
 All inputs are validated using Zod schemas:
+
 ```typescript
 z.object({
   email: z.string().email(),
   amount: z.number().positive().int(),
   bookingReference: z.string().length(6),
-})
+});
 ```
 
 ## 📊 Monitoring & Alerts

@@ -25,7 +25,7 @@ export type AuditEventType =
   | "DATA_EXPORT"
   | "SENSITIVE_DATA_ACCESS";
 
-export type AuditEventCategory = 
+export type AuditEventCategory =
   | "auth"
   | "booking"
   | "payment"
@@ -65,7 +65,7 @@ export interface AuditLogData {
 export async function createAuditLog(data: AuditLogData): Promise<void> {
   try {
     const eventId = nanoid(32);
-    
+
     const auditLogEntry: InsertAuditLog = {
       eventId,
       eventType: data.eventType,
@@ -80,7 +80,9 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
       requestId: data.requestId || null,
       resourceType: data.resourceType || null,
       resourceId: data.resourceId || null,
-      previousValue: data.previousValue ? JSON.stringify(data.previousValue) : null,
+      previousValue: data.previousValue
+        ? JSON.stringify(data.previousValue)
+        : null,
       newValue: data.newValue ? JSON.stringify(data.newValue) : null,
       changeDescription: data.changeDescription || null,
       metadata: data.metadata ? JSON.stringify(data.metadata) : null,
@@ -89,20 +91,25 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
     await db.insert(auditLogs).values(auditLogEntry);
 
     // Also log to structured logger for immediate monitoring
-    logger.info({
-      eventId,
-      eventType: data.eventType,
-      eventCategory: data.eventCategory,
-      outcome: data.outcome,
-      severity: data.severity || "low",
-      userId: data.userId,
-      resourceType: data.resourceType,
-      resourceId: data.resourceId,
-    }, `Audit: ${data.eventType}`);
-
+    logger.info(
+      {
+        eventId,
+        eventType: data.eventType,
+        eventCategory: data.eventCategory,
+        outcome: data.outcome,
+        severity: data.severity || "low",
+        userId: data.userId,
+        resourceType: data.resourceType,
+        resourceId: data.resourceId,
+      },
+      `Audit: ${data.eventType}`
+    );
   } catch (error) {
     // Critical: audit logging should never fail silently
-    logger.error({ error, eventType: data.eventType }, "Failed to create audit log");
+    logger.error(
+      { error, eventType: data.eventType },
+      "Failed to create audit log"
+    );
     // Don't throw - we don't want to break the main operation if audit logging fails
   }
 }
@@ -130,9 +137,10 @@ export async function auditLogin(
     requestId,
     resourceType: "user",
     resourceId: email,
-    changeDescription: outcome === "success" 
-      ? `User ${email} logged in successfully`
-      : `Failed login attempt for ${email}`,
+    changeDescription:
+      outcome === "success"
+        ? `User ${email} logged in successfully`
+        : `Failed login attempt for ${email}`,
   });
 }
 
@@ -190,8 +198,12 @@ export async function auditPayment(
   await createAuditLog({
     eventType,
     eventCategory: "payment",
-    outcome: eventType === "PAYMENT_SUCCESS" ? "success" : 
-             eventType === "PAYMENT_FAILED" ? "failure" : "success",
+    outcome:
+      eventType === "PAYMENT_SUCCESS"
+        ? "success"
+        : eventType === "PAYMENT_FAILED"
+          ? "failure"
+          : "success",
     severity: eventType === "PAYMENT_FAILED" ? "high" : "medium",
     userId,
     actorType: "user",

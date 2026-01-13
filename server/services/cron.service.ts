@@ -12,7 +12,9 @@ export async function cleanupExpiredLocks() {
   try {
     const db = await getDb();
     if (!db) {
-      logError(new Error("Database not available"), { operation: "cleanupExpiredLocks" });
+      logError(new Error("Database not available"), {
+        operation: "cleanupExpiredLocks",
+      });
       return;
     }
 

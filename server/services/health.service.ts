@@ -31,7 +31,7 @@ export async function checkDatabase(): Promise<CheckResult> {
 
     // Simple query to test connection
     await db.execute("SELECT 1");
-    
+
     return {
       status: "pass",
       responseTime: Date.now() - startTime,

@@ -28,6 +28,7 @@ The AIS (Aviation Information System) is a comprehensive flight booking and mana
 ### Tech Stack Overview
 
 **Backend:**
+
 - Node.js 22+ with TypeScript
 - Express 4 (Web Server)
 - tRPC 11 (Type-safe API)
@@ -36,6 +37,7 @@ The AIS (Aviation Information System) is a comprehensive flight booking and mana
 - Stripe (Payments)
 
 **Frontend:**
+
 - React 19
 - TypeScript 5.9
 - Vite 7 (Build Tool)
@@ -45,6 +47,7 @@ The AIS (Aviation Information System) is a comprehensive flight booking and mana
 - React Query (State Management)
 
 **Testing:**
+
 - Vitest (Unit & Integration Tests)
 - Playwright (E2E Tests)
 
@@ -77,32 +80,37 @@ docker run -d \
 ### Installation Steps
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/kafaat/ais-aviation-system.git
    cd ais-aviation-system
    ```
 
 2. **Install dependencies**
+
    ```bash
    pnpm install
    ```
 
 3. **Set up environment variables**
+
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
 4. **Set up the database**
+
    ```bash
    # Generate and run migrations
    pnpm db:push
-   
+
    # Seed initial data (airlines, airports, flights)
    npx tsx scripts/seed-data.mjs
    ```
 
 5. **Start development server**
+
    ```bash
    pnpm dev
    ```
@@ -221,11 +229,11 @@ pnpm lint
 All database tables are defined in `drizzle/schema.ts` using Drizzle ORM:
 
 ```typescript
-import { mysqlTable, varchar, int, timestamp } from 'drizzle-orm/mysql-core';
+import { mysqlTable, varchar, int, timestamp } from "drizzle-orm/mysql-core";
 
-export const flights = mysqlTable('flights', {
-  id: int('id').primaryKey().autoincrement(),
-  flightNumber: varchar('flight_number', { length: 10 }).notNull(),
+export const flights = mysqlTable("flights", {
+  id: int("id").primaryKey().autoincrement(),
+  flightNumber: varchar("flight_number", { length: 10 }).notNull(),
   // ... more fields
 });
 ```
@@ -248,23 +256,21 @@ pnpm db:push
 Use Drizzle ORM for type-safe queries:
 
 ```typescript
-import { db } from './db';
-import { flights } from '../drizzle/schema';
-import { eq } from 'drizzle-orm';
+import { db } from "./db";
+import { flights } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 // Select
 const flight = await db.select().from(flights).where(eq(flights.id, 1));
 
 // Insert
 await db.insert(flights).values({
-  flightNumber: 'AIS123',
+  flightNumber: "AIS123",
   // ... other fields
 });
 
 // Update
-await db.update(flights)
-  .set({ status: 'delayed' })
-  .where(eq(flights.id, 1));
+await db.update(flights).set({ status: "delayed" }).where(eq(flights.id, 1));
 ```
 
 ### Seeding Data
@@ -276,6 +282,7 @@ npx tsx scripts/seed-data.mjs
 ```
 
 This creates:
+
 - 5 airlines
 - 15 airports
 - 50+ flights
@@ -291,16 +298,18 @@ All APIs are organized in `server/routers/` and exported via `routers.ts`:
 
 ```typescript
 // server/routers/flights.ts
-import { router, publicProcedure } from '../_core/trpc';
-import { z } from 'zod';
+import { router, publicProcedure } from "../_core/trpc";
+import { z } from "zod";
 
 export const flightsRouter = router({
   search: publicProcedure
-    .input(z.object({
-      origin: z.string(),
-      destination: z.string(),
-      date: z.string(),
-    }))
+    .input(
+      z.object({
+        origin: z.string(),
+        destination: z.string(),
+        date: z.string(),
+      })
+    )
     .query(async ({ input }) => {
       // Your logic here
       return await searchFlights(input);
@@ -331,11 +340,11 @@ const bookingSchema = z.object({
 Use tRPC error codes:
 
 ```typescript
-import { TRPCError } from '@trpc/server';
+import { TRPCError } from "@trpc/server";
 
 throw new TRPCError({
-  code: 'BAD_REQUEST',
-  message: 'Flight is fully booked',
+  code: "BAD_REQUEST",
+  message: "Flight is fully booked",
 });
 
 // Available codes: BAD_REQUEST, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, INTERNAL_SERVER_ERROR
@@ -346,14 +355,13 @@ throw new TRPCError({
 Protected procedures use middleware:
 
 ```typescript
-import { protectedProcedure } from '../_core/trpc';
+import { protectedProcedure } from "../_core/trpc";
 
 export const bookingsRouter = router({
-  myBookings: protectedProcedure
-    .query(async ({ ctx }) => {
-      const userId = ctx.user.id; // Authenticated user
-      return await getMyBookings(userId);
-    }),
+  myBookings: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.user.id; // Authenticated user
+    return await getMyBookings(userId);
+  }),
 });
 ```
 
@@ -385,7 +393,7 @@ function FlightSearch() {
   });
 
   if (isLoading) return <div>Loading...</div>;
-  
+
   return <FlightList flights={data} />;
 }
 ```
@@ -429,7 +437,7 @@ import { useTranslation } from 'react-i18next';
 
 function MyComponent() {
   const { t } = useTranslation();
-  
+
   return <h1>{t('welcome')}</h1>;
 }
 ```
@@ -454,14 +462,14 @@ pnpm test:watch
 Example test:
 
 ```typescript
-import { describe, it, expect } from 'vitest';
-import { calculateFlightPrice } from './pricing.service';
+import { describe, it, expect } from "vitest";
+import { calculateFlightPrice } from "./pricing.service";
 
-describe('calculateFlightPrice', () => {
-  it('should calculate correct price for economy class', () => {
+describe("calculateFlightPrice", () => {
+  it("should calculate correct price for economy class", () => {
     const price = calculateFlightPrice({
       basePrice: 500,
-      cabinClass: 'economy',
+      cabinClass: "economy",
     });
     expect(price).toBe(500);
   });
@@ -481,6 +489,7 @@ pnpm test:e2e:ui
 ### Test Coverage
 
 Aim for:
+
 - **Services**: 80%+ coverage
 - **Routers**: 70%+ coverage
 - **Critical paths**: 100% coverage (payments, bookings)

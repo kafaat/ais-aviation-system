@@ -39,16 +39,14 @@ export function CancelBookingDialog({
 
   // Check if booking is refundable
   const { data: refundCheck, isLoading: checkingRefundable } =
-    trpc.refunds.checkRefundable.useQuery(
-      { bookingId },
-      { enabled: open }
-    );
+    trpc.refunds.checkRefundable.useQuery({ bookingId }, { enabled: open });
 
   // Calculate cancellation fee
-  const { data: cancellationFee } = trpc.refunds.calculateCancellationFee.useQuery(
-    { bookingId },
-    { enabled: open && refundCheck?.refundable === true }
-  );
+  const { data: cancellationFee } =
+    trpc.refunds.calculateCancellationFee.useQuery(
+      { bookingId },
+      { enabled: open && refundCheck?.refundable === true }
+    );
 
   // Create refund mutation
   const createRefund = trpc.refunds.create.useMutation({
@@ -58,7 +56,7 @@ export function CancelBookingDialog({
       onSuccess();
       onOpenChange(false);
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || "حدث خطأ أثناء إلغاء الحجز");
     },
   });
@@ -80,9 +78,7 @@ export function CancelBookingDialog({
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>إلغاء الحجز واسترداد المبلغ</DialogTitle>
-          <DialogDescription>
-            رقم الحجز: {bookingReference}
-          </DialogDescription>
+          <DialogDescription>رقم الحجز: {bookingReference}</DialogDescription>
         </DialogHeader>
 
         {checkingRefundable ? (
@@ -107,34 +103,42 @@ export function CancelBookingDialog({
           <div className="space-y-4 py-4">
             {/* Refund Amount with Cancellation Fee */}
             {cancellationFee ? (
-              <div className={`p-4 border rounded-lg ${
-                cancellationFee.cancellationFee > 0 
-                  ? 'bg-orange-50 border-orange-200' 
-                  : 'bg-primary/5 border-primary/20'
-              }`}>
+              <div
+                className={`p-4 border rounded-lg ${
+                  cancellationFee.cancellationFee > 0
+                    ? "bg-orange-50 border-orange-200"
+                    : "bg-primary/5 border-primary/20"
+                }`}
+              >
                 <p className="text-sm font-semibold mb-3">
-                  {cancellationFee.tier === 'full' 
-                    ? 'استرداد كامل (100%)' 
+                  {cancellationFee.tier === "full"
+                    ? "استرداد كامل (100%)"
                     : `استرداد ${cancellationFee.refundPercentage}%`}
                 </p>
-                
+
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">المبلغ الأصلي:</span>
+                    <span className="text-muted-foreground">
+                      المبلغ الأصلي:
+                    </span>
                     <span className="font-medium">
                       {(cancellationFee.totalAmount / 100).toFixed(2)} ر.س
                     </span>
                   </div>
-                  
+
                   {cancellationFee.cancellationFee > 0 && (
                     <div className="flex justify-between text-orange-700">
-                      <span>رسوم الإلغاء ({100 - cancellationFee.refundPercentage}%):</span>
+                      <span>
+                        رسوم الإلغاء ({100 - cancellationFee.refundPercentage}
+                        %):
+                      </span>
                       <span className="font-medium">
-                        -{(cancellationFee.cancellationFee / 100).toFixed(2)} ر.س
+                        -{(cancellationFee.cancellationFee / 100).toFixed(2)}{" "}
+                        ر.س
                       </span>
                     </div>
                   )}
-                  
+
                   <div className="flex justify-between pt-2 border-t">
                     <span className="font-semibold">المبلغ المسترد:</span>
                     <span className="text-2xl font-bold text-green-600">
@@ -142,7 +146,7 @@ export function CancelBookingDialog({
                     </span>
                   </div>
                 </div>
-                
+
                 <p className="text-xs text-muted-foreground mt-3">
                   سيتم استرداد المبلغ إلى طريقة الدفع الأصلية خلال 5-10 أيام عمل
                 </p>
@@ -164,13 +168,19 @@ export function CancelBookingDialog({
               <RadioGroup value={reason} onValueChange={setReason}>
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="requested_by_customer" id="customer" />
-                  <Label htmlFor="customer" className="font-normal cursor-pointer">
+                  <Label
+                    htmlFor="customer"
+                    className="font-normal cursor-pointer"
+                  >
                     تغيير في الخطط
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="duplicate" id="duplicate" />
-                  <Label htmlFor="duplicate" className="font-normal cursor-pointer">
+                  <Label
+                    htmlFor="duplicate"
+                    className="font-normal cursor-pointer"
+                  >
                     حجز مكرر
                   </Label>
                 </div>
@@ -190,7 +200,7 @@ export function CancelBookingDialog({
                 id="notes"
                 placeholder="أضف أي ملاحظات إضافية..."
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={e => setNotes(e.target.value)}
                 rows={3}
               />
             </div>
@@ -199,8 +209,8 @@ export function CancelBookingDialog({
             <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
               <p className="text-xs text-amber-800">
-                بمجرد إلغاء الحجز، لن تتمكن من التراجع عن هذا الإجراء. سيتم استرداد
-                المبلغ تلقائياً.
+                بمجرد إلغاء الحجز، لن تتمكن من التراجع عن هذا الإجراء. سيتم
+                استرداد المبلغ تلقائياً.
               </p>
             </div>
           </div>

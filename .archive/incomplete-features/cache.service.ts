@@ -26,7 +26,7 @@ export function initializeRedis(): void {
       console.log("[Cache] Redis connected successfully");
     });
 
-    redis.on("error", (err) => {
+    redis.on("error", err => {
       console.error("[Cache] Redis error:", err);
     });
 
@@ -159,10 +159,10 @@ export async function getOrSet<T>(
   // Fetch from source
   try {
     const value = await fetchFn();
-    
+
     // Cache the result
     await set(key, value, ttl);
-    
+
     return value;
   } catch (error) {
     console.error(`[Cache] Error in getOrSet for key ${key}:`, error);
@@ -173,7 +173,10 @@ export async function getOrSet<T>(
 /**
  * Increment a counter
  */
-export async function increment(key: string, amount: number = 1): Promise<number> {
+export async function increment(
+  key: string,
+  amount: number = 1
+): Promise<number> {
   if (!redis) return 0;
 
   try {
@@ -226,7 +229,7 @@ export const CacheKeys = {
   userBookings: (userId: number) => `user:${userId}:bookings`,
   exchangeRate: (currency: string) => `exchange:${currency}`,
   popularRoutes: () => `analytics:popular_routes`,
-  dashboardMetrics: (startDate: string, endDate: string) => 
+  dashboardMetrics: (startDate: string, endDate: string) =>
     `analytics:dashboard:${startDate}:${endDate}`,
 };
 

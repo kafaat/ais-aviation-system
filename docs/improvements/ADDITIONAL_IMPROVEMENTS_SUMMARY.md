@@ -19,11 +19,13 @@
 ## 1. Multi-Language Content (i18n) 🌍
 
 ### الملفات المطورة
+
 - `drizzle/new-schemas/schema-i18n.ts` - جداول الترجمة
 - `server/services/i18n.service.ts` - خدمة الترجمة
 - `server/routers/new-features/i18n.router.ts` - API للترجمة
 
 ### الميزات
+
 - **دعم 5 لغات:** العربية، الإنجليزية، الفرنسية، الإسبانية، الألمانية
 - **ترجمة ديناميكية:** ترجمة أسماء المطارات، شركات الطيران، والمحتوى الديناميكي
 - **Fallback System:** نظام احتياطي للترجمات غير المتوفرة
@@ -31,17 +33,19 @@
 - **Type-Safe:** جميع الترجمات type-safe مع TypeScript
 
 ### الجداول الجديدة
+
 - `content_types` - أنواع المحتوى القابل للترجمة
 - `translations` - جميع الترجمات
 
 ### API Endpoints
+
 ```typescript
 // Get translation
 trpc.i18n.getTranslation.useQuery({
   contentType: "airline",
   entityId: 1,
   fieldName: "name",
-  locale: "en"
+  locale: "en",
 });
 
 // Set translation (admin)
@@ -50,7 +54,7 @@ trpc.i18n.setTranslation.useMutation({
   entityId: 1,
   fieldName: "name",
   locale: "en",
-  value: "Saudi Arabian Airlines"
+  value: "Saudi Arabian Airlines",
 });
 ```
 
@@ -59,11 +63,13 @@ trpc.i18n.setTranslation.useMutation({
 ## 2. Analytics Dashboard 📊
 
 ### الملفات المطورة
+
 - `drizzle/new-schemas/schema-analytics.ts` - جداول التحليلات
 - `server/services/analytics.service.ts` - خدمة التحليلات
 - `server/routers/new-features/analytics.router.ts` - API للتحليلات
 
 ### الميزات
+
 - **Dashboard Overview:** نظرة عامة على المقاييس الرئيسية
 - **Daily Metrics:** مقاييس يومية مُجمّعة مسبقاً
 - **Booking Trends:** اتجاهات الحجوزات عبر الزمن
@@ -74,43 +80,46 @@ trpc.i18n.setTranslation.useMutation({
 - **Event Tracking:** تتبع أحداث المستخدمين
 
 ### الجداول الجديدة
+
 - `analytics_events` - أحداث التحليلات
 - `daily_metrics` - المقاييس اليومية المُجمّعة
 - `popular_routes` - المسارات الشعبية
 
 ### المقاييس المتوفرة
-| المقياس | الوصف |
-|---------|--------|
-| Total Bookings | إجمالي الحجوزات |
-| Confirmed Bookings | الحجوزات المؤكدة |
-| Cancelled Bookings | الحجوزات الملغاة |
-| Total Revenue | إجمالي الإيرادات |
-| Confirmed Revenue | الإيرادات المؤكدة |
-| Refunded Amount | المبالغ المستردة |
-| New Users | المستخدمون الجدد |
-| Active Users | المستخدمون النشطون |
-| Average Booking Value | متوسط قيمة الحجز |
+
+| المقياس                | الوصف                       |
+| ---------------------- | --------------------------- |
+| Total Bookings         | إجمالي الحجوزات             |
+| Confirmed Bookings     | الحجوزات المؤكدة            |
+| Cancelled Bookings     | الحجوزات الملغاة            |
+| Total Revenue          | إجمالي الإيرادات            |
+| Confirmed Revenue      | الإيرادات المؤكدة           |
+| Refunded Amount        | المبالغ المستردة            |
+| New Users              | المستخدمون الجدد            |
+| Active Users           | المستخدمون النشطون          |
+| Average Booking Value  | متوسط قيمة الحجز            |
 | Search to Booking Rate | معدل التحويل من البحث للحجز |
 
 ### API Endpoints
+
 ```typescript
 // Get dashboard overview
 trpc.analytics.getDashboardOverview.useQuery({
   startDate: "2025-01-01",
-  endDate: "2025-01-31"
+  endDate: "2025-01-31",
 });
 
 // Get booking trends
 trpc.analytics.getBookingTrends.useQuery({
   startDate: "2025-01-01",
-  endDate: "2025-01-31"
+  endDate: "2025-01-31",
 });
 
 // Track event
 trpc.analytics.trackEvent.useMutation({
   eventType: "flight_search",
   eventCategory: "user_action",
-  metadata: { origin: "RUH", destination: "JED" }
+  metadata: { origin: "RUH", destination: "JED" },
 });
 ```
 
@@ -119,9 +128,11 @@ trpc.analytics.trackEvent.useMutation({
 ## 3. Redis Caching Layer ⚡
 
 ### الملفات المطورة
+
 - `server/services/cache.service.ts` - خدمة Redis
 
 ### الميزات
+
 - **Fast Caching:** تخزين مؤقت سريع باستخدام Redis
 - **TTL Support:** دعم انتهاء الصلاحية التلقائي
 - **Cache-Aside Pattern:** نمط getOrSet للتخزين المؤقت
@@ -130,28 +141,31 @@ trpc.analytics.trackEvent.useMutation({
 - **Error Handling:** معالجة الأخطاء بشكل آمن
 
 ### Cache Keys
+
 ```typescript
-CacheKeys.flight(id)                    // flight:123
-CacheKeys.flightSearch(params)          // flight:search:RUH-JED-2025-01-15
-CacheKeys.airport(id)                   // airport:1
-CacheKeys.airline(id)                   // airline:5
-CacheKeys.exchangeRate(currency)        // exchange:USD
-CacheKeys.popularRoutes()               // analytics:popular_routes
-CacheKeys.dashboardMetrics(start, end)  // analytics:dashboard:2025-01-01:2025-01-31
+CacheKeys.flight(id); // flight:123
+CacheKeys.flightSearch(params); // flight:search:RUH-JED-2025-01-15
+CacheKeys.airport(id); // airport:1
+CacheKeys.airline(id); // airline:5
+CacheKeys.exchangeRate(currency); // exchange:USD
+CacheKeys.popularRoutes(); // analytics:popular_routes
+CacheKeys.dashboardMetrics(start, end); // analytics:dashboard:2025-01-01:2025-01-31
 ```
 
 ### Cache TTL
+
 ```typescript
-CacheTTL.SHORT   // 1 minute
-CacheTTL.MEDIUM  // 5 minutes
-CacheTTL.LONG    // 1 hour
-CacheTTL.DAY     // 24 hours
-CacheTTL.WEEK    // 7 days
+CacheTTL.SHORT; // 1 minute
+CacheTTL.MEDIUM; // 5 minutes
+CacheTTL.LONG; // 1 hour
+CacheTTL.DAY; // 24 hours
+CacheTTL.WEEK; // 7 days
 ```
 
 ### Usage Example
+
 ```typescript
-import { getOrSet, CacheKeys, CacheTTL } from './cache.service';
+import { getOrSet, CacheKeys, CacheTTL } from "./cache.service";
 
 // Get flight with caching
 const flight = await getOrSet(
@@ -166,6 +180,7 @@ const flight = await getOrSet(
 ## 4. E2E Tests (Playwright) 🧪
 
 ### الملفات المطورة
+
 - `playwright.config.ts` - تكوين Playwright
 - `e2e/booking-flow.spec.ts` - اختبار تدفق الحجز الكامل
 - `e2e/currency.spec.ts` - اختبار العملات المتعددة
@@ -174,17 +189,20 @@ const flight = await getOrSet(
 ### الاختبارات
 
 #### 1. Booking Flow Tests
+
 - ✅ Complete booking flow (search → select → fill → pay → confirm)
 - ✅ Validation errors for invalid data
 - ✅ Payment failure handling
 
 #### 2. Currency Tests
+
 - ✅ Change currency and update prices
 - ✅ Persist currency selection across pages
 - ✅ Show all supported currencies
 - ✅ Convert prices correctly in booking flow
 
 #### 3. Security Tests
+
 - ✅ Account locking after failed login attempts
 - ✅ Request ID in response headers
 - ✅ No sensitive information in error messages
@@ -192,6 +210,7 @@ const flight = await getOrSet(
 - ✅ Rate limiting enforcement
 
 ### Browser Coverage
+
 - ✅ Desktop Chrome
 - ✅ Desktop Firefox
 - ✅ Desktop Safari
@@ -199,6 +218,7 @@ const flight = await getOrSet(
 - ✅ Mobile Safari (iPhone 12)
 
 ### Running Tests
+
 ```bash
 # Run all E2E tests
 pnpm test:e2e
@@ -235,14 +255,14 @@ pnpm test:e2e booking-flow.spec.ts
 
 ## الإحصائيات
 
-| المؤشر | القيمة |
-|--------|--------|
-| **عدد الملفات الجديدة** | 10 ملفات |
-| **عدد الاختبارات E2E** | 12 اختبار |
-| **عدد الجداول الجديدة** | 5 جداول |
-| **عدد API Endpoints** | 15+ endpoint |
-| **اللغات المدعومة** | 5 لغات |
-| **التحسن في الجاهزية** | +5-10% |
+| المؤشر                  | القيمة       |
+| ----------------------- | ------------ |
+| **عدد الملفات الجديدة** | 10 ملفات     |
+| **عدد الاختبارات E2E**  | 12 اختبار    |
+| **عدد الجداول الجديدة** | 5 جداول      |
+| **عدد API Endpoints**   | 15+ endpoint |
+| **اللغات المدعومة**     | 5 لغات       |
+| **التحسن في الجاهزية**  | +5-10%       |
 
 ---
 
@@ -251,6 +271,7 @@ pnpm test:e2e booking-flow.spec.ts
 ### 1. إضافة Routers الجديدة
 
 في `server/routers/_app.ts`:
+
 ```typescript
 import { i18nRouter } from "./new-features/i18n.router";
 import { analyticsRouter } from "./new-features/analytics.router";
@@ -265,6 +286,7 @@ export const appRouter = router({
 ### 2. تهيئة Redis
 
 في `server/index.ts`:
+
 ```typescript
 import { initializeRedis } from "./services/cache.service";
 
@@ -289,7 +311,7 @@ pnpm db:push
 import { calculateDailyMetrics } from "./services/analytics.service";
 
 // Run daily at midnight
-cron.schedule('0 0 * * *', async () => {
+cron.schedule("0 0 * * *", async () => {
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   await calculateDailyMetrics(yesterday);
@@ -300,21 +322,22 @@ cron.schedule('0 0 * * *', async () => {
 
 ## الجاهزية النهائية
 
-| المكون | قبل التحسينات | بعد التحسينات | التحسن |
-|--------|---------------|---------------|---------|
-| **Backend API** | 95% | 98% | +3% |
-| **Frontend UI** | 90% | 95% | +5% |
-| **Database** | 100% | 100% | - |
-| **Payment** | 90% | 95% | +5% |
-| **Security** | 85% | 95% | +10% |
-| **Testing** | 80% | 95% | +15% |
-| **Documentation** | 95% | 98% | +3% |
-| **Deployment** | 90% | 95% | +5% |
-| **Internationalization** | 75% | 95% | +20% |
-| **Analytics** | 60% | 95% | +35% |
-| **Performance** | 80% | 95% | +15% |
+| المكون                   | قبل التحسينات | بعد التحسينات | التحسن |
+| ------------------------ | ------------- | ------------- | ------ |
+| **Backend API**          | 95%           | 98%           | +3%    |
+| **Frontend UI**          | 90%           | 95%           | +5%    |
+| **Database**             | 100%          | 100%          | -      |
+| **Payment**              | 90%           | 95%           | +5%    |
+| **Security**             | 85%           | 95%           | +10%   |
+| **Testing**              | 80%           | 95%           | +15%   |
+| **Documentation**        | 95%           | 98%           | +3%    |
+| **Deployment**           | 90%           | 95%           | +5%    |
+| **Internationalization** | 75%           | 95%           | +20%   |
+| **Analytics**            | 60%           | 95%           | +35%   |
+| **Performance**          | 80%           | 95%           | +15%   |
 
 ### الجاهزية الإجمالية
+
 **قبل:** 85-90%  
 **بعد:** **95%+**  
 **التحسن:** **+5-10%**

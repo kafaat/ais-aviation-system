@@ -19,7 +19,7 @@
 9. [Deployment](#9-deployment)
 10. [API](#10-api)
 
---- 
+---
 
 ## 1. Introduction
 
@@ -31,16 +31,16 @@ The system is designed to be modular, allowing for the easy addition of new feat
 
 ### 1.2 Key Features
 
-| Feature | Description |
-|---|---|
-| **Integrated Booking** | A complete system for booking flights from search to payment. |
-| **E-Ticketing** | Generation of e-tickets (PDF) with QR codes and boarding passes. |
-| **Loyalty Program** | An integrated miles and rewards system with tiers (Bronze, Silver, Gold, Platinum). |
-| **Multi-Currency Support** | Support for 10 major currencies with instant price conversion. |
-| **Booking Management** | Modify and cancel bookings with automatic fee calculation. |
-| **Admin Dashboard** | A comprehensive interface for managing flights, bookings, and statistics. |
-| **Advanced Security** | Protection against attacks, account locking, and comprehensive activity logging. |
-| **Arabic & English UI** | Full support for both Arabic and English languages. |
+| Feature                    | Description                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| **Integrated Booking**     | A complete system for booking flights from search to payment.                       |
+| **E-Ticketing**            | Generation of e-tickets (PDF) with QR codes and boarding passes.                    |
+| **Loyalty Program**        | An integrated miles and rewards system with tiers (Bronze, Silver, Gold, Platinum). |
+| **Multi-Currency Support** | Support for 10 major currencies with instant price conversion.                      |
+| **Booking Management**     | Modify and cancel bookings with automatic fee calculation.                          |
+| **Admin Dashboard**        | A comprehensive interface for managing flights, bookings, and statistics.           |
+| **Advanced Security**      | Protection against attacks, account locking, and comprehensive activity logging.    |
+| **Arabic & English UI**    | Full support for both Arabic and English languages.                                 |
 
 ---
 
@@ -48,16 +48,16 @@ The system is designed to be modular, allowing for the easy addition of new feat
 
 ### 2.1 Tech Stack
 
-| Layer | Technology | Version |
-|---|---|---|
-| **Backend** | Node.js, Express, tRPC | 22+, 4.21, 11.6 |
-| **Frontend** | React, TypeScript, Vite | 19.1, 5.9, 7.1 |
-| **Database** | MySQL/TiDB, Drizzle ORM | 8.0+, 0.44 |
-| **Styling** | Tailwind CSS, shadcn/ui | 4.1, latest |
-| **State Management** | @tanstack/react-query | 5.90 |
-| **Payment** | Stripe SDK | 20.0 |
-| **Testing** | Vitest, Playwright | 2.1, latest |
-| **Logging** | Pino | 10.1 |
+| Layer                | Technology              | Version         |
+| -------------------- | ----------------------- | --------------- |
+| **Backend**          | Node.js, Express, tRPC  | 22+, 4.21, 11.6 |
+| **Frontend**         | React, TypeScript, Vite | 19.1, 5.9, 7.1  |
+| **Database**         | MySQL/TiDB, Drizzle ORM | 8.0+, 0.44      |
+| **Styling**          | Tailwind CSS, shadcn/ui | 4.1, latest     |
+| **State Management** | @tanstack/react-query   | 5.90            |
+| **Payment**          | Stripe SDK              | 20.0            |
+| **Testing**          | Vitest, Playwright      | 2.1, latest     |
+| **Logging**          | Pino                    | 10.1            |
 
 ### 2.2 Architectural Diagram
 
@@ -171,7 +171,7 @@ erDiagram
         varchar name
         varchar city
     }
-    
+
     exchange_rates {
         int id PK
         varchar targetCurrency
@@ -196,14 +196,14 @@ erDiagram
 
 ### 3.2 New Tables
 
-| Table | Description |
-|---|---|
-| `exchange_rates` | Stores currency exchange rates against SAR, updated periodically. |
-| `user_currency_preferences` | Saves the preferred currency for each user. |
-| `login_attempts` | Records all login attempts (successful and failed) for security purposes. |
-| `account_locks` | Stores accounts locked due to suspicious activity. |
-| `security_events` | An audit log for all security-related events in the system. |
-| `ip_blacklist` | A list of blocked IP addresses. |
+| Table                       | Description                                                               |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `exchange_rates`            | Stores currency exchange rates against SAR, updated periodically.         |
+| `user_currency_preferences` | Saves the preferred currency for each user.                               |
+| `login_attempts`            | Records all login attempts (successful and failed) for security purposes. |
+| `account_locks`             | Stores accounts locked due to suspicious activity.                        |
+| `security_events`           | An audit log for all security-related events in the system.               |
+| `ip_blacklist`              | A list of blocked IP addresses.                                           |
 
 ---
 
@@ -231,17 +231,17 @@ erDiagram
 
 ## 5. Security
 
-| Feature | Description | Status |
-|---|---|---|
-| **Authentication** | Manus OAuth | ✅ Complete |
-| **Rate Limiting** | Protection against DDoS attacks on critical endpoints. | ✅ Complete |
-| **Cookie Security** | Use of `httpOnly`, `secure`, `sameSite`. | ✅ Complete |
-| **Admin Permissions** | Protection of admin-only routes (Admin Guards). | ✅ Complete |
-| **Idempotency** | Use of `Idempotency Keys` to prevent duplicate payments. | ✅ Complete |
-| **Environment Validation** | Validation of environment variables on startup using Zod. | ✅ Complete |
-| **Account Locking** | Automatic account locking after failed attempts. | ✅ Complete |
-| **PII Masking** | Masking of sensitive information in logs. | ✅ Complete |
-| **2FA/MFA** | Two-Factor Authentication. | ❌ Not available |
+| Feature                    | Description                                               | Status           |
+| -------------------------- | --------------------------------------------------------- | ---------------- |
+| **Authentication**         | Manus OAuth                                               | ✅ Complete      |
+| **Rate Limiting**          | Protection against DDoS attacks on critical endpoints.    | ✅ Complete      |
+| **Cookie Security**        | Use of `httpOnly`, `secure`, `sameSite`.                  | ✅ Complete      |
+| **Admin Permissions**      | Protection of admin-only routes (Admin Guards).           | ✅ Complete      |
+| **Idempotency**            | Use of `Idempotency Keys` to prevent duplicate payments.  | ✅ Complete      |
+| **Environment Validation** | Validation of environment variables on startup using Zod. | ✅ Complete      |
+| **Account Locking**        | Automatic account locking after failed attempts.          | ✅ Complete      |
+| **PII Masking**            | Masking of sensitive information in logs.                 | ✅ Complete      |
+| **2FA/MFA**                | Two-Factor Authentication.                                | ❌ Not available |
 
 ---
 
@@ -266,6 +266,7 @@ erDiagram
 ## 7. Installation & Setup
 
 ### Prerequisites
+
 - Node.js 22+
 - pnpm
 - MySQL or TiDB database
@@ -273,12 +274,14 @@ erDiagram
 ### Steps
 
 1. **Clone the project:**
+
    ```bash
    git clone https://github.com/kafaat/ais-aviation-system.git
    cd ais-aviation-system
    ```
 
 2. **Install packages:**
+
    ```bash
    pnpm install
    ```
@@ -288,16 +291,19 @@ erDiagram
    - Fill in the required environment variables, especially `DATABASE_URL` and `STRIPE_SECRET_KEY`.
 
 4. **Apply migrations:**
+
    ```bash
    pnpm db:push
    ```
 
 5. **Seed data (optional):**
+
    ```bash
    npx tsx scripts/seed-data.mjs
    ```
 
 6. **Run the project:**
+
    ```bash
    pnpm dev
    ```
@@ -332,6 +338,7 @@ pnpm test:e2e
 ## 9. Deployment
 
 ### Prerequisites
+
 - Node.js 22+ server
 - MySQL/TiDB database
 - Production environment variables.
@@ -339,15 +346,19 @@ pnpm test:e2e
 ### Deployment Steps
 
 1. **Build the project:**
+
    ```bash
    pnpm build
    ```
+
    This command will build the frontend and backend into the `dist` folder.
 
 2. **Start the server:**
+
    ```bash
    pnpm start
    ```
+
    This command will run the server in production mode.
 
 3. **Set up a Reverse Proxy (recommended):**

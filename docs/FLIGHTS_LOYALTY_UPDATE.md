@@ -1,6 +1,7 @@
 # AIS Aviation System – Flight Management & Loyalty Deep Integration
 
 (مختصر) هذا المستند يلخص التغييرات المقترحة على النظام:
+
 - Flight Management V2 (Flights / Instances / Inventory / Dynamic Pricing)
 - Loyalty System (Earn / Redeem / Refund / Tiers)
 - Seat Map Integration

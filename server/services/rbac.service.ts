@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import type { Context } from "../_core/trpc";
 
 // Define all available roles
-export type UserRole = 
+export type UserRole =
   | "user"
   | "admin"
   | "super_admin"
@@ -23,11 +23,14 @@ const ROLE_HIERARCHY: Record<UserRole, number> = {
 };
 
 // Define role descriptions and capabilities
-export const ROLE_DEFINITIONS: Record<UserRole, {
-  name: string;
-  description: string;
-  capabilities: string[];
-}> = {
+export const ROLE_DEFINITIONS: Record<
+  UserRole,
+  {
+    name: string;
+    description: string;
+    capabilities: string[];
+  }
+> = {
   user: {
     name: "User",
     description: "Regular customer",
@@ -119,7 +122,10 @@ export const ROLE_DEFINITIONS: Record<UserRole, {
  * @param requiredRoles - Array of roles that are allowed
  * @returns true if authorized, false otherwise
  */
-export function isAuthorized(userRole: UserRole, requiredRoles: UserRole[]): boolean {
+export function isAuthorized(
+  userRole: UserRole,
+  requiredRoles: UserRole[]
+): boolean {
   if (requiredRoles.length === 0) {
     return true; // No specific role required
   }
@@ -131,8 +137,10 @@ export function isAuthorized(userRole: UserRole, requiredRoles: UserRole[]): boo
 
   // Check if user's role is higher in hierarchy than any required role
   const userRoleLevel = ROLE_HIERARCHY[userRole];
-  const requiredLevel = Math.min(...requiredRoles.map(role => ROLE_HIERARCHY[role]));
-  
+  const requiredLevel = Math.min(
+    ...requiredRoles.map(role => ROLE_HIERARCHY[role])
+  );
+
   // Super admin can access everything
   if (userRole === "super_admin") {
     return true;
@@ -212,7 +220,14 @@ export function isAdmin(userRole: string): boolean {
  * Helper to check if user is support or higher
  */
 export function isSupportOrHigher(userRole: string): boolean {
-  const supportRoles: UserRole[] = ["support", "ops", "finance", "airline_admin", "admin", "super_admin"];
+  const supportRoles: UserRole[] = [
+    "support",
+    "ops",
+    "finance",
+    "airline_admin",
+    "admin",
+    "super_admin",
+  ];
   return supportRoles.includes(userRole as UserRole);
 }
 

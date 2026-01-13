@@ -21,7 +21,9 @@ describe("Flights Router", () => {
         },
       ];
 
-      vi.mocked(flightsService.searchFlights).mockResolvedValue(mockFlights as any);
+      vi.mocked(flightsService.searchFlights).mockResolvedValue(
+        mockFlights as any
+      );
 
       const caller = flightsRouter.createCaller({} as any);
       const result = await caller.search({
@@ -48,7 +50,9 @@ describe("Flights Router", () => {
         arrivalTime: new Date("2025-01-01T12:00:00Z"),
       };
 
-      vi.mocked(flightsService.getFlightById).mockResolvedValue(mockFlight as any);
+      vi.mocked(flightsService.getFlightById).mockResolvedValue(
+        mockFlight as any
+      );
 
       const caller = flightsRouter.createCaller({} as any);
       const result = await caller.getById({ id: 1 });
