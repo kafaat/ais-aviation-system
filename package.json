@@ -99,7 +99,7 @@
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
-    "wouter": "^3.3.5",
+    "wouter": "^3.7.1",
     "zod": "^4.1.12",
     "bullmq": "^5.34.0",
     "ioredis": "^5.4.1"
@@ -142,6 +142,7 @@
     },
     "overrides": {
       "tailwindcss>nanoid": "3.3.7"
-    }
+    },
+    "allowNonAppliedPatches": true
   }
 }
