@@ -154,6 +154,7 @@ export const bookings = mysqlTable(
     stripeCheckoutSessionId: varchar("stripeCheckoutSessionId", {
       length: 255,
     }),
+    idempotencyKey: varchar("idempotencyKey", { length: 255 }).unique(), // For preventing duplicate bookings
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
     numberOfPassengers: int("numberOfPassengers").notNull(),
     checkedIn: boolean("checkedIn").default(false).notNull(),
@@ -875,3 +876,111 @@ export const bookingStatusHistory = mysqlTable(
 export type BookingStatusHistory = typeof bookingStatusHistory.$inferSelect;
 export type InsertBookingStatusHistory =
   typeof bookingStatusHistory.$inferInsert;
+
+/**
+ * Stripe Events
+ * Stores all Stripe webhook events for de-duplication and audit
+ */
+export const stripeEvents = mysqlTable(
+  "stripe_events",
+  {
+    id: varchar("id", { length: 255 }).primaryKey(), // Stripe event ID
+    type: varchar("type", { length: 100 }).notNull(), // e.g., "payment_intent.succeeded"
+    apiVersion: varchar("apiVersion", { length: 20 }), // Stripe API version
+    data: text("data").notNull(), // JSON stringified event data
+    processed: boolean("processed").default(false).notNull(),
+    processedAt: timestamp("processedAt"),
+    error: text("error"), // Error message if processing failed
+    retryCount: int("retryCount").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    typeIdx: index("stripe_events_type_idx").on(table.type),
+    processedIdx: index("stripe_events_processed_idx").on(table.processed),
+    createdAtIdx: index("stripe_events_created_at_idx").on(table.createdAt),
+  })
+);
+
+export type StripeEvent = typeof stripeEvents.$inferSelect;
+export type InsertStripeEvent = typeof stripeEvents.$inferInsert;
+
+/**
+ * Financial Ledger
+ * Complete audit trail of all financial transactions
+ */
+export const financialLedger = mysqlTable(
+  "financial_ledger",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId"), // Nullable for non-booking transactions
+    userId: int("userId"),
+    type: mysqlEnum("type", [
+      "charge",
+      "refund",
+      "partial_refund",
+      "fee",
+      "adjustment",
+    ]).notNull(),
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    
+    // Stripe references
+    stripeEventId: varchar("stripeEventId", { length: 255 }),
+    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+    stripeChargeId: varchar("stripeChargeId", { length: 255 }),
+    stripeRefundId: varchar("stripeRefundId", { length: 255 }),
+    
+    // Description and metadata
+    description: text("description"),
+    metadata: text("metadata"), // JSON stringified additional data
+    
+    // Balance tracking
+    balanceBefore: decimal("balanceBefore", { precision: 10, scale: 2 }),
+    balanceAfter: decimal("balanceAfter", { precision: 10, scale: 2 }),
+    
+    // Timestamps
+    transactionDate: timestamp("transactionDate").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    bookingIdIdx: index("financial_ledger_booking_id_idx").on(table.bookingId),
+    userIdIdx: index("financial_ledger_user_id_idx").on(table.userId),
+    typeIdx: index("financial_ledger_type_idx").on(table.type),
+    stripeEventIdIdx: index("financial_ledger_stripe_event_id_idx").on(
+      table.stripeEventId
+    ),
+    transactionDateIdx: index("financial_ledger_transaction_date_idx").on(
+      table.transactionDate
+    ),
+  })
+);
+
+export type FinancialLedger = typeof financialLedger.$inferSelect;
+export type InsertFinancialLedger = typeof financialLedger.$inferInsert;
+
+/**
+ * Refresh Tokens
+ * Stores refresh tokens for mobile authentication
+ */
+export const refreshTokens = mysqlTable(
+  "refresh_tokens",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    token: varchar("token", { length: 500 }).notNull().unique(),
+    deviceInfo: text("deviceInfo"), // JSON: device type, OS, app version
+    ipAddress: varchar("ipAddress", { length: 45 }),
+    expiresAt: timestamp("expiresAt").notNull(),
+    revokedAt: timestamp("revokedAt"),
+    lastUsedAt: timestamp("lastUsedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("refresh_tokens_user_id_idx").on(table.userId),
+    tokenIdx: index("refresh_tokens_token_idx").on(table.token),
+    expiresAtIdx: index("refresh_tokens_expires_at_idx").on(table.expiresAt),
+  })
+);
+
+export type RefreshToken = typeof refreshTokens.$inferSelect;
+export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
