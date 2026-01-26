@@ -29,15 +29,17 @@ export const bookingsRouter = router({
         ),
         sessionId: z.string(),
         lockId: z.number().optional(),
-        ancillaries: z.array(
-          z.object({
-            ancillaryServiceId: z.number(),
-            quantity: z.number(),
-            unitPrice: z.number(),
-            totalPrice: z.number(),
-            passengerId: z.number().optional(),
-          })
-        ).optional(),
+        ancillaries: z
+          .array(
+            z.object({
+              ancillaryServiceId: z.number(),
+              quantity: z.number(),
+              unitPrice: z.number(),
+              totalPrice: z.number(),
+              passengerId: z.number().optional(),
+            })
+          )
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -69,12 +71,12 @@ export const bookingsRouter = router({
       if (!booking) {
         throw new Error("Booking not found");
       }
-      
+
       // Verify ownership
       if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
         throw new Error("Access denied");
       }
-      
+
       return booking;
     }),
 
@@ -89,11 +91,11 @@ export const bookingsRouter = router({
       if (!booking) {
         throw new Error("Booking not found");
       }
-      
+
       if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
         throw new Error("Access denied");
       }
-      
+
       return await db.getPassengersByBookingId(input.bookingId);
     }),
 
@@ -127,35 +129,35 @@ export const bookingsRouter = router({
       if (!booking) {
         throw new Error("Booking not found");
       }
-      
+
       if (booking.userId !== ctx.user.id) {
         throw new Error("Access denied");
       }
-      
+
       if (booking.paymentStatus !== "paid") {
         throw new Error("Payment required before check-in");
       }
-      
+
       // Update seat assignments
       const database = await db.getDb();
       if (!database) throw new Error("Database not available");
-      
+
       const { passengers, bookings } = await import("../../drizzle/schema");
       const { eq } = await import("drizzle-orm");
-      
+
       for (const assignment of input.seatAssignments) {
         await database
           .update(passengers)
           .set({ seatNumber: assignment.seatNumber })
           .where(eq(passengers.id, assignment.passengerId));
       }
-      
+
       // Mark booking as checked in
       await database
-          .update(bookings)
-          .set({ checkedIn: true })
-          .where(eq(bookings.id, input.bookingId));
-      
+        .update(bookings)
+        .set({ checkedIn: true })
+        .where(eq(bookings.id, input.bookingId));
+
       return { success: true };
     }),
 });

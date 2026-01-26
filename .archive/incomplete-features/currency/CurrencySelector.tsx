@@ -12,7 +12,8 @@ import { Loader2 } from "lucide-react";
 
 export function CurrencySelector() {
   const { currency, setCurrency, isLoading: currencyLoading } = useCurrency();
-  const { data: currencies, isLoading } = trpc.currency.getSupportedCurrencies.useQuery();
+  const { data: currencies, isLoading } =
+    trpc.currency.getSupportedCurrencies.useQuery();
 
   if (isLoading) {
     return (
@@ -25,7 +26,10 @@ export function CurrencySelector() {
 
   return (
     <div className="flex items-center gap-2">
-      <Select value={currency} onValueChange={(value) => setCurrency(value as any)}>
+      <Select
+        value={currency}
+        onValueChange={value => setCurrency(value as any)}
+      >
         <SelectTrigger className="w-[180px]">
           <SelectValue>
             {currencyLoading ? (
@@ -35,24 +39,25 @@ export function CurrencySelector() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
+                <span>{currencies?.find(c => c.code === currency)?.flag}</span>
                 <span>
-                  {currencies?.find((c) => c.code === currency)?.flag}
-                </span>
-                <span>
-                  {currency} - {currencies?.find((c) => c.code === currency)?.symbol}
+                  {currency} -{" "}
+                  {currencies?.find(c => c.code === currency)?.symbol}
                 </span>
               </div>
             )}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {currencies?.map((curr) => (
+          {currencies?.map(curr => (
             <SelectItem key={curr.code} value={curr.code}>
               <div className="flex items-center gap-2">
                 <span>{curr.flag}</span>
                 <span className="font-medium">{curr.code}</span>
                 <span className="text-muted-foreground">-</span>
-                <span className="text-sm text-muted-foreground">{curr.name}</span>
+                <span className="text-sm text-muted-foreground">
+                  {curr.name}
+                </span>
                 <span className="ml-auto">{curr.symbol}</span>
               </div>
             </SelectItem>
@@ -71,24 +76,26 @@ export function CompactCurrencySelector() {
   const { data: currencies } = trpc.currency.getSupportedCurrencies.useQuery();
 
   return (
-    <Select value={currency} onValueChange={(value) => setCurrency(value as any)}>
+    <Select value={currency} onValueChange={value => setCurrency(value as any)}>
       <SelectTrigger className="w-[100px] h-9">
         <SelectValue>
           <div className="flex items-center gap-1">
             <span className="text-xs">
-              {currencies?.find((c) => c.code === currency)?.flag}
+              {currencies?.find(c => c.code === currency)?.flag}
             </span>
             <span className="text-xs font-medium">{currency}</span>
           </div>
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {currencies?.map((curr) => (
+        {currencies?.map(curr => (
           <SelectItem key={curr.code} value={curr.code}>
             <div className="flex items-center gap-2">
               <span>{curr.flag}</span>
               <span className="font-medium">{curr.code}</span>
-              <span className="text-xs text-muted-foreground">{curr.symbol}</span>
+              <span className="text-xs text-muted-foreground">
+                {curr.symbol}
+              </span>
             </div>
           </SelectItem>
         ))}

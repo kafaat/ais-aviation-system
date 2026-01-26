@@ -159,9 +159,11 @@ async function seedAncillaries() {
     const [existing] = await connection.query(
       "SELECT COUNT(*) as count FROM ancillary_services"
     );
-    
+
     if (existing[0].count > 0) {
-      console.log(`[Seed] Ancillary services already exist (${existing[0].count} services). Skipping seed.`);
+      console.log(
+        `[Seed] Ancillary services already exist (${existing[0].count} services). Skipping seed.`
+      );
       await connection.end();
       return;
     }
@@ -186,7 +188,9 @@ async function seedAncillaries() {
       );
     }
 
-    console.log(`[Seed] Successfully seeded ${services.length} ancillary services`);
+    console.log(
+      `[Seed] Successfully seeded ${services.length} ancillary services`
+    );
   } catch (error) {
     console.error("[Seed] Error seeding ancillary services:", error);
     throw error;
@@ -200,7 +204,7 @@ seedAncillaries()
     console.log("[Seed] Ancillary services seed completed");
     process.exit(0);
   })
-  .catch((error) => {
+  .catch(error => {
     console.error("[Seed] Seed failed:", error);
     process.exit(1);
   });

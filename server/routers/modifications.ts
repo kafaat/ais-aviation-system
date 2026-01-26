@@ -52,7 +52,9 @@ export const modificationsRouter = router({
   getDetails: protectedProcedure
     .input(z.object({ modificationId: z.number() }))
     .query(async ({ input }) => {
-      return await modificationService.getModificationDetails(input.modificationId);
+      return await modificationService.getModificationDetails(
+        input.modificationId
+      );
     }),
 
   /**

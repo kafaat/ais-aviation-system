@@ -11,12 +11,12 @@ export interface TicketData {
   // Passenger info
   passengerName: string;
   passengerType: "adult" | "child" | "infant";
-  
+
   // Booking info
   ticketNumber: string; // 13-digit IATA standard
   bookingReference: string;
   pnr: string;
-  
+
   // Flight info
   flightNumber: string;
   airline: string;
@@ -26,18 +26,18 @@ export interface TicketData {
   destinationCode: string;
   departureTime: Date;
   arrivalTime: Date;
-  
+
   // Seat & class
   cabinClass: string;
   seatNumber?: string;
-  
+
   // Baggage
   baggageAllowance: string;
-  
+
   // Payment
   totalAmount: number;
   currency: string;
-  
+
   // Dates
   issueDate: Date;
 }
@@ -58,17 +58,19 @@ export interface BoardingPassData extends TicketData {
 export function generateTicketNumber(airlineCode: string = "001"): string {
   // Generate 9-digit serial number
   const serial = Math.floor(100000000 + Math.random() * 900000000);
-  
+
   // Calculate check digit (simple mod 7 for demo)
   const checkDigit = (parseInt(airlineCode) + serial) % 7;
-  
+
   return `${airlineCode}${serial}${checkDigit}`;
 }
 
 /**
  * Generate E-Ticket PDF
  */
-export async function generateETicketPDF(ticketData: TicketData): Promise<Buffer> {
+export async function generateETicketPDF(
+  ticketData: TicketData
+): Promise<Buffer> {
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: "A4", margin: 50 });
@@ -102,14 +104,14 @@ export async function generateETicketPDF(ticketData: TicketData): Promise<Buffer
         .fontSize(12)
         .fillColor("#000")
         .text(`Ticket Number: ${ticketData.ticketNumber}`, { align: "center" })
-        .text(`Booking Reference: ${ticketData.bookingReference}`, { align: "center" })
+        .text(`Booking Reference: ${ticketData.bookingReference}`, {
+          align: "center",
+        })
         .text(`PNR: ${ticketData.pnr}`, { align: "center" })
         .moveDown(1.5);
 
       // Passenger info box
-      doc
-        .rect(50, doc.y, 495, 80)
-        .fillAndStroke("#f3f4f6", "#d1d5db");
+      doc.rect(50, doc.y, 495, 80).fillAndStroke("#f3f4f6", "#d1d5db");
 
       doc
         .fillColor("#000")
@@ -125,9 +127,7 @@ export async function generateETicketPDF(ticketData: TicketData): Promise<Buffer
         .moveDown(1.5);
 
       // Flight info box
-      doc
-        .rect(50, doc.y, 495, 120)
-        .fillAndStroke("#eff6ff", "#bfdbfe");
+      doc.rect(50, doc.y, 495, 120).fillAndStroke("#eff6ff", "#bfdbfe");
 
       doc
         .fillColor("#1e40af")
@@ -173,9 +173,7 @@ export async function generateETicketPDF(ticketData: TicketData): Promise<Buffer
         .moveDown(1.5);
 
       // Service details
-      doc
-        .rect(50, doc.y, 495, 80)
-        .fillAndStroke("#f9fafb", "#e5e7eb");
+      doc.rect(50, doc.y, 495, 80).fillAndStroke("#f9fafb", "#e5e7eb");
 
       doc
         .fillColor("#000")
@@ -192,7 +190,10 @@ export async function generateETicketPDF(ticketData: TicketData): Promise<Buffer
       // Payment info
       doc
         .fontSize(10)
-        .text(`Total Amount: ${(ticketData.totalAmount / 100).toFixed(2)} ${ticketData.currency}`, 60)
+        .text(
+          `Total Amount: ${(ticketData.totalAmount / 100).toFixed(2)} ${ticketData.currency}`,
+          60
+        )
         .text(
           `Issue Date: ${ticketData.issueDate.toLocaleDateString("en-US", {
             dateStyle: "medium",
@@ -216,7 +217,10 @@ export async function generateETicketPDF(ticketData: TicketData): Promise<Buffer
           { align: "center", width: 495 }
         )
         .moveDown(0.5)
-        .text("For inquiries, please contact customer service.", { align: "center", width: 495 });
+        .text("For inquiries, please contact customer service.", {
+          align: "center",
+          width: 495,
+        });
 
       doc.end();
     } catch (error) {
@@ -234,7 +238,9 @@ export async function generateETicketPDF(ticketData: TicketData): Promise<Buffer
 /**
  * Generate Boarding Pass PDF
  */
-export async function generateBoardingPassPDF(passData: BoardingPassData): Promise<Buffer> {
+export async function generateBoardingPassPDF(
+  passData: BoardingPassData
+): Promise<Buffer> {
   return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: [600, 250], margin: 20 });
@@ -314,7 +320,9 @@ export async function generateETicketForPassenger(
   passengerId: number
 ): Promise<string> {
   const { getDb } = await import("../db");
-  const { bookings, flights, airports, passengers, airlines } = await import("../../drizzle/schema");
+  const { bookings, flights, airports, passengers, airlines } = await import(
+    "../../drizzle/schema"
+  );
   const { eq } = await import("drizzle-orm");
 
   const database = await getDb();
@@ -408,7 +416,8 @@ export async function generateETicketForPassenger(
     arrivalTime: booking.arrivalTime,
     cabinClass: booking.cabinClass,
     seatNumber: passenger.seatNumber || undefined,
-    baggageAllowance: booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
+    baggageAllowance:
+      booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
     totalAmount: booking.totalAmount,
     currency: "SAR",
     issueDate: new Date(),

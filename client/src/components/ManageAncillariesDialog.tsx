@@ -11,7 +11,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Package, UtensilsCrossed, Armchair, Shield, Coffee, Zap, Plus, Minus, Trash2 } from "lucide-react";
+import {
+  Package,
+  UtensilsCrossed,
+  Armchair,
+  Shield,
+  Coffee,
+  Zap,
+  Plus,
+  Minus,
+  Trash2,
+} from "lucide-react";
 
 interface ManageAncillariesDialogProps {
   open: boolean;
@@ -47,17 +57,18 @@ export function ManageAncillariesDialog({
   numberOfPassengers,
 }: ManageAncillariesDialogProps) {
   const utils = trpc.useUtils();
-  const [selectedServices, setSelectedServices] = useState<Record<number, number>>({});
+  const [selectedServices, setSelectedServices] = useState<
+    Record<number, number>
+  >({});
 
-  const { data: availableServices, isLoading: loadingAvailable } = trpc.ancillary.getAvailable.useQuery(
-    {},
-    { enabled: open }
-  );
+  const { data: availableServices, isLoading: loadingAvailable } =
+    trpc.ancillary.getAvailable.useQuery({}, { enabled: open });
 
-  const { data: currentAncillaries, isLoading: loadingCurrent } = trpc.ancillary.getBookingAncillaries.useQuery(
-    { bookingId },
-    { enabled: open }
-  );
+  const { data: currentAncillaries, isLoading: loadingCurrent } =
+    trpc.ancillary.getBookingAncillaries.useQuery(
+      { bookingId },
+      { enabled: open }
+    );
 
   const addAncillary = trpc.ancillary.addToBooking.useMutation({
     onSuccess: () => {
@@ -65,7 +76,7 @@ export function ManageAncillariesDialog({
       utils.bookings.myBookings.invalidate();
       toast.success("تمت إضافة الخدمة بنجاح");
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || "فشل في إضافة الخدمة");
     },
   });
@@ -76,7 +87,7 @@ export function ManageAncillariesDialog({
       utils.bookings.myBookings.invalidate();
       toast.success("تم حذف الخدمة بنجاح");
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || "فشل في حذف الخدمة");
     },
   });
@@ -88,7 +99,7 @@ export function ManageAncillariesDialog({
       ancillaryServiceId: serviceId,
       quantity,
     });
-    setSelectedServices((prev) => ({ ...prev, [serviceId]: 0 }));
+    setSelectedServices(prev => ({ ...prev, [serviceId]: 0 }));
   };
 
   const handleRemoveAncillary = async (ancillaryId: number) => {
@@ -98,35 +109,36 @@ export function ManageAncillariesDialog({
   };
 
   const incrementQuantity = (serviceId: number) => {
-    setSelectedServices((prev) => ({
+    setSelectedServices(prev => ({
       ...prev,
       [serviceId]: Math.min((prev[serviceId] || 0) + 1, numberOfPassengers * 3),
     }));
   };
 
   const decrementQuantity = (serviceId: number) => {
-    setSelectedServices((prev) => ({
+    setSelectedServices(prev => ({
       ...prev,
       [serviceId]: Math.max((prev[serviceId] || 0) - 1, 0),
     }));
   };
 
-  const groupedServices = availableServices?.reduce((acc, service) => {
-    if (!acc[service.category]) {
-      acc[service.category] = [];
-    }
-    acc[service.category].push(service);
-    return acc;
-  }, {} as Record<string, typeof availableServices>);
+  const groupedServices = availableServices?.reduce(
+    (acc, service) => {
+      if (!acc[service.category]) {
+        acc[service.category] = [];
+      }
+      acc[service.category].push(service);
+      return acc;
+    },
+    {} as Record<string, typeof availableServices>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>إدارة الخدمات الإضافية</DialogTitle>
-          <DialogDescription>
-            أضف أو احذف خدمات إضافية لحجزك
-          </DialogDescription>
+          <DialogDescription>أضف أو احذف خدمات إضافية لحجزك</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -137,9 +149,10 @@ export function ManageAncillariesDialog({
             <div>
               <h3 className="text-sm font-semibold mb-3">الخدمات الحالية</h3>
               <div className="space-y-2">
-                {currentAncillaries.map((ancillary) => {
+                {currentAncillaries.map(ancillary => {
                   if (!ancillary.service) return null;
-                  const Icon = categoryIcons[ancillary.service.category] || Package;
+                  const Icon =
+                    categoryIcons[ancillary.service.category] || Package;
                   return (
                     <div
                       key={ancillary.id}
@@ -148,9 +161,12 @@ export function ManageAncillariesDialog({
                       <div className="flex items-center gap-3">
                         <Icon className="h-5 w-5 text-primary" />
                         <div>
-                          <p className="font-medium">{ancillary.service.name}</p>
+                          <p className="font-medium">
+                            {ancillary.service.name}
+                          </p>
                           <p className="text-sm text-muted-foreground">
-                            الكمية: {ancillary.quantity} • {(ancillary.totalPrice / 100).toFixed(2)} ر.س
+                            الكمية: {ancillary.quantity} •{" "}
+                            {(ancillary.totalPrice / 100).toFixed(2)} ر.س
                           </p>
                         </div>
                       </div>
@@ -181,62 +197,82 @@ export function ManageAncillariesDialog({
               <h3 className="text-sm font-semibold mb-3">الخدمات المتاحة</h3>
               <div className="space-y-4">
                 {groupedServices &&
-                  Object.entries(groupedServices).map(([category, services]) => {
-                    const Icon = categoryIcons[category] || Package;
-                    return (
-                      <div key={category}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <Icon className="h-4 w-4 text-primary" />
-                          <h4 className="text-sm font-medium">{categoryNames[category]}</h4>
-                        </div>
-                        <div className="space-y-2">
-                          {services.map((service) => (
-                            <div
-                              key={service.id}
-                              className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
-                            >
-                              <div className="flex-1">
-                                <p className="font-medium text-sm">{service.name}</p>
-                                <p className="text-xs text-muted-foreground">{service.description}</p>
-                                <p className="text-sm font-semibold text-primary mt-1">
-                                  {(service.price / 100).toFixed(2)} ر.س
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1 border rounded-lg">
+                  Object.entries(groupedServices).map(
+                    ([category, services]) => {
+                      const Icon = categoryIcons[category] || Package;
+                      return (
+                        <div key={category}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Icon className="h-4 w-4 text-primary" />
+                            <h4 className="text-sm font-medium">
+                              {categoryNames[category]}
+                            </h4>
+                          </div>
+                          <div className="space-y-2">
+                            {services.map(service => (
+                              <div
+                                key={service.id}
+                                className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                              >
+                                <div className="flex-1">
+                                  <p className="font-medium text-sm">
+                                    {service.name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {service.description}
+                                  </p>
+                                  <p className="text-sm font-semibold text-primary mt-1">
+                                    {(service.price / 100).toFixed(2)} ر.س
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1 border rounded-lg">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        decrementQuantity(service.id)
+                                      }
+                                      disabled={!selectedServices[service.id]}
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span className="px-3 text-sm font-medium">
+                                      {selectedServices[service.id] || 0}
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        incrementQuantity(service.id)
+                                      }
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
                                   <Button
-                                    variant="ghost"
                                     size="sm"
-                                    onClick={() => decrementQuantity(service.id)}
-                                    disabled={!selectedServices[service.id]}
+                                    onClick={() =>
+                                      handleAddService(
+                                        service.id,
+                                        service.price
+                                      )
+                                    }
+                                    disabled={
+                                      !selectedServices[service.id] ||
+                                      addAncillary.isPending
+                                    }
                                   >
-                                    <Minus className="h-3 w-3" />
-                                  </Button>
-                                  <span className="px-3 text-sm font-medium">
-                                    {selectedServices[service.id] || 0}
-                                  </span>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => incrementQuantity(service.id)}
-                                  >
-                                    <Plus className="h-3 w-3" />
+                                    إضافة
                                   </Button>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleAddService(service.id, service.price)}
-                                  disabled={!selectedServices[service.id] || addAncillary.isPending}
-                                >
-                                  إضافة
-                                </Button>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    }
+                  )}
               </div>
             </div>
           )}

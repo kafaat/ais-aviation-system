@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createBooking } from "./bookings.service";
-import { getBookingAncillaries, createAncillaryService } from "./ancillary-services.service";
+import {
+  getBookingAncillaries,
+  createAncillaryService,
+} from "./ancillary-services.service";
 import { getDb } from "../db";
-import { bookings, ancillaryServices, bookingAncillaries } from "../../drizzle/schema";
+import {
+  bookings,
+  ancillaryServices,
+  bookingAncillaries,
+} from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 describe("Booking with Ancillaries Integration", () => {
@@ -28,11 +35,15 @@ describe("Booking with Ancillaries Integration", () => {
     // Cleanup
     const db = await getDb();
     if (db && testBookingId) {
-      await db.delete(bookingAncillaries).where(eq(bookingAncillaries.bookingId, testBookingId));
+      await db
+        .delete(bookingAncillaries)
+        .where(eq(bookingAncillaries.bookingId, testBookingId));
       await db.delete(bookings).where(eq(bookings.id, testBookingId));
     }
     if (db && testServiceId) {
-      await db.delete(ancillaryServices).where(eq(ancillaryServices.id, testServiceId));
+      await db
+        .delete(ancillaryServices)
+        .where(eq(ancillaryServices.id, testServiceId));
     }
   });
 
@@ -153,8 +164,12 @@ describe("Booking with Ancillaries Integration", () => {
     const ancillaries = await getBookingAncillaries(result.bookingId);
     expect(ancillaries.length).toBe(2);
 
-    const baggage = ancillaries.find((a) => a.service.code === "TEST_INTEGRATION_BAG");
-    const meal = ancillaries.find((a) => a.service.code === "TEST_INTEGRATION_MEAL");
+    const baggage = ancillaries.find(
+      a => a.service.code === "TEST_INTEGRATION_BAG"
+    );
+    const meal = ancillaries.find(
+      a => a.service.code === "TEST_INTEGRATION_MEAL"
+    );
 
     expect(baggage).toBeDefined();
     expect(meal).toBeDefined();
@@ -164,9 +179,13 @@ describe("Booking with Ancillaries Integration", () => {
     // Cleanup
     const db = await getDb();
     if (db) {
-      await db.delete(bookingAncillaries).where(eq(bookingAncillaries.bookingId, result.bookingId));
+      await db
+        .delete(bookingAncillaries)
+        .where(eq(bookingAncillaries.bookingId, result.bookingId));
       await db.delete(bookings).where(eq(bookings.id, result.bookingId));
-      await db.delete(ancillaryServices).where(eq(ancillaryServices.id, mealServiceId));
+      await db
+        .delete(ancillaryServices)
+        .where(eq(ancillaryServices.id, mealServiceId));
     }
   });
 });

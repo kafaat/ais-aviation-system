@@ -14,7 +14,16 @@ export const ancillaryRouter = router({
   getAvailable: publicProcedure
     .input(
       z.object({
-        category: z.enum(["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]).optional(),
+        category: z
+          .enum([
+            "baggage",
+            "meal",
+            "seat",
+            "insurance",
+            "lounge",
+            "priority_boarding",
+          ])
+          .optional(),
       })
     )
     .query(async ({ input }) => {
@@ -27,7 +36,14 @@ export const ancillaryRouter = router({
   getByCategory: publicProcedure
     .input(
       z.object({
-        category: z.enum(["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]),
+        category: z.enum([
+          "baggage",
+          "meal",
+          "seat",
+          "insurance",
+          "lounge",
+          "priority_boarding",
+        ]),
         cabinClass: z.enum(["economy", "business"]).optional(),
         airlineId: z.number().optional(),
       })
@@ -87,7 +103,9 @@ export const ancillaryRouter = router({
     .input(z.object({ ancillaryId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       // TODO: Verify ancillary belongs to user's booking
-      return await ancillaryService.removeAncillaryFromBooking(input.ancillaryId);
+      return await ancillaryService.removeAncillaryFromBooking(
+        input.ancillaryId
+      );
     }),
 
   /**
@@ -96,7 +114,9 @@ export const ancillaryRouter = router({
   calculateTotal: protectedProcedure
     .input(z.object({ bookingId: z.number() }))
     .query(async ({ input }) => {
-      const total = await ancillaryService.calculateAncillariesTotalCost(input.bookingId);
+      const total = await ancillaryService.calculateAncillariesTotalCost(
+        input.bookingId
+      );
       return { total };
     }),
 
@@ -107,7 +127,14 @@ export const ancillaryRouter = router({
     .input(
       z.object({
         code: z.string().max(50),
-        category: z.enum(["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]),
+        category: z.enum([
+          "baggage",
+          "meal",
+          "seat",
+          "insurance",
+          "lounge",
+          "priority_boarding",
+        ]),
         name: z.string().max(255),
         description: z.string().optional(),
         price: z.number().min(0),
@@ -139,7 +166,16 @@ export const ancillaryRouter = router({
       z.object({
         id: z.number(),
         code: z.string().max(50).optional(),
-        category: z.enum(["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]).optional(),
+        category: z
+          .enum([
+            "baggage",
+            "meal",
+            "seat",
+            "insurance",
+            "lounge",
+            "priority_boarding",
+          ])
+          .optional(),
         name: z.string().max(255).optional(),
         description: z.string().optional(),
         price: z.number().min(0).optional(),

@@ -1,7 +1,15 @@
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
-import { checkFlightAvailability, calculateFlightPrice } from "./flights.service";
-import { createInventoryLock, releaseInventoryLock, convertLockToBooking, verifyLock } from "./inventory-lock.service";
+import {
+  checkFlightAvailability,
+  calculateFlightPrice,
+} from "./flights.service";
+import {
+  createInventoryLock,
+  releaseInventoryLock,
+  convertLockToBooking,
+  verifyLock,
+} from "./inventory-lock.service";
 
 /**
  * Bookings Service
@@ -47,14 +55,14 @@ export async function createBooking(input: CreateBookingInput) {
       input.cabinClass,
       input.passengers.length
     );
-    
+
     if (!available) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Not enough seats available",
       });
     }
-    
+
     // Calculate total amount with dynamic pricing
     const pricingResult = await calculateFlightPrice(
       flight!,
@@ -62,15 +70,17 @@ export async function createBooking(input: CreateBookingInput) {
       input.passengers.length
     );
     const totalAmount = pricingResult.price;
-    
+
     if (pricingResult.pricing) {
-      console.log(`[Booking] Dynamic pricing applied: ${pricingResult.pricing.adjustmentPercentage}% adjustment (Occupancy: ${pricingResult.pricing.occupancyRate}%, Days until departure: ${pricingResult.pricing.daysUntilDeparture})`);
+      console.log(
+        `[Booking] Dynamic pricing applied: ${pricingResult.pricing.adjustmentPercentage}% adjustment (Occupancy: ${pricingResult.pricing.occupancyRate}%, Days until departure: ${pricingResult.pricing.daysUntilDeparture})`
+      );
     }
-    
+
     // Generate booking reference and PNR
     const bookingReference = db.generateBookingReference();
     const pnr = db.generateBookingReference();
-    
+
     // Create booking
     const bookingResult = await db.createBooking({
       userId: input.userId,
@@ -82,19 +92,20 @@ export async function createBooking(input: CreateBookingInput) {
       cabinClass: input.cabinClass,
       numberOfPassengers: input.passengers.length,
     });
-    
+
     // Get the inserted booking ID from the result
-    const bookingId = (bookingResult as any).insertId || bookingResult[0]?.insertId;
-    
+    const bookingId =
+      (bookingResult as any).insertId || bookingResult[0]?.insertId;
+
     if (!bookingId) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
         message: "Failed to get booking ID",
       });
     }
-    
+
     // Create passengers
-    const passengersData = input.passengers.map((p) => ({
+    const passengersData = input.passengers.map(p => ({
       bookingId,
       type: p.type,
       title: p.title,
@@ -104,12 +115,14 @@ export async function createBooking(input: CreateBookingInput) {
       passportNumber: p.passportNumber,
       nationality: p.nationality,
     }));
-    
+
     await db.createPassengers(passengersData);
-    
+
     // Add ancillary services if provided
     if (input.ancillaries && input.ancillaries.length > 0) {
-      const { addAncillaryToBooking } = await import("./ancillary-services.service");
+      const { addAncillaryToBooking } = await import(
+        "./ancillary-services.service"
+      );
       for (const ancillary of input.ancillaries) {
         await addAncillaryToBooking({
           bookingId,
@@ -119,7 +132,7 @@ export async function createBooking(input: CreateBookingInput) {
         });
       }
     }
-    
+
     return {
       bookingId,
       bookingReference,
@@ -159,14 +172,14 @@ export async function getUserBookings(userId: number) {
 export async function getBookingById(bookingId: number, userId: number) {
   try {
     const booking = await db.getBookingByIdWithDetails(bookingId);
-    
+
     if (!booking) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Booking not found",
       });
     }
-    
+
     // Verify ownership
     if (booking.userId !== userId) {
       throw new TRPCError({
@@ -174,7 +187,7 @@ export async function getBookingById(bookingId: number, userId: number) {
         message: "Access denied",
       });
     }
-    
+
     return booking;
   } catch (error) {
     if (error instanceof TRPCError) {
@@ -194,23 +207,23 @@ export async function getBookingById(bookingId: number, userId: number) {
 export async function cancelBooking(bookingId: number, userId: number) {
   try {
     const booking = await getBookingById(bookingId, userId);
-    
+
     if (booking.status === "cancelled") {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Booking is already cancelled",
       });
     }
-    
+
     if (booking.status === "completed") {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Cannot cancel completed booking",
       });
     }
-    
+
     await db.updateBookingStatus(bookingId, "cancelled");
-    
+
     return { success: true };
   } catch (error) {
     if (error instanceof TRPCError) {

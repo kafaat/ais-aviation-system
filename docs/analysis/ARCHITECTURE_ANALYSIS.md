@@ -9,15 +9,18 @@
 ## 1. نظرة عامة على النظام
 
 ### 1.1 الوصف
+
 نظام الطيران المتكامل (AIS - Aviation Integrated System) هو منصة شاملة لحجز تذاكر الطيران وإدارة الرحلات، مبني باستخدام تقنيات حديثة ومعايير صناعية عالية.
 
 ### 1.2 الإحصائيات الأساسية
+
 - **عدد الملفات البرمجية:** 179 ملف TypeScript/TSX
 - **إجمالي الأسطر البرمجية:** 25,777 سطر
 - **عدد الاختبارات:** 45+ اختبار (جميعها ناجحة)
 - **نسبة الجاهزية الإجمالية:** 85-90%
 
 ### 1.3 المكونات الرئيسية
+
 1. **Backend API** - Express + tRPC + Drizzle ORM
 2. **Frontend Web** - React 19 + TypeScript + Tailwind CSS 4
 3. **Database** - MySQL/TiDB + Drizzle ORM
@@ -31,6 +34,7 @@
 ### 2.1 Stack التقني
 
 #### Backend
+
 ```
 - Runtime: Node.js 22+
 - Framework: Express 4.21.2
@@ -42,6 +46,7 @@
 ```
 
 #### Frontend
+
 ```
 - Framework: React 19.1.1
 - Language: TypeScript 5.9.3
@@ -53,6 +58,7 @@
 ```
 
 #### Payment & External Services
+
 ```
 - Payment Gateway: Stripe 20.0.0 + @stripe/stripe-js 8.5.2
 - AI Integration: OpenAI 4.67.0
@@ -62,6 +68,7 @@
 ```
 
 #### Testing & Build Tools
+
 ```
 - Testing: Vitest 2.1.4
 - Build: Vite 7.1.7 + esbuild 0.25.0
@@ -124,6 +131,7 @@
 ### 3.1 الجداول الرئيسية
 
 #### Core Tables (الجداول الأساسية)
+
 1. **users** - بيانات المستخدمين والمصادقة
 2. **airlines** - شركات الطيران
 3. **airports** - المطارات
@@ -133,6 +141,7 @@
 7. **payments** - المدفوعات
 
 #### Advanced Tables (الجداول المتقدمة)
+
 8. **flight_status_history** - سجل تغييرات حالة الرحلات
 9. **booking_modifications** - طلبات تعديل الحجوزات
 10. **refunds** - الاستردادات
@@ -166,6 +175,7 @@ flights (1) ─────────── (N) flight_status_history
 ### 3.3 الفهارس (Indexes)
 
 #### Flights Table Indexes
+
 - `flight_number_idx` - رقم الرحلة
 - `departure_time_idx` - وقت المغادرة
 - `route_idx` - المسار (origin + destination)
@@ -174,13 +184,16 @@ flights (1) ─────────── (N) flight_status_history
 - `route_date_status_idx` - مركب (origin + destination + date + status)
 
 #### Bookings Table Indexes
+
 - `user_id_idx` - معرف المستخدم
 - `pnr_idx` - رقم PNR
 
 #### Passengers Table Indexes
+
 - `booking_id_idx` - معرف الحجز
 
 #### Payments Table Indexes
+
 - `booking_id_idx` - معرف الحجز
 - `idempotency_key_idx` - مفتاح منع التكرار
 
@@ -188,15 +201,20 @@ flights (1) ─────────── (N) flight_status_history
 
 ```typescript
 // Enums
-role: ["user", "admin"]
-status: ["scheduled", "delayed", "cancelled", "completed"]
-bookingStatus: ["pending", "confirmed", "cancelled", "completed"]
-paymentStatus: ["pending", "paid", "refunded", "failed"]
-cabinClass: ["economy", "business"]
-passengerType: ["adult", "child", "infant"]
-modificationType: ["change_date", "upgrade_cabin", "change_flight", "add_services"]
-refundStatus: ["pending", "approved", "rejected", "completed"]
-loyaltyTier: ["bronze", "silver", "gold", "platinum"]
+role: ["user", "admin"];
+status: ["scheduled", "delayed", "cancelled", "completed"];
+bookingStatus: ["pending", "confirmed", "cancelled", "completed"];
+paymentStatus: ["pending", "paid", "refunded", "failed"];
+cabinClass: ["economy", "business"];
+passengerType: ["adult", "child", "infant"];
+modificationType: [
+  "change_date",
+  "upgrade_cabin",
+  "change_flight",
+  "add_services",
+];
+refundStatus: ["pending", "approved", "rejected", "completed"];
+loyaltyTier: ["bronze", "silver", "gold", "platinum"];
 ```
 
 ---
@@ -204,13 +222,15 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ## 4. نقاط القوة (Strengths)
 
 ### 4.1 البنية التقنية
+
 ✅ **Type Safety الكامل** - استخدام TypeScript + tRPC + Zod  
 ✅ **معمارية نظيفة** - فصل واضح بين الطبقات (Layers)  
 ✅ **ORM حديث** - Drizzle ORM مع type-safe queries  
 ✅ **Testing شامل** - 45+ اختبار ناجح  
-✅ **React 19** - أحدث إصدار مع تحسينات الأداء  
+✅ **React 19** - أحدث إصدار مع تحسينات الأداء
 
 ### 4.2 الميزات الوظيفية
+
 ✅ **نظام حجز متكامل** - من البحث حتى الدفع  
 ✅ **تكامل Stripe** - دفع آمن مع Webhooks  
 ✅ **E-Ticketing** - توليد تذاكر إلكترونية + بطاقات صعود (PDF + QR)  
@@ -218,28 +238,31 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ✅ **Inventory Locking** - منع الحجز المزدوج  
 ✅ **تعديل الحجوزات** - تغيير التاريخ + ترقية الدرجة  
 ✅ **الاستردادات** - نظام متكامل مع رسوم متدرجة  
-✅ **تسجيل الوصول** - Check-in إلكتروني  
+✅ **تسجيل الوصول** - Check-in إلكتروني
 
 ### 4.3 الأمان
+
 ✅ **Rate Limiting** - حماية من DDoS  
 ✅ **Cookie Security** - httpOnly + secure + sameSite  
 ✅ **Admin Guards** - حماية صفحات الإدارة  
 ✅ **Idempotency Keys** - منع المدفوعات المكررة  
 ✅ **Stripe Webhooks** - تحديثات آمنة للدفع  
-✅ **ENV Validation** - التحقق من المتغيرات البيئية بـ Zod  
+✅ **ENV Validation** - التحقق من المتغيرات البيئية بـ Zod
 
 ### 4.4 الأداء
+
 ✅ **Database Indexes** - فهارس محسّنة للاستعلامات  
 ✅ **Code Splitting** - تقسيم الكود للتحميل السريع  
 ✅ **React Query** - Caching ذكي للبيانات  
-✅ **Lazy Loading** - تحميل كسول للصور والمكونات  
+✅ **Lazy Loading** - تحميل كسول للصور والمكونات
 
 ### 4.5 تجربة المستخدم
+
 ✅ **واجهة عربية كاملة** - دعم i18n (عربي + إنجليزي)  
 ✅ **تصميم متجاوب** - يعمل على جميع الأجهزة  
 ✅ **PWA Support** - يمكن تثبيته كتطبيق  
 ✅ **Loading States** - حالات تحميل واضحة  
-✅ **Error Handling** - معالجة أخطاء شاملة  
+✅ **Error Handling** - معالجة أخطاء شاملة
 
 ---
 
@@ -248,25 +271,31 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ### 5.1 فجوات حرجة (Critical Gaps) 🔴
 
 #### 1. Multi-Currency Support
+
 **الحالة:** غير موجود  
 **التأثير:** يحد من التوسع الدولي  
-**الحل المقترح:** 
+**الحل المقترح:**
+
 - إضافة جدول `exchange_rates`
 - دعم عملات متعددة في الواجهة
 - API لتحويل العملات
 
 #### 2. Multi-Language Content
+
 **الحالة:** واجهة فقط (AR/EN)، لكن المحتوى الديناميكي بلغة واحدة  
 **التأثير:** تجربة مستخدم غير كاملة للمستخدمين الدوليين  
 **الحل المقترح:**
+
 - جداول محتوى متعدد اللغات
 - ترجمة أسماء المطارات والمدن
 - ترجمة رسائل النظام
 
 #### 3. GDS/OTA Integration
+
 **الحالة:** غير موجود  
 **التأثير:** محدودية قنوات التوزيع  
 **الحل المقترح:**
+
 - تكامل مع Amadeus/Sabre
 - API لوكالات السفر
 - Channel Management System
@@ -274,33 +303,41 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ### 5.2 فجوات مهمة (Important Gaps) 🟡
 
 #### 1. Comprehensive Analytics Dashboard
+
 **الحالة:** موجود جزئياً (Analytics Router)  
 **التأثير:** صعوبة اتخاذ قرارات مبنية على البيانات  
 **الحل المقترح:**
+
 - لوحة تحكم شاملة للتحليلات
 - تقارير قابلة للتصدير (PDF/Excel)
 - رسوم بيانية تفاعلية متقدمة
 
 #### 2. Dynamic Pricing Engine
+
 **الحالة:** غير موجود  
 **التأثير:** خسارة إيرادات محتملة  
 **الحل المقترح:**
+
 - محرك تسعير ديناميكي
 - مراقبة أسعار المنافسين
 - Revenue Management System
 
 #### 3. Baggage Handling System
+
 **الحالة:** غير موجود  
 **التأثير:** إدارة يدوية للحقائب  
 **الحل المقترح:**
+
 - نظام تتبع الحقائب
 - تكامل مع DCS
 - باركود/RFID tracking
 
 #### 4. Special Services Management
+
 **الحالة:** غير موجود  
 **التأثير:** عدم القدرة على تلبية احتياجات خاصة  
 **الحل المقترح:**
+
 - طلب وجبات خاصة
 - كراسي متحركة
 - مساعدة ذوي الاحتياجات الخاصة
@@ -308,26 +345,32 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ### 5.3 تحسينات مقترحة (Nice to Have) 🟢
 
 #### 1. Group Bookings
+
 **الحالة:** غير موجود  
 **الحل المقترح:** نظام مخصص للحجوزات الجماعية
 
 #### 2. Overbooking Management
+
 **الحالة:** غير موجود  
 **الحل المقترح:** نظام ذكي لإدارة الحجز الزائد
 
 #### 3. Waitlist System
+
 **الحالة:** غير موجود  
 **الحل المقترح:** قائمة انتظار للرحلات الممتلئة
 
 #### 4. Multiple Payment Gateways
+
 **الحالة:** Stripe فقط  
 **الحل المقترح:** إضافة PayPal, Apple Pay, Google Pay
 
 #### 5. Predictive Analytics
+
 **الحالة:** غير موجود  
 **الحل المقترح:** تحليلات تنبؤية بالطلب والإيرادات
 
 #### 6. Crew Management
+
 **الحالة:** غير موجود  
 **الحل المقترح:** نظام لإدارة طاقم الطائرة
 
@@ -336,6 +379,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ## 6. الأمان (Security Assessment)
 
 ### 6.1 نقاط القوة الأمنية ✅
+
 - **Authentication:** Manus OAuth integration
 - **Rate Limiting:** حماية من DDoS على `/api/trpc` و `/api/stripe/webhook`
 - **Cookie Security:** httpOnly, secure, sameSite
@@ -345,6 +389,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 - **ENV Validation:** التحقق من المتغيرات البيئية
 
 ### 6.2 نقاط التحسين الأمنية ⚠️
+
 - ❌ **Request ID + Unified Logging:** غير مكتمل
 - ❌ **Data API Whitelist:** غير موجود
 - ❌ **Account Lock:** بعد محاولات تسجيل دخول فاشلة
@@ -353,6 +398,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 - ❌ **2FA/MFA:** غير موجود
 
 ### 6.3 توصيات أمنية
+
 1. إضافة Request ID لكل طلب
 2. Unified Logging مع PII masking
 3. Data API Whitelist
@@ -366,6 +412,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ## 7. الأداء (Performance Analysis)
 
 ### 7.1 نقاط القوة ✅
+
 - **Database Indexes:** فهارس محسّنة
 - **Code Splitting:** تقسيم الكود
 - **React Query Caching:** تخزين مؤقت ذكي
@@ -373,6 +420,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 - **Bundle Optimization:** حجم حزمة محسّن
 
 ### 7.2 نقاط التحسين ⚠️
+
 - ❌ **Caching للبحث:** لا يوجد caching لنتائج البحث
 - ❌ **CDN:** لا يوجد CDN للملفات الثابتة
 - ❌ **Image Optimization:** تحسين محدود للصور
@@ -380,6 +428,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 - ❌ **Load Balancing:** غير موجود
 
 ### 7.3 توصيات الأداء
+
 1. إضافة Redis للـ Caching
 2. استخدام CDN (CloudFlare/AWS CloudFront)
 3. تحسين الصور (WebP, lazy loading)
@@ -392,6 +441,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ## 8. قابلية التوسع (Scalability)
 
 ### 8.1 الحالة الحالية
+
 - **Database:** MySQL/TiDB (قابل للتوسع)
 - **Architecture:** Monolithic (غير موزع)
 - **Caching:** محدود
@@ -400,17 +450,20 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ### 8.2 خطة التوسع المقترحة
 
 #### المرحلة 1: Horizontal Scaling
+
 - إضافة Load Balancer
 - Database Read Replicas
 - Redis Cluster للـ Caching
 
 #### المرحلة 2: Microservices (اختياري)
+
 - فصل Booking Service
 - فصل Payment Service
 - فصل Notification Service
 - API Gateway
 
 #### المرحلة 3: Cloud Native
+
 - Kubernetes Deployment
 - Auto-scaling
 - Multi-region Support
@@ -420,11 +473,13 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ## 9. الاختبارات (Testing Coverage)
 
 ### 9.1 الحالة الحالية ✅
+
 - **Unit Tests:** 45+ اختبار ناجح
 - **Integration Tests:** موجودة جزئياً
 - **E2E Tests:** غير موجودة
 
 ### 9.2 التغطية
+
 - ✅ Authentication Tests
 - ✅ Booking Tests
 - ✅ Payment Tests (Stripe)
@@ -436,6 +491,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 - ❌ Security Testing
 
 ### 9.3 توصيات الاختبارات
+
 1. إضافة E2E Tests (Playwright)
 2. Load Testing (k6, Artillery)
 3. Security Testing (OWASP ZAP)
@@ -447,6 +503,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ## 10. التوثيق (Documentation)
 
 ### 10.1 الوثائق الموجودة ✅
+
 - ✅ README.md شامل
 - ✅ SYSTEM_AUDIT.md
 - ✅ TODO.md مفصل
@@ -454,6 +511,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 - ✅ تعليقات في الكود
 
 ### 10.2 الوثائق المفقودة ❌
+
 - ❌ API Documentation (Swagger/OpenAPI)
 - ❌ Database Schema Diagram
 - ❌ Architecture Diagram
@@ -466,6 +524,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 ## 11. خطة العمل الموصى بها
 
 ### المرحلة 1: الأساسيات الحرجة (شهر واحد)
+
 1. ✅ Inventory Locking ← **مكتمل**
 2. ✅ E-Ticket PDF ← **مكتمل**
 3. ✅ Boarding Pass ← **مكتمل**
@@ -473,24 +532,28 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 5. ⏳ Multi-Currency Support
 
 ### المرحلة 2: التحليلات والتسعير (شهر واحد)
+
 1. ⏳ Comprehensive Analytics Dashboard
 2. ⏳ Dynamic Pricing Engine
 3. ⏳ Revenue Reports
 4. ⏳ Load Factor Analysis
 
 ### المرحلة 3: الأمان والأداء (أسبوعان)
+
 1. ⏳ Request ID + Unified Logging
 2. ⏳ Redis Caching
 3. ⏳ CDN Setup
 4. ⏳ Security Audit
 
 ### المرحلة 4: التكامل والتوسع (شهرين)
+
 1. ⏳ GDS Integration
 2. ⏳ OTA Integration
 3. ⏳ Baggage Handling
 4. ⏳ Special Services
 
 ### المرحلة 5: الاختبار والنشر (أسبوعان)
+
 1. ⏳ E2E Tests
 2. ⏳ Load Testing
 3. ⏳ Production Deployment
@@ -502,23 +565,25 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 
 ### 12.1 النسب المئوية للجاهزية
 
-| المكون | النسبة | الحالة |
-|--------|--------|--------|
-| **Backend API** | 90% | ✅ ممتاز |
-| **Frontend UI** | 85% | ✅ جيد جداً |
-| **Database Schema** | 95% | ✅ ممتاز |
-| **Payment Integration** | 85% | ✅ جيد جداً |
-| **Security** | 75% | ⚠️ جيد |
-| **Testing** | 70% | ⚠️ جيد |
-| **Documentation** | 65% | ⚠️ مقبول |
-| **Performance** | 70% | ⚠️ جيد |
-| **Scalability** | 60% | ⚠️ مقبول |
-| **Internationalization** | 50% | ⚠️ محدود |
+| المكون                   | النسبة | الحالة      |
+| ------------------------ | ------ | ----------- |
+| **Backend API**          | 90%    | ✅ ممتاز    |
+| **Frontend UI**          | 85%    | ✅ جيد جداً |
+| **Database Schema**      | 95%    | ✅ ممتاز    |
+| **Payment Integration**  | 85%    | ✅ جيد جداً |
+| **Security**             | 75%    | ⚠️ جيد      |
+| **Testing**              | 70%    | ⚠️ جيد      |
+| **Documentation**        | 65%    | ⚠️ مقبول    |
+| **Performance**          | 70%    | ⚠️ جيد      |
+| **Scalability**          | 60%    | ⚠️ مقبول    |
+| **Internationalization** | 50%    | ⚠️ محدود    |
 
 ### 12.2 التقييم الإجمالي
+
 **الجاهزية الإجمالية: 75-80%**
 
 ### 12.3 نقاط القوة الرئيسية
+
 1. ✅ بنية تقنية حديثة ومتينة
 2. ✅ Type Safety كامل
 3. ✅ نظام حجز شامل ومتكامل
@@ -528,6 +593,7 @@ loyaltyTier: ["bronze", "silver", "gold", "platinum"]
 7. ✅ اختبارات شاملة (45+ tests)
 
 ### 12.4 نقاط التحسين الرئيسية
+
 1. ⚠️ Multi-Currency & Multi-Language
 2. ⚠️ Analytics Dashboard
 3. ⚠️ Dynamic Pricing

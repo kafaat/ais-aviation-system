@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { checkDatabase, checkStripe, performHealthChecks } from "./health.service";
+import {
+  checkDatabase,
+  checkStripe,
+  performHealthChecks,
+} from "./health.service";
 import { cleanupExpiredLocks } from "./cron.service";
 import { getDb } from "../db";
 import { inventoryLocks } from "../../drizzle/schema";
@@ -87,7 +91,9 @@ describe("Production-Ready Features", () => {
       if (db) {
         const { payments } = await import("../../drizzle/schema");
         const { eq } = await import("drizzle-orm");
-        await db.delete(payments).where(eq(payments.idempotencyKey, testIdempotencyKey));
+        await db
+          .delete(payments)
+          .where(eq(payments.idempotencyKey, testIdempotencyKey));
       }
     });
 

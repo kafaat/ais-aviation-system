@@ -81,7 +81,9 @@ export async function getOrCreateLoyaltyAccount(userId: number) {
 /**
  * Calculate tier based on tier points
  */
-function calculateTier(tierPoints: number): "bronze" | "silver" | "gold" | "platinum" {
+function calculateTier(
+  tierPoints: number
+): "bronze" | "silver" | "gold" | "platinum" {
   if (tierPoints >= TIER_THRESHOLDS.platinum) return "platinum";
   if (tierPoints >= TIER_THRESHOLDS.gold) return "gold";
   if (tierPoints >= TIER_THRESHOLDS.silver) return "silver";

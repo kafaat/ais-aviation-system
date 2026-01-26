@@ -1,5 +1,11 @@
 import { getDb } from "../db";
-import { flights, bookings, users, airports, flightStatusHistory } from "../../drizzle/schema";
+import {
+  flights,
+  bookings,
+  users,
+  airports,
+  flightStatusHistory,
+} from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { sendFlightStatusChange } from "./email.service";
@@ -70,10 +76,7 @@ export async function updateFlightStatus(
       .from(bookings)
       .innerJoin(users, eq(bookings.userId, users.id))
       .where(
-        and(
-          eq(bookings.flightId, flightId),
-          eq(bookings.status, "confirmed")
-        )
+        and(eq(bookings.flightId, flightId), eq(bookings.status, "confirmed"))
       );
 
     // Get origin and destination airports for email
@@ -106,26 +109,31 @@ export async function updateFlightStatus(
         if (booking.userEmail) {
           try {
             await sendFlightStatusChange({
-              passengerName: booking.userName || 'Passenger',
+              passengerName: booking.userName || "Passenger",
               passengerEmail: booking.userEmail,
               bookingReference: booking.bookingReference,
               flightNumber: flight.flightNumber,
               origin: `${originAirport.city} (${originAirport.code})`,
               destination: `${destAirport.city} (${destAirport.code})`,
               departureTime: flight.departureTime,
-              oldStatus: 'scheduled',
+              oldStatus: "scheduled",
               newStatus: status,
               delayMinutes,
               reason,
             });
           } catch (emailError) {
-            console.error(`[Flight Status] Error sending email to ${booking.userEmail}:`, emailError);
+            console.error(
+              `[Flight Status] Error sending email to ${booking.userEmail}:`,
+              emailError
+            );
             // Continue with other emails even if one fails
           }
         }
       }
 
-      console.log(`[Flight Status] ${affectedBookings.length} passengers notified about ${status} for flight ${flight.flightNumber}`);
+      console.log(
+        `[Flight Status] ${affectedBookings.length} passengers notified about ${status} for flight ${flight.flightNumber}`
+      );
     }
 
     return {
@@ -211,10 +219,7 @@ export async function cancelFlightAndRefund(params: {
       .select()
       .from(bookings)
       .where(
-        and(
-          eq(bookings.flightId, flightId),
-          eq(bookings.paymentStatus, "paid")
-        )
+        and(eq(bookings.flightId, flightId), eq(bookings.paymentStatus, "paid"))
       );
 
     // Update all bookings to cancelled and refunded
@@ -228,7 +233,7 @@ export async function cancelFlightAndRefund(params: {
           updatedAt: new Date(),
         })
         .where(eq(bookings.id, booking.id));
-      
+
       refundedCount++;
     }
 

@@ -26,28 +26,28 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
   try {
     // Verify booking ownership
     const booking = await db.getBookingByIdWithDetails(input.bookingId);
-    
+
     if (!booking) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Booking not found",
       });
     }
-    
+
     if (booking.userId !== input.userId) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Access denied",
       });
     }
-    
+
     if (booking.paymentStatus === "paid") {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Booking is already paid",
       });
     }
-    
+
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -65,27 +65,31 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.VITE_APP_URL || 'http://localhost:3000'}/booking-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.VITE_APP_URL || 'http://localhost:3000'}/booking-cancelled`,
+      success_url: `${process.env.VITE_APP_URL || "http://localhost:3000"}/booking-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.VITE_APP_URL || "http://localhost:3000"}/booking-cancelled`,
       metadata: {
         bookingId: input.bookingId.toString(),
         userId: input.userId.toString(),
       },
     });
-    
+
     // Check for existing payment with same idempotency key
     if (input.idempotencyKey) {
-      const existingPayment = await db.getPaymentByIdempotencyKey(input.idempotencyKey);
+      const existingPayment = await db.getPaymentByIdempotencyKey(
+        input.idempotencyKey
+      );
       if (existingPayment) {
         // Return existing session instead of creating new one
-        const existingSession = await stripe.checkout.sessions.retrieve(existingPayment.transactionId!);
+        const existingSession = await stripe.checkout.sessions.retrieve(
+          existingPayment.transactionId!
+        );
         return {
           sessionId: existingSession.id,
           url: existingSession.url,
         };
       }
     }
-    
+
     // Create payment record
     await db.createPayment({
       bookingId: input.bookingId,
@@ -96,7 +100,7 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       transactionId: session.id,
       idempotencyKey: input.idempotencyKey,
     });
-    
+
     return {
       sessionId: session.id,
       url: session.url,
@@ -123,19 +127,19 @@ export async function handlePaymentSuccess(
   try {
     // Retrieve session from Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    
+
     if (!session.metadata?.bookingId) {
       throw new Error("Booking ID not found in session metadata");
     }
-    
+
     const bookingId = parseInt(session.metadata.bookingId);
-    
+
     // Update payment status
     await db.updatePaymentStatus(bookingId, "completed", paymentIntentId);
-    
+
     // Update booking status
     await db.updateBookingStatus(bookingId, "confirmed");
-    
+
     return { success: true };
   } catch (error) {
     console.error("Error handling payment success:", error);
@@ -149,16 +153,16 @@ export async function handlePaymentSuccess(
 export async function handlePaymentFailure(sessionId: string) {
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    
+
     if (!session.metadata?.bookingId) {
       throw new Error("Booking ID not found in session metadata");
     }
-    
+
     const bookingId = parseInt(session.metadata.bookingId);
-    
+
     // Update payment status
     await db.updatePaymentStatus(bookingId, "failed");
-    
+
     return { success: true };
   } catch (error) {
     console.error("Error handling payment failure:", error);

@@ -7,7 +7,10 @@ import {
   getRefundHistory,
   getRefundTrends,
 } from "../services/refunds-stats.service";
-import { calculateCancellationFee, getAllCancellationTiers } from "../services/cancellation-fees.service";
+import {
+  calculateCancellationFee,
+  getAllCancellationTiers,
+} from "../services/cancellation-fees.service";
 import { getDb } from "../db";
 import { bookings, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -17,7 +20,10 @@ import { eq } from "drizzle-orm";
  */
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.role !== "admin") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Admin access required",
+    });
   }
   return next({ ctx });
 });
@@ -121,7 +127,10 @@ export const refundsRouter = router({
         });
       }
 
-      return calculateCancellationFee(booking.totalAmount, flight.departureTime);
+      return calculateCancellationFee(
+        booking.totalAmount,
+        flight.departureTime
+      );
     }),
 
   /**
