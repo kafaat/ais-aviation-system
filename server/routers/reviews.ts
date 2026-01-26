@@ -76,6 +76,7 @@ export const reviewsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return await reviewsService.updateReview({
+        reviewId: input.reviewId,
         userId: ctx.user.id,
         ...input,
       });

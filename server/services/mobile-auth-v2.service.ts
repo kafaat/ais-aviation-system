@@ -17,7 +17,7 @@ import jwt from "jsonwebtoken";
 import { getDb } from "../db";
 import { refreshTokens, users } from "../../drizzle/schema";
 import { eq, and, lt, isNull } from "drizzle-orm";
-import { Errors, ErrorCode } from "../_core/errors";
+import { Errors, ErrorCode, throwAPIError } from "../_core/errors";
 
 // ============================================================================
 // CONFIGURATION - Fail Fast
@@ -124,7 +124,7 @@ export const mobileAuthServiceV2 = {
       role: user.role,
     };
 
-    return jwt.sign(payload, JWT_SECRET, {
+    return jwt.sign(payload, JWT_SECRET!, {
       expiresIn: JWT_EXPIRES_IN,
     });
   },
@@ -141,7 +141,7 @@ export const mobileAuthServiceV2 = {
     }
 
     try {
-      return jwt.verify(token, JWT_SECRET) as JwtPayload;
+      return jwt.verify(token, JWT_SECRET!) as JwtPayload;
     } catch (err: any) {
       if (err.name === "TokenExpiredError") {
         throwAPIError(ErrorCode.UNAUTHORIZED, "Access token expired");
