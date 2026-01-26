@@ -48,7 +48,7 @@ class CacheService {
       });
 
       this.client.on("error", err => {
-        logger.error("Redis client error", { error: err });
+        logger.error({ error: err }, "Redis client error");
       });
 
       this.client.on("connect", () => {
@@ -65,7 +65,7 @@ class CacheService {
 
       logger.info("Redis cache service initialized");
     } catch (error) {
-      logger.error("Failed to connect to Redis", { error });
+      logger.error({ error }, "Failed to connect to Redis");
       // Don't throw - allow app to run without cache
       this.client = null;
       this.connected = false;
@@ -105,7 +105,7 @@ class CacheService {
       const version = await this.client!.get(versionKey);
       return version ? parseInt(version) : 1;
     } catch (error) {
-      logger.error("Failed to get version", { namespace, error });
+      logger.error({ namespace, error }, "Failed to get version");
       return 1;
     }
   }
@@ -122,9 +122,9 @@ class CacheService {
     try {
       const versionKey = `${CACHE_PREFIX}:v:${namespace}`;
       await this.client!.incr(versionKey);
-      logger.info("Invalidated namespace", { namespace });
+      logger.info({ namespace }, "Invalidated namespace");
     } catch (error) {
-      logger.error("Failed to invalidate namespace", { namespace, error });
+      logger.error({ namespace, error }, "Failed to invalidate namespace");
     }
   }
 
@@ -157,10 +157,10 @@ class CacheService {
         return null;
       }
 
-      logger.debug("Cache hit", { key });
+      logger.debug({ key }, "Cache hit");
       return JSON.parse(value) as T;
     } catch (error) {
-      logger.error("Cache get error", { key, error });
+      logger.error({ key, error }, "Cache get error");
       return null;
     }
   }
@@ -176,9 +176,9 @@ class CacheService {
     try {
       const serialized = JSON.stringify(value);
       await this.client!.setEx(key, ttlSeconds, serialized);
-      logger.debug("Cache set", { key, ttl: ttlSeconds });
+      logger.debug({ key, ttl: ttlSeconds }, "Cache set");
     } catch (error) {
-      logger.error("Cache set error", { key, error });
+      logger.error({ key, error }, "Cache set error");
     }
   }
 

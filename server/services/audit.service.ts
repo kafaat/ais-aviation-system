@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { db } from "../db";
+import { getDb } from "../db";
 import { auditLogs, type InsertAuditLog } from "../../drizzle/schema";
 import { logger } from "../_core/logger";
 
@@ -87,6 +87,12 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
       changeDescription: data.changeDescription || null,
       metadata: data.metadata ? JSON.stringify(data.metadata) : null,
     };
+
+    const db = await getDb();
+    if (!db) {
+      logger.warn("Database not available, skipping audit log");
+      return;
+    }
 
     await db.insert(auditLogs).values(auditLogEntry);
 
