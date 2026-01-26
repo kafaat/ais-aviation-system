@@ -1038,3 +1038,435 @@ export const idempotencyRequests = mysqlTable(
 
 export type IdempotencyRequest = typeof idempotencyRequests.$inferSelect;
 export type InsertIdempotencyRequest = typeof idempotencyRequests.$inferInsert;
+
+
+// ============================================================================
+// P0 Critical Features - Dynamic Pricing, Multi-Currency, Inventory Management
+// ============================================================================
+
+/**
+ * Pricing Rules
+ * Defines dynamic pricing rules for revenue management
+ */
+export const pricingRules = mysqlTable(
+  "pricing_rules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    // Rule identification
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    
+    // Rule type
+    ruleType: mysqlEnum("ruleType", [
+      "demand_multiplier",
+      "time_based",
+      "seasonal",
+      "route_specific",
+      "cabin_class",
+      "advance_purchase",
+      "load_factor",
+    ]).notNull(),
+    
+    // Scope
+    airlineId: int("airlineId"), // Null = all airlines
+    originId: int("originId"), // Null = all origins
+    destinationId: int("destinationId"), // Null = all destinations
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]), // Null = both
+    
+    // Rule parameters (JSON)
+    parameters: text("parameters").notNull(), // JSON: thresholds, multipliers, etc.
+    
+    // Priority (higher = applied first)
+    priority: int("priority").default(0).notNull(),
+    
+    // Validity
+    validFrom: timestamp("validFrom"),
+    validTo: timestamp("validTo"),
+    isActive: boolean("isActive").default(true).notNull(),
+    
+    // Audit
+    createdBy: int("createdBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    ruleTypeIdx: index("pricing_rules_type_idx").on(table.ruleType),
+    airlineIdx: index("pricing_rules_airline_idx").on(table.airlineId),
+    routeIdx: index("pricing_rules_route_idx").on(table.originId, table.destinationId),
+    activeIdx: index("pricing_rules_active_idx").on(table.isActive),
+    priorityIdx: index("pricing_rules_priority_idx").on(table.priority),
+    validityIdx: index("pricing_rules_validity_idx").on(table.validFrom, table.validTo),
+  })
+);
+
+export type PricingRule = typeof pricingRules.$inferSelect;
+export type InsertPricingRule = typeof pricingRules.$inferInsert;
+
+/**
+ * Pricing History
+ * Tracks all price calculations for analytics and auditing
+ */
+export const pricingHistory = mysqlTable(
+  "pricing_history",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    // Flight reference
+    flightId: int("flightId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    
+    // Pricing details
+    basePrice: int("basePrice").notNull(), // Original price in cents
+    finalPrice: int("finalPrice").notNull(), // Calculated price in cents
+    totalMultiplier: decimal("totalMultiplier", { precision: 10, scale: 4 }).notNull(),
+    
+    // Applied rules (JSON array of rule IDs and their contributions)
+    appliedRules: text("appliedRules").notNull(), // JSON
+    
+    // Context at calculation time
+    occupancyRate: decimal("occupancyRate", { precision: 5, scale: 4 }),
+    daysUntilDeparture: int("daysUntilDeparture"),
+    demandScore: decimal("demandScore", { precision: 5, scale: 2 }),
+    
+    // Booking reference (if price was used)
+    bookingId: int("bookingId"),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    flightIdx: index("pricing_history_flight_idx").on(table.flightId),
+    bookingIdx: index("pricing_history_booking_idx").on(table.bookingId),
+    createdAtIdx: index("pricing_history_created_idx").on(table.createdAt),
+  })
+);
+
+export type PricingHistoryRecord = typeof pricingHistory.$inferSelect;
+export type InsertPricingHistory = typeof pricingHistory.$inferInsert;
+
+/**
+ * Seasonal Pricing
+ * Defines seasonal price adjustments
+ */
+export const seasonalPricing = mysqlTable(
+  "seasonal_pricing",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    name: varchar("name", { length: 255 }).notNull(), // e.g., "Hajj Season", "Summer Peak"
+    nameAr: varchar("nameAr", { length: 255 }), // Arabic name
+    
+    // Date range
+    startDate: timestamp("startDate").notNull(),
+    endDate: timestamp("endDate").notNull(),
+    
+    // Multiplier
+    multiplier: decimal("multiplier", { precision: 5, scale: 2 }).notNull(), // e.g., 1.50 = 50% increase
+    
+    // Scope
+    airlineId: int("airlineId"), // Null = all airlines
+    originId: int("originId"), // Null = all origins
+    destinationId: int("destinationId"), // Null = all destinations
+    
+    // Status
+    isActive: boolean("isActive").default(true).notNull(),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    dateRangeIdx: index("seasonal_pricing_dates_idx").on(table.startDate, table.endDate),
+    activeIdx: index("seasonal_pricing_active_idx").on(table.isActive),
+  })
+);
+
+export type SeasonalPricingRecord = typeof seasonalPricing.$inferSelect;
+export type InsertSeasonalPricing = typeof seasonalPricing.$inferInsert;
+
+/**
+ * Currencies
+ * Supported currencies for multi-currency transactions
+ */
+export const currencies = mysqlTable(
+  "currencies",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    code: varchar("code", { length: 3 }).notNull().unique(), // ISO 4217 code
+    name: varchar("name", { length: 100 }).notNull(),
+    nameAr: varchar("nameAr", { length: 100 }),
+    symbol: varchar("symbol", { length: 10 }).notNull(),
+    decimalPlaces: int("decimalPlaces").default(2).notNull(),
+    
+    // Display settings
+    symbolPosition: mysqlEnum("symbolPosition", ["before", "after"]).default("before").notNull(),
+    thousandsSeparator: varchar("thousandsSeparator", { length: 1 }).default(","),
+    decimalSeparator: varchar("decimalSeparator", { length: 1 }).default("."),
+    
+    // Status
+    isActive: boolean("isActive").default(true).notNull(),
+    isBaseCurrency: boolean("isBaseCurrency").default(false).notNull(), // SAR is base
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    codeIdx: index("currencies_code_idx").on(table.code),
+    activeIdx: index("currencies_active_idx").on(table.isActive),
+  })
+);
+
+export type Currency = typeof currencies.$inferSelect;
+export type InsertCurrency = typeof currencies.$inferInsert;
+
+/**
+ * Exchange Rates
+ * Stores exchange rates between currencies
+ */
+export const exchangeRates = mysqlTable(
+  "exchange_rates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    fromCurrency: varchar("fromCurrency", { length: 3 }).notNull(),
+    toCurrency: varchar("toCurrency", { length: 3 }).notNull(),
+    rate: decimal("rate", { precision: 18, scale: 8 }).notNull(),
+    
+    // Source of the rate
+    source: varchar("source", { length: 100 }), // e.g., "openexchangerates", "manual"
+    
+    // Validity
+    validFrom: timestamp("validFrom").defaultNow().notNull(),
+    validTo: timestamp("validTo"),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    currencyPairIdx: index("exchange_rates_pair_idx").on(table.fromCurrency, table.toCurrency),
+    validFromIdx: index("exchange_rates_valid_idx").on(table.validFrom),
+  })
+);
+
+export type ExchangeRateRecord = typeof exchangeRates.$inferSelect;
+export type InsertExchangeRate = typeof exchangeRates.$inferInsert;
+
+/**
+ * Seat Holds
+ * Temporary seat reservations before payment
+ */
+export const seatHolds = mysqlTable(
+  "seat_holds",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    flightId: int("flightId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    seats: int("seats").notNull(),
+    
+    // User/session reference
+    userId: int("userId"),
+    sessionId: varchar("sessionId", { length: 255 }).notNull(),
+    
+    // Status
+    status: mysqlEnum("status", ["active", "converted", "expired", "released"])
+      .default("active")
+      .notNull(),
+    
+    // Expiration
+    expiresAt: timestamp("expiresAt").notNull(),
+    
+    // Conversion reference
+    bookingId: int("bookingId"),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    flightIdx: index("seat_holds_flight_idx").on(table.flightId),
+    userIdx: index("seat_holds_user_idx").on(table.userId),
+    sessionIdx: index("seat_holds_session_idx").on(table.sessionId),
+    statusIdx: index("seat_holds_status_idx").on(table.status),
+    expiresIdx: index("seat_holds_expires_idx").on(table.expiresAt),
+  })
+);
+
+export type SeatHold = typeof seatHolds.$inferSelect;
+export type InsertSeatHold = typeof seatHolds.$inferInsert;
+
+/**
+ * Waitlist
+ * Manages waitlist for fully booked flights
+ */
+export const waitlist = mysqlTable(
+  "waitlist",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    flightId: int("flightId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    
+    userId: int("userId").notNull(),
+    seats: int("seats").notNull(),
+    
+    // Priority (lower = higher priority)
+    priority: int("priority").notNull(),
+    
+    // Status
+    status: mysqlEnum("status", ["waiting", "offered", "confirmed", "expired", "cancelled"])
+      .default("waiting")
+      .notNull(),
+    
+    // Offer details
+    offeredAt: timestamp("offeredAt"),
+    offerExpiresAt: timestamp("offerExpiresAt"),
+    confirmedAt: timestamp("confirmedAt"),
+    
+    // Contact preferences
+    notifyByEmail: boolean("notifyByEmail").default(true).notNull(),
+    notifyBySms: boolean("notifyBySms").default(false).notNull(),
+    
+    // Resulting booking
+    bookingId: int("bookingId"),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    flightIdx: index("waitlist_flight_idx").on(table.flightId),
+    userIdx: index("waitlist_user_idx").on(table.userId),
+    statusIdx: index("waitlist_status_idx").on(table.status),
+    priorityIdx: index("waitlist_priority_idx").on(table.flightId, table.cabinClass, table.priority),
+  })
+);
+
+export type WaitlistEntry = typeof waitlist.$inferSelect;
+export type InsertWaitlistEntry = typeof waitlist.$inferInsert;
+
+/**
+ * Overbooking Configuration
+ * Per-route overbooking settings
+ */
+export const overbookingConfig = mysqlTable(
+  "overbooking_config",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    // Scope
+    airlineId: int("airlineId"), // Null = all airlines
+    originId: int("originId"), // Null = all origins
+    destinationId: int("destinationId"), // Null = all destinations
+    
+    // Overbooking rates
+    economyRate: decimal("economyRate", { precision: 5, scale: 4 }).default("0.05").notNull(), // 5%
+    businessRate: decimal("businessRate", { precision: 5, scale: 4 }).default("0.02").notNull(), // 2%
+    maxOverbooking: int("maxOverbooking").default(10).notNull(),
+    
+    // Historical data
+    historicalNoShowRate: decimal("historicalNoShowRate", { precision: 5, scale: 4 }),
+    
+    // Status
+    isActive: boolean("isActive").default(true).notNull(),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    routeIdx: index("overbooking_route_idx").on(table.originId, table.destinationId),
+    airlineIdx: index("overbooking_airline_idx").on(table.airlineId),
+    activeIdx: index("overbooking_active_idx").on(table.isActive),
+  })
+);
+
+export type OverbookingConfigRecord = typeof overbookingConfig.$inferSelect;
+export type InsertOverbookingConfig = typeof overbookingConfig.$inferInsert;
+
+/**
+ * Inventory Snapshots
+ * Daily snapshots of inventory for analytics
+ */
+export const inventorySnapshots = mysqlTable(
+  "inventory_snapshots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    flightId: int("flightId").notNull(),
+    snapshotDate: timestamp("snapshotDate").notNull(),
+    
+    // Economy class
+    economyTotal: int("economyTotal").notNull(),
+    economySold: int("economySold").notNull(),
+    economyHeld: int("economyHeld").notNull(),
+    economyAvailable: int("economyAvailable").notNull(),
+    economyWaitlist: int("economyWaitlist").notNull(),
+    
+    // Business class
+    businessTotal: int("businessTotal").notNull(),
+    businessSold: int("businessSold").notNull(),
+    businessHeld: int("businessHeld").notNull(),
+    businessAvailable: int("businessAvailable").notNull(),
+    businessWaitlist: int("businessWaitlist").notNull(),
+    
+    // Pricing at snapshot time
+    economyPrice: int("economyPrice").notNull(),
+    businessPrice: int("businessPrice").notNull(),
+    
+    // Days until departure
+    daysUntilDeparture: int("daysUntilDeparture").notNull(),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    flightIdx: index("inventory_snapshots_flight_idx").on(table.flightId),
+    dateIdx: index("inventory_snapshots_date_idx").on(table.snapshotDate),
+    flightDateIdx: index("inventory_snapshots_flight_date_idx").on(table.flightId, table.snapshotDate),
+  })
+);
+
+export type InventorySnapshot = typeof inventorySnapshots.$inferSelect;
+export type InsertInventorySnapshot = typeof inventorySnapshots.$inferInsert;
+
+/**
+ * Denied Boarding Records
+ * Tracks denied boarding incidents for overbooking
+ */
+export const deniedBoardingRecords = mysqlTable(
+  "denied_boarding_records",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    flightId: int("flightId").notNull(),
+    bookingId: int("bookingId").notNull(),
+    userId: int("userId").notNull(),
+    
+    // Type
+    type: mysqlEnum("type", ["voluntary", "involuntary"]).notNull(),
+    
+    // Compensation
+    compensationAmount: int("compensationAmount").notNull(), // In cents
+    compensationCurrency: varchar("compensationCurrency", { length: 3 }).default("SAR").notNull(),
+    compensationType: mysqlEnum("compensationType", ["cash", "voucher", "miles"]).notNull(),
+    
+    // Alternative flight
+    alternativeFlightId: int("alternativeFlightId"),
+    
+    // Status
+    status: mysqlEnum("status", ["pending", "accepted", "rejected", "completed"])
+      .default("pending")
+      .notNull(),
+    
+    // Notes
+    notes: text("notes"),
+    
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    flightIdx: index("denied_boarding_flight_idx").on(table.flightId),
+    userIdx: index("denied_boarding_user_idx").on(table.userId),
+    statusIdx: index("denied_boarding_status_idx").on(table.status),
+  })
+);
+
+export type DeniedBoardingRecord = typeof deniedBoardingRecords.$inferSelect;
+export type InsertDeniedBoardingRecord = typeof deniedBoardingRecords.$inferInsert;
