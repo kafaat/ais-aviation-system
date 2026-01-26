@@ -984,3 +984,57 @@ export const refreshTokens = mysqlTable(
 
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
+
+/**
+ * Idempotency Requests
+ * Stores idempotency keys for all critical operations
+ * Prevents duplicate processing of the same request
+ */
+export const idempotencyRequests = mysqlTable(
+  "idempotency_requests",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    
+    // Idempotency key and scope
+    scope: varchar("scope", { length: 100 }).notNull(), // e.g., "booking.create", "payment.intent", "webhook.stripe"
+    idempotencyKey: varchar("idempotencyKey", { length: 255 }).notNull(),
+    
+    // User/tenant context (nullable for webhooks)
+    userId: int("userId"),
+    
+    // Request hash to detect payload changes
+    requestHash: varchar("requestHash", { length: 64 }).notNull(), // SHA256
+    
+    // Processing status
+    status: mysqlEnum("status", ["STARTED", "COMPLETED", "FAILED"])
+      .default("STARTED")
+      .notNull(),
+    
+    // Response storage
+    responseJson: text("responseJson"), // JSON stringified response
+    errorMessage: text("errorMessage"), // Error message if FAILED
+    
+    // Timestamps
+    expiresAt: timestamp("expiresAt").notNull(), // TTL for cleanup
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    // Unique constraint on scope + userId + idempotencyKey
+    scopeUserKeyIdx: index("idempotency_scope_user_key_idx").on(
+      table.scope,
+      table.userId,
+      table.idempotencyKey
+    ),
+    // For webhook lookups (no userId)
+    scopeKeyIdx: index("idempotency_scope_key_idx").on(
+      table.scope,
+      table.idempotencyKey
+    ),
+    statusIdx: index("idempotency_status_idx").on(table.status),
+    expiresAtIdx: index("idempotency_expires_at_idx").on(table.expiresAt),
+  })
+);
+
+export type IdempotencyRequest = typeof idempotencyRequests.$inferSelect;
+export type InsertIdempotencyRequest = typeof idempotencyRequests.$inferInsert;
