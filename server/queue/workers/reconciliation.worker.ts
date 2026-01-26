@@ -33,7 +33,7 @@ interface ReconciliationJobData {
 
 const connection = getRedisConnection();
 if (!connection) {
-  throw new Error("Redis connection required for reconciliation worker");
+  throw new Error("Redis connection failed. Please check Redis configuration and ensure Redis server is running.");
 }
 
 export const reconciliationWorker = new Worker<ReconciliationJobData>(
