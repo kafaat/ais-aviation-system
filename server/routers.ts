@@ -19,6 +19,8 @@ import { ancillaryRouter } from "./routers/ancillary";
 import { healthRouter } from "./routers/health";
 import { reviewsRouter } from "./routers/reviews";
 import { favoritesRouter } from "./routers/favorites";
+import { pricingRouter } from "./routers/pricing.router";
+import { inventoryRouter } from "./routers/inventory.router";
 
 /**
  * Main Application Router
@@ -54,6 +56,8 @@ export const appRouter = router({
   health: healthRouter,
   reviews: reviewsRouter,
   favorites: favoritesRouter,
+  pricing: pricingRouter,
+  inventory: inventoryRouter,
 });
 
 export type AppRouter = typeof appRouter;
