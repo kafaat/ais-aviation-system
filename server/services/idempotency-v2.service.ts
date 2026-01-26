@@ -16,7 +16,7 @@ import crypto from "crypto";
 import { getDb } from "../db";
 import { idempotencyRequests } from "../../drizzle/schema";
 import { eq, and, lt, isNull } from "drizzle-orm";
-import { AppError, ErrorCode } from "../_core/errors";
+import { throwAPIError, ErrorCode } from "../_core/errors";
 
 /**
  * Idempotency scopes for different operations
@@ -87,7 +87,7 @@ export async function withIdempotency<T>(
 ): Promise<T> {
   const db = await getDb();
   if (!db) {
-    throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
+    throwAPIError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
   }
 
   // 1. Calculate request hash
@@ -118,19 +118,25 @@ export async function withIdempotency<T>(
     }
 
     // Fetch existing record
-    const existing = await db.query.idempotencyRequests.findFirst({
-      where: (t, { and, eq }) =>
+    const existing = await db
+      .select()
+      .from(idempotencyRequests)
+      .where(
         and(
-          eq(t.scope, opts.scope),
-          eq(t.idempotencyKey, opts.key),
-          opts.userId !== null ? eq(t.userId, opts.userId) : isNull(t.userId)
-        ),
-    });
+          eq(idempotencyRequests.scope, opts.scope),
+          eq(idempotencyRequests.idempotencyKey, opts.key),
+          opts.userId !== null
+            ? eq(idempotencyRequests.userId, opts.userId)
+            : isNull(idempotencyRequests.userId)
+        )
+      )
+      .limit(1)
+      .then((rows) => rows[0]);
 
     if (!existing) {
       // Race condition - record was deleted between insert and select
       // Retry by re-throwing to trigger retry logic
-      throw new AppError(
+      throwAPIError(
         ErrorCode.INTERNAL_ERROR,
         "Idempotency record not found after conflict"
       );
@@ -138,7 +144,7 @@ export async function withIdempotency<T>(
 
     // Payload mismatch protection
     if (existing.requestHash !== requestHash) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.IDEMPOTENCY_CONFLICT,
         "Idempotency key reused with different payload",
         { existingHash: existing.requestHash, newHash: requestHash }
@@ -177,7 +183,7 @@ export async function withIdempotency<T>(
           })
           .where(eq(idempotencyRequests.id, existing.id));
       } else {
-        throw new AppError(
+        throwAPIError(
           ErrorCode.IDEMPOTENCY_IN_PROGRESS,
           "Operation already in progress",
           { scope: opts.scope, key: opts.key }
@@ -300,14 +306,20 @@ export async function getIdempotencyRecord(
     return null;
   }
 
-  return db.query.idempotencyRequests.findFirst({
-    where: (t, { and, eq }) =>
+  return db
+    .select()
+    .from(idempotencyRequests)
+    .where(
       and(
-        eq(t.scope, scope),
-        eq(t.idempotencyKey, key),
-        userId !== null ? eq(t.userId, userId) : isNull(t.userId)
-      ),
-  });
+        eq(idempotencyRequests.scope, scope),
+        eq(idempotencyRequests.idempotencyKey, key),
+        userId !== null
+          ? eq(idempotencyRequests.userId, userId)
+          : isNull(idempotencyRequests.userId)
+      )
+    )
+    .limit(1)
+    .then((rows) => rows[0] || null);
 }
 
 export default {

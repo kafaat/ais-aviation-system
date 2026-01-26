@@ -10,10 +10,10 @@
  * @module services/currency/currency.service
  */
 
-import { db } from "../../db";
+import { getDb } from "../../db";
 import { exchangeRates, currencies } from "../../../drizzle/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
-import { CacheService } from "../cache.service";
+import { cacheService } from "../cache.service";
 
 // ============================================================================
 // Types & Interfaces
@@ -196,7 +196,7 @@ export async function getExchangeRate(
 
   // Try cache first
   const cacheKey = `exchange_rate:${fromCurrency}_${toCurrency}`;
-  const cached = await CacheService.get<ExchangeRate>(cacheKey);
+  const cached = await cacheService.get<ExchangeRate>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -204,7 +204,7 @@ export async function getExchangeRate(
   // Try database
   const dbRate = await getDbExchangeRate(fromCurrency, toCurrency);
   if (dbRate) {
-    await CacheService.set(cacheKey, dbRate, RATE_CACHE_TTL);
+    await cacheService.set(cacheKey, dbRate, RATE_CACHE_TTL);
     return dbRate;
   }
 
@@ -222,7 +222,7 @@ export async function getExchangeRate(
       updatedAt: new Date(),
     };
 
-    await CacheService.set(cacheKey, crossRate, RATE_CACHE_TTL);
+    await cacheService.set(cacheKey, crossRate, RATE_CACHE_TTL);
     return crossRate;
   }
 
@@ -240,7 +240,7 @@ export async function getExchangeRate(
       updatedAt: new Date(),
     };
 
-    await CacheService.set(cacheKey, rate, RATE_CACHE_TTL);
+    await cacheService.set(cacheKey, rate, RATE_CACHE_TTL);
     return rate;
   }
 
@@ -255,13 +255,23 @@ async function getDbExchangeRate(
   toCurrency: string
 ): Promise<ExchangeRate | null> {
   try {
-    const result = await db.query.exchangeRates?.findFirst({
-      where: and(
-        eq(exchangeRates.fromCurrency, fromCurrency),
-        eq(exchangeRates.toCurrency, toCurrency)
-      ),
-      orderBy: [desc(exchangeRates.updatedAt)],
-    });
+    const db = await getDb();
+    if (!db) {
+      return null;
+    }
+
+    const result = await db
+      .select()
+      .from(exchangeRates)
+      .where(
+        and(
+          eq(exchangeRates.fromCurrency, fromCurrency),
+          eq(exchangeRates.toCurrency, toCurrency)
+        )
+      )
+      .orderBy(desc(exchangeRates.updatedAt))
+      .limit(1)
+      .then((rows) => rows[0]);
 
     if (result) {
       return {
@@ -441,7 +451,7 @@ export async function updateExchangeRates(): Promise<void> {
 
       // Invalidate cache
       const cacheKey = `exchange_rate:${from}_${to}`;
-      await CacheService.delete(cacheKey);
+      await cacheService.delete(cacheKey);
     }
 
     console.log(

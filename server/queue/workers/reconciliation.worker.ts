@@ -31,6 +31,12 @@ interface ReconciliationJobData {
 // Worker Definition
 // ============================================================================
 
+const redisConnection = getRedisConnection();
+
+if (!redisConnection) {
+  throw new Error("[ReconciliationWorker] Redis connection not available");
+}
+
 export const reconciliationWorker = new Worker<ReconciliationJobData>(
   WORKER_CONFIG.name,
   async (job: Job<ReconciliationJobData>) => {
@@ -64,7 +70,7 @@ export const reconciliationWorker = new Worker<ReconciliationJobData>(
     }
   },
   {
-    connection: getRedisConnection(),
+    connection: redisConnection,
     concurrency: WORKER_CONFIG.concurrency,
     limiter: {
       max: 1,
@@ -111,6 +117,10 @@ export async function triggerReconciliation(options?: {
   triggeredBy?: string;
 }): Promise<string> {
   const { reconciliationQueue } = await import("../queues");
+
+  if (!reconciliationQueue) {
+    throw new Error("Reconciliation queue not available");
+  }
 
   const job = await reconciliationQueue.add(
     "manual-reconciliation",

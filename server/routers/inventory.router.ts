@@ -12,7 +12,7 @@ import {
   publicProcedure,
   protectedProcedure,
   adminProcedure,
-} from "../trpc";
+} from "../_core/trpc";
 import { InventoryService } from "../services/inventory/inventory.service";
 import { TRPCError } from "@trpc/server";
 

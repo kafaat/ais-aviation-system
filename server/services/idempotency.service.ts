@@ -1,11 +1,11 @@
 import crypto from "crypto";
-import * as db from "../db";
+import { getDb } from "../db";
 import {
   idempotencyRequests,
   type InsertIdempotencyRequest,
 } from "../../drizzle/schema";
 import { eq, and, lt } from "drizzle-orm";
-import { logger } from "./logger.service";
+import { logger } from "../_core/logger";
 import { Errors } from "../_core/errors";
 
 /**
@@ -58,7 +58,12 @@ export async function checkIdempotency(
   }
 
   // Find existing request
-  const existing = await db.db
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const existing = await db
     .select()
     .from(idempotencyRequests)
     .where(and(...conditions))
@@ -75,11 +80,11 @@ export async function checkIdempotency(
     const requestHash = calculateRequestHash(requestPayload);
     if (record.requestHash !== requestHash) {
       // Same key, different payload = conflict
-      logger.warn("Idempotency key reused with different payload", {
+      logger.warn({
         scope,
         idempotencyKey,
         userId,
-      });
+      }, "Idempotency key reused with different payload");
       Errors.idempotencyConflict();
     }
   }
@@ -108,6 +113,11 @@ export async function createIdempotencyRecord(
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
   try {
+    const db = await getDb();
+    if (!db) {
+      throw new Error("Database not available");
+    }
+
     const record: InsertIdempotencyRequest = {
       scope,
       idempotencyKey,
@@ -117,13 +127,13 @@ export async function createIdempotencyRecord(
       expiresAt,
     };
 
-    await db.db.insert(idempotencyRequests).values(record);
+    await db.insert(idempotencyRequests).values(record);
 
-    logger.info("Idempotency record created", {
+    logger.info({
       scope,
       idempotencyKey,
       userId,
-    });
+    }, "Idempotency record created");
 
     return true;
   } catch (error: any) {
@@ -133,11 +143,11 @@ export async function createIdempotencyRecord(
       error.code === "23505" ||
       error.code === "23000"
     ) {
-      logger.info("Idempotency record already exists (race condition)", {
+      logger.info({
         scope,
         idempotencyKey,
         userId,
-      });
+      }, "Idempotency record already exists (race condition)");
       return false;
     }
 
@@ -164,7 +174,12 @@ export async function completeIdempotencyRecord(
     conditions.push(eq(idempotencyRequests.userId, userId));
   }
 
-  await db.db
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db
     .update(idempotencyRequests)
     .set({
       status: "COMPLETED",
@@ -173,11 +188,11 @@ export async function completeIdempotencyRecord(
     })
     .where(and(...conditions));
 
-  logger.info("Idempotency record completed", {
+  logger.info({
     scope,
     idempotencyKey,
     userId,
-  });
+  }, "Idempotency record completed");
 }
 
 /**
@@ -198,7 +213,12 @@ export async function failIdempotencyRecord(
     conditions.push(eq(idempotencyRequests.userId, userId));
   }
 
-  await db.db
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  await db
     .update(idempotencyRequests)
     .set({
       status: "FAILED",
@@ -207,12 +227,12 @@ export async function failIdempotencyRecord(
     })
     .where(and(...conditions));
 
-  logger.info("Idempotency record failed", {
+  logger.info({
     scope,
     idempotencyKey,
     userId,
     error,
-  });
+  }, "Idempotency record failed");
 }
 
 /**
@@ -238,31 +258,31 @@ export async function withIdempotency<T>(
   if (existing.exists) {
     if (existing.status === "COMPLETED") {
       // Return cached response
-      logger.info("Returning cached idempotent response", {
+      logger.info({
         scope,
         idempotencyKey,
         userId,
-      });
+      }, "Returning cached idempotent response");
       return existing.response as T;
     }
 
     if (existing.status === "STARTED") {
       // Request is in progress
-      logger.warn("Idempotent request already in progress", {
+      logger.warn({
         scope,
         idempotencyKey,
         userId,
-      });
+      }, "Idempotent request already in progress");
       Errors.idempotencyInProgress();
     }
 
     if (existing.status === "FAILED") {
       // Previous attempt failed - allow retry or return error
-      logger.info("Previous idempotent request failed, allowing retry", {
+      logger.info({
         scope,
         idempotencyKey,
         userId,
-      });
+      }, "Previous idempotent request failed, allowing retry");
       // Could either throw the previous error or allow retry
       // For now, we'll allow retry by continuing
     }
@@ -326,11 +346,16 @@ export async function withIdempotency<T>(
 export async function cleanupExpiredIdempotencyRecords(): Promise<void> {
   const now = new Date();
 
-  const result = await db.db
+  const db = await getDb();
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const result = await db
     .delete(idempotencyRequests)
     .where(lt(idempotencyRequests.expiresAt, now));
 
-  logger.info("Cleaned up expired idempotency records", {
+  logger.info({
     deletedCount: result.rowsAffected,
-  });
+  }, "Cleaned up expired idempotency records");
 }
