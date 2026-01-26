@@ -7,7 +7,7 @@
  */
 
 import { z } from "zod";
-import { router, publicProcedure, protectedProcedure, adminProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { DynamicPricingService } from "../services/pricing/dynamic-pricing.service";
 import { CurrencyService } from "../services/currency/currency.service";
 import { TRPCError } from "@trpc/server";

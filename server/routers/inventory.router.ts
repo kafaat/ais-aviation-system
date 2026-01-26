@@ -7,7 +7,7 @@
  */
 
 import { z } from "zod";
-import { router, publicProcedure, protectedProcedure, adminProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { InventoryService } from "../services/inventory/inventory.service";
 import { TRPCError } from "@trpc/server";
 
