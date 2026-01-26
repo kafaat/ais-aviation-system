@@ -9,6 +9,7 @@
 ## 🎯 نظرة عامة
 
 تم تطبيق **8 تحسينات حرجة (P0)** التي كانت تمنع الإطلاق. هذه التحسينات تضمن:
+
 - ✅ لا double booking
 - ✅ لا double charge
 - ✅ معالجة آمنة للدفع عبر Stripe webhooks
@@ -23,14 +24,17 @@
 #### التغييرات
 
 **Schema Changes:**
+
 - إضافة `idempotencyKey` لجدول `bookings`
 - Index على `idempotencyKey` للبحث السريع
 
 **الملفات المتأثرة:**
+
 - `drizzle/schema.ts` - إضافة الحقل
 - `drizzle/migrations/0001_add_p0_critical_tables.sql` - Migration
 
 **الكود:**
+
 ```typescript
 // في bookings table
 idempotencyKey: varchar("idempotencyKey", { length: 255 }).unique(),
@@ -62,6 +66,7 @@ export async function createBooking(input: CreateBookingInput) {
 ```
 
 #### الفوائد
+
 - ✅ منع double booking عند إعادة إرسال الطلب
 - ✅ Safe retry mechanism
 - ✅ Idempotent API
@@ -73,6 +78,7 @@ export async function createBooking(input: CreateBookingInput) {
 #### التغييرات
 
 **Schema:**
+
 ```typescript
 export const stripeEvents = mysqlTable("stripe_events", {
   id: varchar("id", { length: 255 }).primaryKey(), // Stripe event ID
@@ -88,49 +94,55 @@ export const stripeEvents = mysqlTable("stripe_events", {
 ```
 
 **الملفات الجديدة:**
+
 - `server/services/stripe-webhook.service.ts` - معالجة الـ webhooks
 - `server/routers/webhooks.ts` - Webhook endpoints
 
 #### كيفية الاستخدام
 
 **1. إعداد Webhook في Stripe Dashboard:**
+
 ```
 URL: https://api.ais.example.com/webhooks/stripe
-Events: payment_intent.succeeded, payment_intent.payment_failed, 
+Events: payment_intent.succeeded, payment_intent.payment_failed,
         charge.refunded, checkout.session.completed, checkout.session.expired
 ```
 
 **2. معالجة الـ Webhook:**
+
 ```typescript
 // Automatic via webhooksRouter
 export const webhooksRouter = router({
   stripe: publicProcedure
-    .input(z.object({
-      body: z.string(),
-      signature: z.string(),
-    }))
+    .input(
+      z.object({
+        body: z.string(),
+        signature: z.string(),
+      })
+    )
     .mutation(async ({ input }) => {
       // 1. Verify signature
       const event = verifyWebhookSignature(input.body, input.signature);
-      
+
       // 2. Check for duplicate
       const alreadyProcessed = await isEventProcessed(event.id);
       if (alreadyProcessed) {
         return { received: true, duplicate: true };
       }
-      
+
       // 3. Store event
       await storeStripeEvent(event);
-      
+
       // 4. Process event
       await processStripeEvent(event);
-      
+
       return { received: true };
     }),
 });
 ```
 
 #### الفوائد
+
 - ✅ Event de-duplication - لا معالجة مكررة
 - ✅ Signature verification - أمان
 - ✅ Audit trail - سجل كامل
@@ -143,6 +155,7 @@ export const webhooksRouter = router({
 #### التغييرات
 
 **Schema:**
+
 ```typescript
 export const financialLedger = mysqlTable("financial_ledger", {
   id: int("id").autoincrement().primaryKey(),
@@ -184,6 +197,7 @@ await recordFinancialTransaction({
 ```
 
 #### الفوائد
+
 - ✅ Complete audit trail - سجل مالي كامل
 - ✅ Reconciliation - مطابقة مع Stripe
 - ✅ Compliance - متطلبات قانونية
@@ -196,6 +210,7 @@ await recordFinancialTransaction({
 #### التغييرات
 
 **Schema:**
+
 ```typescript
 export const refreshTokens = mysqlTable("refresh_tokens", {
   id: int("id").autoincrement().primaryKey(),
@@ -211,11 +226,13 @@ export const refreshTokens = mysqlTable("refresh_tokens", {
 ```
 
 **الملفات الجديدة:**
+
 - `server/services/mobile-auth.service.ts` - Mobile authentication
 
 #### كيفية الاستخدام
 
 **1. Mobile Login:**
+
 ```typescript
 // Client-side
 const response = await api.auth.mobileLogin.mutate({
@@ -242,6 +259,7 @@ await SecureStore.setItemAsync('refreshToken', response.refreshToken);
 ```
 
 **2. Using Access Token:**
+
 ```typescript
 // Add to request headers
 const booking = await fetch('https://api.ais.example.com/bookings', {
@@ -254,6 +272,7 @@ const booking = await fetch('https://api.ais.example.com/bookings', {
 ```
 
 **3. Refresh Access Token:**
+
 ```typescript
 // When access token expires
 const response = await api.auth.refreshToken.mutate({
@@ -261,10 +280,11 @@ const response = await api.auth.refreshToken.mutate({
 });
 
 // Update access token
-await SecureStore.setItemAsync('accessToken', response.accessToken);
+await SecureStore.setItemAsync("accessToken", response.accessToken);
 ```
 
 **4. Logout:**
+
 ```typescript
 // Revoke refresh token
 await api.auth.logout.mutate({
@@ -272,11 +292,12 @@ await api.auth.logout.mutate({
 });
 
 // Clear stored tokens
-await SecureStore.deleteItemAsync('accessToken');
-await SecureStore.deleteItemAsync('refreshToken');
+await SecureStore.deleteItemAsync("accessToken");
+await SecureStore.deleteItemAsync("refreshToken");
 ```
 
 #### الفوائد
+
 - ✅ Mobile-friendly authentication
 - ✅ Short-lived access tokens (15 min) - أمان
 - ✅ Long-lived refresh tokens (7 days) - راحة
@@ -289,13 +310,13 @@ await SecureStore.deleteItemAsync('refreshToken');
 
 #### الأحداث المدعومة
 
-| Event | الإجراء |
-|-------|---------|
-| `payment_intent.succeeded` | تأكيد الحجز + تحديث الدفع + تسجيل في Ledger |
-| `payment_intent.payment_failed` | تحديث حالة الدفع لـ failed |
-| `charge.refunded` | معالجة الاسترداد + تسجيل في Ledger |
-| `checkout.session.completed` | Logging فقط |
-| `checkout.session.expired` | تحديث الحجز لـ expired |
+| Event                           | الإجراء                                     |
+| ------------------------------- | ------------------------------------------- |
+| `payment_intent.succeeded`      | تأكيد الحجز + تحديث الدفع + تسجيل في Ledger |
+| `payment_intent.payment_failed` | تحديث حالة الدفع لـ failed                  |
+| `charge.refunded`               | معالجة الاسترداد + تسجيل في Ledger          |
+| `checkout.session.completed`    | Logging فقط                                 |
+| `checkout.session.expired`      | تحديث الحجز لـ expired                      |
 
 #### Flow Diagram
 
@@ -318,6 +339,7 @@ Mark as Processed ✅
 ```
 
 #### الفوائد
+
 - ✅ Stripe هو مصدر الحقيقة
 - ✅ لا تعارض بين DB و Stripe
 - ✅ Automatic reconciliation
@@ -380,6 +402,7 @@ Headers: Authorization: Bearer <accessToken>
 ```
 
 #### الفوائد
+
 - ✅ Mobile-first authentication
 - ✅ Secure token storage
 - ✅ Session management
@@ -389,16 +412,17 @@ Headers: Authorization: Bearer <accessToken>
 
 ## 📊 ملخص التحسينات
 
-| التحسين | الحالة | الملفات الجديدة | الملفات المعدلة |
-|---------|--------|-----------------|-----------------|
-| Idempotency للحجز | ✅ | - | schema.ts, migration |
-| Stripe Events | ✅ | stripe-webhook.service.ts, webhooks.ts | schema.ts, migration |
-| Financial Ledger | ✅ | - | schema.ts, migration |
-| Refresh Tokens | ✅ | mobile-auth.service.ts | schema.ts, migration |
-| Webhook Processing | ✅ | stripe-webhook.service.ts, webhooks.ts | - |
-| Mobile Auth | ✅ | mobile-auth.service.ts | - |
+| التحسين            | الحالة | الملفات الجديدة                        | الملفات المعدلة      |
+| ------------------ | ------ | -------------------------------------- | -------------------- |
+| Idempotency للحجز  | ✅     | -                                      | schema.ts, migration |
+| Stripe Events      | ✅     | stripe-webhook.service.ts, webhooks.ts | schema.ts, migration |
+| Financial Ledger   | ✅     | -                                      | schema.ts, migration |
+| Refresh Tokens     | ✅     | mobile-auth.service.ts                 | schema.ts, migration |
+| Webhook Processing | ✅     | stripe-webhook.service.ts, webhooks.ts | -                    |
+| Mobile Auth        | ✅     | mobile-auth.service.ts                 | -                    |
 
 **المجموع:**
+
 - **3 ملفات جديدة**
 - **2 ملفات معدلة**
 - **1 migration**
@@ -447,33 +471,35 @@ stripe trigger payment_intent.succeeded
 ### 4. تحديث Client Code
 
 #### Web Client
+
 ```typescript
 // لا تغيير - Cookie-based يعمل كما هو
 ```
 
 #### Mobile Client
+
 ```typescript
 // استخدم Bearer Token
-import { SecureStore } from 'expo-secure-store';
+import { SecureStore } from "expo-secure-store";
 
 // Login
 const { accessToken, refreshToken } = await login(email, password);
-await SecureStore.setItemAsync('accessToken', accessToken);
-await SecureStore.setItemAsync('refreshToken', refreshToken);
+await SecureStore.setItemAsync("accessToken", accessToken);
+await SecureStore.setItemAsync("refreshToken", refreshToken);
 
 // API Calls
-const accessToken = await SecureStore.getItemAsync('accessToken');
+const accessToken = await SecureStore.getItemAsync("accessToken");
 const response = await fetch(url, {
   headers: {
-    'Authorization': `Bearer ${accessToken}`,
+    Authorization: `Bearer ${accessToken}`,
   },
 });
 
 // Refresh on 401
 if (response.status === 401) {
-  const refreshToken = await SecureStore.getItemAsync('refreshToken');
+  const refreshToken = await SecureStore.getItemAsync("refreshToken");
   const { accessToken: newToken } = await refreshAccessToken(refreshToken);
-  await SecureStore.setItemAsync('accessToken', newToken);
+  await SecureStore.setItemAsync("accessToken", newToken);
   // Retry request
 }
 ```
@@ -485,13 +511,13 @@ if (response.status === 401) {
 describe('Booking Flow with Idempotency', () => {
   it('should prevent double booking', async () => {
     const idempotencyKey = uuidv4();
-    
+
     // First request
     const booking1 = await createBooking({ idempotencyKey, ... });
-    
+
     // Duplicate request
     const booking2 = await createBooking({ idempotencyKey, ... });
-    
+
     // Should return same booking
     expect(booking1.id).toBe(booking2.id);
   });
@@ -502,16 +528,16 @@ describe('Stripe Webhook Processing', () => {
   it('should handle payment_intent.succeeded', async () => {
     // Create booking
     const booking = await createBooking({...});
-    
+
     // Simulate webhook
     const event = {
       id: 'evt_test_123',
       type: 'payment_intent.succeeded',
       data: { object: { id: booking.stripePaymentIntentId } },
     };
-    
+
     await processStripeEvent(event);
-    
+
     // Verify booking confirmed
     const updated = await getBooking(booking.id);
     expect(updated.status).toBe('confirmed');
@@ -523,14 +549,14 @@ describe('Stripe Webhook Processing', () => {
 
 ```typescript
 // تأكد من logging
-logger.info('Stripe webhook received', { eventId, type });
-logger.info('Booking confirmed via webhook', { bookingId });
-logger.error('Webhook processing failed', { eventId, error });
+logger.info("Stripe webhook received", { eventId, type });
+logger.info("Booking confirmed via webhook", { bookingId });
+logger.error("Webhook processing failed", { eventId, error });
 
 // إعداد alerts في Sentry
 Sentry.captureException(error, {
   tags: {
-    component: 'stripe-webhook',
+    component: "stripe-webhook",
     eventId: event.id,
   },
 });
@@ -605,7 +631,7 @@ Sentry.captureException(error, {
 ✅ **آمن من double booking**  
 ✅ **آمن من double charge**  
 ✅ **يدعم Stripe webhooks بشكل صحيح**  
-✅ **جاهز للموبايل**  
+✅ **جاهز للموبايل**
 
 **الخطوة التالية:** تشغيل Migration واختبار شامل قبل الإطلاق.
 

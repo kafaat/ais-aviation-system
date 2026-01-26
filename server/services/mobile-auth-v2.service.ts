@@ -1,13 +1,13 @@
 /**
  * Mobile Auth V2 Service - Production-Grade
- * 
+ *
  * Features:
  * - JWT_SECRET is required (fail fast)
  * - Refresh tokens are hashed (SHA256 + pepper)
  * - Token rotation on refresh
  * - Proper cleanup of expired tokens
  * - Rate limiting support
- * 
+ *
  * @version 2.0.0
  * @date 2026-01-26
  */
@@ -155,7 +155,7 @@ export const mobileAuthServiceV2 = {
 
   /**
    * Create refresh token and store hash in database
-   * 
+   *
    * @returns Plain text refresh token (to be sent to client)
    */
   async createRefreshToken(
@@ -168,7 +168,10 @@ export const mobileAuthServiceV2 = {
   ): Promise<string> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
+      throw new AppError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "Database not available"
+      );
     }
 
     // Generate secure random token
@@ -193,7 +196,7 @@ export const mobileAuthServiceV2 = {
 
   /**
    * Verify refresh token and return user info
-   * 
+   *
    * @returns User ID if valid, null if invalid
    */
   async verifyRefreshToken(
@@ -201,7 +204,10 @@ export const mobileAuthServiceV2 = {
   ): Promise<{ userId: number; tokenId: number } | null> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
+      throw new AppError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "Database not available"
+      );
     }
 
     const tokenHash = hashRefreshToken(token);
@@ -224,7 +230,7 @@ export const mobileAuthServiceV2 = {
 
   /**
    * Refresh tokens (rotate refresh token for security)
-   * 
+   *
    * This implements token rotation:
    * 1. Verify old refresh token
    * 2. Revoke old refresh token
@@ -241,13 +247,19 @@ export const mobileAuthServiceV2 = {
   ): Promise<RefreshResult> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
+      throw new AppError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "Database not available"
+      );
     }
 
     // 1. Verify refresh token
     const verified = await this.verifyRefreshToken(refreshToken);
     if (!verified) {
-      throw new AppError(ErrorCode.UNAUTHORIZED, "Invalid or expired refresh token");
+      throw new AppError(
+        ErrorCode.UNAUTHORIZED,
+        "Invalid or expired refresh token"
+      );
     }
 
     // 2. Get user
@@ -268,10 +280,7 @@ export const mobileAuthServiceV2 = {
       .where(eq(refreshTokens.id, verified.tokenId));
 
     // 4. Create new refresh token
-    const newRefreshToken = await this.createRefreshToken(
-      user.id,
-      deviceInfo
-    );
+    const newRefreshToken = await this.createRefreshToken(user.id, deviceInfo);
 
     // 5. Generate new access token
     const accessToken = this.generateAccessToken({
@@ -302,7 +311,10 @@ export const mobileAuthServiceV2 = {
   ): Promise<AuthTokens> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
+      throw new AppError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "Database not available"
+      );
     }
 
     // Get user
@@ -345,7 +357,10 @@ export const mobileAuthServiceV2 = {
   async logout(refreshToken: string): Promise<void> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
+      throw new AppError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "Database not available"
+      );
     }
 
     const tokenHash = hashRefreshToken(refreshToken);
@@ -366,7 +381,10 @@ export const mobileAuthServiceV2 = {
   async logoutAllDevices(userId: number): Promise<number> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
+      throw new AppError(
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "Database not available"
+      );
     }
 
     const result = await db
@@ -375,10 +393,7 @@ export const mobileAuthServiceV2 = {
         revokedAt: new Date(),
       })
       .where(
-        and(
-          eq(refreshTokens.userId, userId),
-          isNull(refreshTokens.revokedAt)
-        )
+        and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt))
       );
 
     const revokedCount = (result as any).rowsAffected || 0;

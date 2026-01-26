@@ -10,11 +10,11 @@
 
 تم دمج جميع التحسينات Production-Grade **مباشرة في الملفات الأصلية** المستخدمة في المشروع:
 
-| الملف | الحجم | التحسينات |
-|-------|-------|-----------|
-| `server/webhooks/stripe.ts` | 15.2 KB | De-dup, Ledger, Transaction |
+| الملف                              | الحجم   | التحسينات                         |
+| ---------------------------------- | ------- | --------------------------------- |
+| `server/webhooks/stripe.ts`        | 15.2 KB | De-dup, Ledger, Transaction       |
 | `server/services/cache.service.ts` | 12.8 KB | Versioned Keys, O(1) Invalidation |
-| `server/services/queue.service.ts` | 16.5 KB | Actual Implementation |
+| `server/services/queue.service.ts` | 16.5 KB | Actual Implementation             |
 
 ---
 
@@ -25,6 +25,7 @@
 **الملف:** `server/webhooks/stripe.ts`
 
 **التنفيذ:**
+
 - يتحقق من `stripeEvents.processed` قبل المعالجة
 - `processed=true` فقط يمنع التكرار
 - `processed=false` يسمح بإعادة المحاولة
@@ -45,25 +46,30 @@ if (existing?.processed) {
 ### 2. Transaction Safety ✅
 
 **التنفيذ:**
+
 - جميع التحديثات داخل `db.transaction()`
 - Rollback تلقائي عند الفشل
 - `processed=true` فقط عند النجاح
 
 ```typescript
-await db.transaction(async (tx) => {
+await db.transaction(async tx => {
   await processEvent(tx, event);
-  
+
   // Mark as processed only on success
-  await tx.update(stripeEvents).set({
-    processed: true,
-    processedAt: new Date(),
-  }).where(eq(stripeEvents.id, event.id));
+  await tx
+    .update(stripeEvents)
+    .set({
+      processed: true,
+      processedAt: new Date(),
+    })
+    .where(eq(stripeEvents.id, event.id));
 });
 ```
 
 ### 3. Financial Ledger ✅
 
 **التنفيذ:**
+
 - تسجيل كل معاملة مالية في `financialLedger`
 - حماية من التكرار (unique constraint)
 - دعم: charge, refund, partial_refund
@@ -82,15 +88,18 @@ await tx.insert(financialLedger).values({
 ### 4. State Machine Guards ✅
 
 **التنفيذ:**
+
 - التحقق من صحة الانتقال قبل التحديث
 - تسجيل التاريخ في `bookingStatusHistory`
 - رفض الانتقالات غير الصالحة
 
 ```typescript
 // Check state transition is valid
-if (booking.status !== "pending_payment" && 
-    booking.status !== "pending" && 
-    booking.status !== "confirmed") {
+if (
+  booking.status !== "pending_payment" &&
+  booking.status !== "pending" &&
+  booking.status !== "confirmed"
+) {
   throw new Error(`Invalid state transition: ${booking.status} -> confirmed`);
 }
 ```
@@ -104,6 +113,7 @@ if (booking.status !== "pending_payment" &&
 **الملف:** `server/services/cache.service.ts`
 
 **التنفيذ:**
+
 - كل namespace له version number
 - Invalidation = increment version (O(1))
 - لا يستخدم KEYS command
@@ -129,6 +139,7 @@ async invalidateNamespace(namespace: string): Promise<void> {
 **التنفيذ:**
 
 #### Email Processing
+
 ```typescript
 private async processEmailJob(job: Job): Promise<void> {
   switch (type) {
@@ -144,6 +155,7 @@ private async processEmailJob(job: Job): Promise<void> {
 ```
 
 #### Webhook Retry
+
 ```typescript
 private async processWebhookRetryJob(job: Job): Promise<void> {
   const stripeEvent = await stripe.events.retrieve(eventId);
@@ -152,6 +164,7 @@ private async processWebhookRetryJob(job: Job): Promise<void> {
 ```
 
 #### Reconciliation (Daily at 2 AM)
+
 ```typescript
 private async processReconciliationJob(job: Job): Promise<void> {
   // 1. Get confirmed bookings
@@ -162,6 +175,7 @@ private async processReconciliationJob(job: Job): Promise<void> {
 ```
 
 #### Cleanup (Hourly)
+
 ```typescript
 private async processCleanupJob(job: Job): Promise<void> {
   switch (type) {
@@ -216,29 +230,29 @@ npx drizzle-kit push:mysql
 
 ### server/webhooks/stripe.ts
 
-| قبل | بعد |
-|-----|-----|
+| قبل               | بعد                        |
+| ----------------- | -------------------------- |
 | لا de-duplication | ✅ De-dup via stripeEvents |
-| لا transaction | ✅ Full transaction |
-| لا ledger | ✅ Financial ledger |
-| لا state guards | ✅ State machine guards |
+| لا transaction    | ✅ Full transaction        |
+| لا ledger         | ✅ Financial ledger        |
+| لا state guards   | ✅ State machine guards    |
 
 ### server/services/cache.service.ts
 
-| قبل | بعد |
-|-----|-----|
-| Simple keys | ✅ Versioned keys |
+| قبل                   | بعد                  |
+| --------------------- | -------------------- |
+| Simple keys           | ✅ Versioned keys    |
 | SCAN for invalidation | ✅ O(1) invalidation |
-| No health check | ✅ Health check |
+| No health check       | ✅ Health check      |
 
 ### server/services/queue.service.ts
 
-| قبل | بعد |
-|-----|-----|
+| قبل               | بعد                     |
+| ----------------- | ----------------------- |
 | TODO placeholders | ✅ Actual email sending |
-| No webhook retry | ✅ Webhook retry |
+| No webhook retry  | ✅ Webhook retry        |
 | No reconciliation | ✅ Daily reconciliation |
-| No cleanup | ✅ Hourly cleanup |
+| No cleanup        | ✅ Hourly cleanup       |
 
 ---
 
@@ -261,6 +275,7 @@ npx drizzle-kit push:mysql
 **Production Readiness: 10/10** 🎉
 
 النظام الآن:
+
 - ✅ آمن من double processing
 - ✅ آمن من double charge
 - ✅ لديه audit trail كامل

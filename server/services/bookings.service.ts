@@ -120,9 +120,8 @@ export async function createBooking(input: CreateBookingInput) {
 
     // Add ancillary services if provided
     if (input.ancillaries && input.ancillaries.length > 0) {
-      const { addAncillaryToBooking } = await import(
-        "./ancillary-services.service"
-      );
+      const { addAncillaryToBooking } =
+        await import("./ancillary-services.service");
       for (const ancillary of input.ancillaries) {
         await addAncillaryToBooking({
           bookingId,

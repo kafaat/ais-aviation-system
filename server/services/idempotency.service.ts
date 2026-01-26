@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import * as db from "../db";
-import { idempotencyRequests, type InsertIdempotencyRequest } from "../../drizzle/schema";
+import {
+  idempotencyRequests,
+  type InsertIdempotencyRequest,
+} from "../../drizzle/schema";
 import { eq, and, lt } from "drizzle-orm";
 import { logger } from "./logger.service";
 import { Errors } from "../_core/errors";
@@ -125,7 +128,11 @@ export async function createIdempotencyRecord(
     return true;
   } catch (error: any) {
     // Check if it's a duplicate key error
-    if (error.code === "ER_DUP_ENTRY" || error.code === "23505" || error.code === "23000") {
+    if (
+      error.code === "ER_DUP_ENTRY" ||
+      error.code === "23505" ||
+      error.code === "23000"
+    ) {
       logger.info("Idempotency record already exists (race condition)", {
         scope,
         idempotencyKey,
@@ -273,16 +280,21 @@ export async function withIdempotency<T>(
   if (!created) {
     // Race condition - another request created the record
     // Check existing status instead of recursing
-    const existing = await checkIdempotency(scope, idempotencyKey, userId, requestPayload);
-    
+    const existing = await checkIdempotency(
+      scope,
+      idempotencyKey,
+      userId,
+      requestPayload
+    );
+
     if (existing.exists && existing.status === "COMPLETED") {
       return existing.response as T;
     }
-    
+
     if (existing.exists && existing.status === "STARTED") {
       Errors.idempotencyInProgress();
     }
-    
+
     // If FAILED, allow retry by continuing
   }
 

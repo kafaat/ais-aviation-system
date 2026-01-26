@@ -4,11 +4,11 @@
 
 This document describes the three critical P0 features implemented to enhance the AIS Aviation System's revenue management and operational capabilities.
 
-| Feature | Expected ROI | Markets Impact |
-|---------|-------------|----------------|
-| Dynamic Pricing Engine | +15-25% Revenue | All markets |
-| Multi-Currency Support | 3+ New Markets | SAR, USD, EUR, AED, GBP, KWD, BHD, QAR, OMR, EGP |
-| Advanced Inventory Management | +5-10% Occupancy | All flights |
+| Feature                       | Expected ROI     | Markets Impact                                   |
+| ----------------------------- | ---------------- | ------------------------------------------------ |
+| Dynamic Pricing Engine        | +15-25% Revenue  | All markets                                      |
+| Multi-Currency Support        | 3+ New Markets   | SAR, USD, EUR, AED, GBP, KWD, BHD, QAR, OMR, EGP |
+| Advanced Inventory Management | +5-10% Occupancy | All flights                                      |
 
 ---
 
@@ -20,14 +20,14 @@ The Dynamic Pricing Engine implements revenue management algorithms to optimize 
 
 ### 1.2 Pricing Factors
 
-| Factor | Description | Multiplier Range |
-|--------|-------------|------------------|
-| **Demand** | Based on booking velocity and search volume | 0.85x - 1.50x |
-| **Time (Advance Purchase)** | Days until departure | 0.80x - 1.80x |
-| **Occupancy (Load Factor)** | Current seat availability | 0.80x - 1.80x |
-| **Seasonal** | Peak travel seasons | 0.90x - 1.80x |
-| **Day of Week** | Weekend premium | 1.00x - 1.10x |
-| **Cabin Class** | Business class premium | 1.00x - 1.05x |
+| Factor                      | Description                                 | Multiplier Range |
+| --------------------------- | ------------------------------------------- | ---------------- |
+| **Demand**                  | Based on booking velocity and search volume | 0.85x - 1.50x    |
+| **Time (Advance Purchase)** | Days until departure                        | 0.80x - 1.80x    |
+| **Occupancy (Load Factor)** | Current seat availability                   | 0.80x - 1.80x    |
+| **Seasonal**                | Peak travel seasons                         | 0.90x - 1.80x    |
+| **Day of Week**             | Weekend premium                             | 1.00x - 1.10x    |
+| **Cabin Class**             | Business class premium                      | 1.00x - 1.05x    |
 
 ### 1.3 Pricing Rules
 
@@ -50,15 +50,15 @@ The Dynamic Pricing Engine implements revenue management algorithms to optimize 
 
 ### 1.4 Seasonal Pricing (Saudi Arabia)
 
-| Season | Period | Multiplier |
-|--------|--------|------------|
-| Hajj Season | June 1-20 | 1.80x |
-| Umrah Peak (Ramadan) | Feb 28 - Mar 30 | 1.50x |
-| Eid Al-Fitr | Mar 29 - Apr 5 | 1.60x |
-| Eid Al-Adha | Jun 5-15 | 1.70x |
-| Summer Holiday | Jul 1 - Aug 31 | 1.25x |
-| National Day | Sep 21-25 | 1.30x |
-| Winter Break | Dec 20 - Jan 5 | 1.35x |
+| Season               | Period          | Multiplier |
+| -------------------- | --------------- | ---------- |
+| Hajj Season          | June 1-20       | 1.80x      |
+| Umrah Peak (Ramadan) | Feb 28 - Mar 30 | 1.50x      |
+| Eid Al-Fitr          | Mar 29 - Apr 5  | 1.60x      |
+| Eid Al-Adha          | Jun 5-15        | 1.70x      |
+| Summer Holiday       | Jul 1 - Aug 31  | 1.25x      |
+| National Day         | Sep 21-25       | 1.30x      |
+| Winter Break         | Dec 20 - Jan 5  | 1.35x      |
 
 ### 1.5 API Endpoints
 
@@ -69,8 +69,8 @@ pricing.calculate({
   cabinClass: "economy",
   passengers: 2,
   currency: "USD",
-  promoCode: "SUMMER10"
-})
+  promoCode: "SUMMER10",
+});
 
 // Get price range for route
 pricing.getPriceRange({
@@ -79,22 +79,22 @@ pricing.getPriceRange({
   cabinClass: "economy",
   startDate: "2026-02-01",
   endDate: "2026-02-28",
-  currency: "SAR"
-})
+  currency: "SAR",
+});
 
 // Validate price
 pricing.validate({
   priceId: "PRC-123-economy-50000-...",
-  expectedPrice: 50000
-})
+  expectedPrice: 50000,
+});
 
 // Get price forecast
 pricing.getForecast({
   flightId: 123,
   cabinClass: "economy",
   days: 7,
-  currency: "SAR"
-})
+  currency: "SAR",
+});
 ```
 
 ### 1.6 Price Validity
@@ -109,32 +109,32 @@ pricing.getForecast({
 
 ### 2.1 Supported Currencies
 
-| Code | Currency | Arabic Name | Symbol | Decimals |
-|------|----------|-------------|--------|----------|
-| SAR | Saudi Riyal | ريال سعودي | ر.س | 2 |
-| USD | US Dollar | دولار أمريكي | $ | 2 |
-| EUR | Euro | يورو | € | 2 |
-| AED | UAE Dirham | درهم إماراتي | د.إ | 2 |
-| GBP | British Pound | جنيه إسترليني | £ | 2 |
-| KWD | Kuwaiti Dinar | دينار كويتي | د.ك | 3 |
-| BHD | Bahraini Dinar | دينار بحريني | د.ب | 3 |
-| QAR | Qatari Riyal | ريال قطري | ر.ق | 2 |
-| OMR | Omani Rial | ريال عماني | ر.ع | 3 |
-| EGP | Egyptian Pound | جنيه مصري | ج.م | 2 |
+| Code | Currency       | Arabic Name   | Symbol | Decimals |
+| ---- | -------------- | ------------- | ------ | -------- |
+| SAR  | Saudi Riyal    | ريال سعودي    | ر.س    | 2        |
+| USD  | US Dollar      | دولار أمريكي  | $      | 2        |
+| EUR  | Euro           | يورو          | €      | 2        |
+| AED  | UAE Dirham     | درهم إماراتي  | د.إ    | 2        |
+| GBP  | British Pound  | جنيه إسترليني | £      | 2        |
+| KWD  | Kuwaiti Dinar  | دينار كويتي   | د.ك    | 3        |
+| BHD  | Bahraini Dinar | دينار بحريني  | د.ب    | 3        |
+| QAR  | Qatari Riyal   | ريال قطري     | ر.ق    | 2        |
+| OMR  | Omani Rial     | ريال عماني    | ر.ع    | 3        |
+| EGP  | Egyptian Pound | جنيه مصري     | ج.م    | 2        |
 
 ### 2.2 Exchange Rates (Base: SAR)
 
-| From | To | Rate |
-|------|-----|------|
-| SAR | USD | 0.2666 |
-| SAR | EUR | 0.2450 |
-| SAR | AED | 0.9793 |
-| SAR | GBP | 0.2100 |
-| SAR | KWD | 0.0820 |
-| SAR | BHD | 0.1004 |
-| SAR | QAR | 0.9707 |
-| SAR | OMR | 0.1026 |
-| SAR | EGP | 8.2400 |
+| From | To  | Rate   |
+| ---- | --- | ------ |
+| SAR  | USD | 0.2666 |
+| SAR  | EUR | 0.2450 |
+| SAR  | AED | 0.9793 |
+| SAR  | GBP | 0.2100 |
+| SAR  | KWD | 0.0820 |
+| SAR  | BHD | 0.1004 |
+| SAR  | QAR | 0.9707 |
+| SAR  | OMR | 0.1026 |
+| SAR  | EGP | 8.2400 |
 
 ### 2.3 Currency Conversion
 
@@ -181,20 +181,20 @@ const display = await CurrencyService.convertPriceForDisplay(
 
 ```typescript
 // Get supported currencies
-pricing.getSupportedCurrencies()
+pricing.getSupportedCurrencies();
 
 // Convert currency
 pricing.convertCurrency({
   amount: 1000,
   fromCurrency: "SAR",
-  toCurrency: "USD"
-})
+  toCurrency: "USD",
+});
 
 // Get exchange rate
 pricing.getExchangeRate({
   fromCurrency: "SAR",
-  toCurrency: "EUR"
-})
+  toCurrency: "EUR",
+});
 ```
 
 ---
@@ -203,12 +203,12 @@ pricing.getExchangeRate({
 
 ### 3.1 Inventory Status
 
-| Status | Occupancy | Description |
-|--------|-----------|-------------|
-| `available` | < 85% | Seats readily available |
-| `limited` | 85-98% | Limited availability |
-| `waitlist_only` | > 98% | Only waitlist available |
-| `closed` | 100% | No seats available |
+| Status          | Occupancy | Description             |
+| --------------- | --------- | ----------------------- |
+| `available`     | < 85%     | Seats readily available |
+| `limited`       | 85-98%    | Limited availability    |
+| `waitlist_only` | > 98%     | Only waitlist available |
+| `closed`        | 100%      | No seats available      |
 
 ### 3.2 Seat Holds
 
@@ -238,14 +238,14 @@ const result = await InventoryService.allocateSeats(
 
 ### 3.3 Overbooking Management
 
-| Class | Default Rate | Max Overbooking |
-|-------|-------------|-----------------|
-| Economy | 5% | 10 seats |
-| Business | 2% | 5 seats |
+| Class    | Default Rate | Max Overbooking |
+| -------- | ------------ | --------------- |
+| Economy  | 5%           | 10 seats        |
+| Business | 2%           | 5 seats         |
 
 ```typescript
 // Calculate effective availability
-effectiveAvailable = availableSeats + overbookingLimit
+effectiveAvailable = availableSeats + overbookingLimit;
 
 // Example:
 // Available: 5 seats
@@ -280,11 +280,11 @@ const entry = await InventoryService.addToWaitlist(
 ### 3.5 Demand Forecasting
 
 | Days Until Departure | Predicted Demand | Risk Level |
-|---------------------|------------------|------------|
-| ≤ 3 days | High (15) | High |
-| 4-7 days | Medium (10) | Medium |
-| 8-14 days | Low (5) | Low |
-| > 14 days | Very Low (3) | Low |
+| -------------------- | ---------------- | ---------- |
+| ≤ 3 days             | High (15)        | High       |
+| 4-7 days             | Medium (10)      | Medium     |
+| 8-14 days            | Low (5)          | Low        |
+| > 14 days            | Very Low (3)     | Low        |
 
 ### 3.6 Denied Boarding Handling
 
@@ -310,39 +310,39 @@ const result = await InventoryService.handleDeniedBoarding(
 // Get inventory status
 inventory.getStatus({
   flightId: 123,
-  cabinClass: "economy"
-})
+  cabinClass: "economy",
+});
 
 // Allocate seats
 inventory.allocateSeats({
   flightId: 123,
   cabinClass: "economy",
   seats: 2,
-  sessionId: "session-abc"
-})
+  sessionId: "session-abc",
+});
 
 // Release hold
 inventory.releaseHold({
-  holdId: 789
-})
+  holdId: 789,
+});
 
 // Add to waitlist
 inventory.addToWaitlist({
   flightId: 123,
   cabinClass: "economy",
-  seats: 2
-})
+  seats: 2,
+});
 
 // Get demand forecast (admin)
 inventory.getForecast({
   flightId: 123,
-  daysAhead: 30
-})
+  daysAhead: 30,
+});
 
 // Get recommended overbooking (admin)
 inventory.getRecommendedOverbooking({
-  flightId: 123
-})
+  flightId: 123,
+});
 ```
 
 ---
@@ -351,18 +351,18 @@ inventory.getRecommendedOverbooking({
 
 ### 4.1 New Tables
 
-| Table | Purpose |
-|-------|---------|
-| `pricing_rules` | Dynamic pricing rule definitions |
-| `pricing_history` | Price calculation audit trail |
-| `seasonal_pricing` | Seasonal price adjustments |
-| `currencies` | Supported currencies |
-| `exchange_rates` | Currency exchange rates |
-| `seat_holds` | Temporary seat reservations |
-| `waitlist` | Flight waitlist entries |
-| `overbooking_config` | Overbooking settings per route |
-| `inventory_snapshots` | Daily inventory snapshots |
-| `denied_boarding_records` | Denied boarding incidents |
+| Table                     | Purpose                          |
+| ------------------------- | -------------------------------- |
+| `pricing_rules`           | Dynamic pricing rule definitions |
+| `pricing_history`         | Price calculation audit trail    |
+| `seasonal_pricing`        | Seasonal price adjustments       |
+| `currencies`              | Supported currencies             |
+| `exchange_rates`          | Currency exchange rates          |
+| `seat_holds`              | Temporary seat reservations      |
+| `waitlist`                | Flight waitlist entries          |
+| `overbooking_config`      | Overbooking settings per route   |
+| `inventory_snapshots`     | Daily inventory snapshots        |
+| `denied_boarding_records` | Denied boarding incidents        |
 
 ### 4.2 Migration
 
@@ -398,11 +398,11 @@ DEFAULT_OVERBOOKING_RATE=0.05
 
 ### 5.2 Cache Keys
 
-| Key Pattern | TTL | Purpose |
-|-------------|-----|---------|
-| `pricing_rules:{airline}:{origin}:{dest}` | 5 min | Pricing rules cache |
-| `exchange_rate:{from}_{to}` | 1 hour | Exchange rate cache |
-| `inventory:{flight}:{class}` | 1 min | Inventory status cache |
+| Key Pattern                               | TTL    | Purpose                |
+| ----------------------------------------- | ------ | ---------------------- |
+| `pricing_rules:{airline}:{origin}:{dest}` | 5 min  | Pricing rules cache    |
+| `exchange_rate:{from}_{to}`               | 1 hour | Exchange rate cache    |
+| `inventory:{flight}:{class}`              | 1 min  | Inventory status cache |
 
 ---
 
@@ -431,13 +431,13 @@ npm run test
 
 ### 7.1 Key Metrics
 
-| Metric | Description | Alert Threshold |
-|--------|-------------|-----------------|
-| `pricing_calculation_time` | Price calculation latency | > 500ms |
-| `currency_conversion_errors` | Failed conversions | > 1% |
-| `seat_hold_expiration_rate` | Holds that expire | > 30% |
-| `waitlist_conversion_rate` | Waitlist to booking | < 20% |
-| `overbooking_denied_rate` | Denied boardings | > 1% |
+| Metric                       | Description               | Alert Threshold |
+| ---------------------------- | ------------------------- | --------------- |
+| `pricing_calculation_time`   | Price calculation latency | > 500ms         |
+| `currency_conversion_errors` | Failed conversions        | > 1%            |
+| `seat_hold_expiration_rate`  | Holds that expire         | > 30%           |
+| `waitlist_conversion_rate`   | Waitlist to booking       | < 20%           |
+| `overbooking_denied_rate`    | Denied boardings          | > 1%            |
 
 ### 7.2 Logging
 
@@ -485,5 +485,5 @@ For technical support or questions about these features:
 
 ---
 
-*Last Updated: January 26, 2026*
-*Version: 1.0.0-beta*
+_Last Updated: January 26, 2026_
+_Version: 1.0.0-beta_

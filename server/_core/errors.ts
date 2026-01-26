@@ -20,37 +20,37 @@ export interface APIError {
 export enum ErrorCode {
   // Validation errors
   VALIDATION_ERROR = "VALIDATION_ERROR",
-  
+
   // Authentication & Authorization
   UNAUTHORIZED = "UNAUTHORIZED",
   FORBIDDEN = "FORBIDDEN",
   TOKEN_EXPIRED = "TOKEN_EXPIRED",
-  
+
   // Resource errors
   NOT_FOUND = "NOT_FOUND",
-  
+
   // Rate limiting
   RATE_LIMITED = "RATE_LIMITED",
-  
+
   // Idempotency
   IDEMPOTENCY_IN_PROGRESS = "IDEMPOTENCY_IN_PROGRESS",
   IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT",
-  
+
   // Booking errors
   BOOKING_CONFLICT = "BOOKING_CONFLICT",
   SEATS_UNAVAILABLE = "SEATS_UNAVAILABLE",
   BOOKING_EXPIRED = "BOOKING_EXPIRED",
   INVALID_STATE_TRANSITION = "INVALID_STATE_TRANSITION",
-  
+
   // Payment errors
   PAYMENT_FAILED = "PAYMENT_FAILED",
   PAYMENT_REQUIRED = "PAYMENT_REQUIRED",
   PAYMENT_PROCESSING = "PAYMENT_PROCESSING",
-  
+
   // Provider errors
   PROVIDER_ERROR = "PROVIDER_ERROR",
   PROVIDER_TIMEOUT = "PROVIDER_TIMEOUT",
-  
+
   // Generic errors
   INTERNAL_ERROR = "INTERNAL_ERROR",
   SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE",
@@ -112,10 +112,7 @@ export function createAPIError(
 /**
  * Transform any error to standardized API error
  */
-export function transformError(
-  error: any,
-  correlationId?: string
-): APIError {
+export function transformError(error: any, correlationId?: string): APIError {
   const cid = correlationId || uuidv4();
 
   // Handle our custom API errors
@@ -184,11 +181,13 @@ export const Errors = {
   rateLimited: (message: string = "Too many requests") =>
     throwAPIError(ErrorCode.RATE_LIMITED, message),
 
-  idempotencyInProgress: (message: string = "Request is already being processed") =>
-    throwAPIError(ErrorCode.IDEMPOTENCY_IN_PROGRESS, message),
+  idempotencyInProgress: (
+    message: string = "Request is already being processed"
+  ) => throwAPIError(ErrorCode.IDEMPOTENCY_IN_PROGRESS, message),
 
-  idempotencyConflict: (message: string = "Idempotency key already used with different payload") =>
-    throwAPIError(ErrorCode.IDEMPOTENCY_CONFLICT, message),
+  idempotencyConflict: (
+    message: string = "Idempotency key already used with different payload"
+  ) => throwAPIError(ErrorCode.IDEMPOTENCY_CONFLICT, message),
 
   bookingConflict: (message: string) =>
     throwAPIError(ErrorCode.BOOKING_CONFLICT, message),
@@ -232,7 +231,7 @@ export const Errors = {
  */
 export function formatErrorResponse(error: any, correlationId?: string) {
   const apiError = transformError(error, correlationId);
-  
+
   return {
     error: apiError,
   };

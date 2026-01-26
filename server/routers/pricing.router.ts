@@ -1,13 +1,18 @@
 /**
  * Pricing Router
- * 
+ *
  * tRPC endpoints for dynamic pricing operations
- * 
+ *
  * @module routers/pricing.router
  */
 
 import { z } from "zod";
-import { router, publicProcedure, protectedProcedure, adminProcedure } from "../trpc";
+import {
+  router,
+  publicProcedure,
+  protectedProcedure,
+  adminProcedure,
+} from "../trpc";
 import { DynamicPricingService } from "../services/pricing/dynamic-pricing.service";
 import { CurrencyService } from "../services/currency/currency.service";
 import { TRPCError } from "@trpc/server";
@@ -97,7 +102,10 @@ export const pricingRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to calculate price",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to calculate price",
         });
       }
     }),
@@ -166,7 +174,10 @@ export const pricingRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to get price range",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to get price range",
         });
       }
     }),
@@ -205,7 +216,7 @@ export const pricingRouter = router({
         // Convert to requested currency if needed
         if (input.currency !== "SAR") {
           const convertedForecast = await Promise.all(
-            forecast.map(async (item) => {
+            forecast.map(async item => {
               const conversion = await CurrencyService.convertCurrency(
                 item.predictedPrice / 100,
                 "SAR",
@@ -234,7 +245,7 @@ export const pricingRouter = router({
         return {
           success: true,
           data: {
-            forecast: forecast.map((item) => ({
+            forecast: forecast.map(item => ({
               ...item,
               formatted: CurrencyService.formatPrice(
                 item.predictedPrice / 100,
@@ -247,7 +258,8 @@ export const pricingRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to get forecast",
+          message:
+            error instanceof Error ? error.message : "Failed to get forecast",
         });
       }
     }),
@@ -289,7 +301,10 @@ export const pricingRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: error instanceof Error ? error.message : "Currency conversion failed",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Currency conversion failed",
         });
       }
     }),
@@ -318,7 +333,10 @@ export const pricingRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: error instanceof Error ? error.message : "Failed to get exchange rate",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to get exchange rate",
         });
       }
     }),

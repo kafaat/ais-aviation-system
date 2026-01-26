@@ -9,6 +9,7 @@
 ## 📋 نظرة عامة
 
 هذا Sprint يركز على **الصحة الأساسية** للنظام. نريد التأكد من أن:
+
 1. كل حجز له حالة واضحة ومحددة
 2. لا يمكن حجز نفس المقعد مرتين
 3. لا يمكن شحن العميل مرتين
@@ -21,6 +22,7 @@
 ### US-1.1: تعريف حالات الحجز رسمياً
 
 #### الوصف
+
 تحديد جميع الحالات الممكنة للحجز وتوثيقها بشكل واضح.
 
 #### الحالات المطلوبة
@@ -30,30 +32,30 @@
 
 export enum BookingStatus {
   // Initial states
-  PENDING = 'pending',              // تم إنشاء الحجز، في انتظار الدفع
-  PAYMENT_PROCESSING = 'payment_processing', // جاري معالجة الدفع
-  
+  PENDING = "pending", // تم إنشاء الحجز، في انتظار الدفع
+  PAYMENT_PROCESSING = "payment_processing", // جاري معالجة الدفع
+
   // Success states
-  CONFIRMED = 'confirmed',          // تم تأكيد الحجز والدفع
-  CHECKED_IN = 'checked_in',        // تم تسجيل الوصول
-  COMPLETED = 'completed',          // تم إكمال الرحلة
-  
+  CONFIRMED = "confirmed", // تم تأكيد الحجز والدفع
+  CHECKED_IN = "checked_in", // تم تسجيل الوصول
+  COMPLETED = "completed", // تم إكمال الرحلة
+
   // Modification states
-  MODIFICATION_REQUESTED = 'modification_requested', // طلب تعديل
-  MODIFIED = 'modified',            // تم التعديل
-  
+  MODIFICATION_REQUESTED = "modification_requested", // طلب تعديل
+  MODIFIED = "modified", // تم التعديل
+
   // Cancellation states
-  CANCELLATION_REQUESTED = 'cancellation_requested', // طلب إلغاء
-  CANCELLED = 'cancelled',          // تم الإلغاء
-  
+  CANCELLATION_REQUESTED = "cancellation_requested", // طلب إلغاء
+  CANCELLED = "cancelled", // تم الإلغاء
+
   // Refund states
-  REFUND_PENDING = 'refund_pending', // في انتظار الاسترداد
-  REFUNDED = 'refunded',            // تم الاسترداد
-  PARTIALLY_REFUNDED = 'partially_refunded', // استرداد جزئي
-  
+  REFUND_PENDING = "refund_pending", // في انتظار الاسترداد
+  REFUNDED = "refunded", // تم الاسترداد
+  PARTIALLY_REFUNDED = "partially_refunded", // استرداد جزئي
+
   // Failure states
-  PAYMENT_FAILED = 'payment_failed', // فشل الدفع
-  EXPIRED = 'expired',              // انتهت صلاحية الحجز
+  PAYMENT_FAILED = "payment_failed", // فشل الدفع
+  EXPIRED = "expired", // انتهت صلاحية الحجز
 }
 ```
 
@@ -100,6 +102,7 @@ export enum BookingStatus {
 ### US-1.2: منع الانتقال لحالة غير منطقية
 
 #### الوصف
+
 تطبيق validations صارمة لمنع الانتقالات غير المنطقية بين الحالات.
 
 #### Allowed Transitions
@@ -113,45 +116,41 @@ const ALLOWED_TRANSITIONS: Record<BookingStatus, BookingStatus[]> = {
     BookingStatus.EXPIRED,
     BookingStatus.CANCELLED,
   ],
-  
+
   [BookingStatus.PAYMENT_PROCESSING]: [
     BookingStatus.CONFIRMED,
     BookingStatus.PAYMENT_FAILED,
   ],
-  
+
   [BookingStatus.CONFIRMED]: [
     BookingStatus.CHECKED_IN,
     BookingStatus.MODIFICATION_REQUESTED,
     BookingStatus.CANCELLATION_REQUESTED,
   ],
-  
-  [BookingStatus.CHECKED_IN]: [
-    BookingStatus.COMPLETED,
-  ],
-  
+
+  [BookingStatus.CHECKED_IN]: [BookingStatus.COMPLETED],
+
   [BookingStatus.MODIFICATION_REQUESTED]: [
     BookingStatus.MODIFIED,
     BookingStatus.CONFIRMED, // رفض التعديل
   ],
-  
+
   [BookingStatus.MODIFIED]: [
     BookingStatus.CONFIRMED, // بعد إتمام التعديل
   ],
-  
+
   [BookingStatus.CANCELLATION_REQUESTED]: [
     BookingStatus.CANCELLED,
     BookingStatus.CONFIRMED, // رفض الإلغاء
   ],
-  
-  [BookingStatus.CANCELLED]: [
-    BookingStatus.REFUND_PENDING,
-  ],
-  
+
+  [BookingStatus.CANCELLED]: [BookingStatus.REFUND_PENDING],
+
   [BookingStatus.REFUND_PENDING]: [
     BookingStatus.REFUNDED,
     BookingStatus.PARTIALLY_REFUNDED,
   ],
-  
+
   // Terminal states - لا انتقالات
   [BookingStatus.COMPLETED]: [],
   [BookingStatus.REFUNDED]: [],
@@ -184,7 +183,7 @@ export class BookingStateMachineService {
     }
 
     // Log the transition
-    logger.info('Booking state transition', {
+    logger.info("Booking state transition", {
       bookingId: booking.id,
       from: booking.status,
       to: newStatus,
@@ -236,6 +235,7 @@ server/
 ### US-1.3: إضافة Idempotency Keys للحجوزات
 
 #### الوصف
+
 تطبيق idempotency للحجوزات لمنع التكرار عند إعادة إرسال الطلب.
 
 #### Database Schema
@@ -243,17 +243,21 @@ server/
 ```typescript
 // drizzle/schema.ts
 
-export const idempotencyKeys = pgTable('idempotency_keys', {
-  key: varchar('key', { length: 255 }).primaryKey(),
-  resourceType: varchar('resource_type', { length: 50 }).notNull(), // 'booking', 'payment', etc.
-  resourceId: varchar('resource_id', { length: 255 }), // ID of created resource
-  response: json('response'), // Cached response
-  statusCode: integer('status_code'), // HTTP status code
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  expiresAt: timestamp('expires_at').notNull(), // 24 hours from creation
-}, (table) => ({
-  expiresAtIdx: index('idempotency_keys_expires_at_idx').on(table.expiresAt),
-}));
+export const idempotencyKeys = pgTable(
+  "idempotency_keys",
+  {
+    key: varchar("key", { length: 255 }).primaryKey(),
+    resourceType: varchar("resource_type", { length: 50 }).notNull(), // 'booking', 'payment', etc.
+    resourceId: varchar("resource_id", { length: 255 }), // ID of created resource
+    response: json("response"), // Cached response
+    statusCode: integer("status_code"), // HTTP status code
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    expiresAt: timestamp("expires_at").notNull(), // 24 hours from creation
+  },
+  table => ({
+    expiresAtIdx: index("idempotency_keys_expires_at_idx").on(table.expiresAt),
+  })
+);
 ```
 
 #### Migration
@@ -365,7 +369,7 @@ export const bookingsRouter = router({
       // Store idempotency key
       await idempotencyService.store(
         idempotencyKey,
-        'booking',
+        "booking",
         booking.id,
         booking,
         200
@@ -381,7 +385,7 @@ export const bookingsRouter = router({
 ```typescript
 // client/src/hooks/useBooking.ts
 
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
 export function useBooking() {
   const createBooking = async (data: BookingData) => {
@@ -419,6 +423,7 @@ export function useBooking() {
 ### US-1.4: لفّ العمليات الحرجة بـ Transactions
 
 #### الوصف
+
 التأكد من أن جميع العمليات الحرجة atomic باستخدام database transactions.
 
 #### العمليات الحرجة
@@ -447,13 +452,13 @@ export function useBooking() {
 export class BookingsService {
   async create(data: CreateBookingInput, userId: string): Promise<Booking> {
     // Start transaction
-    return await db.transaction(async (tx) => {
+    return await db.transaction(async tx => {
       // 1. Check seat availability (with lock)
       const flight = await tx
         .select()
         .from(flights)
         .where(eq(flights.id, data.flightId))
-        .for('update') // Row-level lock
+        .for("update") // Row-level lock
         .limit(1);
 
       if (flight[0].availableSeats < data.passengers.length) {
@@ -461,12 +466,15 @@ export class BookingsService {
       }
 
       // 2. Create booking
-      const booking = await tx.insert(bookings).values({
-        userId,
-        flightId: data.flightId,
-        status: BookingStatus.PENDING,
-        totalAmount: data.totalAmount,
-      }).returning();
+      const booking = await tx
+        .insert(bookings)
+        .values({
+          userId,
+          flightId: data.flightId,
+          status: BookingStatus.PENDING,
+          totalAmount: data.totalAmount,
+        })
+        .returning();
 
       // 3. Create passengers
       await tx.insert(passengers).values(
@@ -488,7 +496,7 @@ export class BookingsService {
       await tx.insert(payments).values({
         bookingId: booking[0].id,
         amount: data.totalAmount,
-        status: 'pending',
+        status: "pending",
       });
 
       return booking[0];
@@ -496,13 +504,13 @@ export class BookingsService {
   }
 
   async cancel(bookingId: string, reason: string): Promise<Booking> {
-    return await db.transaction(async (tx) => {
+    return await db.transaction(async tx => {
       // 1. Get booking (with lock)
       const booking = await tx
         .select()
         .from(bookings)
         .where(eq(bookings.id, bookingId))
-        .for('update')
+        .for("update")
         .limit(1);
 
       if (!booking[0]) {
@@ -538,7 +546,7 @@ export class BookingsService {
         await tx.insert(refunds).values({
           bookingId: bookingId,
           amount: this.calculateRefundAmount(booking[0]),
-          status: 'pending',
+          status: "pending",
         });
       }
 
@@ -570,6 +578,7 @@ export class BookingsService {
 ### US-1.5: اختبارات Integration لمسارات Booking/Payment
 
 #### الوصف
+
 كتابة integration tests شاملة لضمان عمل المسارات الحرجة.
 
 #### Test Scenarios
@@ -577,14 +586,14 @@ export class BookingsService {
 ```typescript
 // server/tests/integration/booking-flow.test.ts
 
-describe('Booking Flow', () => {
-  describe('Happy Path', () => {
-    it('should create booking, process payment, and confirm', async () => {
+describe("Booking Flow", () => {
+  describe("Happy Path", () => {
+    it("should create booking, process payment, and confirm", async () => {
       // 1. Search for flights
       const flights = await api.flights.search.query({
-        from: 'RUH',
-        to: 'JED',
-        date: '2026-02-01',
+        from: "RUH",
+        to: "JED",
+        date: "2026-02-01",
       });
 
       expect(flights).toHaveLength(1);
@@ -595,50 +604,52 @@ describe('Booking Flow', () => {
         flightId: flights[0].id,
         passengers: [
           {
-            firstName: 'Ahmed',
-            lastName: 'Ali',
-            passportNumber: 'A123456',
+            firstName: "Ahmed",
+            lastName: "Ali",
+            passportNumber: "A123456",
           },
         ],
       });
 
-      expect(booking.status).toBe('pending');
+      expect(booking.status).toBe("pending");
 
       // 3. Process payment
       const payment = await api.payments.create.mutate({
         bookingId: booking.id,
-        paymentMethodId: 'pm_test_123',
+        paymentMethodId: "pm_test_123",
       });
 
-      expect(payment.status).toBe('succeeded');
+      expect(payment.status).toBe("succeeded");
 
       // 4. Verify booking confirmed
       const confirmedBooking = await api.bookings.get.query({
         id: booking.id,
       });
 
-      expect(confirmedBooking.status).toBe('confirmed');
+      expect(confirmedBooking.status).toBe("confirmed");
 
       // 5. Verify seat availability updated
       const updatedFlight = await api.flights.get.query({
         id: flights[0].id,
       });
 
-      expect(updatedFlight.availableSeats).toBe(
-        flights[0].availableSeats - 1
-      );
+      expect(updatedFlight.availableSeats).toBe(flights[0].availableSeats - 1);
     });
   });
 
-  describe('Double Booking Prevention', () => {
-    it('should prevent double booking of same seat', async () => {
+  describe("Double Booking Prevention", () => {
+    it("should prevent double booking of same seat", async () => {
       const flight = await createTestFlight({ availableSeats: 1 });
 
       // First booking
       const booking1 = await api.bookings.create.mutate({
         idempotencyKey: uuidv4(),
         flightId: flight.id,
-        passengers: [{ /* ... */ }],
+        passengers: [
+          {
+            /* ... */
+          },
+        ],
       });
 
       // Second booking (should fail)
@@ -646,37 +657,45 @@ describe('Booking Flow', () => {
         api.bookings.create.mutate({
           idempotencyKey: uuidv4(),
           flightId: flight.id,
-          passengers: [{ /* ... */ }],
+          passengers: [
+            {
+              /* ... */
+            },
+          ],
         })
-      ).rejects.toThrow('No seats available');
+      ).rejects.toThrow("No seats available");
     });
   });
 
-  describe('Payment Failure Handling', () => {
-    it('should rollback booking on payment failure', async () => {
+  describe("Payment Failure Handling", () => {
+    it("should rollback booking on payment failure", async () => {
       const flight = await createTestFlight({ availableSeats: 10 });
 
       // Create booking
       const booking = await api.bookings.create.mutate({
         idempotencyKey: uuidv4(),
         flightId: flight.id,
-        passengers: [{ /* ... */ }],
+        passengers: [
+          {
+            /* ... */
+          },
+        ],
       });
 
       // Simulate payment failure
       await expect(
         api.payments.create.mutate({
           bookingId: booking.id,
-          paymentMethodId: 'pm_test_fail',
+          paymentMethodId: "pm_test_fail",
         })
-      ).rejects.toThrow('Payment failed');
+      ).rejects.toThrow("Payment failed");
 
       // Verify booking status
       const failedBooking = await api.bookings.get.query({
         id: booking.id,
       });
 
-      expect(failedBooking.status).toBe('payment_failed');
+      expect(failedBooking.status).toBe("payment_failed");
 
       // Verify seats released
       const updatedFlight = await api.flights.get.query({
@@ -687,25 +706,25 @@ describe('Booking Flow', () => {
     });
   });
 
-  describe('Cancellation and Refund', () => {
-    it('should cancel booking and process refund', async () => {
+  describe("Cancellation and Refund", () => {
+    it("should cancel booking and process refund", async () => {
       // Create and confirm booking
       const booking = await createConfirmedBooking();
 
       // Cancel booking
       const cancelled = await api.bookings.cancel.mutate({
         id: booking.id,
-        reason: 'Customer request',
+        reason: "Customer request",
       });
 
-      expect(cancelled.status).toBe('cancelled');
+      expect(cancelled.status).toBe("cancelled");
 
       // Verify refund created
       const refund = await api.refunds.get.query({
         bookingId: booking.id,
       });
 
-      expect(refund.status).toBe('pending');
+      expect(refund.status).toBe("pending");
 
       // Process refund
       await processRefund(refund.id);
@@ -715,12 +734,12 @@ describe('Booking Flow', () => {
         bookingId: booking.id,
       });
 
-      expect(completedRefund.status).toBe('refunded');
+      expect(completedRefund.status).toBe("refunded");
     });
   });
 
-  describe('Idempotency', () => {
-    it('should return same result for duplicate requests', async () => {
+  describe("Idempotency", () => {
+    it("should return same result for duplicate requests", async () => {
       const idempotencyKey = uuidv4();
       const flight = await createTestFlight();
 
@@ -728,14 +747,22 @@ describe('Booking Flow', () => {
       const booking1 = await api.bookings.create.mutate({
         idempotencyKey,
         flightId: flight.id,
-        passengers: [{ /* ... */ }],
+        passengers: [
+          {
+            /* ... */
+          },
+        ],
       });
 
       // Duplicate request
       const booking2 = await api.bookings.create.mutate({
         idempotencyKey,
         flightId: flight.id,
-        passengers: [{ /* ... */ }],
+        passengers: [
+          {
+            /* ... */
+          },
+        ],
       });
 
       // Should return same booking
@@ -788,13 +815,13 @@ Sprint 1 يعتبر مكتمل عندما:
 
 ## 📊 Progress Tracking
 
-| User Story | Status | Progress | Assignee |
-|-----------|--------|----------|----------|
-| US-1.1 | 📝 To Do | 0% | - |
-| US-1.2 | 📝 To Do | 0% | - |
-| US-1.3 | 📝 To Do | 0% | - |
-| US-1.4 | 📝 To Do | 0% | - |
-| US-1.5 | 📝 To Do | 0% | - |
+| User Story | Status   | Progress | Assignee |
+| ---------- | -------- | -------- | -------- |
+| US-1.1     | 📝 To Do | 0%       | -        |
+| US-1.2     | 📝 To Do | 0%       | -        |
+| US-1.3     | 📝 To Do | 0%       | -        |
+| US-1.4     | 📝 To Do | 0%       | -        |
+| US-1.5     | 📝 To Do | 0%       | -        |
 
 **Overall Progress:** 0% (0/47 story points)
 
@@ -803,6 +830,7 @@ Sprint 1 يعتبر مكتمل عندما:
 ## 🚀 الخطوات التالية
 
 بعد إكمال Sprint 1:
+
 1. Sprint retrospective
 2. تحديث backlog
 3. البدء في Sprint 2 (Stripe Webhooks & Financial Ledger)

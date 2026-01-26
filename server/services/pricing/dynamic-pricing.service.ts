@@ -1,19 +1,36 @@
 /**
  * Dynamic Pricing Engine Service
- * 
+ *
  * Implements revenue management algorithms for flight pricing:
  * - Demand-based pricing
  * - Time-based pricing (advance purchase)
  * - Occupancy-based pricing
  * - Seasonal pricing
  * - Competitor pricing (future)
- * 
+ *
  * @module services/pricing/dynamic-pricing.service
  */
 
 import { db } from "../../db";
-import { flights, bookings, pricingRules, pricingHistory, seasonalPricing } from "../../../drizzle/schema";
-import { eq, and, gte, lte, sql, between, count, desc, or, isNull } from "drizzle-orm";
+import {
+  flights,
+  bookings,
+  pricingRules,
+  pricingHistory,
+  seasonalPricing,
+} from "../../../drizzle/schema";
+import {
+  eq,
+  and,
+  gte,
+  lte,
+  sql,
+  between,
+  count,
+  desc,
+  or,
+  isNull,
+} from "drizzle-orm";
 import { CacheService } from "../cache.service";
 
 // Cache TTL for pricing rules (5 minutes)
@@ -25,7 +42,7 @@ const RULES_CACHE_TTL = 5 * 60;
 
 export interface PricingContext {
   flightId: number;
-  cabinClass: 'economy' | 'business';
+  cabinClass: "economy" | "business";
   requestedSeats: number;
   userId?: number;
   promoCode?: string;
@@ -55,7 +72,7 @@ export interface PriceBreakdown {
 export interface PricingRule {
   id: number;
   name: string;
-  type: 'demand' | 'time' | 'occupancy' | 'seasonal' | 'route';
+  type: "demand" | "time" | "occupancy" | "seasonal" | "route";
   conditions: RuleConditions;
   multiplier: number;
   priority: number;
@@ -85,10 +102,10 @@ export interface DemandMetrics {
 // ============================================================================
 
 const PRICE_VALIDITY_MINUTES = 15;
-const MIN_MULTIPLIER = 0.7;  // Maximum 30% discount
-const MAX_MULTIPLIER = 2.5;  // Maximum 150% increase
-const TAX_RATE = 0.15;       // 15% VAT
-const BOOKING_FEE = 50;      // 50 SAR booking fee
+const MIN_MULTIPLIER = 0.7; // Maximum 30% discount
+const MAX_MULTIPLIER = 2.5; // Maximum 150% increase
+const TAX_RATE = 0.15; // 15% VAT
+const BOOKING_FEE = 50; // 50 SAR booking fee
 
 // Default multipliers when no rules match
 const DEFAULT_MULTIPLIERS = {
@@ -120,9 +137,8 @@ export async function calculateDynamicPrice(
   }
 
   // 2. Get base price
-  const basePrice = cabinClass === 'economy' 
-    ? flight.economyPrice 
-    : flight.businessPrice;
+  const basePrice =
+    cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
 
   // 3. Calculate multipliers
   const demandMultiplier = await calculateDemandMultiplier(flightId);
@@ -146,7 +162,11 @@ export async function calculateDynamicPrice(
     MAX_MULTIPLIER,
     Math.max(
       MIN_MULTIPLIER,
-      demandMultiplier * timeMultiplier * occupancyMultiplier * seasonalMultiplier * rulesMultiplier
+      demandMultiplier *
+        timeMultiplier *
+        occupancyMultiplier *
+        seasonalMultiplier *
+        rulesMultiplier
     )
   );
 
@@ -154,7 +174,7 @@ export async function calculateDynamicPrice(
   const adjustedPrice = Math.round(basePrice * combinedMultiplier);
 
   // 7. Apply promo discount
-  const promoDiscount = promoCode 
+  const promoDiscount = promoCode
     ? await calculatePromoDiscount(promoCode, adjustedPrice)
     : 0;
 
@@ -200,7 +220,7 @@ export async function calculateDynamicPrice(
   return {
     basePrice,
     finalPrice: totalPrice,
-    currency: 'SAR',
+    currency: "SAR",
     breakdown,
     validUntil,
     priceId,
@@ -225,10 +245,7 @@ async function calculateDemandMultiplier(flightId: number): Promise<number> {
     .select({ count: count() })
     .from(bookings)
     .where(
-      and(
-        eq(bookings.flightId, flightId),
-        gte(bookings.createdAt, hourAgo)
-      )
+      and(eq(bookings.flightId, flightId), gte(bookings.createdAt, hourAgo))
     );
 
   const bookingsLastHour = recentBookings[0]?.count || 0;
@@ -238,10 +255,7 @@ async function calculateDemandMultiplier(flightId: number): Promise<number> {
     .select({ count: count() })
     .from(bookings)
     .where(
-      and(
-        eq(bookings.flightId, flightId),
-        gte(bookings.createdAt, dayAgo)
-      )
+      and(eq(bookings.flightId, flightId), gte(bookings.createdAt, dayAgo))
     );
 
   const bookingsLastDay = dailyBookings[0]?.count || 0;
@@ -284,19 +298,19 @@ function calculateTimeMultiplier(departureTime: Date): number {
 
   // Pricing tiers based on days before departure
   if (daysUntilDeparture > 60) {
-    return 0.8;  // 20% discount for very early booking
+    return 0.8; // 20% discount for very early booking
   } else if (daysUntilDeparture > 30) {
-    return 0.9;  // 10% discount for early booking
+    return 0.9; // 10% discount for early booking
   } else if (daysUntilDeparture > 14) {
-    return 1.0;  // Standard price
+    return 1.0; // Standard price
   } else if (daysUntilDeparture > 7) {
     return 1.15; // 15% increase for late booking
   } else if (daysUntilDeparture > 3) {
-    return 1.3;  // 30% increase for very late booking
+    return 1.3; // 30% increase for very late booking
   } else if (daysUntilDeparture > 1) {
-    return 1.5;  // 50% increase for last minute
+    return 1.5; // 50% increase for last minute
   } else {
-    return 1.8;  // 80% increase for same day
+    return 1.8; // 80% increase for same day
   }
 }
 
@@ -306,38 +320,38 @@ function calculateTimeMultiplier(departureTime: Date): number {
  */
 function calculateOccupancyMultiplier(
   flight: typeof flights.$inferSelect,
-  cabinClass: 'economy' | 'business',
+  cabinClass: "economy" | "business",
   requestedSeats: number
 ): number {
-  const totalSeats = cabinClass === 'economy' 
-    ? flight.economySeats 
-    : flight.businessSeats;
-  const availableSeats = cabinClass === 'economy'
-    ? flight.economyAvailable
-    : flight.businessAvailable;
+  const totalSeats =
+    cabinClass === "economy" ? flight.economySeats : flight.businessSeats;
+  const availableSeats =
+    cabinClass === "economy"
+      ? flight.economyAvailable
+      : flight.businessAvailable;
 
   // Check if enough seats available
   if (availableSeats < requestedSeats) {
     throw new Error(`Not enough ${cabinClass} seats available`);
   }
 
-  const occupancyRate = 1 - (availableSeats / totalSeats);
+  const occupancyRate = 1 - availableSeats / totalSeats;
 
   // Pricing tiers based on occupancy
   if (occupancyRate > 0.95) {
-    return 1.8;  // Almost full - premium pricing
+    return 1.8; // Almost full - premium pricing
   } else if (occupancyRate > 0.85) {
-    return 1.5;  // Very high occupancy
-  } else if (occupancyRate > 0.70) {
+    return 1.5; // Very high occupancy
+  } else if (occupancyRate > 0.7) {
     return 1.25; // High occupancy
-  } else if (occupancyRate > 0.50) {
-    return 1.1;  // Medium occupancy
-  } else if (occupancyRate > 0.30) {
-    return 1.0;  // Standard
+  } else if (occupancyRate > 0.5) {
+    return 1.1; // Medium occupancy
+  } else if (occupancyRate > 0.3) {
+    return 1.0; // Standard
   } else if (occupancyRate > 0.15) {
-    return 0.9;  // Low occupancy - discount
+    return 0.9; // Low occupancy - discount
   } else {
-    return 0.8;  // Very low - bigger discount
+    return 0.8; // Very low - bigger discount
   }
 }
 
@@ -364,7 +378,7 @@ async function calculateSeasonalMultiplier(
   // Eid periods
   // Summer holidays (June-August)
   // Winter holidays (December-January)
-  
+
   if (month === 7 || month === 8) {
     // Peak summer
     seasonMultiplier = 1.4;
@@ -400,8 +414,8 @@ async function getRouteSeasonalMultiplier(
   // Check for Hajj/Umrah routes to Jeddah/Madinah
   // This would be enhanced with actual route data
   const hajjRoutes = [
-    { origin: 'JED', destination: 'any' },
-    { origin: 'MED', destination: 'any' },
+    { origin: "JED", destination: "any" },
+    { origin: "MED", destination: "any" },
   ];
 
   // Hajj season (approximate - should use Hijri calendar)
@@ -417,7 +431,7 @@ async function getRouteSeasonalMultiplier(
  */
 async function applyPricingRules(
   flight: typeof flights.$inferSelect,
-  cabinClass: 'economy' | 'business'
+  cabinClass: "economy" | "business"
 ): Promise<number> {
   // Get active pricing rules
   // This would query the pricingRules table
@@ -469,11 +483,13 @@ async function recordPriceHistory(data: {
 }): Promise<void> {
   // Insert into price_history table
   // This helps with analytics and auditing
-  console.log(JSON.stringify({
-    event: 'price_calculated',
-    ...data,
-    timestamp: new Date().toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "price_calculated",
+      ...data,
+      timestamp: new Date().toISOString(),
+    })
+  );
 }
 
 /**
@@ -484,9 +500,9 @@ export async function validatePrice(
   expectedPrice: number
 ): Promise<{ valid: boolean; reason?: string }> {
   // Parse price ID
-  const parts = priceId.split('-');
+  const parts = priceId.split("-");
   if (parts.length < 6) {
-    return { valid: false, reason: 'Invalid price ID format' };
+    return { valid: false, reason: "Invalid price ID format" };
   }
 
   const timestamp = parseInt(parts[4]);
@@ -495,13 +511,13 @@ export async function validatePrice(
 
   // Check if price has expired
   if (ageMinutes > PRICE_VALIDITY_MINUTES) {
-    return { valid: false, reason: 'Price has expired' };
+    return { valid: false, reason: "Price has expired" };
   }
 
   // Verify price matches
   const storedPrice = parseInt(parts[3]);
   if (storedPrice !== expectedPrice) {
-    return { valid: false, reason: 'Price mismatch' };
+    return { valid: false, reason: "Price mismatch" };
   }
 
   return { valid: true };
@@ -512,7 +528,7 @@ export async function validatePrice(
  */
 export async function getPriceForecast(
   flightId: number,
-  cabinClass: 'economy' | 'business',
+  cabinClass: "economy" | "business",
   days: number = 7
 ): Promise<{ date: Date; predictedPrice: number }[]> {
   const flight = await db.query.flights.findFirst({
@@ -524,9 +540,8 @@ export async function getPriceForecast(
   }
 
   const forecast: { date: Date; predictedPrice: number }[] = [];
-  const basePrice = cabinClass === 'economy' 
-    ? flight.economyPrice 
-    : flight.businessPrice;
+  const basePrice =
+    cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
 
   for (let i = 0; i < days; i++) {
     const date = new Date();
@@ -575,40 +590,43 @@ async function getApplicablePricingRules(
   }
 
   try {
-    const rules = await db.query.pricingRules?.findMany({
-      where: and(
-        eq(pricingRules.isActive, true),
-        or(
-          isNull(pricingRules.airlineId),
-          eq(pricingRules.airlineId, airlineId)
+    const rules =
+      (await db.query.pricingRules?.findMany({
+        where: and(
+          eq(pricingRules.isActive, true),
+          or(
+            isNull(pricingRules.airlineId),
+            eq(pricingRules.airlineId, airlineId)
+          ),
+          or(
+            isNull(pricingRules.originId),
+            eq(pricingRules.originId, originId)
+          ),
+          or(
+            isNull(pricingRules.destinationId),
+            eq(pricingRules.destinationId, destinationId)
+          ),
+          or(
+            isNull(pricingRules.validFrom),
+            lte(pricingRules.validFrom, new Date())
+          ),
+          or(
+            isNull(pricingRules.validTo),
+            gte(pricingRules.validTo, new Date())
+          )
         ),
-        or(
-          isNull(pricingRules.originId),
-          eq(pricingRules.originId, originId)
-        ),
-        or(
-          isNull(pricingRules.destinationId),
-          eq(pricingRules.destinationId, destinationId)
-        ),
-        or(
-          isNull(pricingRules.validFrom),
-          lte(pricingRules.validFrom, new Date())
-        ),
-        or(
-          isNull(pricingRules.validTo),
-          gte(pricingRules.validTo, new Date())
-        )
-      ),
-      orderBy: [desc(pricingRules.priority)],
-    }) || [];
+        orderBy: [desc(pricingRules.priority)],
+      })) || [];
 
     await CacheService.set(cacheKey, rules, RULES_CACHE_TTL);
     return rules;
   } catch (error) {
-    console.log(JSON.stringify({
-      event: 'pricing_rules_fetch_error',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }));
+    console.log(
+      JSON.stringify({
+        event: "pricing_rules_fetch_error",
+        error: error instanceof Error ? error.message : "Unknown error",
+      })
+    );
     return [];
   }
 }
@@ -650,10 +668,12 @@ async function getActiveSeasonalPricing(
       };
     }
   } catch (error) {
-    console.log(JSON.stringify({
-      event: 'seasonal_pricing_fetch_error',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }));
+    console.log(
+      JSON.stringify({
+        event: "seasonal_pricing_fetch_error",
+        error: error instanceof Error ? error.message : "Unknown error",
+      })
+    );
   }
 
   return null;
@@ -664,7 +684,7 @@ async function getActiveSeasonalPricing(
  */
 export async function calculateBulkPrices(
   flightIds: number[],
-  cabinClass: 'economy' | 'business'
+  cabinClass: "economy" | "business"
 ): Promise<Map<number, PricingResult>> {
   const results = new Map<number, PricingResult>();
 
@@ -677,11 +697,13 @@ export async function calculateBulkPrices(
       });
       results.set(flightId, result);
     } catch (error) {
-      console.error(JSON.stringify({
-        event: 'bulk_pricing_error',
-        flightId,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      }));
+      console.error(
+        JSON.stringify({
+          event: "bulk_pricing_error",
+          flightId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        })
+      );
     }
   }
 
@@ -694,7 +716,7 @@ export async function calculateBulkPrices(
 export async function getPriceRange(
   originId: number,
   destinationId: number,
-  cabinClass: 'economy' | 'business',
+  cabinClass: "economy" | "business",
   startDate: Date,
   endDate: Date
 ): Promise<{ min: number; max: number; average: number }> {
@@ -704,7 +726,7 @@ export async function getPriceRange(
       eq(flights.destinationId, destinationId),
       gte(flights.departureTime, startDate),
       lte(flights.departureTime, endDate),
-      eq(flights.status, 'scheduled')
+      eq(flights.status, "scheduled")
     ),
   });
 

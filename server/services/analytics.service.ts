@@ -291,9 +291,8 @@ export async function getAncillaryMetrics(
     throw new Error("Database not available");
   }
 
-  const { bookingAncillaries, ancillaryServices } = await import(
-    "../../drizzle/schema"
-  );
+  const { bookingAncillaries, ancillaryServices } =
+    await import("../../drizzle/schema");
 
   const dateFilter =
     startDate && endDate
@@ -367,9 +366,8 @@ export async function getAncillaryRevenueByCategory(): Promise<
     throw new Error("Database not available");
   }
 
-  const { bookingAncillaries, ancillaryServices } = await import(
-    "../../drizzle/schema"
-  );
+  const { bookingAncillaries, ancillaryServices } =
+    await import("../../drizzle/schema");
 
   const categoryRevenue = await db
     .select({
@@ -412,9 +410,8 @@ export async function getPopularAncillaries(
     throw new Error("Database not available");
   }
 
-  const { bookingAncillaries, ancillaryServices } = await import(
-    "../../drizzle/schema"
-  );
+  const { bookingAncillaries, ancillaryServices } =
+    await import("../../drizzle/schema");
 
   const popularServices = await db
     .select({

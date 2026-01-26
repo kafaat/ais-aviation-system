@@ -1,6 +1,6 @@
 /**
  * Background Queue V2 Service - Production-Grade
- * 
+ *
  * Features:
  * - BullMQ for reliable job processing
  * - Email confirmation jobs
@@ -8,7 +8,7 @@
  * - Reconciliation jobs
  * - Idempotency cleanup jobs
  * - Graceful shutdown
- * 
+ *
  * @version 2.0.0
  * @date 2026-01-26
  */
@@ -98,7 +98,11 @@ export const scheduledQueue = new Queue("ais:scheduled", {
 // ============================================================================
 
 export interface EmailJobData {
-  type: "booking-confirmation" | "booking-cancelled" | "payment-receipt" | "welcome";
+  type:
+    | "booking-confirmation"
+    | "booking-cancelled"
+    | "payment-receipt"
+    | "welcome";
   userId: number;
   bookingId?: number;
   email: string;
@@ -142,7 +146,9 @@ export async function queueBookingConfirmationEmail(opts: {
       jobId: `booking-confirmation-${opts.bookingId}`, // Idempotent
     }
   );
-  console.log(`[Queue] Queued booking confirmation email for booking ${opts.bookingId}`);
+  console.log(
+    `[Queue] Queued booking confirmation email for booking ${opts.bookingId}`
+  );
 }
 
 /**
@@ -165,7 +171,9 @@ export async function queueBookingCancellationEmail(opts: {
       jobId: `booking-cancelled-${opts.bookingId}`,
     }
   );
-  console.log(`[Queue] Queued booking cancellation email for booking ${opts.bookingId}`);
+  console.log(
+    `[Queue] Queued booking cancellation email for booking ${opts.bookingId}`
+  );
 }
 
 /**
@@ -192,16 +200,12 @@ export async function queueWebhookRetry(opts: {
  * Schedule daily reconciliation
  */
 export async function scheduleReconciliation(): Promise<void> {
-  await scheduledQueue.add(
-    "reconciliation",
-    {} as ReconciliationJobData,
-    {
-      repeat: {
-        pattern: "0 2 * * *", // 2 AM daily
-      },
-      jobId: "daily-reconciliation",
-    }
-  );
+  await scheduledQueue.add("reconciliation", {} as ReconciliationJobData, {
+    repeat: {
+      pattern: "0 2 * * *", // 2 AM daily
+    },
+    jobId: "daily-reconciliation",
+  });
   console.log(`[Queue] Scheduled daily reconciliation`);
 }
 
@@ -273,9 +277,8 @@ export function startEmailWorker(): Worker {
 
       try {
         // Import email service dynamically to avoid circular dependencies
-        const { sendBookingConfirmation, sendBookingCancellation } = await import(
-          "./email.service"
-        );
+        const { sendBookingConfirmation, sendBookingCancellation } =
+          await import("./email.service");
 
         switch (type) {
           case "booking-confirmation":
@@ -306,7 +309,7 @@ export function startEmailWorker(): Worker {
     }
   );
 
-  emailWorker.on("completed", (job) => {
+  emailWorker.on("completed", job => {
     console.log(`[Worker] Email job ${job.id} completed`);
   });
 
@@ -355,7 +358,9 @@ export function startWebhookRetryWorker(): Worker {
 
       // Check retry count
       if (event.retryCount >= 5) {
-        console.log(`[Worker] Event ${eventId} exceeded max retries, marking as failed`);
+        console.log(
+          `[Worker] Event ${eventId} exceeded max retries, marking as failed`
+        );
         await db
           .update(stripeEvents)
           .set({
@@ -367,12 +372,11 @@ export function startWebhookRetryWorker(): Worker {
 
       // Retry processing
       try {
-        const { stripeWebhookServiceV2 } = await import(
-          "./stripe-webhook-v2.service"
-        );
+        const { stripeWebhookServiceV2 } =
+          await import("./stripe-webhook-v2.service");
 
         const eventData = JSON.parse(event.data);
-        await db.transaction(async (tx) => {
+        await db.transaction(async tx => {
           await stripeWebhookServiceV2.processEvent(tx, {
             id: event.id,
             type: event.type,
@@ -389,9 +393,14 @@ export function startWebhookRetryWorker(): Worker {
             .where(eq(stripeEvents.id, eventId));
         });
 
-        console.log(`[Worker] Event ${eventId} processed successfully on retry`);
+        console.log(
+          `[Worker] Event ${eventId} processed successfully on retry`
+        );
       } catch (err: any) {
-        console.error(`[Worker] Webhook retry failed for ${eventId}:`, err.message);
+        console.error(
+          `[Worker] Webhook retry failed for ${eventId}:`,
+          err.message
+        );
         throw err;
       }
     },
@@ -481,9 +490,8 @@ async function runCleanup(data: CleanupJobData): Promise<void> {
 
   switch (data.type) {
     case "idempotency":
-      const { cleanupExpiredIdempotencyRecords } = await import(
-        "./idempotency-v2.service"
-      );
+      const { cleanupExpiredIdempotencyRecords } =
+        await import("./idempotency-v2.service");
       await cleanupExpiredIdempotencyRecords();
       break;
 
@@ -552,7 +560,7 @@ export async function stopAllWorkers(): Promise<void> {
   const workers = [emailWorker, webhookRetryWorker, scheduledWorker];
 
   await Promise.all(
-    workers.map(async (worker) => {
+    workers.map(async worker => {
       if (worker) {
         await worker.close();
       }

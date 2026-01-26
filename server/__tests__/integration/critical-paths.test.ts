@@ -1,24 +1,32 @@
 /**
  * Critical Path Integration Tests - Production Grade
- * 
+ *
  * ✅ التحسينات:
  * 1. يستخدم الخدمات الفعلية من الريبو
  * 2. يختبر idempotency service الحقيقي
  * 3. يختبر webhook handler الحقيقي
  * 4. يختبر reconciliation service
  * 5. Structured test output
- * 
+ *
  * @see PRODUCTION_GRADE_IMPLEMENTATION_GUIDE.md
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from "vitest";
 import { getDb } from "../../db";
-import { 
-  bookings, 
-  payments, 
-  financialLedger, 
-  stripeEvents, 
-  users, 
+import {
+  bookings,
+  payments,
+  financialLedger,
+  stripeEvents,
+  users,
   flights,
   idempotencyRequests,
 } from "../../../drizzle/schema";
@@ -26,8 +34,14 @@ import { eq, and, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 // Import actual services
-import { withIdempotency, IdempotencyError } from "../../services/idempotency-v2.service";
-import { runStripeReconciliation, runReconciliationDryRun } from "../../services/stripe/stripe-reconciliation.service";
+import {
+  withIdempotency,
+  IdempotencyError,
+} from "../../services/idempotency-v2.service";
+import {
+  runStripeReconciliation,
+  runReconciliationDryRun,
+} from "../../services/stripe/stripe-reconciliation.service";
 
 // ============================================================================
 // Test Configuration
@@ -78,10 +92,20 @@ afterAll(async () => {
 
   // Cleanup test data
   try {
-    await db.delete(financialLedger).where(sql`booking_id IN (SELECT id FROM bookings WHERE user_id = ${testUserId})`);
-    await db.delete(payments).where(sql`booking_id IN (SELECT id FROM bookings WHERE user_id = ${testUserId})`);
+    await db
+      .delete(financialLedger)
+      .where(
+        sql`booking_id IN (SELECT id FROM bookings WHERE user_id = ${testUserId})`
+      );
+    await db
+      .delete(payments)
+      .where(
+        sql`booking_id IN (SELECT id FROM bookings WHERE user_id = ${testUserId})`
+      );
     await db.delete(stripeEvents).where(sql`event_id LIKE '${TEST_PREFIX}%'`);
-    await db.delete(idempotencyRequests).where(sql`idempotency_key LIKE '${TEST_PREFIX}%'`);
+    await db
+      .delete(idempotencyRequests)
+      .where(sql`idempotency_key LIKE '${TEST_PREFIX}%'`);
     await db.delete(bookings).where(eq(bookings.userId, testUserId));
     await db.delete(users).where(eq(users.id, testUserId));
     await db.delete(flights).where(eq(flights.id, testFlightId));
@@ -94,9 +118,11 @@ afterAll(async () => {
 // Helper Functions
 // ============================================================================
 
-async function createTestBooking(overrides: Partial<typeof bookings.$inferInsert> = {}) {
+async function createTestBooking(
+  overrides: Partial<typeof bookings.$inferInsert> = {}
+) {
   const bookingRef = `${TEST_PREFIX}${nanoid(8)}`;
-  
+
   const result = await db!.insert(bookings).values({
     userId: testUserId,
     flightId: testFlightId,
@@ -112,11 +138,14 @@ async function createTestBooking(overrides: Partial<typeof bookings.$inferInsert
   });
 
   const bookingId = Number(result.insertId);
-  
+
   return { bookingId, bookingRef };
 }
 
-async function createTestPayment(bookingId: number, stripePaymentIntentId: string) {
+async function createTestPayment(
+  bookingId: number,
+  stripePaymentIntentId: string
+) {
   const result = await db!.insert(payments).values({
     bookingId,
     stripePaymentIntentId,
@@ -142,7 +171,8 @@ describe("Critical Path 1: Complete Booking Flow", () => {
     bookingId = result.bookingId;
     bookingRef = result.bookingRef;
 
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -153,13 +183,15 @@ describe("Critical Path 1: Complete Booking Flow", () => {
   it("should create payment and link to booking", async () => {
     paymentIntentId = `pi_${TEST_PREFIX}${nanoid(10)}`;
 
-    await db!.update(bookings)
+    await db!
+      .update(bookings)
       .set({ stripePaymentIntentId: paymentIntentId })
       .where(eq(bookings.id, bookingId));
 
     await createTestPayment(bookingId, paymentIntentId);
 
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -178,10 +210,11 @@ describe("Critical Path 1: Complete Booking Flow", () => {
     });
 
     // Simulate webhook processing
-    await db!.transaction(async (tx) => {
+    await db!.transaction(async tx => {
       // Update booking
-      await tx.update(bookings)
-        .set({ 
+      await tx
+        .update(bookings)
+        .set({
           status: "confirmed",
           paymentStatus: "paid",
           updatedAt: new Date(),
@@ -189,8 +222,9 @@ describe("Critical Path 1: Complete Booking Flow", () => {
         .where(eq(bookings.id, bookingId));
 
       // Update payment
-      await tx.update(payments)
-        .set({ 
+      await tx
+        .update(payments)
+        .set({
           status: "completed",
           updatedAt: new Date(),
         })
@@ -211,16 +245,18 @@ describe("Critical Path 1: Complete Booking Flow", () => {
       });
 
       // Mark event processed
-      await tx.update(stripeEvents)
-        .set({ 
-          processed: true, 
+      await tx
+        .update(stripeEvents)
+        .set({
+          processed: true,
           processedAt: new Date(),
         })
         .where(eq(stripeEvents.eventId, eventId));
     });
 
     // Verify final state
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -228,7 +264,8 @@ describe("Critical Path 1: Complete Booking Flow", () => {
     expect(booking.paymentStatus).toBe("paid");
 
     // Verify ledger entry exists
-    const ledgerEntries = await db!.select()
+    const ledgerEntries = await db!
+      .select()
       .from(financialLedger)
       .where(eq(financialLedger.bookingId, bookingId));
 
@@ -249,17 +286,19 @@ describe("Critical Path 2: Payment Failure", () => {
     await createTestPayment(bookingId, paymentIntentId);
 
     // Simulate payment failure
-    await db!.transaction(async (tx) => {
-      await tx.update(bookings)
-        .set({ 
+    await db!.transaction(async tx => {
+      await tx
+        .update(bookings)
+        .set({
           status: "cancelled",
           paymentStatus: "failed",
           updatedAt: new Date(),
         })
         .where(eq(bookings.id, bookingId));
 
-      await tx.update(payments)
-        .set({ 
+      await tx
+        .update(payments)
+        .set({
           status: "failed",
           updatedAt: new Date(),
         })
@@ -267,7 +306,8 @@ describe("Critical Path 2: Payment Failure", () => {
     });
 
     // Verify
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -275,7 +315,8 @@ describe("Critical Path 2: Payment Failure", () => {
     expect(booking.paymentStatus).toBe("failed");
 
     // Verify NO ledger entry for failed payment
-    const ledgerEntries = await db!.select()
+    const ledgerEntries = await db!
+      .select()
       .from(financialLedger)
       .where(eq(financialLedger.bookingId, bookingId));
 
@@ -317,24 +358,27 @@ describe("Critical Path 3: Webhook Deduplication", () => {
     });
 
     // Second webhook attempt - check de-dup
-    const [existingEvent] = await db!.select()
+    const [existingEvent] = await db!
+      .select()
       .from(stripeEvents)
-      .where(and(
-        eq(stripeEvents.eventId, eventId),
-        eq(stripeEvents.processed, true)
-      ));
+      .where(
+        and(eq(stripeEvents.eventId, eventId), eq(stripeEvents.processed, true))
+      );
 
     // De-dup should block
     expect(existingEvent).toBeDefined();
     expect(existingEvent.processed).toBe(true);
 
     // Verify only ONE ledger entry
-    const ledgerEntries = await db!.select()
+    const ledgerEntries = await db!
+      .select()
       .from(financialLedger)
-      .where(and(
-        eq(financialLedger.bookingId, bookingId),
-        eq(financialLedger.stripePaymentIntentId, paymentIntentId)
-      ));
+      .where(
+        and(
+          eq(financialLedger.bookingId, bookingId),
+          eq(financialLedger.stripePaymentIntentId, paymentIntentId)
+        )
+      );
 
     expect(ledgerEntries.length).toBe(1);
   });
@@ -352,12 +396,12 @@ describe("Critical Path 3: Webhook Deduplication", () => {
     });
 
     // Check - should NOT block retry
-    const [existingEvent] = await db!.select()
+    const [existingEvent] = await db!
+      .select()
       .from(stripeEvents)
-      .where(and(
-        eq(stripeEvents.eventId, eventId),
-        eq(stripeEvents.processed, true)
-      ));
+      .where(
+        and(eq(stripeEvents.eventId, eventId), eq(stripeEvents.processed, true))
+      );
 
     // No processed=true event, so retry is allowed
     expect(existingEvent).toBeUndefined();
@@ -373,18 +417,19 @@ describe("Critical Path 4: Cancel Before Payment", () => {
     const { bookingId } = await createTestBooking();
 
     // Cancel unpaid booking
-    await db!.update(bookings)
-      .set({ 
+    await db!
+      .update(bookings)
+      .set({
         status: "cancelled",
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(bookings.id, bookingId),
-        eq(bookings.paymentStatus, "pending")
-      ));
+      .where(
+        and(eq(bookings.id, bookingId), eq(bookings.paymentStatus, "pending"))
+      );
 
     // Verify
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -399,15 +444,19 @@ describe("Critical Path 4: Cancel Before Payment", () => {
     });
 
     // Try to cancel - should fail (or require refund)
-    const result = await db!.update(bookings)
+    const result = await db!
+      .update(bookings)
       .set({ status: "cancelled" })
-      .where(and(
-        eq(bookings.id, bookingId),
-        eq(bookings.status, "pending") // Guard: only pending can be cancelled directly
-      ));
+      .where(
+        and(
+          eq(bookings.id, bookingId),
+          eq(bookings.status, "pending") // Guard: only pending can be cancelled directly
+        )
+      );
 
     // Verify booking is still confirmed
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -442,10 +491,11 @@ describe("Critical Path 5: Refund Flow", () => {
     });
 
     // Process refund
-    await db!.transaction(async (tx) => {
+    await db!.transaction(async tx => {
       // Update booking
-      await tx.update(bookings)
-        .set({ 
+      await tx
+        .update(bookings)
+        .set({
           status: "cancelled",
           paymentStatus: "refunded",
           updatedAt: new Date(),
@@ -469,7 +519,8 @@ describe("Critical Path 5: Refund Flow", () => {
     });
 
     // Verify
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -477,7 +528,8 @@ describe("Critical Path 5: Refund Flow", () => {
     expect(booking.paymentStatus).toBe("refunded");
 
     // Verify ledger has both entries
-    const ledgerEntries = await db!.select()
+    const ledgerEntries = await db!
+      .select()
       .from(financialLedger)
       .where(eq(financialLedger.bookingId, bookingId))
       .orderBy(financialLedger.createdAt);
@@ -559,15 +611,19 @@ describe("Critical Path 7: State Machine Guards", () => {
     });
 
     // Try to confirm a cancelled booking - should fail
-    const result = await db!.update(bookings)
+    const result = await db!
+      .update(bookings)
       .set({ status: "confirmed" })
-      .where(and(
-        eq(bookings.id, bookingId),
-        eq(bookings.status, "pending") // Guard: only pending can be confirmed
-      ));
+      .where(
+        and(
+          eq(bookings.id, bookingId),
+          eq(bookings.status, "pending") // Guard: only pending can be confirmed
+        )
+      );
 
     // Verify booking is still cancelled
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -580,15 +636,14 @@ describe("Critical Path 7: State Machine Guards", () => {
     });
 
     // Confirm pending booking - should succeed
-    await db!.update(bookings)
+    await db!
+      .update(bookings)
       .set({ status: "confirmed" })
-      .where(and(
-        eq(bookings.id, bookingId),
-        eq(bookings.status, "pending")
-      ));
+      .where(and(eq(bookings.id, bookingId), eq(bookings.status, "pending")));
 
     // Verify
-    const [booking] = await db!.select()
+    const [booking] = await db!
+      .select()
       .from(bookings)
       .where(eq(bookings.id, bookingId));
 
@@ -616,7 +671,7 @@ describe("Critical Path 8: Reconciliation", () => {
     expect(result.dryRun).toBe(true);
     expect(result.correlationId).toBeDefined();
     expect(result.scanned).toBeGreaterThanOrEqual(0);
-    
+
     // In dry run, no actual changes
     expect(result.fixed).toBe(0);
   });

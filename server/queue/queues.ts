@@ -1,6 +1,6 @@
 /**
  * BullMQ Queue Configuration - Production Grade
- * 
+ *
  * التحسينات:
  * 1. ✅ Redis إلزامي - يرمي خطأ إذا غير متاح
  * 2. ✅ Graceful degradation - يعمل بدون Redis في dev
@@ -15,7 +15,11 @@ import IORedis from "ioredis";
 // Logger - Structured JSON
 // ============================================================================
 
-function log(level: "info" | "warn" | "error", message: string, context: Record<string, unknown> = {}) {
+function log(
+  level: "info" | "warn" | "error",
+  message: string,
+  context: Record<string, unknown> = {}
+) {
   const timestamp = new Date().toISOString();
   const logEntry = {
     timestamp,
@@ -24,7 +28,7 @@ function log(level: "info" | "warn" | "error", message: string, context: Record<
     message,
     ...context,
   };
-  
+
   if (level === "error") {
     console.error(JSON.stringify(logEntry));
   } else if (level === "warn") {
@@ -43,15 +47,17 @@ const REDIS_REQUIRED = NODE_ENV === "production";
 
 function getRedisUrl(): string | null {
   const url = process.env.REDIS_URL;
-  
+
   if (!url) {
     if (REDIS_REQUIRED) {
       throw new Error("REDIS_URL is required in production environment");
     }
-    log("warn", "REDIS_URL not set, queues will be disabled", { env: NODE_ENV });
+    log("warn", "REDIS_URL not set, queues will be disabled", {
+      env: NODE_ENV,
+    });
     return null;
   }
-  
+
   return url;
 }
 
@@ -81,7 +87,7 @@ export function getRedisConnection(): IORedis | null {
     connection = new IORedis(redisUrl, {
       maxRetriesPerRequest: null, // Required for BullMQ
       enableReadyCheck: false,
-      retryStrategy: (times) => {
+      retryStrategy: times => {
         if (times > 3) {
           log("error", "Redis connection failed after 3 retries", { times });
           if (!REDIS_REQUIRED) {
@@ -93,14 +99,14 @@ export function getRedisConnection(): IORedis | null {
         return Math.min(times * 1000, 5000);
       },
     });
-    
-    connection.on("error", (err) => {
+
+    connection.on("error", err => {
       log("error", "Redis connection error", { error: err.message });
       if (!REDIS_REQUIRED) {
         connectionFailed = true;
       }
     });
-    
+
     connection.on("connect", () => {
       log("info", "Redis connected successfully");
       connectionFailed = false;
@@ -114,11 +120,11 @@ export function getRedisConnection(): IORedis | null {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log("error", "Failed to create Redis connection", { error: errorMessage });
-    
+
     if (REDIS_REQUIRED) {
       throw error;
     }
-    
+
     connectionFailed = true;
     return null;
   }
@@ -128,7 +134,10 @@ export function getRedisConnection(): IORedis | null {
 // Queue Factory
 // ============================================================================
 
-function createQueue(name: string, options: Partial<QueueOptions> = {}): Queue | null {
+function createQueue(
+  name: string,
+  options: Partial<QueueOptions> = {}
+): Queue | null {
   const conn = getRedisConnection();
   if (!conn) {
     log("warn", `Queue "${name}" not created - Redis not available`);
@@ -253,7 +262,7 @@ export async function initializeQueues(): Promise<void> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log("error", "Failed to initialize queues", { error: errorMessage });
-    
+
     if (REDIS_REQUIRED) {
       throw error;
     }
@@ -265,15 +274,22 @@ export async function initializeQueues(): Promise<void> {
  */
 export async function closeQueues(): Promise<void> {
   log("info", "Closing queues...");
-  
-  const queues = [reconciliationQueue, emailQueue, webhookRetryQueue, cleanupQueue];
-  
+
+  const queues = [
+    reconciliationQueue,
+    emailQueue,
+    webhookRetryQueue,
+    cleanupQueue,
+  ];
+
   await Promise.all(
     queues
       .filter((q): q is Queue => q !== null)
-      .map(q => q.close().catch(err => {
-        log("error", `Error closing queue ${q.name}`, { error: err.message });
-      }))
+      .map(q =>
+        q.close().catch(err => {
+          log("error", `Error closing queue ${q.name}`, { error: err.message });
+        })
+      )
   );
 
   if (connection) {
@@ -326,7 +342,10 @@ export async function checkQueueHealth(): Promise<QueueHealthStatus> {
       { name: "cleanup", queue: cleanupQueue },
     ];
 
-    const counts: Record<string, { waiting: number; active: number; failed: number }> = {};
+    const counts: Record<
+      string,
+      { waiting: number; active: number; failed: number }
+    > = {};
 
     for (const { name, queue } of queues) {
       if (queue) {
@@ -347,7 +366,7 @@ export async function checkQueueHealth(): Promise<QueueHealthStatus> {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     log("error", "Queue health check failed", { error: errorMessage });
-    
+
     return {
       available: true,
       connected: false,

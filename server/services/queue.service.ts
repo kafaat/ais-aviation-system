@@ -1,13 +1,13 @@
 /**
  * Queue Service - Production-Grade
- * 
+ *
  * Features:
  * - Email sending (actual implementation)
  * - Webhook retry with stripeEvents
  * - Daily reconciliation (Stripe vs DB)
  * - Cleanup jobs (idempotency, sessions, expired bookings)
  * - Scheduled jobs (cron-like)
- * 
+ *
  * @version 2.0.0
  * @date 2026-01-26
  */
@@ -15,15 +15,19 @@
 import { Queue, Worker, Job, QueueEvents, QueueScheduler } from "bullmq";
 import { logger } from "./logger.service";
 import { getDb } from "../db";
-import { 
-  stripeEvents, 
-  idempotencyRequests, 
+import {
+  stripeEvents,
+  idempotencyRequests,
   bookings,
   financialLedger,
-  refreshTokens
+  refreshTokens,
 } from "../../drizzle/schema";
 import { eq, lt, and, isNull, sql } from "drizzle-orm";
-import { sendBookingConfirmation, sendCancellationNotice, sendRefundNotice } from "./email.service";
+import {
+  sendBookingConfirmation,
+  sendCancellationNotice,
+  sendRefundNotice,
+} from "./email.service";
 import { stripe } from "../stripe";
 
 /**
@@ -106,7 +110,10 @@ class QueueService {
         QueueName.RECONCILIATION,
         this.processReconciliationJob.bind(this)
       );
-      this.initializeWorker(QueueName.CLEANUP, this.processCleanupJob.bind(this));
+      this.initializeWorker(
+        QueueName.CLEANUP,
+        this.processCleanupJob.bind(this)
+      );
       this.initializeWorker(
         QueueName.NOTIFICATIONS,
         this.processNotificationJob.bind(this)
@@ -182,7 +189,7 @@ class QueueService {
       concurrency: 5,
     });
 
-    worker.on("error", (err) => {
+    worker.on("error", err => {
       logger.error("Worker error", { queue: queueName, error: err });
     });
 
@@ -215,7 +222,11 @@ class QueueService {
     }
 
     const job = await queue.add(jobName, data, options);
-    logger.info("Job added to queue", { queue: queueName, jobName, jobId: job.id });
+    logger.info("Job added to queue", {
+      queue: queueName,
+      jobName,
+      jobId: job.id,
+    });
     return job;
   }
 
@@ -378,13 +389,16 @@ class QueueService {
 
       // Re-fetch event from Stripe and process
       const stripeEvent = await stripe.events.retrieve(eventId);
-      
+
       // Import and call the webhook handler
       const { handleStripeWebhook } = await import("../webhooks/stripe");
-      
+
       // Create a mock request/response for processing
       // Note: In production, you might want to refactor this
-      logger.info("Re-processing Stripe event", { eventId, type: stripeEvent.type });
+      logger.info("Re-processing Stripe event", {
+        eventId,
+        type: stripeEvent.type,
+      });
 
       // Update retry count
       await db
@@ -487,7 +501,7 @@ class QueueService {
           // Check amount match (convert cents to dollars)
           const stripeAmount = paymentIntent.amount / 100;
           const dbAmount = parseFloat(booking.totalAmount);
-          
+
           if (Math.abs(stripeAmount - dbAmount) > 0.01) {
             logger.error("Reconciliation: Amount mismatch", {
               bookingId: booking.id,
@@ -539,7 +553,6 @@ class QueueService {
         mismatches,
         unprocessedEvents: unprocessedEvents.length,
       });
-
     } catch (error) {
       logger.error("Reconciliation failed", {
         jobId: job.id,
@@ -836,6 +849,6 @@ class QueueService {
 export const queueService = new QueueService();
 
 // Initialize on module load (non-blocking)
-queueService.initialize().catch((err) => {
+queueService.initialize().catch(err => {
   logger.error("Failed to initialize queue service", { error: err });
 });

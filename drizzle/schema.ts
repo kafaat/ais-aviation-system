@@ -894,7 +894,7 @@ export const stripeEvents = mysqlTable(
     retryCount: int("retryCount").default(0).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     typeIdx: index("stripe_events_type_idx").on(table.type),
     processedIdx: index("stripe_events_processed_idx").on(table.processed),
     createdAtIdx: index("stripe_events_created_at_idx").on(table.createdAt),
@@ -923,26 +923,26 @@ export const financialLedger = mysqlTable(
     ]).notNull(),
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
     currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-    
+
     // Stripe references
     stripeEventId: varchar("stripeEventId", { length: 255 }),
     stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
     stripeChargeId: varchar("stripeChargeId", { length: 255 }),
     stripeRefundId: varchar("stripeRefundId", { length: 255 }),
-    
+
     // Description and metadata
     description: text("description"),
     metadata: text("metadata"), // JSON stringified additional data
-    
+
     // Balance tracking
     balanceBefore: decimal("balanceBefore", { precision: 10, scale: 2 }),
     balanceAfter: decimal("balanceAfter", { precision: 10, scale: 2 }),
-    
+
     // Timestamps
     transactionDate: timestamp("transactionDate").defaultNow().notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     bookingIdIdx: index("financial_ledger_booking_id_idx").on(table.bookingId),
     userIdIdx: index("financial_ledger_user_id_idx").on(table.userId),
     typeIdx: index("financial_ledger_type_idx").on(table.type),
@@ -975,7 +975,7 @@ export const refreshTokens = mysqlTable(
     lastUsedAt: timestamp("lastUsedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     userIdIdx: index("refresh_tokens_user_id_idx").on(table.userId),
     tokenIdx: index("refresh_tokens_token_idx").on(table.token),
     expiresAtIdx: index("refresh_tokens_expires_at_idx").on(table.expiresAt),
@@ -994,32 +994,32 @@ export const idempotencyRequests = mysqlTable(
   "idempotency_requests",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     // Idempotency key and scope
     scope: varchar("scope", { length: 100 }).notNull(), // e.g., "booking.create", "payment.intent", "webhook.stripe"
     idempotencyKey: varchar("idempotencyKey", { length: 255 }).notNull(),
-    
+
     // User/tenant context (nullable for webhooks)
     userId: int("userId"),
-    
+
     // Request hash to detect payload changes
     requestHash: varchar("requestHash", { length: 64 }).notNull(), // SHA256
-    
+
     // Processing status
     status: mysqlEnum("status", ["STARTED", "COMPLETED", "FAILED"])
       .default("STARTED")
       .notNull(),
-    
+
     // Response storage
     responseJson: text("responseJson"), // JSON stringified response
     errorMessage: text("errorMessage"), // Error message if FAILED
-    
+
     // Timestamps
     expiresAt: timestamp("expiresAt").notNull(), // TTL for cleanup
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     // Unique constraint on scope + userId + idempotencyKey
     scopeUserKeyIdx: index("idempotency_scope_user_key_idx").on(
       table.scope,
@@ -1039,7 +1039,6 @@ export const idempotencyRequests = mysqlTable(
 export type IdempotencyRequest = typeof idempotencyRequests.$inferSelect;
 export type InsertIdempotencyRequest = typeof idempotencyRequests.$inferInsert;
 
-
 // ============================================================================
 // P0 Critical Features - Dynamic Pricing, Multi-Currency, Inventory Management
 // ============================================================================
@@ -1052,11 +1051,11 @@ export const pricingRules = mysqlTable(
   "pricing_rules",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     // Rule identification
     name: varchar("name", { length: 255 }).notNull(),
     description: text("description"),
-    
+
     // Rule type
     ruleType: mysqlEnum("ruleType", [
       "demand_multiplier",
@@ -1067,36 +1066,42 @@ export const pricingRules = mysqlTable(
       "advance_purchase",
       "load_factor",
     ]).notNull(),
-    
+
     // Scope
     airlineId: int("airlineId"), // Null = all airlines
     originId: int("originId"), // Null = all origins
     destinationId: int("destinationId"), // Null = all destinations
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]), // Null = both
-    
+
     // Rule parameters (JSON)
     parameters: text("parameters").notNull(), // JSON: thresholds, multipliers, etc.
-    
+
     // Priority (higher = applied first)
     priority: int("priority").default(0).notNull(),
-    
+
     // Validity
     validFrom: timestamp("validFrom"),
     validTo: timestamp("validTo"),
     isActive: boolean("isActive").default(true).notNull(),
-    
+
     // Audit
     createdBy: int("createdBy"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     ruleTypeIdx: index("pricing_rules_type_idx").on(table.ruleType),
     airlineIdx: index("pricing_rules_airline_idx").on(table.airlineId),
-    routeIdx: index("pricing_rules_route_idx").on(table.originId, table.destinationId),
+    routeIdx: index("pricing_rules_route_idx").on(
+      table.originId,
+      table.destinationId
+    ),
     activeIdx: index("pricing_rules_active_idx").on(table.isActive),
     priorityIdx: index("pricing_rules_priority_idx").on(table.priority),
-    validityIdx: index("pricing_rules_validity_idx").on(table.validFrom, table.validTo),
+    validityIdx: index("pricing_rules_validity_idx").on(
+      table.validFrom,
+      table.validTo
+    ),
   })
 );
 
@@ -1111,30 +1116,33 @@ export const pricingHistory = mysqlTable(
   "pricing_history",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     // Flight reference
     flightId: int("flightId").notNull(),
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-    
+
     // Pricing details
     basePrice: int("basePrice").notNull(), // Original price in cents
     finalPrice: int("finalPrice").notNull(), // Calculated price in cents
-    totalMultiplier: decimal("totalMultiplier", { precision: 10, scale: 4 }).notNull(),
-    
+    totalMultiplier: decimal("totalMultiplier", {
+      precision: 10,
+      scale: 4,
+    }).notNull(),
+
     // Applied rules (JSON array of rule IDs and their contributions)
     appliedRules: text("appliedRules").notNull(), // JSON
-    
+
     // Context at calculation time
     occupancyRate: decimal("occupancyRate", { precision: 5, scale: 4 }),
     daysUntilDeparture: int("daysUntilDeparture"),
     demandScore: decimal("demandScore", { precision: 5, scale: 2 }),
-    
+
     // Booking reference (if price was used)
     bookingId: int("bookingId"),
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     flightIdx: index("pricing_history_flight_idx").on(table.flightId),
     bookingIdx: index("pricing_history_booking_idx").on(table.bookingId),
     createdAtIdx: index("pricing_history_created_idx").on(table.createdAt),
@@ -1152,30 +1160,33 @@ export const seasonalPricing = mysqlTable(
   "seasonal_pricing",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     name: varchar("name", { length: 255 }).notNull(), // e.g., "Hajj Season", "Summer Peak"
     nameAr: varchar("nameAr", { length: 255 }), // Arabic name
-    
+
     // Date range
     startDate: timestamp("startDate").notNull(),
     endDate: timestamp("endDate").notNull(),
-    
+
     // Multiplier
     multiplier: decimal("multiplier", { precision: 5, scale: 2 }).notNull(), // e.g., 1.50 = 50% increase
-    
+
     // Scope
     airlineId: int("airlineId"), // Null = all airlines
     originId: int("originId"), // Null = all origins
     destinationId: int("destinationId"), // Null = all destinations
-    
+
     // Status
     isActive: boolean("isActive").default(true).notNull(),
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
-    dateRangeIdx: index("seasonal_pricing_dates_idx").on(table.startDate, table.endDate),
+  table => ({
+    dateRangeIdx: index("seasonal_pricing_dates_idx").on(
+      table.startDate,
+      table.endDate
+    ),
     activeIdx: index("seasonal_pricing_active_idx").on(table.isActive),
   })
 );
@@ -1191,26 +1202,30 @@ export const currencies = mysqlTable(
   "currencies",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     code: varchar("code", { length: 3 }).notNull().unique(), // ISO 4217 code
     name: varchar("name", { length: 100 }).notNull(),
     nameAr: varchar("nameAr", { length: 100 }),
     symbol: varchar("symbol", { length: 10 }).notNull(),
     decimalPlaces: int("decimalPlaces").default(2).notNull(),
-    
+
     // Display settings
-    symbolPosition: mysqlEnum("symbolPosition", ["before", "after"]).default("before").notNull(),
-    thousandsSeparator: varchar("thousandsSeparator", { length: 1 }).default(","),
+    symbolPosition: mysqlEnum("symbolPosition", ["before", "after"])
+      .default("before")
+      .notNull(),
+    thousandsSeparator: varchar("thousandsSeparator", { length: 1 }).default(
+      ","
+    ),
     decimalSeparator: varchar("decimalSeparator", { length: 1 }).default("."),
-    
+
     // Status
     isActive: boolean("isActive").default(true).notNull(),
     isBaseCurrency: boolean("isBaseCurrency").default(false).notNull(), // SAR is base
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     codeIdx: index("currencies_code_idx").on(table.code),
     activeIdx: index("currencies_active_idx").on(table.isActive),
   })
@@ -1227,23 +1242,26 @@ export const exchangeRates = mysqlTable(
   "exchange_rates",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     fromCurrency: varchar("fromCurrency", { length: 3 }).notNull(),
     toCurrency: varchar("toCurrency", { length: 3 }).notNull(),
     rate: decimal("rate", { precision: 18, scale: 8 }).notNull(),
-    
+
     // Source of the rate
     source: varchar("source", { length: 100 }), // e.g., "openexchangerates", "manual"
-    
+
     // Validity
     validFrom: timestamp("validFrom").defaultNow().notNull(),
     validTo: timestamp("validTo"),
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
-    currencyPairIdx: index("exchange_rates_pair_idx").on(table.fromCurrency, table.toCurrency),
+  table => ({
+    currencyPairIdx: index("exchange_rates_pair_idx").on(
+      table.fromCurrency,
+      table.toCurrency
+    ),
     validFromIdx: index("exchange_rates_valid_idx").on(table.validFrom),
   })
 );
@@ -1259,30 +1277,30 @@ export const seatHolds = mysqlTable(
   "seat_holds",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     flightId: int("flightId").notNull(),
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
     seats: int("seats").notNull(),
-    
+
     // User/session reference
     userId: int("userId"),
     sessionId: varchar("sessionId", { length: 255 }).notNull(),
-    
+
     // Status
     status: mysqlEnum("status", ["active", "converted", "expired", "released"])
       .default("active")
       .notNull(),
-    
+
     // Expiration
     expiresAt: timestamp("expiresAt").notNull(),
-    
+
     // Conversion reference
     bookingId: int("bookingId"),
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     flightIdx: index("seat_holds_flight_idx").on(table.flightId),
     userIdx: index("seat_holds_user_idx").on(table.userId),
     sessionIdx: index("seat_holds_session_idx").on(table.sessionId),
@@ -1302,41 +1320,51 @@ export const waitlist = mysqlTable(
   "waitlist",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     flightId: int("flightId").notNull(),
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-    
+
     userId: int("userId").notNull(),
     seats: int("seats").notNull(),
-    
+
     // Priority (lower = higher priority)
     priority: int("priority").notNull(),
-    
+
     // Status
-    status: mysqlEnum("status", ["waiting", "offered", "confirmed", "expired", "cancelled"])
+    status: mysqlEnum("status", [
+      "waiting",
+      "offered",
+      "confirmed",
+      "expired",
+      "cancelled",
+    ])
       .default("waiting")
       .notNull(),
-    
+
     // Offer details
     offeredAt: timestamp("offeredAt"),
     offerExpiresAt: timestamp("offerExpiresAt"),
     confirmedAt: timestamp("confirmedAt"),
-    
+
     // Contact preferences
     notifyByEmail: boolean("notifyByEmail").default(true).notNull(),
     notifyBySms: boolean("notifyBySms").default(false).notNull(),
-    
+
     // Resulting booking
     bookingId: int("bookingId"),
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     flightIdx: index("waitlist_flight_idx").on(table.flightId),
     userIdx: index("waitlist_user_idx").on(table.userId),
     statusIdx: index("waitlist_status_idx").on(table.status),
-    priorityIdx: index("waitlist_priority_idx").on(table.flightId, table.cabinClass, table.priority),
+    priorityIdx: index("waitlist_priority_idx").on(
+      table.flightId,
+      table.cabinClass,
+      table.priority
+    ),
   })
 );
 
@@ -1351,28 +1379,38 @@ export const overbookingConfig = mysqlTable(
   "overbooking_config",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     // Scope
     airlineId: int("airlineId"), // Null = all airlines
     originId: int("originId"), // Null = all origins
     destinationId: int("destinationId"), // Null = all destinations
-    
+
     // Overbooking rates
-    economyRate: decimal("economyRate", { precision: 5, scale: 4 }).default("0.05").notNull(), // 5%
-    businessRate: decimal("businessRate", { precision: 5, scale: 4 }).default("0.02").notNull(), // 2%
+    economyRate: decimal("economyRate", { precision: 5, scale: 4 })
+      .default("0.05")
+      .notNull(), // 5%
+    businessRate: decimal("businessRate", { precision: 5, scale: 4 })
+      .default("0.02")
+      .notNull(), // 2%
     maxOverbooking: int("maxOverbooking").default(10).notNull(),
-    
+
     // Historical data
-    historicalNoShowRate: decimal("historicalNoShowRate", { precision: 5, scale: 4 }),
-    
+    historicalNoShowRate: decimal("historicalNoShowRate", {
+      precision: 5,
+      scale: 4,
+    }),
+
     // Status
     isActive: boolean("isActive").default(true).notNull(),
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
-    routeIdx: index("overbooking_route_idx").on(table.originId, table.destinationId),
+  table => ({
+    routeIdx: index("overbooking_route_idx").on(
+      table.originId,
+      table.destinationId
+    ),
     airlineIdx: index("overbooking_airline_idx").on(table.airlineId),
     activeIdx: index("overbooking_active_idx").on(table.isActive),
   })
@@ -1389,37 +1427,40 @@ export const inventorySnapshots = mysqlTable(
   "inventory_snapshots",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     flightId: int("flightId").notNull(),
     snapshotDate: timestamp("snapshotDate").notNull(),
-    
+
     // Economy class
     economyTotal: int("economyTotal").notNull(),
     economySold: int("economySold").notNull(),
     economyHeld: int("economyHeld").notNull(),
     economyAvailable: int("economyAvailable").notNull(),
     economyWaitlist: int("economyWaitlist").notNull(),
-    
+
     // Business class
     businessTotal: int("businessTotal").notNull(),
     businessSold: int("businessSold").notNull(),
     businessHeld: int("businessHeld").notNull(),
     businessAvailable: int("businessAvailable").notNull(),
     businessWaitlist: int("businessWaitlist").notNull(),
-    
+
     // Pricing at snapshot time
     economyPrice: int("economyPrice").notNull(),
     businessPrice: int("businessPrice").notNull(),
-    
+
     // Days until departure
     daysUntilDeparture: int("daysUntilDeparture").notNull(),
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     flightIdx: index("inventory_snapshots_flight_idx").on(table.flightId),
     dateIdx: index("inventory_snapshots_date_idx").on(table.snapshotDate),
-    flightDateIdx: index("inventory_snapshots_flight_date_idx").on(table.flightId, table.snapshotDate),
+    flightDateIdx: index("inventory_snapshots_flight_date_idx").on(
+      table.flightId,
+      table.snapshotDate
+    ),
   })
 );
 
@@ -1434,34 +1475,45 @@ export const deniedBoardingRecords = mysqlTable(
   "denied_boarding_records",
   {
     id: int("id").autoincrement().primaryKey(),
-    
+
     flightId: int("flightId").notNull(),
     bookingId: int("bookingId").notNull(),
     userId: int("userId").notNull(),
-    
+
     // Type
     type: mysqlEnum("type", ["voluntary", "involuntary"]).notNull(),
-    
+
     // Compensation
     compensationAmount: int("compensationAmount").notNull(), // In cents
-    compensationCurrency: varchar("compensationCurrency", { length: 3 }).default("SAR").notNull(),
-    compensationType: mysqlEnum("compensationType", ["cash", "voucher", "miles"]).notNull(),
-    
+    compensationCurrency: varchar("compensationCurrency", { length: 3 })
+      .default("SAR")
+      .notNull(),
+    compensationType: mysqlEnum("compensationType", [
+      "cash",
+      "voucher",
+      "miles",
+    ]).notNull(),
+
     // Alternative flight
     alternativeFlightId: int("alternativeFlightId"),
-    
+
     // Status
-    status: mysqlEnum("status", ["pending", "accepted", "rejected", "completed"])
+    status: mysqlEnum("status", [
+      "pending",
+      "accepted",
+      "rejected",
+      "completed",
+    ])
       .default("pending")
       .notNull(),
-    
+
     // Notes
     notes: text("notes"),
-    
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     flightIdx: index("denied_boarding_flight_idx").on(table.flightId),
     userIdx: index("denied_boarding_user_idx").on(table.userId),
     statusIdx: index("denied_boarding_status_idx").on(table.status),
@@ -1469,4 +1521,5 @@ export const deniedBoardingRecords = mysqlTable(
 );
 
 export type DeniedBoardingRecord = typeof deniedBoardingRecords.$inferSelect;
-export type InsertDeniedBoardingRecord = typeof deniedBoardingRecords.$inferInsert;
+export type InsertDeniedBoardingRecord =
+  typeof deniedBoardingRecords.$inferInsert;

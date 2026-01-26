@@ -10,41 +10,47 @@
 
 تم تطبيق **7 تحسينات** لجعل الحزمة Production-grade:
 
-| # | التحسين | الحالة | الملف |
-|---|---------|--------|-------|
-| 1 | مصدر التسوية من `payments` | ✅ | `stripe-reconciliation.service.ts` |
-| 2 | Unique Constraints على Ledger | ✅ | `0004_financial_ledger_uniqueness.sql` |
-| 3 | Redis إلزامي في Production | ✅ | `queues.ts` |
-| 4 | Email فعلي من `email.service.ts` | ✅ | `email.worker.ts` |
-| 5 | اختبارات تستخدم الخدمات الفعلية | ✅ | `critical-paths.test.ts` |
-| 6 | dryRun للتسوية | ✅ | `stripe-reconciliation.service.ts` |
-| 7 | Structured JSON Logging | ✅ | جميع الملفات |
+| #   | التحسين                          | الحالة | الملف                                  |
+| --- | -------------------------------- | ------ | -------------------------------------- |
+| 1   | مصدر التسوية من `payments`       | ✅     | `stripe-reconciliation.service.ts`     |
+| 2   | Unique Constraints على Ledger    | ✅     | `0004_financial_ledger_uniqueness.sql` |
+| 3   | Redis إلزامي في Production       | ✅     | `queues.ts`                            |
+| 4   | Email فعلي من `email.service.ts` | ✅     | `email.worker.ts`                      |
+| 5   | اختبارات تستخدم الخدمات الفعلية  | ✅     | `critical-paths.test.ts`               |
+| 6   | dryRun للتسوية                   | ✅     | `stripe-reconciliation.service.ts`     |
+| 7   | Structured JSON Logging          | ✅     | جميع الملفات                           |
 
 ---
 
 ## 1️⃣ مصدر التسوية من `payments`
 
 ### قبل
+
 ```typescript
 // كان يبحث في bookings
 const pendingBookings = await db.select().from(bookings)...
 ```
 
 ### بعد
+
 ```typescript
 // الآن يبحث في payments (المصدر الصحيح)
-const pendingPayments = await db.select()
+const pendingPayments = await db
+  .select()
   .from(payments)
   .innerJoin(bookings, eq(payments.bookingId, bookings.id))
-  .where(and(
-    eq(payments.status, "pending"),
-    isNotNull(payments.stripePaymentIntentId),
-    gte(payments.createdAt, lookbackDate)
-  ))
+  .where(
+    and(
+      eq(payments.status, "pending"),
+      isNotNull(payments.stripePaymentIntentId),
+      gte(payments.createdAt, lookbackDate)
+    )
+  )
   .limit(options.limit);
 ```
 
 ### السبب
+
 - `payments` هو المصدر الصحيح للمدفوعات المعلقة
 - `bookings` قد يكون له حالات مختلفة غير مرتبطة بالدفع
 - الـ JOIN يضمن الحصول على بيانات الحجز أيضاً
@@ -54,16 +60,18 @@ const pendingPayments = await db.select()
 ## 2️⃣ Unique Constraints على Ledger
 
 ### Migration
+
 ```sql
-ALTER TABLE `financial_ledger` 
+ALTER TABLE `financial_ledger`
 ADD UNIQUE INDEX `idx_ledger_unique_stripe_entry` (
-  `booking_id`, 
-  `type`, 
+  `booking_id`,
+  `type`,
   `stripe_payment_intent_id`
 );
 ```
 
 ### الفائدة
+
 - يمنع تكرار القيود المالية على مستوى قاعدة البيانات
 - حماية إضافية فوق الـ application-level checks
 - يسمح بـ NULL في `stripe_payment_intent_id` للقيود اليدوية
@@ -73,13 +81,14 @@ ADD UNIQUE INDEX `idx_ledger_unique_stripe_entry` (
 ## 3️⃣ Redis إلزامي في Production
 
 ### التنفيذ
+
 ```typescript
 const NODE_ENV = process.env.NODE_ENV || "development";
 const REDIS_REQUIRED = NODE_ENV === "production";
 
 function getRedisUrl(): string | null {
   const url = process.env.REDIS_URL;
-  
+
   if (!url) {
     if (REDIS_REQUIRED) {
       throw new Error("REDIS_URL is required in production environment");
@@ -87,30 +96,33 @@ function getRedisUrl(): string | null {
     log("warn", "REDIS_URL not set, queues will be disabled");
     return null;
   }
-  
+
   return url;
 }
 ```
 
 ### السلوك
-| البيئة | Redis متاح | النتيجة |
-|--------|-----------|---------|
-| Development | ❌ | ⚠️ Warning + queues disabled |
-| Development | ✅ | ✅ Works normally |
-| Production | ❌ | 🔴 **Error - يرمي استثناء** |
-| Production | ✅ | ✅ Works normally |
+
+| البيئة      | Redis متاح | النتيجة                      |
+| ----------- | ---------- | ---------------------------- |
+| Development | ❌         | ⚠️ Warning + queues disabled |
+| Development | ✅         | ✅ Works normally            |
+| Production  | ❌         | 🔴 **Error - يرمي استثناء**  |
+| Production  | ✅         | ✅ Works normally            |
 
 ---
 
 ## 4️⃣ Email فعلي من `email.service.ts`
 
 ### قبل
+
 ```typescript
 // TODO: Implement actual email sending
 console.log(`Would send ${data.type} email to ${data.to}`);
 ```
 
 ### بعد
+
 ```typescript
 import { emailService } from "../../services/email.service";
 
@@ -132,12 +144,14 @@ switch (data.type) {
 ## 5️⃣ اختبارات تستخدم الخدمات الفعلية
 
 ### قبل
+
 ```typescript
 // Mock everything
 const mockStripe = { ... };
 ```
 
 ### بعد
+
 ```typescript
 // Import actual services
 import { withIdempotency } from "../../services/idempotency-v2.service";
@@ -151,6 +165,7 @@ it("should return same result for same idempotency key", async () => {
 ```
 
 ### الاختبارات الجديدة
+
 1. ✅ Complete Booking Flow
 2. ✅ Payment Failure
 3. ✅ Webhook Deduplication (processed=true vs false)
@@ -165,11 +180,12 @@ it("should return same result for same idempotency key", async () => {
 ## 6️⃣ dryRun للتسوية
 
 ### API
+
 ```typescript
 interface ReconciliationOptions {
-  lookbackDays?: number;  // Default: 7
-  limit?: number;         // Default: 100
-  dryRun?: boolean;       // Default: false
+  lookbackDays?: number; // Default: 7
+  limit?: number; // Default: 100
+  dryRun?: boolean; // Default: false
 }
 
 // Dry run - لا تغييرات فعلية
@@ -180,6 +196,7 @@ const result = await runStripeReconciliation({ lookbackDays: 7 });
 ```
 
 ### Output
+
 ```typescript
 interface ReconciliationResult {
   correlationId: string;
@@ -199,6 +216,7 @@ interface ReconciliationResult {
 ## 7️⃣ Structured JSON Logging
 
 ### Format
+
 ```json
 {
   "timestamp": "2026-01-26T10:30:00.000Z",
@@ -212,10 +230,11 @@ interface ReconciliationResult {
 ```
 
 ### Implementation
+
 ```typescript
 function log(
-  level: "info" | "warn" | "error", 
-  message: string, 
+  level: "info" | "warn" | "error",
+  message: string,
   context: Record<string, unknown> = {}
 ) {
   const logEntry = {
@@ -226,7 +245,7 @@ function log(
     message,
     ...context,
   };
-  
+
   console.log(JSON.stringify(logEntry));
 }
 ```
@@ -235,19 +254,20 @@ function log(
 
 ## 📁 الملفات المحدثة
 
-| الملف | الحجم | التغييرات |
-|-------|-------|-----------|
-| `stripe-reconciliation.service.ts` | 15.2 KB | مصدر من payments، dryRun، structured logging |
-| `queues.ts` | 8.5 KB | Redis إلزامي، graceful degradation |
-| `email.worker.ts` | 5.8 KB | استخدام email.service.ts الفعلي |
-| `critical-paths.test.ts` | 12.4 KB | اختبارات مع الخدمات الفعلية |
-| `0004_financial_ledger_uniqueness.sql` | 1.8 KB | Unique constraints |
+| الملف                                  | الحجم   | التغييرات                                    |
+| -------------------------------------- | ------- | -------------------------------------------- |
+| `stripe-reconciliation.service.ts`     | 15.2 KB | مصدر من payments، dryRun، structured logging |
+| `queues.ts`                            | 8.5 KB  | Redis إلزامي، graceful degradation           |
+| `email.worker.ts`                      | 5.8 KB  | استخدام email.service.ts الفعلي              |
+| `critical-paths.test.ts`               | 12.4 KB | اختبارات مع الخدمات الفعلية                  |
+| `0004_financial_ledger_uniqueness.sql` | 1.8 KB  | Unique constraints                           |
 
 ---
 
 ## 🚀 الاستخدام
 
 ### تشغيل التسوية
+
 ```bash
 # Dry run أولاً
 pnpm reconcile:dry
@@ -257,12 +277,14 @@ pnpm reconcile
 ```
 
 ### تشغيل الاختبارات
+
 ```bash
 # اختبارات المسارات الحرجة
 pnpm test server/__tests__/integration/critical-paths.test.ts
 ```
 
 ### تشغيل Workers
+
 ```bash
 # في Production
 NODE_ENV=production pnpm workers
@@ -283,12 +305,12 @@ NODE_ENV=production pnpm workers
 
 ## 📊 التقييم النهائي
 
-| المعيار | قبل | بعد |
-|---------|-----|-----|
+| المعيار              | قبل  | بعد        |
+| -------------------- | ---- | ---------- |
 | Production Readiness | 8/10 | **9.5/10** |
-| Code Quality | 8/10 | **9/10** |
-| Test Coverage | 7/10 | **9/10** |
-| Observability | 6/10 | **9/10** |
-| Data Integrity | 8/10 | **10/10** |
+| Code Quality         | 8/10 | **9/10**   |
+| Test Coverage        | 7/10 | **9/10**   |
+| Observability        | 6/10 | **9/10**   |
+| Data Integrity       | 8/10 | **10/10**  |
 
 **الحكم النهائي:** ✅ **Production Ready**

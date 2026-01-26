@@ -49,6 +49,7 @@
 **الدور:** توزيع الحمل على replicas الـ API
 
 **المميزات:**
+
 - Round-robin load balancing
 - Health checks
 - SSL termination
@@ -56,6 +57,7 @@
 - Static file serving
 
 **التكوين:**
+
 ```nginx
 upstream ais_api {
     least_conn;
@@ -107,16 +109,19 @@ server {
 **الدور:** معالجة طلبات API
 
 **المواصفات (لكل replica):**
+
 - **CPU:** 2 cores
 - **RAM:** 2GB
 - **Storage:** 10GB
 
 **المميزات:**
+
 - Stateless (لا session state محلي)
 - Horizontal scaling
 - Auto-restart on failure
 
 **Environment Variables:**
+
 ```env
 NODE_ENV=production
 PORT=3000
@@ -135,17 +140,20 @@ SENTRY_DSN=...
 **الدور:** قاعدة البيانات الرئيسية
 
 **المواصفات:**
+
 - **CPU:** 4 cores
 - **RAM:** 8GB
 - **Storage:** 100GB SSD
 
 **المميزات:**
+
 - Connection pooling (pgBouncer)
 - Daily backups
 - Point-in-time recovery
 - Read replicas (مستقبلاً)
 
 **التكوين:**
+
 ```yaml
 postgres:
   image: postgres:15-alpine
@@ -174,11 +182,13 @@ postgres:
 **الدور:** Caching + Queue + Rate Limiting
 
 **المواصفات:**
+
 - **CPU:** 2 cores
 - **RAM:** 4GB
 - **Storage:** 20GB
 
 **الاستخدامات:**
+
 1. **Caching:**
    - نتائج البحث (TTL: 5 دقائق)
    - بيانات المطارات (TTL: 1 ساعة)
@@ -194,6 +204,7 @@ postgres:
    - Login attempts
 
 **التكوين:**
+
 ```yaml
 redis:
   image: redis:7-alpine
@@ -213,6 +224,7 @@ redis:
 ### 1. Blue-Green Deployment
 
 **الخطوات:**
+
 1. نشر النسخة الجديدة (Green)
 2. اختبار Green environment
 3. تحويل الـ traffic من Blue إلى Green
@@ -220,6 +232,7 @@ redis:
 5. إيقاف Blue environment
 
 **المميزات:**
+
 - Zero downtime
 - سهولة الـ rollback
 - اختبار في بيئة إنتاج حقيقية
@@ -229,6 +242,7 @@ redis:
 ### 2. Rolling Update
 
 **الخطوات:**
+
 1. تحديث replica 1
 2. انتظار health check
 3. تحديث replica 2
@@ -236,6 +250,7 @@ redis:
 5. تحديث replica 3
 
 **المميزات:**
+
 - لا يتطلب موارد إضافية
 - تدريجي وآمن
 
@@ -246,11 +261,13 @@ redis:
 ### 1. Health Checks
 
 **Endpoints:**
+
 - `GET /health` - basic health
 - `GET /health/ready` - readiness (DB + Redis)
 - `GET /health/live` - liveness
 
 **Nginx Health Check:**
+
 ```nginx
 location /health {
     access_log off;
@@ -265,6 +282,7 @@ location /health {
 ### 2. Metrics
 
 **المقاييس المطلوبة:**
+
 - Request rate (req/s)
 - Response time (p50, p95, p99)
 - Error rate (%)
@@ -274,6 +292,7 @@ location /health {
 - Redis memory usage
 
 **الأدوات:**
+
 - Prometheus + Grafana
 - أو Cloud provider metrics (AWS CloudWatch, Azure Monitor)
 
@@ -282,12 +301,14 @@ location /health {
 ### 3. Logging
 
 **المستويات:**
+
 - ERROR - الأخطاء الحرجة
 - WARN - تحذيرات
 - INFO - معلومات عامة
 - DEBUG - تفاصيل للتطوير
 
 **التنسيق:**
+
 ```json
 {
   "timestamp": "2026-01-26T10:00:00Z",
@@ -303,6 +324,7 @@ location /health {
 ```
 
 **الأدوات:**
+
 - Sentry (للأخطاء)
 - ELK Stack أو Cloud logging
 
@@ -321,11 +343,13 @@ location /health {
 ### 2. Secrets Management
 
 **لا تخزن secrets في:**
+
 - Git repository
 - Docker images
 - Environment files في الكود
 
 **استخدم:**
+
 - AWS Secrets Manager
 - Azure Key Vault
 - HashiCorp Vault
@@ -347,6 +371,7 @@ location /health {
 ### 1. Database Backups
 
 **Daily Full Backup:**
+
 ```bash
 #!/bin/bash
 # backup.sh
@@ -360,6 +385,7 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 ```
 
 **Retention:**
+
 - Daily backups: 30 يوم
 - Weekly backups: 3 أشهر
 - Monthly backups: 1 سنة
@@ -369,10 +395,12 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 ### 2. Redis Backups
 
 **AOF (Append Only File):**
+
 - تلقائي مع كل write
 - يسمح بـ point-in-time recovery
 
 **RDB Snapshots:**
+
 - كل 6 ساعات
 - Retention: 7 أيام
 
@@ -383,11 +411,13 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 ### 1. Vertical Scaling (Short-term)
 
 **عند الحاجة:**
+
 - زيادة CPU/RAM للـ API servers
 - زيادة DB resources
 - زيادة Redis memory
 
 **الحدود:**
+
 - API: حتى 8 cores, 16GB RAM
 - DB: حتى 16 cores, 32GB RAM
 - Redis: حتى 8GB memory
@@ -397,11 +427,13 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 ### 2. Horizontal Scaling (Long-term)
 
 **عند الحاجة:**
+
 - إضافة المزيد من API replicas (4, 5, 6...)
 - إضافة DB read replicas
 - Redis clustering
 
 **المؤشرات:**
+
 - CPU usage > 70% لمدة طويلة
 - Response time > 500ms
 - Request rate > 1000 req/s
@@ -410,14 +442,14 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 
 ## 🎯 Performance Targets
 
-| المقياس | الهدف | الحد الأقصى |
-|---------|--------|-------------|
-| Response Time (p95) | < 200ms | < 500ms |
-| Response Time (p99) | < 500ms | < 1000ms |
-| Error Rate | < 0.1% | < 1% |
-| Uptime | 99.9% | 99.5% |
-| DB Connections | < 100 | < 150 |
-| Redis Memory | < 70% | < 90% |
+| المقياس             | الهدف   | الحد الأقصى |
+| ------------------- | ------- | ----------- |
+| Response Time (p95) | < 200ms | < 500ms     |
+| Response Time (p99) | < 500ms | < 1000ms    |
+| Error Rate          | < 0.1%  | < 1%        |
+| Uptime              | 99.9%   | 99.5%       |
+| DB Connections      | < 100   | < 150       |
+| Redis Memory        | < 70%   | < 90%       |
 
 ---
 
@@ -428,6 +460,7 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 **الهدف:** 1 ساعة
 
 **الخطوات:**
+
 1. تحديد المشكلة (15 دقيقة)
 2. اتخاذ قرار الـ recovery (15 دقيقة)
 3. تنفيذ الـ recovery (30 دقيقة)
@@ -439,6 +472,7 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 **الهدف:** 1 ساعة
 
 **الآلية:**
+
 - Point-in-time recovery من DB backups
 - Redis AOF للـ queue data
 
@@ -447,6 +481,7 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 ## 📝 الخلاصة
 
 هذه البنية:
+
 - ✅ بسيطة وسهلة الإدارة
 - ✅ قابلة للتوسع
 - ✅ آمنة
@@ -454,11 +489,13 @@ find /backups -name "ais_db_*.sql.gz" -mtime +30 -delete
 - ✅ بدون تعقيد زائد (لا Kong، لا Kubernetes)
 
 **مناسبة لـ:**
+
 - 100-10,000 مستخدم نشط
 - 1,000-100,000 حجز/شهر
 - فريق صغير (2-5 مطورين)
 
 **التوسع المستقبلي:**
+
 - عند الحاجة، يمكن الانتقال إلى Kubernetes
 - أو استخدام managed services (AWS ECS, Azure App Service)
 

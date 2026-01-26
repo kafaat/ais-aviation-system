@@ -320,9 +320,8 @@ export async function generateETicketForPassenger(
   passengerId: number
 ): Promise<string> {
   const { getDb } = await import("../db");
-  const { bookings, flights, airports, passengers, airlines } = await import(
-    "../../drizzle/schema"
-  );
+  const { bookings, flights, airports, passengers, airlines } =
+    await import("../../drizzle/schema");
   const { eq } = await import("drizzle-orm");
 
   const database = await getDb();

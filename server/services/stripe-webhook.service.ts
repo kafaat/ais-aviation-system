@@ -1,6 +1,11 @@
 import Stripe from "stripe";
 import * as db from "../db";
-import { stripeEvents, financialLedger, type InsertStripeEvent, type InsertFinancialLedger } from "../../drizzle/schema";
+import {
+  stripeEvents,
+  financialLedger,
+  type InsertStripeEvent,
+  type InsertFinancialLedger,
+} from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger.service";
 import { recordStatusChange } from "./booking-state-machine.service";
@@ -56,7 +61,7 @@ export async function storeStripeEvent(event: Stripe.Event): Promise<void> {
   };
 
   await db.db.insert(stripeEvents).values(eventData);
-  
+
   logger.info("Stripe event stored", {
     eventId: event.id,
     type: event.type,
@@ -87,7 +92,7 @@ export async function recordFinancialTransaction(
   data: InsertFinancialLedger
 ): Promise<void> {
   await db.db.insert(financialLedger).values(data);
-  
+
   logger.info("Financial transaction recorded", {
     type: data.type,
     amount: data.amount,
@@ -140,7 +145,7 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
 
     // Mark as processed with error
     await markEventProcessed(event.id, String(error));
-    
+
     // Re-throw to trigger retry
     throw error;
   }
@@ -275,7 +280,11 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
   const refundType = isFullRefund ? "refund" : "partial_refund";
 
   // Update payment status
-  await db.updatePaymentStatus(booking.id, "refunded", charge.payment_intent as string);
+  await db.updatePaymentStatus(
+    booking.id,
+    "refunded",
+    charge.payment_intent as string
+  );
 
   // Record status change
   await recordStatusChange({
@@ -383,7 +392,7 @@ export async function retryFailedEvents(): Promise<void> {
     try {
       const event = JSON.parse(eventRecord.data) as Stripe.Event;
       await processStripeEvent(event);
-      
+
       logger.info("Retry succeeded for event", {
         eventId: eventRecord.id,
       });

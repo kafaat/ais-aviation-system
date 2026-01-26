@@ -1,13 +1,13 @@
 /**
  * Stripe Webhook V2 Service - Production-Grade
- * 
+ *
  * Features:
  * - De-duplication via stripeEvents table (processed=true only prevents)
  * - Retry handling (processed=false allows retry)
  * - Transaction safety
  * - Proper error handling
  * - Ledger uniqueness
- * 
+ *
  * @version 2.0.0
  * @date 2026-01-26
  */
@@ -37,7 +37,7 @@ if (!webhookSecret && process.env.NODE_ENV === "production") {
 export const stripeWebhookServiceV2 = {
   /**
    * Handle raw webhook from Express
-   * 
+   *
    * @param opts.rawBody - Raw request body (Buffer)
    * @param opts.signature - Stripe-Signature header
    * @throws Error if signature verification fails or processing fails
@@ -96,7 +96,9 @@ export const stripeWebhookServiceV2 = {
       } catch (err: any) {
         // Handle race condition (another process inserted)
         if (err.code === "ER_DUP_ENTRY" || err.code === "23505") {
-          console.log(`[Webhook] Event ${event.id} already stored by another process`);
+          console.log(
+            `[Webhook] Event ${event.id} already stored by another process`
+          );
         } else {
           throw err;
         }
@@ -105,7 +107,7 @@ export const stripeWebhookServiceV2 = {
 
     // 4. Process event in transaction
     try {
-      await db.transaction(async (tx) => {
+      await db.transaction(async tx => {
         await this.processEvent(tx, event);
 
         // Mark as processed only on success
@@ -335,7 +337,9 @@ export const stripeWebhookServiceV2 = {
         })
         .where(eq(bookings.id, parseInt(bookingId)));
 
-      console.log(`[Webhook] Booking ${bookingId} confirmed via payment_intent`);
+      console.log(
+        `[Webhook] Booking ${bookingId} confirmed via payment_intent`
+      );
     }
   },
 

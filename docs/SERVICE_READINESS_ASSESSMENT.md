@@ -9,6 +9,7 @@
 ## 🎯 الهدف
 
 تقييم المشروع مقابل **معايير إطلاق تجاري حقيقية** في 6 محاور رئيسية، وتحديد:
+
 - ✅ ما هو جاهز فعلاً
 - ❌ ما هو ناقص
 - 🔴 ما يجب تنفيذه قبل أي إطلاق
@@ -19,11 +20,11 @@
 
 ### مستويات الأولوية
 
-| الأولوية | الرمز | الوصف | الإجراء |
-|----------|------|-------|---------|
-| **P0** | 🔴 | **مانع إطلاق** | يجب تنفيذه قبل أي إطلاق |
-| **P1** | 🟠 | **مهم جداً** | ينفذ خلال أول شهر بعد الإطلاق |
-| **P2** | 🟡 | **تحسينات نمو** | ينفذ خلال 3-6 أشهر |
+| الأولوية | الرمز | الوصف           | الإجراء                       |
+| -------- | ----- | --------------- | ----------------------------- |
+| **P0**   | 🔴    | **مانع إطلاق**  | يجب تنفيذه قبل أي إطلاق       |
+| **P1**   | 🟠    | **مهم جداً**    | ينفذ خلال أول شهر بعد الإطلاق |
+| **P2**   | 🟡    | **تحسينات نمو** | ينفذ خلال 3-6 أشهر            |
 
 ### المحاور الستة
 
@@ -45,11 +46,23 @@
 1. **State Machine للحجوزات** ✅
    - ملف: `server/services/booking-state-machine.service.ts`
    - الحالات المحددة: 13 حالة
+
    ```typescript
-   "initiated" | "pending" | "reserved" | "paid" | "confirmed" | 
-   "checked_in" | "boarded" | "completed" | "cancelled" | 
-   "refunded" | "expired" | "payment_failed" | "no_show"
+   "initiated" |
+     "pending" |
+     "reserved" |
+     "paid" |
+     "confirmed" |
+     "checked_in" |
+     "boarded" |
+     "completed" |
+     "cancelled" |
+     "refunded" |
+     "expired" |
+     "payment_failed" |
+     "no_show";
    ```
+
    - قواعد الانتقال محددة في `VALID_TRANSITIONS`
    - تسجيل تاريخ التغييرات في `bookingStatusHistory`
 
@@ -83,6 +96,7 @@
 ### ✅ المهام المطلوبة
 
 #### Task 1.1: إضافة Idempotency للحجز
+
 ```typescript
 // في server/services/bookings.service.ts
 
@@ -101,13 +115,14 @@ export async function createBooking(input: CreateBookingInput) {
   }
 
   // 2. Create booking in transaction
-  return await db.transaction(async (tx) => {
+  return await db.transaction(async tx => {
     // ... booking logic
   });
 }
 ```
 
 **الملفات المتأثرة:**
+
 - `drizzle/schema.ts` - إضافة `idempotencyKey` لجدول `bookings`
 - `server/services/bookings.service.ts` - تطبيق الـ logic
 - `server/db.ts` - إضافة `getBookingByIdempotencyKey`
@@ -146,12 +161,14 @@ export async function createBooking(input: CreateBookingInput) {
 ```
 
 **العمليات التي تحتاج transactions:**
+
 - ✅ Create booking + Reserve seats + Create passengers
 - ✅ Cancel booking + Release seats + Create refund
 - ✅ Modify booking + Update seats + Create payment/refund
 - ✅ Process payment + Update booking status
 
 **الملفات المتأثرة:**
+
 - `server/services/bookings.service.ts`
 - `server/services/payments.service.ts`
 - `server/services/refunds.service.ts`
@@ -169,19 +186,19 @@ describe('Booking Flow', () => {
   it('should complete full booking flow', async () => {
     // 1. Search flights
     const flights = await api.flights.search.query({...});
-    
+
     // 2. Create booking
     const booking = await api.bookings.create.mutate({
       idempotencyKey: uuidv4(),
       ...
     });
-    
+
     // 3. Process payment
     const payment = await api.payments.create.mutate({...});
-    
+
     // 4. Verify booking confirmed
     expect(booking.status).toBe('confirmed');
-    
+
     // 5. Verify seats updated
     const updatedFlight = await api.flights.get.query({...});
     expect(updatedFlight.availableSeats).toBe(originalSeats - 1);
@@ -198,6 +215,7 @@ describe('Booking Flow', () => {
 ```
 
 **Test Cases المطلوبة:**
+
 - ✅ Happy path: Search → Book → Pay → Confirm
 - ✅ Idempotency: إعادة إرسال نفس الطلب
 - ✅ Double booking prevention
@@ -206,6 +224,7 @@ describe('Booking Flow', () => {
 - ✅ Seat availability updates
 
 **الملفات الجديدة:**
+
 - `server/tests/integration/booking-flow.test.ts`
 - `server/tests/integration/payment-flow.test.ts`
 - `server/tests/integration/cancellation-flow.test.ts`
@@ -259,10 +278,12 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export const webhooksRouter = router({
   stripe: publicProcedure
-    .input(z.object({
-      body: z.string(),
-      signature: z.string(),
-    }))
+    .input(
+      z.object({
+        body: z.string(),
+        signature: z.string(),
+      })
+    )
     .mutation(async ({ input }) => {
       // 1. Verify signature
       let event: Stripe.Event;
@@ -297,6 +318,7 @@ export const webhooksRouter = router({
 ```
 
 **الملفات الجديدة:**
+
 - `server/routers/webhooks.ts`
 - `server/services/stripe-webhook.service.ts`
 
@@ -309,21 +331,26 @@ export const webhooksRouter = router({
 ```typescript
 // drizzle/schema.ts
 
-export const stripeEvents = pgTable('stripe_events', {
-  id: varchar('id', { length: 255 }).primaryKey(), // Stripe event ID
-  type: varchar('type', { length: 100 }).notNull(),
-  data: json('data').notNull(),
-  processed: boolean('processed').default(false).notNull(),
-  processedAt: timestamp('processed_at'),
-  error: text('error'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  typeIdx: index('stripe_events_type_idx').on(table.type),
-  processedIdx: index('stripe_events_processed_idx').on(table.processed),
-}));
+export const stripeEvents = pgTable(
+  "stripe_events",
+  {
+    id: varchar("id", { length: 255 }).primaryKey(), // Stripe event ID
+    type: varchar("type", { length: 100 }).notNull(),
+    data: json("data").notNull(),
+    processed: boolean("processed").default(false).notNull(),
+    processedAt: timestamp("processed_at"),
+    error: text("error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  table => ({
+    typeIdx: index("stripe_events_type_idx").on(table.type),
+    processedIdx: index("stripe_events_processed_idx").on(table.processed),
+  })
+);
 ```
 
 **الملفات المتأثرة:**
+
 - `drizzle/schema.ts`
 - Migration file
 
@@ -336,24 +363,29 @@ export const stripeEvents = pgTable('stripe_events', {
 ```typescript
 // drizzle/schema.ts
 
-export const financialLedger = pgTable('financial_ledger', {
-  id: serial('id').primaryKey(),
-  bookingId: integer('booking_id').references(() => bookings.id),
-  type: varchar('type', { length: 50 }).notNull(), // 'charge', 'refund', 'fee'
-  amount: decimal('amount', { precision: 10, scale: 2 }).notNull(),
-  currency: varchar('currency', { length: 3 }).notNull(),
-  stripeEventId: varchar('stripe_event_id', { length: 255 }),
-  stripePaymentIntentId: varchar('stripe_payment_intent_id', { length: 255 }),
-  description: text('description'),
-  metadata: json('metadata'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  bookingIdIdx: index('financial_ledger_booking_id_idx').on(table.bookingId),
-  typeIdx: index('financial_ledger_type_idx').on(table.type),
-}));
+export const financialLedger = pgTable(
+  "financial_ledger",
+  {
+    id: serial("id").primaryKey(),
+    bookingId: integer("booking_id").references(() => bookings.id),
+    type: varchar("type", { length: 50 }).notNull(), // 'charge', 'refund', 'fee'
+    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    stripeEventId: varchar("stripe_event_id", { length: 255 }),
+    stripePaymentIntentId: varchar("stripe_payment_intent_id", { length: 255 }),
+    description: text("description"),
+    metadata: json("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  table => ({
+    bookingIdIdx: index("financial_ledger_booking_id_idx").on(table.bookingId),
+    typeIdx: index("financial_ledger_type_idx").on(table.type),
+  })
+);
 ```
 
 **الملفات المتأثرة:**
+
 - `drizzle/schema.ts`
 - `server/services/ledger.service.ts` (جديد)
 
@@ -377,9 +409,12 @@ export async function reconcilePayments() {
     );
 
     // 3. Compare with our DB
-    if (stripePayment.status !== 'succeeded' && booking.status === 'confirmed') {
+    if (
+      stripePayment.status !== "succeeded" &&
+      booking.status === "confirmed"
+    ) {
       // Mismatch! Alert and log
-      logger.error('Payment mismatch detected', {
+      logger.error("Payment mismatch detected", {
         bookingId: booking.id,
         ourStatus: booking.status,
         stripeStatus: stripePayment.status,
@@ -387,7 +422,7 @@ export async function reconcilePayments() {
 
       // Send alert
       await sendAlert({
-        type: 'payment_mismatch',
+        type: "payment_mismatch",
         bookingId: booking.id,
       });
     }
@@ -395,10 +430,11 @@ export async function reconcilePayments() {
 }
 
 // Run daily at 2 AM
-schedule.scheduleJob('0 2 * * *', reconcilePayments);
+schedule.scheduleJob("0 2 * * *", reconcilePayments);
 ```
 
 **الملفات الجديدة:**
+
 - `server/jobs/reconciliation.job.ts`
 
 **الجهد:** 4-6 ساعات
@@ -440,12 +476,12 @@ schedule.scheduleJob('0 2 * * *', reconcilePayments);
 
 export async function authenticateRequest(req: Request) {
   // Support both Cookie and Bearer
-  const token = 
-    req.cookies.get('auth_token') || 
-    req.headers.get('Authorization')?.replace('Bearer ', '');
+  const token =
+    req.cookies.get("auth_token") ||
+    req.headers.get("Authorization")?.replace("Bearer ", "");
 
   if (!token) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    throw new TRPCError({ code: "UNAUTHORIZED" });
   }
 
   const payload = verifyJWT(token);
@@ -456,8 +492,8 @@ export async function authenticateRequest(req: Request) {
 export async function mobileLogin(email: string, password: string) {
   const user = await authenticateUser(email, password);
 
-  const accessToken = generateJWT(user, '15m');
-  const refreshToken = generateJWT(user, '7d');
+  const accessToken = generateJWT(user, "15m");
+  const refreshToken = generateJWT(user, "7d");
 
   // Store refresh token
   await storeRefreshToken(user.id, refreshToken);
@@ -472,15 +508,15 @@ export async function mobileLogin(email: string, password: string) {
 // Refresh token endpoint
 export async function refreshAccessToken(refreshToken: string) {
   const payload = verifyJWT(refreshToken);
-  
+
   // Verify refresh token is valid
   const isValid = await verifyRefreshToken(payload.userId, refreshToken);
   if (!isValid) {
-    throw new TRPCError({ code: 'UNAUTHORIZED' });
+    throw new TRPCError({ code: "UNAUTHORIZED" });
   }
 
-  const newAccessToken = generateJWT(payload, '15m');
-  
+  const newAccessToken = generateJWT(payload, "15m");
+
   return {
     accessToken: newAccessToken,
     expiresIn: 900,
@@ -489,6 +525,7 @@ export async function refreshAccessToken(refreshToken: string) {
 ```
 
 **الملفات المتأثرة:**
+
 - `server/_core/auth.ts`
 - `server/routers/auth.ts`
 - `drizzle/schema.ts` - إضافة جدول `refresh_tokens`
@@ -513,21 +550,21 @@ export interface APIError {
 // Error codes
 export const ErrorCodes = {
   // Booking errors
-  BOOKING_CONFLICT: 'BOOKING_CONFLICT',
-  SEATS_UNAVAILABLE: 'SEATS_UNAVAILABLE',
-  BOOKING_EXPIRED: 'BOOKING_EXPIRED',
-  
+  BOOKING_CONFLICT: "BOOKING_CONFLICT",
+  SEATS_UNAVAILABLE: "SEATS_UNAVAILABLE",
+  BOOKING_EXPIRED: "BOOKING_EXPIRED",
+
   // Payment errors
-  PAYMENT_FAILED: 'PAYMENT_FAILED',
-  PAYMENT_REQUIRED: 'PAYMENT_REQUIRED',
-  
+  PAYMENT_FAILED: "PAYMENT_FAILED",
+  PAYMENT_REQUIRED: "PAYMENT_REQUIRED",
+
   // Auth errors
-  UNAUTHORIZED: 'UNAUTHORIZED',
-  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
-  
+  UNAUTHORIZED: "UNAUTHORIZED",
+  TOKEN_EXPIRED: "TOKEN_EXPIRED",
+
   // Generic errors
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  VALIDATION_ERROR: "VALIDATION_ERROR",
+  INTERNAL_ERROR: "INTERNAL_ERROR",
 };
 
 // Error transformer
@@ -545,7 +582,7 @@ export function transformError(error: any, correlationId: string): APIError {
   // Default error
   return {
     code: ErrorCodes.INTERNAL_ERROR,
-    message: 'An unexpected error occurred',
+    message: "An unexpected error occurred",
     correlationId,
     retryable: false,
   };
@@ -553,9 +590,11 @@ export function transformError(error: any, correlationId: string): APIError {
 ```
 
 **الملفات الجديدة:**
+
 - `server/_core/errors.ts`
 
 **الملفات المتأثرة:**
+
 - `server/_core/trpc.ts` - إضافة error transformer
 
 **الجهد:** 4-6 ساعات
@@ -570,22 +609,24 @@ export function transformError(error: any, correlationId: string): APIError {
 ## Authentication
 
 ### Login
+
 POST /api/auth/mobile-login
 
 Request:
 {
-  "email": "user@example.com",
-  "password": "password123"
+"email": "user@example.com",
+"password": "password123"
 }
 
 Response:
 {
-  "accessToken": "eyJ...",
-  "refreshToken": "eyJ...",
-  "expiresIn": 900
+"accessToken": "eyJ...",
+"refreshToken": "eyJ...",
+"expiresIn": 900
 }
 
 ### Refresh Token
+
 POST /api/auth/refresh
 
 Headers:
@@ -593,13 +634,14 @@ Authorization: Bearer <refreshToken>
 
 Response:
 {
-  "accessToken": "eyJ...",
-  "expiresIn": 900
+"accessToken": "eyJ...",
+"expiresIn": 900
 }
 
 ## Flights
 
 ### Search Flights
+
 POST /api/flights/search
 
 Headers:
@@ -607,27 +649,27 @@ Authorization: Bearer <accessToken>
 
 Request:
 {
-  "from": "RUH",
-  "to": "JED",
-  "date": "2026-02-01",
-  "passengers": 1
+"from": "RUH",
+"to": "JED",
+"date": "2026-02-01",
+"passengers": 1
 }
 
 Response:
 {
-  "flights": [
-    {
-      "id": 1,
-      "flightNumber": "SV123",
-      "from": "RUH",
-      "to": "JED",
-      "departureTime": "2026-02-01T10:00:00Z",
-      "arrivalTime": "2026-02-01T11:30:00Z",
-      "price": 500,
-      "currency": "SAR",
-      "availableSeats": 50
-    }
-  ]
+"flights": [
+{
+"id": 1,
+"flightNumber": "SV123",
+"from": "RUH",
+"to": "JED",
+"departureTime": "2026-02-01T10:00:00Z",
+"arrivalTime": "2026-02-01T11:30:00Z",
+"price": 500,
+"currency": "SAR",
+"availableSeats": 50
+}
+]
 }
 
 ## Error Handling
@@ -635,14 +677,15 @@ Response:
 All errors follow this format:
 
 {
-  "code": "SEATS_UNAVAILABLE",
-  "message": "No seats available for this flight",
-  "correlationId": "abc-123",
-  "retryable": false,
-  "details": {}
+"code": "SEATS_UNAVAILABLE",
+"message": "No seats available for this flight",
+"correlationId": "abc-123",
+"retryable": false,
+"details": {}
 }
 
 Error Codes:
+
 - BOOKING_CONFLICT: Another booking is in progress
 - SEATS_UNAVAILABLE: No seats available
 - PAYMENT_FAILED: Payment processing failed
@@ -651,6 +694,7 @@ Error Codes:
 ```
 
 **الملفات الجديدة:**
+
 - `docs/MOBILE_API_DOCUMENTATION.md`
 - `postman/AIS_Mobile_API.postman_collection.json`
 
@@ -689,10 +733,10 @@ Error Codes:
 ```typescript
 // server/_core/redis.ts
 
-import { createClient } from 'redis';
+import { createClient } from "redis";
 
 export const redis = createClient({
-  url: process.env.REDIS_URL || 'redis://localhost:6379',
+  url: process.env.REDIS_URL || "redis://localhost:6379",
 });
 
 await redis.connect();
@@ -716,7 +760,7 @@ export class CacheService {
 // Usage: Cache search results
 export async function searchFlights(params: SearchParams) {
   const cacheKey = `flights:${JSON.stringify(params)}`;
-  
+
   // Check cache
   const cached = await cache.get(cacheKey);
   if (cached) {
@@ -734,10 +778,12 @@ export async function searchFlights(params: SearchParams) {
 ```
 
 **الملفات الجديدة:**
+
 - `server/_core/redis.ts`
 - `server/services/cache.service.ts`
 
 **الملفات المتأثرة:**
+
 - `server/services/flights.service.ts`
 - `docker-compose.production.yml` - إضافة Redis
 
@@ -750,32 +796,37 @@ export async function searchFlights(params: SearchParams) {
 ```typescript
 // server/services/queue.service.ts
 
-import { Queue, Worker } from 'bullmq';
+import { Queue, Worker } from "bullmq";
 
 // Email queue
-export const emailQueue = new Queue('emails', {
+export const emailQueue = new Queue("emails", {
   connection: redis,
 });
 
 // Worker
-const emailWorker = new Worker('emails', async (job) => {
-  const { to, subject, body } = job.data;
-  await sendEmail(to, subject, body);
-}, {
-  connection: redis,
-});
+const emailWorker = new Worker(
+  "emails",
+  async job => {
+    const { to, subject, body } = job.data;
+    await sendEmail(to, subject, body);
+  },
+  {
+    connection: redis,
+  }
+);
 
 // Usage
 export async function sendBookingConfirmationEmail(booking: Booking) {
-  await emailQueue.add('booking-confirmation', {
+  await emailQueue.add("booking-confirmation", {
     to: booking.user.email,
-    subject: 'Booking Confirmed',
+    subject: "Booking Confirmed",
     body: generateEmailBody(booking),
   });
 }
 ```
 
 **الملفات الجديدة:**
+
 - `server/services/queue.service.ts`
 - `server/jobs/email.job.ts`
 - `server/jobs/webhook-retry.job.ts`
@@ -815,17 +866,21 @@ export async function sendBookingConfirmationEmail(booking: Booking) {
 ```typescript
 // server/_core/middleware.ts
 
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 
-export function correlationIdMiddleware(req: Request, res: Response, next: NextFunction) {
-  const correlationId = req.headers.get('x-correlation-id') || uuidv4();
-  
+export function correlationIdMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const correlationId = req.headers.get("x-correlation-id") || uuidv4();
+
   // Attach to request
   req.correlationId = correlationId;
-  
+
   // Add to response headers
-  res.setHeader('x-correlation-id', correlationId);
-  
+  res.setHeader("x-correlation-id", correlationId);
+
   next();
 }
 
@@ -839,9 +894,11 @@ export function log(message: string, data?: any) {
 ```
 
 **الملفات الجديدة:**
+
 - `server/_core/correlation.ts`
 
 **الملفات المتأثرة:**
+
 - `server/_core/middleware.ts`
 - `server/_core/logger.ts`
 
@@ -854,7 +911,7 @@ export function log(message: string, data?: any) {
 ```typescript
 // server/_core/sentry.ts
 
-import * as Sentry from '@sentry/node';
+import * as Sentry from "@sentry/node";
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -871,6 +928,7 @@ export function captureError(error: Error, context?: any) {
 ```
 
 **الملفات الجديدة:**
+
 - `server/_core/sentry.ts`
 
 **الجهد:** 2-3 ساعات
@@ -882,21 +940,25 @@ export function captureError(error: Error, context?: any) {
 ```typescript
 // drizzle/schema.ts
 
-export const auditLogs = pgTable('audit_logs', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id'),
-  action: varchar('action', { length: 100 }).notNull(),
-  resourceType: varchar('resource_type', { length: 50 }).notNull(),
-  resourceId: varchar('resource_id', { length: 255 }).notNull(),
-  changes: json('changes'),
-  ipAddress: varchar('ip_address', { length: 45 }),
-  userAgent: text('user_agent'),
-  correlationId: varchar('correlation_id', { length: 255 }),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-}, (table) => ({
-  userIdIdx: index('audit_logs_user_id_idx').on(table.userId),
-  actionIdx: index('audit_logs_action_idx').on(table.action),
-}));
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id"),
+    action: varchar("action", { length: 100 }).notNull(),
+    resourceType: varchar("resource_type", { length: 50 }).notNull(),
+    resourceId: varchar("resource_id", { length: 255 }).notNull(),
+    changes: json("changes"),
+    ipAddress: varchar("ip_address", { length: 45 }),
+    userAgent: text("user_agent"),
+    correlationId: varchar("correlation_id", { length: 255 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("audit_logs_user_id_idx").on(table.userId),
+    actionIdx: index("audit_logs_action_idx").on(table.action),
+  })
+);
 
 // Usage
 export async function logAudit(data: AuditLogData) {
@@ -914,6 +976,7 @@ export async function logAudit(data: AuditLogData) {
 ```
 
 **الملفات المتأثرة:**
+
 - `drizzle/schema.ts`
 - `server/services/audit.service.ts` (جديد)
 
@@ -962,6 +1025,7 @@ psql $DATABASE_URL -c "SELECT COUNT(*) FROM bookings;"
 ```
 
 **الملفات المطلوبة:**
+
 - `scripts/backup.sh` ✅ (موجود)
 - `scripts/restore.sh` (جديد)
 - `scripts/verify-backup.sh` (جديد)
@@ -975,47 +1039,47 @@ psql $DATABASE_URL -c "SELECT COUNT(*) FROM bookings;"
 ```javascript
 // tests/load/booking-flow.js
 
-import http from 'k6/http';
-import { check, sleep } from 'k6';
+import http from "k6/http";
+import { check, sleep } from "k6";
 
 export const options = {
   stages: [
-    { duration: '2m', target: 50 }, // Ramp up to 50 users
-    { duration: '5m', target: 50 }, // Stay at 50 users
-    { duration: '2m', target: 100 }, // Ramp up to 100 users
-    { duration: '5m', target: 100 }, // Stay at 100 users
-    { duration: '2m', target: 0 }, // Ramp down
+    { duration: "2m", target: 50 }, // Ramp up to 50 users
+    { duration: "5m", target: 50 }, // Stay at 50 users
+    { duration: "2m", target: 100 }, // Ramp up to 100 users
+    { duration: "5m", target: 100 }, // Stay at 100 users
+    { duration: "2m", target: 0 }, // Ramp down
   ],
   thresholds: {
-    http_req_duration: ['p(95)<500'], // 95% of requests must complete below 500ms
-    http_req_failed: ['rate<0.01'], // Error rate must be below 1%
+    http_req_duration: ["p(95)<500"], // 95% of requests must complete below 500ms
+    http_req_failed: ["rate<0.01"], // Error rate must be below 1%
   },
 };
 
 export default function () {
   // 1. Search flights
-  const searchRes = http.post('https://api.ais.example.com/flights/search', {
-    from: 'RUH',
-    to: 'JED',
-    date: '2026-02-01',
+  const searchRes = http.post("https://api.ais.example.com/flights/search", {
+    from: "RUH",
+    to: "JED",
+    date: "2026-02-01",
   });
 
   check(searchRes, {
-    'search status is 200': (r) => r.status === 200,
-    'search response time < 500ms': (r) => r.timings.duration < 500,
+    "search status is 200": r => r.status === 200,
+    "search response time < 500ms": r => r.timings.duration < 500,
   });
 
   sleep(1);
 
   // 2. Create booking
-  const bookingRes = http.post('https://api.ais.example.com/bookings', {
+  const bookingRes = http.post("https://api.ais.example.com/bookings", {
     idempotencyKey: `test-${Date.now()}`,
     flightId: 1,
-    passengers: [{ firstName: 'Test', lastName: 'User' }],
+    passengers: [{ firstName: "Test", lastName: "User" }],
   });
 
   check(bookingRes, {
-    'booking status is 200': (r) => r.status === 200,
+    "booking status is 200": r => r.status === 200,
   });
 
   sleep(2);
@@ -1023,6 +1087,7 @@ export default function () {
 ```
 
 **الملفات الجديدة:**
+
 - `tests/load/booking-flow.js`
 - `tests/load/search-only.js`
 
@@ -1038,10 +1103,12 @@ export default function () {
 ## Stripe Down
 
 ### Symptoms
+
 - Payment creation fails
 - Webhooks not received
 
 ### Actions
+
 1. Check Stripe status: https://status.stripe.com
 2. Enable "maintenance mode" in app
 3. Queue payment requests for retry
@@ -1050,10 +1117,12 @@ export default function () {
 ## Database Slow
 
 ### Symptoms
+
 - Response times > 2s
 - High CPU on DB server
 
 ### Actions
+
 1. Check slow query log
 2. Check connection pool usage
 3. Consider adding indexes
@@ -1062,10 +1131,12 @@ export default function () {
 ## High Error Rate
 
 ### Symptoms
+
 - Error rate > 5%
 - Sentry alerts
 
 ### Actions
+
 1. Check Sentry for error details
 2. Check correlation IDs in logs
 3. Rollback if recent deployment
@@ -1073,6 +1144,7 @@ export default function () {
 ```
 
 **الملفات الجديدة:**
+
 - `docs/INCIDENT_RUNBOOK.md`
 
 **الجهد:** 2-3 ساعات
@@ -1083,14 +1155,14 @@ export default function () {
 
 ### الحالة الحالية
 
-| المحور | الحالة | الدرجة | الأولوية |
-|--------|--------|--------|----------|
-| Correctness & Data Integrity | ⚠️ جزئي | 70% | 🔴 P0 |
-| Payments & Webhooks | ❌ ناقص | 40% | 🔴 P0 |
-| Mobile API Contract | ❌ ناقص | 30% | 🔴 P0 |
-| Performance & Scalability | ❌ ناقص | 50% | 🟠 P1 |
-| Security & Observability | ⚠️ جزئي | 60% | 🟠 P1 |
-| Ops & Go-Live | ⚠️ جزئي | 65% | 🟡 P2 |
+| المحور                       | الحالة  | الدرجة | الأولوية |
+| ---------------------------- | ------- | ------ | -------- |
+| Correctness & Data Integrity | ⚠️ جزئي | 70%    | 🔴 P0    |
+| Payments & Webhooks          | ❌ ناقص | 40%    | 🔴 P0    |
+| Mobile API Contract          | ❌ ناقص | 30%    | 🔴 P0    |
+| Performance & Scalability    | ❌ ناقص | 50%    | 🟠 P1    |
+| Security & Observability     | ⚠️ جزئي | 60%    | 🟠 P1    |
+| Ops & Go-Live                | ⚠️ جزئي | 65%    | 🟡 P2    |
 
 **Overall Readiness:** **52%** 🟠
 
@@ -1135,6 +1207,7 @@ export default function () {
 ## 📋 خطة تنفيذ مختصرة (4 أسابيع)
 
 ### الأسبوع 1-2: Core Correctness (P0)
+
 - [ ] Idempotency للحجز (6h)
 - [ ] Transaction wrapping (12h)
 - [ ] Integration tests (16h)
@@ -1145,6 +1218,7 @@ export default function () {
 **المجموع:** 51 ساعة
 
 ### الأسبوع 3: Mobile & Observability (P0 + P1)
+
 - [ ] Mobile auth (8h)
 - [ ] Error contract (6h)
 - [ ] API documentation (6h)
@@ -1154,6 +1228,7 @@ export default function () {
 **المجموع:** 27 ساعة
 
 ### الأسبوع 4: Performance & Ops (P1)
+
 - [ ] Redis setup (8h)
 - [ ] Background queue (10h)
 - [ ] Audit logs (6h)

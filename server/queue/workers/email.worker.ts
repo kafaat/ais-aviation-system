@@ -1,9 +1,9 @@
 /**
  * Email Worker - Production Grade
- * 
+ *
  * BullMQ worker that processes email sending jobs.
  * ✅ يستخدم email.service.ts الفعلي بدلاً من mock
- * 
+ *
  * التحسينات:
  * 1. استخدام email.service.ts الموجود
  * 2. Structured logging
@@ -35,7 +35,11 @@ const WORKER_CONFIG = {
 // Logger - Structured JSON
 // ============================================================================
 
-function log(level: "info" | "warn" | "error", message: string, context: Record<string, unknown> = {}) {
+function log(
+  level: "info" | "warn" | "error",
+  message: string,
+  context: Record<string, unknown> = {}
+) {
   const timestamp = new Date().toISOString();
   const logEntry = {
     timestamp,
@@ -44,7 +48,7 @@ function log(level: "info" | "warn" | "error", message: string, context: Record<
     message,
     ...context,
   };
-  
+
   if (level === "error") {
     console.error(JSON.stringify(logEntry));
   } else if (level === "warn") {
@@ -58,7 +62,7 @@ function log(level: "info" | "warn" | "error", message: string, context: Record<
 // Job Types
 // ============================================================================
 
-type EmailJobType = 
+type EmailJobType =
   | "booking_confirmation"
   | "booking_cancellation"
   | "payment_receipt"
@@ -85,9 +89,11 @@ interface EmailJobData {
 /**
  * ✅ يستخدم email.service.ts الفعلي
  */
-async function processEmailJob(job: Job<EmailJobData>): Promise<{ success: boolean; sentAt: string }> {
+async function processEmailJob(
+  job: Job<EmailJobData>
+): Promise<{ success: boolean; sentAt: string }> {
   const { type, to, templateData, correlationId } = job.data;
-  
+
   log("info", `Processing email job`, {
     jobId: job.id,
     type,
@@ -104,16 +110,25 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<{ success: boole
           passengerName: templateData.passengerName as string,
           passengerEmail: to,
           bookingReference: templateData.bookingReference as string,
-          pnr: templateData.pnr as string || templateData.bookingReference as string,
+          pnr:
+            (templateData.pnr as string) ||
+            (templateData.bookingReference as string),
           flightNumber: templateData.flightNumber as string,
           origin: templateData.origin as string,
           destination: templateData.destination as string,
-          departureTime: new Date(templateData.departureTime as string || templateData.departureDate as string),
-          arrivalTime: new Date(templateData.arrivalTime as string || templateData.departureTime as string),
-          cabinClass: templateData.cabinClass as string || "economy",
-          numberOfPassengers: templateData.numberOfPassengers as number || 1,
-          totalAmount: templateData.totalAmount as number || 0,
-          attachments: templateData.attachments as BookingConfirmationData["attachments"],
+          departureTime: new Date(
+            (templateData.departureTime as string) ||
+              (templateData.departureDate as string)
+          ),
+          arrivalTime: new Date(
+            (templateData.arrivalTime as string) ||
+              (templateData.departureTime as string)
+          ),
+          cabinClass: (templateData.cabinClass as string) || "economy",
+          numberOfPassengers: (templateData.numberOfPassengers as number) || 1,
+          totalAmount: (templateData.totalAmount as number) || 0,
+          attachments:
+            templateData.attachments as BookingConfirmationData["attachments"],
         };
         success = await sendBookingConfirmation(data);
         break;
@@ -143,10 +158,10 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<{ success: boole
           passengerName: templateData.passengerName as string,
           passengerEmail: to,
           bookingReference: templateData.bookingReference as string,
-          flightNumber: templateData.flightNumber as string || "",
-          refundAmount: templateData.refundAmount as number || 0,
+          flightNumber: (templateData.flightNumber as string) || "",
+          refundAmount: (templateData.refundAmount as number) || 0,
           refundReason: templateData.refundReason as string,
-          processingDays: templateData.processingDays as number || 5,
+          processingDays: (templateData.processingDays as number) || 5,
         };
         success = await sendRefundConfirmation(data);
         break;
@@ -163,7 +178,7 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<{ success: boole
           jobId: job.id,
           type,
         });
-        
+
         // Simulate sending for now
         await new Promise(resolve => setTimeout(resolve, 100));
         success = true;
@@ -182,17 +197,16 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<{ success: boole
     });
 
     return { success: true, sentAt: new Date().toISOString() };
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     log("error", `Failed to send email`, {
       jobId: job.id,
       type,
       to,
       error: errorMessage,
     });
-    
+
     throw error;
   }
 }
@@ -223,20 +237,20 @@ export function getEmailWorker(): Worker<EmailJobData> {
   );
 
   // Event Handlers
-  workerInstance.on("completed", (job) => {
+  workerInstance.on("completed", job => {
     log("info", `Job completed`, { jobId: job.id, type: job.data.type });
   });
 
   workerInstance.on("failed", (job, error) => {
-    log("error", `Job failed`, { 
-      jobId: job?.id, 
+    log("error", `Job failed`, {
+      jobId: job?.id,
       type: job?.data.type,
       error: error.message,
       attemptsMade: job?.attemptsMade,
     });
   });
 
-  workerInstance.on("error", (error) => {
+  workerInstance.on("error", error => {
     log("error", `Worker error`, { error: error.message });
   });
 
@@ -247,7 +261,7 @@ export function getEmailWorker(): Worker<EmailJobData> {
 export const emailWorker = {
   get instance() {
     return getEmailWorker();
-  }
+  },
 };
 
 // ============================================================================
@@ -292,19 +306,19 @@ export async function queueBookingConfirmationEmail(data: {
       bookingId: data.bookingId,
       correlationId: data.correlationId,
     },
-    { 
+    {
       priority: 2,
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
     }
   );
-  
+
   log("info", "Queued booking confirmation email", {
     jobId: job.id,
     to: data.to,
     bookingReference: data.bookingReference,
   });
-  
+
   return job.id!;
 }
 
@@ -343,19 +357,19 @@ export async function queueBookingCancellationEmail(data: {
       bookingId: data.bookingId,
       correlationId: data.correlationId,
     },
-    { 
+    {
       priority: 2,
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
     }
   );
-  
+
   log("info", "Queued booking cancellation email", {
     jobId: job.id,
     to: data.to,
     bookingReference: data.bookingReference,
   });
-  
+
   return job.id!;
 }
 
@@ -391,20 +405,20 @@ export async function queueFlightStatusChangeEmail(data: {
       templateData: data,
       correlationId: data.correlationId,
     },
-    { 
+    {
       priority: 1, // High priority for status changes
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
     }
   );
-  
+
   log("info", "Queued flight status change email", {
     jobId: job.id,
     to: data.to,
     flightNumber: data.flightNumber,
     newStatus: data.newStatus,
   });
-  
+
   return job.id!;
 }
 
@@ -435,19 +449,19 @@ export async function queueFlightReminderEmail(data: {
       templateData: data,
       correlationId: data.correlationId,
     },
-    { 
+    {
       priority: 3,
       attempts: 3,
       backoff: { type: "exponential", delay: 5000 },
     }
   );
-  
+
   log("info", "Queued flight reminder email", {
     jobId: job.id,
     to: data.to,
     flightNumber: data.flightNumber,
   });
-  
+
   return job.id!;
 }
 

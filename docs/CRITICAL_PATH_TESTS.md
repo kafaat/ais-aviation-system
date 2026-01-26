@@ -14,11 +14,13 @@
 ## ✅ الاختبارات المنفذة
 
 ### Test 1: Complete Booking Flow ✅
+
 ```
 Search → Book → Pay → Webhook Success → Confirmed
 ```
 
 **الخطوات:**
+
 1. إنشاء حجز بحالة `pending`
 2. إنشاء Payment Intent
 3. معالجة webhook `payment_intent.succeeded`
@@ -26,6 +28,7 @@ Search → Book → Pay → Webhook Success → Confirmed
 5. إنشاء قيد مالي في Ledger
 
 **التحقق:**
+
 - ✅ حالة الحجز = `confirmed`
 - ✅ حالة الدفع = `paid`
 - ✅ قيد مالي موجود
@@ -33,60 +36,71 @@ Search → Book → Pay → Webhook Success → Confirmed
 ---
 
 ### Test 2: Payment Failure ✅
+
 ```
 Pay Fail → Booking FAILED
 ```
 
 **الخطوات:**
+
 1. إنشاء حجز بحالة `pending`
 2. محاكاة فشل الدفع
 3. تحديث الحجز إلى `failed`
 
 **التحقق:**
+
 - ✅ حالة الحجز = `failed`
 - ✅ حالة الدفع = `failed`
 
 ---
 
 ### Test 3: Webhook Deduplication ✅
+
 ```
 Webhook Duplication → No Duplicate Ledger
 ```
 
 **الخطوات:**
+
 1. معالجة webhook أول مرة
 2. تخزين الحدث مع `processed=true`
 3. محاولة معالجة نفس الحدث مرة أخرى
 4. التحقق من عدم تكرار القيد المالي
 
 **التحقق:**
+
 - ✅ الحدث المكرر لا يُعالج
 - ✅ قيد مالي واحد فقط
 
 ---
 
 ### Test 4: Cancel Before Payment ✅
+
 ```
 Cancel Before Payment → CANCELLED
 ```
 
 **الخطوات:**
+
 1. إنشاء حجز بحالة `pending`
 2. إلغاء الحجز قبل الدفع
 3. التحقق من عدم وجود قيود مالية
 
 **التحقق:**
+
 - ✅ حالة الحجز = `cancelled`
 - ✅ لا قيود مالية
 
 ---
 
 ### Test 5: Refund Flow ✅
+
 ```
 Confirmed → Refund → REFUNDED
 ```
 
 **الخطوات:**
+
 1. إنشاء حجز مؤكد ومدفوع
 2. إنشاء قيد مالي للدفع
 3. معالجة طلب الاسترداد
@@ -94,6 +108,7 @@ Confirmed → Refund → REFUNDED
 5. التحقق من توازن الحساب
 
 **التحقق:**
+
 - ✅ حالة الحجز = `cancelled`
 - ✅ حالة الدفع = `refunded`
 - ✅ مجموع القيود المالية = 0
@@ -101,12 +116,14 @@ Confirmed → Refund → REFUNDED
 ---
 
 ### Test 6: Idempotency ✅
+
 ```
 Same Key → Same Response
 Different Payload + Same Key → Reject
 ```
 
 **الخطوات:**
+
 1. إنشاء حجز مع idempotency key
 2. محاولة إنشاء حجز آخر بنفس المفتاح
 3. التحقق من إرجاع نفس الحجز
@@ -114,24 +131,28 @@ Different Payload + Same Key → Reject
 5. التحقق من الرفض
 
 **التحقق:**
+
 - ✅ نفس المفتاح → نفس النتيجة
 - ✅ مفتاح مكرر مع بيانات مختلفة → رفض
 
 ---
 
 ### Test 7: State Machine Guards ✅
+
 ```
 Invalid Transitions → Blocked
 Valid Transitions → Allowed
 ```
 
 **الانتقالات غير المسموحة:**
+
 - `cancelled` → `confirmed` ❌
 - `cancelled` → `pending` ❌
 - `completed` → `pending` ❌
 - `failed` → `confirmed` ❌
 
 **الانتقالات المسموحة:**
+
 - `pending` → `confirmed` ✅
 - `pending` → `cancelled` ✅
 - `pending` → `failed` ✅
@@ -157,15 +178,15 @@ pnpm test --reporter=verbose server/__tests__/integration/
 
 ## 📊 التغطية المطلوبة
 
-| المسار | الأهمية | الحالة |
-|--------|---------|--------|
-| Booking Flow | P0 | ✅ |
-| Payment Failure | P0 | ✅ |
-| Webhook De-dup | P0 | ✅ |
-| Cancel Flow | P0 | ✅ |
-| Refund Flow | P0 | ✅ |
-| Idempotency | P0 | ✅ |
-| State Guards | P0 | ✅ |
+| المسار          | الأهمية | الحالة |
+| --------------- | ------- | ------ |
+| Booking Flow    | P0      | ✅     |
+| Payment Failure | P0      | ✅     |
+| Webhook De-dup  | P0      | ✅     |
+| Cancel Flow     | P0      | ✅     |
+| Refund Flow     | P0      | ✅     |
+| Idempotency     | P0      | ✅     |
+| State Guards    | P0      | ✅     |
 
 ---
 

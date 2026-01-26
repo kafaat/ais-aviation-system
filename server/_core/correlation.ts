@@ -24,10 +24,7 @@ export function setCorrelationId(correlationId: string): void {
 /**
  * Run function with correlation ID context
  */
-export function runWithCorrelationId<T>(
-  correlationId: string,
-  fn: () => T
-): T {
+export function runWithCorrelationId<T>(correlationId: string, fn: () => T): T {
   return correlationStorage.run(correlationId, fn);
 }
 
@@ -38,9 +35,7 @@ export function runWithCorrelationId<T>(
 export function correlationMiddleware(req: any, res: any, next: any) {
   // Try to get correlation ID from header, or generate new one
   const correlationId =
-    req.headers["x-correlation-id"] ||
-    req.headers["x-request-id"] ||
-    uuidv4();
+    req.headers["x-correlation-id"] || req.headers["x-request-id"] || uuidv4();
 
   // Add to response headers
   res.setHeader("x-correlation-id", correlationId);

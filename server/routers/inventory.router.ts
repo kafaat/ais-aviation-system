@@ -1,13 +1,18 @@
 /**
  * Inventory Router
- * 
+ *
  * tRPC endpoints for inventory management operations
- * 
+ *
  * @module routers/inventory.router
  */
 
 import { z } from "zod";
-import { router, publicProcedure, protectedProcedure, adminProcedure } from "../trpc";
+import {
+  router,
+  publicProcedure,
+  protectedProcedure,
+  adminProcedure,
+} from "../trpc";
 import { InventoryService } from "../services/inventory/inventory.service";
 import { TRPCError } from "@trpc/server";
 
@@ -75,7 +80,10 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to get inventory status",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to get inventory status",
         });
       }
     }),
@@ -102,7 +110,8 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to allocate seats",
+          message:
+            error instanceof Error ? error.message : "Failed to allocate seats",
         });
       }
     }),
@@ -123,7 +132,8 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to release hold",
+          message:
+            error instanceof Error ? error.message : "Failed to release hold",
         });
       }
     }),
@@ -153,7 +163,10 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to add to waitlist",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to add to waitlist",
         });
       }
     }),
@@ -165,7 +178,10 @@ export const inventoryRouter = router({
     .input(removeFromWaitlistInput)
     .mutation(async ({ input }) => {
       try {
-        await InventoryService.removeFromWaitlist(input.waitlistId, input.reason);
+        await InventoryService.removeFromWaitlist(
+          input.waitlistId,
+          input.reason
+        );
 
         return {
           success: true,
@@ -174,7 +190,10 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to remove from waitlist",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to remove from waitlist",
         });
       }
     }),
@@ -198,7 +217,8 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to get forecast",
+          message:
+            error instanceof Error ? error.message : "Failed to get forecast",
         });
       }
     }),
@@ -210,9 +230,10 @@ export const inventoryRouter = router({
     .input(z.object({ flightId: z.number().int().positive() }))
     .query(async ({ input }) => {
       try {
-        const recommendation = await InventoryService.calculateRecommendedOverbooking(
-          input.flightId
-        );
+        const recommendation =
+          await InventoryService.calculateRecommendedOverbooking(
+            input.flightId
+          );
 
         return {
           success: true,
@@ -221,7 +242,10 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to get recommendation",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to get recommendation",
         });
       }
     }),
@@ -252,7 +276,10 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to handle denied boarding",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to handle denied boarding",
         });
       }
     }),
@@ -274,7 +301,8 @@ export const inventoryRouter = router({
     } catch (error) {
       throw new TRPCError({
         code: "INTERNAL_SERVER_ERROR",
-        message: error instanceof Error ? error.message : "Failed to expire holds",
+        message:
+          error instanceof Error ? error.message : "Failed to expire holds",
       });
     }
   }),
@@ -286,7 +314,10 @@ export const inventoryRouter = router({
     .input(getInventoryStatusInput)
     .mutation(async ({ input }) => {
       try {
-        await InventoryService.processWaitlist(input.flightId, input.cabinClass);
+        await InventoryService.processWaitlist(
+          input.flightId,
+          input.cabinClass
+        );
 
         return {
           success: true,
@@ -295,7 +326,10 @@ export const inventoryRouter = router({
       } catch (error) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: error instanceof Error ? error.message : "Failed to process waitlist",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to process waitlist",
         });
       }
     }),

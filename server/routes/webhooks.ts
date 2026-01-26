@@ -1,9 +1,9 @@
 /**
  * Webhook Routes - Express Raw Body Handler
- * 
+ *
  * IMPORTANT: This route must be mounted BEFORE express.json()
  * to preserve raw body for Stripe signature verification.
- * 
+ *
  * @version 2.0.0
  * @date 2026-01-26
  */
@@ -16,12 +16,12 @@ const router: Router = express.Router();
 
 /**
  * Stripe Webhook Endpoint
- * 
+ *
  * POST /webhooks/stripe
- * 
+ *
  * IMPORTANT: Must use express.raw() middleware
  * to preserve raw body for signature verification.
- * 
+ *
  * Response codes:
  * - 200: Event processed successfully (Stripe stops retrying)
  * - 400: Invalid signature (Stripe stops retrying)
@@ -31,7 +31,8 @@ router.post(
   "/stripe",
   express.raw({ type: "application/json" }),
   async (req: Request, res: Response) => {
-    const correlationId = getCorrelationId() || req.headers["x-correlation-id"] || "unknown";
+    const correlationId =
+      getCorrelationId() || req.headers["x-correlation-id"] || "unknown";
     const signature = req.header("Stripe-Signature");
 
     console.log(`[Webhook] Received request (correlationId: ${correlationId})`);
@@ -107,7 +108,7 @@ router.post(
 
 /**
  * Health check for webhooks
- * 
+ *
  * GET /webhooks/health
  */
 router.get("/health", (req: Request, res: Response) => {

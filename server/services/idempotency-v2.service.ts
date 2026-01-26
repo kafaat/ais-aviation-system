@@ -1,13 +1,13 @@
 /**
  * Idempotency V2 Service - Production-Grade
- * 
+ *
  * Features:
  * - DB-based (Source of Truth) - works even if Redis is down
  * - Request hash validation (detects payload changes)
  * - Response caching
  * - Proper error handling
  * - TTL-based cleanup
- * 
+ *
  * @version 2.0.0
  * @date 2026-01-26
  */
@@ -55,16 +55,19 @@ export interface IdempotencyOptions<T> {
  * Calculate SHA256 hash of request payload
  */
 function calculateRequestHash(request: unknown): string {
-  const normalized = JSON.stringify(request, Object.keys(request as object).sort());
+  const normalized = JSON.stringify(
+    request,
+    Object.keys(request as object).sort()
+  );
   return crypto.createHash("sha256").update(normalized).digest("hex");
 }
 
 /**
  * Production-Grade Idempotency Wrapper
- * 
+ *
  * Ensures that the same operation with the same idempotency key
  * is only executed once, even under concurrent requests.
- * 
+ *
  * @example
  * ```typescript
  * const booking = await withIdempotency({
@@ -79,7 +82,9 @@ function calculateRequestHash(request: unknown): string {
  * });
  * ```
  */
-export async function withIdempotency<T>(opts: IdempotencyOptions<T>): Promise<T> {
+export async function withIdempotency<T>(
+  opts: IdempotencyOptions<T>
+): Promise<T> {
   const db = await getDb();
   if (!db) {
     throw new AppError(ErrorCode.SERVICE_UNAVAILABLE, "Database not available");
@@ -105,8 +110,8 @@ export async function withIdempotency<T>(opts: IdempotencyOptions<T>): Promise<T
     // On conflict (duplicate key), fetch existing record
     const isConflict =
       err.code === "ER_DUP_ENTRY" || // MySQL
-      err.code === "23505" ||         // PostgreSQL
-      err.code === "23000";           // MySQL/TiDB
+      err.code === "23505" || // PostgreSQL
+      err.code === "23000"; // MySQL/TiDB
 
     if (!isConflict) {
       throw err; // Unexpected error
@@ -118,9 +123,7 @@ export async function withIdempotency<T>(opts: IdempotencyOptions<T>): Promise<T
         and(
           eq(t.scope, opts.scope),
           eq(t.idempotencyKey, opts.key),
-          opts.userId !== null
-            ? eq(t.userId, opts.userId)
-            : isNull(t.userId)
+          opts.userId !== null ? eq(t.userId, opts.userId) : isNull(t.userId)
         ),
     });
 
@@ -223,7 +226,9 @@ export async function withIdempotency<T>(opts: IdempotencyOptions<T>): Promise<T
         )
       );
 
-    console.log(`[Idempotency] Operation completed for ${opts.scope}:${opts.key}`);
+    console.log(
+      `[Idempotency] Operation completed for ${opts.scope}:${opts.key}`
+    );
     return result;
   } catch (err: any) {
     // 5. Store error
@@ -256,7 +261,7 @@ export async function withIdempotency<T>(opts: IdempotencyOptions<T>): Promise<T
 /**
  * Cleanup expired idempotency records
  * Should be run as a cron job (e.g., every hour)
- * 
+ *
  * @returns Number of deleted records
  */
 export async function cleanupExpiredIdempotencyRecords(): Promise<number> {
@@ -267,7 +272,7 @@ export async function cleanupExpiredIdempotencyRecords(): Promise<number> {
   }
 
   const now = new Date();
-  
+
   try {
     const result = await db
       .delete(idempotencyRequests)

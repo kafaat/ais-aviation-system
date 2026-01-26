@@ -22,26 +22,26 @@
 
 ### P0 (حرجة - يجب تطبيقها)
 
-| # | التحسين | الحالة الحالية | المطلوب | الأولوية |
-|---|---------|----------------|---------|----------|
-| 1 | Stripe Webhook De-dup | ❌ لا يوجد | ✅ processed=true فقط يمنع | P0 |
-| 2 | Ledger Uniqueness | ❌ لا يوجد | ✅ منع تكرار القيود المالية | P0 |
-| 3 | DB Idempotency | ⚠️ جزئي | ✅ Source of Truth | P0 |
-| 4 | Stripe Webhook Express Raw | ⚠️ موجود لكن ناقص | ✅ Signature + De-dup | P0 |
-| 5 | Mobile Auth Hardening | ⚠️ JWT_SECRET اختياري | ✅ إلزامي + Token Hashing | P0 |
-| 6 | Transaction Safety | ⚠️ جزئي | ✅ كامل مع rollback | P0 |
-| 7 | State Machine Enforcement | ⚠️ جزئي | ✅ Guards + Transitions | P0 |
-| 8 | E2E Tests | ❌ لا يوجد | ✅ 5 اختبارات حاسمة | P0 |
+| #   | التحسين                    | الحالة الحالية        | المطلوب                     | الأولوية |
+| --- | -------------------------- | --------------------- | --------------------------- | -------- |
+| 1   | Stripe Webhook De-dup      | ❌ لا يوجد            | ✅ processed=true فقط يمنع  | P0       |
+| 2   | Ledger Uniqueness          | ❌ لا يوجد            | ✅ منع تكرار القيود المالية | P0       |
+| 3   | DB Idempotency             | ⚠️ جزئي               | ✅ Source of Truth          | P0       |
+| 4   | Stripe Webhook Express Raw | ⚠️ موجود لكن ناقص     | ✅ Signature + De-dup       | P0       |
+| 5   | Mobile Auth Hardening      | ⚠️ JWT_SECRET اختياري | ✅ إلزامي + Token Hashing   | P0       |
+| 6   | Transaction Safety         | ⚠️ جزئي               | ✅ كامل مع rollback         | P0       |
+| 7   | State Machine Enforcement  | ⚠️ جزئي               | ✅ Guards + Transitions     | P0       |
+| 8   | E2E Tests                  | ❌ لا يوجد            | ✅ 5 اختبارات حاسمة         | P0       |
 
 ### P1 (مهمة - للأداء والموثوقية)
 
-| # | التحسين | الحالة الحالية | المطلوب | الأولوية |
-|---|---------|----------------|---------|----------|
-| 9 | Redis Versioned Cache | ⚠️ يستخدم KEYS | ✅ Versioned Keys | P1 |
-| 10 | Background Queue | ❌ لا يوجد | ✅ Email + Retry + Recon | P1 |
-| 11 | Observability | ⚠️ جزئي | ✅ Correlation ID + Sentry | P1 |
-| 12 | Health Checks | ⚠️ جزئي | ✅ DB + Redis + Queue | P1 |
-| 13 | Backup/Restore Testing | ❌ لا يوجد | ✅ مجرّب مرة | P1 |
+| #   | التحسين                | الحالة الحالية | المطلوب                    | الأولوية |
+| --- | ---------------------- | -------------- | -------------------------- | -------- |
+| 9   | Redis Versioned Cache  | ⚠️ يستخدم KEYS | ✅ Versioned Keys          | P1       |
+| 10  | Background Queue       | ❌ لا يوجد     | ✅ Email + Retry + Recon   | P1       |
+| 11  | Observability          | ⚠️ جزئي        | ✅ Correlation ID + Sentry | P1       |
+| 12  | Health Checks          | ⚠️ جزئي        | ✅ DB + Redis + Queue      | P1       |
+| 13  | Backup/Restore Testing | ❌ لا يوجد     | ✅ مجرّب مرة               | P1       |
 
 ---
 
@@ -55,18 +55,19 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   // لا يوجد de-duplication
   // لا يوجد retry handling
   // لا يوجد transaction safety
-  
+
   switch (event.type) {
     case "checkout.session.completed":
       await handleCheckoutSessionCompleted(session);
       break;
   }
-  
+
   res.json({ received: true }); // دائماً يعيد success حتى لو فشل!
 }
 ```
 
 **المشاكل:**
+
 1. ❌ لا de-duplication - نفس الحدث قد يُعالج مرتين
 2. ❌ لا retry handling - الفشل يعني فقدان الحدث
 3. ❌ لا transaction safety - قد تحدث تحديثات جزئية
@@ -81,7 +82,12 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 ```typescript
 import Stripe from "stripe";
 import { getDb } from "../db";
-import { stripeEvents, financialLedger, bookings, payments } from "../../drizzle/schema";
+import {
+  stripeEvents,
+  financialLedger,
+  bookings,
+  payments,
+} from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { stripe } from "../stripe";
 
@@ -93,7 +99,7 @@ if (!webhookSecret) {
 
 /**
  * Production-Grade Stripe Webhook Handler
- * 
+ *
  * Features:
  * - De-duplication via stripeEvents table
  * - Retry handling (processed=false allows retry)
@@ -146,7 +152,7 @@ export const stripeWebhookServiceV2 = {
 
     // 4. Process event in transaction
     try {
-      await db.transaction(async (tx) => {
+      await db.transaction(async tx => {
         await this.processEvent(tx, event);
 
         // Mark as processed only on success
@@ -203,10 +209,7 @@ export const stripeWebhookServiceV2 = {
         );
 
       case "charge.refunded":
-        return this.onChargeRefunded(
-          tx,
-          event.data.object as Stripe.Charge
-        );
+        return this.onChargeRefunded(tx, event.data.object as Stripe.Charge);
 
       default:
         console.log(`[Webhook] Unhandled event type: ${event.type}`);
@@ -328,10 +331,7 @@ export const stripeWebhookServiceV2 = {
   /**
    * Handle charge.refunded
    */
-  async onChargeRefunded(
-    tx: any,
-    charge: Stripe.Charge
-  ): Promise<void> {
+  async onChargeRefunded(tx: any, charge: Stripe.Charge): Promise<void> {
     const bookingId = charge.metadata?.bookingId;
     if (!bookingId) {
       console.log(`[Webhook] No bookingId in Charge ${charge.id} metadata`);
@@ -387,7 +387,7 @@ const router = express.Router();
 
 /**
  * Stripe Webhook Endpoint
- * 
+ *
  * IMPORTANT: Must use express.raw() middleware
  * to preserve raw body for signature verification
  */
@@ -451,6 +451,7 @@ app.use(express.json());
 ### المشكلة
 
 قد تصل عدة أحداث مختلفة لنفس العملية المالية:
+
 - `checkout.session.completed`
 - `payment_intent.succeeded`
 - `charge.succeeded`
@@ -469,15 +470,15 @@ app.use(express.json());
 -- Add unique constraints to prevent duplicate financial entries
 
 -- For charges (based on payment_intent_id + type)
-ALTER TABLE financial_ledger 
+ALTER TABLE financial_ledger
 ADD UNIQUE INDEX uq_ledger_pi_type (type, stripePaymentIntentId);
 
 -- For charges (based on charge_id + type)
-ALTER TABLE financial_ledger 
+ALTER TABLE financial_ledger
 ADD UNIQUE INDEX uq_ledger_charge_type (type, stripeChargeId);
 
 -- For refunds (based on refund_id + type)
-ALTER TABLE financial_ledger 
+ALTER TABLE financial_ledger
 ADD UNIQUE INDEX uq_ledger_refund_type (type, stripeRefundId);
 
 -- Note: MySQL doesn't support partial indexes like Postgres
@@ -526,7 +527,7 @@ export enum IdempotencyScope {
 
 /**
  * Production-Grade Idempotency Wrapper
- * 
+ *
  * Features:
  * - DB-based (Source of Truth)
  * - Request hash validation (detects payload changes)
@@ -553,9 +554,7 @@ export async function withIdempotency<T>(opts: {
     .update(JSON.stringify(opts.request))
     .digest("hex");
 
-  const expiresAt = new Date(
-    Date.now() + (opts.ttlSeconds ?? 3600) * 1000
-  );
+  const expiresAt = new Date(Date.now() + (opts.ttlSeconds ?? 3600) * 1000);
 
   // 2. Try to insert idempotency record
   try {
@@ -576,9 +575,7 @@ export async function withIdempotency<T>(opts: {
         and(
           eq(t.scope, opts.scope),
           eq(t.idempotencyKey, opts.key),
-          opts.userId
-            ? eq(t.userId, parseInt(opts.userId))
-            : eq(t.userId, null)
+          opts.userId ? eq(t.userId, parseInt(opts.userId)) : eq(t.userId, null)
         ),
     });
 
@@ -588,9 +585,7 @@ export async function withIdempotency<T>(opts: {
 
     // Payload mismatch protection
     if (existing.requestHash !== requestHash) {
-      const error = new Error(
-        "Idempotency key reused with different payload"
-      );
+      const error = new Error("Idempotency key reused with different payload");
       (error as any).code = "IDEMPOTENCY_PAYLOAD_MISMATCH";
       throw error;
     }
@@ -825,7 +820,7 @@ async delPattern(pattern: string) {
 ```typescript
 /**
  * Redis Cache Service with Versioned Keys
- * 
+ *
  * Instead of deleting thousands of keys,
  * we increment a version number to invalidate all keys at once.
  */
@@ -866,9 +861,7 @@ export class CacheServiceV2 {
   /**
    * Get cached flight search
    */
-  async getCachedFlightSearch(
-    params: SearchParams
-  ): Promise<any | null> {
+  async getCachedFlightSearch(params: SearchParams): Promise<any | null> {
     const version = await this.getVersion("search");
     const hash = this.hashParams(params);
     const key = `search:${version}:${hash}`;
@@ -895,6 +888,7 @@ export class CacheServiceV2 {
 ```
 
 **الفوائد:**
+
 - ✅ لا يستخدم `KEYS` - آمن للإنتاج
 - ✅ Invalidation فوري - O(1)
 - ✅ يعمل مع ملايين المفاتيح
@@ -949,19 +943,15 @@ export async function queueBookingConfirmationEmail(opts: {
   bookingId: number;
   email: string;
 }): Promise<void> {
-  await emailQueue.add(
-    "booking-confirmation",
-    opts,
-    {
-      attempts: 3,
-      backoff: {
-        type: "exponential",
-        delay: 2000,
-      },
-      removeOnComplete: 100, // Keep last 100
-      removeOnFail: 1000, // Keep last 1000 failures
-    }
-  );
+  await emailQueue.add("booking-confirmation", opts, {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 2000,
+    },
+    removeOnComplete: 100, // Keep last 100
+    removeOnFail: 1000, // Keep last 1000 failures
+  });
 }
 
 /**
@@ -970,18 +960,14 @@ export async function queueBookingConfirmationEmail(opts: {
 export async function queueWebhookRetry(opts: {
   eventId: string;
 }): Promise<void> {
-  await webhookRetryQueue.add(
-    "retry-event",
-    opts,
-    {
-      attempts: 5,
-      backoff: {
-        type: "exponential",
-        delay: 5000,
-      },
-      delay: 60000, // Wait 1 minute before first retry
-    }
-  );
+  await webhookRetryQueue.add("retry-event", opts, {
+    attempts: 5,
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    delay: 60000, // Wait 1 minute before first retry
+  });
 }
 
 /**
@@ -1008,7 +994,7 @@ import { Worker } from "bullmq";
 // Email worker
 new Worker(
   "emails",
-  async (job) => {
+  async job => {
     const { userId, bookingId, email } = job.data;
     await sendBookingConfirmation({ userId, bookingId, email });
   },
@@ -1018,23 +1004,20 @@ new Worker(
 // Webhook retry worker
 new Worker(
   "webhook-retry",
-  async (job) => {
+  async job => {
     const { eventId } = job.data;
     const db = await getDb();
-    
+
     const event = await db.query.stripeEvents.findFirst({
       where: (t, { eq }) => eq(t.id, eventId),
     });
-    
+
     if (!event || event.processed) {
       return; // Already processed
     }
-    
+
     // Retry processing
-    await stripeWebhookServiceV2.processEvent(
-      db,
-      JSON.parse(event.data)
-    );
+    await stripeWebhookServiceV2.processEvent(db, JSON.parse(event.data));
   },
   { connection: redisConnection }
 );
@@ -1042,7 +1025,7 @@ new Worker(
 // Reconciliation worker
 new Worker(
   "reconciliation",
-  async (job) => {
+  async job => {
     // TODO: Implement reconciliation logic
     // 1. Fetch all unprocessed events from last 24h
     // 2. Fetch payment intents from Stripe API
@@ -1059,16 +1042,19 @@ new Worker(
 ### المرحلة 1: P0 Criticals (الأسبوع 1)
 
 **اليوم 1-2:**
+
 - [ ] تطبيق Stripe Webhook V2 Service
 - [ ] إضافة Express Raw Route
 - [ ] اختبار De-duplication
 
 **اليوم 3-4:**
+
 - [ ] إضافة Ledger Uniqueness Constraints
 - [ ] تشغيل Migration
 - [ ] اختبار Uniqueness
 
 **اليوم 5-7:**
+
 - [ ] تطبيق DB Idempotency V2
 - [ ] تطبيق في Booking Service
 - [ ] تطبيق Mobile Auth Hardening
@@ -1079,11 +1065,13 @@ new Worker(
 ### المرحلة 2: P0 Testing (الأسبوع 2)
 
 **اليوم 8-10:**
+
 - [ ] كتابة 5 اختبارات E2E
 - [ ] تشغيل الاختبارات
 - [ ] إصلاح الأخطاء
 
 **اليوم 11-14:**
+
 - [ ] Load Testing
 - [ ] Performance Tuning
 - [ ] Documentation
@@ -1093,11 +1081,13 @@ new Worker(
 ### المرحلة 3: P1 Improvements (الأسبوع 3-4)
 
 **الأسبوع 3:**
+
 - [ ] Redis Versioned Cache
 - [ ] Background Queue Setup
 - [ ] Email Worker
 
 **الأسبوع 4:**
+
 - [ ] Webhook Retry Worker
 - [ ] Reconciliation Worker
 - [ ] Observability (Correlation ID + Sentry)
@@ -1155,7 +1145,7 @@ new Worker(
 ✅ **5 تحسينات P1** - للأداء والموثوقية  
 ✅ **أمثلة كود كاملة** - جاهزة للنسخ  
 ✅ **خطة تنفيذ مرحلية** - 6 أسابيع  
-✅ **Acceptance Checklist** - معايير واضحة  
+✅ **Acceptance Checklist** - معايير واضحة
 
 **الخطوة التالية:** ابدأ بالمرحلة 1 (P0 Criticals) واتبع الخطة!
 

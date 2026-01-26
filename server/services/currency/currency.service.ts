@@ -1,12 +1,12 @@
 /**
  * Multi-Currency Support Service
- * 
+ *
  * Provides currency conversion and management:
  * - Real-time exchange rates
  * - Currency conversion
  * - Price formatting
  * - Rate caching
- * 
+ *
  * @module services/currency/currency.service
  */
 
@@ -62,113 +62,113 @@ export interface PriceDisplay {
 // Supported currencies
 export const SUPPORTED_CURRENCIES: Currency[] = [
   {
-    code: 'SAR',
-    name: 'Saudi Riyal',
-    nameAr: 'ريال سعودي',
-    symbol: 'ر.س',
+    code: "SAR",
+    name: "Saudi Riyal",
+    nameAr: "ريال سعودي",
+    symbol: "ر.س",
     decimalPlaces: 2,
     isActive: true,
   },
   {
-    code: 'USD',
-    name: 'US Dollar',
-    nameAr: 'دولار أمريكي',
-    symbol: '$',
+    code: "USD",
+    name: "US Dollar",
+    nameAr: "دولار أمريكي",
+    symbol: "$",
     decimalPlaces: 2,
     isActive: true,
   },
   {
-    code: 'EUR',
-    name: 'Euro',
-    nameAr: 'يورو',
-    symbol: '€',
+    code: "EUR",
+    name: "Euro",
+    nameAr: "يورو",
+    symbol: "€",
     decimalPlaces: 2,
     isActive: true,
   },
   {
-    code: 'AED',
-    name: 'UAE Dirham',
-    nameAr: 'درهم إماراتي',
-    symbol: 'د.إ',
+    code: "AED",
+    name: "UAE Dirham",
+    nameAr: "درهم إماراتي",
+    symbol: "د.إ",
     decimalPlaces: 2,
     isActive: true,
   },
   {
-    code: 'GBP',
-    name: 'British Pound',
-    nameAr: 'جنيه إسترليني',
-    symbol: '£',
+    code: "GBP",
+    name: "British Pound",
+    nameAr: "جنيه إسترليني",
+    symbol: "£",
     decimalPlaces: 2,
     isActive: true,
   },
   {
-    code: 'KWD',
-    name: 'Kuwaiti Dinar',
-    nameAr: 'دينار كويتي',
-    symbol: 'د.ك',
+    code: "KWD",
+    name: "Kuwaiti Dinar",
+    nameAr: "دينار كويتي",
+    symbol: "د.ك",
     decimalPlaces: 3,
     isActive: true,
   },
   {
-    code: 'BHD',
-    name: 'Bahraini Dinar',
-    nameAr: 'دينار بحريني',
-    symbol: 'د.ب',
+    code: "BHD",
+    name: "Bahraini Dinar",
+    nameAr: "دينار بحريني",
+    symbol: "د.ب",
     decimalPlaces: 3,
     isActive: true,
   },
   {
-    code: 'QAR',
-    name: 'Qatari Riyal',
-    nameAr: 'ريال قطري',
-    symbol: 'ر.ق',
+    code: "QAR",
+    name: "Qatari Riyal",
+    nameAr: "ريال قطري",
+    symbol: "ر.ق",
     decimalPlaces: 2,
     isActive: true,
   },
   {
-    code: 'OMR',
-    name: 'Omani Rial',
-    nameAr: 'ريال عماني',
-    symbol: 'ر.ع',
+    code: "OMR",
+    name: "Omani Rial",
+    nameAr: "ريال عماني",
+    symbol: "ر.ع",
     decimalPlaces: 3,
     isActive: true,
   },
   {
-    code: 'EGP',
-    name: 'Egyptian Pound',
-    nameAr: 'جنيه مصري',
-    symbol: 'ج.م',
+    code: "EGP",
+    name: "Egyptian Pound",
+    nameAr: "جنيه مصري",
+    symbol: "ج.م",
     decimalPlaces: 2,
     isActive: true,
   },
 ];
 
 // Base currency for all conversions
-const BASE_CURRENCY = 'SAR';
+const BASE_CURRENCY = "SAR";
 
 // Cache TTL for exchange rates (1 hour)
 const RATE_CACHE_TTL = 60 * 60;
 
 // Fallback rates (updated periodically)
 const FALLBACK_RATES: Record<string, number> = {
-  'SAR_USD': 0.2666,
-  'SAR_EUR': 0.2450,
-  'SAR_AED': 0.9793,
-  'SAR_GBP': 0.2100,
-  'SAR_KWD': 0.0820,
-  'SAR_BHD': 0.1004,
-  'SAR_QAR': 0.9707,
-  'SAR_OMR': 0.1026,
-  'SAR_EGP': 8.2400,
-  'USD_SAR': 3.7500,
-  'EUR_SAR': 4.0816,
-  'AED_SAR': 1.0211,
-  'GBP_SAR': 4.7619,
-  'KWD_SAR': 12.1951,
-  'BHD_SAR': 9.9602,
-  'QAR_SAR': 1.0302,
-  'OMR_SAR': 9.7466,
-  'EGP_SAR': 0.1214,
+  SAR_USD: 0.2666,
+  SAR_EUR: 0.245,
+  SAR_AED: 0.9793,
+  SAR_GBP: 0.21,
+  SAR_KWD: 0.082,
+  SAR_BHD: 0.1004,
+  SAR_QAR: 0.9707,
+  SAR_OMR: 0.1026,
+  SAR_EGP: 8.24,
+  USD_SAR: 3.75,
+  EUR_SAR: 4.0816,
+  AED_SAR: 1.0211,
+  GBP_SAR: 4.7619,
+  KWD_SAR: 12.1951,
+  BHD_SAR: 9.9602,
+  QAR_SAR: 1.0302,
+  OMR_SAR: 9.7466,
+  EGP_SAR: 0.1214,
 };
 
 // ============================================================================
@@ -189,7 +189,7 @@ export async function getExchangeRate(
       toCurrency,
       rate: 1,
       inverseRate: 1,
-      source: 'identity',
+      source: "identity",
       updatedAt: new Date(),
     };
   }
@@ -212,13 +212,13 @@ export async function getExchangeRate(
   if (fromCurrency !== BASE_CURRENCY && toCurrency !== BASE_CURRENCY) {
     const fromToBase = await getExchangeRate(fromCurrency, BASE_CURRENCY);
     const baseToTarget = await getExchangeRate(BASE_CURRENCY, toCurrency);
-    
+
     const crossRate: ExchangeRate = {
       fromCurrency,
       toCurrency,
       rate: fromToBase.rate * baseToTarget.rate,
       inverseRate: 1 / (fromToBase.rate * baseToTarget.rate),
-      source: 'cross_rate',
+      source: "cross_rate",
       updatedAt: new Date(),
     };
 
@@ -229,14 +229,14 @@ export async function getExchangeRate(
   // Use fallback rates
   const fallbackKey = `${fromCurrency}_${toCurrency}`;
   const fallbackRate = FALLBACK_RATES[fallbackKey];
-  
+
   if (fallbackRate) {
     const rate: ExchangeRate = {
       fromCurrency,
       toCurrency,
       rate: fallbackRate,
       inverseRate: 1 / fallbackRate,
-      source: 'fallback',
+      source: "fallback",
       updatedAt: new Date(),
     };
 
@@ -269,16 +269,18 @@ async function getDbExchangeRate(
         toCurrency: result.toCurrency,
         rate: parseFloat(result.rate),
         inverseRate: 1 / parseFloat(result.rate),
-        source: result.source || 'database',
+        source: result.source || "database",
         updatedAt: result.updatedAt,
       };
     }
   } catch (error) {
     // Table might not exist yet
-    console.log(JSON.stringify({
-      event: 'exchange_rate_db_error',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }));
+    console.log(
+      JSON.stringify({
+        event: "exchange_rate_db_error",
+        error: error instanceof Error ? error.message : "Unknown error",
+      })
+    );
   }
 
   return null;
@@ -317,17 +319,17 @@ export async function convertPriceForDisplay(
   priceInSAR: number,
   targetCurrency: string
 ): Promise<PriceDisplay> {
-  if (targetCurrency === 'SAR') {
-    const currencyInfo = getCurrencyInfo('SAR');
+  if (targetCurrency === "SAR") {
+    const currencyInfo = getCurrencyInfo("SAR");
     return {
       amount: priceInSAR,
-      currency: 'SAR',
+      currency: "SAR",
       formatted: formatAmount(priceInSAR, currencyInfo),
       formattedWithSymbol: `${currencyInfo.symbol} ${formatAmount(priceInSAR, currencyInfo)}`,
     };
   }
 
-  const conversion = await convertCurrency(priceInSAR, 'SAR', targetCurrency);
+  const conversion = await convertCurrency(priceInSAR, "SAR", targetCurrency);
   const currencyInfo = getCurrencyInfo(targetCurrency);
 
   return {
@@ -367,7 +369,7 @@ export function isCurrencySupported(code: string): boolean {
  * Format amount according to currency rules
  */
 export function formatAmount(amount: number, currency: Currency): string {
-  return amount.toLocaleString('en-US', {
+  return amount.toLocaleString("en-US", {
     minimumFractionDigits: currency.decimalPlaces,
     maximumFractionDigits: currency.decimalPlaces,
   });
@@ -379,13 +381,13 @@ export function formatAmount(amount: number, currency: Currency): string {
 export function formatPrice(amount: number, currencyCode: string): string {
   const currency = getCurrencyInfo(currencyCode);
   const formatted = formatAmount(amount, currency);
-  
+
   // Arabic currencies typically show symbol after amount
-  const arabicCurrencies = ['SAR', 'AED', 'KWD', 'BHD', 'QAR', 'OMR', 'EGP'];
+  const arabicCurrencies = ["SAR", "AED", "KWD", "BHD", "QAR", "OMR", "EGP"];
   if (arabicCurrencies.includes(currencyCode)) {
     return `${formatted} ${currency.symbol}`;
   }
-  
+
   return `${currency.symbol}${formatted}`;
 }
 
@@ -394,10 +396,8 @@ export function formatPrice(amount: number, currencyCode: string): string {
  */
 export function parseAmount(formattedAmount: string): number {
   // Remove currency symbols and formatting
-  const cleaned = formattedAmount
-    .replace(/[^\d.,\-]/g, '')
-    .replace(/,/g, '');
-  
+  const cleaned = formattedAmount.replace(/[^\d.,\-]/g, "").replace(/,/g, "");
+
   return parseFloat(cleaned);
 }
 
@@ -410,10 +410,12 @@ export function parseAmount(formattedAmount: string): number {
  * Should be called periodically (e.g., every hour)
  */
 export async function updateExchangeRates(): Promise<void> {
-  console.log(JSON.stringify({
-    event: 'exchange_rates_update_started',
-    timestamp: new Date().toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "exchange_rates_update_started",
+      timestamp: new Date().toISOString(),
+    })
+  );
 
   try {
     // In production, this would call an external API like:
@@ -424,8 +426,8 @@ export async function updateExchangeRates(): Promise<void> {
 
     // For now, we'll use the fallback rates
     for (const [key, rate] of Object.entries(FALLBACK_RATES)) {
-      const [from, to] = key.split('_');
-      
+      const [from, to] = key.split("_");
+
       // Update database
       // await db.insert(exchangeRates).values({
       //   fromCurrency: from,
@@ -442,17 +444,21 @@ export async function updateExchangeRates(): Promise<void> {
       await CacheService.delete(cacheKey);
     }
 
-    console.log(JSON.stringify({
-      event: 'exchange_rates_update_completed',
-      ratesUpdated: Object.keys(FALLBACK_RATES).length,
-      timestamp: new Date().toISOString(),
-    }));
+    console.log(
+      JSON.stringify({
+        event: "exchange_rates_update_completed",
+        ratesUpdated: Object.keys(FALLBACK_RATES).length,
+        timestamp: new Date().toISOString(),
+      })
+    );
   } catch (error) {
-    console.error(JSON.stringify({
-      event: 'exchange_rates_update_failed',
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString(),
-    }));
+    console.error(
+      JSON.stringify({
+        event: "exchange_rates_update_failed",
+        error: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString(),
+      })
+    );
   }
 }
 

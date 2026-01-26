@@ -9,6 +9,7 @@
 ## 🎯 نظرة عامة
 
 تم تطبيق **5 تحسينات إضافية (P1)** التي تحسن الأداء والموثوقية والقابلية للمراقبة. هذه التحسينات تضمن:
+
 - ✅ Error Contract موحد مع Correlation ID
 - ✅ Idempotency محسّن بجدول مخصص
 - ✅ Redis Caching للبحث
@@ -24,45 +25,47 @@
 #### التغييرات
 
 **الملفات الجديدة:**
+
 - `server/_core/errors.ts` - Error codes and helpers
 - `server/_core/correlation.ts` - Correlation ID management
 
 **Error Codes (P0):**
+
 ```typescript
 export enum ErrorCode {
   // Validation
   VALIDATION_ERROR = "VALIDATION_ERROR",
-  
+
   // Auth
   UNAUTHORIZED = "UNAUTHORIZED",
   FORBIDDEN = "FORBIDDEN",
   TOKEN_EXPIRED = "TOKEN_EXPIRED",
-  
+
   // Resources
   NOT_FOUND = "NOT_FOUND",
-  
+
   // Rate limiting
   RATE_LIMITED = "RATE_LIMITED",
-  
+
   // Idempotency
   IDEMPOTENCY_IN_PROGRESS = "IDEMPOTENCY_IN_PROGRESS",
   IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT",
-  
+
   // Booking
   BOOKING_CONFLICT = "BOOKING_CONFLICT",
   SEATS_UNAVAILABLE = "SEATS_UNAVAILABLE",
   BOOKING_EXPIRED = "BOOKING_EXPIRED",
   INVALID_STATE_TRANSITION = "INVALID_STATE_TRANSITION",
-  
+
   // Payment
   PAYMENT_FAILED = "PAYMENT_FAILED",
   PAYMENT_REQUIRED = "PAYMENT_REQUIRED",
   PAYMENT_PROCESSING = "PAYMENT_PROCESSING",
-  
+
   // Provider
   PROVIDER_ERROR = "PROVIDER_ERROR",
   PROVIDER_TIMEOUT = "PROVIDER_TIMEOUT",
-  
+
   // Generic
   INTERNAL_ERROR = "INTERNAL_ERROR",
   SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE",
@@ -72,6 +75,7 @@ export enum ErrorCode {
 #### كيفية الاستخدام
 
 **1. Server-side:**
+
 ```typescript
 import { Errors, ErrorCode } from "../_core/errors";
 
@@ -90,13 +94,14 @@ if (seatsAvailable < passengers) {
 ```
 
 **2. Client-side (Mobile):**
+
 ```typescript
 try {
   const booking = await api.bookings.create.mutate({...});
 } catch (error: any) {
   // Standardized error response
   const apiError = error.data?.error;
-  
+
   switch (apiError.code) {
     case "BOOKING_CONFLICT":
       showAlert("Booking already exists");
@@ -113,13 +118,14 @@ try {
     default:
       showAlert(apiError.message);
   }
-  
+
   // Log correlation ID for support
   console.log("Correlation ID:", apiError.correlationId);
 }
 ```
 
 **3. Error Response Format:**
+
 ```json
 {
   "error": {
@@ -133,6 +139,7 @@ try {
 ```
 
 #### الفوائد
+
 - ✅ Machine-readable error codes
 - ✅ Consistent error format
 - ✅ Correlation ID for tracking
@@ -146,6 +153,7 @@ try {
 #### التغييرات
 
 **Schema:**
+
 ```typescript
 export const idempotencyRequests = mysqlTable("idempotency_requests", {
   id: int("id").autoincrement().primaryKey(),
@@ -162,11 +170,13 @@ export const idempotencyRequests = mysqlTable("idempotency_requests", {
 ```
 
 **الملفات الجديدة:**
+
 - `server/services/idempotency.service.ts` - Idempotency guard
 
 #### كيفية الاستخدام
 
 **1. Wrap critical operations:**
+
 ```typescript
 import { withIdempotency, IdempotencyScope } from "../services/idempotency.service";
 
@@ -187,8 +197,13 @@ export async function createBooking(input: CreateBookingInput) {
 ```
 
 **2. Manual idempotency check:**
+
 ```typescript
-import { checkIdempotency, createIdempotencyRecord, completeIdempotencyRecord } from "../services/idempotency.service";
+import {
+  checkIdempotency,
+  createIdempotencyRecord,
+  completeIdempotencyRecord,
+} from "../services/idempotency.service";
 
 // Check if already processed
 const existing = await checkIdempotency(
@@ -223,6 +238,7 @@ await completeIdempotencyRecord(
 ```
 
 **3. Scopes:**
+
 ```typescript
 export enum IdempotencyScope {
   BOOKING_CREATE = "booking.create",
@@ -234,6 +250,7 @@ export enum IdempotencyScope {
 ```
 
 #### الفوائد
+
 - ✅ Dedicated idempotency table
 - ✅ Request hash validation
 - ✅ Response caching
@@ -248,11 +265,13 @@ export enum IdempotencyScope {
 #### التغييرات
 
 **الملفات الجديدة:**
+
 - `server/services/cache.service.ts` - Redis cache service
 
 #### كيفية الاستخدام
 
 **1. Cache flight search:**
+
 ```typescript
 import { cacheService } from "../services/cache.service";
 
@@ -275,6 +294,7 @@ export async function searchFlights(params: SearchParams) {
 ```
 
 **2. Cache flight details:**
+
 ```typescript
 export async function getFlightDetails(flightId: number) {
   // Check cache
@@ -294,6 +314,7 @@ export async function getFlightDetails(flightId: number) {
 ```
 
 **3. Invalidate cache:**
+
 ```typescript
 // When flight is updated
 await cacheService.invalidateFlightDetailsCache(flightId);
@@ -303,6 +324,7 @@ await cacheService.invalidateFlightSearchCache("RUH", "JED");
 ```
 
 **4. Rate limiting:**
+
 ```typescript
 const { allowed, remaining } = await cacheService.checkRateLimit(
   `user:${userId}`,
@@ -316,6 +338,7 @@ if (!allowed) {
 ```
 
 #### الفوائد
+
 - ✅ Reduced database load
 - ✅ Faster response times
 - ✅ Lower provider API costs
@@ -329,11 +352,13 @@ if (!allowed) {
 #### التغييرات
 
 **الملفات الجديدة:**
+
 - `server/services/queue.service.ts` - Background job processing
 
 #### كيفية الاستخدام
 
 **1. Send emails asynchronously:**
+
 ```typescript
 import { queueService } from "../services/queue.service";
 
@@ -349,6 +374,7 @@ await queueService.sendBookingConfirmationEmail({
 ```
 
 **2. Schedule webhook retry:**
+
 ```typescript
 // In webhook handler
 try {
@@ -364,12 +390,14 @@ try {
 ```
 
 **3. Schedule reconciliation:**
+
 ```typescript
 // Daily cron job
 await queueService.scheduleDailyReconciliation();
 ```
 
 **4. Schedule cleanup:**
+
 ```typescript
 // Clean up expired idempotency records
 await queueService.scheduleCleanup("idempotency");
@@ -380,15 +408,16 @@ await queueService.scheduleCleanup("refresh_tokens");
 
 #### Queue Names
 
-| Queue | Purpose |
-|-------|---------|
-| `emails` | Send booking confirmations, receipts, etc. |
-| `webhook-retry` | Retry failed webhook processing |
-| `reconciliation` | Daily payment reconciliation |
-| `cleanup` | Clean up expired records |
-| `notifications` | Push notifications |
+| Queue            | Purpose                                    |
+| ---------------- | ------------------------------------------ |
+| `emails`         | Send booking confirmations, receipts, etc. |
+| `webhook-retry`  | Retry failed webhook processing            |
+| `reconciliation` | Daily payment reconciliation               |
+| `cleanup`        | Clean up expired records                   |
+| `notifications`  | Push notifications                         |
 
 #### الفوائد
+
 - ✅ Non-blocking email sending
 - ✅ Automatic retry with exponential backoff
 - ✅ Job persistence
@@ -402,16 +431,18 @@ await queueService.scheduleCleanup("refresh_tokens");
 #### التغييرات
 
 **الملفات الجديدة:**
+
 - `server/_core/correlation.ts` - Correlation ID management
 
 #### كيفية الاستخدام
 
 **1. Automatic injection:**
+
 ```typescript
 // In TRPC context
 export async function createContext(opts: any) {
   const correlationContext = createCorrelationContext(opts);
-  
+
   return {
     ...correlationContext,
     // other context
@@ -420,6 +451,7 @@ export async function createContext(opts: any) {
 ```
 
 **2. Get correlation ID:**
+
 ```typescript
 import { getCorrelationId } from "../_core/correlation";
 
@@ -430,6 +462,7 @@ logger.info("Processing booking", {
 ```
 
 **3. Client-side:**
+
 ```typescript
 // Send correlation ID in request
 const response = await fetch(url, {
@@ -443,24 +476,26 @@ const correlationId = response.headers.get("x-correlation-id");
 ```
 
 **4. Error tracking:**
+
 ```typescript
 try {
   // ...
 } catch (error) {
   const apiError = transformError(error, getCorrelationId());
-  
+
   // Send to Sentry with correlation ID
   Sentry.captureException(error, {
     tags: {
       correlationId: apiError.correlationId,
     },
   });
-  
+
   throw apiError;
 }
 ```
 
 #### الفوائد
+
 - ✅ End-to-end request tracking
 - ✅ Easier debugging
 - ✅ Better error tracking
@@ -470,15 +505,16 @@ try {
 
 ## 📊 ملخص التحسينات
 
-| التحسين | الحالة | الملفات الجديدة | الملفات المعدلة |
-|---------|--------|-----------------|-----------------|
-| Error Contract | ✅ | errors.ts, correlation.ts | - |
-| Idempotency محسّن | ✅ | idempotency.service.ts | schema.ts, migration |
-| Redis Caching | ✅ | cache.service.ts | - |
-| Background Queue | ✅ | queue.service.ts | - |
-| Correlation ID | ✅ | correlation.ts | - |
+| التحسين           | الحالة | الملفات الجديدة           | الملفات المعدلة      |
+| ----------------- | ------ | ------------------------- | -------------------- |
+| Error Contract    | ✅     | errors.ts, correlation.ts | -                    |
+| Idempotency محسّن | ✅     | idempotency.service.ts    | schema.ts, migration |
+| Redis Caching     | ✅     | cache.service.ts          | -                    |
+| Background Queue  | ✅     | queue.service.ts          | -                    |
+| Correlation ID    | ✅     | correlation.ts            | -                    |
 
 **المجموع:**
+
 - **6 ملفات جديدة**
 - **2 ملفات معدلة**
 - **1 migration**
@@ -544,6 +580,7 @@ docker run -d -p 8081:8081 rediscommander/redis-commander
 ### 5. تحديث Services
 
 **في bookings.service.ts:**
+
 ```typescript
 import { withIdempotency, IdempotencyScope } from "./idempotency.service";
 import { cacheService } from "./cache.service";
@@ -583,6 +620,7 @@ export async function createBooking(input: CreateBookingInput) {
 ```
 
 **في flights.service.ts:**
+
 ```typescript
 export async function searchFlights(params: SearchParams) {
   // Check cache
@@ -607,12 +645,12 @@ export async function searchFlights(params: SearchParams) {
 
 ### الأداء
 
-| المقياس | قبل | بعد | التحسن |
-|---------|-----|-----|--------|
-| Search response time | 500ms | 50ms | **90%** |
-| Booking creation time | 2s | 500ms | **75%** |
-| Email sending (blocking) | 1s | 10ms | **99%** |
-| Database load | 100% | 30% | **70%** |
+| المقياس                  | قبل   | بعد   | التحسن  |
+| ------------------------ | ----- | ----- | ------- |
+| Search response time     | 500ms | 50ms  | **90%** |
+| Booking creation time    | 2s    | 500ms | **75%** |
+| Email sending (blocking) | 1s    | 10ms  | **99%** |
+| Database load            | 100%  | 30%   | **70%** |
 
 ### الموثوقية
 
@@ -697,7 +735,7 @@ export async function searchFlights(params: SearchParams) {
 ✅ **Idempotency محسّن بجدول مخصص**  
 ✅ **Redis Caching للأداء**  
 ✅ **Background Queue للموثوقية**  
-✅ **Correlation ID للتتبع**  
+✅ **Correlation ID للتتبع**
 
 **الخطوة التالية:** إعداد Redis وQueue واختبار شامل.
 

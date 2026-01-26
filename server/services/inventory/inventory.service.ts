@@ -1,18 +1,23 @@
 /**
  * Advanced Inventory Management Service
- * 
+ *
  * Provides sophisticated seat inventory management:
  * - Real-time availability tracking
  * - Overbooking management
  * - Waitlist handling
  * - Seat holds and releases
  * - Inventory forecasting
- * 
+ *
  * @module services/inventory/inventory.service
  */
 
 import { db } from "../../db";
-import { flights, bookings, seatHolds, waitlist } from "../../../drizzle/schema";
+import {
+  flights,
+  bookings,
+  seatHolds,
+  waitlist,
+} from "../../../drizzle/schema";
 import { eq, and, gte, lte, sql, lt, count, sum } from "drizzle-orm";
 
 // ============================================================================
@@ -21,7 +26,7 @@ import { eq, and, gte, lte, sql, lt, count, sum } from "drizzle-orm";
 
 export interface InventoryStatus {
   flightId: number;
-  cabinClass: 'economy' | 'business';
+  cabinClass: "economy" | "business";
   totalSeats: number;
   soldSeats: number;
   heldSeats: number;
@@ -30,35 +35,35 @@ export interface InventoryStatus {
   overbookingLimit: number;
   effectiveAvailable: number;
   occupancyRate: number;
-  status: 'available' | 'limited' | 'waitlist_only' | 'closed';
+  status: "available" | "limited" | "waitlist_only" | "closed";
 }
 
 export interface SeatHold {
   id: number;
   flightId: number;
-  cabinClass: 'economy' | 'business';
+  cabinClass: "economy" | "business";
   seats: number;
   userId: number;
   sessionId: string;
   expiresAt: Date;
-  status: 'active' | 'converted' | 'expired' | 'released';
+  status: "active" | "converted" | "expired" | "released";
 }
 
 export interface WaitlistEntry {
   id: number;
   flightId: number;
-  cabinClass: 'economy' | 'business';
+  cabinClass: "economy" | "business";
   userId: number;
   seats: number;
   priority: number;
-  status: 'waiting' | 'offered' | 'confirmed' | 'expired' | 'cancelled';
+  status: "waiting" | "offered" | "confirmed" | "expired" | "cancelled";
   createdAt: Date;
   offeredAt?: Date;
   expiresAt?: Date;
 }
 
 export interface OverbookingConfig {
-  economyRate: number;  // e.g., 0.05 = 5% overbooking
+  economyRate: number; // e.g., 0.05 = 5% overbooking
   businessRate: number;
   maxOverbooking: number;
   noShowRate: number;
@@ -69,7 +74,7 @@ export interface InventoryForecast {
   predictedDemand: number;
   recommendedOverbooking: number;
   expectedNoShows: number;
-  riskLevel: 'low' | 'medium' | 'high';
+  riskLevel: "low" | "medium" | "high";
 }
 
 export interface SeatAllocationResult {
@@ -93,17 +98,17 @@ const WAITLIST_OFFER_HOURS = 24;
 
 // Default overbooking configuration
 const DEFAULT_OVERBOOKING: OverbookingConfig = {
-  economyRate: 0.05,    // 5% overbooking for economy
-  businessRate: 0.02,   // 2% overbooking for business
-  maxOverbooking: 10,   // Maximum 10 seats overbooking
-  noShowRate: 0.08,     // Historical 8% no-show rate
+  economyRate: 0.05, // 5% overbooking for economy
+  businessRate: 0.02, // 2% overbooking for business
+  maxOverbooking: 10, // Maximum 10 seats overbooking
+  noShowRate: 0.08, // Historical 8% no-show rate
 };
 
 // Inventory status thresholds
 const THRESHOLDS = {
-  limited: 0.85,        // 85% occupancy = limited availability
-  waitlistOnly: 0.98,   // 98% occupancy = waitlist only
-  closed: 1.0,          // 100% = closed
+  limited: 0.85, // 85% occupancy = limited availability
+  waitlistOnly: 0.98, // 98% occupancy = waitlist only
+  closed: 1.0, // 100% = closed
 };
 
 // ============================================================================
@@ -115,7 +120,7 @@ const THRESHOLDS = {
  */
 export async function getInventoryStatus(
   flightId: number,
-  cabinClass: 'economy' | 'business'
+  cabinClass: "economy" | "business"
 ): Promise<InventoryStatus> {
   // Get flight details
   const flight = await db.query.flights.findFirst({
@@ -127,12 +132,12 @@ export async function getInventoryStatus(
   }
 
   // Get total and available seats
-  const totalSeats = cabinClass === 'economy' 
-    ? flight.economySeats 
-    : flight.businessSeats;
-  const baseAvailable = cabinClass === 'economy'
-    ? flight.economyAvailable
-    : flight.businessAvailable;
+  const totalSeats =
+    cabinClass === "economy" ? flight.economySeats : flight.businessSeats;
+  const baseAvailable =
+    cabinClass === "economy"
+      ? flight.economyAvailable
+      : flight.businessAvailable;
 
   // Calculate sold seats
   const soldSeats = totalSeats - baseAvailable;
@@ -145,9 +150,10 @@ export async function getInventoryStatus(
 
   // Calculate overbooking limit
   const overbookingConfig = await getOverbookingConfig(flightId);
-  const overbookingRate = cabinClass === 'economy' 
-    ? overbookingConfig.economyRate 
-    : overbookingConfig.businessRate;
+  const overbookingRate =
+    cabinClass === "economy"
+      ? overbookingConfig.economyRate
+      : overbookingConfig.businessRate;
   const overbookingLimit = Math.min(
     Math.floor(totalSeats * overbookingRate),
     overbookingConfig.maxOverbooking
@@ -161,15 +167,15 @@ export async function getInventoryStatus(
   const occupancyRate = (soldSeats + activeHolds) / totalSeats;
 
   // Determine status
-  let status: InventoryStatus['status'];
+  let status: InventoryStatus["status"];
   if (effectiveAvailable <= 0) {
-    status = waitlistCount > 0 ? 'waitlist_only' : 'closed';
+    status = waitlistCount > 0 ? "waitlist_only" : "closed";
   } else if (occupancyRate >= THRESHOLDS.waitlistOnly) {
-    status = 'waitlist_only';
+    status = "waitlist_only";
   } else if (occupancyRate >= THRESHOLDS.limited) {
-    status = 'limited';
+    status = "limited";
   } else {
-    status = 'available';
+    status = "available";
   }
 
   return {
@@ -192,7 +198,7 @@ export async function getInventoryStatus(
  */
 export async function allocateSeats(
   flightId: number,
-  cabinClass: 'economy' | 'business',
+  cabinClass: "economy" | "business",
   seats: number,
   userId: number,
   sessionId: string
@@ -251,7 +257,7 @@ export async function allocateSeats(
   }
 
   // No seats available - add to waitlist
-  if (inventory.status !== 'closed') {
+  if (inventory.status !== "closed") {
     const waitlistEntry = await addToWaitlist(
       flightId,
       cabinClass,
@@ -270,7 +276,7 @@ export async function allocateSeats(
   return {
     success: false,
     seatsAllocated: 0,
-    message: 'Flight is fully booked and waitlist is closed',
+    message: "Flight is fully booked and waitlist is closed",
   };
 }
 
@@ -279,7 +285,7 @@ export async function allocateSeats(
  */
 async function createSeatHold(
   flightId: number,
-  cabinClass: 'economy' | 'business',
+  cabinClass: "economy" | "business",
   seats: number,
   userId: number,
   sessionId: string
@@ -295,14 +301,16 @@ async function createSeatHold(
     userId,
     sessionId,
     expiresAt,
-    status: 'active',
+    status: "active",
   };
 
-  console.log(JSON.stringify({
-    event: 'seat_hold_created',
-    ...hold,
-    timestamp: new Date().toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "seat_hold_created",
+      ...hold,
+      timestamp: new Date().toISOString(),
+    })
+  );
 
   return hold;
 }
@@ -313,11 +321,13 @@ async function createSeatHold(
 export async function releaseSeatHold(holdId: number): Promise<void> {
   // Update hold status to released
   // Trigger waitlist processing
-  console.log(JSON.stringify({
-    event: 'seat_hold_released',
-    holdId,
-    timestamp: new Date().toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "seat_hold_released",
+      holdId,
+      timestamp: new Date().toISOString(),
+    })
+  );
 
   // Process waitlist after release
   // await processWaitlist(flightId, cabinClass);
@@ -332,12 +342,14 @@ export async function convertHoldToBooking(
 ): Promise<void> {
   // Update hold status to converted
   // Update flight available seats
-  console.log(JSON.stringify({
-    event: 'seat_hold_converted',
-    holdId,
-    bookingId,
-    timestamp: new Date().toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "seat_hold_converted",
+      holdId,
+      bookingId,
+      timestamp: new Date().toISOString(),
+    })
+  );
 }
 
 /**
@@ -345,7 +357,7 @@ export async function convertHoldToBooking(
  */
 async function getActiveHoldsCount(
   flightId: number,
-  cabinClass: 'economy' | 'business'
+  cabinClass: "economy" | "business"
 ): Promise<number> {
   // Query active holds from database
   // For now, return 0
@@ -361,7 +373,7 @@ async function getActiveHoldsCount(
  */
 export async function addToWaitlist(
   flightId: number,
-  cabinClass: 'economy' | 'business',
+  cabinClass: "economy" | "business",
   seats: number,
   userId: number
 ): Promise<WaitlistEntry> {
@@ -376,15 +388,17 @@ export async function addToWaitlist(
     userId,
     seats,
     priority,
-    status: 'waiting',
+    status: "waiting",
     createdAt: new Date(),
   };
 
-  console.log(JSON.stringify({
-    event: 'waitlist_entry_created',
-    ...entry,
-    timestamp: new Date().toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "waitlist_entry_created",
+      ...entry,
+      timestamp: new Date().toISOString(),
+    })
+  );
 
   return entry;
 }
@@ -394,7 +408,7 @@ export async function addToWaitlist(
  */
 async function getWaitlistCount(
   flightId: number,
-  cabinClass: 'economy' | 'business'
+  cabinClass: "economy" | "business"
 ): Promise<number> {
   // Query waitlist from database
   // For now, return 0
@@ -406,10 +420,10 @@ async function getWaitlistCount(
  */
 export async function processWaitlist(
   flightId: number,
-  cabinClass: 'economy' | 'business'
+  cabinClass: "economy" | "business"
 ): Promise<void> {
   const inventory = await getInventoryStatus(flightId, cabinClass);
-  
+
   if (inventory.availableSeats <= 0) {
     return;
   }
@@ -418,13 +432,15 @@ export async function processWaitlist(
   // Offer seats to users
   // Send notifications
 
-  console.log(JSON.stringify({
-    event: 'waitlist_processed',
-    flightId,
-    cabinClass,
-    availableSeats: inventory.availableSeats,
-    timestamp: new Date().toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "waitlist_processed",
+      flightId,
+      cabinClass,
+      availableSeats: inventory.availableSeats,
+      timestamp: new Date().toISOString(),
+    })
+  );
 }
 
 /**
@@ -432,14 +448,16 @@ export async function processWaitlist(
  */
 export async function removeFromWaitlist(
   waitlistId: number,
-  reason: 'confirmed' | 'cancelled' | 'expired'
+  reason: "confirmed" | "cancelled" | "expired"
 ): Promise<void> {
-  console.log(JSON.stringify({
-    event: 'waitlist_entry_removed',
-    waitlistId,
-    reason,
-    timestamp: new Date().toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "waitlist_entry_removed",
+      waitlistId,
+      reason,
+      timestamp: new Date().toISOString(),
+    })
+  );
 }
 
 // ============================================================================
@@ -449,7 +467,9 @@ export async function removeFromWaitlist(
 /**
  * Get overbooking configuration for a flight
  */
-async function getOverbookingConfig(flightId: number): Promise<OverbookingConfig> {
+async function getOverbookingConfig(
+  flightId: number
+): Promise<OverbookingConfig> {
   // In production, this would be configurable per route/airline
   return DEFAULT_OVERBOOKING;
 }
@@ -476,11 +496,16 @@ export async function calculateRecommendedOverbooking(
 
   // Calculate recommended overbooking
   const economyOverbooking = Math.floor(flight.economySeats * noShowRate * 0.8);
-  const businessOverbooking = Math.floor(flight.businessSeats * noShowRate * 0.5);
+  const businessOverbooking = Math.floor(
+    flight.businessSeats * noShowRate * 0.5
+  );
 
   return {
     economy: Math.min(economyOverbooking, DEFAULT_OVERBOOKING.maxOverbooking),
-    business: Math.min(businessOverbooking, Math.floor(DEFAULT_OVERBOOKING.maxOverbooking / 2)),
+    business: Math.min(
+      businessOverbooking,
+      Math.floor(DEFAULT_OVERBOOKING.maxOverbooking / 2)
+    ),
   };
 }
 
@@ -501,7 +526,7 @@ async function getHistoricalNoShowRate(
  */
 export async function handleDeniedBoarding(
   flightId: number,
-  cabinClass: 'economy' | 'business',
+  cabinClass: "economy" | "business",
   seatsNeeded: number
 ): Promise<{
   volunteersNeeded: number;
@@ -512,7 +537,7 @@ export async function handleDeniedBoarding(
   // Calculate compensation based on regulations
   // Find alternative flights
 
-  const compensation = cabinClass === 'economy' ? 1500 : 3000; // SAR
+  const compensation = cabinClass === "economy" ? 1500 : 3000; // SAR
 
   return {
     volunteersNeeded: seatsNeeded,
@@ -552,24 +577,25 @@ export async function forecastDemand(
     // Simple demand prediction based on days until departure
     const remainingDays = daysUntilDeparture - i;
     let predictedDemand: number;
-    let riskLevel: InventoryForecast['riskLevel'];
+    let riskLevel: InventoryForecast["riskLevel"];
 
     if (remainingDays <= 3) {
       predictedDemand = 15; // High last-minute demand
-      riskLevel = 'high';
+      riskLevel = "high";
     } else if (remainingDays <= 7) {
       predictedDemand = 10;
-      riskLevel = 'medium';
+      riskLevel = "medium";
     } else if (remainingDays <= 14) {
       predictedDemand = 5;
-      riskLevel = 'low';
+      riskLevel = "low";
     } else {
       predictedDemand = 3;
-      riskLevel = 'low';
+      riskLevel = "low";
     }
 
     const expectedNoShows = Math.floor(
-      (flight.economySeats + flight.businessSeats) * DEFAULT_OVERBOOKING.noShowRate
+      (flight.economySeats + flight.businessSeats) *
+        DEFAULT_OVERBOOKING.noShowRate
     );
 
     forecasts.push({
@@ -593,15 +619,17 @@ export async function forecastDemand(
  */
 export async function expireOldHolds(): Promise<number> {
   const now = new Date();
-  
+
   // Update expired holds
   // Release seats back to inventory
   // Trigger waitlist processing
 
-  console.log(JSON.stringify({
-    event: 'holds_cleanup_completed',
-    timestamp: now.toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "holds_cleanup_completed",
+      timestamp: now.toISOString(),
+    })
+  );
 
   return 0; // Return count of expired holds
 }
@@ -615,10 +643,12 @@ export async function expireWaitlistOffers(): Promise<number> {
   // Update expired offers
   // Move to next in waitlist
 
-  console.log(JSON.stringify({
-    event: 'waitlist_offers_cleanup_completed',
-    timestamp: now.toISOString(),
-  }));
+  console.log(
+    JSON.stringify({
+      event: "waitlist_offers_cleanup_completed",
+      timestamp: now.toISOString(),
+    })
+  );
 
   return 0;
 }

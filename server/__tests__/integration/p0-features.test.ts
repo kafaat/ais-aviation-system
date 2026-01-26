@@ -1,11 +1,11 @@
 /**
  * P0 Critical Features Integration Tests
- * 
+ *
  * Tests for:
  * - Dynamic Pricing Engine
  * - Multi-Currency Support
  * - Advanced Inventory Management
- * 
+ *
  * @module __tests__/integration/p0-features.test
  */
 
@@ -21,40 +21,40 @@ describe("Dynamic Pricing Engine", () => {
       const basePrice = 50000; // 500 SAR in cents
       const multiplier = 1.0;
       const expectedPrice = basePrice * multiplier;
-      
+
       expect(expectedPrice).toBe(50000);
     });
 
     it("should apply demand multiplier for high occupancy", async () => {
       const basePrice = 50000;
       const occupancyRate = 0.85; // 85% occupancy
-      
+
       // High occupancy should increase price
-      const expectedMultiplier = occupancyRate > 0.80 ? 1.15 : 1.0;
+      const expectedMultiplier = occupancyRate > 0.8 ? 1.15 : 1.0;
       const finalPrice = Math.round(basePrice * expectedMultiplier);
-      
+
       expect(finalPrice).toBe(57500); // 15% increase
     });
 
     it("should apply time-based multiplier for last-minute booking", async () => {
       const basePrice = 50000;
       const daysUntilDeparture = 2;
-      
+
       // Last minute should increase price
       const expectedMultiplier = daysUntilDeparture <= 3 ? 1.5 : 1.0;
       const finalPrice = Math.round(basePrice * expectedMultiplier);
-      
+
       expect(finalPrice).toBe(75000); // 50% increase
     });
 
     it("should apply early bird discount", async () => {
       const basePrice = 50000;
       const daysUntilDeparture = 45;
-      
+
       // Early booking should get discount
       const expectedMultiplier = daysUntilDeparture > 30 ? 0.9 : 1.0;
       const finalPrice = Math.round(basePrice * expectedMultiplier);
-      
+
       expect(finalPrice).toBe(45000); // 10% discount
     });
 
@@ -62,10 +62,10 @@ describe("Dynamic Pricing Engine", () => {
       const basePrice = 50000;
       const MAX_MULTIPLIER = 2.5;
       const calculatedMultiplier = 3.0; // Exceeds max
-      
+
       const cappedMultiplier = Math.min(MAX_MULTIPLIER, calculatedMultiplier);
       const finalPrice = Math.round(basePrice * cappedMultiplier);
-      
+
       expect(cappedMultiplier).toBe(2.5);
       expect(finalPrice).toBe(125000);
     });
@@ -74,10 +74,10 @@ describe("Dynamic Pricing Engine", () => {
       const basePrice = 50000;
       const MIN_MULTIPLIER = 0.7;
       const calculatedMultiplier = 0.5; // Below min
-      
+
       const cappedMultiplier = Math.max(MIN_MULTIPLIER, calculatedMultiplier);
       const finalPrice = Math.round(basePrice * cappedMultiplier);
-      
+
       expect(cappedMultiplier).toBe(0.7);
       expect(finalPrice).toBe(35000);
     });
@@ -88,7 +88,7 @@ describe("Dynamic Pricing Engine", () => {
       const basePrice = 50000;
       const hajjMultiplier = 1.8;
       const finalPrice = Math.round(basePrice * hajjMultiplier);
-      
+
       expect(finalPrice).toBe(90000); // 80% increase
     });
 
@@ -96,7 +96,7 @@ describe("Dynamic Pricing Engine", () => {
       const basePrice = 50000;
       const ramadanMultiplier = 1.5;
       const finalPrice = Math.round(basePrice * ramadanMultiplier);
-      
+
       expect(finalPrice).toBe(75000); // 50% increase
     });
 
@@ -104,7 +104,7 @@ describe("Dynamic Pricing Engine", () => {
       const basePrice = 50000;
       const weekendMultiplier = 1.1;
       const finalPrice = Math.round(basePrice * weekendMultiplier);
-      
+
       expect(finalPrice).toBe(55000); // 10% increase
     });
   });
@@ -114,11 +114,11 @@ describe("Dynamic Pricing Engine", () => {
       const priceId = "PRC-1-economy-50000-" + Date.now() + "-abc123";
       const expectedPrice = 50000;
       const PRICE_VALIDITY_MINUTES = 15;
-      
+
       const parts = priceId.split("-");
       const timestamp = parseInt(parts[4]);
       const ageMinutes = (Date.now() - timestamp) / (1000 * 60);
-      
+
       expect(ageMinutes).toBeLessThan(PRICE_VALIDITY_MINUTES);
     });
 
@@ -126,11 +126,11 @@ describe("Dynamic Pricing Engine", () => {
       const oldTimestamp = Date.now() - 20 * 60 * 1000; // 20 minutes ago
       const priceId = "PRC-1-economy-50000-" + oldTimestamp + "-abc123";
       const PRICE_VALIDITY_MINUTES = 15;
-      
+
       const parts = priceId.split("-");
       const timestamp = parseInt(parts[4]);
       const ageMinutes = (Date.now() - timestamp) / (1000 * 60);
-      
+
       expect(ageMinutes).toBeGreaterThan(PRICE_VALIDITY_MINUTES);
     });
   });
@@ -146,7 +146,7 @@ describe("Multi-Currency Support", () => {
       const amountSAR = 1000;
       const rate = 0.2666;
       const expectedUSD = Math.round(amountSAR * rate * 100) / 100;
-      
+
       expect(expectedUSD).toBe(266.6);
     });
 
@@ -154,7 +154,7 @@ describe("Multi-Currency Support", () => {
       const amountUSD = 100;
       const rate = 3.75;
       const expectedSAR = Math.round(amountUSD * rate * 100) / 100;
-      
+
       expect(expectedSAR).toBe(375);
     });
 
@@ -162,10 +162,10 @@ describe("Multi-Currency Support", () => {
       const amount = 500;
       const fromCurrency = "SAR";
       const toCurrency = "SAR";
-      
+
       const rate = fromCurrency === toCurrency ? 1 : 0;
       const converted = amount * rate;
-      
+
       expect(converted).toBe(500);
     });
 
@@ -174,10 +174,10 @@ describe("Multi-Currency Support", () => {
       const amountEUR = 100;
       const eurToSar = 4.0816;
       const sarToAed = 0.9793;
-      
+
       const sarAmount = amountEUR * eurToSar;
       const aedAmount = Math.round(sarAmount * sarToAed * 100) / 100;
-      
+
       expect(aedAmount).toBeCloseTo(399.75, 1);
     });
   });
@@ -189,7 +189,7 @@ describe("Multi-Currency Support", () => {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-      
+
       expect(formatted).toBe("1,234.56");
     });
 
@@ -199,7 +199,7 @@ describe("Multi-Currency Support", () => {
         minimumFractionDigits: 3,
         maximumFractionDigits: 3,
       });
-      
+
       expect(formatted).toBe("123.456");
     });
 
@@ -207,7 +207,7 @@ describe("Multi-Currency Support", () => {
       const amount = 500;
       const symbol = "$";
       const formatted = `${symbol}${amount.toFixed(2)}`;
-      
+
       expect(formatted).toBe("$500.00");
     });
 
@@ -215,13 +215,24 @@ describe("Multi-Currency Support", () => {
       const amount = 500;
       const symbol = "ر.س";
       const formatted = `${amount.toFixed(2)} ${symbol}`;
-      
+
       expect(formatted).toBe("500.00 ر.س");
     });
   });
 
   describe("Supported Currencies", () => {
-    const supportedCurrencies = ["SAR", "USD", "EUR", "AED", "GBP", "KWD", "BHD", "QAR", "OMR", "EGP"];
+    const supportedCurrencies = [
+      "SAR",
+      "USD",
+      "EUR",
+      "AED",
+      "GBP",
+      "KWD",
+      "BHD",
+      "QAR",
+      "OMR",
+      "EGP",
+    ];
 
     it("should support SAR as base currency", async () => {
       expect(supportedCurrencies).toContain("SAR");
@@ -257,16 +268,16 @@ describe("Advanced Inventory Management", () => {
       const totalSeats = 150;
       const soldSeats = 120;
       const heldSeats = 10;
-      
+
       const occupancyRate = (soldSeats + heldSeats) / totalSeats;
-      
+
       expect(occupancyRate).toBeCloseTo(0.867, 2);
     });
 
     it("should determine available status", async () => {
       const occupancyRate = 0.5;
       const THRESHOLDS = { limited: 0.85, waitlistOnly: 0.98 };
-      
+
       let status: string;
       if (occupancyRate >= THRESHOLDS.waitlistOnly) {
         status = "waitlist_only";
@@ -275,14 +286,14 @@ describe("Advanced Inventory Management", () => {
       } else {
         status = "available";
       }
-      
+
       expect(status).toBe("available");
     });
 
     it("should determine limited status", async () => {
-      const occupancyRate = 0.90;
+      const occupancyRate = 0.9;
       const THRESHOLDS = { limited: 0.85, waitlistOnly: 0.98 };
-      
+
       let status: string;
       if (occupancyRate >= THRESHOLDS.waitlistOnly) {
         status = "waitlist_only";
@@ -291,14 +302,14 @@ describe("Advanced Inventory Management", () => {
       } else {
         status = "available";
       }
-      
+
       expect(status).toBe("limited");
     });
 
     it("should determine waitlist_only status", async () => {
       const occupancyRate = 0.99;
       const THRESHOLDS = { limited: 0.85, waitlistOnly: 0.98 };
-      
+
       let status: string;
       if (occupancyRate >= THRESHOLDS.waitlistOnly) {
         status = "waitlist_only";
@@ -307,7 +318,7 @@ describe("Advanced Inventory Management", () => {
       } else {
         status = "available";
       }
-      
+
       expect(status).toBe("waitlist_only");
     });
   });
@@ -317,9 +328,9 @@ describe("Advanced Inventory Management", () => {
       const HOLD_EXPIRATION_MINUTES = 15;
       const now = Date.now();
       const expiresAt = new Date(now + HOLD_EXPIRATION_MINUTES * 60 * 1000);
-      
+
       const expectedExpiration = now + 15 * 60 * 1000;
-      
+
       expect(expiresAt.getTime()).toBe(expectedExpiration);
     });
 
@@ -327,9 +338,9 @@ describe("Advanced Inventory Management", () => {
       const HOLD_EXPIRATION_MINUTES = 15;
       const holdCreatedAt = Date.now() - 20 * 60 * 1000; // 20 minutes ago
       const expiresAt = holdCreatedAt + HOLD_EXPIRATION_MINUTES * 60 * 1000;
-      
+
       const isExpired = Date.now() > expiresAt;
-      
+
       expect(isExpired).toBe(true);
     });
 
@@ -337,9 +348,9 @@ describe("Advanced Inventory Management", () => {
       const availableSeats = 50;
       const heldSeats = 5;
       const newHold = 3;
-      
+
       const effectiveAvailable = availableSeats - heldSeats - newHold;
-      
+
       expect(effectiveAvailable).toBe(42);
     });
   });
@@ -349,10 +360,10 @@ describe("Advanced Inventory Management", () => {
       const totalSeats = 150;
       const economyRate = 0.05; // 5%
       const maxOverbooking = 10;
-      
+
       const calculatedOverbooking = Math.floor(totalSeats * economyRate);
       const overbookingLimit = Math.min(calculatedOverbooking, maxOverbooking);
-      
+
       expect(calculatedOverbooking).toBe(7);
       expect(overbookingLimit).toBe(7);
     });
@@ -361,10 +372,10 @@ describe("Advanced Inventory Management", () => {
       const totalSeats = 300;
       const economyRate = 0.05; // 5%
       const maxOverbooking = 10;
-      
+
       const calculatedOverbooking = Math.floor(totalSeats * economyRate);
       const overbookingLimit = Math.min(calculatedOverbooking, maxOverbooking);
-      
+
       expect(calculatedOverbooking).toBe(15);
       expect(overbookingLimit).toBe(10);
     });
@@ -372,9 +383,9 @@ describe("Advanced Inventory Management", () => {
     it("should calculate effective available with overbooking", async () => {
       const availableSeats = 5;
       const overbookingLimit = 7;
-      
+
       const effectiveAvailable = availableSeats + overbookingLimit;
-      
+
       expect(effectiveAvailable).toBe(12);
     });
   });
@@ -383,7 +394,7 @@ describe("Advanced Inventory Management", () => {
     it("should assign correct priority", async () => {
       const currentWaitlistCount = 5;
       const newPriority = currentWaitlistCount + 1;
-      
+
       expect(newPriority).toBe(6);
     });
 
@@ -391,9 +402,9 @@ describe("Advanced Inventory Management", () => {
       const WAITLIST_OFFER_HOURS = 24;
       const offeredAt = Date.now();
       const offerExpiresAt = offeredAt + WAITLIST_OFFER_HOURS * 60 * 60 * 1000;
-      
+
       const expectedExpiration = offeredAt + 24 * 60 * 60 * 1000;
-      
+
       expect(offerExpiresAt).toBe(expectedExpiration);
     });
 
@@ -403,9 +414,9 @@ describe("Advanced Inventory Management", () => {
         { id: 2, priority: 1 },
         { id: 3, priority: 2 },
       ];
-      
+
       const sorted = [...waitlist].sort((a, b) => a.priority - b.priority);
-      
+
       expect(sorted[0].priority).toBe(1);
       expect(sorted[1].priority).toBe(2);
       expect(sorted[2].priority).toBe(3);
@@ -415,10 +426,10 @@ describe("Advanced Inventory Management", () => {
   describe("Demand Forecasting", () => {
     it("should predict high demand close to departure", async () => {
       const daysUntilDeparture = 2;
-      
+
       let predictedDemand: number;
       let riskLevel: string;
-      
+
       if (daysUntilDeparture <= 3) {
         predictedDemand = 15;
         riskLevel = "high";
@@ -429,7 +440,7 @@ describe("Advanced Inventory Management", () => {
         predictedDemand = 5;
         riskLevel = "low";
       }
-      
+
       expect(predictedDemand).toBe(15);
       expect(riskLevel).toBe("high");
     });
@@ -437,18 +448,18 @@ describe("Advanced Inventory Management", () => {
     it("should calculate expected no-shows", async () => {
       const totalSeats = 150;
       const noShowRate = 0.08; // 8%
-      
+
       const expectedNoShows = Math.floor(totalSeats * noShowRate);
-      
+
       expect(expectedNoShows).toBe(12);
     });
 
     it("should recommend overbooking based on no-shows", async () => {
       const expectedNoShows = 12;
       const safetyFactor = 0.8; // 80% of expected no-shows
-      
+
       const recommendedOverbooking = Math.floor(expectedNoShows * safetyFactor);
-      
+
       expect(recommendedOverbooking).toBe(9);
     });
   });
@@ -464,10 +475,10 @@ describe("P0 Features Integration", () => {
       const basePriceSAR = 50000; // cents
       const multiplier = 1.15;
       const finalPriceSAR = Math.round(basePriceSAR * multiplier);
-      
+
       const sarToUsd = 0.2666;
       const finalPriceUSD = Math.round(finalPriceSAR * sarToUsd);
-      
+
       expect(finalPriceSAR).toBe(57500);
       expect(finalPriceUSD).toBe(15328);
     });
@@ -477,11 +488,11 @@ describe("P0 Features Integration", () => {
     it("should increase price when inventory is low", async () => {
       const basePrice = 50000;
       const occupancyRate = 0.92;
-      
+
       // High occupancy multiplier
-      const occupancyMultiplier = occupancyRate > 0.90 ? 1.3 : 1.0;
+      const occupancyMultiplier = occupancyRate > 0.9 ? 1.3 : 1.0;
       const finalPrice = Math.round(basePrice * occupancyMultiplier);
-      
+
       expect(finalPrice).toBe(65000);
     });
   });
@@ -491,9 +502,9 @@ describe("P0 Features Integration", () => {
       const availableSeats = 0;
       const overbookingLimit = 0;
       const effectiveAvailable = availableSeats + overbookingLimit;
-      
+
       const shouldAddToWaitlist = effectiveAvailable <= 0;
-      
+
       expect(shouldAddToWaitlist).toBe(true);
     });
   });

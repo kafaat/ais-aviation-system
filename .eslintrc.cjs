@@ -1,6 +1,6 @@
 /**
  * ESLint Configuration
- * 
+ *
  * Enforces code quality standards across the project.
  * Works with TypeScript and integrates with Prettier.
  */

@@ -10,16 +10,16 @@
 
 تم تطبيق **8 تحسينات Production-Grade** على المشروع:
 
-| # | التحسين | الملف | الحالة |
-|---|---------|-------|--------|
-| 1 | Stripe Webhook V2 | `stripe-webhook-v2.service.ts` | ✅ |
-| 2 | Express Webhook Route | `routes/webhooks.ts` | ✅ |
-| 3 | DB Idempotency V2 | `idempotency-v2.service.ts` | ✅ |
-| 4 | Ledger Uniqueness Migration | `0003_ledger_uniqueness.sql` | ✅ |
-| 5 | Mobile Auth V2 | `mobile-auth-v2.service.ts` | ✅ |
-| 6 | Redis Cache V2 | `cache-v2.service.ts` | ✅ |
-| 7 | Background Queue V2 | `queue-v2.service.ts` | ✅ |
-| 8 | Integration Guide | هذا الملف | ✅ |
+| #   | التحسين                     | الملف                          | الحالة |
+| --- | --------------------------- | ------------------------------ | ------ |
+| 1   | Stripe Webhook V2           | `stripe-webhook-v2.service.ts` | ✅     |
+| 2   | Express Webhook Route       | `routes/webhooks.ts`           | ✅     |
+| 3   | DB Idempotency V2           | `idempotency-v2.service.ts`    | ✅     |
+| 4   | Ledger Uniqueness Migration | `0003_ledger_uniqueness.sql`   | ✅     |
+| 5   | Mobile Auth V2              | `mobile-auth-v2.service.ts`    | ✅     |
+| 6   | Redis Cache V2              | `cache-v2.service.ts`          | ✅     |
+| 7   | Background Queue V2         | `queue-v2.service.ts`          | ✅     |
+| 8   | Integration Guide           | هذا الملف                      | ✅     |
 
 ---
 
@@ -30,6 +30,7 @@
 **الملف:** `server/services/stripe-webhook-v2.service.ts`
 
 **الميزات:**
+
 - ✅ De-duplication صحيح (`processed=true` فقط يمنع التكرار)
 - ✅ Retry handling (`processed=false` يسمح بإعادة المحاولة)
 - ✅ Transaction safety (rollback كامل عند الفشل)
@@ -37,6 +38,7 @@
 - ✅ Proper error handling
 
 **الأحداث المدعومة:**
+
 - `checkout.session.completed`
 - `payment_intent.succeeded`
 - `payment_intent.payment_failed`
@@ -44,6 +46,7 @@
 - `charge.dispute.created`
 
 **مثال الاستخدام:**
+
 ```typescript
 import { stripeWebhookServiceV2 } from "./services/stripe-webhook-v2.service";
 
@@ -60,12 +63,14 @@ await stripeWebhookServiceV2.handleRawWebhook({
 **الملف:** `server/routes/webhooks.ts`
 
 **الميزات:**
+
 - ✅ Express Raw Body Handler (يحافظ على Buffer للتحقق من التوقيع)
 - ✅ Signature verification
 - ✅ Proper HTTP status codes (200/400/500)
 - ✅ Correlation ID tracking
 
 **التكامل:**
+
 ```typescript
 // في index.ts أو app.ts
 import webhooksRouter from "./routes/webhooks";
@@ -84,6 +89,7 @@ app.use(express.json());
 **الملف:** `server/services/idempotency-v2.service.ts`
 
 **الميزات:**
+
 - ✅ DB-based (Source of Truth) - يعمل حتى لو Redis معطل
 - ✅ Request hash validation (يكتشف تغيير الـ payload)
 - ✅ Response caching (يعيد نفس الاستجابة للطلبات المكررة)
@@ -91,8 +97,12 @@ app.use(express.json());
 - ✅ Proper error handling
 
 **مثال الاستخدام:**
+
 ```typescript
-import { withIdempotency, IdempotencyScope } from "./services/idempotency-v2.service";
+import {
+  withIdempotency,
+  IdempotencyScope,
+} from "./services/idempotency-v2.service";
 
 const booking = await withIdempotency({
   scope: IdempotencyScope.BOOKING_CREATE,
@@ -112,6 +122,7 @@ const booking = await withIdempotency({
 **الملف:** `drizzle/migrations/0003_ledger_uniqueness.sql`
 
 **الـ Constraints المضافة:**
+
 - `uq_ledger_pi_type` - منع تكرار القيود بناءً على payment_intent_id
 - `uq_ledger_charge_type` - منع تكرار القيود بناءً على charge_id
 - `uq_ledger_refund_type` - منع تكرار القيود بناءً على refund_id
@@ -119,6 +130,7 @@ const booking = await withIdempotency({
 - `uq_booking_idempotency` - منع تكرار الحجوزات
 
 **تشغيل الـ Migration:**
+
 ```bash
 # في بيئة التطوير
 npx drizzle-kit push:mysql
@@ -134,6 +146,7 @@ mysql -u root -p ais_db < drizzle/migrations/0003_ledger_uniqueness.sql
 **الملف:** `server/services/mobile-auth-v2.service.ts`
 
 **الميزات:**
+
 - ✅ JWT_SECRET إلزامي (fail fast في الإنتاج)
 - ✅ Refresh tokens مشفرة (SHA256 + pepper)
 - ✅ Token rotation عند التجديد
@@ -141,6 +154,7 @@ mysql -u root -p ais_db < drizzle/migrations/0003_ledger_uniqueness.sql
 - ✅ Multi-device support
 
 **مثال الاستخدام:**
+
 ```typescript
 import { mobileAuthServiceV2 } from "./services/mobile-auth-v2.service";
 
@@ -166,12 +180,14 @@ await mobileAuthServiceV2.logout(refreshToken);
 **الملف:** `server/services/cache-v2.service.ts`
 
 **الميزات:**
+
 - ✅ Versioned keys (لا يستخدم KEYS command)
 - ✅ O(1) invalidation (بغض النظر عن عدد المفاتيح)
 - ✅ Safe for production مع ملايين المفاتيح
 - ✅ Graceful degradation عند تعطل Redis
 
 **مثال الاستخدام:**
+
 ```typescript
 import { cacheServiceV2 } from "./services/cache-v2.service";
 
@@ -192,6 +208,7 @@ await cacheServiceV2.invalidateFlightSearchCache();
 **الملف:** `server/services/queue-v2.service.ts`
 
 **الميزات:**
+
 - ✅ BullMQ للمعالجة الموثوقة
 - ✅ Email confirmation jobs
 - ✅ Webhook retry jobs
@@ -200,16 +217,18 @@ await cacheServiceV2.invalidateFlightSearchCache();
 - ✅ Graceful shutdown
 
 **الـ Queues:**
+
 - `ais:emails` - إرسال الإيميلات
 - `ais:webhook-retry` - إعادة محاولة الـ webhooks الفاشلة
 - `ais:scheduled` - المهام المجدولة
 
 **مثال الاستخدام:**
+
 ```typescript
-import { 
+import {
   queueBookingConfirmationEmail,
   startAllWorkers,
-  scheduleCleanupJobs 
+  scheduleCleanupJobs,
 } from "./services/queue-v2.service";
 
 // تشغيل الـ workers
@@ -270,7 +289,10 @@ npx drizzle-kit push:mysql
 ```typescript
 import express from "express";
 import webhooksRouter from "./routes/webhooks";
-import { startAllWorkers, scheduleCleanupJobs } from "./services/queue-v2.service";
+import {
+  startAllWorkers,
+  scheduleCleanupJobs,
+} from "./services/queue-v2.service";
 
 const app = express();
 
@@ -290,11 +312,13 @@ scheduleCleanupJobs();
 ## 📊 التقييم النهائي
 
 ### قبل التحسينات
+
 - **الجاهزية:** 52%
 - **Production Readiness:** 5/10
 - **الحالة:** غير جاهز للإنتاج
 
 ### بعد التحسينات
+
 - **الجاهزية:** **99%** 🎉
 - **Production Readiness:** **10/10** 🎉
 - **الحالة:** **جاهز للإطلاق الكامل!** 🚀
@@ -304,6 +328,7 @@ scheduleCleanupJobs();
 ## ✅ Acceptance Checklist
 
 ### P0 (حرجة)
+
 - [x] Stripe webhook يتحقق من التوقيع
 - [x] De-duplication يعمل بشكل صحيح
 - [x] Ledger لا يقبل قيود مكررة
@@ -312,6 +337,7 @@ scheduleCleanupJobs();
 - [x] Refresh tokens مشفرة
 
 ### P1 (مهمة)
+
 - [x] Redis cache لا يستخدم KEYS
 - [x] Invalidation في O(1)
 - [x] Background queue للإيميلات

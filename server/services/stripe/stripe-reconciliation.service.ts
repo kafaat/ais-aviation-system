@@ -1,6 +1,6 @@
 /**
  * Stripe Reconciliation Service - Production Grade
- * 
+ *
  * التحسينات المطبقة:
  * 1. مصدر السحب من payments (بدلاً من bookings) ✅
  * 2. Structured logging مع correlationId ✅
@@ -8,18 +8,14 @@
  * 4. التعامل الصحيح مع العملات ✅
  * 5. حماية من race conditions ✅
  * 6. Unique constraint check قبل insert ✅
- * 
+ *
  * @see PRODUCTION_GRADE_IMPLEMENTATION_GUIDE.md
  */
 
 import Stripe from "stripe";
 import { eq, and, isNotNull, sql, inArray } from "drizzle-orm";
 import { getDb } from "../../db";
-import { 
-  payments, 
-  bookings, 
-  financialLedger,
-} from "../../../drizzle/schema";
+import { payments, bookings, financialLedger } from "../../../drizzle/schema";
 import { nanoid } from "nanoid";
 
 // ============================================================================
@@ -77,7 +73,11 @@ interface LogContext {
   [key: string]: unknown;
 }
 
-function log(level: "info" | "warn" | "error", message: string, context: LogContext) {
+function log(
+  level: "info" | "warn" | "error",
+  message: string,
+  context: LogContext
+) {
   const timestamp = new Date().toISOString();
   const logEntry = {
     timestamp,
@@ -86,7 +86,7 @@ function log(level: "info" | "warn" | "error", message: string, context: LogCont
     message,
     ...context,
   };
-  
+
   if (level === "error") {
     console.error(JSON.stringify(logEntry));
   } else if (level === "warn") {
@@ -114,7 +114,7 @@ function getStripeClient(): Stripe {
 
 /**
  * تشغيل عملية التسوية
- * 
+ *
  * ✅ تبدأ من جدول payments (وليس bookings) للأسباب التالية:
  * 1. قد توجد bookings بدون payment intent
  * 2. قد يكون payment تم معالجته سابقاً
@@ -132,7 +132,7 @@ export async function runStripeReconciliation(
 
   const startedAt = new Date();
   const details: ReconciliationDetail[] = [];
-  
+
   let scanned = 0;
   let fixed = 0;
   let failed = 0;
@@ -140,11 +140,11 @@ export async function runStripeReconciliation(
   let errors = 0;
   let totalAmountReconciled = 0;
 
-  log("info", "Starting reconciliation", { 
-    correlationId, 
-    dryRun, 
-    lookbackDays, 
-    limit 
+  log("info", "Starting reconciliation", {
+    correlationId,
+    dryRun,
+    lookbackDays,
+    limit,
   });
 
   const db = await getDb();
@@ -158,7 +158,7 @@ export async function runStripeReconciliation(
   // 1. جلب المدفوعات المعلقة من جدول payments
   // ✅ تم التغيير: نبدأ من payments وليس bookings
   // ========================================
-  
+
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - lookbackDays);
 
@@ -245,7 +245,14 @@ export async function runStripeReconciliation(
 
       switch (pi.status) {
         case "succeeded":
-          await handleSucceeded(db, payment, pi, dryRun, correlationId, details);
+          await handleSucceeded(
+            db,
+            payment,
+            pi,
+            dryRun,
+            correlationId,
+            details
+          );
           if (!dryRun) {
             fixed++;
             totalAmountReconciled += Number(payment.paymentAmount);
@@ -297,9 +304,9 @@ export async function runStripeReconciliation(
             action: `UNKNOWN_STATUS (${pi.status})`,
           });
       }
-
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       log("error", `Error reconciling payment: ${errorMessage}`, {
         ...paymentContext,
@@ -380,14 +387,15 @@ async function handleSucceeded(
   correlationId: string,
   details: ReconciliationDetail[]
 ): Promise<void> {
-  const chargeId = typeof pi.latest_charge === "object" 
-    ? pi.latest_charge?.id 
-    : pi.latest_charge;
+  const chargeId =
+    typeof pi.latest_charge === "object"
+      ? pi.latest_charge?.id
+      : pi.latest_charge;
 
   if (dryRun) {
-    log("info", "[DRY RUN] Would confirm payment", { 
-      correlationId, 
-      paymentId: payment.paymentId 
+    log("info", "[DRY RUN] Would confirm payment", {
+      correlationId,
+      paymentId: payment.paymentId,
     });
     details.push({
       paymentId: payment.paymentId,
@@ -402,7 +410,7 @@ async function handleSucceeded(
     return;
   }
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async tx => {
     // 1) Check for existing ledger entry (uniqueness protection)
     const existingLedger = await tx
       .select({ id: financialLedger.id })
@@ -460,7 +468,9 @@ async function handleSucceeded(
       const balanceBefore = lastEntry[0]?.balanceAfter ?? "0.00";
       // ✅ التعامل الصحيح مع العملات - المبلغ بالفعل بالهللات
       const amountInMajor = (Number(payment.paymentAmount) / 100).toFixed(2);
-      const balanceAfter = (parseFloat(balanceBefore) + parseFloat(amountInMajor)).toFixed(2);
+      const balanceAfter = (
+        parseFloat(balanceBefore) + parseFloat(amountInMajor)
+      ).toFixed(2);
 
       await tx.insert(financialLedger).values({
         bookingId: payment.bookingId,
@@ -513,9 +523,9 @@ async function handleFailed(
   details: ReconciliationDetail[]
 ): Promise<void> {
   if (dryRun) {
-    log("info", "[DRY RUN] Would mark payment as failed", { 
-      correlationId, 
-      paymentId: payment.paymentId 
+    log("info", "[DRY RUN] Would mark payment as failed", {
+      correlationId,
+      paymentId: payment.paymentId,
     });
     details.push({
       paymentId: payment.paymentId,
@@ -530,7 +540,7 @@ async function handleFailed(
     return;
   }
 
-  await db.transaction(async (tx) => {
+  await db.transaction(async tx => {
     await tx
       .update(payments)
       .set({

@@ -1,12 +1,12 @@
 /**
  * Redis Cache Service - Production-Grade
- * 
+ *
  * Features:
  * - Versioned keys for O(1) invalidation
  * - Tag-based invalidation (fallback)
  * - SCAN instead of KEYS (production safe)
  * - Graceful degradation when Redis is down
- * 
+ *
  * @version 2.0.0
  * @date 2026-01-26
  */
@@ -37,7 +37,7 @@ class CacheService {
       this.client = createClient({
         url: process.env.REDIS_URL || "redis://localhost:6379",
         socket: {
-          reconnectStrategy: (retries) => {
+          reconnectStrategy: retries => {
             if (retries > 10) {
               logger.error("Redis reconnection failed after 10 retries");
               return new Error("Redis reconnection limit exceeded");
@@ -47,7 +47,7 @@ class CacheService {
         },
       });
 
-      this.client.on("error", (err) => {
+      this.client.on("error", err => {
         logger.error("Redis client error", { error: err });
       });
 
@@ -131,7 +131,10 @@ class CacheService {
   /**
    * Build versioned cache key
    */
-  private async buildVersionedKey(namespace: string, hash: string): Promise<string> {
+  private async buildVersionedKey(
+    namespace: string,
+    hash: string
+  ): Promise<string> {
     const version = await this.getVersion(namespace);
     return `${CACHE_PREFIX}:${namespace}:${version}:${hash}`;
   }
@@ -255,9 +258,9 @@ class CacheService {
       const paramsString = JSON.stringify(params, Object.keys(params).sort());
       const hash = crypto.createHash("md5").update(paramsString).digest("hex");
       const key = await this.buildVersionedKey("search", hash);
-      
+
       await this.set(key, results, ttlSeconds);
-      
+
       // Also add to route tag set (for backward compatibility)
       const tagKey = `${CACHE_PREFIX}:search:routes:${params.from}:${params.to}`;
       await this.client!.sAdd(tagKey, key);
@@ -285,7 +288,7 @@ class CacheService {
       const paramsString = JSON.stringify(params, Object.keys(params).sort());
       const hash = crypto.createHash("md5").update(paramsString).digest("hex");
       const key = await this.buildVersionedKey("search", hash);
-      
+
       return await this.get(key);
     } catch (error) {
       logger.error("Failed to get cached flight search", { params, error });
@@ -310,17 +313,17 @@ class CacheService {
     }
 
     const tagKey = `${CACHE_PREFIX}:search:routes:${from}:${to}`;
-    
+
     try {
       // Get all cache keys for this route
       const cacheKeys = await this.client!.sMembers(tagKey);
-      
+
       if (cacheKeys.length > 0) {
         // Delete all cache keys
         await this.client!.del(cacheKeys);
         // Delete the tag set
         await this.client!.del(tagKey);
-        
+
         logger.debug("Invalidated flight search cache", {
           from,
           to,
@@ -409,7 +412,10 @@ class CacheService {
     }
 
     try {
-      const hash = crypto.createHash("md5").update(`${flightId}:${cabinClass}`).digest("hex");
+      const hash = crypto
+        .createHash("md5")
+        .update(`${flightId}:${cabinClass}`)
+        .digest("hex");
       const key = await this.buildVersionedKey("pricing", hash);
       await this.set(key, pricing, ttlSeconds);
     } catch (error) {
@@ -420,17 +426,27 @@ class CacheService {
   /**
    * Get cached pricing
    */
-  async getCachedPricing(flightId: number, cabinClass: string): Promise<any | null> {
+  async getCachedPricing(
+    flightId: number,
+    cabinClass: string
+  ): Promise<any | null> {
     if (!this.isConnected()) {
       return null;
     }
 
     try {
-      const hash = crypto.createHash("md5").update(`${flightId}:${cabinClass}`).digest("hex");
+      const hash = crypto
+        .createHash("md5")
+        .update(`${flightId}:${cabinClass}`)
+        .digest("hex");
       const key = await this.buildVersionedKey("pricing", hash);
       return await this.get(key);
     } catch (error) {
-      logger.error("Failed to get cached pricing", { flightId, cabinClass, error });
+      logger.error("Failed to get cached pricing", {
+        flightId,
+        cabinClass,
+        error,
+      });
       return null;
     }
   }
@@ -574,6 +590,6 @@ class CacheService {
 export const cacheService = new CacheService();
 
 // Initialize on module load
-cacheService.connect().catch((err) => {
+cacheService.connect().catch(err => {
   logger.error("Failed to initialize cache service", { error: err });
 });

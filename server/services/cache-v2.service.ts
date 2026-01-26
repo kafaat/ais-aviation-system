@@ -1,12 +1,12 @@
 /**
  * Redis Cache V2 Service - Production-Grade
- * 
+ *
  * Features:
  * - Versioned keys (no KEYS command needed)
  * - O(1) invalidation
  * - Safe for production with millions of keys
  * - Graceful degradation when Redis is down
- * 
+ *
  * @version 2.0.0
  * @date 2026-01-26
  */
@@ -40,7 +40,7 @@ function getRedisClient(): Redis | null {
   try {
     redisClient = new Redis(REDIS_URL, {
       maxRetriesPerRequest: 3,
-      retryStrategy: (times) => {
+      retryStrategy: times => {
         if (times > 3) {
           console.error("[Cache] Max retries reached, giving up");
           return null;
@@ -55,7 +55,7 @@ function getRedisClient(): Redis | null {
       isConnected = true;
     });
 
-    redisClient.on("error", (err) => {
+    redisClient.on("error", err => {
       console.error("[Cache] Redis error:", err.message);
       isConnected = false;
     });
@@ -66,7 +66,7 @@ function getRedisClient(): Redis | null {
     });
 
     // Connect
-    redisClient.connect().catch((err) => {
+    redisClient.connect().catch(err => {
       console.error("[Cache] Failed to connect to Redis:", err.message);
     });
 
@@ -85,7 +85,10 @@ function getRedisClient(): Redis | null {
  * Generate MD5 hash for cache key
  */
 function hashParams(params: unknown): string {
-  const normalized = JSON.stringify(params, Object.keys(params as object).sort());
+  const normalized = JSON.stringify(
+    params,
+    Object.keys(params as object).sort()
+  );
   return crypto.createHash("md5").update(normalized).digest("hex");
 }
 
@@ -333,7 +336,11 @@ export const cacheServiceV2 = {
   /**
    * Cache user data
    */
-  async cacheUser(userId: number, userData: unknown, ttlSeconds: number = 300): Promise<void> {
+  async cacheUser(
+    userId: number,
+    userData: unknown,
+    ttlSeconds: number = 300
+  ): Promise<void> {
     await this.set("user", { userId }, userData, ttlSeconds);
   },
 

@@ -1,6 +1,6 @@
 /**
  * Reconciliation Worker
- * 
+ *
  * BullMQ worker that processes reconciliation jobs.
  * Runs Stripe payment reconciliation on schedule or on-demand.
  */
@@ -35,19 +35,19 @@ export const reconciliationWorker = new Worker<ReconciliationJobData>(
   WORKER_CONFIG.name,
   async (job: Job<ReconciliationJobData>) => {
     console.log(`[ReconciliationWorker] Processing job ${job.id}...`);
-    
+
     const { limit = 200, triggeredBy = "scheduler" } = job.data;
-    
+
     try {
       // Update progress
       await job.updateProgress(10);
-      
+
       // Run reconciliation
       const result = await reconciliationJob({ limit });
-      
+
       // Update progress
       await job.updateProgress(100);
-      
+
       // Log summary
       console.log(`[ReconciliationWorker] Job ${job.id} completed:`, {
         triggeredBy,
@@ -56,7 +56,7 @@ export const reconciliationWorker = new Worker<ReconciliationJobData>(
         errors: result.errors,
         durationMs: result.durationMs,
       });
-      
+
       return result;
     } catch (error) {
       console.error(`[ReconciliationWorker] Job ${job.id} failed:`, error);
@@ -85,7 +85,7 @@ reconciliationWorker.on("failed", (job, error) => {
   console.error(`[ReconciliationWorker] Job ${job?.id} failed:`, error.message);
 });
 
-reconciliationWorker.on("error", (error) => {
+reconciliationWorker.on("error", error => {
   console.error("[ReconciliationWorker] Worker error:", error);
 });
 
@@ -111,7 +111,7 @@ export async function triggerReconciliation(options?: {
   triggeredBy?: string;
 }): Promise<string> {
   const { reconciliationQueue } = await import("../queues");
-  
+
   const job = await reconciliationQueue.add(
     "manual-reconciliation",
     {
@@ -122,7 +122,9 @@ export async function triggerReconciliation(options?: {
       priority: 1, // High priority for manual triggers
     }
   );
-  
-  console.log(`[ReconciliationWorker] Manual reconciliation triggered: ${job.id}`);
+
+  console.log(
+    `[ReconciliationWorker] Manual reconciliation triggered: ${job.id}`
+  );
   return job.id!;
 }

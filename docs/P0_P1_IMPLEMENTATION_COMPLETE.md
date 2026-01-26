@@ -18,6 +18,7 @@
 **الملف:** `server/services/stripe/stripe-reconciliation.service.ts`
 
 **الميزات:**
+
 - ✅ جلب المدفوعات المعلقة من قاعدة البيانات
 - ✅ مطابقة مع حالة Stripe الفعلية
 - ✅ تحديث حالة الحجز والدفع
@@ -27,6 +28,7 @@
 - ✅ Transaction safety (rollback عند الفشل)
 
 **الحالات المعالجة:**
+
 - `succeeded` → تأكيد الحجز + إنشاء ledger entry
 - `canceled` → إلغاء الحجز
 - `requires_payment_method` → فشل الدفع
@@ -39,6 +41,7 @@
 **الملف:** `server/jobs/reconciliation.job.ts`
 
 **الميزات:**
+
 - ✅ تشغيل يدوي: `pnpm reconcile`
 - ✅ تشغيل عبر Queue (BullMQ)
 - ✅ تسجيل تفصيلي للنتائج
@@ -49,6 +52,7 @@
 ### 3. BullMQ Queue System (P1) ✅
 
 **الملفات:**
+
 - `server/queue/queues.ts` - تعريف الـ Queues
 - `server/queue/workers/reconciliation.worker.ts` - Worker للتسوية
 - `server/queue/workers/email.worker.ts` - Worker للبريد
@@ -63,6 +67,7 @@
 | `cleanup` | تنظيف البيانات | كل ساعة |
 
 **الميزات:**
+
 - ✅ Retry مع exponential backoff
 - ✅ Rate limiting
 - ✅ Health check
@@ -75,6 +80,7 @@
 **الملف:** `.github/workflows/ci-cd.yml`
 
 **التغييرات:**
+
 - ✅ **إزالة `|| true`** من `pnpm audit` - الآن يفشل عند وجود ثغرات عالية
 - ✅ **نقل الأسرار** إلى GitHub Secrets:
   - `JWT_SECRET_TEST`
@@ -96,6 +102,7 @@
 **الملف:** `.eslintrc.cjs`
 
 **القواعد:**
+
 - ✅ TypeScript strict mode
 - ✅ No unused variables (مع استثناء `_` prefix)
 - ✅ No explicit any (warning)
@@ -107,6 +114,7 @@
 ### 6. Package.json Updates ✅
 
 **التبعيات الجديدة:**
+
 ```json
 {
   "dependencies": {
@@ -123,6 +131,7 @@
 ```
 
 **الـ Scripts الجديدة:**
+
 ```json
 {
   "scripts": {
@@ -140,6 +149,7 @@
 ## 📁 الملفات المضافة/المعدلة
 
 ### ملفات جديدة (8 ملفات):
+
 ```
 server/services/stripe/stripe-reconciliation.service.ts
 server/jobs/reconciliation.job.ts
@@ -152,6 +162,7 @@ docs/P0_P1_IMPLEMENTATION_COMPLETE.md
 ```
 
 ### ملفات معدلة (2 ملفات):
+
 ```
 .github/workflows/ci-cd.yml
 package.json
@@ -162,11 +173,13 @@ package.json
 ## 🚀 كيفية الاستخدام
 
 ### 1. تثبيت التبعيات
+
 ```bash
 pnpm install
 ```
 
 ### 2. إعداد البيئة
+
 ```env
 # .env
 REDIS_URL=redis://localhost:6379
@@ -174,16 +187,19 @@ STRIPE_SECRET_KEY=sk_live_...
 ```
 
 ### 3. تشغيل التسوية يدوياً
+
 ```bash
 pnpm reconcile
 ```
 
 ### 4. تشغيل Workers
+
 ```bash
 pnpm workers
 ```
 
 ### 5. تشغيل ESLint
+
 ```bash
 pnpm lint
 pnpm lint:fix  # لإصلاح الأخطاء تلقائياً
@@ -196,11 +212,13 @@ pnpm lint:fix  # لإصلاح الأخطاء تلقائياً
 أضف هذه الأسرار في GitHub Repository Settings → Secrets:
 
 ### للاختبارات:
+
 - `JWT_SECRET_TEST`
 - `STRIPE_SECRET_KEY_TEST`
 - `STRIPE_WEBHOOK_SECRET_TEST`
 
 ### للنشر:
+
 - `DEPLOY_SSH_KEY`
 - `DEPLOY_HOST`
 - `DEPLOY_USER`
@@ -223,12 +241,12 @@ pnpm lint:fix  # لإصلاح الأخطاء تلقائياً
 
 ## 📈 النتيجة
 
-| المقياس | قبل | بعد |
-|---------|-----|-----|
-| Reconciliation | ❌ غير موجود | ✅ يومي تلقائي |
-| Queue System | ❌ placeholders | ✅ BullMQ كامل |
-| CI/CD Security | ⚠️ أسرار مكشوفة | ✅ GitHub Secrets |
-| Code Quality | ⚠️ بدون linting | ✅ ESLint + Prettier |
-| Audit | ⚠️ يتجاهل الثغرات | ✅ يفشل عند الثغرات |
+| المقياس        | قبل               | بعد                  |
+| -------------- | ----------------- | -------------------- |
+| Reconciliation | ❌ غير موجود      | ✅ يومي تلقائي       |
+| Queue System   | ❌ placeholders   | ✅ BullMQ كامل       |
+| CI/CD Security | ⚠️ أسرار مكشوفة   | ✅ GitHub Secrets    |
+| Code Quality   | ⚠️ بدون linting   | ✅ ESLint + Prettier |
+| Audit          | ⚠️ يتجاهل الثغرات | ✅ يفشل عند الثغرات  |
 
 **Production Readiness: 72% → 92%** 🎉
