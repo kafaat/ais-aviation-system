@@ -1,6 +1,21 @@
+/**
+ * Redis Cache Service - Production-Grade
+ * 
+ * Features:
+ * - Versioned keys for O(1) invalidation
+ * - Tag-based invalidation (fallback)
+ * - SCAN instead of KEYS (production safe)
+ * - Graceful degradation when Redis is down
+ * 
+ * @version 2.0.0
+ * @date 2026-01-26
+ */
+
 import { createClient, RedisClientType } from "redis";
 import crypto from "crypto";
 import { logger } from "./logger.service";
+
+const CACHE_PREFIX = process.env.CACHE_PREFIX || "ais";
 
 /**
  * Redis Cache Service
@@ -68,10 +83,62 @@ class CacheService {
    * Generate cache key from query parameters
    */
   private generateCacheKey(prefix: string, params: any): string {
-    const paramsString = JSON.stringify(params);
+    const paramsString = JSON.stringify(params, Object.keys(params).sort());
     const hash = crypto.createHash("md5").update(paramsString).digest("hex");
-    return `${prefix}:${hash}`;
+    return `${CACHE_PREFIX}:${prefix}:${hash}`;
   }
+
+  // ============================================================================
+  // VERSIONED KEYS - O(1) Invalidation
+  // ============================================================================
+
+  /**
+   * Get current version for a namespace
+   */
+  private async getVersion(namespace: string): Promise<number> {
+    if (!this.isConnected()) {
+      return 1;
+    }
+
+    try {
+      const versionKey = `${CACHE_PREFIX}:v:${namespace}`;
+      const version = await this.client!.get(versionKey);
+      return version ? parseInt(version) : 1;
+    } catch (error) {
+      logger.error("Failed to get version", { namespace, error });
+      return 1;
+    }
+  }
+
+  /**
+   * Increment version to invalidate all keys in namespace
+   * This is O(1) - no matter how many keys exist!
+   */
+  async invalidateNamespace(namespace: string): Promise<void> {
+    if (!this.isConnected()) {
+      return;
+    }
+
+    try {
+      const versionKey = `${CACHE_PREFIX}:v:${namespace}`;
+      await this.client!.incr(versionKey);
+      logger.info("Invalidated namespace", { namespace });
+    } catch (error) {
+      logger.error("Failed to invalidate namespace", { namespace, error });
+    }
+  }
+
+  /**
+   * Build versioned cache key
+   */
+  private async buildVersionedKey(namespace: string, hash: string): Promise<string> {
+    const version = await this.getVersion(namespace);
+    return `${CACHE_PREFIX}:${namespace}:${version}:${hash}`;
+  }
+
+  // ============================================================================
+  // CORE METHODS
+  // ============================================================================
 
   /**
    * Get value from cache
@@ -162,9 +229,12 @@ class CacheService {
     }
   }
 
+  // ============================================================================
+  // FLIGHT SEARCH - Using Versioned Keys
+  // ============================================================================
+
   /**
-   * Cache flight search results
-   * Also stores the key in a route tag set for efficient invalidation
+   * Cache flight search results using versioned keys
    */
   async cacheFlightSearch(
     params: {
@@ -177,17 +247,23 @@ class CacheService {
     results: any,
     ttlSeconds: number = 120 // 2 minutes default
   ): Promise<void> {
-    const key = this.generateCacheKey("search:flights", params);
-    await this.set(key, results, ttlSeconds);
-    
-    // Add key to route tag set for efficient invalidation
-    const tagKey = `search:flights:routes:${params.from}:${params.to}`;
+    if (!this.isConnected()) {
+      return;
+    }
+
     try {
+      const paramsString = JSON.stringify(params, Object.keys(params).sort());
+      const hash = crypto.createHash("md5").update(paramsString).digest("hex");
+      const key = await this.buildVersionedKey("search", hash);
+      
+      await this.set(key, results, ttlSeconds);
+      
+      // Also add to route tag set (for backward compatibility)
+      const tagKey = `${CACHE_PREFIX}:search:routes:${params.from}:${params.to}`;
       await this.client!.sAdd(tagKey, key);
-      // Set expiry on tag set (slightly longer than cache TTL)
       await this.client!.expire(tagKey, ttlSeconds + 60);
     } catch (error) {
-      logger.error("Failed to add cache key to tag set", { key, tagKey, error });
+      logger.error("Failed to cache flight search", { params, error });
     }
   }
 
@@ -201,17 +277,39 @@ class CacheService {
     passengers?: number;
     cabinClass?: string;
   }): Promise<any | null> {
-    const key = this.generateCacheKey("search:flights", params);
-    return await this.get(key);
+    if (!this.isConnected()) {
+      return null;
+    }
+
+    try {
+      const paramsString = JSON.stringify(params, Object.keys(params).sort());
+      const hash = crypto.createHash("md5").update(paramsString).digest("hex");
+      const key = await this.buildVersionedKey("search", hash);
+      
+      return await this.get(key);
+    } catch (error) {
+      logger.error("Failed to get cached flight search", { params, error });
+      return null;
+    }
   }
 
   /**
-   * Invalidate flight search cache for a route
-   * Uses a tag-based approach for efficient invalidation
+   * Invalidate ALL flight search cache - O(1) operation
+   */
+  async invalidateAllFlightSearchCache(): Promise<void> {
+    await this.invalidateNamespace("search");
+  }
+
+  /**
+   * Invalidate flight search cache for a specific route
+   * Uses tag-based approach for route-specific invalidation
    */
   async invalidateFlightSearchCache(from: string, to: string): Promise<void> {
-    // Store route tags in a Set for efficient invalidation
-    const tagKey = `search:flights:routes:${from}:${to}`;
+    if (!this.isConnected()) {
+      return;
+    }
+
+    const tagKey = `${CACHE_PREFIX}:search:routes:${from}:${to}`;
     
     try {
       // Get all cache keys for this route
@@ -238,6 +336,10 @@ class CacheService {
     }
   }
 
+  // ============================================================================
+  // FLIGHT DETAILS - Using Versioned Keys
+  // ============================================================================
+
   /**
    * Cache flight details
    */
@@ -246,25 +348,103 @@ class CacheService {
     details: any,
     ttlSeconds: number = 300 // 5 minutes
   ): Promise<void> {
-    const key = `flight:${flightId}`;
-    await this.set(key, details, ttlSeconds);
+    if (!this.isConnected()) {
+      return;
+    }
+
+    try {
+      const key = await this.buildVersionedKey("flight", flightId.toString());
+      await this.set(key, details, ttlSeconds);
+    } catch (error) {
+      logger.error("Failed to cache flight details", { flightId, error });
+    }
   }
 
   /**
    * Get cached flight details
    */
   async getCachedFlightDetails(flightId: number): Promise<any | null> {
-    const key = `flight:${flightId}`;
-    return await this.get(key);
+    if (!this.isConnected()) {
+      return null;
+    }
+
+    try {
+      const key = await this.buildVersionedKey("flight", flightId.toString());
+      return await this.get(key);
+    } catch (error) {
+      logger.error("Failed to get cached flight details", { flightId, error });
+      return null;
+    }
   }
 
   /**
-   * Invalidate flight details cache
+   * Invalidate flight details cache - O(1) operation
    */
-  async invalidateFlightDetailsCache(flightId: number): Promise<void> {
-    const key = `flight:${flightId}`;
-    await this.del(key);
+  async invalidateFlightDetailsCache(flightId?: number): Promise<void> {
+    if (flightId) {
+      // Invalidate specific flight (delete key directly)
+      const key = await this.buildVersionedKey("flight", flightId.toString());
+      await this.del(key);
+    } else {
+      // Invalidate all flights - O(1)
+      await this.invalidateNamespace("flight");
+    }
   }
+
+  // ============================================================================
+  // PRICING - Using Versioned Keys
+  // ============================================================================
+
+  /**
+   * Cache pricing data
+   */
+  async cachePricing(
+    flightId: number,
+    cabinClass: string,
+    pricing: any,
+    ttlSeconds: number = 60 // 1 minute (prices change frequently)
+  ): Promise<void> {
+    if (!this.isConnected()) {
+      return;
+    }
+
+    try {
+      const hash = crypto.createHash("md5").update(`${flightId}:${cabinClass}`).digest("hex");
+      const key = await this.buildVersionedKey("pricing", hash);
+      await this.set(key, pricing, ttlSeconds);
+    } catch (error) {
+      logger.error("Failed to cache pricing", { flightId, cabinClass, error });
+    }
+  }
+
+  /**
+   * Get cached pricing
+   */
+  async getCachedPricing(flightId: number, cabinClass: string): Promise<any | null> {
+    if (!this.isConnected()) {
+      return null;
+    }
+
+    try {
+      const hash = crypto.createHash("md5").update(`${flightId}:${cabinClass}`).digest("hex");
+      const key = await this.buildVersionedKey("pricing", hash);
+      return await this.get(key);
+    } catch (error) {
+      logger.error("Failed to get cached pricing", { flightId, cabinClass, error });
+      return null;
+    }
+  }
+
+  /**
+   * Invalidate all pricing cache - O(1) operation
+   */
+  async invalidatePricingCache(): Promise<void> {
+    await this.invalidateNamespace("pricing");
+  }
+
+  // ============================================================================
+  // USER SESSION
+  // ============================================================================
 
   /**
    * Cache user session data
@@ -274,7 +454,7 @@ class CacheService {
     sessionData: any,
     ttlSeconds: number = 900 // 15 minutes
   ): Promise<void> {
-    const key = `session:${userId}`;
+    const key = `${CACHE_PREFIX}:session:${userId}`;
     await this.set(key, sessionData, ttlSeconds);
   }
 
@@ -282,7 +462,7 @@ class CacheService {
    * Get cached user session
    */
   async getCachedUserSession(userId: number): Promise<any | null> {
-    const key = `session:${userId}`;
+    const key = `${CACHE_PREFIX}:session:${userId}`;
     return await this.get(key);
   }
 
@@ -290,9 +470,13 @@ class CacheService {
    * Invalidate user session cache
    */
   async invalidateUserSession(userId: number): Promise<void> {
-    const key = `session:${userId}`;
+    const key = `${CACHE_PREFIX}:session:${userId}`;
     await this.del(key);
   }
+
+  // ============================================================================
+  // RATE LIMITING
+  // ============================================================================
 
   /**
    * Rate limiting using Redis
@@ -308,7 +492,7 @@ class CacheService {
     }
 
     try {
-      const rateLimitKey = `ratelimit:${key}`;
+      const rateLimitKey = `${CACHE_PREFIX}:ratelimit:${key}`;
       const current = await this.client!.incr(rateLimitKey);
 
       if (current === 1) {
@@ -325,6 +509,53 @@ class CacheService {
       // On error, allow the request
       return { allowed: true, remaining: limit };
     }
+  }
+
+  // ============================================================================
+  // HEALTH CHECK
+  // ============================================================================
+
+  /**
+   * Health check for Redis
+   */
+  async healthCheck(): Promise<{
+    status: "ok" | "error";
+    latency?: number;
+    error?: string;
+  }> {
+    if (!this.isConnected()) {
+      return { status: "error", error: "Not connected" };
+    }
+
+    try {
+      const start = Date.now();
+      await this.client!.ping();
+      const latency = Date.now() - start;
+
+      return { status: "ok", latency };
+    } catch (error: any) {
+      return { status: "error", error: error.message };
+    }
+  }
+
+  /**
+   * Get cache stats
+   */
+  async getStats(): Promise<{
+    connected: boolean;
+    namespaceVersions: Record<string, number>;
+  }> {
+    const namespaces = ["search", "flight", "pricing"];
+    const versions: Record<string, number> = {};
+
+    for (const ns of namespaces) {
+      versions[ns] = await this.getVersion(ns);
+    }
+
+    return {
+      connected: this.connected,
+      namespaceVersions: versions,
+    };
   }
 
   /**
