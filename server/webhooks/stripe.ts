@@ -90,9 +90,12 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
   // 2. De-duplication: Check if event already processed
   try {
-    const existing = await db.query.stripeEvents.findFirst({
-      where: (t, { eq }) => eq(t.id, event.id),
-    });
+    const existingResult = await db
+      .select()
+      .from(stripeEvents)
+      .where(eq(stripeEvents.id, event.id))
+      .limit(1);
+    const existing = existingResult[0];
 
     // If already processed successfully, return 200 (idempotent success)
     if (existing?.processed) {
@@ -123,9 +126,12 @@ export async function handleStripeWebhook(req: Request, res: Response) {
             `[Webhook] Event ${event.id} already stored by another process`
           );
           // Re-check if processed
-          const recheck = await db.query.stripeEvents.findFirst({
-            where: (t, { eq }) => eq(t.id, event.id),
-          });
+          const recheckResult = await db
+            .select()
+            .from(stripeEvents)
+            .where(eq(stripeEvents.id, event.id))
+            .limit(1);
+          const recheck = recheckResult[0];
           if (recheck?.processed) {
             return res.json({ received: true, deduplicated: true });
           }
@@ -158,15 +164,18 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
     // Update error info (processed=false allows retry)
     try {
-      const existing = await db.query.stripeEvents.findFirst({
-        where: (t, { eq }) => eq(t.id, event.id),
-      });
+      const existingResult2 = await db
+        .select()
+        .from(stripeEvents)
+        .where(eq(stripeEvents.id, event.id))
+        .limit(1);
+      const existing2 = existingResult2[0];
 
       await db
         .update(stripeEvents)
         .set({
           processed: false, // Important: false allows retry
-          retryCount: (existing?.retryCount ?? 0) + 1,
+          retryCount: (existing2?.retryCount ?? 0) + 1,
           error: errorMsg,
         })
         .where(eq(stripeEvents.id, event.id));

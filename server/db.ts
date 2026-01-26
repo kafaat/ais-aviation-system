@@ -419,3 +419,33 @@ export function generateBookingReference(): string {
   }
   return result;
 }
+
+// ============ Stripe-related Functions ============
+export async function getBookingByPaymentIntentId(paymentIntentId: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.stripePaymentIntentId, paymentIntentId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+export async function getBookingByCheckoutSessionId(sessionId: string) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.stripeCheckoutSessionId, sessionId))
+    .limit(1);
+
+  return result.length > 0 ? result[0] : null;
+}
+
+// Export the db instance for direct access when needed
+export { getDb as db };

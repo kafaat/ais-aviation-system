@@ -243,6 +243,7 @@ export const payments = mysqlTable(
       .notNull(),
     transactionId: varchar("transactionId", { length: 100 }), // External payment gateway transaction ID
     idempotencyKey: varchar("idempotencyKey", { length: 100 }).unique(), // For preventing duplicate payments
+    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }), // Stripe Payment Intent ID
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

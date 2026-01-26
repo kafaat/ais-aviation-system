@@ -1,8 +1,10 @@
 import Stripe from "stripe";
-import * as db from "../db";
+import { getDb } from "../db";
 import {
   stripeEvents,
   financialLedger,
+  bookings,
+  payments,
   type InsertStripeEvent,
   type InsertFinancialLedger,
 } from "../../drizzle/schema";
@@ -11,7 +13,7 @@ import { logger } from "./logger.service";
 import { recordStatusChange } from "./booking-state-machine.service";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-11-17.clover",
+  apiVersion: "2025-12-15.clover",
 });
 
 /**
@@ -38,7 +40,10 @@ export function verifyWebhookSignature(
  * Check if event has already been processed (de-duplication)
  */
 export async function isEventProcessed(eventId: string): Promise<boolean> {
-  const existing = await db.db
+  const db = await getDb();
+  if (!db) return false;
+
+  const existing = await db
     .select()
     .from(stripeEvents)
     .where(eq(stripeEvents.id, eventId))
@@ -51,6 +56,9 @@ export async function isEventProcessed(eventId: string): Promise<boolean> {
  * Store Stripe event for audit and de-duplication
  */
 export async function storeStripeEvent(event: Stripe.Event): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
   const eventData: InsertStripeEvent = {
     id: event.id,
     type: event.type,
@@ -60,7 +68,7 @@ export async function storeStripeEvent(event: Stripe.Event): Promise<void> {
     createdAt: new Date(),
   };
 
-  await db.db.insert(stripeEvents).values(eventData);
+  await db.insert(stripeEvents).values(eventData);
 
   logger.info("Stripe event stored", {
     eventId: event.id,
@@ -75,7 +83,10 @@ export async function markEventProcessed(
   eventId: string,
   error?: string
 ): Promise<void> {
-  await db.db
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db
     .update(stripeEvents)
     .set({
       processed: true,
@@ -91,7 +102,10 @@ export async function markEventProcessed(
 export async function recordFinancialTransaction(
   data: InsertFinancialLedger
 ): Promise<void> {
-  await db.db.insert(financialLedger).values(data);
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(financialLedger).values(data);
 
   logger.info("Financial transaction recorded", {
     type: data.type,
@@ -164,8 +178,19 @@ async function handlePaymentIntentSucceeded(
     amount: paymentIntent.amount,
   });
 
+  const db = await getDb();
+  if (!db) {
+    logger.error("Database not available");
+    return;
+  }
+
   // Find booking by payment intent ID
-  const booking = await db.getBookingByPaymentIntentId(paymentIntent.id);
+  const bookingResult = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.stripePaymentIntentId, paymentIntent.id))
+    .limit(1);
+  const booking = bookingResult[0];
 
   if (!booking) {
     logger.warn("Booking not found for payment intent", {
@@ -175,10 +200,20 @@ async function handlePaymentIntentSucceeded(
   }
 
   // Update booking status to confirmed
-  await db.updateBookingStatus(booking.id, "confirmed");
+  await db
+    .update(bookings)
+    .set({ status: "confirmed", updatedAt: new Date() })
+    .where(eq(bookings.id, booking.id));
 
   // Update payment status
-  await db.updatePaymentStatus(booking.id, "paid", paymentIntent.id);
+  await db
+    .update(payments)
+    .set({
+      status: "completed",
+      transactionId: paymentIntent.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(payments.bookingId, booking.id));
 
   // Record status change
   await recordStatusChange({
@@ -196,7 +231,7 @@ async function handlePaymentIntentSucceeded(
     bookingId: booking.id,
     userId: booking.userId,
     type: "charge",
-    amount: (paymentIntent.amount / 100).toString(), // Convert cents to dollars
+    amount: (paymentIntent.amount / 100).toString(),
     currency: paymentIntent.currency.toUpperCase(),
     stripeEventId: event.id,
     stripePaymentIntentId: paymentIntent.id,
@@ -222,8 +257,19 @@ async function handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
     error: paymentIntent.last_payment_error?.message,
   });
 
+  const db = await getDb();
+  if (!db) {
+    logger.error("Database not available");
+    return;
+  }
+
   // Find booking
-  const booking = await db.getBookingByPaymentIntentId(paymentIntent.id);
+  const bookingResult = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.stripePaymentIntentId, paymentIntent.id))
+    .limit(1);
+  const booking = bookingResult[0];
 
   if (!booking) {
     logger.warn("Booking not found for failed payment", {
@@ -233,7 +279,14 @@ async function handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
   }
 
   // Update payment status
-  await db.updatePaymentStatus(booking.id, "failed", paymentIntent.id);
+  await db
+    .update(payments)
+    .set({
+      status: "failed",
+      transactionId: paymentIntent.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(payments.bookingId, booking.id));
 
   // Record status change
   await recordStatusChange({
@@ -263,10 +316,19 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
     amount: charge.amount_refunded,
   });
 
+  const db = await getDb();
+  if (!db) {
+    logger.error("Database not available");
+    return;
+  }
+
   // Find booking by payment intent
-  const booking = await db.getBookingByPaymentIntentId(
-    charge.payment_intent as string
-  );
+  const bookingResult = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.stripePaymentIntentId, charge.payment_intent as string))
+    .limit(1);
+  const booking = bookingResult[0];
 
   if (!booking) {
     logger.warn("Booking not found for refund", {
@@ -280,11 +342,13 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
   const refundType = isFullRefund ? "refund" : "partial_refund";
 
   // Update payment status
-  await db.updatePaymentStatus(
-    booking.id,
-    "refunded",
-    charge.payment_intent as string
-  );
+  await db
+    .update(payments)
+    .set({
+      status: "refunded",
+      updatedAt: new Date(),
+    })
+    .where(eq(payments.bookingId, booking.id));
 
   // Record status change
   await recordStatusChange({
@@ -348,8 +412,19 @@ async function handleCheckoutSessionExpired(
     sessionId: session.id,
   });
 
+  const db = await getDb();
+  if (!db) {
+    logger.error("Database not available");
+    return;
+  }
+
   // Find booking by session ID
-  const booking = await db.getBookingByCheckoutSessionId(session.id);
+  const bookingResult = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.stripeCheckoutSessionId, session.id))
+    .limit(1);
+  const booking = bookingResult[0];
 
   if (!booking) {
     logger.warn("Booking not found for expired session", {
@@ -360,7 +435,10 @@ async function handleCheckoutSessionExpired(
 
   // Mark booking as expired if still pending
   if (booking.status === "pending") {
-    await db.updateBookingStatus(booking.id, "expired");
+    await db
+      .update(bookings)
+      .set({ status: "expired", updatedAt: new Date() })
+      .where(eq(bookings.id, booking.id));
 
     await recordStatusChange({
       bookingId: booking.id,
@@ -382,7 +460,13 @@ async function handleCheckoutSessionExpired(
  * Retry failed events
  */
 export async function retryFailedEvents(): Promise<void> {
-  const failedEvents = await db.db
+  const db = await getDb();
+  if (!db) {
+    logger.error("Database not available for retry");
+    return;
+  }
+
+  const failedEvents = await db
     .select()
     .from(stripeEvents)
     .where(eq(stripeEvents.processed, false))
@@ -403,7 +487,7 @@ export async function retryFailedEvents(): Promise<void> {
       });
 
       // Increment retry count
-      await db.db
+      await db
         .update(stripeEvents)
         .set({
           retryCount: eventRecord.retryCount + 1,
