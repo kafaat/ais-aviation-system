@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import * as db from "../db";
 import { idempotencyRequests, type InsertIdempotencyRequest } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { logger } from "./logger.service";
 import { Errors } from "../_core/errors";
 
@@ -125,7 +125,7 @@ export async function createIdempotencyRecord(
     return true;
   } catch (error: any) {
     // Check if it's a duplicate key error
-    if (error.code === "ER_DUP_ENTRY" || error.code === "23505") {
+    if (error.code === "ER_DUP_ENTRY" || error.code === "23505" || error.code === "23000") {
       logger.info("Idempotency record already exists (race condition)", {
         scope,
         idempotencyKey,
@@ -272,9 +272,18 @@ export async function withIdempotency<T>(
 
   if (!created) {
     // Race condition - another request created the record
-    // Wait a bit and check again
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return withIdempotency(scope, idempotencyKey, requestPayload, fn, userId, ttlSeconds);
+    // Check existing status instead of recursing
+    const existing = await checkIdempotency(scope, idempotencyKey, userId, requestPayload);
+    
+    if (existing.exists && existing.status === "COMPLETED") {
+      return existing.response as T;
+    }
+    
+    if (existing.exists && existing.status === "STARTED") {
+      Errors.idempotencyInProgress();
+    }
+    
+    // If FAILED, allow retry by continuing
   }
 
   // 3. Execute the function
@@ -307,7 +316,7 @@ export async function cleanupExpiredIdempotencyRecords(): Promise<void> {
 
   const result = await db.db
     .delete(idempotencyRequests)
-    .where(and(eq(idempotencyRequests.expiresAt, now)));
+    .where(lt(idempotencyRequests.expiresAt, now));
 
   logger.info("Cleaned up expired idempotency records", {
     deletedCount: result.rowsAffected,

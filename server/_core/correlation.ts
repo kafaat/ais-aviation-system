@@ -42,16 +42,14 @@ export function correlationMiddleware(req: any, res: any, next: any) {
     req.headers["x-request-id"] ||
     uuidv4();
 
-  // Set in context
-  setCorrelationId(correlationId);
-
   // Add to response headers
   res.setHeader("x-correlation-id", correlationId);
 
   // Add to request object for easy access
   req.correlationId = correlationId;
 
-  next();
+  // Run the rest of the request within correlation context
+  runWithCorrelationId(correlationId, () => next());
 }
 
 /**
@@ -63,7 +61,7 @@ export function createCorrelationContext(opts: {
 }) {
   // Try to get from headers
   const correlationId =
-    opts.headers?.[" x-correlation-id"] ||
+    opts.headers?.["x-correlation-id"] ||
     opts.headers?.["x-request-id"] ||
     opts.req?.headers?.["x-correlation-id"] ||
     opts.req?.headers?.["x-request-id"] ||

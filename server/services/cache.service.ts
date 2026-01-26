@@ -130,6 +130,7 @@ class CacheService {
 
   /**
    * Delete multiple keys matching pattern
+   * Note: Uses SCAN instead of KEYS for production safety
    */
   async delPattern(pattern: string): Promise<void> {
     if (!this.isConnected()) {
@@ -137,11 +138,25 @@ class CacheService {
     }
 
     try {
-      const keys = await this.client!.keys(pattern);
-      if (keys.length > 0) {
-        await this.client!.del(keys);
-        logger.debug("Cache delete pattern", { pattern, count: keys.length });
-      }
+      let cursor = 0;
+      let deletedCount = 0;
+
+      do {
+        const result = await this.client!.scan(cursor, {
+          MATCH: pattern,
+          COUNT: 100,
+        });
+
+        cursor = result.cursor;
+        const keys = result.keys;
+
+        if (keys.length > 0) {
+          await this.client!.del(keys);
+          deletedCount += keys.length;
+        }
+      } while (cursor !== 0);
+
+      logger.debug("Cache delete pattern", { pattern, count: deletedCount });
     } catch (error) {
       logger.error("Cache delete pattern error", { pattern, error });
     }
@@ -149,6 +164,7 @@ class CacheService {
 
   /**
    * Cache flight search results
+   * Also stores the key in a route tag set for efficient invalidation
    */
   async cacheFlightSearch(
     params: {
@@ -163,6 +179,16 @@ class CacheService {
   ): Promise<void> {
     const key = this.generateCacheKey("search:flights", params);
     await this.set(key, results, ttlSeconds);
+    
+    // Add key to route tag set for efficient invalidation
+    const tagKey = `search:flights:routes:${params.from}:${params.to}`;
+    try {
+      await this.client!.sAdd(tagKey, key);
+      // Set expiry on tag set (slightly longer than cache TTL)
+      await this.client!.expire(tagKey, ttlSeconds + 60);
+    } catch (error) {
+      logger.error("Failed to add cache key to tag set", { key, tagKey, error });
+    }
   }
 
   /**
@@ -181,10 +207,35 @@ class CacheService {
 
   /**
    * Invalidate flight search cache for a route
+   * Uses a tag-based approach for efficient invalidation
    */
   async invalidateFlightSearchCache(from: string, to: string): Promise<void> {
-    const pattern = `search:flights:*${from}*${to}*`;
-    await this.delPattern(pattern);
+    // Store route tags in a Set for efficient invalidation
+    const tagKey = `search:flights:routes:${from}:${to}`;
+    
+    try {
+      // Get all cache keys for this route
+      const cacheKeys = await this.client!.sMembers(tagKey);
+      
+      if (cacheKeys.length > 0) {
+        // Delete all cache keys
+        await this.client!.del(cacheKeys);
+        // Delete the tag set
+        await this.client!.del(tagKey);
+        
+        logger.debug("Invalidated flight search cache", {
+          from,
+          to,
+          count: cacheKeys.length,
+        });
+      }
+    } catch (error) {
+      logger.error("Failed to invalidate flight search cache", {
+        from,
+        to,
+        error,
+      });
+    }
   }
 
   /**
