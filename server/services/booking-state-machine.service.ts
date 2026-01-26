@@ -1,3 +1,4 @@
+import { eq, desc } from "drizzle-orm";
 import { db } from "../db";
 import {
   bookingStatusHistory,
@@ -124,7 +125,11 @@ export async function recordStatusChange(data: {
       metadata: data.metadata ? JSON.stringify(data.metadata) : null,
     };
 
-    await db.insert(bookingStatusHistory).values(historyEntry);
+    const database = await db();
+    if (!database) {
+      throw new Error("Database not available");
+    }
+    await database.insert(bookingStatusHistory).values(historyEntry);
 
     logger.info(
       {
@@ -155,11 +160,15 @@ export async function recordStatusChange(data: {
  */
 export async function getBookingStatusHistory(bookingId: number) {
   try {
-    const history = await db
+    const database = await db();
+    if (!database) {
+      throw new Error("Database not available");
+    }
+    const history = await database
       .select()
       .from(bookingStatusHistory)
-      .where(db.eq(bookingStatusHistory.bookingId, bookingId))
-      .orderBy(db.desc(bookingStatusHistory.transitionedAt));
+      .where(eq(bookingStatusHistory.bookingId, bookingId))
+      .orderBy(desc(bookingStatusHistory.transitionedAt));
 
     return history.map(entry => ({
       ...entry,

@@ -12,7 +12,7 @@ import {
   publicProcedure,
   protectedProcedure,
   adminProcedure,
-} from "../trpc";
+} from "../_core/trpc";
 import { DynamicPricingService } from "../services/pricing/dynamic-pricing.service";
 import { CurrencyService } from "../services/currency/currency.service";
 import { TRPCError } from "@trpc/server";

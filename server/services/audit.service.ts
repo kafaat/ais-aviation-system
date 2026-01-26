@@ -88,7 +88,11 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
       metadata: data.metadata ? JSON.stringify(data.metadata) : null,
     };
 
-    await db.insert(auditLogs).values(auditLogEntry);
+    const database = await db();
+    if (!database) {
+      throw new Error("Database not available");
+    }
+    await database.insert(auditLogs).values(auditLogEntry);
 
     // Also log to structured logger for immediate monitoring
     logger.info(

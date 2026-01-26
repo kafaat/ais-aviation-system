@@ -21,7 +21,7 @@ export const favoritesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.addFavorite({
-        userId: ctx.userId,
+        userId: ctx.user.id,
         ...input,
       });
     }),
@@ -30,7 +30,7 @@ export const favoritesRouter = router({
    * Get user's favorite flights
    */
   getAll: protectedProcedure.query(async ({ ctx }) => {
-    return await favoritesService.getUserFavorites(ctx.userId);
+    return await favoritesService.getUserFavorites(ctx.user.id);
   }),
 
   /**
@@ -49,7 +49,7 @@ export const favoritesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.updateFavorite({
-        userId: ctx.userId,
+        userId: ctx.user.id,
         ...input,
       });
     }),
@@ -66,7 +66,7 @@ export const favoritesRouter = router({
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.deleteFavorite(
         input.favoriteId,
-        ctx.userId
+        ctx.user.id
       );
     }),
 
@@ -83,7 +83,7 @@ export const favoritesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       return await favoritesService.isFavorited({
-        userId: ctx.userId,
+        userId: ctx.user.id,
         ...input,
       });
     }),
@@ -100,7 +100,7 @@ export const favoritesRouter = router({
     .query(async ({ ctx, input }) => {
       return await favoritesService.getPriceAlertHistory(
         input.favoriteId,
-        ctx.userId
+        ctx.user.id
       );
     }),
 
@@ -116,7 +116,7 @@ export const favoritesRouter = router({
     .query(async ({ ctx, input }) => {
       return await favoritesService.getBestPricesForFavorite(
         input.favoriteId,
-        ctx.userId
+        ctx.user.id
       );
     }),
 
