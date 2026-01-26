@@ -17,7 +17,7 @@ import jwt from "jsonwebtoken";
 import { getDb } from "../db";
 import { refreshTokens, users } from "../../drizzle/schema";
 import { eq, and, lt, isNull } from "drizzle-orm";
-import { AppError, ErrorCode } from "../_core/errors";
+import { Errors, ErrorCode } from "../_core/errors";
 
 // ============================================================================
 // CONFIGURATION - Fail Fast
@@ -112,7 +112,7 @@ export const mobileAuthServiceV2 = {
     role: string;
   }): string {
     if (!JWT_SECRET) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.INTERNAL_ERROR,
         "JWT_SECRET is not configured"
       );
@@ -134,7 +134,7 @@ export const mobileAuthServiceV2 = {
    */
   verifyAccessToken(token: string): JwtPayload {
     if (!JWT_SECRET) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.INTERNAL_ERROR,
         "JWT_SECRET is not configured"
       );
@@ -144,12 +144,12 @@ export const mobileAuthServiceV2 = {
       return jwt.verify(token, JWT_SECRET) as JwtPayload;
     } catch (err: any) {
       if (err.name === "TokenExpiredError") {
-        throw new AppError(ErrorCode.UNAUTHORIZED, "Access token expired");
+        throwAPIError(ErrorCode.UNAUTHORIZED, "Access token expired");
       }
       if (err.name === "JsonWebTokenError") {
-        throw new AppError(ErrorCode.UNAUTHORIZED, "Invalid access token");
+        throwAPIError(ErrorCode.UNAUTHORIZED, "Invalid access token");
       }
-      throw new AppError(ErrorCode.UNAUTHORIZED, "Token verification failed");
+      throwAPIError(ErrorCode.UNAUTHORIZED, "Token verification failed");
     }
   },
 
@@ -168,7 +168,7 @@ export const mobileAuthServiceV2 = {
   ): Promise<string> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.SERVICE_UNAVAILABLE,
         "Database not available"
       );
@@ -204,7 +204,7 @@ export const mobileAuthServiceV2 = {
   ): Promise<{ userId: number; tokenId: number } | null> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.SERVICE_UNAVAILABLE,
         "Database not available"
       );
@@ -247,7 +247,7 @@ export const mobileAuthServiceV2 = {
   ): Promise<RefreshResult> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.SERVICE_UNAVAILABLE,
         "Database not available"
       );
@@ -256,7 +256,7 @@ export const mobileAuthServiceV2 = {
     // 1. Verify refresh token
     const verified = await this.verifyRefreshToken(refreshToken);
     if (!verified) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.UNAUTHORIZED,
         "Invalid or expired refresh token"
       );
@@ -268,7 +268,7 @@ export const mobileAuthServiceV2 = {
     });
 
     if (!user) {
-      throw new AppError(ErrorCode.UNAUTHORIZED, "User not found");
+      throwAPIError(ErrorCode.UNAUTHORIZED, "User not found");
     }
 
     // 3. Revoke old refresh token (token rotation)
@@ -311,7 +311,7 @@ export const mobileAuthServiceV2 = {
   ): Promise<AuthTokens> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.SERVICE_UNAVAILABLE,
         "Database not available"
       );
@@ -323,7 +323,7 @@ export const mobileAuthServiceV2 = {
     });
 
     if (!user) {
-      throw new AppError(ErrorCode.NOT_FOUND, "User not found");
+      throwAPIError(ErrorCode.NOT_FOUND, "User not found");
     }
 
     // Generate tokens
@@ -357,7 +357,7 @@ export const mobileAuthServiceV2 = {
   async logout(refreshToken: string): Promise<void> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.SERVICE_UNAVAILABLE,
         "Database not available"
       );
@@ -381,7 +381,7 @@ export const mobileAuthServiceV2 = {
   async logoutAllDevices(userId: number): Promise<number> {
     const db = await getDb();
     if (!db) {
-      throw new AppError(
+      throwAPIError(
         ErrorCode.SERVICE_UNAVAILABLE,
         "Database not available"
       );
