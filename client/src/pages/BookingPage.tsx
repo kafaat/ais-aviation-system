@@ -6,12 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChevronLeft, Plus, Trash2, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
-import AncillarySelection, { type SelectedAncillary } from "@/components/AncillarySelection";
+import AncillarySelection, {
+  type SelectedAncillary,
+} from "@/components/AncillarySelection";
 
 type Passenger = {
   type: "adult" | "child" | "infant";
@@ -28,23 +36,32 @@ export default function BookingPage() {
   const [location] = useLocation();
   const { user, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
-  
+
   const flightId = params?.id ? parseInt(params.id) : 0;
-  const searchParams = new URLSearchParams(location.split('?')[1]);
-  const cabinClass = (searchParams.get('class') || 'economy') as "economy" | "business";
+  const searchParams = new URLSearchParams(location.split("?")[1]);
+  const cabinClass = (searchParams.get("class") || "economy") as
+    | "economy"
+    | "business";
 
   const [passengers, setPassengers] = useState<Passenger[]>([
-    { type: "adult", firstName: "", lastName: "" }
+    { type: "adult", firstName: "", lastName: "" },
   ]);
-  const [selectedAncillaries, setSelectedAncillaries] = useState<SelectedAncillary[]>([]);
+  const [selectedAncillaries, setSelectedAncillaries] = useState<
+    SelectedAncillary[]
+  >([]);
   const [ancillariesTotalCost, setAncillariesTotalCost] = useState(0);
 
-  const { data: flight, isLoading } = trpc.flights.getById.useQuery({ id: flightId });
+  const { data: flight, isLoading } = trpc.flights.getById.useQuery({
+    id: flightId,
+  });
   const createBooking = trpc.bookings.create.useMutation();
   const createPayment = trpc.payments.create.useMutation();
 
   const addPassenger = () => {
-    setPassengers([...passengers, { type: "adult", firstName: "", lastName: "" }]);
+    setPassengers([
+      ...passengers,
+      { type: "adult", firstName: "", lastName: "" },
+    ]);
   };
 
   const removePassenger = (index: number) => {
@@ -53,7 +70,11 @@ export default function BookingPage() {
     }
   };
 
-  const updatePassenger = (index: number, field: keyof Passenger, value: any) => {
+  const updatePassenger = (
+    index: number,
+    field: keyof Passenger,
+    value: any
+  ) => {
     const updated = [...passengers];
     updated[index] = { ...updated[index], [field]: value };
     setPassengers(updated);
@@ -75,14 +96,15 @@ export default function BookingPage() {
     try {
       // Generate session ID for inventory locking
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      
+
       // Create booking
       const booking = await createBooking.mutateAsync({
         flightId,
         cabinClass,
         passengers,
         sessionId,
-        ancillaries: selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
+        ancillaries:
+          selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
       });
 
       // Process payment
@@ -124,11 +146,15 @@ export default function BookingPage() {
     );
   }
 
-  const price = cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
+  const price =
+    cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
   const baseAmount = (price * passengers.length) / 100;
-  const totalAmount = baseAmount + (ancillariesTotalCost / 100);
+  const totalAmount = baseAmount + ancillariesTotalCost / 100;
 
-  const handleAncillariesChange = (ancillaries: SelectedAncillary[], totalCost: number) => {
+  const handleAncillariesChange = (
+    ancillaries: SelectedAncillary[],
+    totalCost: number
+  ) => {
     setSelectedAncillaries(ancillaries);
     setAncillariesTotalCost(totalCost);
   };
@@ -183,7 +209,9 @@ export default function BookingPage() {
                         <Label>نوع الراكب</Label>
                         <Select
                           value={passenger.type}
-                          onValueChange={(value: any) => updatePassenger(index, "type", value)}
+                          onValueChange={(value: any) =>
+                            updatePassenger(index, "type", value)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -200,7 +228,9 @@ export default function BookingPage() {
                         <Label>اللقب</Label>
                         <Select
                           value={passenger.title || ""}
-                          onValueChange={(value) => updatePassenger(index, "title", value)}
+                          onValueChange={value =>
+                            updatePassenger(index, "title", value)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="اختر" />
@@ -217,7 +247,9 @@ export default function BookingPage() {
                         <Label>الاسم الأول</Label>
                         <Input
                           value={passenger.firstName}
-                          onChange={(e) => updatePassenger(index, "firstName", e.target.value)}
+                          onChange={e =>
+                            updatePassenger(index, "firstName", e.target.value)
+                          }
                           placeholder="الاسم الأول"
                         />
                       </div>
@@ -226,7 +258,9 @@ export default function BookingPage() {
                         <Label>اسم العائلة</Label>
                         <Input
                           value={passenger.lastName}
-                          onChange={(e) => updatePassenger(index, "lastName", e.target.value)}
+                          onChange={e =>
+                            updatePassenger(index, "lastName", e.target.value)
+                          }
                           placeholder="اسم العائلة"
                         />
                       </div>
@@ -235,7 +269,13 @@ export default function BookingPage() {
                         <Label>رقم الجواز (اختياري)</Label>
                         <Input
                           value={passenger.passportNumber || ""}
-                          onChange={(e) => updatePassenger(index, "passportNumber", e.target.value)}
+                          onChange={e =>
+                            updatePassenger(
+                              index,
+                              "passportNumber",
+                              e.target.value
+                            )
+                          }
                           placeholder="رقم الجواز"
                         />
                       </div>
@@ -244,7 +284,13 @@ export default function BookingPage() {
                         <Label>الجنسية (اختياري)</Label>
                         <Input
                           value={passenger.nationality || ""}
-                          onChange={(e) => updatePassenger(index, "nationality", e.target.value)}
+                          onChange={e =>
+                            updatePassenger(
+                              index,
+                              "nationality",
+                              e.target.value
+                            )
+                          }
                           placeholder="الجنسية"
                         />
                       </div>
@@ -266,7 +312,7 @@ export default function BookingPage() {
           <div className="lg:col-span-1">
             <Card className="p-6 sticky top-24">
               <h2 className="text-xl font-semibold mb-4">ملخص الحجز</h2>
-              
+
               <div className="space-y-4 mb-6">
                 <div>
                   <p className="text-sm text-muted-foreground">رقم الرحلة</p>
@@ -305,7 +351,9 @@ export default function BookingPage() {
                     <>
                       <div className="flex justify-between items-center mb-2 pt-2 border-t">
                         <span className="text-sm">الخدمات الإضافية</span>
-                        <span>{(ancillariesTotalCost / 100).toFixed(2)} ر.س</span>
+                        <span>
+                          {(ancillariesTotalCost / 100).toFixed(2)} ر.س
+                        </span>
                       </div>
                       <div className="text-xs text-muted-foreground mb-2">
                         {selectedAncillaries.length} خدمة مختارة
@@ -314,19 +362,23 @@ export default function BookingPage() {
                   )}
                   <div className="flex justify-between items-center text-lg font-bold mt-4 pt-4 border-t">
                     <span>المجموع</span>
-                    <span className="text-primary">{totalAmount.toFixed(2)} ر.س</span>
+                    <span className="text-primary">
+                      {totalAmount.toFixed(2)} ر.س
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <Button 
-                onClick={handleSubmit} 
-                className="w-full" 
+              <Button
+                onClick={handleSubmit}
+                className="w-full"
                 size="lg"
                 disabled={createBooking.isPending || createPayment.isPending}
               >
                 <CreditCard className="h-5 w-5 ml-2" />
-                {createBooking.isPending || createPayment.isPending ? "جاري المعالجة..." : "إتمام الحجز والدفع"}
+                {createBooking.isPending || createPayment.isPending
+                  ? "جاري المعالجة..."
+                  : "إتمام الحجز والدفع"}
               </Button>
 
               <p className="text-xs text-muted-foreground text-center mt-4">

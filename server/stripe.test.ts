@@ -65,7 +65,7 @@ describe("Stripe Payment Integration", () => {
     // Clean up test data
     const db = await getDb();
     if (!db) return;
-    
+
     try {
       await db.delete(bookings).where(eq(bookings.id, testBookingId));
     } catch (error) {
@@ -92,7 +92,8 @@ describe("Stripe Payment Integration", () => {
     if (!db) throw new Error("Database not available");
 
     // Mark booking as paid
-    await db.update(bookings)
+    await db
+      .update(bookings)
       .set({ paymentStatus: "paid" })
       .where({ id: testBookingId });
 
@@ -104,7 +105,8 @@ describe("Stripe Payment Integration", () => {
     ).rejects.toThrow("already paid");
 
     // Reset for other tests
-    await db.update(bookings)
+    await db
+      .update(bookings)
       .set({ paymentStatus: "pending" })
       .where({ id: testBookingId });
   });
@@ -113,7 +115,7 @@ describe("Stripe Payment Integration", () => {
     const { ctx } = createAuthContext();
     // Change user ID to simulate different user
     ctx.user!.id = 999;
-    
+
     const caller = appRouter.createCaller(ctx);
 
     await expect(

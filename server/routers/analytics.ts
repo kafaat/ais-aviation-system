@@ -12,10 +12,12 @@ export const analyticsRouter = router({
    */
   getKPIs: adminProcedure
     .input(
-      z.object({
-        startDate: z.date().optional(),
-        endDate: z.date().optional(),
-      }).optional()
+      z
+        .object({
+          startDate: z.date().optional(),
+          endDate: z.date().optional(),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       return await analyticsService.getKPIMetrics(
@@ -29,9 +31,11 @@ export const analyticsRouter = router({
    */
   getRevenueOverTime: adminProcedure
     .input(
-      z.object({
-        days: z.number().min(1).max(365).default(30),
-      }).optional()
+      z
+        .object({
+          days: z.number().min(1).max(365).default(30),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       return await analyticsService.getRevenueOverTime(input?.days || 30);
@@ -42,9 +46,11 @@ export const analyticsRouter = router({
    */
   getPopularDestinations: adminProcedure
     .input(
-      z.object({
-        limit: z.number().min(1).max(50).default(10),
-      }).optional()
+      z
+        .object({
+          limit: z.number().min(1).max(50).default(10),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       return await analyticsService.getPopularDestinations(input?.limit || 10);
@@ -55,9 +61,11 @@ export const analyticsRouter = router({
    */
   getBookingTrends: adminProcedure
     .input(
-      z.object({
-        days: z.number().min(1).max(365).default(30),
-      }).optional()
+      z
+        .object({
+          days: z.number().min(1).max(365).default(30),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       return await analyticsService.getBookingTrends(input?.days || 30);
@@ -75,10 +83,12 @@ export const analyticsRouter = router({
    */
   getAncillaryMetrics: adminProcedure
     .input(
-      z.object({
-        startDate: z.date().optional(),
-        endDate: z.date().optional(),
-      }).optional()
+      z
+        .object({
+          startDate: z.date().optional(),
+          endDate: z.date().optional(),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       return await analyticsService.getAncillaryMetrics(
@@ -99,9 +109,11 @@ export const analyticsRouter = router({
    */
   getPopularAncillaries: adminProcedure
     .input(
-      z.object({
-        limit: z.number().min(1).max(50).default(10),
-      }).optional()
+      z
+        .object({
+          limit: z.number().min(1).max(50).default(10),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       return await analyticsService.getPopularAncillaries(input?.limit || 10);

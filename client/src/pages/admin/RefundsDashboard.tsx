@@ -33,7 +33,7 @@ export default function RefundsDashboard() {
       <div className="space-y-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
+          {[1, 2, 3, 4].map(i => (
             <Skeleton key={i} className="h-32" />
           ))}
         </div>
@@ -88,7 +88,9 @@ export default function RefundsDashboard() {
             <CheckCircle2 className="h-4 w-4 text-green-600" />
           </div>
           <p className="text-3xl font-bold">{stats?.completedRefunds || 0}</p>
-          <p className="text-xs text-muted-foreground mt-2">تم الاسترداد بنجاح</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            تم الاسترداد بنجاح
+          </p>
         </Card>
 
         <Card className="p-6">
@@ -121,7 +123,9 @@ export default function RefundsDashboard() {
               >
                 <div className="flex items-center gap-3">
                   <div className="text-sm font-medium">
-                    {format(new Date(trend.date), "dd MMM yyyy", { locale: ar })}
+                    {format(new Date(trend.date), "dd MMM yyyy", {
+                      locale: ar,
+                    })}
                   </div>
                   <Badge variant="secondary">{trend.count} استرداد</Badge>
                 </div>
@@ -139,7 +143,7 @@ export default function RefundsDashboard() {
         <h2 className="text-xl font-semibold mb-4">سجل الاستردادات</h2>
         {historyLoading ? (
           <div className="space-y-2">
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4, 5].map(i => (
               <Skeleton key={i} className="h-16 w-full" />
             ))}
           </div>
@@ -162,7 +166,7 @@ export default function RefundsDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {history.map((refund) => (
+                {history.map(refund => (
                   <TableRow key={refund.id}>
                     <TableCell className="font-medium">
                       {refund.bookingReference}
@@ -178,7 +182,9 @@ export default function RefundsDashboard() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(refund.refundedAt), "PPp", { locale: ar })}
+                      {format(new Date(refund.refundedAt), "PPp", {
+                        locale: ar,
+                      })}
                     </TableCell>
                   </TableRow>
                 ))}

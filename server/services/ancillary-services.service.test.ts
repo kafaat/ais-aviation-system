@@ -34,8 +34,12 @@ describe("Ancillary Services Service", () => {
     // Cleanup
     const db = await getDb();
     if (db) {
-      await db.delete(ancillaryServices).where(eq(ancillaryServices.id, testServiceId));
-      await db.delete(bookingAncillaries).where(eq(bookingAncillaries.bookingId, testBookingId));
+      await db
+        .delete(ancillaryServices)
+        .where(eq(ancillaryServices.id, testServiceId));
+      await db
+        .delete(bookingAncillaries)
+        .where(eq(bookingAncillaries.bookingId, testBookingId));
     }
   });
 
@@ -50,7 +54,7 @@ describe("Ancillary Services Service", () => {
     const services = await getAvailableAncillaries("baggage");
     expect(services).toBeDefined();
     expect(Array.isArray(services)).toBe(true);
-    expect(services.every((s) => s.category === "baggage")).toBe(true);
+    expect(services.every(s => s.category === "baggage")).toBe(true);
   });
 
   it("should get ancillary by ID", async () => {
@@ -98,7 +102,7 @@ describe("Ancillary Services Service", () => {
     await removeAncillaryFromBooking(ancillaryId);
 
     const updated = await getBookingAncillaries(testBookingId);
-    const cancelled = updated.find((a) => a.id === ancillaryId);
+    const cancelled = updated.find(a => a.id === ancillaryId);
     expect(cancelled?.status).toBe("cancelled");
   });
 
@@ -125,13 +129,15 @@ describe("Ancillary Services Service", () => {
       cabinClass: "business",
     });
 
-    expect(economyServices.some((s) => s.id === economyServiceId)).toBe(true);
-    expect(businessServices.some((s) => s.id === economyServiceId)).toBe(false);
+    expect(economyServices.some(s => s.id === economyServiceId)).toBe(true);
+    expect(businessServices.some(s => s.id === economyServiceId)).toBe(false);
 
     // Cleanup
     const db = await getDb();
     if (db) {
-      await db.delete(ancillaryServices).where(eq(ancillaryServices.id, economyServiceId));
+      await db
+        .delete(ancillaryServices)
+        .where(eq(ancillaryServices.id, economyServiceId));
     }
   });
 
@@ -152,7 +158,9 @@ describe("Ancillary Services Service", () => {
     // Cleanup
     const db = await getDb();
     if (db) {
-      await db.delete(bookingAncillaries).where(eq(bookingAncillaries.bookingId, testBookingId + 1));
+      await db
+        .delete(bookingAncillaries)
+        .where(eq(bookingAncillaries.bookingId, testBookingId + 1));
     }
   });
 });

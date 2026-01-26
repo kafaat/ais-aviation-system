@@ -60,14 +60,20 @@ export function calculateDynamicPrice(factors: PricingFactors): PricingResult {
   const timeMultiplier = getTimeMultiplier(factors.daysUntilDeparture);
 
   // Apply both multipliers
-  const finalPrice = Math.round(factors.basePrice * occupancyMultiplier * timeMultiplier);
-  
+  const finalPrice = Math.round(
+    factors.basePrice * occupancyMultiplier * timeMultiplier
+  );
+
   // Calculate individual adjustments for breakdown
-  const occupancyAdjustment = Math.round(factors.basePrice * (occupancyMultiplier - 1));
+  const occupancyAdjustment = Math.round(
+    factors.basePrice * (occupancyMultiplier - 1)
+  );
   const timeAdjustment = Math.round(factors.basePrice * (timeMultiplier - 1));
-  
+
   // Total adjustment percentage
-  const adjustmentPercentage = Math.round(((finalPrice - factors.basePrice) / factors.basePrice) * 100);
+  const adjustmentPercentage = Math.round(
+    ((finalPrice - factors.basePrice) / factors.basePrice) * 100
+  );
 
   return {
     basePrice: factors.basePrice,

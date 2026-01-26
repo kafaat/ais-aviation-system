@@ -1,4 +1,11 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Flight Status History table
@@ -7,8 +14,18 @@ import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-or
 export const flightStatusHistory = mysqlTable("flight_status_history", {
   id: int("id").autoincrement().primaryKey(),
   flightId: int("flightId").notNull(),
-  oldStatus: mysqlEnum("oldStatus", ["scheduled", "delayed", "cancelled", "completed"]),
-  newStatus: mysqlEnum("newStatus", ["scheduled", "delayed", "cancelled", "completed"]).notNull(),
+  oldStatus: mysqlEnum("oldStatus", [
+    "scheduled",
+    "delayed",
+    "cancelled",
+    "completed",
+  ]),
+  newStatus: mysqlEnum("newStatus", [
+    "scheduled",
+    "delayed",
+    "cancelled",
+    "completed",
+  ]).notNull(),
   delayMinutes: int("delayMinutes"),
   reason: text("reason"),
   changedBy: int("changedBy"), // User ID who made the change (admin)

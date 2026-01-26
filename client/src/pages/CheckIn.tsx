@@ -15,10 +15,11 @@ export default function CheckIn() {
   const [pnr, setPnr] = useState("");
   const [searchPerformed, setSearchPerformed] = useState(false);
 
-  const { data: booking, isLoading, refetch } = trpc.bookings.getByPNR.useQuery(
-    { pnr },
-    { enabled: false }
-  );
+  const {
+    data: booking,
+    isLoading,
+    refetch,
+  } = trpc.bookings.getByPNR.useQuery({ pnr }, { enabled: false });
 
   const { data: passengers } = trpc.bookings.getPassengers.useQuery(
     { bookingId: booking?.id || 0 },
@@ -30,7 +31,7 @@ export default function CheckIn() {
       toast.success("تم تسجيل الوصول بنجاح!");
       refetch();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message || "حدث خطأ أثناء تسجيل الوصول");
     },
   });
@@ -46,14 +47,16 @@ export default function CheckIn() {
 
   const handleCheckIn = async () => {
     if (!booking || !passengers) return;
-    
+
     // Generate seat assignments for all passengers
     const seatAssignments = passengers.map((passenger: any, index: number) => ({
       passengerId: passenger.id,
-      seatNumber: passenger.seatNumber || `${Math.floor(index / 6) + 1}${String.fromCharCode(65 + (index % 6))}`,
+      seatNumber:
+        passenger.seatNumber ||
+        `${Math.floor(index / 6) + 1}${String.fromCharCode(65 + (index % 6))}`,
     }));
-    
-    await checkInMutation.mutateAsync({ 
+
+    await checkInMutation.mutateAsync({
       bookingId: booking.id,
       seatAssignments,
     });
@@ -107,7 +110,7 @@ export default function CheckIn() {
                   <Input
                     id="pnr"
                     value={pnr}
-                    onChange={(e) => setPnr(e.target.value.toUpperCase())}
+                    onChange={e => setPnr(e.target.value.toUpperCase())}
                     placeholder="أدخل رقم PNR (6 أحرف)"
                     maxLength={6}
                     className="flex-1"
@@ -130,7 +133,9 @@ export default function CheckIn() {
               {!booking ? (
                 <Card className="p-12 text-center">
                   <Plane className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                  <h2 className="text-2xl font-semibold mb-2">لم يتم العثور على حجز</h2>
+                  <h2 className="text-2xl font-semibold mb-2">
+                    لم يتم العثور على حجز
+                  </h2>
                   <p className="text-muted-foreground">
                     تأكد من رقم PNR وحاول مرة أخرى
                   </p>
@@ -142,20 +147,30 @@ export default function CheckIn() {
                   <div className="space-y-4 mb-6">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <p className="text-sm text-muted-foreground">رقم الرحلة</p>
+                        <p className="text-sm text-muted-foreground">
+                          رقم الرحلة
+                        </p>
                         <p className="font-medium">{booking.flightId}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">رقم الحجز</p>
-                        <p className="font-medium">{booking.bookingReference}</p>
+                        <p className="text-sm text-muted-foreground">
+                          رقم الحجز
+                        </p>
+                        <p className="font-medium">
+                          {booking.bookingReference}
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">الحالة</p>
                         <p className="font-medium">{booking.status}</p>
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">عدد الركاب</p>
-                        <p className="font-medium">{booking.numberOfPassengers}</p>
+                        <p className="text-sm text-muted-foreground">
+                          عدد الركاب
+                        </p>
+                        <p className="font-medium">
+                          {booking.numberOfPassengers}
+                        </p>
                       </div>
                     </div>
 
@@ -163,12 +178,20 @@ export default function CheckIn() {
                       <h3 className="font-semibold mb-3">الركاب</h3>
                       <div className="space-y-2">
                         {passengers?.map((passenger: any, index: number) => (
-                          <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-3 bg-gray-50 rounded"
+                          >
                             <span>
-                              {passenger.title} {passenger.firstName} {passenger.lastName}
+                              {passenger.title} {passenger.firstName}{" "}
+                              {passenger.lastName}
                             </span>
                             <span className="text-sm text-muted-foreground">
-                              {passenger.type === "adult" ? "بالغ" : passenger.type === "child" ? "طفل" : "رضيع"}
+                              {passenger.type === "adult"
+                                ? "بالغ"
+                                : passenger.type === "child"
+                                  ? "طفل"
+                                  : "رضيع"}
                             </span>
                           </div>
                         ))}
@@ -186,13 +209,15 @@ export default function CheckIn() {
                       </p>
                     </div>
                   ) : (
-                    <Button 
-                      onClick={handleCheckIn} 
-                      className="w-full" 
+                    <Button
+                      onClick={handleCheckIn}
+                      className="w-full"
                       size="lg"
                       disabled={checkInMutation.isPending}
                     >
-                      {checkInMutation.isPending ? "جاري التسجيل..." : "تسجيل الوصول"}
+                      {checkInMutation.isPending
+                        ? "جاري التسجيل..."
+                        : "تسجيل الوصول"}
                     </Button>
                   )}
                 </Card>

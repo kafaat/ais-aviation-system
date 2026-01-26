@@ -1,22 +1,22 @@
-import type { Request, Response } from 'express';
-import Stripe from 'stripe';
-import { stripe } from '../stripe';
-import { getDb } from '../db';
-import { bookings, flights, airports, users } from '../../drizzle/schema';
-import { eq } from 'drizzle-orm';
-import { sendBookingConfirmation } from '../services/email.service';
-import { awardMilesForBooking } from '../services/loyalty.service';
-import { generateETicketForPassenger } from '../services/eticket.service';
-import { passengers } from '../../drizzle/schema';
+import type { Request, Response } from "express";
+import Stripe from "stripe";
+import { stripe } from "../stripe";
+import { getDb } from "../db";
+import { bookings, flights, airports, users } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
+import { sendBookingConfirmation } from "../services/email.service";
+import { awardMilesForBooking } from "../services/loyalty.service";
+import { generateETicketForPassenger } from "../services/eticket.service";
+import { passengers } from "../../drizzle/schema";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 export async function handleStripeWebhook(req: Request, res: Response) {
-  const sig = req.headers['stripe-signature'];
+  const sig = req.headers["stripe-signature"];
 
   if (!sig || !webhookSecret) {
-    console.error('[Webhook] Missing signature or webhook secret');
-    return res.status(400).send('Webhook Error: Missing signature');
+    console.error("[Webhook] Missing signature or webhook secret");
+    return res.status(400).send("Webhook Error: Missing signature");
   }
 
   let event: Stripe.Event;
@@ -29,8 +29,10 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   }
 
   // Handle test events
-  if (event.id.startsWith('evt_test_')) {
-    console.log('[Webhook] Test event detected, returning verification response');
+  if (event.id.startsWith("evt_test_")) {
+    console.log(
+      "[Webhook] Test event detected, returning verification response"
+    );
     return res.json({ verified: true });
   }
 
@@ -38,19 +40,19 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
   try {
     switch (event.type) {
-      case 'checkout.session.completed': {
+      case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         await handleCheckoutSessionCompleted(session);
         break;
       }
 
-      case 'payment_intent.succeeded': {
+      case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`[Webhook] PaymentIntent succeeded: ${paymentIntent.id}`);
         break;
       }
 
-      case 'payment_intent.payment_failed': {
+      case "payment_intent.payment_failed": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         console.log(`[Webhook] PaymentIntent failed: ${paymentIntent.id}`);
         await handlePaymentFailed(paymentIntent);
@@ -64,30 +66,33 @@ export async function handleStripeWebhook(req: Request, res: Response) {
     res.json({ received: true });
   } catch (error: any) {
     console.error(`[Webhook] Error processing event:`, error);
-    res.status(500).json({ error: 'Webhook processing failed' });
+    res.status(500).json({ error: "Webhook processing failed" });
   }
 }
 
-async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+async function handleCheckoutSessionCompleted(
+  session: Stripe.Checkout.Session
+) {
   console.log(`[Webhook] Checkout session completed: ${session.id}`);
 
   const bookingId = session.metadata?.bookingId;
   if (!bookingId) {
-    console.error('[Webhook] No bookingId in session metadata');
+    console.error("[Webhook] No bookingId in session metadata");
     return;
   }
 
   const db = await getDb();
   if (!db) {
-    console.error('[Webhook] Database not available');
+    console.error("[Webhook] Database not available");
     return;
   }
 
   // Update booking status
-  await db.update(bookings)
+  await db
+    .update(bookings)
     .set({
-      paymentStatus: 'paid',
-      status: 'confirmed',
+      paymentStatus: "paid",
+      status: "confirmed",
       stripePaymentIntentId: session.payment_intent as string,
     })
     .where(eq(bookings.id, parseInt(bookingId)));
@@ -134,7 +139,11 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         .limit(1);
 
       // Generate e-tickets for all passengers
-      let eticketAttachments: Array<{filename: string; content: string; contentType?: string}> = [];
+      let eticketAttachments: Array<{
+        filename: string;
+        content: string;
+        contentType?: string;
+      }> = [];
       try {
         const bookingPassengers = await db
           .select()
@@ -143,24 +152,29 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
         if (bookingPassengers.length > 0) {
           eticketAttachments = await Promise.all(
-            bookingPassengers.map(async (passenger) => {
-              const pdf = await generateETicketForPassenger(parseInt(bookingId), passenger.id);
+            bookingPassengers.map(async passenger => {
+              const pdf = await generateETicketForPassenger(
+                parseInt(bookingId),
+                passenger.id
+              );
               return {
                 filename: `eticket-${booking.bookingReference}-${passenger.firstName}.pdf`,
                 content: pdf, // Already base64 string
-                contentType: 'application/pdf',
+                contentType: "application/pdf",
               };
             })
           );
-          console.log(`[Webhook] Generated ${eticketAttachments.length} e-ticket PDFs`);
+          console.log(
+            `[Webhook] Generated ${eticketAttachments.length} e-ticket PDFs`
+          );
         }
       } catch (eticketError) {
-        console.error('[Webhook] Failed to generate e-tickets:', eticketError);
+        console.error("[Webhook] Failed to generate e-tickets:", eticketError);
       }
 
       // Send booking confirmation email with e-ticket attachments
       await sendBookingConfirmation({
-        passengerName: booking.userName || 'Passenger',
+        passengerName: booking.userName || "Passenger",
         passengerEmail: booking.userEmail,
         bookingReference: booking.bookingReference,
         pnr: booking.pnr,
@@ -172,13 +186,19 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         cabinClass: booking.cabinClass,
         numberOfPassengers: booking.numberOfPassengers,
         totalAmount: booking.totalAmount,
-        attachments: eticketAttachments.length > 0 ? eticketAttachments : undefined,
+        attachments:
+          eticketAttachments.length > 0 ? eticketAttachments : undefined,
       });
 
-      console.log(`[Webhook] Sent booking confirmation${eticketAttachments.length > 0 ? ` with ${eticketAttachments.length} e-ticket PDFs` : ''} to ${booking.userEmail}`);
+      console.log(
+        `[Webhook] Sent booking confirmation${eticketAttachments.length > 0 ? ` with ${eticketAttachments.length} e-ticket PDFs` : ""} to ${booking.userEmail}`
+      );
     }
   } catch (emailError) {
-    console.error('[Webhook] Failed to send booking confirmation email:', emailError);
+    console.error(
+      "[Webhook] Failed to send booking confirmation email:",
+      emailError
+    );
   }
 
   // Award loyalty miles
@@ -203,15 +223,17 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
       console.log(
         `[Webhook] Awarded ${result.milesEarned} miles to user ${bookingDetails.userId} ` +
-        `(Base: ${result.baseMiles}, Bonus: ${result.bonusMiles})`
+          `(Base: ${result.baseMiles}, Bonus: ${result.bonusMiles})`
       );
 
       if (result.tierUpgraded) {
-        console.log(`[Webhook] User ${bookingDetails.userId} upgraded to ${result.newTier} tier!`);
+        console.log(
+          `[Webhook] User ${bookingDetails.userId} upgraded to ${result.newTier} tier!`
+        );
       }
     }
   } catch (loyaltyError) {
-    console.error('[Webhook] Failed to award loyalty miles:', loyaltyError);
+    console.error("[Webhook] Failed to award loyalty miles:", loyaltyError);
     // Don't fail the webhook if loyalty fails
   }
 }
@@ -221,19 +243,21 @@ async function handlePaymentFailed(paymentIntent: Stripe.PaymentIntent) {
 
   const db = await getDb();
   if (!db) {
-    console.error('[Webhook] Database not available');
+    console.error("[Webhook] Database not available");
     return;
   }
 
   // Find booking by payment intent ID
-  const booking = await db.select()
+  const booking = await db
+    .select()
     .from(bookings)
     .where(eq(bookings.stripePaymentIntentId, paymentIntent.id))
     .limit(1);
 
   if (booking[0]) {
-    await db.update(bookings)
-      .set({ paymentStatus: 'failed' })
+    await db
+      .update(bookings)
+      .set({ paymentStatus: "failed" })
       .where(eq(bookings.id, booking[0].id));
 
     console.log(`[Webhook] Booking ${booking[0].id} marked as payment failed`);

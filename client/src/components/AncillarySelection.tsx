@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,7 +28,10 @@ import {
 interface AncillarySelectionProps {
   cabinClass: "economy" | "business";
   numberOfPassengers: number;
-  onSelectionChange: (selectedAncillaries: SelectedAncillary[], totalCost: number) => void;
+  onSelectionChange: (
+    selectedAncillaries: SelectedAncillary[],
+    totalCost: number
+  ) => void;
 }
 
 export interface SelectedAncillary {
@@ -48,12 +57,16 @@ export default function AncillarySelection({
   onSelectionChange,
 }: AncillarySelectionProps) {
   const { t } = useTranslation();
-  const [selectedServices, setSelectedServices] = useState<Map<number, number>>(new Map());
+  const [selectedServices, setSelectedServices] = useState<Map<number, number>>(
+    new Map()
+  );
 
-  const { data: ancillaries, isLoading } = trpc.ancillary.getAvailable.useQuery({});
+  const { data: ancillaries, isLoading } = trpc.ancillary.getAvailable.useQuery(
+    {}
+  );
 
   // Filter ancillaries by cabin class
-  const filteredAncillaries = ancillaries?.filter((service) => {
+  const filteredAncillaries = ancillaries?.filter(service => {
     if (!service.applicableCabinClasses) return true;
     try {
       const classes = JSON.parse(service.applicableCabinClasses);
@@ -64,18 +77,28 @@ export default function AncillarySelection({
   });
 
   // Group by category
-  const groupedAncillaries = filteredAncillaries?.reduce((acc, service) => {
-    if (!acc[service.category]) {
-      acc[service.category] = [];
-    }
-    acc[service.category].push(service);
-    return acc;
-  }, {} as Record<string, typeof filteredAncillaries>);
+  const groupedAncillaries = filteredAncillaries?.reduce(
+    (acc, service) => {
+      if (!acc[service.category]) {
+        acc[service.category] = [];
+      }
+      acc[service.category].push(service);
+      return acc;
+    },
+    {} as Record<string, typeof filteredAncillaries>
+  );
 
-  const handleQuantityChange = (serviceId: number, delta: number, price: number) => {
+  const handleQuantityChange = (
+    serviceId: number,
+    delta: number,
+    price: number
+  ) => {
     const newSelected = new Map(selectedServices);
     const current = newSelected.get(serviceId) || 0;
-    const newQuantity = Math.max(0, Math.min(numberOfPassengers * 3, current + delta));
+    const newQuantity = Math.max(
+      0,
+      Math.min(numberOfPassengers * 3, current + delta)
+    );
 
     if (newQuantity === 0) {
       newSelected.delete(serviceId);
@@ -90,7 +113,7 @@ export default function AncillarySelection({
     let totalCost = 0;
 
     newSelected.forEach((quantity, id) => {
-      const service = ancillaries?.find((s) => s.id === id);
+      const service = ancillaries?.find(s => s.id === id);
       if (service) {
         const itemTotal = service.price * quantity;
         selected.push({
@@ -143,10 +166,12 @@ export default function AncillarySelection({
             <div key={category} className="space-y-3">
               <div className="flex items-center gap-2">
                 <Icon className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold capitalize">{t(`ancillary.categories.${category}`)}</h3>
+                <h3 className="font-semibold capitalize">
+                  {t(`ancillary.categories.${category}`)}
+                </h3>
               </div>
               <div className="grid gap-3">
-                {services.map((service) => {
+                {services.map(service => {
                   const quantity = selectedServices.get(service.id) || 0;
                   const isSelected = quantity > 0;
 
@@ -154,14 +179,18 @@ export default function AncillarySelection({
                     <div
                       key={service.id}
                       className={`border rounded-lg p-4 transition-all ${
-                        isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                        isSelected
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3 flex-1">
                           <Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => toggleService(service.id, service.price)}
+                            onCheckedChange={() =>
+                              toggleService(service.id, service.price)
+                            }
                             id={`service-${service.id}`}
                           />
                           <div className="flex-1">
@@ -180,7 +209,8 @@ export default function AncillarySelection({
                         </div>
                         <div className="text-right">
                           <p className="font-semibold text-lg">
-                            {(service.price / 100).toFixed(2)} {t("common.currency")}
+                            {(service.price / 100).toFixed(2)}{" "}
+                            {t("common.currency")}
                           </p>
                         </div>
                       </div>
@@ -191,25 +221,42 @@ export default function AncillarySelection({
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleQuantityChange(service.id, -1, service.price)}
+                              onClick={() =>
+                                handleQuantityChange(
+                                  service.id,
+                                  -1,
+                                  service.price
+                                )
+                              }
                               disabled={quantity <= 1}
                             >
                               <Minus className="h-3 w-3" />
                             </Button>
-                            <span className="w-12 text-center font-medium">{quantity}</span>
+                            <span className="w-12 text-center font-medium">
+                              {quantity}
+                            </span>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleQuantityChange(service.id, 1, service.price)}
+                              onClick={() =>
+                                handleQuantityChange(
+                                  service.id,
+                                  1,
+                                  service.price
+                                )
+                              }
                               disabled={quantity >= numberOfPassengers * 3}
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm text-muted-foreground">{t("ancillary.subtotal")}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {t("ancillary.subtotal")}
+                            </p>
                             <p className="font-semibold">
-                              {((service.price * quantity) / 100).toFixed(2)} {t("common.currency")}
+                              {((service.price * quantity) / 100).toFixed(2)}{" "}
+                              {t("common.currency")}
                             </p>
                           </div>
                         </div>
@@ -235,10 +282,13 @@ export default function AncillarySelection({
                 </div>
                 <p className="text-2xl font-bold text-primary">
                   {(
-                    Array.from(selectedServices.entries()).reduce((sum, [id, qty]) => {
-                      const service = ancillaries?.find((s) => s.id === id);
-                      return sum + (service ? service.price * qty : 0);
-                    }, 0) / 100
+                    Array.from(selectedServices.entries()).reduce(
+                      (sum, [id, qty]) => {
+                        const service = ancillaries?.find(s => s.id === id);
+                        return sum + (service ? service.price * qty : 0);
+                      },
+                      0
+                    ) / 100
                   ).toFixed(2)}{" "}
                   {t("common.currency")}
                 </p>

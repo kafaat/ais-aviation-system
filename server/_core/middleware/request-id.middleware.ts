@@ -15,19 +15,23 @@ declare global {
   }
 }
 
-export function requestIdMiddleware(req: Request, res: Response, next: NextFunction) {
+export function requestIdMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   // Check if request already has an ID (from load balancer or proxy)
   const existingId = req.headers["x-request-id"] as string;
-  
+
   // Generate new ID if not present
   const requestId = existingId || nanoid(16);
-  
+
   // Attach to request object
   req.id = requestId;
-  
+
   // Add to response headers for client-side debugging
   res.setHeader("X-Request-ID", requestId);
-  
+
   next();
 }
 
