@@ -192,9 +192,9 @@ class CacheService {
 
     try {
       await this.client!.del(key);
-      logger.debug("Cache delete", { key });
+      logger.debug({ key }, "Cache delete");
     } catch (error) {
-      logger.error("Cache delete error", { key, error });
+      logger.error({ key, error }, "Cache delete error");
     }
   }
 
@@ -208,27 +208,27 @@ class CacheService {
     }
 
     try {
-      let cursor = 0;
+      let cursor = "0";
       let deletedCount = 0;
 
       do {
-        const result = await this.client!.scan(cursor, {
+        const result = await this.client!.scan(Number(cursor), {
           MATCH: pattern,
           COUNT: 100,
         });
 
-        cursor = result.cursor;
+        cursor = String(result.cursor);
         const keys = result.keys;
 
         if (keys.length > 0) {
           await this.client!.del(keys);
           deletedCount += keys.length;
         }
-      } while (cursor !== 0);
+      } while (cursor !== "0");
 
-      logger.debug("Cache delete pattern", { pattern, count: deletedCount });
+      logger.debug({ pattern, count: deletedCount }, "Cache delete pattern");
     } catch (error) {
-      logger.error("Cache delete pattern error", { pattern, error });
+      logger.error({ pattern, error }, "Cache delete pattern error");
     }
   }
 
@@ -266,7 +266,7 @@ class CacheService {
       await this.client!.sAdd(tagKey, key);
       await this.client!.expire(tagKey, ttlSeconds + 60);
     } catch (error) {
-      logger.error("Failed to cache flight search", { params, error });
+      logger.error({ params, error }, "Failed to cache flight search");
     }
   }
 
@@ -291,7 +291,7 @@ class CacheService {
 
       return await this.get(key);
     } catch (error) {
-      logger.error("Failed to get cached flight search", { params, error });
+      logger.error({ params, error }, "Failed to get cached flight search");
       return null;
     }
   }
@@ -324,18 +324,18 @@ class CacheService {
         // Delete the tag set
         await this.client!.del(tagKey);
 
-        logger.debug("Invalidated flight search cache", {
+        logger.debug({
           from,
           to,
           count: cacheKeys.length,
-        });
+        }, "Invalidated flight search cache");
       }
     } catch (error) {
-      logger.error("Failed to invalidate flight search cache", {
+      logger.error({
         from,
         to,
         error,
-      });
+      }, "Failed to invalidate flight search cache");
     }
   }
 
@@ -359,7 +359,7 @@ class CacheService {
       const key = await this.buildVersionedKey("flight", flightId.toString());
       await this.set(key, details, ttlSeconds);
     } catch (error) {
-      logger.error("Failed to cache flight details", { flightId, error });
+      logger.error({ flightId, error }, "Failed to cache flight details");
     }
   }
 
@@ -375,7 +375,7 @@ class CacheService {
       const key = await this.buildVersionedKey("flight", flightId.toString());
       return await this.get(key);
     } catch (error) {
-      logger.error("Failed to get cached flight details", { flightId, error });
+      logger.error({ flightId, error }, "Failed to get cached flight details");
       return null;
     }
   }
@@ -419,7 +419,7 @@ class CacheService {
       const key = await this.buildVersionedKey("pricing", hash);
       await this.set(key, pricing, ttlSeconds);
     } catch (error) {
-      logger.error("Failed to cache pricing", { flightId, cabinClass, error });
+      logger.error({ flightId, cabinClass, error }, "Failed to cache pricing");
     }
   }
 
@@ -442,11 +442,11 @@ class CacheService {
       const key = await this.buildVersionedKey("pricing", hash);
       return await this.get(key);
     } catch (error) {
-      logger.error("Failed to get cached pricing", {
+      logger.error({
         flightId,
         cabinClass,
         error,
-      });
+      }, "Failed to get cached pricing");
       return null;
     }
   }
@@ -521,7 +521,7 @@ class CacheService {
 
       return { allowed, remaining };
     } catch (error) {
-      logger.error("Rate limit check error", { key, error });
+      logger.error({ key, error }, "Rate limit check error");
       // On error, allow the request
       return { allowed: true, remaining: limit };
     }
@@ -591,5 +591,5 @@ export const cacheService = new CacheService();
 
 // Initialize on module load
 cacheService.connect().catch(err => {
-  logger.error("Failed to initialize cache service", { error: err });
+  logger.error({ error: err }, "Failed to initialize cache service");
 });
