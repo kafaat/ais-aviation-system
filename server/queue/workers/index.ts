@@ -56,12 +56,12 @@ export function getWorkersStatus(): Record<
 > {
   return {
     reconciliation: {
-      running: reconciliationWorker.isRunning(),
-      paused: reconciliationWorker.isPaused(),
+      running: reconciliationWorker.isRunning?.() ?? false,
+      paused: reconciliationWorker.isPaused?.() ?? false,
     },
     email: {
-      running: emailWorker.isRunning(),
-      paused: emailWorker.isPaused(),
+      running: emailWorker.instance.isRunning?.() ?? false,
+      paused: emailWorker.instance.isPaused?.() ?? false,
     },
   };
 }

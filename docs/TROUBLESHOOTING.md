@@ -102,24 +102,35 @@ pnpm install
 
 ```
 error TS2307: Cannot find module '@/components/...'
+error TS2339: Property 'xyz' does not exist on type 'ABC'
 ```
 
 **Solutions:**
 
-1. **Regenerate TypeScript declarations:**
+1. **Ensure all dependencies are installed:**
+
+```bash
+# Check for missing peer dependencies
+pnpm install
+
+# If you see missing packages like uuid, jsonwebtoken, etc.
+pnpm add uuid jsonwebtoken @types/uuid @types/jsonwebtoken
+```
+
+2. **Regenerate TypeScript declarations:**
 
 ```bash
 pnpm check
 ```
 
-2. **Clean build cache:**
+3. **Clean build cache:**
 
 ```bash
 rm -rf dist .tsbuildinfo
 pnpm build
 ```
 
-3. **Check tsconfig.json paths:**
+4. **Check tsconfig.json paths:**
 
 ```json
 {
@@ -129,6 +140,88 @@ pnpm build
     }
   }
 }
+```
+
+---
+
+### Problem: ESLint configuration errors
+
+**Symptoms:**
+
+```
+ESLint couldn't find an eslint.config.(js|mjs|cjs) file
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@eslint/js'
+```
+
+**Solutions:**
+
+1. **Ensure ESLint v9 configuration exists:**
+
+```bash
+# Check if eslint.config.js exists
+ls -la eslint.config.js
+
+# If missing, ESLint v9 requires this file instead of .eslintrc.cjs
+```
+
+2. **Install required ESLint dependencies:**
+
+```bash
+pnpm add -D @eslint/js @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-prettier
+```
+
+3. **Run ESLint:**
+
+```bash
+pnpm lint
+
+# To auto-fix issues:
+pnpm lint:fix
+```
+
+---
+
+### Problem: Test failures with database connection
+
+**Symptoms:**
+
+```
+ECONNREFUSED: Connection refused
+DrizzleQueryError: Failed query
+Tests failing with database errors
+```
+
+**Solutions:**
+
+1. **Set up test database:**
+
+```bash
+# Create test database
+mysql -u root -p
+CREATE DATABASE ais_aviation_test;
+EXIT;
+
+# Configure .env.test with test database URL
+echo "DATABASE_URL=mysql://username:password@localhost:3306/ais_aviation_test" > .env.test
+```
+
+2. **Run migrations on test database:**
+
+```bash
+# Load .env.test environment
+export $(cat .env.test | xargs)
+
+# Apply database schema
+pnpm db:push
+
+# Optionally seed test data
+npx tsx scripts/seed-data.mjs
+```
+
+3. **Run tests:**
+
+```bash
+pnpm test
 ```
 
 ---
