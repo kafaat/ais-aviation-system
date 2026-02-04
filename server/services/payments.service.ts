@@ -8,7 +8,7 @@ import Stripe from "stripe";
  */
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
+  apiVersion: "2024-12-18.acacia",
 });
 
 export interface CreateCheckoutSessionInput {
@@ -48,6 +48,27 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       });
     }
 
+    // Check for existing payment with same idempotency key BEFORE creating Stripe session
+    if (input.idempotencyKey) {
+      const existingPayment = await db.getPaymentByIdempotencyKey(
+        input.idempotencyKey
+      );
+      if (existingPayment && existingPayment.transactionId) {
+        // Return existing session instead of creating new one
+        try {
+          const existingSession = await stripe.checkout.sessions.retrieve(
+            existingPayment.transactionId
+          );
+          return {
+            sessionId: existingSession.id,
+            url: existingSession.url,
+          };
+        } catch {
+          // Session expired or not found, continue to create new one
+        }
+      }
+    }
+
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -72,23 +93,6 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
         userId: input.userId.toString(),
       },
     });
-
-    // Check for existing payment with same idempotency key
-    if (input.idempotencyKey) {
-      const existingPayment = await db.getPaymentByIdempotencyKey(
-        input.idempotencyKey
-      );
-      if (existingPayment) {
-        // Return existing session instead of creating new one
-        const existingSession = await stripe.checkout.sessions.retrieve(
-          existingPayment.transactionId!
-        );
-        return {
-          sessionId: existingSession.id,
-          url: existingSession.url,
-        };
-      }
-    }
 
     // Create payment record
     await db.createPayment({

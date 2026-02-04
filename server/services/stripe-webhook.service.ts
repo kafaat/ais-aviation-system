@@ -13,7 +13,7 @@ import { logger } from "../_core/logger";
 import { recordStatusChange } from "./booking-state-machine.service";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
+  apiVersion: "2024-12-18.acacia",
 });
 
 /**

@@ -19,6 +19,7 @@ export default [
       "node_modules/**",
       "coverage/**",
       "drizzle/migrations/**",
+      ".archive/**",
       "*.config.js",
       "*.config.cjs",
       "*.config.mjs",

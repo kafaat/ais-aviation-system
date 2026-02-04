@@ -480,7 +480,7 @@ describe("P0 Features Integration", () => {
       const finalPriceUSD = Math.round(finalPriceSAR * sarToUsd);
 
       expect(finalPriceSAR).toBe(57500);
-      expect(finalPriceUSD).toBe(15328);
+      expect(finalPriceUSD).toBe(15330); // Math.round(57500 * 0.2666) = Math.round(15329.5) = 15330
     });
   });
 

@@ -105,7 +105,7 @@ function getStripeClient(): Stripe {
   if (!secretKey) {
     throw new Error("STRIPE_SECRET_KEY is required for reconciliation");
   }
-  return new Stripe(secretKey, { apiVersion: "2025-12-15.clover" });
+  return new Stripe(secretKey, { apiVersion: "2024-12-18.acacia" });
 }
 
 // ============================================================================
