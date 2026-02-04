@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { refreshTokens, type InsertRefreshToken } from "../../drizzle/schema";
+import { refreshTokens, users, type InsertRefreshToken } from "../../drizzle/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { logger } from "../_core/logger";
 
@@ -322,10 +322,14 @@ async function authenticateUser(
     return null;
   }
   
-  const user = await database.query.users?.findFirst({
-    where: (users, { eq }) => eq(users.email, email),
-  });
+  const result = await database
+    .select()
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
 
+  const user = result[0];
+  
   if (!user) {
     return null;
   }
