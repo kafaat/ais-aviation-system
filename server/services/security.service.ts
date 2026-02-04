@@ -136,7 +136,7 @@ export function configureCORS(app: Express): void {
     next();
   });
 
-  logger.info({ allowedOrigins }, "CORS configured with allowed origins:");
+  logger.info({ allowedOrigins }, "CORS configured with allowed origins");
 }
 
 /**
