@@ -10,7 +10,7 @@
  * @module services/currency/currency.service
  */
 
-import { db } from "../../db";
+import { getDb } from "../../db";
 import { exchangeRates, currencies } from "../../../drizzle/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { CacheService } from "../cache.service";
@@ -255,7 +255,12 @@ async function getDbExchangeRate(
   toCurrency: string
 ): Promise<ExchangeRate | null> {
   try {
-    const result = await db.query.exchangeRates?.findFirst({
+    const database = await getDb();
+    if (!database) {
+      return null;
+    }
+    
+    const result = await database.query.exchangeRates?.findFirst({
       where: and(
         eq(exchangeRates.fromCurrency, fromCurrency),
         eq(exchangeRates.toCurrency, toCurrency)

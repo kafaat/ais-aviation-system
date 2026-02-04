@@ -11,7 +11,7 @@
  * @module services/pricing/dynamic-pricing.service
  */
 
-import { db } from "../../db";
+import { getDb } from "../../db";
 import {
   flights,
   bookings,
@@ -128,7 +128,12 @@ export async function calculateDynamicPrice(
   const { flightId, cabinClass, requestedSeats, promoCode } = context;
 
   // 1. Get flight details
-  const flight = await db.query.flights.findFirst({
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
 
@@ -241,7 +246,12 @@ async function calculateDemandMultiplier(flightId: number): Promise<number> {
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   // Get recent bookings count
-  const recentBookings = await db
+  const database = await getDb();
+  if (!database) {
+    return DEFAULT_MULTIPLIERS.demand;
+  }
+  
+  const recentBookings = await database
     .select({ count: count() })
     .from(bookings)
     .where(
@@ -251,7 +261,7 @@ async function calculateDemandMultiplier(flightId: number): Promise<number> {
   const bookingsLastHour = recentBookings[0]?.count || 0;
 
   // Get daily bookings for comparison
-  const dailyBookings = await db
+  const dailyBookings = await database
     .select({ count: count() })
     .from(bookings)
     .where(
@@ -531,7 +541,12 @@ export async function getPriceForecast(
   cabinClass: "economy" | "business",
   days: number = 7
 ): Promise<{ date: Date; predictedPrice: number }[]> {
-  const flight = await db.query.flights.findFirst({
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
 
@@ -590,8 +605,13 @@ async function getApplicablePricingRules(
   }
 
   try {
+    const database = await getDb();
+    if (!database) {
+      return [];
+    }
+    
     const rules =
-      (await db.query.pricingRules?.findMany({
+      (await database.query.pricingRules?.findMany({
         where: and(
           eq(pricingRules.isActive, true),
           or(
@@ -641,7 +661,12 @@ async function getActiveSeasonalPricing(
   destinationId: number
 ): Promise<{ name: string; multiplier: number } | null> {
   try {
-    const seasonal = await db.query.seasonalPricing?.findFirst({
+    const database = await getDb();
+    if (!database) {
+      return null;
+    }
+    
+    const seasonal = await database.query.seasonalPricing?.findFirst({
       where: and(
         eq(seasonalPricing.isActive, true),
         lte(seasonalPricing.startDate, departureTime),
@@ -720,7 +745,12 @@ export async function getPriceRange(
   startDate: Date,
   endDate: Date
 ): Promise<{ min: number; max: number; average: number }> {
-  const flightsInRange = await db.query.flights.findMany({
+  const database = await getDb();
+  if (!database) {
+    return { min: 0, max: 0, average: 0 };
+  }
+  
+  const flightsInRange = await database.query.flights.findMany({
     where: and(
       eq(flights.originId, originId),
       eq(flights.destinationId, destinationId),

@@ -149,6 +149,21 @@ export function transformError(error: any, correlationId?: string): APIError {
 }
 
 /**
+ * Custom error class for application errors
+ */
+export class AppError extends Error {
+  constructor(
+    public code: ErrorCode,
+    message: string,
+    public details?: any
+  ) {
+    super(message);
+    this.name = "AppError";
+    Object.setPrototypeOf(this, AppError.prototype);
+  }
+}
+
+/**
  * Throw standardized API error
  */
 export function throwAPIError(

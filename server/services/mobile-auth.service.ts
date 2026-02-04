@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
-import * as db from "../db";
+import { getDb } from "../db";
 import { refreshTokens, type InsertRefreshToken } from "../../drizzle/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { logger } from "../_core/logger";
@@ -130,7 +130,15 @@ export async function mobileLogin(
     expiresAt,
   };
 
-  await db.db.insert(refreshTokens).values(refreshTokenData);
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+  
+  await database.insert(refreshTokens).values(refreshTokenData);
 
   logger.info("Mobile login successful", {
     userId: user.id,
@@ -167,7 +175,15 @@ export async function refreshAccessToken(
   }
 
   // Check if refresh token exists and is valid in database
-  const tokenRecord = await db.db
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+  
+  const tokenRecord = await database
     .select()
     .from(refreshTokens)
     .where(
@@ -195,7 +211,7 @@ export async function refreshAccessToken(
   }
 
   // Update last used timestamp
-  await db.db
+  await database
     .update(refreshTokens)
     .set({ lastUsedAt: new Date() })
     .where(eq(refreshTokens.token, refreshTokenString));
@@ -225,7 +241,15 @@ export async function refreshAccessToken(
 export async function revokeRefreshToken(
   refreshTokenString: string
 ): Promise<void> {
-  await db.db
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+  
+  await database
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
     .where(eq(refreshTokens.token, refreshTokenString));
@@ -237,7 +261,15 @@ export async function revokeRefreshToken(
  * Revoke all refresh tokens for a user (logout from all devices)
  */
 export async function revokeAllUserTokens(userId: number): Promise<void> {
-  await db.db
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+  
+  await database
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
     .where(eq(refreshTokens.userId, userId));
@@ -249,7 +281,15 @@ export async function revokeAllUserTokens(userId: number): Promise<void> {
  * Clean up expired refresh tokens (run as cron job)
  */
 export async function cleanupExpiredTokens(): Promise<void> {
-  const result = await db.db
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+  
+  const result = await database
     .delete(refreshTokens)
     .where(gt(new Date(), refreshTokens.expiresAt));
 
@@ -277,7 +317,14 @@ async function authenticateUser(
   // 3. Return user if valid, null otherwise
 
   // Placeholder implementation
-  const user = await db.getUserByEmail(email);
+  const database = await getDb();
+  if (!database) {
+    return null;
+  }
+  
+  const user = await database.query.users?.findFirst({
+    where: (users, { eq }) => eq(users.email, email),
+  });
 
   if (!user) {
     return null;
