@@ -3,6 +3,7 @@ import {
   bookingStatusHistory,
   type InsertBookingStatusHistory,
 } from "../../drizzle/schema";
+import { eq, desc } from "drizzle-orm";
 import { logger } from "../_core/logger";
 
 // Define all possible booking states
@@ -126,7 +127,7 @@ export async function recordStatusChange(data: {
 
     const database = await getDb();
     if (!database) {
-      logger.error("Database not available");
+      logger.error({}, "Database not available");
       return;
     }
     
@@ -163,7 +164,7 @@ export async function getBookingStatusHistory(bookingId: number) {
   try {
     const database = await getDb();
     if (!database) {
-      logger.error("Database not available");
+      logger.error({}, "Database not available");
       return [];
     }
     

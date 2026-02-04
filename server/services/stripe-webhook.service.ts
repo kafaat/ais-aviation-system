@@ -31,7 +31,7 @@ export function verifyWebhookSignature(
     );
     return event;
   } catch (err) {
-    logger.error("Webhook signature verification failed", { error: err });
+    logger.error({ error: err }, "Webhook signature verification failed");
     throw new Error("Invalid webhook signature");
   }
 }
@@ -70,10 +70,10 @@ export async function storeStripeEvent(event: Stripe.Event): Promise<void> {
 
   await db.insert(stripeEvents).values(eventData);
 
-  logger.info("Stripe event stored", {
+  logger.info({
     eventId: event.id,
     type: event.type,
-  });
+  }, "Stripe event stored");
 }
 
 /**
@@ -107,11 +107,11 @@ export async function recordFinancialTransaction(
 
   await db.insert(financialLedger).values(data);
 
-  logger.info("Financial transaction recorded", {
+  logger.info({
     type: data.type,
     amount: data.amount,
     bookingId: data.bookingId,
-  });
+  }, "Financial transaction recorded");
 }
 
 /**
@@ -119,10 +119,10 @@ export async function recordFinancialTransaction(
  */
 export async function processStripeEvent(event: Stripe.Event): Promise<void> {
   try {
-    logger.info("Processing Stripe event", {
+    logger.info({
       eventId: event.id,
       type: event.type,
-    });
+    }, "Processing Stripe event");
 
     switch (event.type) {
       case "payment_intent.succeeded":
@@ -146,16 +146,16 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
         break;
 
       default:
-        logger.info("Unhandled event type", { type: event.type });
+        logger.info({ type: event.type }, "Unhandled event type");
     }
 
     // Mark as processed
     await markEventProcessed(event.id);
   } catch (error) {
-    logger.error("Error processing Stripe event", {
+    logger.error({
       eventId: event.id,
       error,
-    });
+    }, "Error processing Stripe event");
 
     // Mark as processed with error
     await markEventProcessed(event.id, String(error));
@@ -173,14 +173,14 @@ async function handlePaymentIntentSucceeded(
 ): Promise<void> {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-  logger.info("Payment intent succeeded", {
+  logger.info({
     paymentIntentId: paymentIntent.id,
     amount: paymentIntent.amount,
-  });
+  }, "Payment intent succeeded");
 
   const db = await getDb();
   if (!db) {
-    logger.error("Database not available");
+    logger.error({}, "Database not available");
     return;
   }
 
@@ -193,9 +193,9 @@ async function handlePaymentIntentSucceeded(
   const booking = bookingResult[0];
 
   if (!booking) {
-    logger.warn("Booking not found for payment intent", {
+    logger.warn({
       paymentIntentId: paymentIntent.id,
-    });
+    }, "Booking not found for payment intent");
     return;
   }
 
@@ -240,10 +240,10 @@ async function handlePaymentIntentSucceeded(
     transactionDate: new Date(),
   });
 
-  logger.info("Booking confirmed via webhook", {
+  logger.info({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
-  });
+  }, "Booking confirmed via webhook");
 }
 
 /**
@@ -252,14 +252,14 @@ async function handlePaymentIntentSucceeded(
 async function handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
   const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-  logger.warn("Payment intent failed", {
+  logger.warn({
     paymentIntentId: paymentIntent.id,
     error: paymentIntent.last_payment_error?.message,
-  });
+  }, "Payment intent failed");
 
   const db = await getDb();
   if (!db) {
-    logger.error("Database not available");
+    logger.error({}, "Database not available");
     return;
   }
 
@@ -272,9 +272,9 @@ async function handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
   const booking = bookingResult[0];
 
   if (!booking) {
-    logger.warn("Booking not found for failed payment", {
+    logger.warn({
       paymentIntentId: paymentIntent.id,
-    });
+    }, "Booking not found for failed payment");
     return;
   }
 
@@ -299,10 +299,10 @@ async function handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
     paymentIntentId: paymentIntent.id,
   });
 
-  logger.info("Booking marked as payment failed", {
+  logger.info({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
-  });
+  }, "Booking marked as payment failed");
 }
 
 /**
@@ -311,14 +311,14 @@ async function handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
 async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
   const charge = event.data.object as Stripe.Charge;
 
-  logger.info("Charge refunded", {
+  logger.info({
     chargeId: charge.id,
     amount: charge.amount_refunded,
-  });
+  }, "Charge refunded");
 
   const db = await getDb();
   if (!db) {
-    logger.error("Database not available");
+    logger.error({}, "Database not available");
     return;
   }
 
@@ -331,9 +331,9 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
   const booking = bookingResult[0];
 
   if (!booking) {
-    logger.warn("Booking not found for refund", {
+    logger.warn({
       chargeId: charge.id,
-    });
+    }, "Booking not found for refund");
     return;
   }
 
@@ -376,11 +376,11 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
     transactionDate: new Date(),
   });
 
-  logger.info("Refund processed via webhook", {
+  logger.info({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
     refundType,
-  });
+  }, "Refund processed via webhook");
 }
 
 /**
@@ -391,10 +391,10 @@ async function handleCheckoutSessionCompleted(
 ): Promise<void> {
   const session = event.data.object as Stripe.Checkout.Session;
 
-  logger.info("Checkout session completed", {
+  logger.info({
     sessionId: session.id,
     paymentIntentId: session.payment_intent,
-  });
+  }, "Checkout session completed");
 
   // Payment intent succeeded event will handle the actual confirmation
   // This is just for logging and tracking
@@ -408,13 +408,13 @@ async function handleCheckoutSessionExpired(
 ): Promise<void> {
   const session = event.data.object as Stripe.Checkout.Session;
 
-  logger.info("Checkout session expired", {
+  logger.info({
     sessionId: session.id,
-  });
+  }, "Checkout session expired");
 
   const db = await getDb();
   if (!db) {
-    logger.error("Database not available");
+    logger.error({}, "Database not available");
     return;
   }
 
@@ -427,9 +427,9 @@ async function handleCheckoutSessionExpired(
   const booking = bookingResult[0];
 
   if (!booking) {
-    logger.warn("Booking not found for expired session", {
+    logger.warn({
       sessionId: session.id,
-    });
+    }, "Booking not found for expired session");
     return;
   }
 
@@ -437,22 +437,22 @@ async function handleCheckoutSessionExpired(
   if (booking.status === "pending") {
     await db
       .update(bookings)
-      .set({ status: "expired", updatedAt: new Date() })
+      .set({ status: "cancelled", updatedAt: new Date() })
       .where(eq(bookings.id, booking.id));
 
     await recordStatusChange({
       bookingId: booking.id,
       bookingReference: booking.bookingReference,
       previousStatus: "pending",
-      newStatus: "expired",
+      newStatus: "cancelled",
       transitionReason: "Checkout session expired",
       actorType: "system",
     });
 
-    logger.info("Booking marked as expired", {
+    logger.info({
       bookingId: booking.id,
       bookingReference: booking.bookingReference,
-    });
+    }, "Booking marked as expired");
   }
 }
 
@@ -462,7 +462,7 @@ async function handleCheckoutSessionExpired(
 export async function retryFailedEvents(): Promise<void> {
   const db = await getDb();
   if (!db) {
-    logger.error("Database not available for retry");
+    logger.error({}, "Database not available for retry");
     return;
   }
 
@@ -477,14 +477,14 @@ export async function retryFailedEvents(): Promise<void> {
       const event = JSON.parse(eventRecord.data) as Stripe.Event;
       await processStripeEvent(event);
 
-      logger.info("Retry succeeded for event", {
+      logger.info({
         eventId: eventRecord.id,
-      });
+      }, "Retry succeeded for event");
     } catch (error) {
-      logger.error("Retry failed for event", {
+      logger.error({
         eventId: eventRecord.id,
         error,
-      });
+      }, "Retry failed for event");
 
       // Increment retry count
       await db

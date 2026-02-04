@@ -132,7 +132,7 @@ export async function getFlightReviews(
     const limit = options?.limit || 20;
     const offset = options?.offset || 0;
 
-    let query = db
+    const query = db
       .select()
       .from(flightReviews)
       .where(

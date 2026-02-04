@@ -5,9 +5,8 @@ import {
   performHealthChecks,
 } from "./health.service";
 import { cleanupExpiredLocks } from "./cron.service";
-import { getDb } from "../db";
+import { getDb, getPaymentByIdempotencyKey, createPayment } from "../db";
 import { inventoryLocks } from "../../drizzle/schema";
-import { getPaymentByIdempotencyKey, createPayment } from "../db";
 
 describe("Production-Ready Features", () => {
   describe("Health Checks", () => {

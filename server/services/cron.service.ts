@@ -43,22 +43,22 @@ export async function cleanupExpiredLocks() {
  * Initialize and start all cron jobs
  */
 export function startCronJobs() {
-  logger.info("Starting cron jobs...");
+  logger.info({}, "Starting cron jobs...");
 
   // Clean up expired locks every 5 minutes
   cron.schedule("*/5 * * * *", async () => {
-    logger.debug("Running cron job: cleanupExpiredLocks");
+    logger.debug({}, "Running cron job: cleanupExpiredLocks");
     await cleanupExpiredLocks();
   });
 
-  logger.info("Cron jobs started successfully");
+  logger.info({}, "Cron jobs started successfully");
 }
 
 /**
  * Manually trigger cron jobs (for testing)
  */
 export async function triggerCronJobs() {
-  logger.info("Manually triggering cron jobs");
+  logger.info({}, "Manually triggering cron jobs");
   await cleanupExpiredLocks();
-  logger.info("Cron jobs completed");
+  logger.info({}, "Cron jobs completed");
 }

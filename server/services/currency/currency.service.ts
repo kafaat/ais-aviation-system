@@ -13,7 +13,7 @@
 import { getDb } from "../../db";
 import { exchangeRates, currencies } from "../../../drizzle/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
-import { CacheService } from "../cache.service";
+import { cacheService as CacheService } from "../cache.service";
 
 // ============================================================================
 // Types & Interfaces
@@ -260,14 +260,19 @@ async function getDbExchangeRate(
       return null;
     }
     
-    const result = await database.query.exchangeRates?.findFirst({
-      where: and(
-        eq(exchangeRates.fromCurrency, fromCurrency),
-        eq(exchangeRates.toCurrency, toCurrency)
-      ),
-      orderBy: [desc(exchangeRates.updatedAt)],
-    });
+    const results = await database
+      .select()
+      .from(exchangeRates)
+      .where(
+        and(
+          eq(exchangeRates.fromCurrency, fromCurrency),
+          eq(exchangeRates.toCurrency, toCurrency)
+        )
+      )
+      .orderBy(desc(exchangeRates.updatedAt))
+      .limit(1);
 
+    const result = results[0];
     if (result) {
       return {
         fromCurrency: result.fromCurrency,
@@ -446,7 +451,7 @@ export async function updateExchangeRates(): Promise<void> {
 
       // Invalidate cache
       const cacheKey = `exchange_rate:${from}_${to}`;
-      await CacheService.delete(cacheKey);
+      await CacheService.del(cacheKey);
     }
 
     console.log(

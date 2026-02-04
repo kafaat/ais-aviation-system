@@ -71,9 +71,13 @@ export const stripeWebhookServiceV2 = {
     console.log(`[Webhook] Processing event: ${event.type} (${event.id})`);
 
     // 2. Check if event already processed (de-duplication)
-    const existing = await db.query.stripeEvents.findFirst({
-      where: (t, { eq }) => eq(t.id, event.id),
-    });
+    const existingResults = await db
+      .select()
+      .from(stripeEvents)
+      .where(eq(stripeEvents.id, event.id))
+      .limit(1);
+    
+    const existing = existingResults[0];
 
     // If already processed successfully, return (idempotent success)
     if (existing?.processed) {
@@ -216,7 +220,7 @@ export const stripeWebhookServiceV2 = {
       return;
     }
 
-    if (booking.status !== "pending_payment" && booking.status !== "pending") {
+    if (booking.status !== "pending") {
       throw new Error(
         `Invalid state transition: ${booking.status} -> confirmed`
       );
@@ -229,8 +233,8 @@ export const stripeWebhookServiceV2 = {
         bookingId: parseInt(bookingId),
         userId: booking.userId,
         type: "charge",
-        amount: booking.totalPrice?.toString() || "0",
-        currency: booking.currency || "SAR",
+        amount: (booking.totalAmount / 100).toFixed(2), // totalAmount is stored in cents, convert to dollars
+        currency: "SAR",
         stripeEventId: eventId,
         stripePaymentIntentId: paymentIntentId,
         description: `Payment for booking #${bookingId}`,
@@ -326,7 +330,7 @@ export const stripeWebhookServiceV2 = {
     }
 
     // Update if still pending
-    if (booking.status === "pending_payment" || booking.status === "pending") {
+    if (booking.status === "pending") {
       await tx
         .update(bookings)
         .set({
@@ -369,7 +373,7 @@ export const stripeWebhookServiceV2 = {
     }
 
     // Only update if in pending state
-    if (booking.status === "pending_payment" || booking.status === "pending") {
+    if (booking.status === "pending") {
       await tx
         .update(bookings)
         .set({

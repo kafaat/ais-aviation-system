@@ -2,8 +2,8 @@ import { describe, expect, it, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import type { User } from "../drizzle/schema";
-import { getDb } from "./db";
 import { bookings } from "../drizzle/schema";
+import { getDb } from "./db";
 import { eq } from "drizzle-orm";
 
 function createAuthenticatedContext(): TrpcContext {

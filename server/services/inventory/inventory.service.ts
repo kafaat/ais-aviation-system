@@ -19,6 +19,7 @@ import {
   waitlist,
 } from "../../../drizzle/schema";
 import { eq, and, gte, lte, sql, lt, count, sum } from "drizzle-orm";
+import * as schema from "../../../drizzle/schema";
 
 // ============================================================================
 // Types & Interfaces

@@ -11,7 +11,7 @@
  * @date 2026-01-26
  */
 
-import { createClient, RedisClientType } from "redis";
+import Redis from "ioredis";
 import crypto from "crypto";
 import { logger } from "../_core/logger";
 
@@ -22,7 +22,7 @@ const CACHE_PREFIX = process.env.CACHE_PREFIX || "ais";
  * Provides caching for search results and other frequently accessed data
  */
 class CacheService {
-  private client: RedisClientType | null = null;
+  private client: Redis | null = null;
   private connected: boolean = false;
 
   /**
@@ -34,38 +34,37 @@ class CacheService {
     }
 
     try {
-      this.client = createClient({
-        url: process.env.REDIS_URL || "redis://localhost:6379",
-        socket: {
-          reconnectStrategy: retries => {
-            if (retries > 10) {
-              logger.error("Redis reconnection failed after 10 retries");
-              return new Error("Redis reconnection limit exceeded");
-            }
-            return Math.min(retries * 100, 3000);
-          },
+      this.client = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+        maxRetriesPerRequest: 10,
+        retryStrategy: (retries: number) => {
+          if (retries > 10) {
+            logger.error({}, "Redis reconnection failed after 10 retries");
+            return null;
+          }
+          return Math.min(retries * 100, 3000);
         },
       });
 
-      this.client.on("error", err => {
-        logger.error("Redis client error", { error: err });
+      this.client.on("error", (err: Error) => {
+        logger.error({ error: err }, "Redis client error");
       });
 
       this.client.on("connect", () => {
-        logger.info("Redis client connected");
+        logger.info({}, "Redis client connected");
+        this.connected = true;
       });
 
-      this.client.on("disconnect", () => {
-        logger.warn("Redis client disconnected");
+      this.client.on("ready", () => {
+        logger.info({}, "Redis cache service initialized");
+        this.connected = true;
+      });
+
+      this.client.on("close", () => {
+        logger.warn({}, "Redis client disconnected");
         this.connected = false;
       });
-
-      await this.client.connect();
-      this.connected = true;
-
-      logger.info("Redis cache service initialized");
     } catch (error) {
-      logger.error("Failed to connect to Redis", { error });
+      logger.error({ error }, "Failed to connect to Redis");
       // Don't throw - allow app to run without cache
       this.client = null;
       this.connected = false;
@@ -105,7 +104,7 @@ class CacheService {
       const version = await this.client!.get(versionKey);
       return version ? parseInt(version) : 1;
     } catch (error) {
-      logger.error("Failed to get version", { namespace, error });
+      logger.error({ namespace, error }, "Failed to get version");
       return 1;
     }
   }
@@ -122,9 +121,9 @@ class CacheService {
     try {
       const versionKey = `${CACHE_PREFIX}:v:${namespace}`;
       await this.client!.incr(versionKey);
-      logger.info("Invalidated namespace", { namespace });
+      logger.info({ namespace }, "Invalidated namespace");
     } catch (error) {
-      logger.error("Failed to invalidate namespace", { namespace, error });
+      logger.error({ namespace, error }, "Failed to invalidate namespace");
     }
   }
 
@@ -157,10 +156,10 @@ class CacheService {
         return null;
       }
 
-      logger.debug("Cache hit", { key });
+      logger.debug({ key }, "Cache hit");
       return JSON.parse(value) as T;
     } catch (error) {
-      logger.error("Cache get error", { key, error });
+      logger.error({ key, error }, "Cache get error");
       return null;
     }
   }
@@ -175,10 +174,10 @@ class CacheService {
 
     try {
       const serialized = JSON.stringify(value);
-      await this.client!.setEx(key, ttlSeconds, serialized);
-      logger.debug("Cache set", { key, ttl: ttlSeconds });
+      await this.client!.setex(key, ttlSeconds, serialized);
+      logger.debug({ key, ttl: ttlSeconds }, "Cache set");
     } catch (error) {
-      logger.error("Cache set error", { key, error });
+      logger.error({ key, error }, "Cache set error");
     }
   }
 
@@ -192,9 +191,9 @@ class CacheService {
 
     try {
       await this.client!.del(key);
-      logger.debug("Cache delete", { key });
+      logger.debug({ key }, "Cache delete");
     } catch (error) {
-      logger.error("Cache delete error", { key, error });
+      logger.error({ key, error }, "Cache delete error");
     }
   }
 
@@ -208,27 +207,30 @@ class CacheService {
     }
 
     try {
-      let cursor = 0;
+      let cursor = "0";
       let deletedCount = 0;
 
       do {
-        const result = await this.client!.scan(cursor, {
-          MATCH: pattern,
-          COUNT: 100,
-        });
+        const result = await this.client!.scan(
+          cursor,
+          "MATCH",
+          pattern,
+          "COUNT",
+          "100"
+        );
 
-        cursor = result.cursor;
-        const keys = result.keys;
+        cursor = result[0];
+        const keys = result[1];
 
         if (keys.length > 0) {
-          await this.client!.del(keys);
+          await this.client!.del(...keys);
           deletedCount += keys.length;
         }
-      } while (cursor !== 0);
+      } while (cursor !== "0");
 
-      logger.debug("Cache delete pattern", { pattern, count: deletedCount });
+      logger.debug({ pattern, count: deletedCount }, "Cache delete pattern");
     } catch (error) {
-      logger.error("Cache delete pattern error", { pattern, error });
+      logger.error({ pattern, error }, "Cache delete pattern error");
     }
   }
 
@@ -263,10 +265,10 @@ class CacheService {
 
       // Also add to route tag set (for backward compatibility)
       const tagKey = `${CACHE_PREFIX}:search:routes:${params.from}:${params.to}`;
-      await this.client!.sAdd(tagKey, key);
+      await this.client!.sadd(tagKey, key);
       await this.client!.expire(tagKey, ttlSeconds + 60);
     } catch (error) {
-      logger.error("Failed to cache flight search", { params, error });
+      logger.error({ params, error }, "Failed to cache flight search");
     }
   }
 
@@ -291,7 +293,7 @@ class CacheService {
 
       return await this.get(key);
     } catch (error) {
-      logger.error("Failed to get cached flight search", { params, error });
+      logger.error({ params, error }, "Failed to get cached flight search");
       return null;
     }
   }
@@ -316,26 +318,26 @@ class CacheService {
 
     try {
       // Get all cache keys for this route
-      const cacheKeys = await this.client!.sMembers(tagKey);
+      const cacheKeys = await this.client!.smembers(tagKey);
 
       if (cacheKeys.length > 0) {
         // Delete all cache keys
-        await this.client!.del(cacheKeys);
+        await this.client!.del(...cacheKeys);
         // Delete the tag set
         await this.client!.del(tagKey);
 
-        logger.debug("Invalidated flight search cache", {
+        logger.debug({
           from,
           to,
           count: cacheKeys.length,
-        });
+        }, "Invalidated flight search cache");
       }
     } catch (error) {
-      logger.error("Failed to invalidate flight search cache", {
+      logger.error({
         from,
         to,
         error,
-      });
+      }, "Failed to invalidate flight search cache");
     }
   }
 
@@ -359,7 +361,7 @@ class CacheService {
       const key = await this.buildVersionedKey("flight", flightId.toString());
       await this.set(key, details, ttlSeconds);
     } catch (error) {
-      logger.error("Failed to cache flight details", { flightId, error });
+      logger.error({ flightId, error }, "Failed to cache flight details");
     }
   }
 
@@ -375,7 +377,7 @@ class CacheService {
       const key = await this.buildVersionedKey("flight", flightId.toString());
       return await this.get(key);
     } catch (error) {
-      logger.error("Failed to get cached flight details", { flightId, error });
+      logger.error({ flightId, error }, "Failed to get cached flight details");
       return null;
     }
   }
@@ -419,7 +421,7 @@ class CacheService {
       const key = await this.buildVersionedKey("pricing", hash);
       await this.set(key, pricing, ttlSeconds);
     } catch (error) {
-      logger.error("Failed to cache pricing", { flightId, cabinClass, error });
+      logger.error({ flightId, cabinClass, error }, "Failed to cache pricing");
     }
   }
 
@@ -442,11 +444,11 @@ class CacheService {
       const key = await this.buildVersionedKey("pricing", hash);
       return await this.get(key);
     } catch (error) {
-      logger.error("Failed to get cached pricing", {
+      logger.error({
         flightId,
         cabinClass,
         error,
-      });
+      }, "Failed to get cached pricing");
       return null;
     }
   }
@@ -521,7 +523,7 @@ class CacheService {
 
       return { allowed, remaining };
     } catch (error) {
-      logger.error("Rate limit check error", { key, error });
+      logger.error({ key, error }, "Rate limit check error");
       // On error, allow the request
       return { allowed: true, remaining: limit };
     }
@@ -581,7 +583,7 @@ class CacheService {
     if (this.client) {
       await this.client.quit();
       this.connected = false;
-      logger.info("Redis cache service disconnected");
+      logger.info({}, "Redis cache service disconnected");
     }
   }
 }
@@ -591,5 +593,5 @@ export const cacheService = new CacheService();
 
 // Initialize on module load
 cacheService.connect().catch(err => {
-  logger.error("Failed to initialize cache service", { error: err });
+  logger.error({ error: err }, "Failed to initialize cache service");
 });
