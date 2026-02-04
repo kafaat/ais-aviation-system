@@ -220,7 +220,7 @@ export const stripeWebhookServiceV2 = {
       return;
     }
 
-    if (booking.status !== "pending" && booking.status !== "pending") {
+    if (booking.status !== "pending") {
       throw new Error(
         `Invalid state transition: ${booking.status} -> confirmed`
       );
@@ -233,7 +233,7 @@ export const stripeWebhookServiceV2 = {
         bookingId: parseInt(bookingId),
         userId: booking.userId,
         type: "charge",
-        amount: (booking.totalAmount / 100).toFixed(2), // Convert cents to decimal
+        amount: (booking.totalAmount / 100).toFixed(2), // totalAmount is stored in cents, convert to dollars
         currency: "SAR",
         stripeEventId: eventId,
         stripePaymentIntentId: paymentIntentId,
@@ -330,7 +330,7 @@ export const stripeWebhookServiceV2 = {
     }
 
     // Update if still pending
-    if (booking.status === "pending" || booking.status === "pending") {
+    if (booking.status === "pending") {
       await tx
         .update(bookings)
         .set({
@@ -373,7 +373,7 @@ export const stripeWebhookServiceV2 = {
     }
 
     // Only update if in pending state
-    if (booking.status === "pending" || booking.status === "pending") {
+    if (booking.status === "pending") {
       await tx
         .update(bookings)
         .set({

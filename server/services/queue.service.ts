@@ -498,9 +498,9 @@ class QueueService {
             mismatches++;
           }
 
-          // Check amount match (convert cents to dollars)
+          // Check amount match (convert from cents to dollars)
           const stripeAmount = paymentIntent.amount / 100;
-          const dbAmount = booking.totalAmount / 100; // totalAmount is already in cents
+          const dbAmount = booking.totalAmount / 100; // totalAmount is stored in cents
 
           if (Math.abs(stripeAmount - dbAmount) > 0.01) {
             logger.error({
@@ -595,7 +595,7 @@ class QueueService {
             .delete(idempotencyRequests)
             .where(lt(idempotencyRequests.expiresAt, expiredDate));
 
-          deletedCount = (result as any).rowsAffected || 0;
+          deletedCount = (result as any)[0]?.affectedRows || 0;
           break;
         }
 
@@ -607,7 +607,7 @@ class QueueService {
             .delete(refreshTokens)
             .where(lt(refreshTokens.expiresAt, now));
 
-          deletedCount = (result as any).rowsAffected || 0;
+          deletedCount = (result as any)[0]?.affectedRows || 0;
           break;
         }
 
@@ -630,7 +630,7 @@ class QueueService {
               )
             );
 
-          deletedCount = (result as any).rowsAffected || 0;
+          deletedCount = (result as any)[0]?.affectedRows || 0;
           break;
         }
 
@@ -648,7 +648,7 @@ class QueueService {
               )
             );
 
-          deletedCount = (result as any).rowsAffected || 0;
+          deletedCount = (result as any)[0]?.affectedRows || 0;
           break;
         }
 
