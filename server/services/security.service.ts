@@ -17,7 +17,7 @@ const { invalidCsrfTokenError, generateToken, doubleCsrfProtection } =
     },
     size: 64,
     ignoredMethods: ["GET", "HEAD", "OPTIONS"],
-    getTokenFromRequest: req => {
+    getCsrfTokenFromRequest: req => {
       return req.headers["x-csrf-token"] as string;
     },
   });
