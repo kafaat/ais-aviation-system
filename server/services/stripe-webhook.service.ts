@@ -9,7 +9,7 @@ import {
   type InsertFinancialLedger,
 } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { logger } from "./logger.service";
+import { logger } from "../_core/logger";
 import { recordStatusChange } from "./booking-state-machine.service";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {

@@ -7,7 +7,7 @@ import {
   storeStripeEvent,
   processStripeEvent,
 } from "../services/stripe-webhook.service";
-import { logger } from "../services/logger.service";
+import { logger } from "../_core/logger";
 
 /**
  * Webhooks Router
