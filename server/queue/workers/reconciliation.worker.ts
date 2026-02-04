@@ -110,7 +110,9 @@ if (reconciliationWorker) {
 
 export async function closeReconciliationWorker(): Promise<void> {
   if (!reconciliationWorker) {
-    console.log("[ReconciliationWorker] Worker not initialized, skipping close");
+    console.log(
+      "[ReconciliationWorker] Worker not initialized, skipping close"
+    );
     return;
   }
   console.log("[ReconciliationWorker] Closing worker...");
