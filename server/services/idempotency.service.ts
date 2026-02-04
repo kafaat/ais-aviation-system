@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import * as db from "../db";
+import { getDb } from "../db";
 import {
   idempotencyRequests,
   type InsertIdempotencyRequest,
@@ -58,7 +58,12 @@ export async function checkIdempotency(
   }
 
   // Find existing request
-  const existing = await db.db
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  const existing = await database
     .select()
     .from(idempotencyRequests)
     .where(and(...conditions))
@@ -108,6 +113,11 @@ export async function createIdempotencyRecord(
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
 
   try {
+    const database = await getDb();
+    if (!database) {
+      throw new Error("Database connection not available");
+    }
+    
     const record: InsertIdempotencyRequest = {
       scope,
       idempotencyKey,
@@ -117,7 +127,7 @@ export async function createIdempotencyRecord(
       expiresAt,
     };
 
-    await db.db.insert(idempotencyRequests).values(record);
+    await database.insert(idempotencyRequests).values(record);
 
     logger.info("Idempotency record created", {
       scope,
@@ -164,7 +174,12 @@ export async function completeIdempotencyRecord(
     conditions.push(eq(idempotencyRequests.userId, userId));
   }
 
-  await db.db
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  await database
     .update(idempotencyRequests)
     .set({
       status: "COMPLETED",
@@ -198,7 +213,12 @@ export async function failIdempotencyRecord(
     conditions.push(eq(idempotencyRequests.userId, userId));
   }
 
-  await db.db
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  await database
     .update(idempotencyRequests)
     .set({
       status: "FAILED",
@@ -326,7 +346,12 @@ export async function withIdempotency<T>(
 export async function cleanupExpiredIdempotencyRecords(): Promise<void> {
   const now = new Date();
 
-  const result = await db.db
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  const result = await database
     .delete(idempotencyRequests)
     .where(lt(idempotencyRequests.expiresAt, now));
 
