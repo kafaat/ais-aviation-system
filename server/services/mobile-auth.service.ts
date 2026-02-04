@@ -211,15 +211,7 @@ export async function refreshAccessToken(
   }
 
   // Update last used timestamp
-  const database2 = await getDb();
-  if (!database2) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database connection not available",
-    });
-  }
-  
-  await database2
+  await database
     .update(refreshTokens)
     .set({ lastUsedAt: new Date() })
     .where(eq(refreshTokens.token, refreshTokenString));
