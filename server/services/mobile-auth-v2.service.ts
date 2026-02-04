@@ -13,11 +13,12 @@
  */
 
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { getDb } from "../db";
 import { refreshTokens, users } from "../../drizzle/schema";
-import { eq, and, lt, isNull } from "drizzle-orm";
+import { eq, and, lt, isNull, gt, desc } from "drizzle-orm";
 import { AppError, ErrorCode } from "../_core/errors";
+import * as schema from "../../drizzle/schema";
 
 // ============================================================================
 // CONFIGURATION - Fail Fast
@@ -25,7 +26,7 @@ import { AppError, ErrorCode } from "../_core/errors";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const REFRESH_TOKEN_PEPPER = process.env.REFRESH_TOKEN_PEPPER || "";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
+const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || "15m") as string | number;
 const REFRESH_TOKEN_EXPIRES_DAYS = parseInt(
   process.env.REFRESH_TOKEN_EXPIRES_DAYS || "30"
 );
@@ -124,9 +125,11 @@ export const mobileAuthServiceV2 = {
       role: user.role,
     };
 
-    return jwt.sign(payload, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-    });
+    const options: SignOptions = {
+      expiresIn: JWT_EXPIRES_IN as any,
+    };
+
+    return jwt.sign(payload, JWT_SECRET || "", options);
   },
 
   /**
@@ -182,11 +185,12 @@ export const mobileAuthServiceV2 = {
     // Store hash in database (never store plain token!)
     await db.insert(refreshTokens).values({
       userId,
-      tokenHash,
+      token: tokenHash,
       expiresAt,
-      userAgent: deviceInfo?.userAgent || null,
+      deviceInfo: deviceInfo
+        ? JSON.stringify(deviceInfo)
+        : null,
       ipAddress: deviceInfo?.ipAddress || null,
-      deviceId: deviceInfo?.deviceId || null,
       createdAt: new Date(),
     });
 
@@ -215,7 +219,7 @@ export const mobileAuthServiceV2 = {
     const record = await db.query.refreshTokens.findFirst({
       where: (t, { and, eq, gt, isNull }) =>
         and(
-          eq(t.tokenHash, tokenHash),
+          eq(t.token, tokenHash),
           gt(t.expiresAt, new Date()),
           isNull(t.revokedAt)
         ),
@@ -370,7 +374,7 @@ export const mobileAuthServiceV2 = {
       .set({
         revokedAt: new Date(),
       })
-      .where(eq(refreshTokens.tokenHash, tokenHash));
+      .where(eq(refreshTokens.token, tokenHash));
 
     console.log(`[Auth] Logged out (revoked refresh token)`);
   },
@@ -447,13 +451,12 @@ export const mobileAuthServiceV2 = {
         ),
       columns: {
         id: true,
-        userAgent: true,
+        deviceInfo: true,
         ipAddress: true,
-        deviceId: true,
         createdAt: true,
         expiresAt: true,
       },
-      orderBy: (t, { desc }) => desc(t.createdAt),
+      orderBy: (t, { desc }) => [desc(t.createdAt)],
     });
 
     return sessions;

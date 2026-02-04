@@ -355,7 +355,8 @@ export async function cleanupExpiredIdempotencyRecords(): Promise<void> {
     .delete(idempotencyRequests)
     .where(lt(idempotencyRequests.expiresAt, now));
 
+  const affectedRows = (result as any)[0]?.affectedRows || 0;
   logger.info({
-    deletedCount: result.rowsAffected,
+    deletedCount: affectedRows,
   }, "Cleaned up expired idempotency records");
 }

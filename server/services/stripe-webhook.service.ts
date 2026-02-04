@@ -437,14 +437,14 @@ async function handleCheckoutSessionExpired(
   if (booking.status === "pending") {
     await db
       .update(bookings)
-      .set({ status: "expired", updatedAt: new Date() })
+      .set({ status: "cancelled", updatedAt: new Date() })
       .where(eq(bookings.id, booking.id));
 
     await recordStatusChange({
       bookingId: booking.id,
       bookingReference: booking.bookingReference,
       previousStatus: "pending",
-      newStatus: "expired",
+      newStatus: "cancelled",
       transitionReason: "Checkout session expired",
       actorType: "system",
     });

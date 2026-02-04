@@ -1,13 +1,14 @@
-import jwt from "jsonwebtoken";
+import jwt, { SignOptions } from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { refreshTokens, type InsertRefreshToken } from "../../drizzle/schema";
+import { refreshTokens, users, type InsertRefreshToken } from "../../drizzle/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { logger } from "../_core/logger";
+import * as schema from "../../drizzle/schema";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
-const ACCESS_TOKEN_EXPIRY = "15m"; // 15 minutes
-const REFRESH_TOKEN_EXPIRY = "7d"; // 7 days
+const ACCESS_TOKEN_EXPIRY = "15m" as string | number; // 15 minutes
+const REFRESH_TOKEN_EXPIRY = "7d" as string | number; // 7 days
 
 export interface TokenPayload {
   userId: number;
@@ -36,7 +37,7 @@ function generateToken(
   email: string,
   role: string,
   type: "access" | "refresh",
-  expiresIn: string
+  expiresIn: string | number
 ): string {
   const payload: TokenPayload = {
     userId,
@@ -45,11 +46,13 @@ function generateToken(
     type,
   };
 
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn,
+  const options: SignOptions = {
+    expiresIn: expiresIn as any,
     issuer: "ais-aviation",
     audience: "ais-mobile",
-  });
+  };
+
+  return jwt.sign(payload, JWT_SECRET, options);
 }
 
 /**
@@ -291,10 +294,11 @@ export async function cleanupExpiredTokens(): Promise<void> {
   
   const result = await database
     .delete(refreshTokens)
-    .where(gt(new Date(), refreshTokens.expiresAt));
+    .where(gt(refreshTokens.expiresAt, new Date()));
 
+  const affectedRows = (result as any)[0]?.affectedRows || 0;
   logger.info({
-    deletedCount: result.rowsAffected,
+    deletedCount: affectedRows,
   }, "Expired refresh tokens cleaned up");
 }
 

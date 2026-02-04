@@ -31,7 +31,8 @@ import {
   or,
   isNull,
 } from "drizzle-orm";
-import { CacheService } from "../cache.service";
+import { cacheService } from "../cache.service";
+import * as schema from "../../../drizzle/schema";
 
 // Cache TTL for pricing rules (5 minutes)
 const RULES_CACHE_TTL = 5 * 60;
@@ -599,7 +600,7 @@ async function getApplicablePricingRules(
   destinationId: number
 ): Promise<any[]> {
   const cacheKey = `pricing_rules:${airlineId}:${originId}:${destinationId}`;
-  const cached = await CacheService.get<any[]>(cacheKey);
+  const cached = await cacheService.get<any[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -638,7 +639,7 @@ async function getApplicablePricingRules(
         orderBy: [desc(pricingRules.priority)],
       })) || [];
 
-    await CacheService.set(cacheKey, rules, RULES_CACHE_TTL);
+    await cacheService.set(cacheKey, rules, RULES_CACHE_TTL);
     return rules;
   } catch (error) {
     console.log(

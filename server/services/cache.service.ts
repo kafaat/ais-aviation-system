@@ -11,7 +11,7 @@
  * @date 2026-01-26
  */
 
-import { createClient, RedisClientType } from "redis";
+import Redis from "ioredis";
 import crypto from "crypto";
 import { logger } from "../_core/logger";
 
@@ -22,7 +22,7 @@ const CACHE_PREFIX = process.env.CACHE_PREFIX || "ais";
  * Provides caching for search results and other frequently accessed data
  */
 class CacheService {
-  private client: RedisClientType | null = null;
+  private client: Redis | null = null;
   private connected: boolean = false;
 
   /**
@@ -34,36 +34,35 @@ class CacheService {
     }
 
     try {
-      this.client = createClient({
-        url: process.env.REDIS_URL || "redis://localhost:6379",
-        socket: {
-          reconnectStrategy: retries => {
-            if (retries > 10) {
-              logger.error({}, "Redis reconnection failed after 10 retries");
-              return new Error("Redis reconnection limit exceeded");
-            }
-            return Math.min(retries * 100, 3000);
-          },
+      this.client = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+        maxRetriesPerRequest: 10,
+        retryStrategy: (retries: number) => {
+          if (retries > 10) {
+            logger.error({}, "Redis reconnection failed after 10 retries");
+            return null;
+          }
+          return Math.min(retries * 100, 3000);
         },
       });
 
-      this.client.on("error", err => {
+      this.client.on("error", (err: Error) => {
         logger.error({ error: err }, "Redis client error");
       });
 
       this.client.on("connect", () => {
         logger.info({}, "Redis client connected");
+        this.connected = true;
       });
 
-      this.client.on("disconnect", () => {
+      this.client.on("ready", () => {
+        logger.info({}, "Redis cache service initialized");
+        this.connected = true;
+      });
+
+      this.client.on("close", () => {
         logger.warn({}, "Redis client disconnected");
         this.connected = false;
       });
-
-      await this.client.connect();
-      this.connected = true;
-
-      logger.info({}, "Redis cache service initialized");
     } catch (error) {
       logger.error({ error }, "Failed to connect to Redis");
       // Don't throw - allow app to run without cache
@@ -175,7 +174,7 @@ class CacheService {
 
     try {
       const serialized = JSON.stringify(value);
-      await this.client!.setEx(key, ttlSeconds, serialized);
+      await this.client!.setex(key, ttlSeconds, serialized);
       logger.debug({ key, ttl: ttlSeconds }, "Cache set");
     } catch (error) {
       logger.error({ key, error }, "Cache set error");
@@ -208,23 +207,26 @@ class CacheService {
     }
 
     try {
-      let cursor = 0;
+      let cursor = "0";
       let deletedCount = 0;
 
       do {
-        const result = await this.client!.scan(cursor, {
-          MATCH: pattern,
-          COUNT: 100,
-        });
+        const result = await this.client!.scan(
+          cursor,
+          "MATCH",
+          pattern,
+          "COUNT",
+          "100"
+        );
 
-        cursor = result.cursor;
-        const keys = result.keys;
+        cursor = result[0];
+        const keys = result[1];
 
         if (keys.length > 0) {
-          await this.client!.del(keys);
+          await this.client!.del(...keys);
           deletedCount += keys.length;
         }
-      } while (cursor !== 0);
+      } while (cursor !== "0");
 
       logger.debug({ pattern, count: deletedCount }, "Cache delete pattern");
     } catch (error) {
@@ -263,7 +265,7 @@ class CacheService {
 
       // Also add to route tag set (for backward compatibility)
       const tagKey = `${CACHE_PREFIX}:search:routes:${params.from}:${params.to}`;
-      await this.client!.sAdd(tagKey, key);
+      await this.client!.sadd(tagKey, key);
       await this.client!.expire(tagKey, ttlSeconds + 60);
     } catch (error) {
       logger.error({ params, error }, "Failed to cache flight search");
@@ -316,11 +318,11 @@ class CacheService {
 
     try {
       // Get all cache keys for this route
-      const cacheKeys = await this.client!.sMembers(tagKey);
+      const cacheKeys = await this.client!.smembers(tagKey);
 
       if (cacheKeys.length > 0) {
         // Delete all cache keys
-        await this.client!.del(cacheKeys);
+        await this.client!.del(...cacheKeys);
         // Delete the tag set
         await this.client!.del(tagKey);
 

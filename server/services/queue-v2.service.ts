@@ -16,7 +16,8 @@
 import { Queue, Worker, Job, QueueEvents } from "bullmq";
 import { getDb } from "../db";
 import { stripeEvents, bookings, users } from "../../drizzle/schema";
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, gt, desc } from "drizzle-orm";
+import * as schema from "../../drizzle/schema";
 
 // ============================================================================
 // CONFIGURATION
@@ -277,20 +278,20 @@ export function startEmailWorker(): Worker {
 
       try {
         // Import email service dynamically to avoid circular dependencies
-        const { sendBookingConfirmation, sendBookingCancellation } =
-          await import("./email.service");
+        const { sendBookingConfirmation } = await import("./email.service");
 
         switch (type) {
           case "booking-confirmation":
-            if (bookingId) {
-              await sendBookingConfirmation({ userId, bookingId, email });
+            if (bookingId && data) {
+              await sendBookingConfirmation(data as any);
             }
             break;
 
           case "booking-cancelled":
-            if (bookingId) {
-              await sendBookingCancellation({ userId, bookingId, email });
-            }
+            // TODO: Implement sendBookingCancellation if needed
+            console.log(
+              `[Worker] Booking cancellation email not implemented yet for booking ${bookingId}`
+            );
             break;
 
           default:
@@ -523,17 +524,17 @@ async function cleanupExpiredBookings(): Promise<void> {
   const result = await db
     .update(bookings)
     .set({
-      status: "expired",
+      status: "cancelled",
       updatedAt: new Date(),
     })
     .where(
       and(
-        eq(bookings.status, "pending_payment"),
+        eq(bookings.status, "pending"),
         lt(bookings.createdAt, thirtyMinutesAgo)
       )
     );
 
-  const expiredCount = (result as any).rowsAffected || 0;
+  const expiredCount = (result as any)[0]?.affectedRows || 0;
   console.log(`[Cleanup] Expired ${expiredCount} pending bookings`);
 }
 
