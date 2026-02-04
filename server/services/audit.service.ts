@@ -90,32 +90,29 @@ export async function createAuditLog(data: AuditLogData): Promise<void> {
 
     const database = await getDb();
     if (!database) {
-      logger.error("Database not available for audit log");
+      logger.error({}, "Database not available for audit log");
       return;
     }
     
     await database.insert(auditLogs).values(auditLogEntry);
 
     // Also log to structured logger for immediate monitoring
-    logger.info(
-      {
-        eventId,
-        eventType: data.eventType,
-        eventCategory: data.eventCategory,
-        outcome: data.outcome,
-        severity: data.severity || "low",
-        userId: data.userId,
-        resourceType: data.resourceType,
-        resourceId: data.resourceId,
-      },
-      `Audit: ${data.eventType}`
-    );
+    logger.info({
+      eventId,
+      eventType: data.eventType,
+      eventCategory: data.eventCategory,
+      outcome: data.outcome,
+      severity: data.severity || "low",
+      userId: data.userId,
+      resourceType: data.resourceType,
+      resourceId: data.resourceId,
+    }, `Audit: ${data.eventType}`);
   } catch (error) {
     // Critical: audit logging should never fail silently
-    logger.error(
-      { error, eventType: data.eventType },
-      "Failed to create audit log"
-    );
+    logger.error({
+      error,
+      eventType: data.eventType,
+    }, "Failed to create audit log");
     // Don't throw - we don't want to break the main operation if audit logging fails
   }
 }

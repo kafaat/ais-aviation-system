@@ -77,7 +77,7 @@ export function configureSecurityHeaders(app: Express): void {
     })
   );
 
-  logger.info("Security headers configured with Helmet");
+  logger.info({}, "Security headers configured with Helmet");
 }
 
 /**
@@ -98,7 +98,7 @@ export function configureCsrfProtection(app: Express): void {
     res.json({ csrfToken });
   });
 
-  logger.info("CSRF protection configured");
+  logger.info({}, "CSRF protection configured");
 }
 
 /**
@@ -136,7 +136,7 @@ export function configureCORS(app: Express): void {
     next();
   });
 
-  logger.info("CORS configured with allowed origins:", allowedOrigins);
+  logger.info({ allowedOrigins }, "CORS configured with allowed origins:");
 }
 
 /**
@@ -266,7 +266,7 @@ export function validateSecurityConfiguration(): void {
       throw new Error(`Security configuration errors: ${issues.join(", ")}`);
     }
   } else {
-    logger.info("Security configuration validated successfully");
+    logger.info({}, "Security configuration validated successfully");
   }
 }
 

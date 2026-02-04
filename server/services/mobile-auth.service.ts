@@ -140,10 +140,10 @@ export async function mobileLogin(
   
   await database.insert(refreshTokens).values(refreshTokenData);
 
-  logger.info("Mobile login successful", {
+  logger.info({
     userId: user.id,
     email: user.email,
-  });
+  }, "Mobile login successful");
 
   return {
     accessToken,
@@ -225,9 +225,9 @@ export async function refreshAccessToken(
     ACCESS_TOKEN_EXPIRY
   );
 
-  logger.info("Access token refreshed", {
+  logger.info({
     userId: payload.userId,
-  });
+  }, "Access token refreshed");
 
   return {
     accessToken,
@@ -254,7 +254,7 @@ export async function revokeRefreshToken(
     .set({ revokedAt: new Date() })
     .where(eq(refreshTokens.token, refreshTokenString));
 
-  logger.info("Refresh token revoked");
+  logger.info({}, "Refresh token revoked");
 }
 
 /**
@@ -274,7 +274,7 @@ export async function revokeAllUserTokens(userId: number): Promise<void> {
     .set({ revokedAt: new Date() })
     .where(eq(refreshTokens.userId, userId));
 
-  logger.info("All refresh tokens revoked for user", { userId });
+  logger.info({ userId }, "All refresh tokens revoked for user");
 }
 
 /**
@@ -293,9 +293,9 @@ export async function cleanupExpiredTokens(): Promise<void> {
     .delete(refreshTokens)
     .where(gt(new Date(), refreshTokens.expiresAt));
 
-  logger.info("Expired refresh tokens cleaned up", {
+  logger.info({
     deletedCount: result.rowsAffected,
-  });
+  }, "Expired refresh tokens cleaned up");
 }
 
 /**
