@@ -1,4 +1,5 @@
 # المساهمة في نظام الطيران المتكامل (AIS)
+
 # Contributing to AIS Aviation System
 
 [العربية](#العربية) | [English](#english)
@@ -59,6 +60,7 @@ gh repo edit kafaat/ais-aviation-system --visibility public
    - ملفات `.env` (يجب أن تكون في `.gitignore`)
 
 2. **مراجعة سجل الالتزامات (Git History):**
+
    ```bash
    # فحص السجل للبحث عن معلومات حساسة
    git log --all --full-history -- "*.env"
@@ -66,6 +68,7 @@ gh repo edit kafaat/ais-aviation-system --visibility public
    ```
 
 3. **التأكد من وجود ملف `.gitignore` صحيح:**
+
    ```bash
    # تحقق من أن الملفات الحساسة مستثناة
    cat .gitignore
@@ -126,17 +129,20 @@ pnpm test:e2e
 #### 4. إنشاء Pull Request
 
 1. أنشئ فرع جديد للميزة أو الإصلاح:
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
 2. قم بالتعديلات والالتزامات:
+
    ```bash
    git add .
    git commit -m "وصف واضح للتغييرات"
    ```
 
 3. ادفع التغييرات:
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -154,6 +160,7 @@ pnpm test:e2e
 ### الدعم
 
 للحصول على المساعدة:
+
 - افتح [issue على GitHub](https://github.com/kafaat/ais-aviation-system/issues)
 - راجع [دليل المطور](docs/DEVELOPER_GUIDE.md)
 - راجع [دليل استكشاف الأخطاء](docs/TROUBLESHOOTING.md)
@@ -214,6 +221,7 @@ Before making the repository public, ensure you:
    - `.env` files (should be in `.gitignore`)
 
 2. **Review Git History:**
+
    ```bash
    # Check history for sensitive information
    git log --all --full-history -- "*.env"
@@ -221,6 +229,7 @@ Before making the repository public, ensure you:
    ```
 
 3. **Ensure proper `.gitignore`:**
+
    ```bash
    # Verify sensitive files are excluded
    cat .gitignore
@@ -281,17 +290,20 @@ pnpm test:e2e
 #### 4. Create a Pull Request
 
 1. Create a new branch for your feature or fix:
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
 2. Make changes and commit:
+
    ```bash
    git add .
    git commit -m "Clear description of changes"
    ```
 
 3. Push changes:
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -309,6 +321,7 @@ pnpm test:e2e
 ### Support
 
 For help:
+
 - Open an [issue on GitHub](https://github.com/kafaat/ais-aviation-system/issues)
 - Review the [Developer Guide](docs/DEVELOPER_GUIDE.md)
 - Review the [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
