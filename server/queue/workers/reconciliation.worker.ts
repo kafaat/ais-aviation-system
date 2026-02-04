@@ -31,69 +31,88 @@ interface ReconciliationJobData {
 // Worker Definition
 // ============================================================================
 
-export const reconciliationWorker = new Worker<ReconciliationJobData>(
-  WORKER_CONFIG.name,
-  async (job: Job<ReconciliationJobData>) => {
-    console.log(`[ReconciliationWorker] Processing job ${job.id}...`);
+const redisConnection = getRedisConnection();
 
-    const { limit = 200, triggeredBy = "scheduler" } = job.data;
+if (!redisConnection) {
+  console.warn(
+    "[ReconciliationWorker] Redis connection not available, worker disabled"
+  );
+}
 
-    try {
-      // Update progress
-      await job.updateProgress(10);
+export const reconciliationWorker = redisConnection
+  ? new Worker<ReconciliationJobData>(
+      WORKER_CONFIG.name,
+      async (job: Job<ReconciliationJobData>) => {
+        console.log(`[ReconciliationWorker] Processing job ${job.id}...`);
 
-      // Run reconciliation
-      const result = await reconciliationJob({ limit });
+        const { limit = 200, triggeredBy = "scheduler" } = job.data;
 
-      // Update progress
-      await job.updateProgress(100);
+        try {
+          // Update progress
+          await job.updateProgress(10);
 
-      // Log summary
-      console.log(`[ReconciliationWorker] Job ${job.id} completed:`, {
-        triggeredBy,
-        scanned: result.scanned,
-        fixed: result.fixed,
-        errors: result.errors,
-        durationMs: result.durationMs,
-      });
+          // Run reconciliation
+          const result = await reconciliationJob({ limit });
 
-      return result;
-    } catch (error) {
-      console.error(`[ReconciliationWorker] Job ${job.id} failed:`, error);
-      throw error;
-    }
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: WORKER_CONFIG.concurrency,
-    limiter: {
-      max: 1,
-      duration: 60000, // Max 1 job per minute
-    },
-  }
-);
+          // Update progress
+          await job.updateProgress(100);
+
+          // Log summary
+          console.log(`[ReconciliationWorker] Job ${job.id} completed:`, {
+            triggeredBy,
+            scanned: result.scanned,
+            fixed: result.fixed,
+            errors: result.errors,
+            durationMs: result.durationMs,
+          });
+
+          return result;
+        } catch (error) {
+          console.error(`[ReconciliationWorker] Job ${job.id} failed:`, error);
+          throw error;
+        }
+      },
+      {
+        connection: redisConnection,
+        concurrency: WORKER_CONFIG.concurrency,
+        limiter: {
+          max: 1,
+          duration: 60000, // Max 1 job per minute
+        },
+      }
+    )
+  : (null as any); // Fallback when Redis is not available
 
 // ============================================================================
 // Event Handlers
 // ============================================================================
 
-reconciliationWorker.on("completed", (job, result) => {
-  console.log(`[ReconciliationWorker] Job ${job.id} completed successfully`);
-});
+if (reconciliationWorker) {
+  reconciliationWorker.on("completed", (job, result) => {
+    console.log(`[ReconciliationWorker] Job ${job.id} completed successfully`);
+  });
 
-reconciliationWorker.on("failed", (job, error) => {
-  console.error(`[ReconciliationWorker] Job ${job?.id} failed:`, error.message);
-});
+  reconciliationWorker.on("failed", (job, error) => {
+    console.error(
+      `[ReconciliationWorker] Job ${job?.id} failed:`,
+      error.message
+    );
+  });
 
-reconciliationWorker.on("error", error => {
-  console.error("[ReconciliationWorker] Worker error:", error);
-});
+  reconciliationWorker.on("error", error => {
+    console.error("[ReconciliationWorker] Worker error:", error);
+  });
+}
 
 // ============================================================================
 // Graceful Shutdown
 // ============================================================================
 
 export async function closeReconciliationWorker(): Promise<void> {
+  if (!reconciliationWorker) {
+    console.log("[ReconciliationWorker] Worker not initialized, skipping close");
+    return;
+  }
   console.log("[ReconciliationWorker] Closing worker...");
   await reconciliationWorker.close();
   console.log("[ReconciliationWorker] Worker closed");
@@ -111,6 +130,10 @@ export async function triggerReconciliation(options?: {
   triggeredBy?: string;
 }): Promise<string> {
   const { reconciliationQueue } = await import("../queues");
+
+  if (!reconciliationQueue) {
+    throw new Error("Reconciliation queue not available (Redis not connected)");
+  }
 
   const job = await reconciliationQueue.add(
     "manual-reconciliation",

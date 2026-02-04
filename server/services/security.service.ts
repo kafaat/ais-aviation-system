@@ -1,7 +1,7 @@
 import helmet from "helmet";
 import { doubleCsrf } from "csrf-csrf";
 import type { Express, Request, Response, NextFunction } from "express";
-import { logger } from "../services/logger.service";
+import { logger } from "../_core/logger";
 
 // CSRF Protection configuration
 const { invalidCsrfTokenError, generateToken, doubleCsrfProtection } =
@@ -17,7 +17,7 @@ const { invalidCsrfTokenError, generateToken, doubleCsrfProtection } =
     },
     size: 64,
     ignoredMethods: ["GET", "HEAD", "OPTIONS"],
-    getTokenFromRequest: req => {
+    getCsrfTokenFromRequest: req => {
       return req.headers["x-csrf-token"] as string;
     },
   });

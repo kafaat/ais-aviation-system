@@ -3,7 +3,7 @@ import {
   bookingStatusHistory,
   type InsertBookingStatusHistory,
 } from "../../drizzle/schema";
-import { logger } from "./logger.service";
+import { logger } from "../_core/logger";
 
 // Define all possible booking states
 export type BookingStatus =

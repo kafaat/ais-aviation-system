@@ -21,7 +21,7 @@ export const reviewsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return await reviewsService.createReview({
-        userId: ctx.userId,
+        userId: ctx.user.id,
         ...input,
       });
     }),
@@ -75,10 +75,11 @@ export const reviewsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const { reviewId, ...updateData } = input;
       return await reviewsService.updateReview({
-        reviewId: input.reviewId,
-        userId: ctx.userId,
-        ...input,
+        reviewId,
+        userId: ctx.user.id,
+        ...updateData,
       });
     }),
 
@@ -92,7 +93,7 @@ export const reviewsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return await reviewsService.deleteReview(input.reviewId, ctx.userId);
+      return await reviewsService.deleteReview(input.reviewId, ctx.user.id);
     }),
 
   /**
@@ -106,7 +107,7 @@ export const reviewsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return await reviewsService.getUserReviews(ctx.userId, {
+      return await reviewsService.getUserReviews(ctx.user.id, {
         limit: input.limit,
         offset: input.offset,
       });

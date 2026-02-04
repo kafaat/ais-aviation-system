@@ -60,8 +60,8 @@ export function getWorkersStatus(): Record<
       paused: reconciliationWorker.isPaused(),
     },
     email: {
-      running: emailWorker.isRunning(),
-      paused: emailWorker.isPaused(),
+      running: emailWorker.instance.isRunning(),
+      paused: emailWorker.instance.isPaused(),
     },
   };
 }

@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import { db } from "../db";
 import { auditLogs, type InsertAuditLog } from "../../drizzle/schema";
-import { logger } from "./logger.service";
+import { logger } from "../_core/logger";
 
 export type AuditEventType =
   | "LOGIN_SUCCESS"
