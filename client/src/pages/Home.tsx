@@ -29,9 +29,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-import { APP_LOGO } from "@/const";
+import { APP_LOGO, getLoginUrl } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 
 const fadeIn = {
   initial: { opacity: 0, y: 20 },
