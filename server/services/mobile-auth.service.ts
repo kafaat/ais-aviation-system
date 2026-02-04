@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import { refreshTokens, type InsertRefreshToken } from "../../drizzle/schema";
 import { eq, and, gt } from "drizzle-orm";
-import { logger } from "./logger.service";
+import { logger } from "../_core/logger";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 const ACCESS_TOKEN_EXPIRY = "15m"; // 15 minutes

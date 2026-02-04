@@ -13,7 +13,7 @@
 
 import { createClient, RedisClientType } from "redis";
 import crypto from "crypto";
-import { logger } from "./logger.service";
+import { logger } from "../_core/logger";
 
 const CACHE_PREFIX = process.env.CACHE_PREFIX || "ais";
 

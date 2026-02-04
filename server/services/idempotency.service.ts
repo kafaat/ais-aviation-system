@@ -5,7 +5,7 @@ import {
   type InsertIdempotencyRequest,
 } from "../../drizzle/schema";
 import { eq, and, lt } from "drizzle-orm";
-import { logger } from "./logger.service";
+import { logger } from "../_core/logger";
 import { Errors } from "../_core/errors";
 
 /**

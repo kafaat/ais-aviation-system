@@ -13,7 +13,7 @@
  */
 
 import { Queue, Worker, Job, QueueEvents, QueueScheduler } from "bullmq";
-import { logger } from "./logger.service";
+import { logger } from "../_core/logger";
 import { getDb } from "../db";
 import {
   stripeEvents,
