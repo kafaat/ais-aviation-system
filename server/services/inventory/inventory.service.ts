@@ -11,7 +11,7 @@
  * @module services/inventory/inventory.service
  */
 
-import { db } from "../../db";
+import { getDb } from "../../db";
 import {
   flights,
   bookings,
@@ -123,7 +123,12 @@ export async function getInventoryStatus(
   cabinClass: "economy" | "business"
 ): Promise<InventoryStatus> {
   // Get flight details
-  const flight = await db.query.flights.findFirst({
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
 
@@ -480,7 +485,12 @@ async function getOverbookingConfig(
 export async function calculateRecommendedOverbooking(
   flightId: number
 ): Promise<{ economy: number; business: number }> {
-  const flight = await db.query.flights.findFirst({
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
 
@@ -557,7 +567,12 @@ export async function forecastDemand(
   flightId: number,
   daysAhead: number = 30
 ): Promise<InventoryForecast[]> {
-  const flight = await db.query.flights.findFirst({
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+  
+  const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
 
