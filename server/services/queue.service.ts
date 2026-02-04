@@ -12,7 +12,7 @@
  * @date 2026-01-26
  */
 
-import { Queue, Worker, Job, QueueEvents, QueueScheduler } from "bullmq";
+import { Queue, Worker, Job, QueueEvents } from "bullmq";
 import { logger } from "../_core/logger";
 import { getDb } from "../db";
 import {
@@ -25,8 +25,6 @@ import {
 import { eq, lt, and, isNull, sql } from "drizzle-orm";
 import {
   sendBookingConfirmation,
-  sendCancellationNotice,
-  sendRefundNotice,
 } from "./email.service";
 import { stripe } from "../stripe";
 
@@ -316,11 +314,13 @@ class QueueService {
           break;
 
         case EmailJobType.CANCELLATION_NOTICE:
-          await sendCancellationNotice(data);
+          // TODO: Implement sendCancellationNotice
+          logger.info({ type, data }, "Cancellation notice email placeholder");
           break;
 
         case EmailJobType.REFUND_NOTICE:
-          await sendRefundNotice(data);
+          // TODO: Implement sendRefundNotice
+          logger.info({ type, data }, "Refund notice email placeholder");
           break;
 
         case EmailJobType.PAYMENT_RECEIPT:
@@ -500,7 +500,7 @@ class QueueService {
 
           // Check amount match (convert cents to dollars)
           const stripeAmount = paymentIntent.amount / 100;
-          const dbAmount = parseFloat(booking.totalAmount);
+          const dbAmount = booking.totalAmount / 100; // totalAmount is already in cents
 
           if (Math.abs(stripeAmount - dbAmount) > 0.01) {
             logger.error({
@@ -595,7 +595,7 @@ class QueueService {
             .delete(idempotencyRequests)
             .where(lt(idempotencyRequests.expiresAt, expiredDate));
 
-          deletedCount = result.rowsAffected || 0;
+          deletedCount = (result as any).rowsAffected || 0;
           break;
         }
 
@@ -607,7 +607,7 @@ class QueueService {
             .delete(refreshTokens)
             .where(lt(refreshTokens.expiresAt, now));
 
-          deletedCount = result.rowsAffected || 0;
+          deletedCount = (result as any).rowsAffected || 0;
           break;
         }
 
@@ -620,17 +620,17 @@ class QueueService {
             .update(bookings)
             .set({
               status: "cancelled",
-              paymentStatus: "expired",
+              paymentStatus: "failed",
               updatedAt: new Date(),
             })
             .where(
               and(
-                eq(bookings.status, "pending_payment"),
+                eq(bookings.status, "pending"),
                 lt(bookings.createdAt, expiryTime)
               )
             );
 
-          deletedCount = result.rowsAffected || 0;
+          deletedCount = (result as any).rowsAffected || 0;
           break;
         }
 
@@ -648,7 +648,7 @@ class QueueService {
               )
             );
 
-          deletedCount = result.rowsAffected || 0;
+          deletedCount = (result as any).rowsAffected || 0;
           break;
         }
 

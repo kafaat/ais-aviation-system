@@ -118,14 +118,19 @@ export async function withIdempotency<T>(
     }
 
     // Fetch existing record
-    const existing = await db.query.idempotencyRequests.findFirst({
-      where: (t, { and, eq }) =>
+    const existingResults = await db
+      .select()
+      .from(idempotencyRequests)
+      .where(
         and(
-          eq(t.scope, opts.scope),
-          eq(t.idempotencyKey, opts.key),
-          opts.userId !== null ? eq(t.userId, opts.userId) : isNull(t.userId)
-        ),
-    });
+          eq(idempotencyRequests.scope, opts.scope),
+          eq(idempotencyRequests.idempotencyKey, opts.key),
+          opts.userId !== null ? eq(idempotencyRequests.userId, opts.userId) : isNull(idempotencyRequests.userId)
+        )
+      )
+      .limit(1);
+    
+    const existing = existingResults[0];
 
     if (!existing) {
       // Race condition - record was deleted between insert and select
@@ -300,14 +305,19 @@ export async function getIdempotencyRecord(
     return null;
   }
 
-  return db.query.idempotencyRequests.findFirst({
-    where: (t, { and, eq }) =>
+  const results = await db
+    .select()
+    .from(idempotencyRequests)
+    .where(
       and(
-        eq(t.scope, scope),
-        eq(t.idempotencyKey, key),
-        userId !== null ? eq(t.userId, userId) : isNull(t.userId)
-      ),
-  });
+        eq(idempotencyRequests.scope, scope),
+        eq(idempotencyRequests.idempotencyKey, key),
+        userId !== null ? eq(idempotencyRequests.userId, userId) : isNull(idempotencyRequests.userId)
+      )
+    )
+    .limit(1);
+  
+  return results[0] || null;
 }
 
 export default {

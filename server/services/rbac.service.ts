@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import type { Context } from "../_core/trpc";
+import type { TrpcContext } from "../_core/context";
 
 // Define all available roles
 export type UserRole =
@@ -182,7 +182,7 @@ export function hasCapability(userRole: UserRole, capability: string): boolean {
  * Creates a middleware that checks if the user has one of the required roles
  */
 export function createRBACMiddleware(requiredRoles: UserRole[]) {
-  return async ({ ctx, next }: { ctx: Context; next: () => any }) => {
+  return async ({ ctx, next }: { ctx: TrpcContext; next: any }) => {
     // Ensure user is authenticated
     if (!ctx.user) {
       throw new TRPCError({

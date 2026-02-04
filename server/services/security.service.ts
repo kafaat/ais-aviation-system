@@ -4,10 +4,14 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { logger } from "../_core/logger";
 
 // CSRF Protection configuration
-const { invalidCsrfTokenError, generateToken, doubleCsrfProtection } =
+const { invalidCsrfTokenError, generateCsrfToken, doubleCsrfProtection } =
   doubleCsrf({
     getSecret: () =>
       process.env.CSRF_SECRET || "default-csrf-secret-change-in-production",
+    getSessionIdentifier: (req) => {
+      // Use authentication cookie or a fallback for unauthenticated requests
+      return req.cookies?.['manus-access-token'] || req.ip || 'anonymous';
+    },
     cookieName: "__Host-csrf",
     cookieOptions: {
       httpOnly: true,
@@ -94,7 +98,7 @@ export function configureCsrfProtection(app: Express): void {
 
   // CSRF token generation endpoint
   app.get("/api/csrf-token", (req, res) => {
-    const csrfToken = generateToken(req, res);
+    const csrfToken = generateCsrfToken(req, res);
     res.json({ csrfToken });
   });
 
@@ -270,4 +274,4 @@ export function validateSecurityConfiguration(): void {
   }
 }
 
-export { invalidCsrfTokenError, generateToken, doubleCsrfProtection };
+export { invalidCsrfTokenError, generateCsrfToken, doubleCsrfProtection };
