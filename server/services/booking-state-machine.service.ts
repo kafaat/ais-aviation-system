@@ -3,7 +3,6 @@ import {
   bookingStatusHistory,
   type InsertBookingStatusHistory,
 } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
 import { logger } from "../_core/logger";
 
 // Define all possible booking states
