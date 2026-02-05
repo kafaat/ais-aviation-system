@@ -130,7 +130,7 @@ export default function AIChatBooking({
       createdAt: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInputValue("");
     setIsLoading(true);
 
@@ -147,7 +147,7 @@ export default function AIChatBooking({
         createdAt: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages(prev => [...prev, assistantMessage]);
 
       if (response.suggestions) {
         setSuggestions(response.suggestions);
@@ -242,9 +242,13 @@ export default function AIChatBooking({
         <div className="flex items-center justify-between mb-2">
           <Badge variant="secondary">{suggestion.airline}</Badge>
           <Badge
-            variant={suggestion.cabinClass === "business" ? "default" : "outline"}
+            variant={
+              suggestion.cabinClass === "business" ? "default" : "outline"
+            }
           >
-            {suggestion.cabinClass === "business" ? t("cabin.business") : t("cabin.economy")}
+            {suggestion.cabinClass === "business"
+              ? t("cabin.business")
+              : t("cabin.economy")}
           </Badge>
         </div>
 
@@ -396,7 +400,7 @@ export default function AIChatBooking({
           <Input
             ref={inputRef}
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={e => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder={t("chat.placeholder")}
             disabled={isLoading}

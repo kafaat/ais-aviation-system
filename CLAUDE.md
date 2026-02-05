@@ -41,15 +41,15 @@ pnpm db:studio        # Open Drizzle Studio for database inspection
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|------------|
+| Layer        | Technology                                              |
+| ------------ | ------------------------------------------------------- |
 | **Frontend** | React 19, TypeScript, Tailwind CSS 4, shadcn/ui, Wouter |
-| **API** | tRPC 11 (type-safe RPC) |
-| **Backend** | Express 4 |
-| **Database** | MySQL/TiDB with Drizzle ORM |
-| **Payments** | Stripe |
-| **Testing** | Vitest, Playwright |
-| **Build** | Vite 7, esbuild |
+| **API**      | tRPC 11 (type-safe RPC)                                 |
+| **Backend**  | Express 4                                               |
+| **Database** | MySQL/TiDB with Drizzle ORM                             |
+| **Payments** | Stripe                                                  |
+| **Testing**  | Vitest, Playwright                                      |
+| **Build**    | Vite 7, esbuild                                         |
 
 ### Directory Structure
 
@@ -102,7 +102,12 @@ Routers are organized by business domain in `server/routers/`. Each router uses 
 ```typescript
 // server/routers/example.ts
 import { z } from "zod";
-import { publicProcedure, protectedProcedure, adminProcedure, router } from "../_core/trpc";
+import {
+  publicProcedure,
+  protectedProcedure,
+  adminProcedure,
+  router,
+} from "../_core/trpc";
 
 export const exampleRouter = router({
   // Public endpoint (no auth required)
@@ -160,17 +165,30 @@ export async function getSomething(id: number) {
 All tables are defined in `drizzle/schema.ts` using Drizzle ORM:
 
 ```typescript
-import { int, mysqlTable, varchar, timestamp, mysqlEnum, index } from "drizzle-orm/mysql-core";
+import {
+  int,
+  mysqlTable,
+  varchar,
+  timestamp,
+  mysqlEnum,
+  index,
+} from "drizzle-orm/mysql-core";
 
-export const examples = mysqlTable("examples", {
-  id: int("id").autoincrement().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  status: mysqlEnum("status", ["active", "inactive"]).default("active").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-}, (table) => ({
-  nameIdx: index("name_idx").on(table.name),
-}));
+export const examples = mysqlTable(
+  "examples",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    status: mysqlEnum("status", ["active", "inactive"])
+      .default("active")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    nameIdx: index("name_idx").on(table.name),
+  })
+);
 
 export type Example = typeof examples.$inferSelect;
 export type InsertExample = typeof examples.$inferInsert;
@@ -239,7 +257,9 @@ describe("Feature Name", () => {
 
   it("should do something specific", async () => {
     // Arrange
-    const input = { /* test data */ };
+    const input = {
+      /* test data */
+    };
 
     // Act
     const result = await someFunction(input);
@@ -263,15 +283,15 @@ pnpm test booking.test.ts           # Run specific test file
 
 ### Core Entities
 
-| Entity | Description |
-|--------|-------------|
-| `users` | User accounts with roles (user, admin, super_admin, etc.) |
-| `flights` | Flight schedules with pricing and availability |
-| `bookings` | Reservations linking users to flights |
-| `passengers` | Individual passenger details per booking |
-| `payments` | Payment transactions (Stripe integration) |
-| `loyaltyAccounts` | User loyalty/miles program |
-| `ancillaryServices` | Add-on services (baggage, meals, etc.) |
+| Entity              | Description                                               |
+| ------------------- | --------------------------------------------------------- |
+| `users`             | User accounts with roles (user, admin, super_admin, etc.) |
+| `flights`           | Flight schedules with pricing and availability            |
+| `bookings`          | Reservations linking users to flights                     |
+| `passengers`        | Individual passenger details per booking                  |
+| `payments`          | Payment transactions (Stripe integration)                 |
+| `loyaltyAccounts`   | User loyalty/miles program                                |
+| `ancillaryServices` | Add-on services (baggage, meals, etc.)                    |
 
 ### Booking Flow
 
@@ -291,17 +311,17 @@ pnpm test booking.test.ts           # Run specific test file
 
 All tRPC routes are under `/api/trpc/*`. Main routers:
 
-| Router | Purpose |
-|--------|---------|
-| `auth` | Authentication (me, logout) |
-| `flights` | Flight search and details |
-| `bookings` | Booking CRUD operations |
-| `payments` | Payment processing |
-| `refunds` | Refund handling |
-| `loyalty` | Loyalty program |
-| `admin` | Admin operations |
-| `analytics` | Reports and statistics |
-| `health` | Health check endpoints |
+| Router      | Purpose                     |
+| ----------- | --------------------------- |
+| `auth`      | Authentication (me, logout) |
+| `flights`   | Flight search and details   |
+| `bookings`  | Booking CRUD operations     |
+| `payments`  | Payment processing          |
+| `refunds`   | Refund handling             |
+| `loyalty`   | Loyalty program             |
+| `admin`     | Admin operations            |
+| `analytics` | Reports and statistics      |
+| `health`    | Health check endpoints      |
 
 ## Environment Variables
 
