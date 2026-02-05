@@ -744,7 +744,8 @@ function calculateRevenueMetrics(
   const revenueByHour: Record<string, number> = {};
   for (const event of paymentEvents) {
     const hour = event.timestamp.toISOString().slice(0, 13); // YYYY-MM-DDTHH
-    revenueByHour[hour] = (revenueByHour[hour] || 0) + (event.metadata?.amount || 0);
+    revenueByHour[hour] =
+      (revenueByHour[hour] || 0) + (event.metadata?.amount || 0);
   }
 
   return {
@@ -841,8 +842,11 @@ function getEventCounts(
     number
   >;
   for (const type of eventTypes) {
-    counts[type] = metricsStore.getEventsByType(type, startTime, endTime)
-      .length;
+    counts[type] = metricsStore.getEventsByType(
+      type,
+      startTime,
+      endTime
+    ).length;
   }
   return counts;
 }

@@ -27,7 +27,9 @@ export const paymentsRouter = router({
         protect: true,
       },
     })
-    .input(z.object({ bookingId: z.number().describe("Booking ID to pay for") }))
+    .input(
+      z.object({ bookingId: z.number().describe("Booking ID to pay for") })
+    )
     .output(
       z.object({
         sessionId: z.string().describe("Stripe session ID"),
@@ -140,7 +142,9 @@ export const paymentsRouter = router({
     .input(z.object({ sessionId: z.string().describe("Stripe session ID") }))
     .output(
       z.object({
-        status: z.string().describe("Payment status (paid, unpaid, no_payment_required)"),
+        status: z
+          .string()
+          .describe("Payment status (paid, unpaid, no_payment_required)"),
         customerEmail: z.string().nullable().describe("Customer email"),
       })
     )
@@ -171,7 +175,9 @@ export const paymentsRouter = router({
       z.object({
         bookingId: z.number().describe("Booking ID"),
         amount: z.number().describe("Payment amount in smallest currency unit"),
-        method: z.enum(["card", "wallet", "bank_transfer"]).describe("Payment method"),
+        method: z
+          .enum(["card", "wallet", "bank_transfer"])
+          .describe("Payment method"),
       })
     )
     .output(
@@ -184,7 +190,8 @@ export const paymentsRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Get booking reference for audit
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
-      const bookingReference = booking?.bookingReference || `booking-${input.bookingId}`;
+      const bookingReference =
+        booking?.bookingReference || `booking-${input.bookingId}`;
 
       // Create payment record
       const paymentResult = await db.createPayment({

@@ -88,7 +88,7 @@ export function initSentry(): void {
           "ChunkLoadError",
         ];
 
-        if (ignoredMessages.some((msg) => error.message.includes(msg))) {
+        if (ignoredMessages.some(msg => error.message.includes(msg))) {
           return null;
         }
 
@@ -171,7 +171,10 @@ export function addBreadcrumb(breadcrumb: Sentry.Breadcrumb): void {
 /**
  * Set custom context for additional debugging info
  */
-export function setContext(name: string, context: Record<string, unknown>): void {
+export function setContext(
+  name: string,
+  context: Record<string, unknown>
+): void {
   Sentry.setContext(name, context);
 }
 

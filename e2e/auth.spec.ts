@@ -15,9 +15,7 @@ test.describe("Authentication", () => {
 
     test("should display login form correctly", async ({ page }) => {
       // Check form elements are present
-      await expect(
-        page.getByLabel(/البريد الإلكتروني|Email/i)
-      ).toBeVisible();
+      await expect(page.getByLabel(/البريد الإلكتروني|Email/i)).toBeVisible();
       await expect(page.getByLabel(/كلمة المرور|Password/i)).toBeVisible();
       await expect(
         page.getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
@@ -174,9 +172,7 @@ test.describe("Authentication", () => {
       // Check all form fields are present
       await expect(page.getByLabel(/الاسم الأول|First name/i)).toBeVisible();
       await expect(page.getByLabel(/اسم العائلة|Last name/i)).toBeVisible();
-      await expect(
-        page.getByLabel(/البريد الإلكتروني|Email/i)
-      ).toBeVisible();
+      await expect(page.getByLabel(/البريد الإلكتروني|Email/i)).toBeVisible();
       await expect(page.getByLabel(/كلمة المرور|Password/i)).toBeVisible();
       await expect(
         page.getByLabel(/تأكيد كلمة المرور|Confirm password/i)
@@ -230,7 +226,9 @@ test.describe("Authentication", () => {
       const isSuccessful =
         (await page.url().includes("/login")) ||
         (await page.url().includes("/")) ||
-        (await page.getByText(/تم إنشاء الحساب بنجاح|Account created/i).isVisible());
+        (await page
+          .getByText(/تم إنشاء الحساب بنجاح|Account created/i)
+          .isVisible());
 
       expect(isSuccessful).toBeTruthy();
     });
@@ -462,9 +460,7 @@ test.describe("Authentication", () => {
         .click();
 
       // Verify password reset form is displayed
-      await expect(
-        page.getByLabel(/البريد الإلكتروني|Email/i)
-      ).toBeVisible();
+      await expect(page.getByLabel(/البريد الإلكتروني|Email/i)).toBeVisible();
       await expect(
         page.getByRole("button", {
           name: /إرسال رابط|Reset password|Send link/i,

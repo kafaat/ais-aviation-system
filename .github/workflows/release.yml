@@ -5,27 +5,27 @@ on:
     branches:
       - main
     paths-ignore:
-      - '**.md'
-      - '.github/ISSUE_TEMPLATE/**'
-      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - "**.md"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type (patch, minor, major)'
+        description: "Release type (patch, minor, major)"
         required: true
-        default: 'patch'
+        default: "patch"
         type: choice
         options:
           - patch
           - minor
           - major
       prerelease:
-        description: 'Create as prerelease'
+        description: "Create as prerelease"
         required: false
         default: false
         type: boolean
       custom_version:
-        description: 'Custom version (leave empty to auto-increment)'
+        description: "Custom version (leave empty to auto-increment)"
         required: false
         type: string
 
@@ -329,7 +329,7 @@ jobs:
     needs: [version, release]
     runs-on: ubuntu-latest
     if: github.event.inputs.prerelease != 'true'
-    continue-on-error: true  # Don't fail release if deployment trigger fails
+    continue-on-error: true # Don't fail release if deployment trigger fails
     steps:
       - name: Trigger deployment workflow
         uses: peter-evans/repository-dispatch@v3

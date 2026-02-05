@@ -241,14 +241,14 @@ class RedisCacheService {
         },
         reconnectOnError: (err: Error) => {
           const targetErrors = ["READONLY", "ECONNRESET", "ETIMEDOUT"];
-          return targetErrors.some((e) => err.message.includes(e));
+          return targetErrors.some(e => err.message.includes(e));
         },
       });
 
       this.setupEventHandlers();
 
       // Attempt initial connection
-      this.redisClient.connect().catch((err) => {
+      this.redisClient.connect().catch(err => {
         logger.warn(
           { error: err.message },
           "Initial Redis connection failed, using memory fallback"
@@ -285,10 +285,7 @@ class RedisCacheService {
 
     this.redisClient.on("reconnecting", () => {
       this.reconnectAttempts++;
-      logger.info(
-        { attempt: this.reconnectAttempts },
-        "Redis reconnecting..."
-      );
+      logger.info({ attempt: this.reconnectAttempts }, "Redis reconnecting...");
     });
 
     this.redisClient.on("end", () => {
@@ -299,12 +296,15 @@ class RedisCacheService {
 
   private startCleanupInterval(): void {
     // Clean memory cache every 5 minutes
-    this.cleanupTimer = setInterval(() => {
-      const cleaned = this.memoryCache.cleanup();
-      if (cleaned > 0) {
-        logger.debug({ cleaned }, "Memory cache cleanup completed");
-      }
-    }, 5 * 60 * 1000);
+    this.cleanupTimer = setInterval(
+      () => {
+        const cleaned = this.memoryCache.cleanup();
+        if (cleaned > 0) {
+          logger.debug({ cleaned }, "Memory cache cleanup completed");
+        }
+      },
+      5 * 60 * 1000
+    );
   }
 
   /**
@@ -335,7 +335,7 @@ class RedisCacheService {
     this.initializeRedis();
 
     // Wait for connection with timeout
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const timeout = setTimeout(() => {
         resolve(false);
       }, 5000);
@@ -371,8 +371,15 @@ class RedisCacheService {
    * Generate hash from parameters
    */
   private hashParams(params: unknown): string {
-    const normalized = JSON.stringify(params, Object.keys(params as object).sort());
-    return crypto.createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+    const normalized = JSON.stringify(
+      params,
+      Object.keys(params as object).sort()
+    );
+    return crypto
+      .createHash("sha256")
+      .update(normalized)
+      .digest("hex")
+      .slice(0, 16);
   }
 
   /**
@@ -668,7 +675,12 @@ class RedisCacheService {
     airports: unknown,
     ttlSeconds: number = CacheTTL.AIRPORTS
   ): Promise<void> {
-    await this.set(CacheNamespace.AIRPORTS, { key: "all" }, airports, ttlSeconds);
+    await this.set(
+      CacheNamespace.AIRPORTS,
+      { key: "all" },
+      airports,
+      ttlSeconds
+    );
   }
 
   /**
@@ -685,7 +697,12 @@ class RedisCacheService {
     airlines: unknown,
     ttlSeconds: number = CacheTTL.AIRLINES
   ): Promise<void> {
-    await this.set(CacheNamespace.AIRLINES, { key: "all" }, airlines, ttlSeconds);
+    await this.set(
+      CacheNamespace.AIRLINES,
+      { key: "all" },
+      airlines,
+      ttlSeconds
+    );
   }
 
   /**
@@ -776,7 +793,12 @@ class RedisCacheService {
     routes: unknown,
     ttlSeconds: number = CacheTTL.POPULAR_ROUTES
   ): Promise<void> {
-    await this.set(CacheNamespace.ROUTES, { key: "popular" }, routes, ttlSeconds);
+    await this.set(
+      CacheNamespace.ROUTES,
+      { key: "popular" },
+      routes,
+      ttlSeconds
+    );
   }
 
   /**
@@ -858,8 +880,14 @@ class RedisCacheService {
     if (flightId) {
       // Invalidate both economy and business pricing
       await Promise.all([
-        this.delete(CacheNamespace.PRICING, { flightId, cabinClass: "economy" }),
-        this.delete(CacheNamespace.PRICING, { flightId, cabinClass: "business" }),
+        this.delete(CacheNamespace.PRICING, {
+          flightId,
+          cabinClass: "economy",
+        }),
+        this.delete(CacheNamespace.PRICING, {
+          flightId,
+          cabinClass: "business",
+        }),
       ]);
     } else {
       await this.invalidateNamespace(CacheNamespace.PRICING);
@@ -947,7 +975,8 @@ class RedisCacheService {
         memory: { entries: memoryEntries, maxSize: MEMORY_CACHE_MAX_SIZE },
       };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       return {
         status: "error",
         redis: { connected: false, error: errorMessage },

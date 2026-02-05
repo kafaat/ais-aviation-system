@@ -152,7 +152,9 @@ describe("Rate Limit Service", () => {
       );
 
       expect(result.allowed).toBe(true);
-      expect(result.remaining).toBe(RATE_LIMIT_TIERS.anonymous.requestsPerWindow - 1);
+      expect(result.remaining).toBe(
+        RATE_LIMIT_TIERS.anonymous.requestsPerWindow - 1
+      );
       expect(result.limit).toBe(RATE_LIMIT_TIERS.anonymous.requestsPerWindow);
       expect(result.tier).toBe("anonymous");
     });
@@ -162,11 +164,19 @@ describe("Rate Limit Service", () => {
       const tier = RATE_LIMIT_TIERS.anonymous;
 
       // First request
-      const result1 = await rateLimitService.checkRateLimit(identifier, tier, "test");
+      const result1 = await rateLimitService.checkRateLimit(
+        identifier,
+        tier,
+        "test"
+      );
       expect(result1.remaining).toBe(tier.requestsPerWindow - 1);
 
       // Second request
-      const result2 = await rateLimitService.checkRateLimit(identifier, tier, "test");
+      const result2 = await rateLimitService.checkRateLimit(
+        identifier,
+        tier,
+        "test"
+      );
       expect(result2.remaining).toBe(tier.requestsPerWindow - 2);
     });
 
@@ -179,7 +189,11 @@ describe("Rate Limit Service", () => {
       await rateLimitService.checkRateLimit(identifier, tier, "test");
 
       // Third request should be blocked
-      const result = await rateLimitService.checkRateLimit(identifier, tier, "test");
+      const result = await rateLimitService.checkRateLimit(
+        identifier,
+        tier,
+        "test"
+      );
       expect(result.allowed).toBe(false);
       expect(result.remaining).toBe(0);
       expect(result.retryAfterSeconds).toBeDefined();
@@ -246,8 +260,16 @@ describe("Rate Limit Service", () => {
       await rateLimitService.checkUserRateLimit(user, ip, "api");
 
       // Get status (should not increment)
-      const status1 = await rateLimitService.getRateLimitStatus(user, ip, "api");
-      const status2 = await rateLimitService.getRateLimitStatus(user, ip, "api");
+      const status1 = await rateLimitService.getRateLimitStatus(
+        user,
+        ip,
+        "api"
+      );
+      const status2 = await rateLimitService.getRateLimitStatus(
+        user,
+        ip,
+        "api"
+      );
 
       // Status calls should not change remaining count
       expect(status1.remaining).toBe(status2.remaining);
@@ -268,7 +290,11 @@ describe("Rate Limit Service", () => {
       await rateLimitService.resetRateLimit(identifier, "test");
 
       // Should be back to full limit
-      const result = await rateLimitService.checkRateLimit(identifier, tier, "test");
+      const result = await rateLimitService.checkRateLimit(
+        identifier,
+        tier,
+        "test"
+      );
       expect(result.remaining).toBe(tier.requestsPerWindow - 1);
     });
   });

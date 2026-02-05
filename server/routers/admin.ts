@@ -198,7 +198,11 @@ export const adminRouter = router({
           ctx.user.role,
           input.status === "cancelled" ? "cancelled" : "updated",
           { status: existingFlight.status },
-          { status: input.status, delayMinutes: input.delayMinutes, reason: input.reason },
+          {
+            status: input.status,
+            delayMinutes: input.delayMinutes,
+            reason: input.reason,
+          },
           ctx.req.ip,
           ctx.req.headers["x-request-id"] as string
         );
@@ -257,9 +261,11 @@ export const adminRouter = router({
    */
   getMetrics: adminProcedure
     .input(
-      z.object({
-        hoursBack: z.number().min(1).max(168).default(24), // 1 hour to 7 days
-      }).optional()
+      z
+        .object({
+          hoursBack: z.number().min(1).max(168).default(24), // 1 hour to 7 days
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       const hoursBack = input?.hoursBack ?? 24;
@@ -272,9 +278,11 @@ export const adminRouter = router({
    */
   getMetricsSummary: adminProcedure
     .input(
-      z.object({
-        hoursBack: z.number().min(1).max(24).default(1),
-      }).optional()
+      z
+        .object({
+          hoursBack: z.number().min(1).max(24).default(1),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       const hoursBack = input?.hoursBack ?? 1;
@@ -428,9 +436,11 @@ export const adminRouter = router({
    */
   getHighSeverityEvents: adminProcedure
     .input(
-      z.object({
-        limit: z.number().min(1).max(500).default(50),
-      }).optional()
+      z
+        .object({
+          limit: z.number().min(1).max(500).default(50),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       return await getHighSeverityEvents(input?.limit ?? 50);
@@ -441,9 +451,11 @@ export const adminRouter = router({
    */
   getAuditLogStats: adminProcedure
     .input(
-      z.object({
-        days: z.number().min(1).max(365).default(30),
-      }).optional()
+      z
+        .object({
+          days: z.number().min(1).max(365).default(30),
+        })
+        .optional()
     )
     .query(async ({ input }) => {
       return await getAuditLogStats(input?.days ?? 30);

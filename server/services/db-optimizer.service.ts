@@ -291,9 +291,7 @@ export async function analyzeQuery(
 
   try {
     // Execute EXPLAIN
-    const explainResult = await db.execute(
-      sql.raw(`EXPLAIN ${queryString}`)
-    );
+    const explainResult = await db.execute(sql.raw(`EXPLAIN ${queryString}`));
 
     const resultArray = explainResult as unknown as Array<
       Array<Record<string, unknown>>
@@ -332,9 +330,7 @@ export async function analyzeQuery(
 
       // Check for index range scans (less efficient)
       if (step.type === "range" && step.rows > 10000) {
-        warnings.push(
-          `Range scan reading ${step.rows} rows on ${step.table}`
-        );
+        warnings.push(`Range scan reading ${step.rows} rows on ${step.table}`);
       }
 
       // Check for filesort
@@ -363,10 +359,7 @@ export async function analyzeQuery(
       }
     }
 
-    const estimatedRows = plan.reduce(
-      (total, step) => total + step.rows,
-      0
-    );
+    const estimatedRows = plan.reduce((total, step) => total + step.rows, 0);
     const usesIndex = plan.some(step => step.key !== null);
     const indexUsed = plan.find(step => step.key !== null)?.key ?? null;
     const scanType = plan[0]?.type || "unknown";
@@ -403,9 +396,7 @@ export async function explainQueryJson(
       sql.raw(`EXPLAIN FORMAT=JSON ${queryString}`)
     );
 
-    const resultArray = result as unknown as Array<
-      Array<{ EXPLAIN: string }>
-    >;
+    const resultArray = result as unknown as Array<Array<{ EXPLAIN: string }>>;
     const rows = resultArray[0] ?? [];
     if (rows[0]?.EXPLAIN) {
       return JSON.parse(rows[0].EXPLAIN);
@@ -737,9 +728,7 @@ export function buildOptimizedQuery(
 /**
  * Generate index recommendation for a table based on query patterns
  */
-export async function suggestIndexes(
-  tableName: string
-): Promise<
+export async function suggestIndexes(tableName: string): Promise<
   Array<{
     columns: string[];
     reason: string;
@@ -804,7 +793,4 @@ export async function suggestIndexes(
 
 // ============ Exports ============
 
-export {
-  slowQueryLog,
-  SlowQueryLog,
-};
+export { slowQueryLog, SlowQueryLog };

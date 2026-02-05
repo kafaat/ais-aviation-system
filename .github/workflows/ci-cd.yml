@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop, "release/**"]
     tags:
-      - 'v*'
+      - "v*"
   pull_request:
     branches: [main, develop]
 
@@ -220,17 +220,17 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
       - name: Check for secrets with Gitleaks
         uses: gitleaks/gitleaks-action@v2
@@ -519,9 +519,9 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}
-          format: 'table'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
+          format: "table"
+          exit-code: "0"
+          severity: "CRITICAL,HIGH"
 
   # =============================================================================
   # STAGE 6: Deploy to Staging
@@ -549,7 +549,7 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
         with:
-          version: 'v1.29.0'
+          version: "v1.29.0"
 
       - name: Configure kubectl
         run: |
@@ -682,7 +682,7 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
         with:
-          version: 'v1.29.0'
+          version: "v1.29.0"
 
       - name: Configure kubectl
         run: |

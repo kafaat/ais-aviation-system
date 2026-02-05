@@ -277,9 +277,7 @@ test.describe("Flight Search", () => {
       const hasResults =
         (await page.locator('[data-testid="flight-card"]').count()) > 0;
       const hasNoResultsMessage = await page
-        .getByText(
-          /لا توجد رحلات|No flights found|No results|لم يتم العثور/i
-        )
+        .getByText(/لا توجد رحلات|No flights found|No results|لم يتم العثور/i)
         .isVisible();
 
       expect(hasResults || hasNoResultsMessage).toBeTruthy();
@@ -320,8 +318,12 @@ test.describe("Flight Search", () => {
       if (await flightCard.isVisible()) {
         // Check for flight number or airline
         const hasAirlineInfo =
-          (await flightCard.locator('[data-testid="airline-name"]').isVisible()) ||
-          (await flightCard.locator('[data-testid="flight-number"]').isVisible()) ||
+          (await flightCard
+            .locator('[data-testid="airline-name"]')
+            .isVisible()) ||
+          (await flightCard
+            .locator('[data-testid="flight-number"]')
+            .isVisible()) ||
           (await flightCard.getByText(/SV|EK|QR|MS|GF/i).isVisible());
 
         // Check for departure/arrival times
@@ -333,7 +335,9 @@ test.describe("Flight Search", () => {
 
         // Check for price
         const hasPrice =
-          (await flightCard.locator('[data-testid="flight-price"]').isVisible()) ||
+          (await flightCard
+            .locator('[data-testid="flight-price"]')
+            .isVisible()) ||
           (await flightCard.getByText(/﷼|\$|SAR|USD/).isVisible());
 
         expect(hasAirlineInfo || hasTimes || hasPrice).toBeTruthy();
@@ -346,7 +350,9 @@ test.describe("Flight Search", () => {
       if (await flightCard.isVisible()) {
         // Look for duration in various formats
         const hasDuration =
-          (await flightCard.locator('[data-testid="flight-duration"]').isVisible()) ||
+          (await flightCard
+            .locator('[data-testid="flight-duration"]')
+            .isVisible()) ||
           (await flightCard.getByText(/\d+\s*(ساعة|hour|h|م|m)/i).isVisible());
 
         expect(hasDuration).toBeTruthy();
@@ -442,7 +448,9 @@ test.describe("Flight Search", () => {
 
       if (await airlineFilter.isVisible()) {
         // Check for airline checkboxes
-        const airlineCheckboxes = airlineFilter.locator('input[type="checkbox"]');
+        const airlineCheckboxes = airlineFilter.locator(
+          'input[type="checkbox"]'
+        );
         const checkboxCount = await airlineCheckboxes.count();
 
         if (checkboxCount > 0) {
@@ -495,7 +503,9 @@ test.describe("Flight Search", () => {
         // Apply some filter first
         const airlineFilter = page.locator('[data-testid="airline-filter"]');
         if (await airlineFilter.isVisible()) {
-          const checkbox = airlineFilter.locator('input[type="checkbox"]').first();
+          const checkbox = airlineFilter
+            .locator('input[type="checkbox"]')
+            .first();
           if (await checkbox.isVisible()) {
             await checkbox.check();
             await page.waitForTimeout(500);
@@ -546,9 +556,7 @@ test.describe("Flight Search", () => {
       const hasSortOptions =
         (await page.locator('[data-testid="sort-select"]').isVisible()) ||
         (await page.getByLabel(/ترتيب|Sort by/i).isVisible()) ||
-        (await page
-          .getByRole("button", { name: /ترتيب|Sort/i })
-          .isVisible());
+        (await page.getByRole("button", { name: /ترتيب|Sort/i }).isVisible());
 
       const flightCount = await page
         .locator('[data-testid="flight-card"]')
@@ -577,7 +585,9 @@ test.describe("Flight Search", () => {
             parseFloat(p.replace(/[^\d.]/g, ""))
           );
           for (let i = 1; i < numericPrices.length; i++) {
-            expect(numericPrices[i]).toBeGreaterThanOrEqual(numericPrices[i - 1]);
+            expect(numericPrices[i]).toBeGreaterThanOrEqual(
+              numericPrices[i - 1]
+            );
           }
         }
       }

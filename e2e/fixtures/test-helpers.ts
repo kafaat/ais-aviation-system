@@ -27,7 +27,9 @@ export async function login(
   await page.getByLabel(/كلمة المرور|Password/i).fill(password);
 
   // Submit form
-  await page.getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i }).click();
+  await page
+    .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
+    .click();
 
   // Wait for navigation after login
   await page.waitForURL(/^(?!.*\/login).*$/);
@@ -132,8 +134,14 @@ export async function applyPriceFilter(
   const priceSlider = page.locator('[data-testid="price-filter"]');
   if (await priceSlider.isVisible()) {
     // Interact with price range slider
-    await priceSlider.locator('input[type="range"]').first().fill(min.toString());
-    await priceSlider.locator('input[type="range"]').last().fill(max.toString());
+    await priceSlider
+      .locator('input[type="range"]')
+      .first()
+      .fill(min.toString());
+    await priceSlider
+      .locator('input[type="range"]')
+      .last()
+      .fill(max.toString());
   }
 }
 
@@ -196,7 +204,9 @@ export async function fillPassengerForm(
     .fill(data.passportNumber);
 
   await page
-    .getByLabel(new RegExp(`تاريخ الميلاد${suffix}|Date of birth${suffixEn}`, "i"))
+    .getByLabel(
+      new RegExp(`تاريخ الميلاد${suffix}|Date of birth${suffixEn}`, "i")
+    )
     .fill(data.dateOfBirth);
 }
 
@@ -271,7 +281,7 @@ export async function expectToastMessage(
   page: Page,
   message: RegExp | string
 ): Promise<void> {
-  const toast = page.locator('[data-sonner-toast]');
+  const toast = page.locator("[data-sonner-toast]");
   await expect(toast.filter({ hasText: message })).toBeVisible();
 }
 

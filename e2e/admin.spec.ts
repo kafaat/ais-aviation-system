@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { testUsers, testFlightData, getNextWeekDate } from "./fixtures/test-data";
+import {
+  testUsers,
+  testFlightData,
+  getNextWeekDate,
+} from "./fixtures/test-data";
 import { format } from "date-fns";
 
 /**
@@ -32,15 +36,14 @@ test.describe("Admin Dashboard", () => {
 
       // Should show unauthorized or redirect
       const isRestricted =
-        (await page.getByText(/غير مصرح|Unauthorized|Access denied/i).isVisible()) ||
-        !page.url().includes("/admin");
+        (await page
+          .getByText(/غير مصرح|Unauthorized|Access denied/i)
+          .isVisible()) || !page.url().includes("/admin");
 
       expect(isRestricted).toBeTruthy();
     });
 
-    test("should redirect unauthenticated users to login", async ({
-      page,
-    }) => {
+    test("should redirect unauthenticated users to login", async ({ page }) => {
       await page.goto("/admin");
       await page.waitForLoadState("networkidle");
 
@@ -112,8 +115,9 @@ test.describe("Admin Dashboard", () => {
 
     test("should display statistics cards", async ({ page }) => {
       // Check for stat cards
-      const statCards =
-        page.locator('[data-testid="stat-card"]').or(page.locator(".stat-card"));
+      const statCards = page
+        .locator('[data-testid="stat-card"]')
+        .or(page.locator(".stat-card"));
 
       const count = await statCards.count();
 
@@ -195,12 +199,8 @@ test.describe("Admin Dashboard", () => {
       await addFlightButton.click();
 
       // Check for all required fields
-      await expect(
-        page.getByLabel(/رقم الرحلة|Flight number/i)
-      ).toBeVisible();
-      await expect(
-        page.getByLabel(/شركة الطيران|Airline/i)
-      ).toBeVisible();
+      await expect(page.getByLabel(/رقم الرحلة|Flight number/i)).toBeVisible();
+      await expect(page.getByLabel(/شركة الطيران|Airline/i)).toBeVisible();
       await expect(
         page.getByLabel(/مطار المغادرة|Departure airport|Origin/i)
       ).toBeVisible();
@@ -255,9 +255,7 @@ test.describe("Admin Dashboard", () => {
       }
 
       // Fill seat counts
-      const economySeatsInput = page.getByLabel(
-        /مقاعد.*سياحية|Economy seats/i
-      );
+      const economySeatsInput = page.getByLabel(/مقاعد.*سياحية|Economy seats/i);
       if (await economySeatsInput.isVisible()) {
         await economySeatsInput.fill(testFlightData.newFlight.economySeats);
       }
@@ -365,7 +363,9 @@ test.describe("Admin Dashboard", () => {
     test("should show booking statistics", async ({ page }) => {
       const hasBookingStats =
         (await page.locator('[data-testid="booking-stats"]').isVisible()) ||
-        (await page.getByText(/إحصائيات الحجوزات|Booking statistics/i).isVisible()) ||
+        (await page
+          .getByText(/إحصائيات الحجوزات|Booking statistics/i)
+          .isVisible()) ||
         (await page.getByText(/عدد الحجوزات|Number of bookings/i).isVisible());
 
       expect(hasBookingStats).toBeTruthy();
@@ -423,7 +423,9 @@ test.describe("Admin Dashboard", () => {
     test("should show pending refund requests", async ({ page }) => {
       const hasPendingRefunds =
         (await page.locator('[data-testid="pending-refunds"]').isVisible()) ||
-        (await page.getByText(/طلبات الاسترداد|Refund requests/i).isVisible()) ||
+        (await page
+          .getByText(/طلبات الاسترداد|Refund requests/i)
+          .isVisible()) ||
         (await page.locator('table, [role="table"]').isVisible());
 
       expect(hasPendingRefunds).toBeTruthy();
@@ -717,7 +719,7 @@ test.describe("Admin Dashboard", () => {
           // Should show error
           const hasError =
             (await page.getByText(/خطأ|Error/i).isVisible()) ||
-            (await page.locator('[data-sonner-toast]').isVisible()) ||
+            (await page.locator("[data-sonner-toast]").isVisible()) ||
             (await page.locator('[aria-invalid="true"]').isVisible());
 
           expect(hasError).toBeTruthy();

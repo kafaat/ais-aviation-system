@@ -5,10 +5,7 @@ import {
   calculateOccupancyRate,
   getDaysUntilDeparture,
 } from "./dynamic-pricing.service";
-import {
-  redisCacheService,
-  CacheTTL,
-} from "./redis-cache.service";
+import { redisCacheService, CacheTTL } from "./redis-cache.service";
 
 /**
  * Flights Service
@@ -26,13 +23,17 @@ export interface GetFlightInput {
 }
 
 // Type for flight search results
-export type FlightSearchResult = Awaited<ReturnType<typeof import("../db").searchFlights>>;
+export type FlightSearchResult = Awaited<
+  ReturnType<typeof import("../db").searchFlights>
+>;
 
 /**
  * Search for flights based on origin, destination, and date
  * Results are cached for 2 minutes to improve performance
  */
-export async function searchFlights(input: SearchFlightsInput): Promise<FlightSearchResult> {
+export async function searchFlights(
+  input: SearchFlightsInput
+): Promise<FlightSearchResult> {
   try {
     // Create cache key params
     const cacheParams = {

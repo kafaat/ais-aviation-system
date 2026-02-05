@@ -147,7 +147,8 @@ function buildPlugins(mode: string): PluginOption[] {
   if (process.env.ANALYZE === "true") {
     try {
       const visualizerModule = require("rollup-plugin-visualizer");
-      const visualizer = visualizerModule.visualizer || visualizerModule.default;
+      const visualizer =
+        visualizerModule.visualizer || visualizerModule.default;
       pluginList.push(
         visualizer({
           filename: path.resolve(import.meta.dirname, "dist/public/stats.html"),

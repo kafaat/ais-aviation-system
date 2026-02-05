@@ -79,7 +79,12 @@ function getStoredTokens() {
       user,
     };
   } catch {
-    return { accessToken: null, refreshToken: null, expiresAt: null, user: null };
+    return {
+      accessToken: null,
+      refreshToken: null,
+      expiresAt: null,
+      user: null,
+    };
   }
 }
 
@@ -93,7 +98,10 @@ function storeTokens(
     const expiresAt = Date.now() + expiresIn * 1000;
     localStorage.setItem(AUTH_STORAGE_KEYS.ACCESS_TOKEN, accessToken);
     localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
-    localStorage.setItem(AUTH_STORAGE_KEYS.TOKEN_EXPIRES_AT, expiresAt.toString());
+    localStorage.setItem(
+      AUTH_STORAGE_KEYS.TOKEN_EXPIRES_AT,
+      expiresAt.toString()
+    );
     localStorage.setItem(AUTH_STORAGE_KEYS.USER, JSON.stringify(user));
   } catch (error) {
     console.error("[Auth] Failed to store tokens:", error);
@@ -259,7 +267,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       clearTimeout(refreshTimerRef.current);
     }
 
-    const timeUntilRefresh = expiresAt - Date.now() - TOKEN_TIMING.REFRESH_BUFFER_MS;
+    const timeUntilRefresh =
+      expiresAt - Date.now() - TOKEN_TIMING.REFRESH_BUFFER_MS;
 
     if (timeUntilRefresh > 0) {
       refreshTimerRef.current = setTimeout(() => {
@@ -491,5 +500,9 @@ export function getAuthToken(): string | null {
  */
 export function isAuthenticated(): boolean {
   const stored = getStoredTokens();
-  return !!(stored.accessToken && stored.refreshToken && !isTokenExpiringSoon(stored.expiresAt));
+  return !!(
+    stored.accessToken &&
+    stored.refreshToken &&
+    !isTokenExpiringSoon(stored.expiresAt)
+  );
 }

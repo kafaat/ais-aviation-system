@@ -89,11 +89,20 @@ export function requestIdMiddleware(
 
     // Use appropriate log level based on status code
     if (res.statusCode >= 500) {
-      requestLogger.error(logData, `${req.method} ${req.path} - ${res.statusCode} (${durationMs}ms)`);
+      requestLogger.error(
+        logData,
+        `${req.method} ${req.path} - ${res.statusCode} (${durationMs}ms)`
+      );
     } else if (res.statusCode >= 400) {
-      requestLogger.warn(logData, `${req.method} ${req.path} - ${res.statusCode} (${durationMs}ms)`);
+      requestLogger.warn(
+        logData,
+        `${req.method} ${req.path} - ${res.statusCode} (${durationMs}ms)`
+      );
     } else {
-      requestLogger.info(logData, `${req.method} ${req.path} - ${res.statusCode} (${durationMs}ms)`);
+      requestLogger.info(
+        logData,
+        `${req.method} ${req.path} - ${res.statusCode} (${durationMs}ms)`
+      );
     }
   });
 

@@ -23,7 +23,11 @@ import {
  */
 export function getCorrelationId(): string {
   const context = getLogContext();
-  return context.correlationId as string || context.requestId as string || "unknown";
+  return (
+    (context.correlationId as string) ||
+    (context.requestId as string) ||
+    "unknown"
+  );
 }
 
 /**
@@ -109,7 +113,9 @@ export function withCorrelation<T extends (...args: any[]) => Promise<any>>(
 /**
  * Create a child context with additional data while preserving correlation
  */
-export function createChildContext(additionalContext: Partial<LogContext>): LogContext {
+export function createChildContext(
+  additionalContext: Partial<LogContext>
+): LogContext {
   const parentContext = getLogContext();
   return {
     ...parentContext,

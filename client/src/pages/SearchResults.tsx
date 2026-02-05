@@ -16,7 +16,10 @@ import {
 import { AdvancedFilters } from "@/components/AdvancedFilters";
 import { SearchHistory, saveSearchToHistory } from "@/components/SearchHistory";
 import { FlightStatusBadge } from "@/components/FlightStatusBadge";
-import { useFlightStatus, type FlightStatusType } from "@/hooks/useFlightStatus";
+import {
+  useFlightStatus,
+  type FlightStatusType,
+} from "@/hooks/useFlightStatus";
 import {
   Plane,
   Clock,

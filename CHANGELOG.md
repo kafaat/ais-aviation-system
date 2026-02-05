@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### CI/CD Pipeline
+
 - Complete deployment pipeline with staging and production environments
 - Docker image building and pushing to GitHub Container Registry (GHCR)
 - Kubernetes deployment manifests with HPA, PDB, and resource limits
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Network policies for security isolation
 
 #### Deployment Automation
+
 - Automated database migrations during deployment
 - Pre-deployment database backup for production
 - Blue-green deployment strategy with health checks
@@ -27,12 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Post-deployment monitoring for 5 minutes
 
 #### Testing & Verification
+
 - Smoke tests script for deployment verification
 - E2E critical path tests for production deployments
 - Health check verification before traffic switching
 - Synthetic test triggering (Datadog integration)
 
 #### Release Automation
+
 - Automatic changelog generation from conventional commits
 - Version bumping with semantic versioning
 - GitHub Release creation with release notes
@@ -40,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependency review for security vulnerabilities
 
 #### Scripts & Tools
+
 - `scripts/smoke-tests.sh` - Deployment verification tests
 - `scripts/e2e-critical.sh` - Critical path E2E tests
 - `scripts/rollback.sh` - Manual rollback script
@@ -47,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Commitlint configuration for commit message validation
 
 #### Kubernetes Manifests
+
 - Base deployment with probes and resource limits
 - Service with ClusterIP and headless service
 - ConfigMap for non-sensitive configuration
@@ -55,11 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resource quotas and limit ranges per environment
 
 #### Notifications
+
 - Slack notifications for deployment status
 - Deployment success/failure alerts
 - Release publication notifications
 
 ### Security
+
 - Trivy vulnerability scanning for filesystem and containers
 - Gitleaks secret detection
 - SBOM generation for container images

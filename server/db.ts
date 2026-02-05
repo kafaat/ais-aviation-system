@@ -82,11 +82,17 @@ export function getPool(): mysql.Pool | null {
 
       // Monitor pool events
       _pool.on("connection", () => {
-        log.debug({ event: "pool_connection_created" }, "New pool connection created");
+        log.debug(
+          { event: "pool_connection_created" },
+          "New pool connection created"
+        );
       });
 
       _pool.on("release", () => {
-        log.debug({ event: "pool_connection_released" }, "Pool connection released");
+        log.debug(
+          { event: "pool_connection_released" },
+          "Pool connection released"
+        );
       });
 
       _pool.on("enqueue", () => {
@@ -105,7 +111,10 @@ export function getPool(): mysql.Pool | null {
         "Database connection pool initialized"
       );
     } catch (error) {
-      log.error({ event: "pool_init_failed", error }, "Failed to initialize connection pool");
+      log.error(
+        { event: "pool_init_failed", error },
+        "Failed to initialize connection pool"
+      );
       _pool = null;
     }
   }
@@ -152,7 +161,10 @@ export async function getDb(): Promise<MySql2Database<typeof schema> | null> {
         _db = drizzle(process.env.DATABASE_URL, { schema, mode: "default" });
       }
     } catch (error) {
-      log.warn({ event: "db_connection_failed", error }, "Failed to connect to database");
+      log.warn(
+        { event: "db_connection_failed", error },
+        "Failed to connect to database"
+      );
       _db = null;
     }
   }
@@ -171,7 +183,10 @@ export async function closePool(): Promise<void> {
       _db = null;
       log.info({ event: "pool_closed" }, "Database connection pool closed");
     } catch (error) {
-      log.error({ event: "pool_close_failed", error }, "Failed to close connection pool");
+      log.error(
+        { event: "pool_close_failed", error },
+        "Failed to close connection pool"
+      );
     }
   }
 }
@@ -349,7 +364,10 @@ export async function efficientCount(
     const rows = result as unknown as Array<Array<{ count: number | bigint }>>;
     return Number(rows[0]?.[0]?.count ?? 0);
   } catch (error) {
-    log.error({ event: "count_query_failed", table, error }, "Failed to execute count query");
+    log.error(
+      { event: "count_query_failed", table, error },
+      "Failed to execute count query"
+    );
     return 0;
   }
 }
@@ -390,7 +408,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   const db = await getDb();
   if (!db) {
-    log.warn({ event: "db_unavailable", operation: "upsert_user" }, "Cannot upsert user: database not available");
+    log.warn(
+      { event: "db_unavailable", operation: "upsert_user" },
+      "Cannot upsert user: database not available"
+    );
     return;
   }
 
@@ -445,7 +466,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) {
-    log.warn({ event: "db_unavailable", operation: "get_user" }, "Cannot get user: database not available");
+    log.warn(
+      { event: "db_unavailable", operation: "get_user" },
+      "Cannot get user: database not available"
+    );
     return undefined;
   }
 
@@ -461,15 +485,14 @@ export async function getUserByOpenId(openId: string) {
 export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) {
-    log.warn({ event: "db_unavailable", operation: "get_user" }, "Cannot get user: database not available");
+    log.warn(
+      { event: "db_unavailable", operation: "get_user" },
+      "Cannot get user: database not available"
+    );
     return undefined;
   }
 
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, id))
-    .limit(1);
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
@@ -477,7 +500,10 @@ export async function getUserById(id: number) {
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) {
-    log.warn({ event: "db_unavailable", operation: "get_user" }, "Cannot get user: database not available");
+    log.warn(
+      { event: "db_unavailable", operation: "get_user" },
+      "Cannot get user: database not available"
+    );
     return undefined;
   }
 

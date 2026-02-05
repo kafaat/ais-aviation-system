@@ -53,7 +53,12 @@ export const refundsRouter = router({
       z.object({
         bookingId: z.number().describe("Booking ID to refund"),
         reason: z.string().optional().describe("Reason for refund request"),
-        amount: z.number().optional().describe("Requested refund amount (optional, calculated automatically if not provided)"),
+        amount: z
+          .number()
+          .optional()
+          .describe(
+            "Requested refund amount (optional, calculated automatically if not provided)"
+          ),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -154,7 +159,8 @@ export const refundsRouter = router({
         path: "/refunds/{refundId}",
         tags: ["Refunds"],
         summary: "Get refund details",
-        description: "Retrieve detailed information about a specific refund including status, amount, and processing history.",
+        description:
+          "Retrieve detailed information about a specific refund including status, amount, and processing history.",
         protect: true,
       },
     })
@@ -173,7 +179,8 @@ export const refundsRouter = router({
         path: "/refunds/check/{bookingId}",
         tags: ["Refunds"],
         summary: "Check if booking is refundable",
-        description: "Check whether a booking is eligible for a refund based on its status, payment status, and the cancellation policy.",
+        description:
+          "Check whether a booking is eligible for a refund based on its status, payment status, and the cancellation policy.",
         protect: true,
       },
     })
@@ -192,7 +199,8 @@ export const refundsRouter = router({
         path: "/refunds/calculate-fee/{bookingId}",
         tags: ["Refunds"],
         summary: "Calculate cancellation fee",
-        description: "Calculate the cancellation fee for a booking based on the time until departure and the applicable cancellation policy tier.",
+        description:
+          "Calculate the cancellation fee for a booking based on the time until departure and the applicable cancellation policy tier.",
         protect: true,
       },
     })
@@ -248,7 +256,8 @@ export const refundsRouter = router({
         path: "/refunds/policy",
         tags: ["Refunds"],
         summary: "Get cancellation policy",
-        description: "Retrieve the complete cancellation policy with all fee tiers based on time until departure. Useful for displaying policy information to users before booking.",
+        description:
+          "Retrieve the complete cancellation policy with all fee tiers based on time until departure. Useful for displaying policy information to users before booking.",
         protect: true,
       },
     })
@@ -266,7 +275,8 @@ export const refundsRouter = router({
         path: "/admin/refunds/stats",
         tags: ["Refunds", "Admin"],
         summary: "Get refund statistics",
-        description: "Admin endpoint to retrieve refund statistics including total refunds, amounts, and breakdown by reason and status.",
+        description:
+          "Admin endpoint to retrieve refund statistics including total refunds, amounts, and breakdown by reason and status.",
         protect: true,
       },
     })
@@ -284,13 +294,17 @@ export const refundsRouter = router({
         path: "/admin/refunds/history",
         tags: ["Refunds", "Admin"],
         summary: "Get refund history",
-        description: "Admin endpoint to retrieve paginated refund history with all refund records.",
+        description:
+          "Admin endpoint to retrieve paginated refund history with all refund records.",
         protect: true,
       },
     })
     .input(
       z.object({
-        limit: z.number().optional().describe("Maximum number of records to return"),
+        limit: z
+          .number()
+          .optional()
+          .describe("Maximum number of records to return"),
         offset: z.number().optional().describe("Number of records to skip"),
       })
     )
@@ -308,7 +322,8 @@ export const refundsRouter = router({
         path: "/admin/refunds/trends",
         tags: ["Refunds", "Admin"],
         summary: "Get refund trends",
-        description: "Admin endpoint to retrieve refund trends over time for analytics and reporting.",
+        description:
+          "Admin endpoint to retrieve refund trends over time for analytics and reporting.",
         protect: true,
       },
     })

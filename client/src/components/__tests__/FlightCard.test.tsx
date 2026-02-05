@@ -308,9 +308,7 @@ describe("FlightCard", () => {
     });
 
     it("renders share button when handler is provided", () => {
-      renderWithProviders(
-        <FlightCard flight={mockFlight} onShare={onShare} />
-      );
+      renderWithProviders(<FlightCard flight={mockFlight} onShare={onShare} />);
 
       expect(screen.getByTestId("share-button")).toBeInTheDocument();
     });
@@ -322,9 +320,7 @@ describe("FlightCard", () => {
     });
 
     it("calls onShare when share button is clicked", () => {
-      renderWithProviders(
-        <FlightCard flight={mockFlight} onShare={onShare} />
-      );
+      renderWithProviders(<FlightCard flight={mockFlight} onShare={onShare} />);
 
       fireEvent.click(screen.getByTestId("share-button"));
 
@@ -378,9 +374,7 @@ describe("FlightCard", () => {
     });
 
     it("share button has aria-label", () => {
-      renderWithProviders(
-        <FlightCard flight={mockFlight} onShare={vi.fn()} />
-      );
+      renderWithProviders(<FlightCard flight={mockFlight} onShare={vi.fn()} />);
 
       expect(screen.getByTestId("share-button")).toHaveAttribute(
         "aria-label",
@@ -413,9 +407,7 @@ describe("FlightCard", () => {
 
       renderWithProviders(<FlightCard flight={shortFlight} />);
 
-      expect(screen.getByTestId("flight-duration")).toHaveTextContent(
-        "0h 45m"
-      );
+      expect(screen.getByTestId("flight-duration")).toHaveTextContent("0h 45m");
     });
 
     it("handles flight with low economy availability", () => {

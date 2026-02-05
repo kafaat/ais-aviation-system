@@ -50,7 +50,10 @@ import {
   FlightStatusBadge,
   FlightDelayNotification,
 } from "@/components/FlightStatusBadge";
-import { useFlightStatus, type FlightStatusType } from "@/hooks/useFlightStatus";
+import {
+  useFlightStatus,
+  type FlightStatusType,
+} from "@/hooks/useFlightStatus";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { getLoginUrl } from "@/const";

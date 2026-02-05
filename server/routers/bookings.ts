@@ -31,8 +31,13 @@ export const bookingsRouter = router({
         passengers: z
           .array(
             z.object({
-              type: z.enum(["adult", "child", "infant"]).describe("Passenger type"),
-              title: z.string().optional().describe("Title (Mr, Mrs, Ms, etc.)"),
+              type: z
+                .enum(["adult", "child", "infant"])
+                .describe("Passenger type"),
+              title: z
+                .string()
+                .optional()
+                .describe("Title (Mr, Mrs, Ms, etc.)"),
               firstName: z.string().describe("First name"),
               lastName: z.string().describe("Last name"),
               dateOfBirth: z.date().optional().describe("Date of birth"),
@@ -48,9 +53,16 @@ export const bookingsRouter = router({
             z.object({
               ancillaryServiceId: z.number().describe("Ancillary service ID"),
               quantity: z.number().describe("Quantity"),
-              unitPrice: z.number().describe("Unit price in smallest currency unit"),
-              totalPrice: z.number().describe("Total price in smallest currency unit"),
-              passengerId: z.number().optional().describe("Passenger ID if service is per-passenger"),
+              unitPrice: z
+                .number()
+                .describe("Unit price in smallest currency unit"),
+              totalPrice: z
+                .number()
+                .describe("Total price in smallest currency unit"),
+              passengerId: z
+                .number()
+                .optional()
+                .describe("Passenger ID if service is per-passenger"),
             })
           )
           .optional()

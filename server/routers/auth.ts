@@ -133,12 +133,14 @@ export const authRouter = router({
       },
     })
     .output(
-      z.object({
-        id: z.number(),
-        name: z.string().nullable(),
-        email: z.string().nullable(),
-        role: z.string(),
-      }).nullable()
+      z
+        .object({
+          id: z.number(),
+          name: z.string().nullable(),
+          email: z.string().nullable(),
+          role: z.string(),
+        })
+        .nullable()
     )
     .query(({ ctx }) => ctx.user),
 
@@ -320,19 +322,19 @@ export const authRouter = router({
     .input(logoutInputSchema)
     .output(z.object({ success: z.boolean() }))
     .mutation(async ({ input }) => {
-    const { refreshToken } = input;
+      const { refreshToken } = input;
 
-    try {
-      await mobileAuthServiceV2.logout(refreshToken);
-      logger.info("User logged out successfully");
+      try {
+        await mobileAuthServiceV2.logout(refreshToken);
+        logger.info("User logged out successfully");
 
-      return { success: true };
-    } catch (error: any) {
-      // Even if logout fails, we don't want to expose errors
-      logger.warn({ error: error.message }, "Logout error (ignored)");
-      return { success: true };
-    }
-  }),
+        return { success: true };
+      } catch (error: any) {
+        // Even if logout fails, we don't want to expose errors
+        logger.warn({ error: error.message }, "Logout error (ignored)");
+        return { success: true };
+      }
+    }),
 
   /**
    * Logout from all devices - revoke all refresh tokens
@@ -352,28 +354,31 @@ export const authRouter = router({
     })
     .output(z.object({ success: z.boolean(), revokedCount: z.number() }))
     .mutation(async ({ ctx }) => {
-    const userId = ctx.user.id;
+      const userId = ctx.user.id;
 
-    try {
-      const revokedCount = await mobileAuthServiceV2.logoutAllDevices(userId);
+      try {
+        const revokedCount = await mobileAuthServiceV2.logoutAllDevices(userId);
 
-      logger.info(
-        { userId, revokedCount },
-        "User logged out from all devices"
-      );
+        logger.info(
+          { userId, revokedCount },
+          "User logged out from all devices"
+        );
 
-      return {
-        success: true,
-        revokedCount,
-      };
-    } catch (error: any) {
-      logger.error({ userId, error: error.message }, "Logout all devices failed");
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to logout from all devices",
-      });
-    }
-  }),
+        return {
+          success: true,
+          revokedCount,
+        };
+      } catch (error: any) {
+        logger.error(
+          { userId, error: error.message },
+          "Logout all devices failed"
+        );
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to logout from all devices",
+        });
+      }
+    }),
 
   /**
    * Get active sessions for the current user
@@ -407,47 +412,47 @@ export const authRouter = router({
       )
     )
     .query(async ({ ctx }) => {
-    const userId = ctx.user.id;
+      const userId = ctx.user.id;
 
-    try {
-      const sessions = await mobileAuthServiceV2.getActiveSessions(userId);
+      try {
+        const sessions = await mobileAuthServiceV2.getActiveSessions(userId);
 
-      // Parse device info and format for display
-      return sessions.map((session) => {
-        let deviceInfo: {
-          userAgent?: string;
-          deviceId?: string;
-          platform?: string;
-        } = {};
+        // Parse device info and format for display
+        return sessions.map(session => {
+          let deviceInfo: {
+            userAgent?: string;
+            deviceId?: string;
+            platform?: string;
+          } = {};
 
-        if (session.deviceInfo) {
-          try {
-            deviceInfo = JSON.parse(session.deviceInfo);
-          } catch {
-            // Ignore parse errors
+          if (session.deviceInfo) {
+            try {
+              deviceInfo = JSON.parse(session.deviceInfo);
+            } catch {
+              // Ignore parse errors
+            }
           }
-        }
 
-        return {
-          id: session.id,
-          deviceInfo: {
-            userAgent: deviceInfo.userAgent || "Unknown device",
-            deviceId: deviceInfo.deviceId,
-            platform: deviceInfo.platform,
-          },
-          ipAddress: session.ipAddress || "Unknown",
-          createdAt: session.createdAt,
-          expiresAt: session.expiresAt,
-        };
-      });
-    } catch (error: any) {
-      logger.error({ userId, error: error.message }, "Get sessions failed");
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to get active sessions",
-      });
-    }
-  }),
+          return {
+            id: session.id,
+            deviceInfo: {
+              userAgent: deviceInfo.userAgent || "Unknown device",
+              deviceId: deviceInfo.deviceId,
+              platform: deviceInfo.platform,
+            },
+            ipAddress: session.ipAddress || "Unknown",
+            createdAt: session.createdAt,
+            expiresAt: session.expiresAt,
+          };
+        });
+      } catch (error: any) {
+        logger.error({ userId, error: error.message }, "Get sessions failed");
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to get active sessions",
+        });
+      }
+    }),
 
   /**
    * Revoke a specific session (by session ID)
@@ -491,7 +496,8 @@ export const authRouter = router({
           and(eq(refreshTokens.id, sessionId), eq(refreshTokens.userId, userId))
         );
 
-      const affected = (result as any).rowsAffected || (result as any)[0]?.affectedRows || 0;
+      const affected =
+        (result as any).rowsAffected || (result as any)[0]?.affectedRows || 0;
 
       if (affected === 0) {
         throw new TRPCError({
@@ -520,7 +526,11 @@ export const authRouter = router({
           "Verify an access token and return its decoded payload. Useful for debugging and validating tokens. Returns validation status and token details if valid.",
       },
     })
-    .input(z.object({ accessToken: z.string().describe("JWT access token to verify") }))
+    .input(
+      z.object({
+        accessToken: z.string().describe("JWT access token to verify"),
+      })
+    )
     .output(
       z.union([
         z.object({

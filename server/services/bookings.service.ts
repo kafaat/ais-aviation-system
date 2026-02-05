@@ -10,10 +10,7 @@ import {
   convertLockToBooking,
   verifyLock,
 } from "./inventory-lock.service";
-import {
-  trackBookingStarted,
-  trackBookingCancelled,
-} from "./metrics.service";
+import { trackBookingStarted, trackBookingCancelled } from "./metrics.service";
 
 /**
  * Bookings Service

@@ -374,9 +374,7 @@ export async function exportUserData(
 /**
  * Generate user data export (called by background job)
  */
-export async function generateDataExport(
-  requestId: number
-): Promise<{
+export async function generateDataExport(requestId: number): Promise<{
   success: boolean;
   data?: Record<string, unknown>;
   error?: string;
@@ -428,10 +426,7 @@ export async function generateDataExport(
       })
       .where(eq(dataExportRequests.id, requestId));
 
-    logger.info(
-      { requestId, userId },
-      "Data export completed successfully"
-    );
+    logger.info({ requestId, userId }, "Data export completed successfully");
 
     return { success: true, data: userData };
   } catch (error) {
@@ -884,7 +879,10 @@ export async function processAccountDeletion(
       .limit(1);
 
     if (request.length === 0) {
-      return { success: false, error: "Deletion request not found or already processed" };
+      return {
+        success: false,
+        error: "Deletion request not found or already processed",
+      };
     }
 
     const deletionRequest = request[0];
@@ -892,14 +890,20 @@ export async function processAccountDeletion(
 
     // Check if past scheduled deletion date and confirmed
     if (!deletionRequest.confirmedAt) {
-      return { success: false, error: "Deletion request not confirmed by user" };
+      return {
+        success: false,
+        error: "Deletion request not confirmed by user",
+      };
     }
 
     if (
       deletionRequest.scheduledDeletionAt &&
       new Date() < deletionRequest.scheduledDeletionAt
     ) {
-      return { success: false, error: "Scheduled deletion date not yet reached" };
+      return {
+        success: false,
+        error: "Scheduled deletion date not yet reached",
+      };
     }
 
     // Update status to processing
@@ -1023,9 +1027,7 @@ async function anonymizeUserData(userId: number): Promise<void> {
 /**
  * Get deletion request status
  */
-export async function getDeletionStatus(
-  userId: number
-): Promise<{
+export async function getDeletionStatus(userId: number): Promise<{
   hasPendingRequest: boolean;
   request?: {
     id: number;
@@ -1076,13 +1078,15 @@ export async function getDeletionStatus(
 export async function getConsentHistory(
   userId: number,
   limit: number = 50
-): Promise<Array<{
-  consentType: string;
-  previousValue: boolean | null;
-  newValue: boolean;
-  changeReason: string;
-  createdAt: Date;
-}>> {
+): Promise<
+  Array<{
+    consentType: string;
+    previousValue: boolean | null;
+    newValue: boolean;
+    changeReason: string;
+    createdAt: Date;
+  }>
+> {
   const db = await getDb();
   if (!db) {
     throw new TRPCError({

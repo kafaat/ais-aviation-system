@@ -103,9 +103,7 @@ test.describe("Profile Management", () => {
 
         // Verify travel preferences content
         const hasTravelContent =
-          (await page
-            .getByText(/المقعد المفضل|Preferred seat/i)
-            .isVisible()) ||
+          (await page.getByText(/المقعد المفضل|Preferred seat/i).isVisible()) ||
           (await page.getByText(/درجة السفر|Cabin class/i).isVisible()) ||
           (await page.getByText(/الوجبات|Meal preference/i).isVisible());
 
@@ -169,9 +167,7 @@ test.describe("Profile Management", () => {
 
     test("should update preferred seat type", async ({ page }) => {
       const seatSelect = page.locator('[data-testid="seat-preference-select"]');
-      const fallbackSelect = page.getByLabel(
-        /المقعد المفضل|Preferred seat/i
-      );
+      const fallbackSelect = page.getByLabel(/المقعد المفضل|Preferred seat/i);
 
       const selectToUse = (await seatSelect.isVisible())
         ? seatSelect
@@ -181,9 +177,7 @@ test.describe("Profile Management", () => {
         await selectToUse.click();
 
         // Select window seat
-        await page
-          .getByRole("option", { name: /نافذة|Window/i })
-          .click();
+        await page.getByRole("option", { name: /نافذة|Window/i }).click();
 
         // Save changes
         const saveButton = page.getByRole("button", {
@@ -193,9 +187,9 @@ test.describe("Profile Management", () => {
           await saveButton.click();
 
           // Check for success message
-          await expect(
-            page.getByText(/تم الحفظ|Saved|Updated/i)
-          ).toBeVisible({ timeout: 5000 });
+          await expect(page.getByText(/تم الحفظ|Saved|Updated/i)).toBeVisible({
+            timeout: 5000,
+          });
         }
       }
     });
@@ -388,9 +382,7 @@ test.describe("Profile Management", () => {
 
       if (await emergencyPhoneInput.isVisible()) {
         await emergencyPhoneInput.clear();
-        await emergencyPhoneInput.fill(
-          testPreferences.personal.emergencyPhone
-        );
+        await emergencyPhoneInput.fill(testPreferences.personal.emergencyPhone);
       }
     });
   });
@@ -427,9 +419,7 @@ test.describe("Profile Management", () => {
     });
 
     test("should toggle SMS notifications", async ({ page }) => {
-      const smsSwitch = page.getByLabel(
-        /إشعارات الرسائل|SMS notifications/i
-      );
+      const smsSwitch = page.getByLabel(/إشعارات الرسائل|SMS notifications/i);
 
       if (await smsSwitch.isVisible()) {
         const initialState = await smsSwitch.isChecked();
@@ -510,7 +500,7 @@ test.describe("Profile Management", () => {
           (await page
             .getByText(/تم الحفظ بنجاح|Saved successfully|Updated/i)
             .isVisible()) ||
-          (await page.locator('[data-sonner-toast]').isVisible());
+          (await page.locator("[data-sonner-toast]").isVisible());
 
         expect(hasSuccess).toBeTruthy();
       }
