@@ -42,6 +42,7 @@ import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
+import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
 
 interface MenuItem {
@@ -332,6 +333,9 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3 border-t border-border/40">
+            <div className="flex items-center justify-between mb-2 group-data-[collapsible=icon]:justify-center">
+              <ThemeToggle variant="ghost" size="sm" showLabel={!isCollapsed} />
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">

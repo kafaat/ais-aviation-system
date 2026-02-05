@@ -18,6 +18,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { SearchHistory } from "@/components/SearchHistory";
 import { Link, useLocation } from "wouter";
 import {
@@ -171,6 +172,7 @@ export default function Home() {
             </nav>
 
             <div className="flex items-center gap-2">
+              <ThemeToggle />
               <LanguageSwitcher />
               {user ? (
                 <div className="flex items-center gap-2">

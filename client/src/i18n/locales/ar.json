@@ -136,14 +136,43 @@
     "subtitle": "عرض وإدارة جميع حجوزاتك",
     "noBookings": "لا توجد حجوزات",
     "noBookingsDesc": "لم تقم بأي حجوزات بعد",
+    "noBookingsHint": "ابدأ باستكشاف الرحلات واحجز مغامرتك القادمة",
+    "searchFlights": "البحث عن رحلات",
+    "loginRequired": "تسجيل الدخول مطلوب",
+    "loginRequiredDesc": "يرجى تسجيل الدخول لعرض حجوزاتك",
     "bookingRef": "رقم الحجز",
     "pnr": "PNR",
     "from": "من",
     "to": "إلى",
     "departureDate": "تاريخ المغادرة",
     "totalAmount": "المبلغ الإجمالي",
+    "passengers": "الركاب",
+    "passengerCount": "{{count}} راكب",
     "checkInNow": "تسجيل الوصول",
     "checkedIn": "تم تسجيل الوصول",
+    "modify": "تعديل",
+    "cancelBooking": "إلغاء",
+    "manageServices": "إدارة الخدمات",
+    "adult": "بالغ",
+    "child": "طفل",
+    "infant": "رضيع",
+    "seat": "مقعد",
+    "filters": {
+      "title": "الفلاتر",
+      "status": "الحالة",
+      "allStatuses": "جميع الحالات",
+      "dateRange": "نطاق التاريخ",
+      "startDate": "تاريخ البداية",
+      "endDate": "تاريخ النهاية",
+      "clearFilters": "مسح الفلاتر"
+    },
+    "sort": {
+      "title": "ترتيب حسب",
+      "dateDesc": "الأحدث أولاً",
+      "dateAsc": "الأقدم أولاً",
+      "priceDesc": "الأعلى سعراً",
+      "priceAsc": "الأقل سعراً"
+    },
     "status": {
       "pending": "قيد الانتظار",
       "confirmed": "مؤكد",
@@ -155,7 +184,10 @@
       "paid": "مدفوع",
       "refunded": "مسترد",
       "failed": "فشل"
-    }
+    },
+    "resultsCount": "عرض {{count}} حجز",
+    "noResults": "لا توجد حجوزات مطابقة للفلاتر",
+    "noResultsHint": "جرب تعديل الفلاتر لرؤية المزيد من النتائج"
   },
   "checkIn": {
     "title": "تسجيل الوصول",
@@ -169,8 +201,29 @@
     "bookingDetails": "تفاصيل الحجز",
     "passengers": "الركاب",
     "checkInButton": "تسجيل الوصول",
-    "checkInSuccess": "✓ تم تسجيل الوصول بنجاح",
-    "checkInSuccessDesc": "يمكنك التوجه إلى بوابة الصعود"
+    "checkInSuccess": "تم تسجيل الوصول بنجاح",
+    "checkInSuccessDesc": "يمكنك التوجه إلى بوابة الصعود",
+    "loginRequired": "تسجيل الدخول مطلوب",
+    "loginRequiredDesc": "يرجى تسجيل الدخول لإتمام عملية تسجيل الوصول",
+    "findBooking": "ابحث عن حجزك",
+    "invalidPnr": "يرجى إدخال رقم PNR صحيح (6 أحرف)",
+    "successMessage": "تم تسجيل الوصول بنجاح!",
+    "errorMessage": "حدث خطأ أثناء تسجيل الوصول",
+    "processing": "جاري المعالجة...",
+    "bookingRef": "رقم الحجز",
+    "departure": "موعد المغادرة",
+    "status": "الحالة",
+    "passengerCount": "عدد الركاب",
+    "flightNumber": "رقم الرحلة",
+    "boardingPass": "بطاقة الصعود",
+    "passenger": "الراكب",
+    "date": "التاريخ",
+    "boardingTime": "وقت الصعود",
+    "seat": "المقعد",
+    "gate": "البوابة",
+    "class": "الدرجة",
+    "boardingPassNote": "يرجى الوصول إلى البوابة قبل 30 دقيقة على الأقل من موعد المغادرة",
+    "printBoardingPass": "طباعة بطاقة الصعود"
   },
   "admin": {
     "title": "لوحة التحكم الإدارية",
@@ -213,7 +266,21 @@
   },
   "profile": {
     "title": "الملف الشخصي",
+    "subtitle": "إدارة إعدادات حسابك وتفضيلاتك",
     "updateSuccess": "تم تحديث التفضيلات بنجاح",
+    "updateError": "فشل في تحديث التفضيلات",
+    "saving": "جاري الحفظ...",
+    "avatar": {
+      "change": "تغيير صورة الملف الشخصي",
+      "invalidType": "يرجى اختيار ملف صورة",
+      "tooLarge": "يجب أن يكون حجم الصورة أقل من 5 ميجابايت",
+      "uploadSuccess": "تم تحديث الصورة بنجاح"
+    },
+    "validation": {
+      "invalidPassport": "رقم الجواز يجب أن يكون 6-12 حرفاً أو رقماً",
+      "invalidPhone": "يرجى إدخال رقم هاتف صحيح",
+      "pleaseCorrect": "يرجى تصحيح الأخطاء قبل الحفظ"
+    },
     "tabs": {
       "travel": "تفضيلات السفر",
       "personal": "المعلومات الشخصية",
@@ -317,7 +384,32 @@
     "tierBonus": "مكافآت المستوى",
     "tierBonusDesc": "احصل على مضاعفات إضافية حسب مستواك",
     "specialOffers": "عروض خاصة",
-    "specialOffersDesc": "عروض ترويجية حصرية للأعضاء"
+    "specialOffersDesc": "عروض ترويجية حصرية للأعضاء",
+    "milesHistory": "سجل الأميال",
+    "milesHistoryDesc": "تتبع أميالك المكتسبة عبر الوقت",
+    "last6Months": "آخر 6 أشهر",
+    "compareTiers": "مقارنة المستويات",
+    "compareTiersDesc": "اكتشف مزايا كل مستوى",
+    "currentTier": "المستوى الحالي",
+    "yourTier": "مستواك",
+    "benefits": {
+      "priorityBoarding": "أولوية الصعود",
+      "loungeAccess": "دخول الصالة",
+      "extraBaggage": "حقيبة إضافية",
+      "seatSelection": "اختيار المقعد مجاناً",
+      "upgrades": "ترقيات مجانية",
+      "dedicatedSupport": "خط دعم مخصص",
+      "partnerBenefits": "مزايا الشركاء",
+      "exclusiveOffers": "عروض حصرية",
+      "bonusMiles": "أميال إضافية",
+      "flexibleBooking": "تغيير الحجز المرن"
+    },
+    "tierRequirements": "متطلبات المستوى",
+    "milesRequired": "{{miles}} ميل مطلوب",
+    "unlimitedBenefits": "جميع المزايا مفعلة",
+    "earnedThisMonth": "المكتسب هذا الشهر",
+    "redeemedThisMonth": "المسترد هذا الشهر",
+    "viewAll": "عرض الكل"
   },
   "ancillary": {
     "title": "الخدمات الإضافية",
@@ -343,6 +435,10 @@
     "errorSending": "خطأ في إرسال الرسالة",
     "errorSelecting": "خطأ في اختيار الرحلة",
     "bookingSelected": "تم اختيار الرحلة بنجاح"
+  },
+  "theme": {
+    "darkMode": "الوضع الداكن",
+    "lightMode": "الوضع الفاتح"
   },
   "cabin": {
     "economy": "اقتصادي",

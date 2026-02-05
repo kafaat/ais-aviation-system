@@ -17,7 +17,7 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AnalyticsDashboard = lazy(() => import("./pages/AnalyticsDashboard"));
 const RefundsDashboard = lazy(() => import("./pages/admin/RefundsDashboard"));
 const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
-const UserProfile = lazy(() => import("./pages/UserProfile"));
+const Profile = lazy(() => import("./pages/Profile"));
 const LoyaltyDashboard = lazy(() => import("./pages/LoyaltyDashboard"));
 const FavoritesPage = lazy(() => import("./pages/FavoritesPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -43,7 +43,7 @@ function Router() {
         <Route path="/booking/:id" component={BookingPage} />
         <Route path="/my-bookings" component={MyBookings} />
         <Route path="/check-in" component={CheckIn} />
-        <Route path="/profile" component={UserProfile} />
+        <Route path="/profile" component={Profile} />
         <Route path="/loyalty" component={LoyaltyDashboard} />
         <Route path="/favorites" component={FavoritesPage} />
         <Route path="/admin">
@@ -76,7 +76,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider defaultTheme="light" switchable>
         <TooltipProvider>
           <Toaster />
           <Router />
