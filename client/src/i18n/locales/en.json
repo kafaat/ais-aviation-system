@@ -402,6 +402,35 @@
     "addToFavorites": "Add to favorites",
     "removeFromFavorites": "Remove from favorites"
   },
+  "favoritesPage": {
+    "title": "My Favorite Routes",
+    "subtitle": "Manage your saved routes and price alerts",
+    "searchFlights": "Search Flights",
+    "features": {
+      "saveRoutes": {
+        "title": "Save Routes",
+        "description": "Save your frequently traveled routes for quick access"
+      },
+      "priceAlerts": {
+        "title": "Price Alerts",
+        "description": "Get notified when prices drop below your target"
+      },
+      "trackPrices": {
+        "title": "Track Prices",
+        "description": "Monitor price changes over time for your favorite routes"
+      }
+    }
+  },
+  "searchHistory": {
+    "title": "Recent Searches",
+    "recent": "Recent Searches",
+    "empty": "No recent searches",
+    "passengers": "passengers",
+    "justNow": "Just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
   "priceCalendar": {
     "title": "Price Calendar",
     "subtitle": "View flight prices by date",

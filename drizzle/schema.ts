@@ -158,6 +158,7 @@ export const bookings = mysqlTable(
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
     numberOfPassengers: int("numberOfPassengers").notNull(),
     checkedIn: boolean("checkedIn").default(false).notNull(),
+    checkInReminderSentAt: timestamp("checkInReminderSentAt"), // When check-in reminder email was sent
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

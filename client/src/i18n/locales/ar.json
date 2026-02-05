@@ -379,6 +379,35 @@
     "addToFavorites": "إضافة إلى المفضلة",
     "removeFromFavorites": "إزالة من المفضلة"
   },
+  "favoritesPage": {
+    "title": "مساراتي المفضلة",
+    "subtitle": "إدارة المسارات المحفوظة وتنبيهات الأسعار",
+    "searchFlights": "البحث عن رحلات",
+    "features": {
+      "saveRoutes": {
+        "title": "حفظ المسارات",
+        "description": "احفظ مساراتك المتكررة للوصول السريع"
+      },
+      "priceAlerts": {
+        "title": "تنبيهات الأسعار",
+        "description": "احصل على إشعار عندما تنخفض الأسعار عن هدفك"
+      },
+      "trackPrices": {
+        "title": "تتبع الأسعار",
+        "description": "راقب تغيرات الأسعار بمرور الوقت لمساراتك المفضلة"
+      }
+    }
+  },
+  "searchHistory": {
+    "title": "عمليات البحث الأخيرة",
+    "recent": "عمليات البحث الأخيرة",
+    "empty": "لا توجد عمليات بحث أخيرة",
+    "passengers": "مسافرين",
+    "justNow": "الآن",
+    "minutesAgo": "منذ {{count}} دقيقة",
+    "hoursAgo": "منذ {{count}} ساعة",
+    "daysAgo": "منذ {{count}} يوم"
+  },
   "priceCalendar": {
     "title": "تقويم الأسعار",
     "subtitle": "عرض أسعار الرحلات حسب التاريخ",

@@ -19,6 +19,7 @@ const RefundsDashboard = lazy(() => import("./pages/admin/RefundsDashboard"));
 const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
 const UserProfile = lazy(() => import("./pages/UserProfile"));
 const LoyaltyDashboard = lazy(() => import("./pages/LoyaltyDashboard"));
+const FavoritesPage = lazy(() => import("./pages/FavoritesPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Loading component shown while lazy loading pages
@@ -44,6 +45,7 @@ function Router() {
         <Route path="/check-in" component={CheckIn} />
         <Route path="/profile" component={UserProfile} />
         <Route path="/loyalty" component={LoyaltyDashboard} />
+        <Route path="/favorites" component={FavoritesPage} />
         <Route path="/admin">
           <AdminRoute>
             <AdminDashboard />
