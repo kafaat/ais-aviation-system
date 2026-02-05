@@ -224,7 +224,7 @@ function DashboardLayoutContent({
     };
   }, [isResizing, setSidebarWidth]);
 
-  const renderMenuItem = (item: MenuItem, index: number) => {
+  const renderMenuItem = (item: MenuItem, _index: number) => {
     const isActive = location === item.path;
     const label = t(item.labelKey);
 
@@ -234,6 +234,7 @@ function DashboardLayoutContent({
           isActive={isActive}
           onClick={() => setLocation(item.path)}
           tooltip={label}
+          aria-current={isActive ? "page" : undefined}
           className={`h-11 transition-all font-normal ${
             isActive
               ? "bg-primary/10 text-primary font-medium"
@@ -244,6 +245,7 @@ function DashboardLayoutContent({
             className={`h-4 w-4 transition-colors ${
               isActive ? "text-primary" : "text-muted-foreground"
             }`}
+            aria-hidden="true"
           />
           <span className="flex-1">{label}</span>
           {item.badge && (
@@ -258,6 +260,11 @@ function DashboardLayoutContent({
 
   return (
     <>
+      {/* Skip to content link for keyboard users */}
+      <a href="#main-content" className="skip-to-content">
+        {t("accessibility.skipToContent")}
+      </a>
+
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
@@ -276,8 +283,12 @@ function DashboardLayoutContent({
                   <button
                     onClick={toggleSidebar}
                     className="absolute inset-0 flex items-center justify-center bg-accent rounded-lg ring-1 ring-border opacity-0 group-hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t("accessibility.expandSidebar")}
                   >
-                    <PanelLeft className="h-4 w-4 text-foreground" />
+                    <PanelLeft
+                      className="h-4 w-4 text-foreground"
+                      aria-hidden="true"
+                    />
                   </button>
                 </div>
               ) : (
@@ -300,8 +311,12 @@ function DashboardLayoutContent({
                   <button
                     onClick={toggleSidebar}
                     className="ml-auto h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                    aria-label={t("accessibility.collapseSidebar")}
                   >
-                    <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                    <PanelLeft
+                      className="h-4 w-4 text-muted-foreground"
+                      aria-hidden="true"
+                    />
                   </button>
                 </>
               )}
@@ -310,24 +325,28 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0 py-2">
             {/* Main Navigation */}
-            <SidebarMenu className="px-2 py-1 space-y-0.5">
-              {menuItems.map(renderMenuItem)}
-            </SidebarMenu>
+            <nav aria-label={t("accessibility.mainNavigation")}>
+              <SidebarMenu className="px-2 py-1 space-y-0.5">
+                {menuItems.map(renderMenuItem)}
+              </SidebarMenu>
+            </nav>
 
             {/* Admin Navigation */}
             {isAdmin && (
               <>
                 <div className="px-4 py-3">
-                  <div className="h-px bg-border/60" />
+                  <div className="h-px bg-border/60" aria-hidden="true" />
                 </div>
                 <div className="px-4 mb-1">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                     {t("nav.admin")}
                   </span>
                 </div>
-                <SidebarMenu className="px-2 py-1 space-y-0.5">
-                  {adminMenuItems.map(renderMenuItem)}
-                </SidebarMenu>
+                <nav aria-label={t("accessibility.adminNavigation")}>
+                  <SidebarMenu className="px-2 py-1 space-y-0.5">
+                    {adminMenuItems.map(renderMenuItem)}
+                  </SidebarMenu>
+                </nav>
               </>
             )}
           </SidebarContent>
@@ -338,7 +357,10 @@ function DashboardLayoutContent({
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button
+                  className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={t("accessibility.userMenu")}
+                >
                   <Avatar className="h-10 w-10 border-2 border-primary/20 shrink-0 shadow-sm">
                     <AvatarFallback className="text-sm font-semibold bg-gradient-to-br from-primary/20 to-purple-500/20 text-primary">
                       {user?.name?.charAt(0).toUpperCase()}
@@ -364,14 +386,14 @@ function DashboardLayoutContent({
                   onClick={() => setLocation("/profile")}
                   className="cursor-pointer"
                 >
-                  <User className="mr-2 h-4 w-4" />
+                  <User className="mr-2 h-4 w-4" aria-hidden="true" />
                   <span>{t("nav.profile")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setLocation("/loyalty")}
                   className="cursor-pointer"
                 >
-                  <Star className="mr-2 h-4 w-4" />
+                  <Star className="mr-2 h-4 w-4" aria-hidden="true" />
                   <span>{t("nav.loyalty")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -379,7 +401,7 @@ function DashboardLayoutContent({
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                   <span>{t("common.logout")}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -411,7 +433,9 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main id="main-content" className="flex-1 p-4 md:p-6" role="main">
+          {children}
+        </main>
       </SidebarInset>
     </>
   );

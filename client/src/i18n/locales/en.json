@@ -563,5 +563,58 @@
     "medium": "Medium",
     "high": "High",
     "perPerson": "per person"
+  },
+  "pwa": {
+    "install": "Install App",
+    "installPrompt": "Install AIS Aviation on your device for quick access and offline support.",
+    "offline": "You're offline. Some features may be unavailable.",
+    "updateAvailable": "Update Available",
+    "updateNow": "Update Now"
+  },
+  "errors": {
+    "somethingWentWrong": "Something went wrong",
+    "tryAgain": "Try Again",
+    "reportError": "Report this Error",
+    "pageNotFound": "Page Not Found",
+    "pageNotFoundDescription": "Sorry, the page you are looking for doesn't exist or has been moved.",
+    "pageNotFoundHint": "It may have been removed, had its name changed, or is temporarily unavailable.",
+    "goHome": "Go Home",
+    "popularPages": "Popular pages you might be looking for:",
+    "needHelp": "Need help?",
+    "contactSupport": "Contact our support team",
+    "technicalDetails": "Technical Details",
+    "errorApology": "We apologize for the inconvenience. An unexpected error has occurred.",
+    "persistentError": "If this problem persists, please contact our support team."
+  },
+  "flightStatus": {
+    "live": "Live",
+    "scheduled": "Scheduled",
+    "boarding": "Boarding",
+    "departed": "Departed",
+    "delayed": "Delayed",
+    "cancelled": "Cancelled",
+    "landed": "Landed",
+    "staticStatus": "Status (not live)",
+    "disconnected": "Disconnected",
+    "delayedBy": "Delayed by {{minutes}} minutes",
+    "flightDelayed": "Flight {{flightNumber}} is delayed",
+    "flightCancelled": "Flight {{flightNumber}} has been cancelled"
+  },
+  "accessibility": {
+    "skipToContent": "Skip to main content",
+    "mainNavigation": "Main navigation",
+    "adminNavigation": "Admin navigation",
+    "reducedMotion": "Reduced motion",
+    "highContrast": "High contrast",
+    "fontSize": "Font size",
+    "fontSizeNormal": "Normal",
+    "fontSizeLarge": "Large",
+    "fontSizeLarger": "Larger",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "userMenu": "User menu",
+    "closeDialog": "Close dialog",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   }
 }

@@ -131,6 +131,75 @@
   input[type="radio"]:not(:disabled) {
     @apply cursor-pointer;
   }
+
+  /* Focus-visible styles for keyboard navigation */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  /* Remove default focus outline for mouse users */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Enhanced focus styles for interactive elements */
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary ring-2 ring-primary/20;
+  }
+}
+
+/* Skip to content link - visually hidden but accessible */
+.skip-to-content {
+  @apply absolute -top-10 left-4 z-[100] bg-primary text-primary-foreground px-4 py-2 rounded-md font-medium transition-all duration-200;
+}
+
+.skip-to-content:focus {
+  @apply top-4;
+}
+
+/* Reduced motion preference */
+.reduce-motion,
+.reduce-motion * {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* High contrast mode */
+.high-contrast {
+  --border: oklch(0.3 0 0);
+  --ring: oklch(0 0 0);
+}
+
+.high-contrast.dark {
+  --border: oklch(0.8 0 0);
+  --ring: oklch(1 0 0);
+}
+
+.high-contrast * {
+  border-color: currentColor !important;
+}
+
+.high-contrast button,
+.high-contrast a,
+.high-contrast [role="button"] {
+  text-decoration: underline;
+}
+
+/* Font size adjustments */
+.font-large {
+  font-size: 112.5%; /* 18px base */
+}
+
+.font-larger {
+  font-size: 125%; /* 20px base */
 }
 
 @layer components {

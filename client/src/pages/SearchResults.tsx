@@ -3,6 +3,7 @@ import { useLocation, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,9 @@ import {
 } from "@/components/ui/tooltip";
 import { AdvancedFilters } from "@/components/AdvancedFilters";
 import { SearchHistory, saveSearchToHistory } from "@/components/SearchHistory";
+import { FlightStatusBadge } from "@/components/FlightStatusBadge";
+import { useFlightStatus } from "@/hooks/useFlightStatus";
+import type { FlightStatusType } from "@/hooks/useFlightStatus";
 import {
   Plane,
   Clock,
@@ -90,6 +94,19 @@ export default function SearchResults() {
       toast.error(error.message);
     },
   });
+
+  // Get flight IDs for WebSocket subscription
+  const flightIds = useMemo(
+    () => (flights ? flights.map(f => f.id) : []),
+    [flights]
+  );
+
+  // Subscribe to real-time flight status updates
+  const { statuses: flightStatuses, isConnected: wsConnected } =
+    useFlightStatus({
+      flightIds,
+      enabled: flightIds.length > 0,
+    });
 
   // Check if current route is favorited (using params)
   const isRouteFavorited = () => {
@@ -247,9 +264,18 @@ export default function SearchResults() {
     }
   };
 
+  // Generate dynamic SEO title based on search
+  const seoTitle = useMemo(() => {
+    if (flights && flights.length > 0) {
+      return `${flights[0].origin.city} - ${flights[0].destination.city}`;
+    }
+    return t("search.title");
+  }, [flights, t]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <SEO title={t("search.title")} />
         <div className="container py-8">
           <Skeleton className="h-8 w-64 mb-8" />
           <div className="space-y-4">
@@ -264,14 +290,26 @@ export default function SearchResults() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <SEO
+        title={seoTitle}
+        description={t("search.foundFlights", {
+          count: filteredFlights.length,
+        })}
+        keywords="flight search, booking, travel"
+      />
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm">
         <div className="container py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/">
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <ChevronLeft className="h-5 w-5" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full"
+                  aria-label={t("common.back")}
+                >
+                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                 </Button>
               </Link>
               <div>
@@ -289,7 +327,10 @@ export default function SearchResults() {
             {flights && flights.length > 0 && (
               <div className="hidden md:flex items-center gap-2 text-sm bg-muted/50 px-4 py-2 rounded-full">
                 <span className="font-semibold">{flights[0].origin.code}</span>
-                <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                <ArrowLeftRight
+                  className="h-4 w-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
                 <span className="font-semibold">
                   {flights[0].destination.code}
                 </span>
@@ -359,11 +400,18 @@ export default function SearchResults() {
               <div className="space-y-4">
                 {filteredFlights.map(flight => {
                   const isFavorited = isRouteFavorited();
+                  const liveStatus = flightStatuses.get(flight.id);
+                  const displayStatus: FlightStatusType =
+                    liveStatus?.status ||
+                    (flight.status as FlightStatusType) ||
+                    "scheduled";
 
                   return (
                     <Card
                       key={flight.id}
                       className="p-6 hover:shadow-xl transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm"
+                      role="article"
+                      aria-label={`${t("search.title")}: ${flight.airline.name} ${flight.flightNumber}, ${flight.origin.city} ${t("home.search.to")} ${flight.destination.city}`}
                     >
                       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
                         {/* Airline Info */}
@@ -377,7 +425,10 @@ export default function SearchResults() {
                               />
                             ) : (
                               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                                <Plane className="h-6 w-6 text-primary" />
+                                <Plane
+                                  className="h-6 w-6 text-primary"
+                                  aria-hidden="true"
+                                />
                               </div>
                             )}
                             <div>
@@ -387,6 +438,15 @@ export default function SearchResults() {
                               <p className="text-sm text-muted-foreground">
                                 {flight.flightNumber}
                               </p>
+                              {/* Live Flight Status Badge */}
+                              <FlightStatusBadge
+                                status={displayStatus}
+                                delayMinutes={liveStatus?.delayMinutes}
+                                isLive={!!liveStatus}
+                                isConnected={wsConnected}
+                                size="sm"
+                                className="mt-1"
+                              />
                             </div>
                           </div>
                         </div>
@@ -411,7 +471,10 @@ export default function SearchResults() {
                                 <div className="border-t-2 border-dashed border-primary/30"></div>
                                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-2">
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                                    <Clock className="h-3 w-3" />
+                                    <Clock
+                                      className="h-3 w-3"
+                                      aria-hidden="true"
+                                    />
                                     <span>
                                       {calculateDuration(
                                         flight.departureTime,
@@ -459,12 +522,21 @@ export default function SearchResults() {
                                 }`}
                                 onClick={handleAddToFavorites}
                                 disabled={addFavorite.isPending || isFavorited}
+                                aria-label={
+                                  isFavorited
+                                    ? t("favorites.removeFromFavorites")
+                                    : t("favorites.addToFavorites")
+                                }
                               >
                                 {addFavorite.isPending ? (
-                                  <Loader2 className="h-5 w-5 animate-spin" />
+                                  <Loader2
+                                    className="h-5 w-5 animate-spin"
+                                    aria-hidden="true"
+                                  />
                                 ) : (
                                   <Heart
                                     className={`h-5 w-5 ${isFavorited ? "fill-current" : ""}`}
+                                    aria-hidden="true"
                                   />
                                 )}
                               </Button>
@@ -483,8 +555,12 @@ export default function SearchResults() {
                                 size="icon"
                                 className="rounded-full hover:text-blue-500 hover:bg-blue-50"
                                 onClick={() => handleShare(flight)}
+                                aria-label={t("common.share")}
                               >
-                                <Share2 className="h-5 w-5" />
+                                <Share2
+                                  className="h-5 w-5"
+                                  aria-hidden="true"
+                                />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>{t("common.share")}</TooltipContent>

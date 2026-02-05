@@ -9,6 +9,44 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
+// Service Worker Registration
+const registerServiceWorker = async () => {
+  if ("serviceWorker" in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+      });
+
+      // Check for updates
+      registration.addEventListener("updatefound", () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener("statechange", () => {
+            if (
+              newWorker.state === "installed" &&
+              navigator.serviceWorker.controller
+            ) {
+              // New content is available, dispatch event for UI notification
+              window.dispatchEvent(
+                new CustomEvent("swUpdate", { detail: registration })
+              );
+            }
+          });
+        }
+      });
+
+      console.info("[PWA] Service Worker registered successfully");
+    } catch (error) {
+      console.error("[PWA] Service Worker registration failed:", error);
+    }
+  }
+};
+
+// Register SW after page load
+if (typeof window !== "undefined") {
+  window.addEventListener("load", registerServiceWorker);
+}
+
 const queryClient = new QueryClient();
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {

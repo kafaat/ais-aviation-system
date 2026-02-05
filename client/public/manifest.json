@@ -1,8 +1,9 @@
 {
-  "name": "نظام الطيران المتكامل - AIS",
-  "short_name": "AIS",
-  "description": "نظام شامل لحجز تذاكر الطيران وإدارة الرحلات",
+  "name": "Aviation Integrated System - AIS",
+  "short_name": "AIS Aviation",
+  "description": "Comprehensive flight booking and management system - نظام شامل لحجز تذاكر الطيران وإدارة الرحلات",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
@@ -22,6 +23,7 @@
     }
   ],
   "categories": ["travel", "productivity"],
-  "lang": "ar",
-  "dir": "rtl"
+  "lang": "en",
+  "dir": "ltr",
+  "prefer_related_applications": false
 }

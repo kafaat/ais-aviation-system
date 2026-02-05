@@ -545,5 +545,58 @@
     "medium": "متوسط",
     "high": "مرتفع",
     "perPerson": "للشخص الواحد"
+  },
+  "pwa": {
+    "install": "تثبيت التطبيق",
+    "installPrompt": "ثبّت نظام الطيران المتكامل على جهازك للوصول السريع والدعم بدون اتصال.",
+    "offline": "أنت غير متصل بالإنترنت. قد تكون بعض الميزات غير متاحة.",
+    "updateAvailable": "يتوفر تحديث جديد",
+    "updateNow": "تحديث الآن"
+  },
+  "errors": {
+    "somethingWentWrong": "حدث خطأ ما",
+    "tryAgain": "حاول مرة أخرى",
+    "reportError": "الإبلاغ عن هذا الخطأ",
+    "pageNotFound": "الصفحة غير موجودة",
+    "pageNotFoundDescription": "عذراً، الصفحة التي تبحث عنها غير موجودة أو تم نقلها.",
+    "pageNotFoundHint": "ربما تمت إزالتها أو تغيير اسمها أو أنها غير متوفرة مؤقتاً.",
+    "goHome": "العودة للرئيسية",
+    "popularPages": "صفحات شائعة قد تبحث عنها:",
+    "needHelp": "هل تحتاج مساعدة؟",
+    "contactSupport": "تواصل مع فريق الدعم",
+    "technicalDetails": "التفاصيل التقنية",
+    "errorApology": "نعتذر عن الإزعاج. حدث خطأ غير متوقع.",
+    "persistentError": "إذا استمرت هذه المشكلة، يرجى التواصل مع فريق الدعم."
+  },
+  "flightStatus": {
+    "live": "مباشر",
+    "scheduled": "مجدولة",
+    "boarding": "صعود الركاب",
+    "departed": "غادرت",
+    "delayed": "متأخرة",
+    "cancelled": "ملغاة",
+    "landed": "هبطت",
+    "staticStatus": "الحالة (غير مباشرة)",
+    "disconnected": "غير متصل",
+    "delayedBy": "متأخرة {{minutes}} دقيقة",
+    "flightDelayed": "الرحلة {{flightNumber}} متأخرة",
+    "flightCancelled": "تم إلغاء الرحلة {{flightNumber}}"
+  },
+  "accessibility": {
+    "skipToContent": "التخطي إلى المحتوى الرئيسي",
+    "mainNavigation": "التنقل الرئيسي",
+    "adminNavigation": "تنقل المسؤول",
+    "reducedMotion": "تقليل الحركة",
+    "highContrast": "تباين عالي",
+    "fontSize": "حجم الخط",
+    "fontSizeNormal": "عادي",
+    "fontSizeLarge": "كبير",
+    "fontSizeLarger": "أكبر",
+    "expandSidebar": "توسيع الشريط الجانبي",
+    "collapseSidebar": "طي الشريط الجانبي",
+    "userMenu": "قائمة المستخدم",
+    "closeDialog": "إغلاق الحوار",
+    "openMenu": "فتح القائمة",
+    "closeMenu": "إغلاق القائمة"
   }
 }

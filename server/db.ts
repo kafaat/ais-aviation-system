@@ -243,10 +243,13 @@ export async function getBookingsByUserId(userId: number) {
       numberOfPassengers: bookings.numberOfPassengers,
       checkedIn: bookings.checkedIn,
       createdAt: bookings.createdAt,
+      flightId: bookings.flightId,
       flight: {
+        id: flights.id,
         flightNumber: flights.flightNumber,
         departureTime: flights.departureTime,
         arrivalTime: flights.arrivalTime,
+        status: flights.status,
         origin: airports.code,
         destination: sql<string>`dest.code`,
       },

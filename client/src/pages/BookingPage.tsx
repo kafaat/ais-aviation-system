@@ -3,6 +3,7 @@ import { useLocation, useRoute, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -202,6 +203,7 @@ export default function BookingPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+        <SEO title={t("booking.title")} />
         <div className="container py-8">
           <Skeleton className="h-12 w-48 mb-8" />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -219,6 +221,7 @@ export default function BookingPage() {
   if (!flight) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <SEO title={t("booking.title")} />
         <Card className="p-12 text-center border-dashed">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
             <Plane className="h-10 w-10 text-muted-foreground" />
@@ -259,6 +262,11 @@ export default function BookingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <SEO
+        title={`${t("booking.title")} - ${flight.origin.city} ${t("home.search.to")} ${flight.destination.city}`}
+        description={t("booking.completeBooking")}
+        keywords="flight booking, passenger info, payment"
+      />
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm">
         <div className="container py-4">
