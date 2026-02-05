@@ -39,12 +39,16 @@
   },
   "nav": {
     "home": "Home",
+    "searchFlights": "Search Flights",
     "myBookings": "My Bookings",
+    "favorites": "Favorites",
     "checkIn": "Check-in",
     "profile": "Profile",
-    "loyalty": "Loyalty",
+    "loyalty": "Loyalty Program",
     "admin": "Dashboard",
-    "analytics": "Analytics"
+    "analytics": "Analytics",
+    "reports": "Reports",
+    "refunds": "Refunds"
   },
   "home": {
     "hero": {
@@ -419,13 +423,30 @@
         "title": "Track Prices",
         "description": "Monitor price changes over time for your favorite routes"
       }
+    },
+    "howItWorks": {
+      "title": "How It Works",
+      "step1": {
+        "title": "Search & Save",
+        "description": "Search for a flight and click the heart icon to save it"
+      },
+      "step2": {
+        "title": "Set Target Price",
+        "description": "Set a price alert to get notified when it drops"
+      },
+      "step3": {
+        "title": "Book at Best Price",
+        "description": "When the price drops, you'll receive a notification to book immediately"
+      }
     }
   },
   "searchHistory": {
     "title": "Recent Searches",
     "recent": "Recent Searches",
     "empty": "No recent searches",
+    "emptyHint": "Start searching for your first flight",
     "passengers": "passengers",
+    "searchAgain": "Search",
     "justNow": "Just now",
     "minutesAgo": "{{count}} min ago",
     "hoursAgo": "{{count}}h ago",

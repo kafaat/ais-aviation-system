@@ -8,7 +8,15 @@ import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { History, Plane, X, Search, Clock } from "lucide-react";
+import {
+  History,
+  Plane,
+  X,
+  Search,
+  Clock,
+  ArrowRight,
+  Trash2,
+} from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -153,10 +161,15 @@ export function SearchHistory({
   if (history.length === 0) {
     if (compact) return null;
     return (
-      <Card>
-        <CardContent className="py-6 text-center text-muted-foreground">
-          <History className="h-8 w-8 mx-auto mb-2 opacity-20" />
-          <p>{t("searchHistory.empty")}</p>
+      <Card className="border-dashed">
+        <CardContent className="py-12 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+            <History className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h3 className="font-semibold mb-1">{t("searchHistory.empty")}</h3>
+          <p className="text-sm text-muted-foreground">
+            {t("searchHistory.emptyHint")}
+          </p>
         </CardContent>
       </Card>
     );
@@ -164,13 +177,21 @@ export function SearchHistory({
 
   if (compact) {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium flex items-center gap-2">
-            <History className="h-4 w-4" />
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <div className="p-1.5 bg-primary/10 rounded-lg">
+              <History className="h-4 w-4 text-primary" />
+            </div>
             {t("searchHistory.recent")}
           </h3>
-          <Button variant="ghost" size="sm" onClick={handleClearAll}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearAll}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
             {t("common.clearAll")}
           </Button>
         </div>
@@ -180,10 +201,12 @@ export function SearchHistory({
               key={entry.id}
               variant="outline"
               size="sm"
-              className="text-xs"
+              className="text-xs group hover:border-primary hover:bg-primary/5 transition-all"
               onClick={() => handleSearch(entry)}
             >
-              {entry.originCode} → {entry.destinationCode}
+              <span className="font-semibold">{entry.originCode}</span>
+              <ArrowRight className="h-3 w-3 mx-1 text-muted-foreground group-hover:text-primary" />
+              <span className="font-semibold">{entry.destinationCode}</span>
             </Button>
           ))}
         </div>
@@ -192,75 +215,114 @@ export function SearchHistory({
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="overflow-hidden">
+      <CardHeader className="pb-3 bg-gradient-to-r from-slate-50 to-gray-50 border-b">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <History className="h-5 w-5" />
+          <CardTitle className="text-lg flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-xl">
+              <History className="h-5 w-5 text-primary" />
+            </div>
             {t("searchHistory.title")}
+            <Badge variant="secondary" className="text-xs">
+              {history.length}
+            </Badge>
           </CardTitle>
-          <Button variant="ghost" size="sm" onClick={handleClearAll}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearAll}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4 mr-1.5" />
             {t("common.clearAll")}
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {history.map(entry => (
+      <CardContent className="p-0">
+        <div className="divide-y">
+          {history.map((entry, index) => (
             <div
               key={entry.id}
-              className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors group"
+              className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors group"
             >
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="text-center">
-                    <div className="font-bold">{entry.originCode}</div>
-                    <div className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                {/* Route visualization */}
+                <div className="flex items-center gap-3">
+                  <div className="text-center min-w-[60px]">
+                    <div className="text-lg font-bold text-primary">
+                      {entry.originCode}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate max-w-[80px]">
                       {entry.originCity}
                     </div>
                   </div>
-                  <Plane className="h-4 w-4 text-muted-foreground" />
-                  <div className="text-center">
-                    <div className="font-bold">{entry.destinationCode}</div>
-                    <div className="text-xs text-muted-foreground">
+
+                  <div className="flex flex-col items-center">
+                    <div className="w-20 h-px bg-gradient-to-r from-primary/50 via-primary to-primary/50 relative">
+                      <Plane className="h-4 w-4 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background" />
+                    </div>
+                  </div>
+
+                  <div className="text-center min-w-[60px]">
+                    <div className="text-lg font-bold text-primary">
+                      {entry.destinationCode}
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate max-w-[80px]">
                       {entry.destinationCity}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Badge variant="secondary" className="text-xs">
-                    {formatDate(entry.departureDate)}
+                {/* Trip details */}
+                <div className="hidden md:flex items-center gap-2 flex-wrap">
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal bg-white"
+                  >
+                    📅 {formatDate(entry.departureDate)}
                   </Badge>
-                  <Badge variant="outline" className="text-xs">
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal bg-white"
+                  >
+                    {entry.cabinClass === "business" ? "💼" : "✈️"}{" "}
                     {t(`cabin.${entry.cabinClass}`)}
                   </Badge>
-                  <span className="text-xs">
-                    {entry.passengers} {t("searchHistory.passengers")}
-                  </span>
+                  <Badge
+                    variant="outline"
+                    className="text-xs font-normal bg-white"
+                  >
+                    👤 {entry.passengers}
+                  </Badge>
                 </div>
               </div>
 
+              {/* Actions */}
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="text-xs text-muted-foreground hidden sm:flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {formatTimestamp(entry.timestamp)}
                 </span>
+
                 <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
+                  variant="default"
+                  size="sm"
+                  className="gap-1.5"
                   onClick={() => handleSearch(entry)}
                 >
-                  <Search className="h-4 w-4" />
+                  <Search className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">
+                    {t("searchHistory.searchAgain")}
+                  </span>
                 </Button>
+
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                   onClick={() => handleRemove(entry.id)}
                 >
-                  <X className="h-4 w-4 text-destructive" />
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             </div>
