@@ -16,6 +16,7 @@ const CheckIn = lazy(() => import("./pages/CheckIn"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AnalyticsDashboard = lazy(() => import("./pages/AnalyticsDashboard"));
 const RefundsDashboard = lazy(() => import("./pages/admin/RefundsDashboard"));
+const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
 const UserProfile = lazy(() => import("./pages/UserProfile"));
 const LoyaltyDashboard = lazy(() => import("./pages/LoyaltyDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -56,6 +57,11 @@ function Router() {
         <Route path="/admin/refunds">
           <AdminRoute>
             <RefundsDashboard />
+          </AdminRoute>
+        </Route>
+        <Route path="/admin/reports">
+          <AdminRoute>
+            <ReportsDashboard />
           </AdminRoute>
         </Route>
         <Route path="/404" component={NotFound} />

@@ -385,6 +385,23 @@
     "exportSuccess": "Report exported successfully",
     "exportError": "Error exporting report"
   },
+  "favorites": {
+    "title": "Favorite Routes",
+    "empty": "No favorite routes yet",
+    "emptyHint": "Add routes to your favorites to track prices",
+    "alertUpdated": "Alert settings updated",
+    "alertSet": "Price alert set successfully",
+    "removed": "Route removed from favorites",
+    "invalidPrice": "Please enter a valid price",
+    "alertAt": "Alert at",
+    "setPriceAlert": "Set Price Alert",
+    "enableAlert": "Enable price alert",
+    "targetPrice": "Target price",
+    "enterPrice": "Enter target price",
+    "alertDescription": "You will be notified when the price drops below this amount",
+    "addToFavorites": "Add to favorites",
+    "removeFromFavorites": "Remove from favorites"
+  },
   "priceCalendar": {
     "title": "Price Calendar",
     "subtitle": "View flight prices by date",
