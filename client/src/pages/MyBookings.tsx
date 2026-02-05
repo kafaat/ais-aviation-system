@@ -72,8 +72,10 @@ export default function MyBookings() {
     );
   }
 
+  type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
+
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, { variant: any; label: string }> = {
+    const variants: Record<string, { variant: BadgeVariant; label: string }> = {
       pending: { variant: "secondary", label: "قيد الانتظار" },
       confirmed: { variant: "default", label: "مؤكد" },
       cancelled: { variant: "destructive", label: "ملغي" },
@@ -83,7 +85,7 @@ export default function MyBookings() {
   };
 
   const getPaymentBadge = (status: string) => {
-    const variants: Record<string, { variant: any; label: string }> = {
+    const variants: Record<string, { variant: BadgeVariant; label: string }> = {
       pending: { variant: "secondary", label: "معلق" },
       paid: { variant: "default", label: "مدفوع" },
       refunded: { variant: "outline", label: "مسترد" },

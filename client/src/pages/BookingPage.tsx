@@ -73,7 +73,7 @@ export default function BookingPage() {
   const updatePassenger = (
     index: number,
     field: keyof Passenger,
-    value: any
+    value: Passenger[keyof Passenger]
   ) => {
     const updated = [...passengers];
     updated[index] = { ...updated[index], [field]: value };

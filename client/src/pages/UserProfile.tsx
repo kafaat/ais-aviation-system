@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -67,7 +67,7 @@ export default function UserProfile() {
   });
 
   // Update formData when preferences load
-  useState(() => {
+  useEffect(() => {
     if (preferences) {
       setFormData({
         preferredSeatType: preferences.preferredSeatType || "window",
@@ -85,7 +85,7 @@ export default function UserProfile() {
         smsNotifications: preferences.smsNotifications ?? false,
       });
     }
-  });
+  }, [preferences]);
 
   const handleSave = () => {
     updatePreferences.mutate(formData);
