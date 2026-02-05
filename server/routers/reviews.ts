@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import * as reviewsService from "../services/reviews.service";
 
 export const reviewsRouter = router({
@@ -27,9 +27,9 @@ export const reviewsRouter = router({
     }),
 
   /**
-   * Get reviews for a flight
+   * Get reviews for a flight (public - anyone can view reviews)
    */
-  getFlightReviews: protectedProcedure
+  getFlightReviews: publicProcedure
     .input(
       z.object({
         flightId: z.number().int().positive(),
@@ -47,9 +47,9 @@ export const reviewsRouter = router({
     }),
 
   /**
-   * Get review statistics for a flight
+   * Get review statistics for a flight (public)
    */
-  getFlightStats: protectedProcedure
+  getFlightStats: publicProcedure
     .input(
       z.object({
         flightId: z.number().int().positive(),
@@ -124,5 +124,54 @@ export const reviewsRouter = router({
     )
     .mutation(async ({ input }) => {
       return await reviewsService.markReviewHelpful(input.reviewId);
+    }),
+
+  /**
+   * Get reviews for an airline (aggregated from all flights)
+   */
+  getAirlineReviews: publicProcedure
+    .input(
+      z.object({
+        airlineId: z.number().int().positive(),
+        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().min(0).optional(),
+        minRating: z.number().int().min(1).max(5).optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      return await reviewsService.getAirlineReviews(input.airlineId, {
+        limit: input.limit,
+        offset: input.offset,
+        minRating: input.minRating,
+      });
+    }),
+
+  /**
+   * Get review statistics for an airline
+   */
+  getAirlineStats: publicProcedure
+    .input(
+      z.object({
+        airlineId: z.number().int().positive(),
+      })
+    )
+    .query(async ({ input }) => {
+      return await reviewsService.getAirlineReviewStats(input.airlineId);
+    }),
+
+  /**
+   * Check if user can review a flight
+   */
+  canReview: protectedProcedure
+    .input(
+      z.object({
+        flightId: z.number().int().positive(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return await reviewsService.canUserReviewFlight(
+        ctx.user.id,
+        input.flightId
+      );
     }),
 });

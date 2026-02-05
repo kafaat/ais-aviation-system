@@ -2,6 +2,7 @@
  * Reports Dashboard - Admin Panel
  *
  * Allows admins to generate and export various reports
+ * Supports CSV, PDF, and Excel formats
  */
 
 import { useState } from "react";
@@ -34,12 +35,14 @@ import {
   TrendingUp,
   Plane,
   Users,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays } from "date-fns";
+import { ExportReportButton } from "@/components/ExportReportButton";
 
-type ReportType = "bookings" | "revenue" | "flights";
-type ExportFormat = "csv" | "pdf";
+type ReportType = "bookings" | "revenue" | "flights" | "refunds";
+type ExportFormat = "csv" | "pdf" | "excel";
 
 export default function ReportsDashboard() {
   const { t } = useTranslation();
@@ -51,13 +54,26 @@ export default function ReportsDashboard() {
   const [status, setStatus] = useState<string>("all");
   const [isExporting, setIsExporting] = useState(false);
 
-  // Export mutations
+  // CSV Export mutations
   const exportBookingsCSV = trpc.reports.exportBookingsCSV.useMutation();
   const exportRevenueCSV = trpc.reports.exportRevenueCSV.useMutation();
   const exportFlightPerformanceCSV =
     trpc.reports.exportFlightPerformanceCSV.useMutation();
+  const exportRefundsCSV = trpc.reports.exportRefundsCSV.useMutation();
+
+  // Excel Export mutations
+  const exportBookingsExcel = trpc.reports.exportBookingsExcel.useMutation();
+  const exportRevenueExcel = trpc.reports.exportRevenueExcel.useMutation();
+  const exportFlightPerformanceExcel =
+    trpc.reports.exportFlightPerformanceExcel.useMutation();
+  const exportRefundsExcel = trpc.reports.exportRefundsExcel.useMutation();
+
+  // PDF Export mutations
   const generateBookingsPDF = trpc.reports.generateBookingsPDF.useMutation();
   const generateRevenuePDF = trpc.reports.generateRevenuePDF.useMutation();
+  const generateFlightPerformancePDF =
+    trpc.reports.generateFlightPerformancePDF.useMutation();
+  const generateRefundsPDF = trpc.reports.generateRefundsPDF.useMutation();
 
   // Download helper
   const downloadFile = (
@@ -99,42 +115,55 @@ export default function ReportsDashboard() {
     };
 
     try {
+      let result: {
+        filename: string;
+        content: string;
+        contentType: string;
+        encoding?: string;
+      };
+
       if (activeTab === "bookings") {
         if (format === "csv") {
-          const result = await exportBookingsCSV.mutateAsync(filters);
-          downloadFile(result.content, result.filename, result.contentType);
+          result = await exportBookingsCSV.mutateAsync(filters);
+        } else if (format === "excel") {
+          result = await exportBookingsExcel.mutateAsync(filters);
         } else {
-          const result = await generateBookingsPDF.mutateAsync(filters);
-          downloadFile(
-            result.content,
-            result.filename,
-            result.contentType,
-            result.encoding
-          );
+          result = await generateBookingsPDF.mutateAsync(filters);
         }
       } else if (activeTab === "revenue") {
         if (format === "csv") {
-          const result = await exportRevenueCSV.mutateAsync(filters);
-          downloadFile(result.content, result.filename, result.contentType);
+          result = await exportRevenueCSV.mutateAsync(filters);
+        } else if (format === "excel") {
+          result = await exportRevenueExcel.mutateAsync(filters);
         } else {
-          const result = await generateRevenuePDF.mutateAsync(filters);
-          downloadFile(
-            result.content,
-            result.filename,
-            result.contentType,
-            result.encoding
-          );
+          result = await generateRevenuePDF.mutateAsync(filters);
         }
       } else if (activeTab === "flights") {
         if (format === "csv") {
-          const result = await exportFlightPerformanceCSV.mutateAsync(filters);
-          downloadFile(result.content, result.filename, result.contentType);
+          result = await exportFlightPerformanceCSV.mutateAsync(filters);
+        } else if (format === "excel") {
+          result = await exportFlightPerformanceExcel.mutateAsync(filters);
         } else {
-          toast.error("PDF export not available for flight performance");
-          return;
+          result = await generateFlightPerformancePDF.mutateAsync(filters);
         }
+      } else if (activeTab === "refunds") {
+        if (format === "csv") {
+          result = await exportRefundsCSV.mutateAsync(filters);
+        } else if (format === "excel") {
+          result = await exportRefundsExcel.mutateAsync(filters);
+        } else {
+          result = await generateRefundsPDF.mutateAsync(filters);
+        }
+      } else {
+        throw new Error("Invalid report type");
       }
 
+      downloadFile(
+        result.content,
+        result.filename,
+        result.contentType,
+        result.encoding
+      );
       toast.success(t("reports.exportSuccess"));
     } catch (error) {
       toast.error(t("reports.exportError"));
@@ -212,7 +241,7 @@ export default function ReportsDashboard() {
         value={activeTab}
         onValueChange={value => setActiveTab(value as ReportType)}
       >
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="bookings" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             {t("reports.bookings")}
@@ -224,6 +253,10 @@ export default function ReportsDashboard() {
           <TabsTrigger value="flights" className="flex items-center gap-2">
             <Plane className="h-4 w-4" />
             {t("reports.flights")}
+          </TabsTrigger>
+          <TabsTrigger value="refunds" className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4" />
+            {t("reports.refunds")}
           </TabsTrigger>
         </TabsList>
 
@@ -299,6 +332,30 @@ export default function ReportsDashboard() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="refunds">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("reports.refundsReport")}</CardTitle>
+              <CardDescription>
+                {t("reports.refundsReportDesc")}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  {t("reports.refundsIncludes")}:
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-1">
+                  <li>{t("reports.bookingReference")}</li>
+                  <li>{t("reports.refundAmount")}</li>
+                  <li>{t("reports.refundDate")}</li>
+                  <li>{t("reports.userEmail")}</li>
+                </ul>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Export Buttons */}
@@ -318,25 +375,81 @@ export default function ReportsDashboard() {
               {isExporting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <FileSpreadsheet className="h-4 w-4" />
+                <FileSpreadsheet className="h-4 w-4 text-blue-600" />
               )}
               {t("reports.exportCSV")}
             </Button>
 
-            {activeTab !== "flights" && (
-              <Button
-                onClick={() => handleExport("pdf")}
-                disabled={isExporting}
-                className="flex items-center gap-2"
-              >
-                {isExporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <FileText className="h-4 w-4" />
-                )}
-                {t("reports.exportPDF")}
-              </Button>
-            )}
+            <Button
+              onClick={() => handleExport("excel")}
+              disabled={isExporting}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="h-4 w-4 text-green-600" />
+              )}
+              {t("reports.exportExcel")}
+            </Button>
+
+            <Button
+              onClick={() => handleExport("pdf")}
+              disabled={isExporting}
+              className="flex items-center gap-2"
+            >
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              {t("reports.exportPDF")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Export Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("reports.quickExport")}</CardTitle>
+          <CardDescription>{t("reports.quickExportDesc")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <ExportReportButton
+              reportType="bookings"
+              filters={{
+                startDate,
+                endDate,
+                status: status !== "all" ? status : undefined,
+              }}
+              showLabel={true}
+              variant="outline"
+              className="w-full justify-start"
+            />
+            <ExportReportButton
+              reportType="revenue"
+              filters={{ startDate, endDate }}
+              showLabel={true}
+              variant="outline"
+              className="w-full justify-start"
+            />
+            <ExportReportButton
+              reportType="flights"
+              filters={{ startDate, endDate }}
+              showLabel={true}
+              variant="outline"
+              className="w-full justify-start"
+            />
+            <ExportReportButton
+              reportType="refunds"
+              filters={{ startDate, endDate }}
+              showLabel={true}
+              variant="outline"
+              className="w-full justify-start"
+            />
           </div>
         </CardContent>
       </Card>

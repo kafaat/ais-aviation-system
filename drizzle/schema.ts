@@ -1889,5 +1889,222 @@ export type AccountDeletionRequest =
 export type InsertAccountDeletionRequest =
   typeof accountDeletionRequests.$inferInsert;
 
+// ============================================================================
+// Group Bookings System
+// ============================================================================
+
+/**
+ * Group Bookings table
+ * Handles booking requests for groups (10+ passengers) with special pricing
+ */
+export const groupBookings = mysqlTable(
+  "group_bookings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    // Organizer information
+    organizerName: varchar("organizerName", { length: 255 }).notNull(),
+    organizerEmail: varchar("organizerEmail", { length: 320 }).notNull(),
+    organizerPhone: varchar("organizerPhone", { length: 20 }).notNull(),
+
+    // Group details
+    groupSize: int("groupSize").notNull(), // Minimum 10 passengers
+
+    // Flight reference
+    flightId: int("flightId").notNull(),
+
+    // Status tracking
+    status: mysqlEnum("status", ["pending", "confirmed", "cancelled"])
+      .default("pending")
+      .notNull(),
+
+    // Pricing
+    discountPercent: decimal("discountPercent", { precision: 5, scale: 2 }), // e.g., 5.00, 10.00, 15.00
+    totalPrice: int("totalPrice"), // Total price in SAR cents after discount
+
+    // Additional information
+    notes: text("notes"), // Special requests or admin notes
+    rejectionReason: text("rejectionReason"), // Reason if rejected
+
+    // Audit fields
+    approvedBy: int("approvedBy"), // Admin user ID who approved
+    approvedAt: timestamp("approvedAt"),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    // Index for organizer email lookups
+    organizerEmailIdx: index("group_bookings_organizer_email_idx").on(
+      table.organizerEmail
+    ),
+    // Index for flight-based queries
+    flightIdIdx: index("group_bookings_flight_id_idx").on(table.flightId),
+    // Index for status filtering (admin panels)
+    statusIdx: index("group_bookings_status_idx").on(table.status),
+    // Index for creation date sorting
+    createdAtIdx: index("group_bookings_created_at_idx").on(table.createdAt),
+    // Composite index for status + date (admin filtering)
+    statusCreatedAtIdx: index("group_bookings_status_created_at_idx").on(
+      table.status,
+      table.createdAt
+    ),
+  })
+);
+
+export type GroupBooking = typeof groupBookings.$inferSelect;
+export type InsertGroupBooking = typeof groupBookings.$inferInsert;
+
+// ============================================================================
+// Special Services System
+// ============================================================================
+
+/**
+ * Special Services
+ * Tracks special service requests for passengers (meals, wheelchair, UMNR, etc.)
+ */
+export const specialServices = mysqlTable(
+  "special_services",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    passengerId: int("passengerId").notNull(),
+
+    // Service identification
+    serviceType: mysqlEnum("serviceType", [
+      "meal",
+      "wheelchair",
+      "unaccompanied_minor",
+      "extra_legroom",
+      "pet_in_cabin",
+      "medical_assistance",
+    ]).notNull(),
+
+    // Service code (IATA standard codes where applicable)
+    serviceCode: varchar("serviceCode", { length: 20 }).notNull(),
+    // Examples:
+    // Meals: VGML (vegetarian), VVML (vegan), MOML (Muslim/halal), KSML (kosher), GFML (gluten-free), DBML (diabetic), CHML (child)
+    // Wheelchair: WCHR (can walk short distance), WCHS (cannot walk, can climb stairs), WCHC (immobile)
+    // UMNR: UMNR (unaccompanied minor)
+    // Pet: PETC (pet in cabin)
+    // Medical: MEDA (medical assistance)
+    // Extra legroom: EXST (extra seat)
+
+    // Additional details (JSON for flexibility)
+    details: text("details"), // JSON: additional information like age for UMNR, pet type, medical equipment, etc.
+
+    // Request status
+    status: mysqlEnum("status", [
+      "pending",
+      "confirmed",
+      "rejected",
+      "cancelled",
+    ])
+      .default("pending")
+      .notNull(),
+
+    // Admin notes for rejection reasons or special handling
+    adminNotes: text("adminNotes"),
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    bookingIdIdx: index("special_services_booking_id_idx").on(table.bookingId),
+    passengerIdIdx: index("special_services_passenger_id_idx").on(
+      table.passengerId
+    ),
+    serviceTypeIdx: index("special_services_type_idx").on(table.serviceType),
+    serviceCodeIdx: index("special_services_code_idx").on(table.serviceCode),
+    statusIdx: index("special_services_status_idx").on(table.status),
+    // Composite index for booking + passenger lookups
+    bookingPassengerIdx: index("special_services_booking_passenger_idx").on(
+      table.bookingId,
+      table.passengerId
+    ),
+  })
+);
+
+export type SpecialService = typeof specialServices.$inferSelect;
+export type InsertSpecialService = typeof specialServices.$inferInsert;
+
+// ============================================================================
+// User Flight Favorites & Price Alerts
+// ============================================================================
+
+/**
+ * User Flight Favorites
+ * Allows users to favorite specific individual flights
+ */
+export const userFlightFavorites = mysqlTable(
+  "user_flight_favorites",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    flightId: int("flightId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("user_flight_favorites_user_id_idx").on(table.userId),
+    flightIdIdx: index("user_flight_favorites_flight_id_idx").on(
+      table.flightId
+    ),
+    // Unique constraint: one favorite per user per flight
+    userFlightUnique: index("user_flight_favorites_unique_idx").on(
+      table.userId,
+      table.flightId
+    ),
+  })
+);
+
+export type UserFlightFavorite = typeof userFlightFavorites.$inferSelect;
+export type InsertUserFlightFavorite = typeof userFlightFavorites.$inferInsert;
+
+/**
+ * Price Alerts
+ * Standalone price alerts for routes (separate from favorites)
+ */
+export const priceAlerts = mysqlTable(
+  "price_alerts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    originId: int("originId").notNull(),
+    destinationId: int("destinationId").notNull(),
+    targetPrice: int("targetPrice").notNull(), // Price in SAR cents
+    currentPrice: int("currentPrice"), // Last checked price in SAR cents
+    isActive: boolean("isActive").default(true).notNull(),
+    lastChecked: timestamp("lastChecked"),
+    notifiedAt: timestamp("notifiedAt"), // When user was last notified
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"])
+      .default("economy")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("price_alerts_user_id_idx").on(table.userId),
+    routeIdx: index("price_alerts_route_idx").on(
+      table.originId,
+      table.destinationId
+    ),
+    activeIdx: index("price_alerts_active_idx").on(table.isActive),
+    lastCheckedIdx: index("price_alerts_last_checked_idx").on(
+      table.lastChecked
+    ),
+    // Unique constraint: one alert per user per route per cabin class
+    userRouteUnique: index("price_alerts_user_route_unique_idx").on(
+      table.userId,
+      table.originId,
+      table.destinationId,
+      table.cabinClass
+    ),
+  })
+);
+
+export type PriceAlert = typeof priceAlerts.$inferSelect;
+export type InsertPriceAlert = typeof priceAlerts.$inferInsert;
+
 // Export chat and notification schemas
 export * from "./chat-schema";

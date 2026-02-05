@@ -4,10 +4,13 @@
  */
 
 import { useTranslation } from "react-i18next";
+import { Link, useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 import { FavoriteFlights } from "@/components/FavoriteFlights";
+import { FlightFavorites } from "@/components/FlightFavorites";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Heart,
   Search,
@@ -15,8 +18,8 @@ import {
   TrendingDown,
   Sparkles,
   Plane,
+  Route,
 } from "lucide-react";
-import { useLocation } from "wouter";
 
 export default function FavoritesPage() {
   const { t } = useTranslation();
@@ -167,8 +170,51 @@ export default function FavoritesPage() {
           </CardContent>
         </Card>
 
-        {/* Favorites List */}
-        <FavoriteFlights />
+        {/* Favorites Tabs */}
+        <Tabs defaultValue="flights" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsTrigger value="flights" className="flex items-center gap-2">
+              <Plane className="h-4 w-4" />
+              {t("favorites.flightsTab")}
+            </TabsTrigger>
+            <TabsTrigger value="routes" className="flex items-center gap-2">
+              <Route className="h-4 w-4" />
+              {t("favorites.routesTab")}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="flights">
+            <FlightFavorites />
+          </TabsContent>
+
+          <TabsContent value="routes">
+            <FavoriteFlights />
+          </TabsContent>
+        </Tabs>
+
+        {/* Price Alerts Link */}
+        <Card className="mt-6 border-blue-100 bg-gradient-to-br from-white to-blue-50/50">
+          <CardContent className="py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-blue-100 rounded-xl">
+                  <Bell className="h-6 w-6 text-blue-500" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">
+                    {t("priceAlerts.manageAlerts")}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {t("priceAlerts.manageAlertsDescription")}
+                  </p>
+                </div>
+              </div>
+              <Button asChild variant="outline">
+                <Link href="/price-alerts">{t("priceAlerts.viewAlerts")}</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

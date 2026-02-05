@@ -37,6 +37,7 @@ import {
   Ticket,
   Users,
   X,
+  Star,
 } from "lucide-react";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
 import {
@@ -46,6 +47,13 @@ import {
 import { ModifyBookingDialog } from "@/components/ModifyBookingDialog";
 import { BookingAncillariesDisplay } from "@/components/BookingAncillariesDisplay";
 import { ManageAncillariesDialog } from "@/components/ManageAncillariesDialog";
+import { ReviewForm } from "@/components/ReviewForm";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   FlightStatusBadge,
   FlightDelayNotification,
@@ -71,6 +79,7 @@ export default function MyBookings() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
   const [manageAncillariesOpen, setManageAncillariesOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
 
   // Filter states
@@ -721,6 +730,23 @@ export default function MyBookings() {
                                 bookingId={booking.id}
                               />
 
+                              {/* Leave Review Button for Completed Bookings */}
+                              {booking.status === "completed" && (
+                                <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+                                  <Button
+                                    variant="outline"
+                                    className="w-full rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 hover:border-amber-400 text-amber-700 hover:text-amber-800 dark:from-amber-900/20 dark:to-orange-900/20 dark:border-amber-800 dark:text-amber-400"
+                                    onClick={() => {
+                                      setSelectedBooking(booking);
+                                      setReviewDialogOpen(true);
+                                    }}
+                                  >
+                                    <Star className="mr-2 h-4 w-4 fill-amber-400 text-amber-400" />
+                                    {t("reviews.leaveReview")}
+                                  </Button>
+                                </div>
+                              )}
+
                               {/* Modify/Cancel/Manage Buttons */}
                               {booking.status !== "cancelled" &&
                                 booking.status !== "completed" && (
@@ -815,6 +841,31 @@ export default function MyBookings() {
           cabinClass={selectedBooking.cabinClass}
           numberOfPassengers={selectedBooking.numberOfPassengers}
         />
+      )}
+
+      {/* Review Dialog */}
+      {selectedBooking && (
+        <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>{t("reviews.writeReview")}</DialogTitle>
+            </DialogHeader>
+            <ReviewForm
+              flightId={selectedBooking.flightId}
+              bookingId={selectedBooking.id}
+              flightInfo={{
+                flightNumber: selectedBooking.flight.flightNumber,
+                origin: selectedBooking.flight.origin,
+                destination: selectedBooking.flight.destination,
+              }}
+              onSuccess={() => {
+                setReviewDialogOpen(false);
+                setSelectedBooking(null);
+              }}
+              onCancel={() => setReviewDialogOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
