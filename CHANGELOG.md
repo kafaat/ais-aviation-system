@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.3.0
+
+### Features
+- feat: add Phase 2 components, services, and fix TypeScript errors (505ceae)
+- feat: complete voucher/credits system and Phase 2 features (041ccec)
+- feat: add gate management UI and translations (5ee327a)
+
+### Other Changes
+- style: fix prettier formatting issues (d17eef5)
+- Merge branch 'main' into claude/add-claude-documentation-hFQZh (bde54da)
+- Update CHANGELOG.md for version 1.2.0 (f8d159f)
+- Merge pull request #41 from kafaat/claude/add-claude-documentation-hFQZh (b348882)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.2.0...v1.3.0
+
+
+---
+
 ## What's Changed in v1.2.0
 
 ### Features
