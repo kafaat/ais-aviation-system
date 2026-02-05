@@ -794,3 +794,13 @@ export async function suggestIndexes(tableName: string): Promise<
 // ============ Exports ============
 
 export { slowQueryLog, SlowQueryLog };
+
+// Re-export pagination utilities from db.ts for convenience
+export {
+  PAGINATION_DEFAULTS,
+  normalizePaginationLimit,
+  buildCursorCondition,
+  createCursorPaginatedResponse,
+  createOffsetPaginatedResponse,
+  calculateOffset,
+} from "../db";

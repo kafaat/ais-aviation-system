@@ -9,16 +9,91 @@ import {
   bookings,
   ancillaryServices,
   bookingAncillaries,
+  users,
+  flights,
+  airlines,
+  airports,
 } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 describe("Booking with Ancillaries Integration", () => {
   let testServiceId: number;
   let testBookingId: number;
-  const testUserId = 1;
-  const testFlightId = 1;
+  let testUserId: number;
+  let testFlightId: number;
+
+  // Fixed IDs for cleanup
+  const testAirlineId = 999701;
+  const testOriginId = 999702;
+  const testDestinationId = 999703;
 
   beforeAll(async () => {
+    const db = await getDb();
+    if (!db) {
+      throw new Error("Database not available for tests");
+    }
+
+    // Create test user
+    const userResult = await db.insert(users).values({
+      email: `booking-ancillary-test-${Date.now()}@example.com`,
+      password: "hashedpassword123",
+      name: "Booking Ancillary Test User",
+      role: "user",
+      openId: `test-booking-ancillary-${Date.now()}`,
+    });
+    testUserId = (userResult as any).insertId;
+
+    // Create test airline
+    await db.insert(airlines).values({
+      id: testAirlineId,
+      code: "BA9",
+      name: "Test Booking Ancillary Airline",
+      active: true,
+    });
+
+    // Create test airports
+    await db.insert(airports).values([
+      {
+        id: testOriginId,
+        code: "BA1",
+        name: "Test Booking Origin",
+        city: "Test City 1",
+        country: "Saudi Arabia",
+      },
+      {
+        id: testDestinationId,
+        code: "BA2",
+        name: "Test Booking Destination",
+        city: "Test City 2",
+        country: "Saudi Arabia",
+      },
+    ]);
+
+    // Create test flight
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(10, 0, 0, 0);
+
+    const arrivalTime = new Date(tomorrow);
+    arrivalTime.setHours(12, 0, 0, 0);
+
+    const flightResult = await db.insert(flights).values({
+      flightNumber: "BA999",
+      airlineId: testAirlineId,
+      originId: testOriginId,
+      destinationId: testDestinationId,
+      departureTime: tomorrow,
+      arrivalTime: arrivalTime,
+      economyPrice: 50000,
+      businessPrice: 100000,
+      firstClassPrice: 200000,
+      economySeats: 100,
+      businessSeats: 20,
+      firstClassSeats: 10,
+      status: "scheduled",
+    });
+    testFlightId = (flightResult as any).insertId;
+
     // Create a test ancillary service
     testServiceId = await createAncillaryService({
       code: "TEST_INTEGRATION_BAG",
@@ -34,17 +109,29 @@ describe("Booking with Ancillaries Integration", () => {
   afterAll(async () => {
     // Cleanup
     const db = await getDb();
-    if (db && testBookingId) {
+    if (!db) return;
+
+    if (testBookingId) {
       await db
         .delete(bookingAncillaries)
         .where(eq(bookingAncillaries.bookingId, testBookingId));
       await db.delete(bookings).where(eq(bookings.id, testBookingId));
     }
-    if (db && testServiceId) {
+    if (testServiceId) {
       await db
         .delete(ancillaryServices)
         .where(eq(ancillaryServices.id, testServiceId));
     }
+    // Cleanup test data created in beforeAll
+    if (testFlightId) {
+      await db.delete(flights).where(eq(flights.id, testFlightId));
+    }
+    if (testUserId) {
+      await db.delete(users).where(eq(users.id, testUserId));
+    }
+    await db.delete(airports).where(eq(airports.id, testOriginId));
+    await db.delete(airports).where(eq(airports.id, testDestinationId));
+    await db.delete(airlines).where(eq(airlines.id, testAirlineId));
   });
 
   it("should create booking without ancillaries", async () => {

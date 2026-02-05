@@ -56,6 +56,7 @@ describe("Corporate Service", () => {
       password: "hashedpassword123",
       name: "Corporate Test User",
       role: "user",
+      openId: `test-corporate-user-${Date.now()}`,
     });
     testUserId = (userResult as any).insertId;
 
@@ -64,6 +65,7 @@ describe("Corporate Service", () => {
       password: "hashedpassword123",
       name: "Corporate Admin User",
       role: "admin",
+      openId: `test-corporate-admin-${Date.now()}`,
     });
     testAdminUserId = (adminUserResult as any).insertId;
 

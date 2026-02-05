@@ -8,8 +8,11 @@
 import { TRPCError } from "@trpc/server";
 import { eq, desc, and, sql, count } from "drizzle-orm";
 import { getDb } from "../db";
-import { notificationHistory, smsLogs } from "../../drizzle/schema";
-import type { SMSLog } from "../../drizzle/schema";
+import {
+  notificationHistory,
+  smsLogs,
+  type SMSLog,
+} from "../../drizzle/schema";
 
 // ============================================================================
 // Types
