@@ -6,8 +6,10 @@
  */
 
 import { TRPCError } from "@trpc/server";
+import { eq, desc, and, sql, count } from "drizzle-orm";
 import { getDb } from "../db";
-import { notificationHistory } from "../../drizzle/schema";
+import { notificationHistory, smsLogs } from "../../drizzle/schema";
+import type { SMSLog } from "../../drizzle/schema";
 
 // ============================================================================
 // Types
@@ -56,12 +58,30 @@ export const SMS_TEMPLATES: Record<string, SMSTemplate> = {
     bodyEn:
       "Reminder: Check-in is now open for flight {flightNumber} departing on {date}.",
   },
+  flight_reminder: {
+    id: "flight_reminder",
+    nameAr: "تذكير بالرحلة",
+    nameEn: "Flight Reminder",
+    bodyAr:
+      "تذكير: رحلتك {flightNumber} من {origin} إلى {destination} غداً في {time}. رقم الحجز: {bookingRef}.",
+    bodyEn:
+      "Reminder: Your flight {flightNumber} from {origin} to {destination} departs tomorrow at {time}. Booking: {bookingRef}.",
+  },
   flight_status: {
     id: "flight_status",
     nameAr: "حالة الرحلة",
     nameEn: "Flight Status",
     bodyAr: "تحديث الرحلة {flightNumber}: {status}. {message}",
     bodyEn: "Flight {flightNumber} update: {status}. {message}",
+  },
+  boarding_pass: {
+    id: "boarding_pass",
+    nameAr: "بطاقة الصعود",
+    nameEn: "Boarding Pass",
+    bodyAr:
+      "بطاقة صعودك لرحلة {flightNumber}: البوابة {gate}، المقعد {seat}، وقت الصعود {boardingTime}. رقم الحجز: {bookingRef}.",
+    bodyEn:
+      "Your boarding pass for {flightNumber}: Gate {gate}, Seat {seat}, Boarding at {boardingTime}. Booking: {bookingRef}.",
   },
   payment_received: {
     id: "payment_received",
@@ -222,17 +242,41 @@ export function formatPhoneNumber(
 }
 
 /**
+ * Get the current SMS provider name
+ */
+function getProviderName(): string {
+  return process.env.SMS_PROVIDER === "twilio" ? "twilio" : "mock";
+}
+
+/**
+ * SMS Log type for filtering
+ */
+export type SMSType =
+  | "booking_confirmation"
+  | "flight_reminder"
+  | "flight_status"
+  | "boarding_pass"
+  | "check_in_reminder"
+  | "payment_received"
+  | "refund_processed"
+  | "loyalty_update"
+  | "promotional"
+  | "system";
+
+/**
  * Send SMS notification
  */
 export async function sendSMS(
-  userId: number,
+  userId: number | null,
   phoneNumber: string,
   body: string,
+  type: SMSType = "system",
   templateId?: string,
   bookingId?: number,
   flightId?: number
 ): Promise<SMSResult> {
   const provider = getSMSProvider();
+  const providerName = getProviderName();
   const formattedPhone = formatPhoneNumber(phoneNumber);
 
   const result = await provider.send({
@@ -241,10 +285,33 @@ export async function sendSMS(
     templateId,
   });
 
-  // Log to notification history
+  // Log to sms_logs table
   try {
     const db = await getDb();
     if (db) {
+      await db.insert(smsLogs).values({
+        userId: userId ?? undefined,
+        phoneNumber: formattedPhone,
+        message: body,
+        type,
+        status: result.success ? "sent" : "failed",
+        provider: providerName,
+        providerMessageId: result.messageId,
+        errorMessage: result.error,
+        templateId,
+        bookingId,
+        flightId,
+        sentAt: result.success ? new Date() : undefined,
+      });
+    }
+  } catch (error) {
+    console.error("[SMS] Error logging to sms_logs:", error);
+  }
+
+  // Also log to notification history for backward compatibility
+  try {
+    const db = await getDb();
+    if (db && userId) {
       await db.insert(notificationHistory).values({
         userId,
         type: templateId
@@ -271,7 +338,7 @@ export async function sendSMS(
       });
     }
   } catch (error) {
-    console.error("[SMS] Error logging to history:", error);
+    console.error("[SMS] Error logging to notification history:", error);
   }
 
   return result;
@@ -281,7 +348,7 @@ export async function sendSMS(
  * Send templated SMS
  */
 export async function sendTemplatedSMS(
-  userId: number,
+  userId: number | null,
   phoneNumber: string,
   templateId: keyof typeof SMS_TEMPLATES,
   variables: Record<string, string>,
@@ -305,7 +372,29 @@ export async function sendTemplatedSMS(
     body = body.replace(new RegExp(`\\{${key}\\}`, "g"), value);
   });
 
-  return sendSMS(userId, phoneNumber, body, templateId, bookingId, flightId);
+  // Map template ID to SMS type
+  const typeMap: Record<string, SMSType> = {
+    booking_confirmation: "booking_confirmation",
+    check_in_reminder: "check_in_reminder",
+    flight_reminder: "flight_reminder",
+    flight_status: "flight_status",
+    boarding_pass: "boarding_pass",
+    payment_received: "payment_received",
+    refund_processed: "refund_processed",
+    loyalty_milestone: "loyalty_update",
+  };
+
+  const smsType: SMSType = typeMap[templateId] || "system";
+
+  return sendSMS(
+    userId,
+    phoneNumber,
+    body,
+    smsType,
+    templateId,
+    bookingId,
+    flightId
+  );
 }
 
 /**
@@ -417,6 +506,7 @@ export async function sendBulkSMS(
       msg.userId,
       msg.phoneNumber,
       msg.body,
+      "system",
       undefined,
       msg.bookingId
     );
@@ -432,4 +522,394 @@ export async function sendBulkSMS(
   }
 
   return { sent, failed, results };
+}
+
+// ============================================================================
+// Flight Reminder & Boarding Pass Functions
+// ============================================================================
+
+/**
+ * Send flight reminder SMS (24 hours before departure)
+ */
+export async function sendFlightReminderSMS(
+  userId: number,
+  phoneNumber: string,
+  flightNumber: string,
+  origin: string,
+  destination: string,
+  departureTime: string,
+  bookingRef: string,
+  language: "ar" | "en" = "ar",
+  bookingId?: number,
+  flightId?: number
+): Promise<SMSResult> {
+  return sendTemplatedSMS(
+    userId,
+    phoneNumber,
+    "flight_reminder",
+    {
+      flightNumber,
+      origin,
+      destination,
+      time: departureTime,
+      bookingRef,
+    },
+    language,
+    bookingId,
+    flightId
+  );
+}
+
+/**
+ * Send boarding pass SMS
+ */
+export async function sendBoardingPassSMS(
+  userId: number,
+  phoneNumber: string,
+  flightNumber: string,
+  gate: string,
+  seat: string,
+  boardingTime: string,
+  bookingRef: string,
+  language: "ar" | "en" = "ar",
+  bookingId?: number,
+  flightId?: number
+): Promise<SMSResult> {
+  return sendTemplatedSMS(
+    userId,
+    phoneNumber,
+    "boarding_pass",
+    {
+      flightNumber,
+      gate,
+      seat,
+      boardingTime,
+      bookingRef,
+    },
+    language,
+    bookingId,
+    flightId
+  );
+}
+
+/**
+ * Send refund processed SMS
+ */
+export async function sendRefundProcessedSMS(
+  userId: number,
+  phoneNumber: string,
+  amount: string,
+  bookingRef: string,
+  language: "ar" | "en" = "ar",
+  bookingId?: number
+): Promise<SMSResult> {
+  return sendTemplatedSMS(
+    userId,
+    phoneNumber,
+    "refund_processed",
+    { amount, bookingRef },
+    language,
+    bookingId
+  );
+}
+
+/**
+ * Send loyalty milestone SMS
+ */
+export async function sendLoyaltyMilestoneSMS(
+  userId: number,
+  phoneNumber: string,
+  tier: string,
+  miles: string,
+  language: "ar" | "en" = "ar"
+): Promise<SMSResult> {
+  return sendTemplatedSMS(
+    userId,
+    phoneNumber,
+    "loyalty_milestone",
+    { tier, miles },
+    language
+  );
+}
+
+// ============================================================================
+// SMS Logs Query Functions
+// ============================================================================
+
+/**
+ * Options for fetching SMS logs
+ */
+export interface GetSMSLogsOptions {
+  limit?: number;
+  offset?: number;
+  type?: SMSType;
+  status?: "pending" | "sent" | "delivered" | "failed" | "rejected";
+  startDate?: Date;
+  endDate?: Date;
+}
+
+/**
+ * Get SMS logs for a specific user
+ */
+export async function getSMSLogs(
+  userId: number,
+  options: GetSMSLogsOptions = {}
+): Promise<SMSLog[]> {
+  try {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const {
+      limit = 50,
+      offset = 0,
+      type,
+      status,
+      startDate,
+      endDate,
+    } = options;
+
+    // Build conditions
+    const conditions = [eq(smsLogs.userId, userId)];
+
+    if (type) {
+      conditions.push(eq(smsLogs.type, type));
+    }
+
+    if (status) {
+      conditions.push(eq(smsLogs.status, status));
+    }
+
+    if (startDate) {
+      conditions.push(sql`${smsLogs.createdAt} >= ${startDate}`);
+    }
+
+    if (endDate) {
+      conditions.push(sql`${smsLogs.createdAt} <= ${endDate}`);
+    }
+
+    const results = await db
+      .select()
+      .from(smsLogs)
+      .where(and(...conditions))
+      .orderBy(desc(smsLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return results;
+  } catch (error) {
+    console.error("[SMS] Error fetching SMS logs:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to fetch SMS logs",
+    });
+  }
+}
+
+/**
+ * Get all SMS logs (admin function)
+ */
+export async function getAllSMSLogs(
+  options: GetSMSLogsOptions = {}
+): Promise<{ logs: SMSLog[]; total: number }> {
+  try {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    const {
+      limit = 50,
+      offset = 0,
+      type,
+      status,
+      startDate,
+      endDate,
+    } = options;
+
+    // Build conditions
+    const conditions: ReturnType<typeof eq>[] = [];
+
+    if (type) {
+      conditions.push(eq(smsLogs.type, type));
+    }
+
+    if (status) {
+      conditions.push(eq(smsLogs.status, status));
+    }
+
+    if (startDate) {
+      conditions.push(sql`${smsLogs.createdAt} >= ${startDate}` as any);
+    }
+
+    if (endDate) {
+      conditions.push(sql`${smsLogs.createdAt} <= ${endDate}` as any);
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    // Get logs
+    const logs = await db
+      .select()
+      .from(smsLogs)
+      .where(whereClause)
+      .orderBy(desc(smsLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Get total count
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(smsLogs)
+      .where(whereClause);
+
+    return {
+      logs,
+      total: countResult?.count ?? 0,
+    };
+  } catch (error) {
+    console.error("[SMS] Error fetching all SMS logs:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to fetch SMS logs",
+    });
+  }
+}
+
+/**
+ * Get SMS statistics (admin function)
+ */
+export async function getSMSStats(): Promise<{
+  totalSent: number;
+  totalFailed: number;
+  totalPending: number;
+  byType: Record<string, number>;
+  byProvider: Record<string, number>;
+  todaySent: number;
+}> {
+  try {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    // Get total counts by status
+    const statusCounts = await db
+      .select({
+        status: smsLogs.status,
+        count: count(),
+      })
+      .from(smsLogs)
+      .groupBy(smsLogs.status);
+
+    // Get counts by type
+    const typeCounts = await db
+      .select({
+        type: smsLogs.type,
+        count: count(),
+      })
+      .from(smsLogs)
+      .groupBy(smsLogs.type);
+
+    // Get counts by provider
+    const providerCounts = await db
+      .select({
+        provider: smsLogs.provider,
+        count: count(),
+      })
+      .from(smsLogs)
+      .groupBy(smsLogs.provider);
+
+    // Get today's sent count
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [todayResult] = await db
+      .select({ count: count() })
+      .from(smsLogs)
+      .where(
+        and(eq(smsLogs.status, "sent"), sql`${smsLogs.createdAt} >= ${today}`)
+      );
+
+    // Process results
+    const statusMap = Object.fromEntries(
+      statusCounts.map(r => [r.status, r.count])
+    );
+    const typeMap = Object.fromEntries(typeCounts.map(r => [r.type, r.count]));
+    const providerMap = Object.fromEntries(
+      providerCounts.map(r => [r.provider, r.count])
+    );
+
+    return {
+      totalSent: statusMap["sent"] ?? 0,
+      totalFailed: statusMap["failed"] ?? 0,
+      totalPending: statusMap["pending"] ?? 0,
+      byType: typeMap,
+      byProvider: providerMap,
+      todaySent: todayResult?.count ?? 0,
+    };
+  } catch (error) {
+    console.error("[SMS] Error fetching SMS stats:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to fetch SMS statistics",
+    });
+  }
+}
+
+/**
+ * Resend a failed SMS
+ */
+export async function resendSMS(logId: number): Promise<SMSResult> {
+  try {
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+
+    // Get the original log
+    const [log] = await db
+      .select()
+      .from(smsLogs)
+      .where(eq(smsLogs.id, logId))
+      .limit(1);
+
+    if (!log) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "SMS log not found",
+      });
+    }
+
+    if (log.status === "sent" || log.status === "delivered") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "SMS was already delivered",
+      });
+    }
+
+    // Update retry count
+    await db
+      .update(smsLogs)
+      .set({
+        retryCount: (log.retryCount ?? 0) + 1,
+        status: "pending",
+      })
+      .where(eq(smsLogs.id, logId));
+
+    // Resend
+    const result = await sendSMS(
+      log.userId,
+      log.phoneNumber,
+      log.message,
+      log.type,
+      log.templateId ?? undefined,
+      log.bookingId ?? undefined,
+      log.flightId ?? undefined
+    );
+
+    return result;
+  } catch (error) {
+    if (error instanceof TRPCError) {
+      throw error;
+    }
+    console.error("[SMS] Error resending SMS:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to resend SMS",
+    });
+  }
 }

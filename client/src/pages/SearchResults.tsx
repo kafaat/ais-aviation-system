@@ -7,7 +7,8 @@ import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { SearchResultsSkeleton } from "@/components/skeletons";
 import {
   Tooltip,
   TooltipContent,
@@ -16,6 +17,9 @@ import {
 import { AdvancedFilters } from "@/components/AdvancedFilters";
 import { SearchHistory, saveSearchToHistory } from "@/components/SearchHistory";
 import { FlightStatusBadge } from "@/components/FlightStatusBadge";
+import { CompareBar } from "@/components/CompareBar";
+import { JoinWaitlistDialog } from "@/components/JoinWaitlistDialog";
+import { useFlightCompare } from "@/contexts/FlightCompareContext";
 import {
   useFlightStatus,
   type FlightStatusType,
@@ -28,10 +32,12 @@ import {
   Loader2,
   Share2,
   ArrowLeftRight,
+  Scale,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { toast } from "sonner";
+import type { FlightData } from "@/components/FlightCard";
 
 interface FilterOptions {
   priceRange: [number, number];
@@ -50,6 +56,16 @@ export default function SearchResults() {
     destinationId: number;
     departureDate: Date;
   } | null>(null);
+
+  // Flight comparison state
+  const {
+    selectedFlights,
+    addFlight,
+    removeFlight,
+    clearAll,
+    isSelected,
+    canAdd,
+  } = useFlightCompare();
 
   const [filters, setFilters] = useState<FilterOptions>({
     priceRange: [0, 10000],
@@ -245,6 +261,21 @@ export default function SearchResults() {
       : `${hours}h ${minutes}m`;
   };
 
+  // Handle adding/removing flights from compare
+  const handleCompareToggle = (flight: FlightData) => {
+    if (isSelected(flight.id)) {
+      removeFlight(flight.id);
+      toast.success(t("compare.removedFromCompare"));
+    } else {
+      if (canAdd) {
+        addFlight(flight);
+        toast.success(t("compare.addedToCompare"));
+      } else {
+        toast.error(t("compare.maxFlightsReached"));
+      }
+    }
+  };
+
   const handleShare = async (flight: {
     id: number;
     origin: { city: string };
@@ -276,17 +307,10 @@ export default function SearchResults() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+      <>
         <SEO title={t("search.title")} />
-        <div className="container py-8">
-          <Skeleton className="h-8 w-64 mb-8" />
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <Skeleton key={i} className="h-48 w-full rounded-xl" />
-            ))}
-          </div>
-        </div>
-      </div>
+        <SearchResultsSkeleton cardCount={3} />
+      </>
     );
   }
 
@@ -512,6 +536,37 @@ export default function SearchResults() {
 
                         {/* Actions */}
                         <div className="lg:col-span-1 flex lg:flex-col items-center justify-center gap-2">
+                          {/* Compare Checkbox */}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div
+                                className={`flex items-center justify-center rounded-full p-2 cursor-pointer transition-colors ${
+                                  isSelected(flight.id)
+                                    ? "text-primary bg-primary/10"
+                                    : "hover:text-primary hover:bg-primary/10"
+                                }`}
+                                onClick={() =>
+                                  handleCompareToggle(
+                                    flight as unknown as FlightData
+                                  )
+                                }
+                                role="checkbox"
+                                aria-checked={isSelected(flight.id)}
+                                aria-label={t("compare.addToCompare")}
+                              >
+                                <Scale
+                                  className={`h-5 w-5 ${isSelected(flight.id) ? "fill-current" : ""}`}
+                                  aria-hidden="true"
+                                />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isSelected(flight.id)
+                                ? t("compare.removeFromCompare")
+                                : t("compare.addToCompare")}
+                            </TooltipContent>
+                          </Tooltip>
+
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -572,7 +627,7 @@ export default function SearchResults() {
                         {/* Pricing */}
                         <div className="lg:col-span-4">
                           <div className="flex flex-col sm:flex-row gap-3">
-                            {flight.economyAvailable > 0 && (
+                            {flight.economyAvailable > 0 ? (
                               <div className="flex-1">
                                 <div className="text-center p-4 border-2 rounded-xl hover:border-primary/50 transition-colors group">
                                   <p className="text-xs text-muted-foreground mb-1">
@@ -603,9 +658,34 @@ export default function SearchResults() {
                                   </Button>
                                 </div>
                               </div>
+                            ) : (
+                              <div className="flex-1">
+                                <div className="text-center p-4 border-2 rounded-xl border-slate-200 bg-slate-50/50 dark:bg-slate-800/50">
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    {t("search.economy")}
+                                  </p>
+                                  <Badge
+                                    variant="secondary"
+                                    className="mb-2 bg-slate-200 text-slate-700"
+                                  >
+                                    {t("waitlist.soldOut")}
+                                  </Badge>
+                                  <p className="text-xs text-muted-foreground mt-1 mb-3">
+                                    {t("waitlist.joinToGetNotified")}
+                                  </p>
+                                  <JoinWaitlistDialog
+                                    flightId={flight.id}
+                                    flightNumber={flight.flightNumber}
+                                    originCity={flight.origin.city}
+                                    destinationCity={flight.destination.city}
+                                    departureTime={flight.departureTime}
+                                    cabinClass="economy"
+                                  />
+                                </div>
+                              </div>
                             )}
 
-                            {flight.businessAvailable > 0 && (
+                            {flight.businessAvailable > 0 ? (
                               <div className="flex-1">
                                 <div className="text-center p-4 border-2 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200 hover:border-amber-400 transition-colors group">
                                   <p className="text-xs text-amber-700 mb-1 font-medium">
@@ -635,6 +715,31 @@ export default function SearchResults() {
                                   </Button>
                                 </div>
                               </div>
+                            ) : (
+                              <div className="flex-1">
+                                <div className="text-center p-4 border-2 rounded-xl border-amber-200 bg-amber-50/50 dark:bg-amber-900/20">
+                                  <p className="text-xs text-amber-700 mb-1 font-medium">
+                                    {t("search.business")}
+                                  </p>
+                                  <Badge
+                                    variant="secondary"
+                                    className="mb-2 bg-amber-200 text-amber-700"
+                                  >
+                                    {t("waitlist.soldOut")}
+                                  </Badge>
+                                  <p className="text-xs text-muted-foreground mt-1 mb-3">
+                                    {t("waitlist.joinToGetNotified")}
+                                  </p>
+                                  <JoinWaitlistDialog
+                                    flightId={flight.id}
+                                    flightNumber={flight.flightNumber}
+                                    originCity={flight.origin.city}
+                                    destinationCity={flight.destination.city}
+                                    departureTime={flight.departureTime}
+                                    cabinClass="business"
+                                  />
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -647,6 +752,16 @@ export default function SearchResults() {
           </div>
         )}
       </div>
+
+      {/* Compare Bar - Sticky at bottom */}
+      <CompareBar
+        selectedFlights={selectedFlights}
+        onRemove={removeFlight}
+        onClearAll={clearAll}
+      />
+
+      {/* Add padding at bottom when CompareBar is visible */}
+      {selectedFlights.length > 0 && <div className="h-32 md:h-24" />}
     </div>
   );
 }

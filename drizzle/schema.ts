@@ -2106,5 +2106,976 @@ export const priceAlerts = mysqlTable(
 export type PriceAlert = typeof priceAlerts.$inferSelect;
 export type InsertPriceAlert = typeof priceAlerts.$inferInsert;
 
+// ============================================================================
+// In-App Notifications System
+// ============================================================================
+
+/**
+ * Notifications table
+ * Stores in-app notifications for users
+ */
+export const notifications = mysqlTable(
+  "notifications",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+
+    // Notification type
+    type: mysqlEnum("type", [
+      "booking",
+      "flight",
+      "payment",
+      "promo",
+      "system",
+    ]).notNull(),
+
+    // Content
+    title: varchar("title", { length: 255 }).notNull(),
+    message: text("message").notNull(),
+
+    // Additional data (JSON for flexibility - booking IDs, flight details, etc.)
+    data: text("data"), // JSON stringified additional data
+
+    // Read status
+    isRead: boolean("isRead").default(false).notNull(),
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    readAt: timestamp("readAt"),
+  },
+  table => ({
+    userIdIdx: index("notifications_user_id_idx").on(table.userId),
+    typeIdx: index("notifications_type_idx").on(table.type),
+    isReadIdx: index("notifications_is_read_idx").on(table.isRead),
+    createdAtIdx: index("notifications_created_at_idx").on(table.createdAt),
+    // Composite index for common queries: user's unread notifications sorted by date
+    userUnreadIdx: index("notifications_user_unread_idx").on(
+      table.userId,
+      table.isRead,
+      table.createdAt
+    ),
+  })
+);
+
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = typeof notifications.$inferInsert;
+
+// ============================================================================
+// Multi-City Booking System
+// ============================================================================
+
+/**
+ * Booking Segments table
+ * Stores individual flight segments for multi-city bookings
+ */
+export const bookingSegments = mysqlTable(
+  "booking_segments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    segmentOrder: int("segmentOrder").notNull(), // Order of segment in the trip (1, 2, 3, etc.)
+    flightId: int("flightId").notNull(),
+    departureDate: timestamp("departureDate").notNull(),
+    status: mysqlEnum("status", [
+      "pending",
+      "confirmed",
+      "cancelled",
+      "completed",
+    ])
+      .default("pending")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    // Index for booking-based queries
+    bookingIdIdx: index("booking_segments_booking_id_idx").on(table.bookingId),
+    // Index for flight-based queries
+    flightIdIdx: index("booking_segments_flight_id_idx").on(table.flightId),
+    // Composite index for booking + order
+    bookingOrderIdx: index("booking_segments_booking_order_idx").on(
+      table.bookingId,
+      table.segmentOrder
+    ),
+    // Index for status filtering
+    statusIdx: index("booking_segments_status_idx").on(table.status),
+  })
+);
+
+export type BookingSegment = typeof bookingSegments.$inferSelect;
+export type InsertBookingSegment = typeof bookingSegments.$inferInsert;
+
+// ============================================================================
+// Baggage Handling & Tracking System
+// ============================================================================
+
+/**
+ * Baggage Items table
+ * Tracks individual baggage items for passengers
+ */
+export const baggageItems = mysqlTable(
+  "baggage_items",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    passengerId: int("passengerId").notNull(),
+    tagNumber: varchar("tagNumber", { length: 20 }).notNull().unique(), // Unique baggage tag (e.g., "AIS123456")
+    weight: decimal("weight", { precision: 5, scale: 2 }).notNull(), // Weight in kg
+    status: mysqlEnum("status", [
+      "checked_in",
+      "security_screening",
+      "loading",
+      "in_transit",
+      "arrived",
+      "customs",
+      "ready_for_pickup",
+      "claimed",
+      "lost",
+      "found",
+      "damaged",
+    ])
+      .default("checked_in")
+      .notNull(),
+    lastLocation: varchar("lastLocation", { length: 255 }), // Last known location (e.g., "JED Terminal 1 Belt 3")
+    description: text("description"), // Baggage description (color, size, brand)
+    specialHandling: text("specialHandling"), // Special handling instructions (fragile, oversized, etc.)
+    lostReportedAt: timestamp("lostReportedAt"), // When baggage was reported lost
+    lostDescription: text("lostDescription"), // Description for lost baggage report
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    bookingIdIdx: index("baggage_items_booking_id_idx").on(table.bookingId),
+    passengerIdIdx: index("baggage_items_passenger_id_idx").on(
+      table.passengerId
+    ),
+    tagNumberIdx: index("baggage_items_tag_number_idx").on(table.tagNumber),
+    statusIdx: index("baggage_items_status_idx").on(table.status),
+    // Composite index for booking + passenger lookups
+    bookingPassengerIdx: index("baggage_items_booking_passenger_idx").on(
+      table.bookingId,
+      table.passengerId
+    ),
+    // Index for lost baggage queries
+    lostStatusIdx: index("baggage_items_lost_status_idx").on(
+      table.status,
+      table.lostReportedAt
+    ),
+  })
+);
+
+export type BaggageItem = typeof baggageItems.$inferSelect;
+export type InsertBaggageItem = typeof baggageItems.$inferInsert;
+
+/**
+ * Baggage Tracking table
+ * Tracks all location and status updates for baggage items
+ */
+export const baggageTracking = mysqlTable(
+  "baggage_tracking",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    baggageId: int("baggageId").notNull(), // References baggageItems.id
+    location: varchar("location", { length: 255 }).notNull(), // Location where scanned (e.g., "JED Terminal 1 Check-in")
+    status: mysqlEnum("status", [
+      "checked_in",
+      "security_screening",
+      "loading",
+      "in_transit",
+      "arrived",
+      "customs",
+      "ready_for_pickup",
+      "claimed",
+      "lost",
+      "found",
+      "damaged",
+    ]).notNull(),
+    scannedAt: timestamp("scannedAt").defaultNow().notNull(),
+    scannedBy: int("scannedBy"), // User ID of the handler who scanned (nullable for automated scans)
+    notes: text("notes"), // Additional notes about the scan/status update
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    baggageIdIdx: index("baggage_tracking_baggage_id_idx").on(table.baggageId),
+    statusIdx: index("baggage_tracking_status_idx").on(table.status),
+    scannedAtIdx: index("baggage_tracking_scanned_at_idx").on(table.scannedAt),
+    scannedByIdx: index("baggage_tracking_scanned_by_idx").on(table.scannedBy),
+    // Composite index for baggage timeline queries
+    baggageTimelineIdx: index("baggage_tracking_baggage_timeline_idx").on(
+      table.baggageId,
+      table.scannedAt
+    ),
+  })
+);
+
+export type BaggageTracking = typeof baggageTracking.$inferSelect;
+export type InsertBaggageTracking = typeof baggageTracking.$inferInsert;
+
+// ============================================================================
+// Split Payments System
+// ============================================================================
+
+/**
+ * Payment Splits
+ * Allows a booking payment to be split among multiple payers
+ */
+export const paymentSplits = mysqlTable(
+  "payment_splits",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+
+    // Payer information
+    payerEmail: varchar("payerEmail", { length: 320 }).notNull(),
+    payerName: varchar("payerName", { length: 255 }).notNull(),
+
+    // Payment details
+    amount: int("amount").notNull(), // Amount in SAR cents
+    percentage: decimal("percentage", { precision: 5, scale: 2 }).notNull(), // e.g., 33.33%
+
+    // Status tracking
+    status: mysqlEnum("status", [
+      "pending",
+      "email_sent",
+      "paid",
+      "failed",
+      "cancelled",
+      "expired",
+    ])
+      .default("pending")
+      .notNull(),
+
+    // Stripe payment reference
+    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+    stripeCheckoutSessionId: varchar("stripeCheckoutSessionId", {
+      length: 255,
+    }),
+
+    // Payment token for payer access (unique link)
+    paymentToken: varchar("paymentToken", { length: 64 }).notNull().unique(),
+
+    // Timestamps
+    paidAt: timestamp("paidAt"),
+    emailSentAt: timestamp("emailSentAt"),
+    expiresAt: timestamp("expiresAt"), // Payment request expiration
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    bookingIdIdx: index("payment_splits_booking_id_idx").on(table.bookingId),
+    payerEmailIdx: index("payment_splits_payer_email_idx").on(table.payerEmail),
+    statusIdx: index("payment_splits_status_idx").on(table.status),
+    paymentTokenIdx: index("payment_splits_token_idx").on(table.paymentToken),
+    // Composite index for booking + status queries
+    bookingStatusIdx: index("payment_splits_booking_status_idx").on(
+      table.bookingId,
+      table.status
+    ),
+    // Index for expiration queries
+    expiresAtIdx: index("payment_splits_expires_at_idx").on(table.expiresAt),
+    // Stripe session lookup
+    stripeCheckoutIdx: index("payment_splits_stripe_checkout_idx").on(
+      table.stripeCheckoutSessionId
+    ),
+  })
+);
+
+export type PaymentSplit = typeof paymentSplits.$inferSelect;
+export type InsertPaymentSplit = typeof paymentSplits.$inferInsert;
+
 // Export chat and notification schemas
 export * from "./chat-schema";
+
+// ============================================================================
+// Saved Passengers
+// ============================================================================
+
+/**
+ * Saved Passengers table
+ * Stores user's saved passenger profiles for quick booking
+ */
+export const savedPassengers = mysqlTable(
+  "saved_passengers",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+
+    // Passenger details
+    firstName: varchar("firstName", { length: 100 }).notNull(),
+    lastName: varchar("lastName", { length: 100 }).notNull(),
+    dateOfBirth: timestamp("dateOfBirth"),
+    nationality: varchar("nationality", { length: 100 }),
+
+    // Passport information
+    passportNumber: varchar("passportNumber", { length: 50 }),
+    passportExpiry: timestamp("passportExpiry"),
+
+    // Contact information
+    email: varchar("email", { length: 320 }),
+    phone: varchar("phone", { length: 20 }),
+
+    // Default flag
+    isDefault: boolean("isDefault").default(false).notNull(),
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("saved_passengers_user_id_idx").on(table.userId),
+    // Index for default passenger lookup
+    userDefaultIdx: index("saved_passengers_user_default_idx").on(
+      table.userId,
+      table.isDefault
+    ),
+    // Index for name search
+    nameIdx: index("saved_passengers_name_idx").on(
+      table.lastName,
+      table.firstName
+    ),
+  })
+);
+
+export type SavedPassenger = typeof savedPassengers.$inferSelect;
+export type InsertSavedPassenger = typeof savedPassengers.$inferInsert;
+
+// ============================================================================
+// Corporate Travel Accounts System
+// ============================================================================
+
+/**
+ * Corporate Accounts table
+ * Manages corporate/business travel accounts with credit limits and discounts
+ */
+export const corporateAccounts = mysqlTable(
+  "corporate_accounts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    // Company information
+    companyName: varchar("companyName", { length: 255 }).notNull(),
+    taxId: varchar("taxId", { length: 50 }).notNull().unique(), // Company tax ID / registration number
+    address: text("address"),
+
+    // Primary contact
+    contactName: varchar("contactName", { length: 255 }).notNull(),
+    contactEmail: varchar("contactEmail", { length: 320 }).notNull(),
+    contactPhone: varchar("contactPhone", { length: 20 }),
+
+    // Financial settings
+    creditLimit: int("creditLimit").notNull().default(0), // Credit limit in SAR cents
+    balance: int("balance").notNull().default(0), // Current balance (negative = credit used)
+    discountPercent: decimal("discountPercent", { precision: 5, scale: 2 })
+      .default("0.00")
+      .notNull(), // Corporate discount percentage
+
+    // Account status
+    status: mysqlEnum("status", ["pending", "active", "suspended", "closed"])
+      .default("pending")
+      .notNull(),
+
+    // Approval tracking
+    approvedBy: int("approvedBy"), // Admin user ID who approved
+    approvedAt: timestamp("approvedAt"),
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    companyNameIdx: index("corporate_accounts_company_name_idx").on(
+      table.companyName
+    ),
+    taxIdIdx: index("corporate_accounts_tax_id_idx").on(table.taxId),
+    statusIdx: index("corporate_accounts_status_idx").on(table.status),
+    contactEmailIdx: index("corporate_accounts_contact_email_idx").on(
+      table.contactEmail
+    ),
+    createdAtIdx: index("corporate_accounts_created_at_idx").on(
+      table.createdAt
+    ),
+  })
+);
+
+export type CorporateAccount = typeof corporateAccounts.$inferSelect;
+export type InsertCorporateAccount = typeof corporateAccounts.$inferInsert;
+
+/**
+ * Corporate Users table
+ * Links users to corporate accounts with roles
+ */
+export const corporateUsers = mysqlTable(
+  "corporate_users",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    // Account and user reference
+    corporateAccountId: int("corporateAccountId").notNull(),
+    userId: int("userId").notNull(),
+
+    // Role within the corporate account
+    role: mysqlEnum("role", ["admin", "booker", "traveler"])
+      .default("traveler")
+      .notNull(),
+    // admin: Can manage users and view all bookings
+    // booker: Can book for others in the company
+    // traveler: Can only book for themselves
+
+    // Status
+    isActive: boolean("isActive").default(true).notNull(),
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    corporateAccountIdIdx: index("corporate_users_account_id_idx").on(
+      table.corporateAccountId
+    ),
+    userIdIdx: index("corporate_users_user_id_idx").on(table.userId),
+    roleIdx: index("corporate_users_role_idx").on(table.role),
+    // Unique constraint: one user can only be in one corporate account
+    userAccountUnique: index("corporate_users_user_account_unique_idx").on(
+      table.userId,
+      table.corporateAccountId
+    ),
+    isActiveIdx: index("corporate_users_is_active_idx").on(table.isActive),
+  })
+);
+
+export type CorporateUser = typeof corporateUsers.$inferSelect;
+export type InsertCorporateUser = typeof corporateUsers.$inferInsert;
+
+/**
+ * Corporate Bookings table
+ * Links bookings to corporate accounts with approval workflow
+ */
+export const corporateBookings = mysqlTable(
+  "corporate_bookings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    // Corporate account reference
+    corporateAccountId: int("corporateAccountId").notNull(),
+
+    // Booking reference
+    bookingId: int("bookingId").notNull().unique(),
+
+    // Corporate tracking fields
+    costCenter: varchar("costCenter", { length: 50 }), // Cost center code for accounting
+    projectCode: varchar("projectCode", { length: 50 }), // Project/department code
+    travelPurpose: text("travelPurpose"), // Business reason for travel
+
+    // Approval workflow
+    approvalStatus: mysqlEnum("approvalStatus", [
+      "pending",
+      "approved",
+      "rejected",
+    ])
+      .default("pending")
+      .notNull(),
+    approvedBy: int("approvedBy"), // Corporate admin user ID who approved
+    approvedAt: timestamp("approvedAt"),
+    rejectionReason: text("rejectionReason"),
+
+    // Booked by (may be different from traveler)
+    bookedByUserId: int("bookedByUserId").notNull(),
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    corporateAccountIdIdx: index("corporate_bookings_account_id_idx").on(
+      table.corporateAccountId
+    ),
+    bookingIdIdx: index("corporate_bookings_booking_id_idx").on(
+      table.bookingId
+    ),
+    approvalStatusIdx: index("corporate_bookings_approval_status_idx").on(
+      table.approvalStatus
+    ),
+    costCenterIdx: index("corporate_bookings_cost_center_idx").on(
+      table.costCenter
+    ),
+    projectCodeIdx: index("corporate_bookings_project_code_idx").on(
+      table.projectCode
+    ),
+    bookedByUserIdIdx: index("corporate_bookings_booked_by_idx").on(
+      table.bookedByUserId
+    ),
+    createdAtIdx: index("corporate_bookings_created_at_idx").on(
+      table.createdAt
+    ),
+    // Composite index for common queries
+    accountApprovalIdx: index("corporate_bookings_account_approval_idx").on(
+      table.corporateAccountId,
+      table.approvalStatus
+    ),
+  })
+);
+
+export type CorporateBooking = typeof corporateBookings.$inferSelect;
+export type InsertCorporateBooking = typeof corporateBookings.$inferInsert;
+
+/**
+ * Travel Agents table
+ * Represents travel agencies that can book flights via API
+ */
+export const travelAgents = mysqlTable(
+  "travel_agents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    agencyName: varchar("agencyName", { length: 255 }).notNull(),
+    iataNumber: varchar("iataNumber", { length: 20 }).notNull().unique(), // IATA accreditation number
+    contactName: varchar("contactName", { length: 255 }).notNull(),
+    email: varchar("email", { length: 320 }).notNull().unique(),
+    phone: varchar("phone", { length: 50 }).notNull(),
+    commissionRate: decimal("commissionRate", { precision: 5, scale: 2 })
+      .default("5.00")
+      .notNull(), // Commission percentage (e.g., 5.00 = 5%)
+    // API credentials
+    apiKey: varchar("apiKey", { length: 64 }).notNull().unique(), // Unique API key for authentication
+    apiSecret: varchar("apiSecret", { length: 128 }).notNull(), // Hashed API secret
+    // Status
+    isActive: boolean("isActive").default(true).notNull(),
+    // Rate limiting
+    dailyBookingLimit: int("dailyBookingLimit").default(100).notNull(),
+    monthlyBookingLimit: int("monthlyBookingLimit").default(2000).notNull(),
+    // Statistics
+    totalBookings: int("totalBookings").default(0).notNull(),
+    totalRevenue: int("totalRevenue").default(0).notNull(), // In SAR cents
+    totalCommission: int("totalCommission").default(0).notNull(), // In SAR cents
+    // Timestamps
+    lastActiveAt: timestamp("lastActiveAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    iataNumberIdx: index("travel_agents_iata_number_idx").on(table.iataNumber),
+    emailIdx: index("travel_agents_email_idx").on(table.email),
+    apiKeyIdx: index("travel_agents_api_key_idx").on(table.apiKey),
+    isActiveIdx: index("travel_agents_is_active_idx").on(table.isActive),
+    createdAtIdx: index("travel_agents_created_at_idx").on(table.createdAt),
+  })
+);
+
+export type TravelAgent = typeof travelAgents.$inferSelect;
+export type InsertTravelAgent = typeof travelAgents.$inferInsert;
+
+/**
+ * Agent Bookings table
+ * Links bookings made by travel agents with commission tracking
+ */
+export const agentBookings = mysqlTable(
+  "agent_bookings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    agentId: int("agentId").notNull(),
+    bookingId: int("bookingId").notNull().unique(),
+    // Commission details
+    commissionRate: decimal("commissionRate", {
+      precision: 5,
+      scale: 2,
+    }).notNull(), // Rate at time of booking
+    commissionAmount: int("commissionAmount").notNull(), // In SAR cents
+    bookingAmount: int("bookingAmount").notNull(), // Original booking amount in SAR cents
+    // Commission payment status
+    commissionStatus: mysqlEnum("commissionStatus", [
+      "pending",
+      "approved",
+      "paid",
+      "cancelled",
+    ])
+      .default("pending")
+      .notNull(),
+    commissionPaidAt: timestamp("commissionPaidAt"),
+    // External reference (agent's internal booking ID)
+    externalReference: varchar("externalReference", { length: 100 }),
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    agentIdIdx: index("agent_bookings_agent_id_idx").on(table.agentId),
+    bookingIdIdx: index("agent_bookings_booking_id_idx").on(table.bookingId),
+    commissionStatusIdx: index("agent_bookings_commission_status_idx").on(
+      table.commissionStatus
+    ),
+    createdAtIdx: index("agent_bookings_created_at_idx").on(table.createdAt),
+    // Composite index for agent commission queries
+    agentCommissionIdx: index("agent_bookings_agent_commission_idx").on(
+      table.agentId,
+      table.commissionStatus
+    ),
+  })
+);
+
+export type AgentBooking = typeof agentBookings.$inferSelect;
+export type InsertAgentBooking = typeof agentBookings.$inferInsert;
+
+// ============================================================================
+// SMS Notification Logs
+// ============================================================================
+
+/**
+ * SMS Logs table
+ * Tracks all SMS notifications sent through the system
+ */
+export const smsLogs = mysqlTable(
+  "sms_logs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId"), // Nullable for system-generated SMS
+
+    // Recipient details
+    phoneNumber: varchar("phoneNumber", { length: 20 }).notNull(),
+
+    // Message content
+    message: text("message").notNull(),
+
+    // Message type/category
+    type: mysqlEnum("type", [
+      "booking_confirmation",
+      "flight_reminder",
+      "flight_status",
+      "boarding_pass",
+      "check_in_reminder",
+      "payment_received",
+      "refund_processed",
+      "loyalty_update",
+      "promotional",
+      "system",
+    ]).notNull(),
+
+    // Status tracking
+    status: mysqlEnum("status", [
+      "pending",
+      "sent",
+      "delivered",
+      "failed",
+      "rejected",
+    ])
+      .default("pending")
+      .notNull(),
+
+    // Provider information
+    provider: varchar("provider", { length: 50 }).notNull(), // e.g., "twilio", "mock"
+    providerMessageId: varchar("providerMessageId", { length: 128 }), // External message ID from provider
+
+    // Error handling
+    errorMessage: text("errorMessage"),
+    retryCount: int("retryCount").default(0).notNull(),
+
+    // Related entities
+    bookingId: int("bookingId"),
+    flightId: int("flightId"),
+
+    // Template used
+    templateId: varchar("templateId", { length: 64 }),
+
+    // Timing
+    sentAt: timestamp("sentAt"),
+    deliveredAt: timestamp("deliveredAt"),
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("sms_logs_user_id_idx").on(table.userId),
+    phoneNumberIdx: index("sms_logs_phone_number_idx").on(table.phoneNumber),
+    typeIdx: index("sms_logs_type_idx").on(table.type),
+    statusIdx: index("sms_logs_status_idx").on(table.status),
+    providerIdx: index("sms_logs_provider_idx").on(table.provider),
+    sentAtIdx: index("sms_logs_sent_at_idx").on(table.sentAt),
+    bookingIdIdx: index("sms_logs_booking_id_idx").on(table.bookingId),
+    createdAtIdx: index("sms_logs_created_at_idx").on(table.createdAt),
+    // Composite index for user SMS history
+    userCreatedAtIdx: index("sms_logs_user_created_at_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+    // Composite index for admin status filtering
+    statusCreatedAtIdx: index("sms_logs_status_created_at_idx").on(
+      table.status,
+      table.createdAt
+    ),
+  })
+);
+
+export type SMSLog = typeof smsLogs.$inferSelect;
+export type InsertSMSLog = typeof smsLogs.$inferInsert;
+
+// ============================================================================
+// Gate Assignment System
+// ============================================================================
+
+/**
+ * Airport Gates table
+ * Stores information about gates at each airport
+ */
+export const airportGates = mysqlTable(
+  "airport_gates",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airportId: int("airportId").notNull(),
+    gateNumber: varchar("gateNumber", { length: 10 }).notNull(), // e.g., "A1", "B12", "T1-G5"
+    terminal: varchar("terminal", { length: 50 }), // e.g., "Terminal 1", "T1", "North"
+    type: mysqlEnum("type", ["domestic", "international", "both"])
+      .default("both")
+      .notNull(),
+    status: mysqlEnum("status", ["available", "occupied", "maintenance"])
+      .default("available")
+      .notNull(),
+    capacity: varchar("capacity", { length: 50 }), // Aircraft size capability, e.g., "narrow-body", "wide-body"
+    amenities: text("amenities"), // JSON array of amenities like "jet_bridge", "wheelchair_access"
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    // Index for airport-based queries
+    airportIdIdx: index("airport_gates_airport_id_idx").on(table.airportId),
+    // Index for gate number lookups
+    gateNumberIdx: index("airport_gates_gate_number_idx").on(table.gateNumber),
+    // Index for status filtering
+    statusIdx: index("airport_gates_status_idx").on(table.status),
+    // Index for type filtering
+    typeIdx: index("airport_gates_type_idx").on(table.type),
+    // Composite index for airport + status (finding available gates)
+    airportStatusIdx: index("airport_gates_airport_status_idx").on(
+      table.airportId,
+      table.status
+    ),
+    // Composite index for airport + type (domestic/international filtering)
+    airportTypeIdx: index("airport_gates_airport_type_idx").on(
+      table.airportId,
+      table.type
+    ),
+    // Unique constraint: one gate number per airport
+    airportGateUnique: index("airport_gates_airport_gate_unique_idx").on(
+      table.airportId,
+      table.gateNumber
+    ),
+  })
+);
+
+export type AirportGate = typeof airportGates.$inferSelect;
+export type InsertAirportGate = typeof airportGates.$inferInsert;
+
+/**
+ * Gate Assignments table
+ * Tracks gate assignments for flights
+ */
+export const gateAssignments = mysqlTable(
+  "gate_assignments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    gateId: int("gateId").notNull(),
+
+    // Assignment timing
+    assignedAt: timestamp("assignedAt").defaultNow().notNull(),
+    boardingStartTime: timestamp("boardingStartTime"),
+    boardingEndTime: timestamp("boardingEndTime"),
+
+    // Status tracking
+    status: mysqlEnum("status", [
+      "assigned",
+      "boarding",
+      "departed",
+      "cancelled",
+      "changed",
+    ])
+      .default("assigned")
+      .notNull(),
+
+    // Admin tracking
+    assignedBy: int("assignedBy"), // User ID who made the assignment (admin)
+
+    // Change tracking
+    previousGateId: int("previousGateId"), // For gate changes
+    changeReason: text("changeReason"), // Reason for gate change
+
+    // Notifications
+    notificationSentAt: timestamp("notificationSentAt"), // When gate change notification was sent
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    // Index for flight-based queries
+    flightIdIdx: index("gate_assignments_flight_id_idx").on(table.flightId),
+    // Index for gate-based queries
+    gateIdIdx: index("gate_assignments_gate_id_idx").on(table.gateId),
+    // Index for status filtering
+    statusIdx: index("gate_assignments_status_idx").on(table.status),
+    // Index for assigned by (admin queries)
+    assignedByIdx: index("gate_assignments_assigned_by_idx").on(
+      table.assignedBy
+    ),
+    // Index for boarding times (schedule queries)
+    boardingStartIdx: index("gate_assignments_boarding_start_idx").on(
+      table.boardingStartTime
+    ),
+    // Composite index for gate + status (finding current assignments)
+    gateStatusIdx: index("gate_assignments_gate_status_idx").on(
+      table.gateId,
+      table.status
+    ),
+    // Composite index for flight + status (getting active assignment)
+    flightStatusIdx: index("gate_assignments_flight_status_idx").on(
+      table.flightId,
+      table.status
+    ),
+    // Index for assignment date
+    assignedAtIdx: index("gate_assignments_assigned_at_idx").on(
+      table.assignedAt
+    ),
+  })
+);
+
+export type GateAssignment = typeof gateAssignments.$inferSelect;
+export type InsertGateAssignment = typeof gateAssignments.$inferInsert;
+
+// ============================================================================
+// Voucher & Credit System
+// ============================================================================
+
+/**
+ * Vouchers table
+ * Stores promotional codes and discounts for bookings
+ */
+export const vouchers = mysqlTable(
+  "vouchers",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    code: varchar("code", { length: 50 }).notNull().unique(), // Unique voucher code
+    type: mysqlEnum("type", ["fixed", "percentage"]).notNull(), // Type of discount
+    value: int("value").notNull(), // For fixed: amount in cents, for percentage: percentage value (e.g., 10 = 10%)
+    minPurchase: int("minPurchase").default(0).notNull(), // Minimum purchase amount in cents
+    maxDiscount: int("maxDiscount"), // Maximum discount amount in cents (for percentage vouchers)
+    maxUses: int("maxUses"), // Maximum number of times voucher can be used (null = unlimited)
+    usedCount: int("usedCount").default(0).notNull(), // Number of times voucher has been used
+    validFrom: timestamp("validFrom").notNull(), // Start date
+    validUntil: timestamp("validUntil").notNull(), // Expiration date
+    isActive: boolean("isActive").default(true).notNull(), // Active status
+    description: text("description"), // Admin notes/description
+    createdBy: int("createdBy"), // Admin who created the voucher
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    codeIdx: index("vouchers_code_idx").on(table.code),
+    isActiveIdx: index("vouchers_is_active_idx").on(table.isActive),
+    validFromIdx: index("vouchers_valid_from_idx").on(table.validFrom),
+    validUntilIdx: index("vouchers_valid_until_idx").on(table.validUntil),
+    // Composite index for voucher validation queries
+    activeValidIdx: index("vouchers_active_valid_idx").on(
+      table.isActive,
+      table.validFrom,
+      table.validUntil
+    ),
+  })
+);
+
+export type Voucher = typeof vouchers.$inferSelect;
+export type InsertVoucher = typeof vouchers.$inferInsert;
+
+/**
+ * User Credits table
+ * Tracks credit balances for users (from refunds, promotions, compensation)
+ */
+export const userCredits = mysqlTable(
+  "user_credits",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(), // User who owns the credit
+    amount: int("amount").notNull(), // Credit amount in cents
+    source: mysqlEnum("source", [
+      "refund",
+      "promo",
+      "compensation",
+      "bonus",
+    ]).notNull(), // Source of credit
+    description: text("description"), // Description of why credit was given
+    expiresAt: timestamp("expiresAt"), // Expiration date (null = never expires)
+    usedAmount: int("usedAmount").default(0).notNull(), // Amount already used
+    bookingId: int("bookingId"), // Related booking ID (for refunds)
+    createdBy: int("createdBy"), // Admin who issued the credit (for manual credits)
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("user_credits_user_id_idx").on(table.userId),
+    sourceIdx: index("user_credits_source_idx").on(table.source),
+    expiresAtIdx: index("user_credits_expires_at_idx").on(table.expiresAt),
+    bookingIdIdx: index("user_credits_booking_id_idx").on(table.bookingId),
+    // Composite index for finding available credits
+    userAvailableIdx: index("user_credits_user_available_idx").on(
+      table.userId,
+      table.expiresAt
+    ),
+  })
+);
+
+export type UserCredit = typeof userCredits.$inferSelect;
+export type InsertUserCredit = typeof userCredits.$inferInsert;
+
+/**
+ * Voucher Usage table
+ * Tracks when and how vouchers are used
+ */
+export const voucherUsage = mysqlTable(
+  "voucher_usage",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    voucherId: int("voucherId").notNull(), // Voucher that was used
+    userId: int("userId").notNull(), // User who used the voucher
+    bookingId: int("bookingId").notNull(), // Booking where voucher was applied
+    discountApplied: int("discountApplied").notNull(), // Actual discount amount in cents
+    usedAt: timestamp("usedAt").defaultNow().notNull(), // When voucher was used
+  },
+  table => ({
+    voucherIdIdx: index("voucher_usage_voucher_id_idx").on(table.voucherId),
+    userIdIdx: index("voucher_usage_user_id_idx").on(table.userId),
+    bookingIdIdx: index("voucher_usage_booking_id_idx").on(table.bookingId),
+    usedAtIdx: index("voucher_usage_used_at_idx").on(table.usedAt),
+    // Unique constraint: one voucher use per booking
+    voucherBookingUnique: index("voucher_usage_voucher_booking_unique").on(
+      table.voucherId,
+      table.bookingId
+    ),
+  })
+);
+
+export type VoucherUsage = typeof voucherUsage.$inferSelect;
+export type InsertVoucherUsage = typeof voucherUsage.$inferInsert;
+
+/**
+ * Credit Usage table
+ * Tracks when and how user credits are used
+ */
+export const creditUsage = mysqlTable(
+  "credit_usage",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userCreditId: int("userCreditId").notNull(), // Credit record that was used
+    userId: int("userId").notNull(), // User who used the credit
+    bookingId: int("bookingId").notNull(), // Booking where credit was applied
+    amountUsed: int("amountUsed").notNull(), // Amount of credit used in cents
+    usedAt: timestamp("usedAt").defaultNow().notNull(), // When credit was used
+  },
+  table => ({
+    userCreditIdIdx: index("credit_usage_user_credit_id_idx").on(
+      table.userCreditId
+    ),
+    userIdIdx: index("credit_usage_user_id_idx").on(table.userId),
+    bookingIdIdx: index("credit_usage_booking_id_idx").on(table.bookingId),
+    usedAtIdx: index("credit_usage_used_at_idx").on(table.usedAt),
+  })
+);
+
+export type CreditUsage = typeof creditUsage.$inferSelect;
+export type InsertCreditUsage = typeof creditUsage.$inferInsert;

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { FlightCompareProvider } from "./contexts/FlightCompareContext";
 import { AdminRoute } from "./components/AdminRoute";
 import { PageLoadingFallback } from "./components/PageLoadingFallback";
 import { InstallPrompt } from "./components/InstallPrompt";
@@ -19,6 +20,12 @@ const Profile = lazy(() => import("./pages/Profile"));
 const LoyaltyDashboard = lazy(() => import("./pages/LoyaltyDashboard"));
 const FavoritesPage = lazy(() => import("./pages/FavoritesPage"));
 const PriceAlerts = lazy(() => import("./pages/PriceAlerts"));
+const CompareFlights = lazy(() => import("./pages/CompareFlights"));
+const SavedPassengers = lazy(() => import("./pages/SavedPassengers"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const MyWaitlist = lazy(() => import("./pages/MyWaitlist"));
+const MultiCityResults = lazy(() => import("./pages/MultiCityResults"));
+const LiveFlightTracking = lazy(() => import("./pages/LiveFlightTracking"));
 
 // Admin pages
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
@@ -28,9 +35,14 @@ const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
 const GroupBookingsManagement = lazy(
   () => import("./pages/admin/GroupBookingsManagement")
 );
+const VoucherManagement = lazy(() => import("./pages/admin/VoucherManagement"));
+const GateManagement = lazy(() => import("./pages/admin/GateManagement"));
 
 // Group booking pages
 const GroupBookingRequest = lazy(() => import("./pages/GroupBookingRequest"));
+
+// Split payment pages
+const PayYourShare = lazy(() => import("./pages/PayYourShare"));
 
 // Error/utility pages
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -163,9 +175,46 @@ function Router() {
               <PriceAlerts />
             </Suspense>
           </Route>
+          <Route path="/compare">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <CompareFlights />
+            </Suspense>
+          </Route>
           <Route path="/group-booking/:id">
             <Suspense fallback={<PageLoadingFallback variant="form" />}>
               <GroupBookingRequest />
+            </Suspense>
+          </Route>
+          <Route path="/saved-passengers">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <SavedPassengers />
+            </Suspense>
+          </Route>
+          <Route path="/notifications">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <Notifications />
+            </Suspense>
+          </Route>
+          <Route path="/my-waitlist">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <MyWaitlist />
+            </Suspense>
+          </Route>
+          <Route path="/multi-city">
+            <Suspense fallback={<PageLoadingFallback variant="search" />}>
+              <MultiCityResults />
+            </Suspense>
+          </Route>
+          <Route path="/track-flight">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <LiveFlightTracking />
+            </Suspense>
+          </Route>
+
+          {/* Split payment pages (public - accessed via email link) */}
+          <Route path="/pay/:token/:status?">
+            <Suspense fallback={<PageLoadingFallback variant="form" />}>
+              <PayYourShare />
             </Suspense>
           </Route>
 
@@ -205,6 +254,20 @@ function Router() {
               </Suspense>
             </AdminRoute>
           </Route>
+          <Route path="/admin/vouchers">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <VoucherManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/gates">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <GateManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
 
           {/* Error/utility pages */}
           <Route path="/404" component={NotFound} />
@@ -219,11 +282,13 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light" switchable>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-          <InstallPrompt />
-        </TooltipProvider>
+        <FlightCompareProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+            <InstallPrompt />
+          </TooltipProvider>
+        </FlightCompareProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

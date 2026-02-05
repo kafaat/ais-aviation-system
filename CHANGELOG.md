@@ -3,58 +3,64 @@
 ## What's Changed in v1.2.0
 
 ### Features
+
 - feat: implement Phase 2 features - advanced aviation system capabilities (ac7ce89)
 
 ### Other Changes
+
 - Merge branch 'main' into claude/add-claude-documentation-hFQZh (3631b0c)
 - Merge pull request #40 from kafaat/claude/add-claude-documentation-hFQZh (cb9ee3a)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.1.1...v1.2.0
-
 
 ---
 
 ## What's Changed in v1.1.1
 
 ### Bug Fixes
+
 - fix: handle repository-dispatch permission issue gracefully (2c3fe3c)
 - fix: resolve duplicate import errors in MyBookings and SearchResults (248c94c)
 - fix: make dependency review optional when Dependency Graph is disabled (f14c385)
 - fix: update lockfile and fix breaking changes check script (6134101)
 
 ### Maintenance
+
 - chore: trigger CI rebuild (bea3dff)
 
 ### Other Changes
+
 - style: fix Prettier formatting issues across codebase (40ebac1)
 - Merge branch 'main' into claude/add-claude-documentation-hFQZh (3de320d)
 - Merge pull request #39 from kafaat/claude/add-claude-documentation-hFQZh (b6c18e5)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.1.0...v1.1.1
-
 
 ---
 
 ## What's Changed in v1.1.0
 
 ### Features
+
 - feat: add production-ready improvements with security, monitoring, and testing (e953154)
 
 ### Bug Fixes
+
 - fix: Update wouter version and fix pnpm lockfile (955aa36)
 - fix: Fix TypeScript errors in Stripe services (8495681)
 - fix: remove explicit pnpm version from CI workflows (d477e4e)
 - fix: remove conflicting deny-licenses from dependency review (5923db5)
 
 ### Documentation
+
 - docs: Add comprehensive project audit reports and update .env with Redis configuration (9bdf970)
 
 ### Maintenance
+
 - chore: Add final fixes summary document (9cd3403)
 
 ### Other Changes
+
 - Initial plan (12e0251)
 - Add comprehensive documentation for repository visibility and contribution guidelines (110aff3)
 - style: Fix code formatting with Prettier (efe69cf)
@@ -108,9 +114,7 @@
 - Add production-ready improvements: security, monitoring, testing, and CI/CD (98be1e1)
 - Fix TypeScript errors and test setup for production readiness (f4e0b88)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.1.0-beta...v1.1.0
-
 
 ---
 
@@ -142,7 +146,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automated rollback on smoke test failure
 - Post-deployment monitoring for 5 minutes
 
-#### Testing & Verification
+#### Testing &amp; Verification
 
 - Smoke tests script for deployment verification
 - E2E critical path tests for production deployments
@@ -157,7 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PR title validation for conventional commits
 - Dependency review for security vulnerabilities
 
-#### Scripts & Tools
+#### Scripts &amp; Tools
 
 - `scripts/smoke-tests.sh` - Deployment verification tests
 - `scripts/e2e-critical.sh` - Critical path E2E tests
@@ -193,7 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2026-01-12
 
-### 🎉 Major Release - Comprehensive Documentation & Review
+### 🎉 Major Release - Comprehensive Documentation &amp; Review
 
 This release focuses on comprehensive system documentation, analysis, and best practices documentation.
 
@@ -202,6 +206,7 @@ This release focuses on comprehensive system documentation, analysis, and best p
 #### Documentation
 
 - **DEVELOPER_GUIDE.md** - Complete developer onboarding guide with:
+
   - Getting started instructions
   - Project structure explanation
   - Development workflow
@@ -211,6 +216,7 @@ This release focuses on comprehensive system documentation, analysis, and best p
   - Best practices
 
 - **ARCHITECTURE.md** - Detailed system architecture documentation:
+
   - System overview and diagrams
   - Architecture patterns (Layered, DDD)
   - Technology stack breakdown
@@ -223,6 +229,7 @@ This release focuses on comprehensive system documentation, analysis, and best p
   - Scalability and performance strategies
 
 - **API_DOCUMENTATION.md** - Complete API reference:
+
   - All endpoints documented with examples
   - Input/output schemas
   - Error handling guide
@@ -231,6 +238,7 @@ This release focuses on comprehensive system documentation, analysis, and best p
   - Pagination documentation
 
 - **SECURITY.md** - Comprehensive security guide:
+
   - Authentication and authorization
   - Data protection and encryption
   - Input validation
@@ -243,6 +251,7 @@ This release focuses on comprehensive system documentation, analysis, and best p
   - GDPR compliance guide
 
 - **TROUBLESHOOTING.md** - Detailed troubleshooting guide:
+
   - Quick diagnostics
   - Installation issues
   - Database problems
@@ -255,6 +264,7 @@ This release focuses on comprehensive system documentation, analysis, and best p
   - Debug tools
 
 - **.env.example** - Comprehensive environment variables template:
+
   - All required and optional variables
   - Detailed comments for each variable
   - Grouped by category
@@ -447,4 +457,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**For detailed information about specific features, refer to the documentation in the `docs/` directory.**
+**For detailed information about specific features, refer to the documentation in the `docs/` directory.

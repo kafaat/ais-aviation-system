@@ -22,7 +22,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ProfileSkeleton } from "@/components/skeletons";
 import { toast } from "sonner";
 import {
   User,
@@ -205,31 +205,7 @@ export default function Profile() {
 
   // Loading skeleton
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-        {/* Header Skeleton */}
-        <header className="bg-gradient-to-r from-primary/90 to-primary shadow-lg">
-          <div className="container py-8">
-            <div className="flex items-center gap-6">
-              <Skeleton className="h-24 w-24 rounded-full" />
-              <div className="space-y-2">
-                <Skeleton className="h-8 w-48" />
-                <Skeleton className="h-4 w-64" />
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Content Skeleton */}
-        <div className="container py-8">
-          <Skeleton className="h-12 w-full mb-6" />
-          <div className="space-y-6">
-            <Skeleton className="h-64 w-full rounded-xl" />
-            <Skeleton className="h-48 w-full rounded-xl" />
-          </div>
-        </div>
-      </div>
-    );
+    return <ProfileSkeleton />;
   }
 
   return (

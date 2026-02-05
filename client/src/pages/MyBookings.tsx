@@ -6,6 +6,7 @@ import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { BookingCardSkeleton } from "@/components/skeletons";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -25,8 +26,10 @@ import {
 import { Link } from "wouter";
 import {
   ChevronLeft,
+  ChevronDown,
   Plane,
   Calendar,
+  Clock,
   MapPin,
   XCircle,
   Edit,
@@ -62,6 +65,12 @@ import {
   useFlightStatus,
   type FlightStatusType,
 } from "@/hooks/useFlightStatus";
+import { BookingTimeline } from "@/components/BookingTimeline";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { getLoginUrl } from "@/const";
@@ -205,7 +214,7 @@ export default function MyBookings() {
   // Loading Skeleton
   if (loading || isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 dark:from-slate-950 dark:via-blue-950/20 dark:to-slate-950">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 dark:from-slate-950 dark:via-blue-950/20 dark:to-slate-950 animate-in fade-in duration-500">
         <SEO title={t("myBookings.title")} />
         <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b sticky top-0 z-50">
           <div className="container py-4">
@@ -220,7 +229,7 @@ export default function MyBookings() {
         </header>
         <div className="container py-8">
           {/* Filter skeleton */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-4 mb-6 shadow-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-4 mb-6 shadow-sm animate-in fade-in slide-in-from-top-4">
             <div className="flex flex-wrap gap-4">
               <Skeleton className="h-10 w-40" />
               <Skeleton className="h-10 w-40" />
@@ -230,32 +239,16 @@ export default function MyBookings() {
           </div>
           {/* Booking cards skeleton */}
           <div className="space-y-4">
-            {[1, 2, 3].map(i => (
+            {[1, 2, 3].map((i, index) => (
               <div
                 key={i}
-                className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm"
+                className="animate-in fade-in slide-in-from-bottom-4"
+                style={{
+                  animationDelay: `${index * 100}ms`,
+                  animationFillMode: "backwards",
+                }}
               >
-                <div className="flex flex-col lg:flex-row gap-6">
-                  <div className="flex-1 space-y-4">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-6 w-24" />
-                      <Skeleton className="h-6 w-20 rounded-full" />
-                      <Skeleton className="h-6 w-20 rounded-full" />
-                    </div>
-                    <Skeleton className="h-4 w-48" />
-                    <div className="grid grid-cols-2 gap-4">
-                      <Skeleton className="h-16 w-full" />
-                      <Skeleton className="h-16 w-full" />
-                      <Skeleton className="h-16 w-full" />
-                      <Skeleton className="h-16 w-full" />
-                    </div>
-                  </div>
-                  <div className="lg:w-64 space-y-4">
-                    <Skeleton className="h-8 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </div>
-                </div>
+                <BookingCardSkeleton />
               </div>
             ))}
           </div>
@@ -645,6 +638,61 @@ export default function MyBookings() {
                             </div>
                           </div>
                         </div>
+
+                        {/* Booking Timeline - Collapsible */}
+                        <Collapsible className="mt-4">
+                          <CollapsibleTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-between text-muted-foreground hover:text-foreground"
+                            >
+                              <span className="flex items-center gap-2">
+                                <Clock className="h-4 w-4" />
+                                {t("bookingTimeline.title")}
+                              </span>
+                              <ChevronDown className="h-4 w-4 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="pt-3">
+                            <BookingTimeline
+                              bookingStatus={
+                                booking.status as
+                                  | "pending"
+                                  | "confirmed"
+                                  | "cancelled"
+                                  | "completed"
+                              }
+                              paymentStatus={
+                                booking.paymentStatus as
+                                  | "pending"
+                                  | "paid"
+                                  | "refunded"
+                                  | "failed"
+                              }
+                              createdAt={booking.createdAt}
+                              paidAt={
+                                booking.paymentStatus === "paid"
+                                  ? booking.createdAt
+                                  : null
+                              }
+                              checkedInAt={
+                                booking.checkedIn ? booking.createdAt : null
+                              }
+                              completedAt={
+                                booking.status === "completed"
+                                  ? booking.createdAt
+                                  : null
+                              }
+                              cancelledAt={
+                                booking.status === "cancelled"
+                                  ? booking.createdAt
+                                  : null
+                              }
+                              showRelativeTime
+                            />
+                          </CollapsibleContent>
+                        </Collapsible>
                       </div>
 
                       {/* Actions */}

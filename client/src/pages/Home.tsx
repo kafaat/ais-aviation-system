@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -21,6 +22,7 @@ import {
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SearchHistory } from "@/components/SearchHistory";
+import { MultiCitySearch, Segment } from "@/components/MultiCitySearch";
 import { Link, useLocation } from "wouter";
 import {
   Plane,
@@ -30,6 +32,7 @@ import {
   Clock,
   Globe as GlobeIcon,
   Heart,
+  Route,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -60,6 +63,13 @@ export default function Home() {
   const [originId, setOriginId] = useState<string>("");
   const [destinationId, setDestinationId] = useState<string>("");
   const [departureDate, setDepartureDate] = useState<Date>();
+  const [searchType, setSearchType] = useState<"oneWay" | "multiCity">(
+    "oneWay"
+  );
+  const [multiCitySegments, setMultiCitySegments] = useState<Segment[]>([
+    { originId: "", destinationId: "", departureDate: undefined },
+    { originId: "", destinationId: "", departureDate: undefined },
+  ]);
 
   const { data: airports } = trpc.reference.airports.useQuery();
 
@@ -72,6 +82,24 @@ export default function Home() {
       });
       setLocation(`/search?${params.toString()}`);
     }
+  };
+
+  const handleMultiCitySearch = () => {
+    const validSegments = multiCitySegments.filter(
+      s => s.originId && s.destinationId && s.departureDate
+    );
+    if (validSegments.length < 2) return;
+
+    const segmentsData = validSegments.map(s => ({
+      originId: s.originId,
+      destinationId: s.destinationId,
+      departureDate: s.departureDate!.toISOString(),
+    }));
+
+    const params = new URLSearchParams({
+      segments: encodeURIComponent(JSON.stringify(segmentsData)),
+    });
+    setLocation(`/multi-city?${params.toString()}`);
   };
 
   // Handle search history selection
@@ -248,155 +276,195 @@ export default function Home() {
               transition={{ delay: 0.4, duration: 0.8 }}
             >
               <Card className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label
-                      id="origin-label"
-                      className="text-sm font-medium flex items-center gap-2"
+                <Tabs
+                  value={searchType}
+                  onValueChange={v =>
+                    setSearchType(v as "oneWay" | "multiCity")
+                  }
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2 mb-6">
+                    <TabsTrigger
+                      value="oneWay"
+                      className="flex items-center gap-2"
                     >
-                      <MapPin
-                        className="h-4 w-4 text-primary"
-                        aria-hidden="true"
-                      />
-                      {t("home.search.from")}
-                    </label>
-                    <Select value={originId} onValueChange={setOriginId}>
-                      <SelectTrigger
-                        className="h-12"
-                        aria-labelledby="origin-label"
-                      >
-                        <SelectValue
-                          placeholder={t("home.search.selectCity")}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {airports?.map(airport => (
-                          <SelectItem
-                            key={airport.id}
-                            value={airport.id.toString()}
-                          >
-                            {airport.city} ({airport.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <Plane className="h-4 w-4" />
+                      {t("multiCity.oneWay")}
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="multiCity"
+                      className="flex items-center gap-2"
+                    >
+                      <Route className="h-4 w-4" />
+                      {t("multiCity.multiCity")}
+                    </TabsTrigger>
+                  </TabsList>
 
-                  <div className="space-y-2">
-                    <label
-                      id="destination-label"
-                      className="text-sm font-medium flex items-center gap-2"
-                    >
-                      <MapPin
-                        className="h-4 w-4 text-primary"
-                        aria-hidden="true"
-                      />
-                      {t("home.search.to")}
-                    </label>
-                    <Select
-                      value={destinationId}
-                      onValueChange={setDestinationId}
-                    >
-                      <SelectTrigger
-                        className="h-12"
-                        aria-labelledby="destination-label"
-                      >
-                        <SelectValue
-                          placeholder={t("home.search.selectCity")}
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {airports?.map(airport => (
-                          <SelectItem
-                            key={airport.id}
-                            value={airport.id.toString()}
-                          >
-                            {airport.city} ({airport.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label
-                      id="date-label"
-                      className="text-sm font-medium flex items-center gap-2"
-                    >
-                      <CalendarIcon
-                        className="h-4 w-4 text-primary"
-                        aria-hidden="true"
-                      />
-                      {t("home.search.departureDate")}
-                    </label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full h-12 justify-start text-left font-normal"
-                          aria-labelledby="date-label"
+                  {/* One-Way Search */}
+                  <TabsContent value="oneWay">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="space-y-2">
+                        <label
+                          id="origin-label"
+                          className="text-sm font-medium flex items-center gap-2"
                         >
-                          {departureDate ? (
-                            format(departureDate, "PPP", {
-                              locale: currentLocale,
-                            })
-                          ) : (
-                            <span className="text-muted-foreground">
-                              {t("home.search.selectDate")}
-                            </span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar
-                          mode="single"
-                          selected={departureDate}
-                          onSelect={setDepartureDate}
-                          disabled={date => date < new Date()}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
+                          <MapPin
+                            className="h-4 w-4 text-primary"
+                            aria-hidden="true"
+                          />
+                          {t("home.search.from")}
+                        </label>
+                        <Select value={originId} onValueChange={setOriginId}>
+                          <SelectTrigger
+                            className="h-12"
+                            aria-labelledby="origin-label"
+                          >
+                            <SelectValue
+                              placeholder={t("home.search.selectCity")}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {airports?.map(airport => (
+                              <SelectItem
+                                key={airport.id}
+                                value={airport.id.toString()}
+                              >
+                                {airport.city} ({airport.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                <motion.div
-                  className="mt-6 flex flex-col sm:flex-row gap-3"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <Button
-                    onClick={handleSearch}
-                    size="lg"
-                    className="flex-1 h-14 text-lg font-semibold shadow-lg"
-                    disabled={!originId || !destinationId || !departureDate}
-                  >
-                    {t("home.search.searchFlights")}
-                  </Button>
-                  {user && (
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="lg"
-                      className="h-14 px-6 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                      <div className="space-y-2">
+                        <label
+                          id="destination-label"
+                          className="text-sm font-medium flex items-center gap-2"
+                        >
+                          <MapPin
+                            className="h-4 w-4 text-primary"
+                            aria-hidden="true"
+                          />
+                          {t("home.search.to")}
+                        </label>
+                        <Select
+                          value={destinationId}
+                          onValueChange={setDestinationId}
+                        >
+                          <SelectTrigger
+                            className="h-12"
+                            aria-labelledby="destination-label"
+                          >
+                            <SelectValue
+                              placeholder={t("home.search.selectCity")}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {airports?.map(airport => (
+                              <SelectItem
+                                key={airport.id}
+                                value={airport.id.toString()}
+                              >
+                                {airport.city} ({airport.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label
+                          id="date-label"
+                          className="text-sm font-medium flex items-center gap-2"
+                        >
+                          <CalendarIcon
+                            className="h-4 w-4 text-primary"
+                            aria-hidden="true"
+                          />
+                          {t("home.search.departureDate")}
+                        </label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full h-12 justify-start text-left font-normal"
+                              aria-labelledby="date-label"
+                            >
+                              {departureDate ? (
+                                format(departureDate, "PPP", {
+                                  locale: currentLocale,
+                                })
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  {t("home.search.selectDate")}
+                                </span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={departureDate}
+                              onSelect={setDepartureDate}
+                              disabled={date => date < new Date()}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+
+                    <motion.div
+                      className="mt-6 flex flex-col sm:flex-row gap-3"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
                     >
-                      <Link href="/favorites">
-                        <Heart className="h-5 w-5 mr-2" />
-                        {t("nav.favorites")}
-                      </Link>
-                    </Button>
-                  )}
-                </motion.div>
+                      <Button
+                        onClick={handleSearch}
+                        size="lg"
+                        className="flex-1 h-14 text-lg font-semibold shadow-lg"
+                        disabled={!originId || !destinationId || !departureDate}
+                      >
+                        {t("home.search.searchFlights")}
+                      </Button>
+                      {user && (
+                        <Button
+                          asChild
+                          variant="outline"
+                          size="lg"
+                          className="h-14 px-6 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                        >
+                          <Link href="/favorites">
+                            <Heart className="h-5 w-5 mr-2" />
+                            {t("nav.favorites")}
+                          </Link>
+                        </Button>
+                      )}
+                    </motion.div>
+                  </TabsContent>
 
-                {/* Recent Searches (compact) */}
-                <motion.div
-                  className="mt-6 pt-6 border-t"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                >
-                  <SearchHistory compact onSelect={handleHistorySelect} />
-                </motion.div>
+                  {/* Multi-City Search */}
+                  <TabsContent value="multiCity">
+                    <MultiCitySearch
+                      airports={airports || []}
+                      segments={multiCitySegments}
+                      onSegmentsChange={setMultiCitySegments}
+                      onSearch={handleMultiCitySearch}
+                    />
+                  </TabsContent>
+                </Tabs>
+
+                {/* Recent Searches (compact) - only show for one-way */}
+                {searchType === "oneWay" && (
+                  <motion.div
+                    className="mt-6 pt-6 border-t"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.6 }}
+                  >
+                    <SearchHistory compact onSelect={handleHistorySelect} />
+                  </motion.div>
+                )}
               </Card>
             </motion.div>
           </div>
