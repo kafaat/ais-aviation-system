@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -18,6 +18,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { SearchHistory } from "@/components/SearchHistory";
 import { Link, useLocation } from "wouter";
 import {
   Plane,
@@ -26,6 +27,7 @@ import {
   Shield,
   Clock,
   Globe as GlobeIcon,
+  Heart,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -67,6 +69,30 @@ export default function Home() {
       setLocation(`/search?${params.toString()}`);
     }
   };
+
+  // Handle search history selection
+  const handleHistorySelect = useCallback(
+    (search: {
+      originCode: string;
+      destinationCode: string;
+      departureDate: string;
+    }) => {
+      if (!airports) return;
+
+      // Find airport IDs from codes
+      const originAirport = airports.find(a => a.code === search.originCode);
+      const destAirport = airports.find(a => a.code === search.destinationCode);
+
+      if (originAirport) {
+        setOriginId(originAirport.id.toString());
+      }
+      if (destAirport) {
+        setDestinationId(destAirport.id.toString());
+      }
+      setDepartureDate(new Date(search.departureDate));
+    },
+    [airports]
+  );
 
   const currentLocale = i18n.language === "ar" ? ar : enUS;
 
@@ -279,18 +305,41 @@ export default function Home() {
               </div>
 
               <motion.div
-                className="mt-6"
+                className="mt-6 flex flex-col sm:flex-row gap-3"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
                 <Button
                   onClick={handleSearch}
                   size="lg"
-                  className="w-full h-14 text-lg font-semibold shadow-lg"
+                  className="flex-1 h-14 text-lg font-semibold shadow-lg"
                   disabled={!originId || !destinationId || !departureDate}
                 >
                   {t("home.search.searchFlights")}
                 </Button>
+                {user && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="lg"
+                    className="h-14 px-6 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                  >
+                    <Link href="/favorites">
+                      <Heart className="h-5 w-5 mr-2" />
+                      {t("nav.favorites")}
+                    </Link>
+                  </Button>
+                )}
+              </motion.div>
+
+              {/* Recent Searches (compact) */}
+              <motion.div
+                className="mt-6 pt-6 border-t"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+              >
+                <SearchHistory compact onSelect={handleHistorySelect} />
               </motion.div>
             </Card>
           </motion.div>

@@ -93,8 +93,9 @@
     "selectFlight": "Select Flight",
     "available": "available",
     "full": "Full",
-    "economy": "Economy",
-    "business": "Business"
+    "total": "total",
+    "noMatchingFlights": "No flights match your filters",
+    "tryChangingFilters": "Try adjusting your filter options to find flights"
   },
   "booking": {
     "title": "Complete Booking",

@@ -35,7 +35,10 @@
     "previous": "السابق",
     "submit": "إرسال",
     "currency": "ر.س",
-    "clearAll": "مسح الكل"
+    "clearAll": "مسح الكل",
+    "share": "مشاركة",
+    "copied": "تم النسخ",
+    "loginRequired": "يرجى تسجيل الدخول أولاً"
   },
   "nav": {
     "home": "الرئيسية",
@@ -88,7 +91,10 @@
     "economy": "الدرجة السياحية",
     "business": "درجة الأعمال",
     "seatsAvailable": "{{count}} مقعد متاح",
-    "bookNow": "احجز الآن"
+    "bookNow": "احجز الآن",
+    "total": "الإجمالي",
+    "noMatchingFlights": "لا توجد رحلات مطابقة للفلاتر",
+    "tryChangingFilters": "جرب تغيير خيارات الفلتر للعثور على رحلات"
   },
   "booking": {
     "title": "إكمال الحجز",

@@ -1,15 +1,31 @@
 import { useEffect, useState, useMemo } from "react";
 import { useLocation, Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { AdvancedFilters } from "@/components/AdvancedFilters";
 import { SearchHistory, saveSearchToHistory } from "@/components/SearchHistory";
-import { Plane, Clock, ChevronLeft } from "lucide-react";
+import {
+  Plane,
+  Clock,
+  ChevronLeft,
+  Heart,
+  Loader2,
+  Share2,
+  ArrowLeftRight,
+} from "lucide-react";
 import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+import { ar, enUS } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface FilterOptions {
   priceRange: [number, number];
@@ -20,6 +36,8 @@ interface FilterOptions {
 }
 
 export default function SearchResults() {
+  const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const [location] = useLocation();
   const [params, setParams] = useState<{
     originId: number;
@@ -34,6 +52,8 @@ export default function SearchResults() {
     departureTime: [],
     cabinClass: [],
   });
+
+  const currentLocale = i18n.language === "ar" ? ar : enUS;
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.split("?")[1]);
@@ -53,6 +73,46 @@ export default function SearchResults() {
   const { data: flights, isLoading } = trpc.flights.search.useQuery(params!, {
     enabled: !!params,
   });
+
+  // Get user's favorites to check if route is favorited
+  const { data: favorites, refetch: refetchFavorites } =
+    trpc.favorites.getAll.useQuery(undefined, {
+      enabled: !!user,
+    });
+
+  // Add to favorites mutation
+  const addFavorite = trpc.favorites.add.useMutation({
+    onSuccess: () => {
+      toast.success(t("favorites.addToFavorites") + " ✓");
+      refetchFavorites();
+    },
+    onError: (error: { message: string }) => {
+      toast.error(error.message);
+    },
+  });
+
+  // Check if current route is favorited (using params)
+  const isRouteFavorited = () => {
+    if (!favorites || !params) return false;
+    return favorites.some(
+      (fav: { favorite: { originId: number; destinationId: number } }) =>
+        fav.favorite.originId === params.originId &&
+        fav.favorite.destinationId === params.destinationId
+    );
+  };
+
+  // Handle add to favorites (using params)
+  const handleAddToFavorites = () => {
+    if (!user) {
+      toast.error(t("common.loginRequired"));
+      return;
+    }
+    if (!params) return;
+    addFavorite.mutate({
+      originId: params.originId,
+      destinationId: params.destinationId,
+    });
+  };
 
   // Save search to history when we get results
   useEffect(() => {
@@ -148,28 +208,53 @@ export default function SearchResults() {
   };
 
   const formatTime = (date: Date) => {
-    return format(new Date(date), "HH:mm", { locale: ar });
+    return format(new Date(date), "HH:mm", { locale: currentLocale });
   };
 
   const formatPrice = (price: number) => {
-    return (price / 100).toFixed(2);
+    return (price / 100).toLocaleString(
+      i18n.language === "ar" ? "ar-SA" : "en-US"
+    );
   };
 
   const calculateDuration = (departure: Date, arrival: Date) => {
     const diff = new Date(arrival).getTime() - new Date(departure).getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    return `${hours}س ${minutes}د`;
+    return i18n.language === "ar"
+      ? `${hours}س ${minutes}د`
+      : `${hours}h ${minutes}m`;
+  };
+
+  const handleShare = async (flight: {
+    id: number;
+    origin: { city: string };
+    destination: { city: string };
+    economyPrice: number;
+  }) => {
+    const url = `${window.location.origin}/booking/${flight.id}`;
+    const text = `${flight.origin.city} → ${flight.destination.city} - ${formatPrice(flight.economyPrice)} ${t("common.currency")}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: t("common.appName"), text, url });
+      } catch {
+        // User cancelled share
+      }
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success(t("common.copied"));
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="container py-8">
           <Skeleton className="h-8 w-64 mb-8" />
           <div className="space-y-4">
             {[1, 2, 3].map(i => (
-              <Skeleton key={i} className="h-40 w-full" />
+              <Skeleton key={i} className="h-48 w-full rounded-xl" />
             ))}
           </div>
         </div>
@@ -178,24 +263,38 @@ export default function SearchResults() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-50">
+      <header className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm">
         <div className="container py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/">
-              <Button variant="ghost" size="icon">
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold">نتائج البحث</h1>
-              {params && (
-                <p className="text-sm text-muted-foreground">
-                  {format(params.departureDate, "PPP", { locale: ar })}
-                </p>
-              )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/">
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <ChevronLeft className="h-5 w-5" />
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-xl font-bold">{t("search.title")}</h1>
+                {params && (
+                  <p className="text-sm text-muted-foreground">
+                    {format(params.departureDate, "PPP", {
+                      locale: currentLocale,
+                    })}
+                  </p>
+                )}
+              </div>
             </div>
+
+            {flights && flights.length > 0 && (
+              <div className="hidden md:flex items-center gap-2 text-sm bg-muted/50 px-4 py-2 rounded-full">
+                <span className="font-semibold">{flights[0].origin.code}</span>
+                <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+                <span className="font-semibold">
+                  {flights[0].destination.code}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -204,18 +303,18 @@ export default function SearchResults() {
       <div className="container py-8">
         {!flights || flights.length === 0 ? (
           <div className="space-y-6">
-            <Card className="p-12 text-center">
-              <Plane className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <Card className="p-12 text-center border-dashed">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
+                <Plane className="h-10 w-10 text-muted-foreground" />
+              </div>
               <h2 className="text-2xl font-semibold mb-2">
-                لا توجد رحلات متاحة
+                {t("search.noFlights")}
               </h2>
-              <p className="text-muted-foreground mb-6">
-                عذراً، لم نجد أي رحلات متاحة لهذا المسار في التاريخ المحدد
+              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                {t("search.noFlightsDesc")}
               </p>
-              <Button asChild>
-                <Link href="/">
-                  <a>العودة للبحث</a>
-                </Link>
+              <Button asChild size="lg">
+                <Link href="/">{t("common.back")}</Link>
               </Button>
             </Card>
 
@@ -233,10 +332,10 @@ export default function SearchResults() {
             {/* Results Count */}
             <div className="flex items-center justify-between">
               <p className="text-lg font-medium">
-                وجدنا {filteredFlights.length} رحلة متاحة
+                {t("search.foundFlights", { count: filteredFlights.length })}
                 {filteredFlights.length !== flights.length && (
                   <span className="text-sm text-muted-foreground ml-2">
-                    (من أصل {flights.length})
+                    ({flights.length} {t("search.total")})
                   </span>
                 )}
               </p>
@@ -244,153 +343,227 @@ export default function SearchResults() {
 
             {/* Flight Cards */}
             {filteredFlights.length === 0 ? (
-              <Card className="p-12 text-center">
+              <Card className="p-12 text-center border-dashed">
                 <Plane className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
                 <h2 className="text-2xl font-semibold mb-2">
-                  لا توجد رحلات تطابق الفلاتر
+                  {t("search.noMatchingFlights")}
                 </h2>
                 <p className="text-muted-foreground mb-6">
-                  جرب تغيير معايير البحث أو إعادة تعيين الفلاتر
+                  {t("search.tryChangingFilters")}
                 </p>
                 <Button onClick={handleResetFilters}>
-                  إعادة تعيين الفلاتر
+                  {t("filters.reset")}
                 </Button>
               </Card>
             ) : (
               <div className="space-y-4">
-                {filteredFlights.map(flight => (
-                  <Card
-                    key={flight.id}
-                    className="p-6 hover:shadow-lg transition-shadow"
-                  >
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-                      {/* Airline Info */}
-                      <div className="lg:col-span-2">
-                        <div className="flex items-center gap-3">
-                          {flight.airline.logo && (
-                            <img
-                              src={flight.airline.logo}
-                              alt={flight.airline.name}
-                              className="h-12 w-12 object-contain"
-                            />
-                          )}
-                          <div>
-                            <p className="font-semibold">
-                              {flight.airline.name}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {flight.flightNumber}
-                            </p>
+                {filteredFlights.map(flight => {
+                  const isFavorited = isRouteFavorited();
+
+                  return (
+                    <Card
+                      key={flight.id}
+                      className="p-6 hover:shadow-xl transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm"
+                    >
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                        {/* Airline Info */}
+                        <div className="lg:col-span-2">
+                          <div className="flex items-center gap-3">
+                            {flight.airline.logo ? (
+                              <img
+                                src={flight.airline.logo}
+                                alt={flight.airline.name}
+                                className="h-12 w-12 object-contain rounded-lg"
+                              />
+                            ) : (
+                              <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Plane className="h-6 w-6 text-primary" />
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-semibold">
+                                {flight.airline.name}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {flight.flightNumber}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Flight Details */}
-                      <div className="lg:col-span-6">
-                        <div className="flex items-center justify-between">
-                          <div className="text-center">
-                            <p className="text-3xl font-bold">
-                              {formatTime(flight.departureTime)}
-                            </p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {flight.origin.city} ({flight.origin.code})
-                            </p>
-                          </div>
+                        {/* Flight Details */}
+                        <div className="lg:col-span-5">
+                          <div className="flex items-center justify-between">
+                            <div className="text-center">
+                              <p className="text-3xl font-bold">
+                                {formatTime(flight.departureTime)}
+                              </p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                <span className="font-semibold text-foreground">
+                                  {flight.origin.code}
+                                </span>{" "}
+                                - {flight.origin.city}
+                              </p>
+                            </div>
 
-                          <div className="flex-1 px-6">
-                            <div className="relative">
-                              <div className="border-t-2 border-dashed border-gray-300"></div>
-                              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-3">
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <Clock className="h-4 w-4" />
-                                  <span>
-                                    {calculateDuration(
-                                      flight.departureTime,
-                                      flight.arrivalTime
-                                    )}
-                                  </span>
+                            <div className="flex-1 px-4">
+                              <div className="relative">
+                                <div className="border-t-2 border-dashed border-primary/30"></div>
+                                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-2">
+                                  <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                                    <Clock className="h-3 w-3" />
+                                    <span>
+                                      {calculateDuration(
+                                        flight.departureTime,
+                                        flight.arrivalTime
+                                      )}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
+                              <p className="text-xs text-center text-muted-foreground mt-2">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px]"
+                                >
+                                  {t("search.directFlight")}
+                                </Badge>
+                              </p>
                             </div>
-                            <p className="text-xs text-center text-muted-foreground mt-2">
-                              رحلة مباشرة
-                            </p>
-                          </div>
 
-                          <div className="text-center">
-                            <p className="text-3xl font-bold">
-                              {formatTime(flight.arrivalTime)}
-                            </p>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {flight.destination.city} (
-                              {flight.destination.code})
-                            </p>
+                            <div className="text-center">
+                              <p className="text-3xl font-bold">
+                                {formatTime(flight.arrivalTime)}
+                              </p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                <span className="font-semibold text-foreground">
+                                  {flight.destination.code}
+                                </span>{" "}
+                                - {flight.destination.city}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="lg:col-span-1 flex lg:flex-col items-center justify-center gap-2">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`rounded-full ${
+                                  isFavorited
+                                    ? "text-rose-500 bg-rose-50"
+                                    : "hover:text-rose-500 hover:bg-rose-50"
+                                }`}
+                                onClick={handleAddToFavorites}
+                                disabled={addFavorite.isPending || isFavorited}
+                              >
+                                {addFavorite.isPending ? (
+                                  <Loader2 className="h-5 w-5 animate-spin" />
+                                ) : (
+                                  <Heart
+                                    className={`h-5 w-5 ${isFavorited ? "fill-current" : ""}`}
+                                  />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isFavorited
+                                ? t("favorites.removeFromFavorites")
+                                : t("favorites.addToFavorites")}
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-full hover:text-blue-500 hover:bg-blue-50"
+                                onClick={() => handleShare(flight)}
+                              >
+                                <Share2 className="h-5 w-5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t("common.share")}</TooltipContent>
+                          </Tooltip>
+                        </div>
+
+                        {/* Pricing */}
+                        <div className="lg:col-span-4">
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            {flight.economyAvailable > 0 && (
+                              <div className="flex-1">
+                                <div className="text-center p-4 border-2 rounded-xl hover:border-primary/50 transition-colors group">
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    {t("search.economy")}
+                                  </p>
+                                  <p className="text-2xl font-bold text-primary">
+                                    {formatPrice(flight.economyPrice)}{" "}
+                                    <span className="text-sm font-normal">
+                                      {t("common.currency")}
+                                    </span>
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                    {t("search.seatsAvailable", {
+                                      count: flight.economyAvailable,
+                                    })}
+                                  </p>
+                                  <Button
+                                    asChild
+                                    className="w-full mt-3 group-hover:bg-primary group-hover:text-white"
+                                    variant="outline"
+                                    size="sm"
+                                  >
+                                    <Link
+                                      href={`/booking/${flight.id}?class=economy`}
+                                    >
+                                      {t("search.bookNow")}
+                                    </Link>
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            {flight.businessAvailable > 0 && (
+                              <div className="flex-1">
+                                <div className="text-center p-4 border-2 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200 hover:border-amber-400 transition-colors group">
+                                  <p className="text-xs text-amber-700 mb-1 font-medium">
+                                    {t("search.business")}
+                                  </p>
+                                  <p className="text-2xl font-bold text-amber-700">
+                                    {formatPrice(flight.businessPrice)}{" "}
+                                    <span className="text-sm font-normal">
+                                      {t("common.currency")}
+                                    </span>
+                                  </p>
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    {t("search.seatsAvailable", {
+                                      count: flight.businessAvailable,
+                                    })}
+                                  </p>
+                                  <Button
+                                    asChild
+                                    className="w-full mt-3 bg-amber-600 hover:bg-amber-700"
+                                    size="sm"
+                                  >
+                                    <Link
+                                      href={`/booking/${flight.id}?class=business`}
+                                    >
+                                      {t("search.bookNow")}
+                                    </Link>
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-
-                      {/* Pricing */}
-                      <div className="lg:col-span-4">
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          {flight.economyAvailable > 0 && (
-                            <div className="flex-1">
-                              <div className="text-center p-3 border rounded-lg">
-                                <p className="text-xs text-muted-foreground mb-1">
-                                  الدرجة السياحية
-                                </p>
-                                <p className="text-2xl font-bold text-primary">
-                                  {formatPrice(flight.economyPrice)} ر.س
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {flight.economyAvailable} مقعد متاح
-                                </p>
-                                <Button
-                                  asChild
-                                  className="w-full mt-3"
-                                  size="sm"
-                                >
-                                  <Link
-                                    href={`/booking/${flight.id}?class=economy`}
-                                  >
-                                    <a>احجز الآن</a>
-                                  </Link>
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-
-                          {flight.businessAvailable > 0 && (
-                            <div className="flex-1">
-                              <div className="text-center p-3 border rounded-lg bg-primary/5">
-                                <p className="text-xs text-muted-foreground mb-1">
-                                  درجة الأعمال
-                                </p>
-                                <p className="text-2xl font-bold text-primary">
-                                  {formatPrice(flight.businessPrice)} ر.س
-                                </p>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {flight.businessAvailable} مقعد متاح
-                                </p>
-                                <Button
-                                  asChild
-                                  className="w-full mt-3"
-                                  size="sm"
-                                  variant="default"
-                                >
-                                  <Link
-                                    href={`/booking/${flight.id}?class=business`}
-                                  >
-                                    <a>احجز الآن</a>
-                                  </Link>
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>
