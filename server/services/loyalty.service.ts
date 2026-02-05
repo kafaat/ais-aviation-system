@@ -296,3 +296,229 @@ export async function getLoyaltyAccountDetails(userId: number) {
     });
   }
 }
+
+/**
+ * Process expired miles (run daily via cron job)
+ * Expires miles older than 2 years and updates account balances
+ */
+export async function processExpiredMiles(): Promise<{
+  processedAccounts: number;
+  totalExpiredMiles: number;
+}> {
+  const database = await getDb();
+  if (!database) {
+    console.error("Database not available for miles expiration");
+    return { processedAccounts: 0, totalExpiredMiles: 0 };
+  }
+
+  let processedAccounts = 0;
+  let totalExpiredMiles = 0;
+
+  try {
+    const now = new Date();
+
+    // Get all accounts with balances > 0
+    const accounts = await database.select().from(loyaltyAccounts);
+
+    for (const account of accounts) {
+      // Get unexpired earn transactions that are now expired
+      const expiredTransactions = await database
+        .select()
+        .from(milesTransactions)
+        .where(eq(milesTransactions.userId, account.userId));
+
+      // Filter to only expired earn transactions
+      const toExpire = expiredTransactions.filter(
+        t =>
+          t.type === "earn" &&
+          t.expiresAt &&
+          new Date(t.expiresAt) <= now &&
+          t.amount > 0
+      );
+
+      if (toExpire.length === 0) continue;
+
+      // Calculate total miles to expire
+      const milesToExpire = toExpire.reduce((sum, t) => sum + t.amount, 0);
+
+      if (milesToExpire <= 0) continue;
+
+      // Don't expire more than current balance
+      const actualExpireAmount = Math.min(
+        milesToExpire,
+        account.currentMilesBalance
+      );
+
+      if (actualExpireAmount <= 0) continue;
+
+      // Create expiration transaction
+      await database.insert(milesTransactions).values({
+        userId: account.userId,
+        loyaltyAccountId: account.id,
+        type: "expire",
+        amount: -actualExpireAmount,
+        balanceAfter: account.currentMilesBalance - actualExpireAmount,
+        description: `انتهاء صلاحية ${actualExpireAmount} ميل - Miles expiration (${toExpire.length} transactions)`,
+      });
+
+      // Update account balance
+      await database
+        .update(loyaltyAccounts)
+        .set({
+          currentMilesBalance: account.currentMilesBalance - actualExpireAmount,
+          lastActivityAt: now,
+        })
+        .where(eq(loyaltyAccounts.userId, account.userId));
+
+      processedAccounts++;
+      totalExpiredMiles += actualExpireAmount;
+
+      console.info(
+        `[Loyalty] Expired ${actualExpireAmount} miles for user ${account.userId}`
+      );
+    }
+
+    console.info(
+      `[Loyalty] Miles expiration completed: ${processedAccounts} accounts, ${totalExpiredMiles} miles expired`
+    );
+
+    return { processedAccounts, totalExpiredMiles };
+  } catch (error) {
+    console.error("Error processing expired miles:", error);
+    return { processedAccounts, totalExpiredMiles };
+  }
+}
+
+/**
+ * Reverse miles for cancelled/refunded booking
+ */
+export async function reverseMilesForBooking(
+  userId: number,
+  bookingId: number,
+  reason: string = "Booking cancelled"
+): Promise<{ milesReversed: number }> {
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
+
+  try {
+    // Find original earn transaction for this booking
+    const [originalTransaction] = await database
+      .select()
+      .from(milesTransactions)
+      .where(eq(milesTransactions.bookingId, bookingId));
+
+    if (!originalTransaction || originalTransaction.type !== "earn") {
+      return { milesReversed: 0 };
+    }
+
+    const milesToReverse = originalTransaction.amount;
+
+    // Get current account
+    const [account] = await database
+      .select()
+      .from(loyaltyAccounts)
+      .where(eq(loyaltyAccounts.userId, userId));
+
+    if (!account) {
+      return { milesReversed: 0 };
+    }
+
+    const newBalance = Math.max(
+      0,
+      account.currentMilesBalance - milesToReverse
+    );
+
+    // Create adjustment transaction
+    await database.insert(milesTransactions).values({
+      userId,
+      loyaltyAccountId: account.id,
+      bookingId,
+      type: "adjustment",
+      amount: -milesToReverse,
+      balanceAfter: newBalance,
+      description: `استرداد ${milesToReverse} ميل - ${reason}`,
+    });
+
+    // Update account
+    await database
+      .update(loyaltyAccounts)
+      .set({
+        currentMilesBalance: newBalance,
+        milesRedeemed: account.milesRedeemed + milesToReverse,
+        lastActivityAt: new Date(),
+      })
+      .where(eq(loyaltyAccounts.userId, userId));
+
+    console.info(
+      `[Loyalty] Reversed ${milesToReverse} miles for user ${userId}, booking ${bookingId}`
+    );
+
+    return { milesReversed: milesToReverse };
+  } catch (error) {
+    console.error("Error reversing miles:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to reverse miles",
+    });
+  }
+}
+
+/**
+ * Award bonus miles (admin function)
+ */
+export async function awardBonusMiles(
+  userId: number,
+  miles: number,
+  reason: string
+): Promise<{ newBalance: number }> {
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
+
+  try {
+    const account = await getOrCreateLoyaltyAccount(userId);
+    const newBalance = account.currentMilesBalance + miles;
+
+    // Create bonus transaction
+    await database.insert(milesTransactions).values({
+      userId,
+      loyaltyAccountId: account.id,
+      type: "bonus",
+      amount: miles,
+      balanceAfter: newBalance,
+      description: `مكافأة: ${reason}`,
+      expiresAt: new Date(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000), // 2 years
+    });
+
+    // Update account
+    await database
+      .update(loyaltyAccounts)
+      .set({
+        currentMilesBalance: newBalance,
+        totalMilesEarned: account.totalMilesEarned + miles,
+        lastActivityAt: new Date(),
+      })
+      .where(eq(loyaltyAccounts.userId, userId));
+
+    console.info(
+      `[Loyalty] Awarded ${miles} bonus miles to user ${userId}: ${reason}`
+    );
+
+    return { newBalance };
+  } catch (error) {
+    console.error("Error awarding bonus miles:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to award bonus miles",
+    });
+  }
+}

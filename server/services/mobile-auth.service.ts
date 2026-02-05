@@ -1,7 +1,11 @@
 import jwt, { SignOptions } from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { refreshTokens, users, type InsertRefreshToken } from "../../drizzle/schema";
+import {
+  refreshTokens,
+  users,
+  type InsertRefreshToken,
+} from "../../drizzle/schema";
 import { eq, and, gt } from "drizzle-orm";
 import { logger } from "../_core/logger";
 import * as schema from "../../drizzle/schema";
@@ -140,13 +144,16 @@ export async function mobileLogin(
       message: "Database connection not available",
     });
   }
-  
+
   await database.insert(refreshTokens).values(refreshTokenData);
 
-  logger.info({
-    userId: user.id,
-    email: user.email,
-  }, "Mobile login successful");
+  logger.info(
+    {
+      userId: user.id,
+      email: user.email,
+    },
+    "Mobile login successful"
+  );
 
   return {
     accessToken,
@@ -185,7 +192,7 @@ export async function refreshAccessToken(
       message: "Database connection not available",
     });
   }
-  
+
   const tokenRecord = await database
     .select()
     .from(refreshTokens)
@@ -228,9 +235,12 @@ export async function refreshAccessToken(
     ACCESS_TOKEN_EXPIRY
   );
 
-  logger.info({
-    userId: payload.userId,
-  }, "Access token refreshed");
+  logger.info(
+    {
+      userId: payload.userId,
+    },
+    "Access token refreshed"
+  );
 
   return {
     accessToken,
@@ -251,7 +261,7 @@ export async function revokeRefreshToken(
       message: "Database connection not available",
     });
   }
-  
+
   await database
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
@@ -271,7 +281,7 @@ export async function revokeAllUserTokens(userId: number): Promise<void> {
       message: "Database connection not available",
     });
   }
-  
+
   await database
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
@@ -291,15 +301,18 @@ export async function cleanupExpiredTokens(): Promise<void> {
       message: "Database connection not available",
     });
   }
-  
+
   const result = await database
     .delete(refreshTokens)
     .where(gt(refreshTokens.expiresAt, new Date()));
 
   const affectedRows = (result as any)[0]?.affectedRows || 0;
-  logger.info({
-    deletedCount: affectedRows,
-  }, "Expired refresh tokens cleaned up");
+  logger.info(
+    {
+      deletedCount: affectedRows,
+    },
+    "Expired refresh tokens cleaned up"
+  );
 }
 
 /**
@@ -325,7 +338,7 @@ async function authenticateUser(
   if (!database) {
     return null;
   }
-  
+
   const user = await database.query.users?.findFirst({
     where: (users, { eq }) => eq(users.email, email),
   });

@@ -128,7 +128,7 @@ export async function getInventoryStatus(
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
@@ -490,7 +490,7 @@ export async function calculateRecommendedOverbooking(
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
@@ -572,7 +572,7 @@ export async function forecastDemand(
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });

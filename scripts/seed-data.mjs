@@ -1,5 +1,13 @@
 import { drizzle } from "drizzle-orm/mysql2";
-import { airlines, airports, flights } from "../drizzle/schema.js";
+import {
+  airlines,
+  airports,
+  flights,
+  currencies,
+  ancillaryServices,
+  pricingRules,
+  seasonalPricing,
+} from "../drizzle/schema.js";
 
 const db = drizzle(process.env.DATABASE_URL);
 
@@ -178,6 +186,276 @@ async function seedData() {
         businessPrice: 120000, // 1200 SAR
         economyAvailable: 140,
         businessAvailable: 25,
+      },
+    ]);
+
+    // Seed Currencies
+    console.log("Adding currencies...");
+    await db.insert(currencies).values([
+      {
+        code: "SAR",
+        name: "Saudi Riyal",
+        nameAr: "ريال سعودي",
+        symbol: "﷼",
+        decimalPlaces: 2,
+        symbolPosition: "after",
+        thousandsSeparator: ",",
+        decimalSeparator: ".",
+        isActive: true,
+        isBaseCurrency: true,
+      },
+      {
+        code: "USD",
+        name: "US Dollar",
+        nameAr: "دولار أمريكي",
+        symbol: "$",
+        decimalPlaces: 2,
+        symbolPosition: "before",
+        thousandsSeparator: ",",
+        decimalSeparator: ".",
+        isActive: true,
+        isBaseCurrency: false,
+      },
+      {
+        code: "EUR",
+        name: "Euro",
+        nameAr: "يورو",
+        symbol: "€",
+        decimalPlaces: 2,
+        symbolPosition: "before",
+        thousandsSeparator: ".",
+        decimalSeparator: ",",
+        isActive: true,
+        isBaseCurrency: false,
+      },
+      {
+        code: "AED",
+        name: "UAE Dirham",
+        nameAr: "درهم إماراتي",
+        symbol: "د.إ",
+        decimalPlaces: 2,
+        symbolPosition: "after",
+        thousandsSeparator: ",",
+        decimalSeparator: ".",
+        isActive: true,
+        isBaseCurrency: false,
+      },
+      {
+        code: "EGP",
+        name: "Egyptian Pound",
+        nameAr: "جنيه مصري",
+        symbol: "ج.م",
+        decimalPlaces: 2,
+        symbolPosition: "after",
+        thousandsSeparator: ",",
+        decimalSeparator: ".",
+        isActive: true,
+        isBaseCurrency: false,
+      },
+    ]);
+
+    // Seed Ancillary Services
+    console.log("Adding ancillary services...");
+    await db.insert(ancillaryServices).values([
+      // Baggage
+      {
+        code: "BAG_20KG",
+        category: "baggage",
+        name: "20kg Checked Baggage",
+        description: "Additional 20kg checked baggage allowance",
+        price: 15000, // 150 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy", "business"]),
+        icon: "luggage",
+      },
+      {
+        code: "BAG_30KG",
+        category: "baggage",
+        name: "30kg Checked Baggage",
+        description: "Additional 30kg checked baggage allowance",
+        price: 25000, // 250 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy", "business"]),
+        icon: "luggage",
+      },
+      // Meals
+      {
+        code: "MEAL_STD",
+        category: "meal",
+        name: "Standard Meal",
+        description: "Hot meal with drink",
+        price: 5000, // 50 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy"]),
+        icon: "utensils",
+      },
+      {
+        code: "MEAL_VEG",
+        category: "meal",
+        name: "Vegetarian Meal",
+        description: "Vegetarian hot meal with drink",
+        price: 5000, // 50 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy"]),
+        icon: "leaf",
+      },
+      {
+        code: "MEAL_HALAL",
+        category: "meal",
+        name: "Halal Meal",
+        description: "Halal certified hot meal with drink",
+        price: 5000, // 50 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy"]),
+        icon: "utensils",
+      },
+      // Seats
+      {
+        code: "SEAT_EXTRA_LEG",
+        category: "seat",
+        name: "Extra Legroom Seat",
+        description: "Seat with additional legroom",
+        price: 10000, // 100 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy"]),
+        icon: "armchair",
+      },
+      {
+        code: "SEAT_WINDOW",
+        category: "seat",
+        name: "Window Seat",
+        description: "Guaranteed window seat",
+        price: 3000, // 30 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy"]),
+        icon: "window",
+      },
+      // Lounge
+      {
+        code: "LOUNGE_ACCESS",
+        category: "lounge",
+        name: "Lounge Access",
+        description: "Access to airport lounge",
+        price: 20000, // 200 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy"]),
+        icon: "sofa",
+      },
+      // Priority Boarding
+      {
+        code: "PRIORITY_BOARD",
+        category: "priority_boarding",
+        name: "Priority Boarding",
+        description: "Board the aircraft before other passengers",
+        price: 5000, // 50 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy"]),
+        icon: "fast-forward",
+      },
+      // Insurance
+      {
+        code: "TRAVEL_INS",
+        category: "insurance",
+        name: "Travel Insurance",
+        description: "Comprehensive travel insurance coverage",
+        price: 8000, // 80 SAR
+        currency: "SAR",
+        available: true,
+        applicableCabinClasses: JSON.stringify(["economy", "business"]),
+        icon: "shield",
+      },
+    ]);
+
+    // Seed Pricing Rules
+    console.log("Adding pricing rules...");
+    await db.insert(pricingRules).values([
+      {
+        name: "High Demand Multiplier",
+        description: "Increase prices when demand is high (>80% occupancy)",
+        ruleType: "load_factor",
+        parameters: JSON.stringify({
+          thresholds: [
+            { occupancy: 0.8, multiplier: 1.15 },
+            { occupancy: 0.9, multiplier: 1.3 },
+            { occupancy: 0.95, multiplier: 1.5 },
+          ],
+        }),
+        priority: 10,
+        isActive: true,
+      },
+      {
+        name: "Advance Purchase Discount",
+        description: "Lower prices for early bookings",
+        ruleType: "advance_purchase",
+        parameters: JSON.stringify({
+          thresholds: [
+            { daysBeforeDeparture: 30, multiplier: 0.85 },
+            { daysBeforeDeparture: 14, multiplier: 0.95 },
+            { daysBeforeDeparture: 7, multiplier: 1.0 },
+            { daysBeforeDeparture: 3, multiplier: 1.15 },
+            { daysBeforeDeparture: 1, multiplier: 1.25 },
+          ],
+        }),
+        priority: 5,
+        isActive: true,
+      },
+      {
+        name: "Business Class Premium",
+        description: "Premium pricing for business class",
+        ruleType: "cabin_class",
+        cabinClass: "business",
+        parameters: JSON.stringify({
+          baseMultiplier: 3.0,
+        }),
+        priority: 1,
+        isActive: true,
+      },
+    ]);
+
+    // Seed Seasonal Pricing
+    console.log("Adding seasonal pricing...");
+    const currentYear = new Date().getFullYear();
+    await db.insert(seasonalPricing).values([
+      {
+        name: "Hajj Season",
+        nameAr: "موسم الحج",
+        startDate: new Date(`${currentYear}-06-01`),
+        endDate: new Date(`${currentYear}-07-15`),
+        multiplier: "1.50",
+        isActive: true,
+      },
+      {
+        name: "Ramadan",
+        nameAr: "رمضان",
+        startDate: new Date(`${currentYear}-03-01`),
+        endDate: new Date(`${currentYear}-04-10`),
+        multiplier: "1.20",
+        isActive: true,
+      },
+      {
+        name: "Summer Peak",
+        nameAr: "ذروة الصيف",
+        startDate: new Date(`${currentYear}-07-15`),
+        endDate: new Date(`${currentYear}-08-31`),
+        multiplier: "1.25",
+        isActive: true,
+      },
+      {
+        name: "National Day",
+        nameAr: "اليوم الوطني",
+        startDate: new Date(`${currentYear}-09-20`),
+        endDate: new Date(`${currentYear}-09-25`),
+        multiplier: "1.15",
+        isActive: true,
       },
     ]);
 

@@ -259,7 +259,7 @@ async function getDbExchangeRate(
     if (!database) {
       return null;
     }
-    
+
     const results = await database
       .select()
       .from(exchangeRates)

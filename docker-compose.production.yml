@@ -38,21 +38,22 @@ services:
   api1:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: ais_api_1
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
       - REDIS_URL=redis://redis:6379
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - JWT_SECRET=${JWT_SECRET}
-      - SENTRY_DSN=${SENTRY_DSN}
-      - MANUS_OAUTH_CLIENT_ID=${MANUS_OAUTH_CLIENT_ID}
-      - MANUS_OAUTH_CLIENT_SECRET=${MANUS_OAUTH_CLIENT_SECRET}
+      - CSRF_SECRET=${CSRF_SECRET}
+      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
+      - OWNER_OPEN_ID=${OWNER_OPEN_ID}
+      - FRONTEND_URL=${FRONTEND_URL}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -67,7 +68,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost:3000/health",
+          "http://localhost:3000/api/trpc/health.check",
         ]
       interval: 30s
       timeout: 10s
@@ -86,21 +87,22 @@ services:
   api2:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: ais_api_2
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
       - REDIS_URL=redis://redis:6379
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - JWT_SECRET=${JWT_SECRET}
-      - SENTRY_DSN=${SENTRY_DSN}
-      - MANUS_OAUTH_CLIENT_ID=${MANUS_OAUTH_CLIENT_ID}
-      - MANUS_OAUTH_CLIENT_SECRET=${MANUS_OAUTH_CLIENT_SECRET}
+      - CSRF_SECRET=${CSRF_SECRET}
+      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
+      - OWNER_OPEN_ID=${OWNER_OPEN_ID}
+      - FRONTEND_URL=${FRONTEND_URL}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -115,7 +117,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost:3000/health",
+          "http://localhost:3000/api/trpc/health.check",
         ]
       interval: 30s
       timeout: 10s
@@ -134,21 +136,22 @@ services:
   api3:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: ais_api_3
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
       - REDIS_URL=redis://redis:6379
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - JWT_SECRET=${JWT_SECRET}
-      - SENTRY_DSN=${SENTRY_DSN}
-      - MANUS_OAUTH_CLIENT_ID=${MANUS_OAUTH_CLIENT_ID}
-      - MANUS_OAUTH_CLIENT_SECRET=${MANUS_OAUTH_CLIENT_SECRET}
+      - CSRF_SECRET=${CSRF_SECRET}
+      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
+      - OWNER_OPEN_ID=${OWNER_OPEN_ID}
+      - FRONTEND_URL=${FRONTEND_URL}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -163,7 +166,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost:3000/health",
+          "http://localhost:3000/api/trpc/health.check",
         ]
       interval: 30s
       timeout: 10s
@@ -178,40 +181,48 @@ services:
           cpus: "1"
           memory: 1G
 
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: ais_postgres
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: ais_mysql
     environment:
-      - POSTGRES_DB=ais
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${DB_NAME}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
       - ./backups:/backups
     networks:
       - ais_network
     restart: unless-stopped
     command: >
-      postgres
-      -c max_connections=200
-      -c shared_buffers=2GB
-      -c effective_cache_size=6GB
-      -c maintenance_work_mem=512MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
-      -c work_mem=10485kB
-      -c min_wal_size=1GB
-      -c max_wal_size=4GB
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max-connections=500
+      --innodb-buffer-pool-size=2G
+      --innodb-log-file-size=256M
+      --innodb-flush-log-at-trx-commit=2
+      --innodb-flush-method=O_DIRECT
+      --slow-query-log=1
+      --long-query-time=2
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ais"]
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p${DB_ROOT_PASSWORD}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -258,18 +269,21 @@ services:
   worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: ais_worker
-    command: node server/worker.js
+    command: node dist/worker.js
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
       - REDIS_URL=redis://redis:6379
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-      - SENTRY_DSN=${SENTRY_DSN}
-      - EMAIL_SERVICE_API_KEY=${EMAIL_SERVICE_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -290,7 +304,7 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
+  mysql_data:
     driver: local
   redis_data:
     driver: local

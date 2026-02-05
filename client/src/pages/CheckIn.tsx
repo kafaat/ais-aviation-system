@@ -10,6 +10,15 @@ import { ChevronLeft, Search, Plane } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
 
+interface Passenger {
+  id: number;
+  title?: string;
+  firstName: string;
+  lastName: string;
+  type: "adult" | "child" | "infant";
+  seatNumber?: string;
+}
+
 export default function CheckIn() {
   const { isAuthenticated } = useAuth();
   const [pnr, setPnr] = useState("");
@@ -49,12 +58,14 @@ export default function CheckIn() {
     if (!booking || !passengers) return;
 
     // Generate seat assignments for all passengers
-    const seatAssignments = passengers.map((passenger: any, index: number) => ({
-      passengerId: passenger.id,
-      seatNumber:
-        passenger.seatNumber ||
-        `${Math.floor(index / 6) + 1}${String.fromCharCode(65 + (index % 6))}`,
-    }));
+    const seatAssignments = (passengers as Passenger[]).map(
+      (passenger, index) => ({
+        passengerId: passenger.id,
+        seatNumber:
+          passenger.seatNumber ||
+          `${Math.floor(index / 6) + 1}${String.fromCharCode(65 + (index % 6))}`,
+      })
+    );
 
     await checkInMutation.mutateAsync({
       bookingId: booking.id,
@@ -177,24 +188,26 @@ export default function CheckIn() {
                     <div className="border-t pt-4">
                       <h3 className="font-semibold mb-3">الركاب</h3>
                       <div className="space-y-2">
-                        {passengers?.map((passenger: any, index: number) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-3 bg-gray-50 rounded"
-                          >
-                            <span>
-                              {passenger.title} {passenger.firstName}{" "}
-                              {passenger.lastName}
-                            </span>
-                            <span className="text-sm text-muted-foreground">
-                              {passenger.type === "adult"
-                                ? "بالغ"
-                                : passenger.type === "child"
-                                  ? "طفل"
-                                  : "رضيع"}
-                            </span>
-                          </div>
-                        ))}
+                        {(passengers as Passenger[] | undefined)?.map(
+                          (passenger, index) => (
+                            <div
+                              key={passenger.id || index}
+                              className="flex items-center justify-between p-3 bg-gray-50 rounded"
+                            >
+                              <span>
+                                {passenger.title} {passenger.firstName}{" "}
+                                {passenger.lastName}
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                {passenger.type === "adult"
+                                  ? "بالغ"
+                                  : passenger.type === "child"
+                                    ? "طفل"
+                                    : "رضيع"}
+                              </span>
+                            </div>
+                          )
+                        )}
                       </div>
                     </div>
                   </div>

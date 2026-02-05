@@ -1524,3 +1524,6 @@ export const deniedBoardingRecords = mysqlTable(
 export type DeniedBoardingRecord = typeof deniedBoardingRecords.$inferSelect;
 export type InsertDeniedBoardingRecord =
   typeof deniedBoardingRecords.$inferInsert;
+
+// Export chat and notification schemas
+export * from "./chat-schema";

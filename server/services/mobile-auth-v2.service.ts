@@ -187,9 +187,7 @@ export const mobileAuthServiceV2 = {
       userId,
       token: tokenHash,
       expiresAt,
-      deviceInfo: deviceInfo
-        ? JSON.stringify(deviceInfo)
-        : null,
+      deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : null,
       ipAddress: deviceInfo?.ipAddress || null,
       createdAt: new Date(),
     });

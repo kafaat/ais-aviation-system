@@ -71,7 +71,20 @@ export function generateTicketNumber(airlineCode: string = "001"): string {
 export async function generateETicketPDF(
   ticketData: TicketData
 ): Promise<Buffer> {
-  return new Promise(async (resolve, reject) => {
+  // Generate QR code first (async operation)
+  const qrData = `${ticketData.pnr}|${ticketData.ticketNumber}|${ticketData.passengerName}`;
+  let qrCodeDataURL: string;
+  try {
+    qrCodeDataURL = await QRCode.toDataURL(qrData);
+  } catch (error) {
+    console.error("Error generating QR code:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to generate e-ticket QR code",
+    });
+  }
+
+  return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: "A4", margin: 50 });
       const buffers: Buffer[] = [];
@@ -81,10 +94,14 @@ export async function generateETicketPDF(
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
-
-      // Generate QR code
-      const qrData = `${ticketData.pnr}|${ticketData.ticketNumber}|${ticketData.passengerName}`;
-      const qrCodeDataURL = await QRCode.toDataURL(qrData);
+      doc.on("error", err => {
+        reject(
+          new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to generate e-ticket PDF",
+          })
+        );
+      });
 
       // Header
       doc
@@ -241,7 +258,20 @@ export async function generateETicketPDF(
 export async function generateBoardingPassPDF(
   passData: BoardingPassData
 ): Promise<Buffer> {
-  return new Promise(async (resolve, reject) => {
+  // Generate barcode data first (async operation)
+  const barcodeData = `M1${passData.passengerName.substring(0, 20).padEnd(20)}E${passData.bookingReference}${passData.originCode}${passData.destinationCode}${passData.flightNumber.padEnd(5)}${passData.sequence || "001"}`;
+  let barcodeDataURL: string;
+  try {
+    barcodeDataURL = await QRCode.toDataURL(barcodeData);
+  } catch (error) {
+    console.error("Error generating barcode:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to generate boarding pass barcode",
+    });
+  }
+
+  return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: [600, 250], margin: 20 });
       const buffers: Buffer[] = [];
@@ -251,10 +281,14 @@ export async function generateBoardingPassPDF(
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
-
-      // Generate barcode data
-      const barcodeData = `M1${passData.passengerName.substring(0, 20).padEnd(20)}E${passData.bookingReference}${passData.originCode}${passData.destinationCode}${passData.flightNumber.padEnd(5)}${passData.sequence || "001"}`;
-      const barcodeDataURL = await QRCode.toDataURL(barcodeData);
+      doc.on("error", err => {
+        reject(
+          new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to generate boarding pass PDF",
+          })
+        );
+      });
 
       // Header
       doc
