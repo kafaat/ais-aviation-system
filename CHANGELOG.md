@@ -1,5 +1,27 @@
 # Changelog
 
+## What's Changed in v1.3.1
+
+### Bug Fixes
+- fix: resolve lint errors (duplicate imports and prefer-const) (1317f22)
+- fix: resolve gitleaks commit range error in CI (17c1a5d)
+- fix: add fetch-depth for gitleaks to access commit history (aeb2448)
+- fix: add --force flag to db:push for non-interactive CI (253dd66)
+- fix: resolve test failures in CI (7d0fc45)
+
+### Documentation
+- docs: update CLAUDE.md with Phase 2 features documentation (9bc474c)
+
+### Other Changes
+- Merge main into feature branch (23ffdef)
+- Merge pull request #42 from kafaat/claude/add-claude-documentation-hFQZh (05cf171)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.3.0...v1.3.1
+
+
+---
+
 ## What's Changed in v1.3.0
 
 ### Features
