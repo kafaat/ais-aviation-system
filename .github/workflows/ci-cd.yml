@@ -132,7 +132,7 @@ jobs:
       - name: Run database migrations
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
-        run: pnpm run db:push
+        run: pnpm exec drizzle-kit push --force
 
       - name: Run tests with coverage
         env:
@@ -327,7 +327,7 @@ jobs:
       - name: Run database migrations
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
-        run: pnpm run db:push
+        run: pnpm exec drizzle-kit push --force
 
       - name: Build application
         run: pnpm run build
