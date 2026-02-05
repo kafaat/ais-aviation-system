@@ -79,16 +79,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check for breaking change indicators
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          # Check if PR title or body contains breaking change indicators
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BODY="${{ github.event.pull_request.body }}"
-
+          # Check if PR title contains breaking change indicators
           if echo "$PR_TITLE" | grep -qE "!:|BREAKING CHANGE"; then
             echo "::warning::This PR contains breaking changes. Make sure to update the major version."
           fi
 
-          if echo "$PR_BODY" | grep -qi "breaking change"; then
+          # Check PR body for breaking change mentions (handle multiline safely)
+          if printf '%s' "$PR_BODY" | grep -qi "breaking change"; then
             echo "::warning::This PR body mentions breaking changes. Ensure documentation is updated."
           fi
 
