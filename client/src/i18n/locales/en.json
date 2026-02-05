@@ -360,5 +360,44 @@
   "cabin": {
     "economy": "Economy",
     "business": "Business"
+  },
+  "reports": {
+    "title": "Reports Dashboard",
+    "subtitle": "Generate and export reports",
+    "filters": "Report Filters",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "selectStartDate": "Select start date",
+    "selectEndDate": "Select end date",
+    "status": "Status",
+    "allStatuses": "All Statuses",
+    "exportFormat": "Export Format",
+    "availableReports": "Available Reports",
+    "bookingsReport": "Bookings Report",
+    "bookingsReportDesc": "Export booking data with passenger and payment details",
+    "revenueReport": "Revenue Report",
+    "revenueReportDesc": "Daily revenue report with confirmed payments",
+    "flightPerformanceReport": "Flight Performance Report",
+    "flightPerformanceReportDesc": "Occupancy rates and estimated revenue per flight",
+    "exportCSV": "Export CSV",
+    "exportPDF": "Export PDF",
+    "exporting": "Exporting...",
+    "exportSuccess": "Report exported successfully",
+    "exportError": "Error exporting report"
+  },
+  "priceCalendar": {
+    "title": "Price Calendar",
+    "subtitle": "View flight prices by date",
+    "selectDate": "Select departure date",
+    "lowestPrice": "Lowest Price",
+    "averagePrice": "Average Price",
+    "highestPrice": "Highest Price",
+    "priceFor": "Price for",
+    "noFlights": "No flights",
+    "legend": "Legend",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "perPerson": "per person"
   }
 }

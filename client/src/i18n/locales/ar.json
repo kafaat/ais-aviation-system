@@ -337,5 +337,44 @@
   "cabin": {
     "economy": "اقتصادي",
     "business": "رجال الأعمال"
+  },
+  "reports": {
+    "title": "لوحة التقارير",
+    "subtitle": "إنشاء وتصدير التقارير",
+    "filters": "فلاتر التقرير",
+    "startDate": "تاريخ البداية",
+    "endDate": "تاريخ النهاية",
+    "selectStartDate": "اختر تاريخ البداية",
+    "selectEndDate": "اختر تاريخ النهاية",
+    "status": "الحالة",
+    "allStatuses": "جميع الحالات",
+    "exportFormat": "صيغة التصدير",
+    "availableReports": "التقارير المتاحة",
+    "bookingsReport": "تقرير الحجوزات",
+    "bookingsReportDesc": "تصدير بيانات الحجوزات مع تفاصيل الركاب والمدفوعات",
+    "revenueReport": "تقرير الإيرادات",
+    "revenueReportDesc": "تقرير يومي للإيرادات والمدفوعات المؤكدة",
+    "flightPerformanceReport": "تقرير أداء الرحلات",
+    "flightPerformanceReportDesc": "معدلات الإشغال والإيرادات المقدرة لكل رحلة",
+    "exportCSV": "تصدير CSV",
+    "exportPDF": "تصدير PDF",
+    "exporting": "جاري التصدير...",
+    "exportSuccess": "تم تصدير التقرير بنجاح",
+    "exportError": "خطأ في تصدير التقرير"
+  },
+  "priceCalendar": {
+    "title": "تقويم الأسعار",
+    "subtitle": "عرض أسعار الرحلات حسب التاريخ",
+    "selectDate": "اختر تاريخ المغادرة",
+    "lowestPrice": "أقل سعر",
+    "averagePrice": "متوسط السعر",
+    "highestPrice": "أعلى سعر",
+    "priceFor": "السعر لـ",
+    "noFlights": "لا توجد رحلات",
+    "legend": "دليل الألوان",
+    "low": "منخفض",
+    "medium": "متوسط",
+    "high": "مرتفع",
+    "perPerson": "للشخص الواحد"
   }
 }
