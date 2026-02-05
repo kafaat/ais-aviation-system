@@ -10,6 +10,15 @@ import { ChevronLeft, Search, Plane } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
 
+interface Passenger {
+  id: number;
+  title?: string;
+  firstName: string;
+  lastName: string;
+  type: "adult" | "child" | "infant";
+  seatNumber?: string;
+}
+
 export default function CheckIn() {
   const { isAuthenticated } = useAuth();
   const [pnr, setPnr] = useState("");
@@ -49,7 +58,7 @@ export default function CheckIn() {
     if (!booking || !passengers) return;
 
     // Generate seat assignments for all passengers
-    const seatAssignments = passengers.map((passenger: any, index: number) => ({
+    const seatAssignments = (passengers as Passenger[]).map((passenger, index) => ({
       passengerId: passenger.id,
       seatNumber:
         passenger.seatNumber ||
@@ -177,9 +186,9 @@ export default function CheckIn() {
                     <div className="border-t pt-4">
                       <h3 className="font-semibold mb-3">الركاب</h3>
                       <div className="space-y-2">
-                        {passengers?.map((passenger: any, index: number) => (
+                        {(passengers as Passenger[] | undefined)?.map((passenger, index) => (
                           <div
-                            key={index}
+                            key={passenger.id || index}
                             className="flex items-center justify-between p-3 bg-gray-50 rounded"
                           >
                             <span>

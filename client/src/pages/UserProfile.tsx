@@ -32,6 +32,10 @@ import {
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
+type SeatType = "window" | "aisle" | "middle";
+type CabinClass = "economy" | "business" | "first";
+type MealPreference = "regular" | "vegetarian" | "vegan" | "halal" | "kosher" | "gluten_free";
+
 export default function UserProfile() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
@@ -147,10 +151,10 @@ export default function UserProfile() {
                   <Label>{t("profile.travel.preferredSeat")}</Label>
                   <Select
                     value={formData.preferredSeatType}
-                    onValueChange={value =>
+                    onValueChange={(value: string) =>
                       setFormData({
                         ...formData,
-                        preferredSeatType: value as any,
+                        preferredSeatType: value as SeatType,
                       })
                     }
                   >
@@ -176,10 +180,10 @@ export default function UserProfile() {
                   <Label>{t("profile.travel.preferredClass")}</Label>
                   <Select
                     value={formData.preferredCabinClass}
-                    onValueChange={value =>
+                    onValueChange={(value: string) =>
                       setFormData({
                         ...formData,
-                        preferredCabinClass: value as any,
+                        preferredCabinClass: value as CabinClass,
                       })
                     }
                   >
@@ -205,8 +209,8 @@ export default function UserProfile() {
                   <Label>{t("profile.travel.mealPreference")}</Label>
                   <Select
                     value={formData.mealPreference}
-                    onValueChange={value =>
-                      setFormData({ ...formData, mealPreference: value as any })
+                    onValueChange={(value: string) =>
+                      setFormData({ ...formData, mealPreference: value as MealPreference })
                     }
                   >
                     <SelectTrigger>

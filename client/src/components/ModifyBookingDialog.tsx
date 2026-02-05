@@ -31,6 +31,8 @@ interface ModifyBookingDialogProps {
     totalAmount: number;
     originName: string;
     destinationName: string;
+    originId?: number;
+    destinationId?: number;
   };
 }
 
@@ -46,14 +48,16 @@ export function ModifyBookingDialog({
   const utils = trpc.useUtils();
 
   // Search for alternative flights on the same route
+  // Only enabled when both origin and destination IDs are available
+  const hasRouteIds = Boolean(booking.originId && booking.destinationId);
   const { data: alternativeFlights, isLoading: isSearching } =
     trpc.flights.search.useQuery(
       {
-        originId: 0, // We'll need to pass the actual IDs
-        destinationId: 0,
+        originId: booking.originId || 0,
+        destinationId: booking.destinationId || 0,
         departureDate: new Date(),
       },
-      { enabled: selectedTab === "date" && open }
+      { enabled: selectedTab === "date" && open && hasRouteIds }
     );
 
   const requestChangeDateMutation =
