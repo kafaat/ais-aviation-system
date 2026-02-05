@@ -57,31 +57,57 @@ let db: Awaited<ReturnType<typeof getDb>>;
 let testUserId: number;
 let testFlightId: number;
 
+// Test airline and airport IDs for cleanup
+const TEST_AIRLINE_ID = 999901;
+const TEST_ORIGIN_ID = 999902;
+const TEST_DEST_ID = 999903;
+
 beforeAll(async () => {
   db = await getDb();
   if (!db) {
     throw new Error("Database not available for tests");
   }
 
-  // Create test user
+  const timestamp = Date.now();
+
+  // Create test user with required openId
   const userResult = await db.insert(users).values({
     email: `${TEST_PREFIX}${nanoid(6)}@example.com`,
     name: "Test User",
     role: "user",
+    openId: `${TEST_PREFIX}user_${timestamp}`,
   });
   testUserId = Number(userResult.insertId) || 1;
 
-  // Create test flight
+  // Create test airline
+  await db.execute(
+    sql`INSERT IGNORE INTO airlines (id, code, name, active) VALUES (${TEST_AIRLINE_ID}, 'CP9', 'Critical Path Airline', 1)`
+  );
+
+  // Create test airports
+  await db.execute(
+    sql`INSERT IGNORE INTO airports (id, code, name, city, country) VALUES (${TEST_ORIGIN_ID}, 'CP1', 'Critical Origin', 'City1', 'Saudi Arabia')`
+  );
+  await db.execute(
+    sql`INSERT IGNORE INTO airports (id, code, name, city, country) VALUES (${TEST_DEST_ID}, 'CP2', 'Critical Dest', 'City2', 'Saudi Arabia')`
+  );
+
+  // Create test flight with correct schema
+  const tomorrow = new Date(Date.now() + 86400000);
+  const arrival = new Date(Date.now() + 90000000);
   const flightResult = await db.insert(flights).values({
-    flightNumber: `TST${nanoid(4)}`,
-    airline: "Test Airline",
-    origin: "RUH",
-    destination: "JED",
-    departureTime: new Date(Date.now() + 86400000),
-    arrivalTime: new Date(Date.now() + 90000000),
-    price: "500.00",
-    currency: "SAR",
-    availableSeats: 100,
+    flightNumber: `CP${nanoid(4)}`,
+    airlineId: TEST_AIRLINE_ID,
+    originId: TEST_ORIGIN_ID,
+    destinationId: TEST_DEST_ID,
+    departureTime: tomorrow,
+    arrivalTime: arrival,
+    economyPrice: 50000,
+    businessPrice: 100000,
+    economySeats: 100,
+    businessSeats: 20,
+    economyAvailable: 100,
+    businessAvailable: 20,
     status: "scheduled",
   });
   testFlightId = Number(flightResult.insertId) || 1;
@@ -102,13 +128,19 @@ afterAll(async () => {
       .where(
         sql`booking_id IN (SELECT id FROM bookings WHERE user_id = ${testUserId})`
       );
-    await db.delete(stripeEvents).where(sql`event_id LIKE '${TEST_PREFIX}%'`);
+    await db.delete(stripeEvents).where(sql`event_id LIKE 'test_critical_%'`);
     await db
       .delete(idempotencyRequests)
-      .where(sql`idempotency_key LIKE '${TEST_PREFIX}%'`);
+      .where(sql`idempotency_key LIKE 'test_critical_%'`);
     await db.delete(bookings).where(eq(bookings.userId, testUserId));
-    await db.delete(users).where(eq(users.id, testUserId));
-    await db.delete(flights).where(eq(flights.id, testFlightId));
+    if (testUserId) await db.delete(users).where(eq(users.id, testUserId));
+    if (testFlightId)
+      await db.delete(flights).where(eq(flights.id, testFlightId));
+    // Cleanup test airlines and airports
+    await db.execute(
+      sql`DELETE FROM airports WHERE id IN (${TEST_ORIGIN_ID}, ${TEST_DEST_ID})`
+    );
+    await db.execute(sql`DELETE FROM airlines WHERE id = ${TEST_AIRLINE_ID}`);
   } catch (error) {
     console.error("Cleanup error:", error);
   }
@@ -121,19 +153,18 @@ afterAll(async () => {
 async function createTestBooking(
   overrides: Partial<typeof bookings.$inferInsert> = {}
 ) {
-  const bookingRef = `${TEST_PREFIX}${nanoid(8)}`;
+  const bookingRef = nanoid(6).toUpperCase();
+  const pnr = nanoid(6).toUpperCase();
 
   const result = await db!.insert(bookings).values({
     userId: testUserId,
     flightId: testFlightId,
     bookingReference: bookingRef,
+    pnr: pnr,
     status: "pending",
     paymentStatus: "pending",
-    totalAmount: "500.00",
-    currency: "SAR",
-    passengerCount: 1,
-    contactEmail: "test@example.com",
-    contactPhone: "+966500000000",
+    totalAmount: 50000, // Integer in SAR cents
+    cabinClass: "economy",
     ...overrides,
   });
 
@@ -149,8 +180,9 @@ async function createTestPayment(
   const result = await db!.insert(payments).values({
     bookingId,
     stripePaymentIntentId,
-    amount: "500.00",
+    amount: 50000, // Integer in SAR cents
     currency: "SAR",
+    method: "card",
     status: "pending",
   });
 
