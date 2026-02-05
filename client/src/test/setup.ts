@@ -8,23 +8,34 @@
  * - Common test utilities and helpers
  */
 
-import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
 import { afterEach, vi, beforeAll } from "vitest";
-import React from "react";
+
+// Check if we're in a browser/jsdom environment
+const isBrowser = typeof window !== "undefined";
+
+// Only import browser-specific testing utilities in browser environment
+if (isBrowser) {
+  // Dynamically import jest-dom matchers
+  import("@testing-library/jest-dom/vitest");
+}
 
 // Mock console methods to reduce noise in tests
 vi.spyOn(console, "log").mockImplementation(() => {});
 vi.spyOn(console, "debug").mockImplementation(() => {});
 
-// Cleanup after each test
+// Cleanup after each test (only in browser environment)
 afterEach(() => {
-  cleanup();
+  if (isBrowser) {
+    import("@testing-library/react").then(({ cleanup }) => cleanup());
+  }
   vi.clearAllMocks();
 });
 
 // Setup mocks before all tests
-beforeAll(() => {
+beforeAll(async () => {
+  // Only setup browser mocks in browser environment
+  if (!isBrowser) return;
+
   // Mock window.matchMedia
   Object.defineProperty(window, "matchMedia", {
     writable: true,
@@ -91,63 +102,73 @@ beforeAll(() => {
   }
 });
 
-// Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
+// Mock ResizeObserver (only in browser environment)
+if (isBrowser) {
+  global.ResizeObserver = vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  }));
 
-// Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-  root: null,
-  rootMargin: "",
-  thresholds: [],
-}));
+  // Mock IntersectionObserver
+  global.IntersectionObserver = vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+    root: null,
+    rootMargin: "",
+    thresholds: [],
+  }));
+}
 
 // Mock pointer capture methods (needed for Radix UI components)
-Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
-Element.prototype.setPointerCapture = vi.fn();
-Element.prototype.releasePointerCapture = vi.fn();
+// Only run in browser/jsdom environment
+if (typeof Element !== "undefined") {
+  Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.releasePointerCapture = vi.fn();
 
-// Mock scrollIntoView (needed for Radix UI Select)
-Element.prototype.scrollIntoView = vi.fn();
+  // Mock scrollIntoView (needed for Radix UI Select)
+  Element.prototype.scrollIntoView = vi.fn();
 
-// Mock getBoundingClientRect
-Element.prototype.getBoundingClientRect = vi.fn().mockReturnValue({
-  width: 100,
-  height: 50,
-  top: 0,
-  left: 0,
-  bottom: 50,
-  right: 100,
-  x: 0,
-  y: 0,
-  toJSON: vi.fn(),
-});
+  // Mock getBoundingClientRect
+  Element.prototype.getBoundingClientRect = vi.fn().mockReturnValue({
+    width: 100,
+    height: 50,
+    top: 0,
+    left: 0,
+    bottom: 50,
+    right: 100,
+    x: 0,
+    y: 0,
+    toJSON: vi.fn(),
+  });
+}
 
-// Mock framer-motion to avoid animation issues in tests
-vi.mock("framer-motion", () => ({
-  motion: {
-    div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) =>
-      React.createElement("div", props, children),
-    header: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
-      React.createElement("header", props, children),
-    section: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
-      React.createElement("section", props, children),
-    h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) =>
-      React.createElement("h2", props, children),
-    h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) =>
-      React.createElement("h3", props, children),
-    p: ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) =>
-      React.createElement("p", props, children),
-    button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
-      React.createElement("button", props, children),
-  },
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
-  useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
-  useInView: () => true,
-}));
+// Mock framer-motion to avoid animation issues in tests (only in browser environment)
+if (isBrowser) {
+  vi.mock("framer-motion", async () => {
+    const React = await import("react");
+    return {
+      motion: {
+        div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) =>
+          React.createElement("div", props, children),
+        header: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
+          React.createElement("header", props, children),
+        section: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
+          React.createElement("section", props, children),
+        h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) =>
+          React.createElement("h2", props, children),
+        h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) =>
+          React.createElement("h3", props, children),
+        p: ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) =>
+          React.createElement("p", props, children),
+        button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
+          React.createElement("button", props, children),
+      },
+      AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
+      useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
+      useInView: () => true,
+    };
+  });
+}

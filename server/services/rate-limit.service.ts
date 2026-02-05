@@ -13,9 +13,15 @@
 
 import { cacheService } from "./cache.service";
 import { logger } from "../_core/logger";
-import { loyaltyAccounts, type User } from "../../drizzle/schema";
+import { loyaltyAccounts } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { eq } from "drizzle-orm";
+
+// Minimal user type for rate limiting (only needs id and role)
+export type RateLimitUser = {
+  id: number;
+  role: "user" | "admin" | "super_admin" | "airline_admin" | "finance" | "ops" | "support";
+};
 
 const RATE_LIMIT_PREFIX = process.env.CACHE_PREFIX || "ais";
 
@@ -196,7 +202,7 @@ class RateLimitService {
   /**
    * Determine the rate limit tier for a user
    */
-  async getRateLimitTier(user: User | null): Promise<RateLimitTier> {
+  async getRateLimitTier(user: RateLimitUser | null): Promise<RateLimitTier> {
     // Anonymous user
     if (!user) {
       return RATE_LIMIT_TIERS.anonymous;
@@ -385,7 +391,7 @@ class RateLimitService {
    * Check rate limit for a user (combines user ID + IP for extra security)
    */
   async checkUserRateLimit(
-    user: User | null,
+    user: RateLimitUser | null,
     ip: string,
     scope: string = "api"
   ): Promise<RateLimitResult> {
@@ -416,7 +422,7 @@ class RateLimitService {
    * Get current rate limit status without incrementing counter
    */
   async getRateLimitStatus(
-    user: User | null,
+    user: RateLimitUser | null,
     ip: string,
     scope: string = "api"
   ): Promise<RateLimitResult & { tierInfo: RateLimitTier }> {
@@ -505,7 +511,7 @@ class RateLimitService {
   /**
    * Generate identifier from user/IP
    */
-  getIdentifier(user: User | null, ip: string): string {
+  getIdentifier(user: RateLimitUser | null, ip: string): string {
     return user ? `user:${user.id}` : `ip:${ip}`;
   }
 }

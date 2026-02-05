@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => {
         // Use node for server-side tests
         ["server/**/*.test.ts", "node"],
       ],
-      // Setup file for client tests
+      // Setup file with conditional browser checks
       setupFiles: ["./client/src/test/setup.ts"],
       env: {
         // Provide test environment variables

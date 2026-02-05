@@ -184,8 +184,8 @@ export const rateLimitRouter = router({
       })
     )
     .query(async ({ input }) => {
-      // We need to mock a minimal user for lookup
-      const mockUser = { id: input.userId, role: "user" as const } as { id: number; role: "user" | "admin" | "super_admin" | "airline_admin" | "finance" | "ops" | "support" };
+      // Create a minimal user object for rate limit lookup
+      const mockUser = { id: input.userId, role: "user" as const };
       const tier = await rateLimitService.getRateLimitTier(mockUser);
       const loyaltyTier = await rateLimitService.getUserLoyaltyTier(input.userId);
 

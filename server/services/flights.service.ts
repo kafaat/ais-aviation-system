@@ -25,11 +25,14 @@ export interface GetFlightInput {
   id: number;
 }
 
+// Type for flight search results
+export type FlightSearchResult = Awaited<ReturnType<typeof import("../db").searchFlights>>;
+
 /**
  * Search for flights based on origin, destination, and date
  * Results are cached for 2 minutes to improve performance
  */
-export async function searchFlights(input: SearchFlightsInput) {
+export async function searchFlights(input: SearchFlightsInput): Promise<FlightSearchResult> {
   try {
     // Create cache key params
     const cacheParams = {
@@ -41,7 +44,7 @@ export async function searchFlights(input: SearchFlightsInput) {
     // Try to get from cache
     const cached = await redisCacheService.getCachedFlightSearch(cacheParams);
     if (cached) {
-      return cached;
+      return cached as FlightSearchResult;
     }
 
     // Fetch from database
