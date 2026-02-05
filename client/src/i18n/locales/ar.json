@@ -251,7 +251,11 @@
     "gate": "البوابة",
     "class": "الدرجة",
     "boardingPassNote": "يرجى الوصول إلى البوابة قبل 30 دقيقة على الأقل من موعد المغادرة",
-    "printBoardingPass": "طباعة بطاقة الصعود"
+    "printBoardingPass": "طباعة بطاقة الصعود",
+    "selectSeats": "اختر مقاعدك",
+    "seatAssignments": "توزيع المقاعد",
+    "autoAssign": "تعيين تلقائي",
+    "addToCalendar": "إضافة إلى التقويم"
   },
   "admin": {
     "title": "لوحة التحكم الإدارية",

@@ -252,7 +252,11 @@
     "gate": "Gate",
     "class": "Class",
     "boardingPassNote": "Please arrive at the gate at least 30 minutes before departure",
-    "printBoardingPass": "Print Boarding Pass"
+    "printBoardingPass": "Print Boarding Pass",
+    "selectSeats": "Select Your Seats",
+    "seatAssignments": "Seat Assignments",
+    "autoAssign": "Auto-assign",
+    "addToCalendar": "Add to Calendar"
   },
   "analytics": {
     "title": "Analytics Dashboard",

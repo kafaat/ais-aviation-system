@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -22,9 +22,11 @@ import {
   Ticket,
   Loader2,
   AlertCircle,
+  Armchair,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
+import { SeatMap } from "@/components/SeatMap";
 
 interface Passenger {
   id: number;
@@ -270,11 +272,21 @@ function CheckInSkeleton() {
   );
 }
 
+interface SelectedSeat {
+  id: string;
+  row: number;
+  column: string;
+  status: "available" | "selected" | "occupied";
+  class: "economy" | "business";
+}
+
 export default function CheckIn() {
   const { t } = useTranslation();
   const { isAuthenticated } = useAuth();
   const [pnr, setPnr] = useState("");
   const [searchPerformed, setSearchPerformed] = useState(false);
+  const [showSeatMap, setShowSeatMap] = useState(false);
+  const [selectedSeats, setSelectedSeats] = useState<SelectedSeat[]>([]);
   const boardingPassRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -318,17 +330,23 @@ export default function CheckIn() {
     await refetch();
   };
 
+  const handleSeatSelect = useCallback((seats: SelectedSeat[]) => {
+    setSelectedSeats(seats);
+  }, []);
+
   const handleCheckIn = async () => {
     if (!booking || !passengers) return;
 
-    const seatAssignments = (passengers as Passenger[]).map(
-      (passenger, index) => ({
-        passengerId: passenger.id,
-        seatNumber:
-          passenger.seatNumber ||
-          `${Math.floor(index / 6) + 1}${String.fromCharCode(65 + (index % 6))}`,
-      })
-    );
+    const passengerList = passengers as Passenger[];
+
+    // Use seats selected from SeatMap, or fall back to auto-assignment
+    const seatAssignments = passengerList.map((passenger, index) => ({
+      passengerId: passenger.id,
+      seatNumber:
+        selectedSeats[index]?.id ||
+        passenger.seatNumber ||
+        `${Math.floor(index / 6) + 1}${String.fromCharCode(65 + (index % 6))}`,
+    }));
 
     await checkInMutation.mutateAsync({
       bookingId: booking.id,
@@ -598,6 +616,61 @@ export default function CheckIn() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Seat Selection Section */}
+                  {!showSeatMap ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowSeatMap(true)}
+                      className="w-full mb-4 h-12 border-blue-200 text-blue-600 hover:bg-blue-50"
+                    >
+                      <Armchair className="h-5 w-5 mr-2" />
+                      {t("checkIn.selectSeats")}
+                    </Button>
+                  ) : (
+                    <div className="mb-4">
+                      <SeatMap
+                        cabinClass={
+                          (booking.cabinClass as "economy" | "business") ||
+                          "economy"
+                        }
+                        onSeatSelect={handleSeatSelect}
+                        maxSeats={booking.numberOfPassengers || 1}
+                      />
+                      {selectedSeats.length > 0 &&
+                        passengers &&
+                        (passengers as Passenger[]).length > 0 && (
+                          <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                            <p className="text-sm font-medium text-blue-700 mb-2">
+                              {t("checkIn.seatAssignments")}:
+                            </p>
+                            {(passengers as Passenger[]).map(
+                              (passenger, index) => (
+                                <div
+                                  key={passenger.id}
+                                  className="flex items-center justify-between text-sm py-1"
+                                >
+                                  <span className="text-gray-700">
+                                    {passenger.title} {passenger.firstName}{" "}
+                                    {passenger.lastName}
+                                  </span>
+                                  <Badge
+                                    variant={
+                                      selectedSeats[index]
+                                        ? "default"
+                                        : "secondary"
+                                    }
+                                  >
+                                    {selectedSeats[index]?.id ||
+                                      t("checkIn.autoAssign")}
+                                  </Badge>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        )}
+                    </div>
+                  )}
 
                   <Button
                     onClick={handleCheckIn}
