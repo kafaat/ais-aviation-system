@@ -34,16 +34,19 @@ class CacheService {
     }
 
     try {
-      this.client = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
-        maxRetriesPerRequest: 10,
-        retryStrategy: (retries: number) => {
-          if (retries > 10) {
-            logger.error({}, "Redis reconnection failed after 10 retries");
-            return null;
-          }
-          return Math.min(retries * 100, 3000);
-        },
-      });
+      this.client = new Redis(
+        process.env.REDIS_URL || "redis://localhost:6379",
+        {
+          maxRetriesPerRequest: 10,
+          retryStrategy: (retries: number) => {
+            if (retries > 10) {
+              logger.error({}, "Redis reconnection failed after 10 retries");
+              return null;
+            }
+            return Math.min(retries * 100, 3000);
+          },
+        }
+      );
 
       this.client.on("error", (err: Error) => {
         logger.error({ error: err }, "Redis client error");
@@ -326,18 +329,24 @@ class CacheService {
         // Delete the tag set
         await this.client!.del(tagKey);
 
-        logger.debug({
-          from,
-          to,
-          count: cacheKeys.length,
-        }, "Invalidated flight search cache");
+        logger.debug(
+          {
+            from,
+            to,
+            count: cacheKeys.length,
+          },
+          "Invalidated flight search cache"
+        );
       }
     } catch (error) {
-      logger.error({
-        from,
-        to,
-        error,
-      }, "Failed to invalidate flight search cache");
+      logger.error(
+        {
+          from,
+          to,
+          error,
+        },
+        "Failed to invalidate flight search cache"
+      );
     }
   }
 
@@ -444,11 +453,14 @@ class CacheService {
       const key = await this.buildVersionedKey("pricing", hash);
       return await this.get(key);
     } catch (error) {
-      logger.error({
-        flightId,
-        cabinClass,
-        error,
-      }, "Failed to get cached pricing");
+      logger.error(
+        {
+          flightId,
+          cabinClass,
+          error,
+        },
+        "Failed to get cached pricing"
+      );
       return null;
     }
   }

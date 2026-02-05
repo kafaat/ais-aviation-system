@@ -62,7 +62,7 @@ export async function checkIdempotency(
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   const existing = await database
     .select()
     .from(idempotencyRequests)
@@ -80,11 +80,14 @@ export async function checkIdempotency(
     const requestHash = calculateRequestHash(requestPayload);
     if (record.requestHash !== requestHash) {
       // Same key, different payload = conflict
-      logger.warn({
-        scope,
-        idempotencyKey,
-        userId,
-      }, "Idempotency key reused with different payload");
+      logger.warn(
+        {
+          scope,
+          idempotencyKey,
+          userId,
+        },
+        "Idempotency key reused with different payload"
+      );
       Errors.idempotencyConflict();
     }
   }
@@ -117,7 +120,7 @@ export async function createIdempotencyRecord(
     if (!database) {
       throw new Error("Database connection not available");
     }
-    
+
     const record: InsertIdempotencyRequest = {
       scope,
       idempotencyKey,
@@ -129,11 +132,14 @@ export async function createIdempotencyRecord(
 
     await database.insert(idempotencyRequests).values(record);
 
-    logger.info({
-      scope,
-      idempotencyKey,
-      userId,
-    }, "Idempotency record created");
+    logger.info(
+      {
+        scope,
+        idempotencyKey,
+        userId,
+      },
+      "Idempotency record created"
+    );
 
     return true;
   } catch (error: any) {
@@ -143,11 +149,14 @@ export async function createIdempotencyRecord(
       error.code === "23505" ||
       error.code === "23000"
     ) {
-      logger.info({
-        scope,
-        idempotencyKey,
-        userId,
-      }, "Idempotency record already exists (race condition)");
+      logger.info(
+        {
+          scope,
+          idempotencyKey,
+          userId,
+        },
+        "Idempotency record already exists (race condition)"
+      );
       return false;
     }
 
@@ -178,7 +187,7 @@ export async function completeIdempotencyRecord(
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   await database
     .update(idempotencyRequests)
     .set({
@@ -188,11 +197,14 @@ export async function completeIdempotencyRecord(
     })
     .where(and(...conditions));
 
-  logger.info({
-    scope,
-    idempotencyKey,
-    userId,
-  }, "Idempotency record completed");
+  logger.info(
+    {
+      scope,
+      idempotencyKey,
+      userId,
+    },
+    "Idempotency record completed"
+  );
 }
 
 /**
@@ -217,7 +229,7 @@ export async function failIdempotencyRecord(
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   await database
     .update(idempotencyRequests)
     .set({
@@ -227,12 +239,15 @@ export async function failIdempotencyRecord(
     })
     .where(and(...conditions));
 
-  logger.info({
-    scope,
-    idempotencyKey,
-    userId,
-    error,
-  }, "Idempotency record failed");
+  logger.info(
+    {
+      scope,
+      idempotencyKey,
+      userId,
+      error,
+    },
+    "Idempotency record failed"
+  );
 }
 
 /**
@@ -258,31 +273,40 @@ export async function withIdempotency<T>(
   if (existing.exists) {
     if (existing.status === "COMPLETED") {
       // Return cached response
-      logger.info({
-        scope,
-        idempotencyKey,
-        userId,
-      }, "Returning cached idempotent response");
+      logger.info(
+        {
+          scope,
+          idempotencyKey,
+          userId,
+        },
+        "Returning cached idempotent response"
+      );
       return existing.response as T;
     }
 
     if (existing.status === "STARTED") {
       // Request is in progress
-      logger.warn({
-        scope,
-        idempotencyKey,
-        userId,
-      }, "Idempotent request already in progress");
+      logger.warn(
+        {
+          scope,
+          idempotencyKey,
+          userId,
+        },
+        "Idempotent request already in progress"
+      );
       Errors.idempotencyInProgress();
     }
 
     if (existing.status === "FAILED") {
       // Previous attempt failed - allow retry or return error
-      logger.info({
-        scope,
-        idempotencyKey,
-        userId,
-      }, "Previous idempotent request failed, allowing retry");
+      logger.info(
+        {
+          scope,
+          idempotencyKey,
+          userId,
+        },
+        "Previous idempotent request failed, allowing retry"
+      );
       // Could either throw the previous error or allow retry
       // For now, we'll allow retry by continuing
     }
@@ -350,13 +374,16 @@ export async function cleanupExpiredIdempotencyRecords(): Promise<void> {
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   const result = await database
     .delete(idempotencyRequests)
     .where(lt(idempotencyRequests.expiresAt, now));
 
   const affectedRows = (result as any)[0]?.affectedRows || 0;
-  logger.info({
-    deletedCount: affectedRows,
-  }, "Cleaned up expired idempotency records");
+  logger.info(
+    {
+      deletedCount: affectedRows,
+    },
+    "Cleaned up expired idempotency records"
+  );
 }

@@ -110,7 +110,11 @@ export async function startConversation(
   input: StartConversationInput
 ): Promise<{ conversationId: number; greeting: string }> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Create conversation record
   const [result] = await db.insert(chatConversations).values({
@@ -124,10 +128,12 @@ export async function startConversation(
   const conversationId = result.insertId;
 
   // Generate greeting based on context
-  let greeting = "مرحباً! أنا مساعد الحجز الذكي. كيف يمكنني مساعدتك اليوم؟\n\nHello! I'm your smart booking assistant. How can I help you today?";
+  let greeting =
+    "مرحباً! أنا مساعد الحجز الذكي. كيف يمكنني مساعدتك اليوم؟\n\nHello! I'm your smart booking assistant. How can I help you today?";
 
   if (input.initialContext?.originId || input.initialContext?.destinationId) {
-    greeting = "مرحباً! أرى أنك تبحث عن رحلة. دعني أساعدك في إيجاد أفضل الخيارات.\n\nHi! I see you're looking for a flight. Let me help you find the best options.";
+    greeting =
+      "مرحباً! أرى أنك تبحث عن رحلة. دعني أساعدك في إيجاد أفضل الخيارات.\n\nHi! I see you're looking for a flight. Let me help you find the best options.";
   }
 
   // Store greeting as system message
@@ -148,9 +154,15 @@ export async function startConversation(
 /**
  * Send a message in an existing conversation
  */
-export async function sendMessage(input: SendMessageInput): Promise<ChatResponse> {
+export async function sendMessage(
+  input: SendMessageInput
+): Promise<ChatResponse> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get conversation
   const [conversation] = await db
@@ -164,11 +176,17 @@ export async function sendMessage(input: SendMessageInput): Promise<ChatResponse
     );
 
   if (!conversation) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Conversation not found" });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Conversation not found",
+    });
   }
 
   if (conversation.status !== "active") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Conversation is no longer active" });
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Conversation is no longer active",
+    });
   }
 
   // Store user message
@@ -188,7 +206,7 @@ export async function sendMessage(input: SendMessageInput): Promise<ChatResponse
   // Build LLM messages
   const llmMessages: Message[] = [
     { role: "system", content: BOOKING_SYSTEM_PROMPT },
-    ...history.map((m) => ({
+    ...history.map(m => ({
       role: m.role as "user" | "assistant" | "system",
       content: m.content,
     })),
@@ -209,7 +227,7 @@ export async function sendMessage(input: SendMessageInput): Promise<ChatResponse
     if (typeof choice.message.content === "string") {
       responseContent = choice.message.content;
     } else if (Array.isArray(choice.message.content)) {
-      const textContent = choice.message.content.find((c) => c.type === "text");
+      const textContent = choice.message.content.find(c => c.type === "text");
       if (textContent && "text" in textContent) {
         responseContent = textContent.text;
       }
@@ -231,7 +249,10 @@ export async function sendMessage(input: SendMessageInput): Promise<ChatResponse
     role: "assistant",
     content: responseContent,
     processingTimeMs: processingTime,
-    metadata: suggestions.length > 0 ? { suggestions: suggestions.map(s => s.id) } : undefined,
+    metadata:
+      suggestions.length > 0
+        ? { suggestions: suggestions.map(s => s.id) }
+        : undefined,
   });
 
   // Update conversation
@@ -247,7 +268,8 @@ export async function sendMessage(input: SendMessageInput): Promise<ChatResponse
   return {
     message: responseContent,
     suggestions: suggestions.length > 0 ? suggestions : undefined,
-    contextUpdated: JSON.stringify(updatedContext) !== JSON.stringify(conversation.context),
+    contextUpdated:
+      JSON.stringify(updatedContext) !== JSON.stringify(conversation.context),
     bookingReady: isBookingReady(updatedContext),
   };
 }
@@ -260,7 +282,11 @@ export async function getConversationHistory(
   userId: number
 ): Promise<ChatMessage[]> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Verify ownership
   const [conversation] = await db
@@ -274,7 +300,10 @@ export async function getConversationHistory(
     );
 
   if (!conversation) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Conversation not found" });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Conversation not found",
+    });
   }
 
   return db
@@ -292,7 +321,11 @@ export async function getConversationSuggestions(
   userId: number
 ): Promise<BookingSuggestion[]> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Verify ownership
   const [conversation] = await db
@@ -306,7 +339,10 @@ export async function getConversationSuggestions(
     );
 
   if (!conversation) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Conversation not found" });
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Conversation not found",
+    });
   }
 
   return db
@@ -324,7 +360,11 @@ export async function selectSuggestion(
   userId: number
 ): Promise<{ flightId: number; cabinClass: string; price: number }> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get suggestion with conversation
   const [suggestion] = await db
@@ -333,7 +373,10 @@ export async function selectSuggestion(
       conversation: chatConversations,
     })
     .from(bookingSuggestions)
-    .innerJoin(chatConversations, eq(bookingSuggestions.conversationId, chatConversations.id))
+    .innerJoin(
+      chatConversations,
+      eq(bookingSuggestions.conversationId, chatConversations.id)
+    )
     .where(eq(bookingSuggestions.id, suggestionId));
 
   if (!suggestion || suggestion.conversation.userId !== userId) {
@@ -341,7 +384,10 @@ export async function selectSuggestion(
   }
 
   if (suggestion.suggestion.selected !== "pending") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Suggestion already processed" });
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Suggestion already processed",
+    });
   }
 
   // Mark as selected
@@ -404,8 +450,10 @@ async function processResponse(
 
   if (searchIntent) {
     // Update context with extracted info
-    if (searchIntent.passengers) updatedContext.passengers = searchIntent.passengers;
-    if (searchIntent.cabinClass) updatedContext.cabinClass = searchIntent.cabinClass;
+    if (searchIntent.passengers)
+      updatedContext.passengers = searchIntent.passengers;
+    if (searchIntent.cabinClass)
+      updatedContext.cabinClass = searchIntent.cabinClass;
     if (searchIntent.date) updatedContext.departureDate = searchIntent.date;
 
     // If we have origin and destination, search for flights
@@ -417,7 +465,9 @@ async function processResponse(
         const searchResults = await searchFlights({
           originId: searchIntent.originId,
           destinationId: searchIntent.destinationId,
-          departureDate: searchIntent.date ? new Date(searchIntent.date) : new Date(),
+          departureDate: searchIntent.date
+            ? new Date(searchIntent.date)
+            : new Date(),
         });
 
         // Get top 3 flights
@@ -426,9 +476,10 @@ async function processResponse(
         for (let i = 0; i < topFlights.length; i++) {
           const flight = topFlights[i];
           const cabinClass = updatedContext.cabinClass || "economy";
-          const price = cabinClass === "business"
-            ? Number(flight.businessPrice)
-            : Number(flight.economyPrice);
+          const price =
+            cabinClass === "business"
+              ? Number(flight.businessPrice)
+              : Number(flight.economyPrice);
 
           // Use nested data from flight object (origin, destination, airline are included)
           const originCity = flight.origin?.city || "Unknown";
@@ -436,18 +487,25 @@ async function processResponse(
           const airlineName = flight.airline?.name || "Unknown";
 
           // Store suggestion
-          const [suggestionResult] = await db.insert(bookingSuggestions).values({
-            conversationId,
-            flightId: flight.id,
-            cabinClass,
-            pricePerPerson: price,
-            totalPrice: price * (updatedContext.passengers || 1),
-            currency: "SAR",
-            reason: i === 0 ? "أفضل سعر متاح" : i === 1 ? "وقت مغادرة مناسب" : "خيار بديل",
-            rank: i + 1,
-            score: 100 - (i * 15),
-            expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
-          });
+          const [suggestionResult] = await db
+            .insert(bookingSuggestions)
+            .values({
+              conversationId,
+              flightId: flight.id,
+              cabinClass,
+              pricePerPerson: price,
+              totalPrice: price * (updatedContext.passengers || 1),
+              currency: "SAR",
+              reason:
+                i === 0
+                  ? "أفضل سعر متاح"
+                  : i === 1
+                    ? "وقت مغادرة مناسب"
+                    : "خيار بديل",
+              rank: i + 1,
+              score: 100 - i * 15,
+              expiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 minutes
+            });
 
           suggestions.push({
             id: suggestionResult.insertId,
@@ -459,7 +517,12 @@ async function processResponse(
             arrivalTime: flight.arrivalTime.toISOString(),
             price,
             cabinClass,
-            reason: i === 0 ? "أفضل سعر متاح" : i === 1 ? "وقت مغادرة مناسب" : "خيار بديل",
+            reason:
+              i === 0
+                ? "أفضل سعر متاح"
+                : i === 1
+                  ? "وقت مغادرة مناسب"
+                  : "خيار بديل",
           });
         }
       } catch (error) {
@@ -490,7 +553,9 @@ function extractSearchIntent(message: string): {
   } = {};
 
   // Extract passengers count
-  const passengersMatch = message.match(/(\d+)\s*(راكب|مسافر|passenger|person|adult)/i);
+  const passengersMatch = message.match(
+    /(\d+)\s*(راكب|مسافر|passenger|person|adult)/i
+  );
   if (passengersMatch) {
     intent.passengers = parseInt(passengersMatch[1]);
   }
@@ -503,7 +568,9 @@ function extractSearchIntent(message: string): {
   }
 
   // Extract date patterns
-  const dateMatch = message.match(/(\d{4}[-/]\d{1,2}[-/]\d{1,2})|(\d{1,2}[-/]\d{1,2}[-/]\d{4})/);
+  const dateMatch = message.match(
+    /(\d{4}[-/]\d{1,2}[-/]\d{1,2})|(\d{1,2}[-/]\d{1,2}[-/]\d{4})/
+  );
   if (dateMatch) {
     intent.date = dateMatch[0].replace(/\//g, "-");
   }
@@ -531,9 +598,15 @@ function isBookingReady(context: ChatContext): boolean {
 /**
  * Get user's active conversations
  */
-export async function getUserConversations(userId: number): Promise<ChatConversation[]> {
+export async function getUserConversations(
+  userId: number
+): Promise<ChatConversation[]> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return db
     .select()
@@ -550,7 +623,9 @@ export async function getUserConversations(userId: number): Promise<ChatConversa
 /**
  * Archive old conversations (for cleanup job)
  */
-export async function archiveOldConversations(olderThanDays: number = 7): Promise<number> {
+export async function archiveOldConversations(
+  olderThanDays: number = 7
+): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
 

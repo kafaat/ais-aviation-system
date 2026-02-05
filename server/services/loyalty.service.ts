@@ -318,22 +318,18 @@ export async function processExpiredMiles(): Promise<{
     const now = new Date();
 
     // Get all accounts with balances > 0
-    const accounts = await database
-      .select()
-      .from(loyaltyAccounts);
+    const accounts = await database.select().from(loyaltyAccounts);
 
     for (const account of accounts) {
       // Get unexpired earn transactions that are now expired
       const expiredTransactions = await database
         .select()
         .from(milesTransactions)
-        .where(
-          eq(milesTransactions.userId, account.userId)
-        );
+        .where(eq(milesTransactions.userId, account.userId));
 
       // Filter to only expired earn transactions
       const toExpire = expiredTransactions.filter(
-        (t) =>
+        t =>
           t.type === "earn" &&
           t.expiresAt &&
           new Date(t.expiresAt) <= now &&
@@ -348,7 +344,10 @@ export async function processExpiredMiles(): Promise<{
       if (milesToExpire <= 0) continue;
 
       // Don't expire more than current balance
-      const actualExpireAmount = Math.min(milesToExpire, account.currentMilesBalance);
+      const actualExpireAmount = Math.min(
+        milesToExpire,
+        account.currentMilesBalance
+      );
 
       if (actualExpireAmount <= 0) continue;
 
@@ -429,7 +428,10 @@ export async function reverseMilesForBooking(
       return { milesReversed: 0 };
     }
 
-    const newBalance = Math.max(0, account.currentMilesBalance - milesToReverse);
+    const newBalance = Math.max(
+      0,
+      account.currentMilesBalance - milesToReverse
+    );
 
     // Create adjustment transaction
     await database.insert(milesTransactions).values({
@@ -507,7 +509,9 @@ export async function awardBonusMiles(
       })
       .where(eq(loyaltyAccounts.userId, userId));
 
-    console.info(`[Loyalty] Awarded ${miles} bonus miles to user ${userId}: ${reason}`);
+    console.info(
+      `[Loyalty] Awarded ${miles} bonus miles to user ${userId}: ${reason}`
+    );
 
     return { newBalance };
   } catch (error) {

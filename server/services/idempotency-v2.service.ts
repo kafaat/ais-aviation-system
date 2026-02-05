@@ -125,11 +125,13 @@ export async function withIdempotency<T>(
         and(
           eq(idempotencyRequests.scope, opts.scope),
           eq(idempotencyRequests.idempotencyKey, opts.key),
-          opts.userId !== null ? eq(idempotencyRequests.userId, opts.userId) : isNull(idempotencyRequests.userId)
+          opts.userId !== null
+            ? eq(idempotencyRequests.userId, opts.userId)
+            : isNull(idempotencyRequests.userId)
         )
       )
       .limit(1);
-    
+
     const existing = existingResults[0];
 
     if (!existing) {
@@ -312,11 +314,13 @@ export async function getIdempotencyRecord(
       and(
         eq(idempotencyRequests.scope, scope),
         eq(idempotencyRequests.idempotencyKey, key),
-        userId !== null ? eq(idempotencyRequests.userId, userId) : isNull(idempotencyRequests.userId)
+        userId !== null
+          ? eq(idempotencyRequests.userId, userId)
+          : isNull(idempotencyRequests.userId)
       )
     )
     .limit(1);
-  
+
   return results[0] || null;
 }
 

@@ -54,7 +54,7 @@ export const chatConversations = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     userIdx: index("chat_conv_user_idx").on(table.userId),
     statusIdx: index("chat_conv_status_idx").on(table.status),
     bookingIdx: index("chat_conv_booking_idx").on(table.bookingId),
@@ -96,7 +96,7 @@ export const chatMessages = mysqlTable(
 
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     convIdx: index("chat_msg_conv_idx").on(table.conversationId),
     roleIdx: index("chat_msg_role_idx").on(table.role),
     createdIdx: index("chat_msg_created_idx").on(table.createdAt),
@@ -131,7 +131,12 @@ export const bookingSuggestions = mysqlTable(
     score: int("score"), // AI confidence score (0-100)
 
     // Selection tracking
-    selected: mysqlEnum("selected", ["pending", "selected", "rejected", "expired"])
+    selected: mysqlEnum("selected", [
+      "pending",
+      "selected",
+      "rejected",
+      "expired",
+    ])
       .default("pending")
       .notNull(),
     selectedAt: timestamp("selectedAt"),
@@ -139,7 +144,7 @@ export const bookingSuggestions = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     expiresAt: timestamp("expiresAt"), // Suggestion validity period
   },
-  (table) => ({
+  table => ({
     convIdx: index("booking_sug_conv_idx").on(table.conversationId),
     flightIdx: index("booking_sug_flight_idx").on(table.flightId),
     selectedIdx: index("booking_sug_selected_idx").on(table.selected),
@@ -211,7 +216,7 @@ export const notificationHistory = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     userIdx: index("notif_hist_user_idx").on(table.userId),
     typeIdx: index("notif_hist_type_idx").on(table.type),
     channelIdx: index("notif_hist_channel_idx").on(table.channel),
@@ -278,7 +283,7 @@ export const customerReviews = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => ({
+  table => ({
     userIdx: index("review_user_idx").on(table.userId),
     bookingIdx: index("review_booking_idx").on(table.bookingId),
     flightIdx: index("review_flight_idx").on(table.flightId),
@@ -301,7 +306,7 @@ export const reviewHelpfulVotes = mysqlTable(
     userId: int("userId").notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (table) => ({
+  table => ({
     reviewUserIdx: index("helpful_review_user_idx").on(
       table.reviewId,
       table.userId

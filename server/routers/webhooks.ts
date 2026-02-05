@@ -30,17 +30,23 @@ export const webhooksRouter = router({
         // 1. Verify webhook signature
         const event = verifyWebhookSignature(input.body, input.signature);
 
-        logger.info({
-          eventId: event.id,
-          type: event.type,
-        }, "Stripe webhook received");
+        logger.info(
+          {
+            eventId: event.id,
+            type: event.type,
+          },
+          "Stripe webhook received"
+        );
 
         // 2. Check for duplicate (de-duplication)
         const alreadyProcessed = await isEventProcessed(event.id);
         if (alreadyProcessed) {
-          logger.info({
-            eventId: event.id,
-          }, "Stripe event already processed (duplicate)");
+          logger.info(
+            {
+              eventId: event.id,
+            },
+            "Stripe event already processed (duplicate)"
+          );
           return {
             received: true,
             duplicate: true,
@@ -54,10 +60,13 @@ export const webhooksRouter = router({
         // 4. Process event
         await processStripeEvent(event);
 
-        logger.info({
-          eventId: event.id,
-          type: event.type,
-        }, "Stripe event processed successfully");
+        logger.info(
+          {
+            eventId: event.id,
+            type: event.type,
+          },
+          "Stripe event processed successfully"
+        );
 
         return {
           received: true,
@@ -65,10 +74,13 @@ export const webhooksRouter = router({
           eventId: event.id,
         };
       } catch (error) {
-        logger.error({
-          error,
-          signature: input.signature.substring(0, 20) + "...",
-        }, "Error processing Stripe webhook");
+        logger.error(
+          {
+            error,
+            signature: input.signature.substring(0, 20) + "...",
+          },
+          "Error processing Stripe webhook"
+        );
 
         // Return 500 to trigger Stripe retry
         throw new TRPCError({

@@ -8,9 +8,9 @@ const { invalidCsrfTokenError, generateCsrfToken, doubleCsrfProtection } =
   doubleCsrf({
     getSecret: () =>
       process.env.CSRF_SECRET || "default-csrf-secret-change-in-production",
-    getSessionIdentifier: (req) => {
+    getSessionIdentifier: req => {
       // Use authentication cookie or a fallback for unauthenticated requests
-      return req.cookies?.['manus-access-token'] || req.ip || 'anonymous';
+      return req.cookies?.["manus-access-token"] || req.ip || "anonymous";
     },
     cookieName: "__Host-csrf",
     cookieOptions: {

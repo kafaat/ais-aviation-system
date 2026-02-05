@@ -34,7 +34,13 @@ import { ar } from "date-fns/locale";
 
 type SeatType = "window" | "aisle" | "middle";
 type CabinClass = "economy" | "business" | "first";
-type MealPreference = "regular" | "vegetarian" | "vegan" | "halal" | "kosher" | "gluten_free";
+type MealPreference =
+  | "regular"
+  | "vegetarian"
+  | "vegan"
+  | "halal"
+  | "kosher"
+  | "gluten_free";
 
 export default function UserProfile() {
   const { t, i18n } = useTranslation();
@@ -210,7 +216,10 @@ export default function UserProfile() {
                   <Select
                     value={formData.mealPreference}
                     onValueChange={(value: string) =>
-                      setFormData({ ...formData, mealPreference: value as MealPreference })
+                      setFormData({
+                        ...formData,
+                        mealPreference: value as MealPreference,
+                      })
                     }
                   >
                     <SelectTrigger>

@@ -130,7 +130,7 @@ export async function recordStatusChange(data: {
       logger.error({}, "Database not available");
       return;
     }
-    
+
     await database.insert(bookingStatusHistory).values(historyEntry);
 
     logger.info(
@@ -167,7 +167,7 @@ export async function getBookingStatusHistory(bookingId: number) {
       logger.error({}, "Database not available");
       return [];
     }
-    
+
     const history = await database
       .select()
       .from(bookingStatusHistory)

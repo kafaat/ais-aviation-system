@@ -94,11 +94,13 @@ export async function generateETicketPDF(
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
-      doc.on("error", (err) => {
-        reject(new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to generate e-ticket PDF",
-        }));
+      doc.on("error", err => {
+        reject(
+          new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to generate e-ticket PDF",
+          })
+        );
       });
 
       // Header
@@ -279,11 +281,13 @@ export async function generateBoardingPassPDF(
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
-      doc.on("error", (err) => {
-        reject(new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to generate boarding pass PDF",
-        }));
+      doc.on("error", err => {
+        reject(
+          new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to generate boarding pass PDF",
+          })
+        );
       });
 
       // Header

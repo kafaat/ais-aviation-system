@@ -23,9 +23,7 @@ import {
   refreshTokens,
 } from "../../drizzle/schema";
 import { eq, lt, and, isNull, sql } from "drizzle-orm";
-import {
-  sendBookingConfirmation,
-} from "./email.service";
+import { sendBookingConfirmation } from "./email.service";
 import { stripe } from "../stripe";
 
 /**
@@ -220,11 +218,14 @@ class QueueService {
     }
 
     const job = await queue.add(jobName, data, options);
-    logger.info({
-      queue: queueName,
-      jobName,
-      jobId: job.id,
-    }, "Job added to queue");
+    logger.info(
+      {
+        queue: queueName,
+        jobName,
+        jobId: job.id,
+      },
+      "Job added to queue"
+    );
     return job;
   }
 
@@ -301,11 +302,14 @@ class QueueService {
   private async processEmailJob(job: Job): Promise<void> {
     const { type, data } = job.data;
 
-    logger.info({
-      jobId: job.id,
-      type,
-      to: data?.to || data?.passengerEmail,
-    }, "Processing email job");
+    logger.info(
+      {
+        jobId: job.id,
+        type,
+        to: data?.to || data?.passengerEmail,
+      },
+      "Processing email job"
+    );
 
     try {
       switch (type) {
@@ -335,16 +339,22 @@ class QueueService {
           logger.warn({ type }, "Unknown email type");
       }
 
-      logger.info({
-        jobId: job.id,
-        type,
-      }, "Email sent successfully");
+      logger.info(
+        {
+          jobId: job.id,
+          type,
+        },
+        "Email sent successfully"
+      );
     } catch (error) {
-      logger.error({
-        jobId: job.id,
-        type,
-        error,
-      }, "Failed to send email");
+      logger.error(
+        {
+          jobId: job.id,
+          type,
+          error,
+        },
+        "Failed to send email"
+      );
       throw error; // Will trigger retry
     }
   }
@@ -359,10 +369,13 @@ class QueueService {
   private async processWebhookRetryJob(job: Job): Promise<void> {
     const { eventId } = job.data;
 
-    logger.info({
-      jobId: job.id,
-      eventId,
-    }, "Processing webhook retry job");
+    logger.info(
+      {
+        jobId: job.id,
+        eventId,
+      },
+      "Processing webhook retry job"
+    );
 
     const db = await getDb();
     if (!db) {
@@ -395,10 +408,13 @@ class QueueService {
 
       // Create a mock request/response for processing
       // Note: In production, you might want to refactor this
-      logger.info({
-        eventId,
-        type: stripeEvent.type,
-      }, "Re-processing Stripe event");
+      logger.info(
+        {
+          eventId,
+          type: stripeEvent.type,
+        },
+        "Re-processing Stripe event"
+      );
 
       // Update retry count
       await db
@@ -408,16 +424,22 @@ class QueueService {
         })
         .where(eq(stripeEvents.id, eventId));
 
-      logger.info({
-        jobId: job.id,
-        eventId,
-      }, "Webhook retry completed");
+      logger.info(
+        {
+          jobId: job.id,
+          eventId,
+        },
+        "Webhook retry completed"
+      );
     } catch (error) {
-      logger.error({
-        jobId: job.id,
-        eventId,
-        error,
-      }, "Webhook retry failed");
+      logger.error(
+        {
+          jobId: job.id,
+          eventId,
+          error,
+        },
+        "Webhook retry failed"
+      );
       throw error;
     }
   }
@@ -432,10 +454,13 @@ class QueueService {
   private async processReconciliationJob(job: Job): Promise<void> {
     const { type } = job.data;
 
-    logger.info({
-      jobId: job.id,
-      type,
-    }, "Processing reconciliation job");
+    logger.info(
+      {
+        jobId: job.id,
+        type,
+      },
+      "Processing reconciliation job"
+    );
 
     const db = await getDb();
     if (!db) {
@@ -465,20 +490,26 @@ class QueueService {
           )
         );
 
-      logger.info({
-        count: confirmedBookings.length,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-      }, "Reconciliation: Found confirmed bookings");
+      logger.info(
+        {
+          count: confirmedBookings.length,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        },
+        "Reconciliation: Found confirmed bookings"
+      );
 
       let mismatches = 0;
 
       // 2. Verify each booking against Stripe
       for (const booking of confirmedBookings) {
         if (!booking.stripePaymentIntentId) {
-          logger.warn({
-            bookingId: booking.id,
-          }, "Reconciliation: Booking without payment intent");
+          logger.warn(
+            {
+              bookingId: booking.id,
+            },
+            "Reconciliation: Booking without payment intent"
+          );
           mismatches++;
           continue;
         }
@@ -490,11 +521,14 @@ class QueueService {
 
           // Check status match
           if (paymentIntent.status !== "succeeded") {
-            logger.error({
-              bookingId: booking.id,
-              dbStatus: booking.paymentStatus,
-              stripeStatus: paymentIntent.status,
-            }, "Reconciliation: Status mismatch");
+            logger.error(
+              {
+                bookingId: booking.id,
+                dbStatus: booking.paymentStatus,
+                stripeStatus: paymentIntent.status,
+              },
+              "Reconciliation: Status mismatch"
+            );
             mismatches++;
           }
 
@@ -503,19 +537,25 @@ class QueueService {
           const dbAmount = booking.totalAmount / 100; // totalAmount is stored in cents
 
           if (Math.abs(stripeAmount - dbAmount) > 0.01) {
-            logger.error({
-              bookingId: booking.id,
-              dbAmount,
-              stripeAmount,
-            }, "Reconciliation: Amount mismatch");
+            logger.error(
+              {
+                bookingId: booking.id,
+                dbAmount,
+                stripeAmount,
+              },
+              "Reconciliation: Amount mismatch"
+            );
             mismatches++;
           }
         } catch (stripeError: any) {
-          logger.error({
-            bookingId: booking.id,
-            paymentIntentId: booking.stripePaymentIntentId,
-            error: stripeError.message,
-          }, "Reconciliation: Failed to fetch from Stripe");
+          logger.error(
+            {
+              bookingId: booking.id,
+              paymentIntentId: booking.stripePaymentIntentId,
+              error: stripeError.message,
+            },
+            "Reconciliation: Failed to fetch from Stripe"
+          );
           mismatches++;
         }
       }
@@ -532,9 +572,12 @@ class QueueService {
         );
 
       if (unprocessedEvents.length > 0) {
-        logger.warn({
-          count: unprocessedEvents.length,
-        }, "Reconciliation: Found unprocessed events");
+        logger.warn(
+          {
+            count: unprocessedEvents.length,
+          },
+          "Reconciliation: Found unprocessed events"
+        );
 
         // Schedule retries for unprocessed events
         for (const event of unprocessedEvents) {
@@ -546,18 +589,24 @@ class QueueService {
         }
       }
 
-      logger.info({
-        jobId: job.id,
-        type,
-        totalBookings: confirmedBookings.length,
-        mismatches,
-        unprocessedEvents: unprocessedEvents.length,
-      }, "Reconciliation completed");
+      logger.info(
+        {
+          jobId: job.id,
+          type,
+          totalBookings: confirmedBookings.length,
+          mismatches,
+          unprocessedEvents: unprocessedEvents.length,
+        },
+        "Reconciliation completed"
+      );
     } catch (error) {
-      logger.error({
-        jobId: job.id,
-        error,
-      }, "Reconciliation failed");
+      logger.error(
+        {
+          jobId: job.id,
+          error,
+        },
+        "Reconciliation failed"
+      );
       throw error;
     }
   }
@@ -572,10 +621,13 @@ class QueueService {
   private async processCleanupJob(job: Job): Promise<void> {
     const { type } = job.data;
 
-    logger.info({
-      jobId: job.id,
-      type,
-    }, "Processing cleanup job");
+    logger.info(
+      {
+        jobId: job.id,
+        type,
+      },
+      "Processing cleanup job"
+    );
 
     const db = await getDb();
     if (!db) {
@@ -656,17 +708,23 @@ class QueueService {
           logger.warn({ type }, "Unknown cleanup type");
       }
 
-      logger.info({
-        jobId: job.id,
-        type,
-        deletedCount,
-      }, "Cleanup completed");
+      logger.info(
+        {
+          jobId: job.id,
+          type,
+          deletedCount,
+        },
+        "Cleanup completed"
+      );
     } catch (error) {
-      logger.error({
-        jobId: job.id,
-        type,
-        error,
-      }, "Cleanup failed");
+      logger.error(
+        {
+          jobId: job.id,
+          type,
+          error,
+        },
+        "Cleanup failed"
+      );
       throw error;
     }
   }
@@ -677,26 +735,35 @@ class QueueService {
   private async processNotificationJob(job: Job): Promise<void> {
     const { userId, type, message, metadata } = job.data;
 
-    logger.info({
-      jobId: job.id,
-      userId,
-      type,
-    }, "Processing notification job");
+    logger.info(
+      {
+        jobId: job.id,
+        userId,
+        type,
+      },
+      "Processing notification job"
+    );
 
     try {
       // TODO: Implement push notifications when needed
       // For now, log the notification
-      logger.info({
-        jobId: job.id,
-        userId,
-        type,
-        message,
-      }, "Notification processed");
+      logger.info(
+        {
+          jobId: job.id,
+          userId,
+          type,
+          message,
+        },
+        "Notification processed"
+      );
     } catch (error) {
-      logger.error({
-        jobId: job.id,
-        error,
-      }, "Notification failed");
+      logger.error(
+        {
+          jobId: job.id,
+          error,
+        },
+        "Notification failed"
+      );
       throw error;
     }
   }

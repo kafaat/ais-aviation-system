@@ -7,7 +7,14 @@
 
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { bookings, payments, flights, users, airports, airlines } from "../../drizzle/schema";
+import {
+  bookings,
+  payments,
+  flights,
+  users,
+  airports,
+  airlines,
+} from "../../drizzle/schema";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 
@@ -69,7 +76,11 @@ export async function exportBookingsToCSV(
   filters: ReportFilters
 ): Promise<string> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const conditions = [];
   if (filters.startDate) {
@@ -79,7 +90,12 @@ export async function exportBookingsToCSV(
     conditions.push(lte(bookings.createdAt, filters.endDate));
   }
   if (filters.status) {
-    conditions.push(eq(bookings.status, filters.status as "pending" | "confirmed" | "cancelled" | "completed"));
+    conditions.push(
+      eq(
+        bookings.status,
+        filters.status as "pending" | "confirmed" | "cancelled" | "completed"
+      )
+    );
   }
 
   const results = await db
@@ -130,7 +146,7 @@ export async function exportBookingsToCSV(
     "Created At",
   ];
 
-  const rows = results.map((row) => [
+  const rows = results.map(row => [
     row.bookingReference || "",
     row.pnr || "",
     row.flightNumber || "",
@@ -146,7 +162,10 @@ export async function exportBookingsToCSV(
     row.createdAt ? new Date(row.createdAt).toISOString() : "",
   ]);
 
-  return [headers.join(","), ...rows.map((row) => row.map(escapeCSV).join(","))].join("\n");
+  return [
+    headers.join(","),
+    ...rows.map(row => row.map(escapeCSV).join(",")),
+  ].join("\n");
 }
 
 /**
@@ -156,9 +175,14 @@ export async function exportRevenueToCSV(
   filters: ReportFilters
 ): Promise<string> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
-  const startDate = filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const startDate =
+    filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const endDate = filters.endDate || new Date();
 
   const results = await db
@@ -170,7 +194,9 @@ export async function exportRevenueToCSV(
       refundedAmount: sql<number>`SUM(CASE WHEN ${bookings.paymentStatus} = 'refunded' THEN ${bookings.totalAmount} ELSE 0 END)`,
     })
     .from(bookings)
-    .where(and(gte(bookings.createdAt, startDate), lte(bookings.createdAt, endDate)))
+    .where(
+      and(gte(bookings.createdAt, startDate), lte(bookings.createdAt, endDate))
+    )
     .groupBy(sql`DATE(${bookings.createdAt})`)
     .orderBy(sql`DATE(${bookings.createdAt})`);
 
@@ -182,7 +208,7 @@ export async function exportRevenueToCSV(
     "Refunded Amount (SAR)",
   ];
 
-  const rows = results.map((row) => [
+  const rows = results.map(row => [
     row.date,
     String(row.totalBookings || 0),
     ((Number(row.totalRevenue) || 0) / 100).toFixed(2),
@@ -190,7 +216,7 @@ export async function exportRevenueToCSV(
     ((Number(row.refundedAmount) || 0) / 100).toFixed(2),
   ]);
 
-  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+  return [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
 }
 
 /**
@@ -200,7 +226,11 @@ export async function exportFlightPerformanceToCSV(
   filters: ReportFilters
 ): Promise<string> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const results = await db
     .select({
@@ -240,14 +270,16 @@ export async function exportFlightPerformanceToCSV(
     "Estimated Revenue (SAR)",
   ];
 
-  const rows = results.map((row) => {
+  const rows = results.map(row => {
     const totalSeats = (row.economySeats || 0) + (row.businessSeats || 0);
-    const availableSeats = (row.economyAvailable || 0) + (row.businessAvailable || 0);
+    const availableSeats =
+      (row.economyAvailable || 0) + (row.businessAvailable || 0);
     const bookedSeats = totalSeats - availableSeats;
     const occupancyRate = totalSeats > 0 ? (bookedSeats / totalSeats) * 100 : 0;
 
     const economyBooked = (row.economySeats || 0) - (row.economyAvailable || 0);
-    const businessBooked = (row.businessSeats || 0) - (row.businessAvailable || 0);
+    const businessBooked =
+      (row.businessSeats || 0) - (row.businessAvailable || 0);
     const revenue =
       economyBooked * (Number(row.economyPrice) || 0) +
       businessBooked * (Number(row.businessPrice) || 0);
@@ -264,7 +296,7 @@ export async function exportFlightPerformanceToCSV(
     ];
   });
 
-  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+  return [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
 }
 
 // ============================================================================
@@ -278,10 +310,15 @@ export async function generateBookingsPDF(
   filters: ReportFilters
 ): Promise<Buffer> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get summary data
-  const startDate = filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const startDate =
+    filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const endDate = filters.endDate || new Date();
 
   const [summary] = await db
@@ -293,13 +330,15 @@ export async function generateBookingsPDF(
       totalPassengers: sql<number>`SUM(${bookings.numberOfPassengers})`,
     })
     .from(bookings)
-    .where(and(gte(bookings.createdAt, startDate), lte(bookings.createdAt, endDate)));
+    .where(
+      and(gte(bookings.createdAt, startDate), lte(bookings.createdAt, endDate))
+    );
 
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50 });
     const chunks: Buffer[] = [];
 
-    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("data", chunk => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
@@ -310,10 +349,12 @@ export async function generateBookingsPDF(
     doc.moveDown(2);
 
     // Date range
-    doc.fontSize(12).text(
-      `Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
-      { align: "center" }
-    );
+    doc
+      .fontSize(12)
+      .text(
+        `Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
+        { align: "center" }
+      );
     doc.moveDown(2);
 
     // Summary statistics
@@ -321,17 +362,23 @@ export async function generateBookingsPDF(
     doc.moveDown();
 
     const stats = [
-      { label: "Total Bookings / إجمالي الحجوزات", value: summary?.totalBookings || 0 },
+      {
+        label: "Total Bookings / إجمالي الحجوزات",
+        value: summary?.totalBookings || 0,
+      },
       {
         label: "Total Revenue / إجمالي الإيرادات",
         value: `${((Number(summary?.totalRevenue) || 0) / 100).toFixed(2)} SAR`,
       },
       { label: "Confirmed / مؤكدة", value: summary?.confirmedBookings || 0 },
       { label: "Cancelled / ملغية", value: summary?.cancelledBookings || 0 },
-      { label: "Total Passengers / إجمالي الركاب", value: summary?.totalPassengers || 0 },
+      {
+        label: "Total Passengers / إجمالي الركاب",
+        value: summary?.totalPassengers || 0,
+      },
     ];
 
-    stats.forEach((stat) => {
+    stats.forEach(stat => {
       doc.fontSize(12).text(`${stat.label}: ${stat.value}`);
       doc.moveDown(0.5);
     });
@@ -339,12 +386,14 @@ export async function generateBookingsPDF(
     doc.moveDown(2);
 
     // Footer
-    doc.fontSize(10).text(
-      `Generated on ${new Date().toISOString()}`,
-      50,
-      doc.page.height - 50,
-      { align: "center" }
-    );
+    doc
+      .fontSize(10)
+      .text(
+        `Generated on ${new Date().toISOString()}`,
+        50,
+        doc.page.height - 50,
+        { align: "center" }
+      );
 
     doc.end();
   });
@@ -357,9 +406,14 @@ export async function generateRevenuePDF(
   filters: ReportFilters
 ): Promise<Buffer> {
   const db = await getDb();
-  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
-  const startDate = filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const startDate =
+    filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const endDate = filters.endDate || new Date();
 
   const dailyRevenue = await db
@@ -383,50 +437,70 @@ export async function generateRevenuePDF(
     const doc = new PDFDocument({ margin: 50 });
     const chunks: Buffer[] = [];
 
-    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("data", chunk => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
     // Title
-    doc.fontSize(24).text("تقرير الإيرادات - AIS Aviation", { align: "center" });
+    doc
+      .fontSize(24)
+      .text("تقرير الإيرادات - AIS Aviation", { align: "center" });
     doc.moveDown();
     doc.fontSize(12).text(`Revenue Report - AIS Aviation`, { align: "center" });
     doc.moveDown(2);
 
     // Date range
-    doc.fontSize(12).text(
-      `Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
-      { align: "center" }
-    );
+    doc
+      .fontSize(12)
+      .text(
+        `Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
+        { align: "center" }
+      );
     doc.moveDown(2);
 
     // Total revenue
-    const totalRevenue = dailyRevenue.reduce((sum, row) => sum + (Number(row.revenue) || 0), 0);
-    const totalBookings = dailyRevenue.reduce((sum, row) => sum + (row.bookings || 0), 0);
+    const totalRevenue = dailyRevenue.reduce(
+      (sum, row) => sum + (Number(row.revenue) || 0),
+      0
+    );
+    const totalBookings = dailyRevenue.reduce(
+      (sum, row) => sum + (row.bookings || 0),
+      0
+    );
 
     doc.fontSize(16).text("Summary / ملخص", { underline: true });
     doc.moveDown();
-    doc.fontSize(14).text(`Total Revenue / إجمالي الإيرادات: ${(totalRevenue / 100).toFixed(2)} SAR`);
+    doc
+      .fontSize(14)
+      .text(
+        `Total Revenue / إجمالي الإيرادات: ${(totalRevenue / 100).toFixed(2)} SAR`
+      );
     doc.text(`Total Confirmed Bookings / الحجوزات المؤكدة: ${totalBookings}`);
     doc.moveDown(2);
 
     // Daily breakdown
-    doc.fontSize(16).text("Daily Breakdown / التفصيل اليومي", { underline: true });
+    doc
+      .fontSize(16)
+      .text("Daily Breakdown / التفصيل اليومي", { underline: true });
     doc.moveDown();
 
-    dailyRevenue.slice(0, 30).forEach((row) => {
-      doc.fontSize(10).text(
-        `${row.date}: ${(Number(row.revenue) / 100).toFixed(2)} SAR (${row.bookings} bookings)`
-      );
+    dailyRevenue.slice(0, 30).forEach(row => {
+      doc
+        .fontSize(10)
+        .text(
+          `${row.date}: ${(Number(row.revenue) / 100).toFixed(2)} SAR (${row.bookings} bookings)`
+        );
     });
 
     // Footer
-    doc.fontSize(10).text(
-      `Generated on ${new Date().toISOString()}`,
-      50,
-      doc.page.height - 50,
-      { align: "center" }
-    );
+    doc
+      .fontSize(10)
+      .text(
+        `Generated on ${new Date().toISOString()}`,
+        50,
+        doc.page.height - 50,
+        { align: "center" }
+      );
 
     doc.end();
   });

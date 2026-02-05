@@ -76,7 +76,7 @@ export const stripeWebhookServiceV2 = {
       .from(stripeEvents)
       .where(eq(stripeEvents.id, event.id))
       .limit(1);
-    
+
     const existing = existingResults[0];
 
     // If already processed successfully, return (idempotent success)

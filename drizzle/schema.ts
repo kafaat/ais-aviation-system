@@ -1527,4 +1527,3 @@ export type InsertDeniedBoardingRecord =
 
 // Export chat and notification schemas
 export * from "./chat-schema";
-

@@ -133,7 +133,7 @@ export async function calculateDynamicPrice(
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
@@ -251,7 +251,7 @@ async function calculateDemandMultiplier(flightId: number): Promise<number> {
   if (!database) {
     return DEFAULT_MULTIPLIERS.demand;
   }
-  
+
   const recentBookings = await database
     .select({ count: count() })
     .from(bookings)
@@ -546,7 +546,7 @@ export async function getPriceForecast(
   if (!database) {
     throw new Error("Database connection not available");
   }
-  
+
   const flight = await database.query.flights.findFirst({
     where: eq(flights.id, flightId),
   });
@@ -610,7 +610,7 @@ async function getApplicablePricingRules(
     if (!database) {
       return [];
     }
-    
+
     const rules =
       (await database.query.pricingRules?.findMany({
         where: and(
@@ -666,7 +666,7 @@ async function getActiveSeasonalPricing(
     if (!database) {
       return null;
     }
-    
+
     const seasonal = await database.query.seasonalPricing?.findFirst({
       where: and(
         eq(seasonalPricing.isActive, true),
@@ -750,7 +750,7 @@ export async function getPriceRange(
   if (!database) {
     return { min: 0, max: 0, average: 0 };
   }
-  
+
   const flightsInRange = await database.query.flights.findMany({
     where: and(
       eq(flights.originId, originId),
