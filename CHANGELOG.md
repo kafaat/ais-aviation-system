@@ -25,21 +25,26 @@
 ## What's Changed in v1.1.0
 
 ### Features
+
 - feat: add production-ready improvements with security, monitoring, and testing (e953154)
 
 ### Bug Fixes
+
 - fix: Update wouter version and fix pnpm lockfile (955aa36)
 - fix: Fix TypeScript errors in Stripe services (8495681)
 - fix: remove explicit pnpm version from CI workflows (d477e4e)
 - fix: remove conflicting deny-licenses from dependency review (5923db5)
 
 ### Documentation
+
 - docs: Add comprehensive project audit reports and update .env with Redis configuration (9bdf970)
 
 ### Maintenance
+
 - chore: Add final fixes summary document (9cd3403)
 
 ### Other Changes
+
 - Initial plan (12e0251)
 - Add comprehensive documentation for repository visibility and contribution guidelines (110aff3)
 - style: Fix code formatting with Prettier (efe69cf)
@@ -93,9 +98,7 @@
 - Add production-ready improvements: security, monitoring, testing, and CI/CD (98be1e1)
 - Fix TypeScript errors and test setup for production readiness (f4e0b88)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.1.0-beta...v1.1.0
-
 
 ---
 

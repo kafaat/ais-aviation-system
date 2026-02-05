@@ -88,6 +88,18 @@ export interface LoyaltyMilesNotificationData {
   nextTierMiles?: number;
 }
 
+export interface SplitPaymentRequestData {
+  payerName: string;
+  payerEmail: string;
+  bookingReference: string;
+  flightNumber: string;
+  route: string;
+  departureTime: Date;
+  amount: number;
+  paymentUrl: string;
+  expiresAt?: Date;
+}
+
 /**
  * Mock email sending function
  * In production, replace with actual email service API call
@@ -573,6 +585,117 @@ ${nextTierText}
   } catch (error) {
     console.error(
       "[Email Service] Error sending loyalty miles notification:",
+      error
+    );
+    return false;
+  }
+}
+
+/**
+ * Send split payment request email
+ */
+export async function sendSplitPaymentRequest(
+  data: SplitPaymentRequestData
+): Promise<boolean> {
+  try {
+    const expiryText = data.expiresAt
+      ? `يرجى إتمام الدفع قبل ${data.expiresAt.toLocaleDateString("ar-SA")}`
+      : "";
+
+    const template: EmailTemplate = {
+      to: data.payerEmail,
+      subject: `طلب دفع حصتك - الحجز ${data.bookingReference}`,
+      text: `
+مرحباً ${data.payerName},
+
+تمت دعوتك للمشاركة في دفع حجز رحلة طيران.
+
+تفاصيل الحجز:
+- رقم الحجز: ${data.bookingReference}
+- رقم الرحلة: ${data.flightNumber}
+- المسار: ${data.route}
+- تاريخ المغادرة: ${data.departureTime.toLocaleString("ar-SA")}
+
+حصتك في الدفع: ${(data.amount / 100).toFixed(2)} ر.س
+
+${expiryText}
+
+يمكنك إتمام الدفع من خلال الرابط التالي:
+${data.paymentUrl}
+
+شكراً لاستخدامك خدماتنا!
+نظام الطيران المتكامل
+      `.trim(),
+      html: `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .content { background: #f9fafb; padding: 25px; margin: 0; border: 1px solid #e5e7eb; }
+    .amount-box { background: white; border: 2px solid #6366f1; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0; }
+    .amount { font-size: 32px; font-weight: bold; color: #6366f1; }
+    .amount-label { font-size: 14px; color: #6b7280; }
+    .detail { margin: 10px 0; padding: 10px; background: white; border-radius: 8px; }
+    .label { font-weight: bold; color: #1f2937; }
+    .cta-button { display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; font-size: 16px; }
+    .cta-button:hover { background: linear-gradient(135deg, #4f46e5, #7c3aed); }
+    .expiry-notice { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px; margin-top: 20px; color: #92400e; }
+    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; padding: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>طلب دفع حصتك</h1>
+      <p>تمت دعوتك للمشاركة في دفع حجز رحلة</p>
+    </div>
+    <div class="content">
+      <p>مرحباً ${data.payerName},</p>
+      <p>تمت دعوتك للمشاركة في دفع حجز رحلة طيران. يرجى مراجعة التفاصيل أدناه وإتمام الدفع.</p>
+
+      <div class="amount-box">
+        <div class="amount-label">حصتك في الدفع</div>
+        <div class="amount">${(data.amount / 100).toFixed(2)} ر.س</div>
+      </div>
+
+      <div class="detail"><span class="label">رقم الحجز:</span> ${data.bookingReference}</div>
+      <div class="detail"><span class="label">رقم الرحلة:</span> ${data.flightNumber}</div>
+      <div class="detail"><span class="label">المسار:</span> ${data.route}</div>
+      <div class="detail"><span class="label">تاريخ المغادرة:</span> ${data.departureTime.toLocaleString("ar-SA")}</div>
+
+      <div style="text-align: center;">
+        <a href="${data.paymentUrl}" class="cta-button">ادفع الآن</a>
+      </div>
+
+      ${
+        data.expiresAt
+          ? `
+      <div class="expiry-notice">
+        <strong>تنبيه:</strong> يرجى إتمام الدفع قبل ${data.expiresAt.toLocaleDateString("ar-SA")}
+      </div>
+      `
+          : ""
+      }
+    </div>
+    <div class="footer">
+      <p>شكراً لاستخدامك خدماتنا!</p>
+      <p>نظام الطيران المتكامل</p>
+    </div>
+  </div>
+</body>
+</html>
+      `.trim(),
+    };
+
+    return await sendEmail(template);
+  } catch (error) {
+    console.error(
+      "[Email Service] Error sending split payment request:",
       error
     );
     return false;

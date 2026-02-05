@@ -27,6 +27,18 @@ import { authRouter } from "./routers/auth";
 import { cacheRouter } from "./routers/cache";
 import { groupBookingsRouter } from "./routers/group-bookings";
 import { specialServicesRouter } from "./routers/special-services";
+import { notificationsRouter } from "./routers/notifications";
+import { multiCityRouter } from "./routers/multi-city";
+import { baggageRouter } from "./routers/baggage";
+import { savedPassengersRouter } from "./routers/saved-passengers";
+import { waitlistRouter } from "./routers/waitlist";
+import { splitPaymentsRouter } from "./routers/split-payments";
+import { corporateRouter } from "./routers/corporate";
+import { priceCalendarRouter } from "./routers/price-calendar";
+import { travelAgentRouter } from "./routers/travel-agent";
+import { smsRouter } from "./routers/sms";
+import { gatesRouter } from "./routers/gates";
+import { vouchersRouter } from "./routers/vouchers";
 
 /**
  * Main Application Router
@@ -74,6 +86,18 @@ export const appRouter = router({
   cache: cacheRouter,
   groupBookings: groupBookingsRouter,
   specialServices: specialServicesRouter,
+  notifications: notificationsRouter,
+  multiCity: multiCityRouter,
+  baggage: baggageRouter,
+  savedPassengers: savedPassengersRouter,
+  waitlist: waitlistRouter,
+  splitPayments: splitPaymentsRouter,
+  corporate: corporateRouter,
+  priceCalendar: priceCalendarRouter,
+  travelAgent: travelAgentRouter,
+  sms: smsRouter,
+  gates: gatesRouter,
+  vouchers: vouchersRouter,
 });
 
 export type AppRouter = typeof appRouter;

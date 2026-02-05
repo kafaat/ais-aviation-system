@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useRoute, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -31,6 +31,8 @@ import {
   Plane,
   Clock,
   Share2,
+  Users,
+  Split,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
@@ -39,6 +41,20 @@ import { ar, enUS } from "date-fns/locale";
 import AncillarySelection, {
   type SelectedAncillary,
 } from "@/components/AncillarySelection";
+import {
+  SavedPassengerSelect,
+  type PassengerData,
+} from "@/components/SavedPassengerSelect";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import SplitPaymentForm from "@/components/SplitPaymentForm";
+import { MessageSquare } from "lucide-react";
 
 type Passenger = {
   type: "adult" | "child" | "infant";
@@ -48,6 +64,9 @@ type Passenger = {
   dateOfBirth?: Date;
   passportNumber?: string;
   nationality?: string;
+  email?: string;
+  phone?: string;
+  saveForFuture?: boolean;
 };
 
 export default function BookingPage() {
@@ -70,6 +89,14 @@ export default function BookingPage() {
     SelectedAncillary[]
   >([]);
   const [ancillariesTotalCost, setAncillariesTotalCost] = useState(0);
+  const [showSplitPayment, setShowSplitPayment] = useState(false);
+  const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
+  const [createdBookingRef, setCreatedBookingRef] = useState<string | null>(
+    null
+  );
+  const [createdBookingAmount, setCreatedBookingAmount] = useState<number>(0);
+  const [smsNotification, setSmsNotification] = useState(false);
+  const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
 
   const currentLocale = i18n.language === "ar" ? ar : enUS;
 
@@ -78,6 +105,25 @@ export default function BookingPage() {
   });
   const createBooking = trpc.bookings.create.useMutation();
   const createPayment = trpc.payments.create.useMutation();
+  const savePassengerMutation = trpc.savedPassengers.add.useMutation();
+
+  // Get user preferences for SMS phone number
+  const { data: userPrefs } = trpc.userPreferences.getMyPreferences.useQuery(
+    undefined,
+    {
+      enabled: !!user,
+    }
+  );
+
+  // Update state when user preferences are loaded
+  useEffect(() => {
+    if (userPrefs?.phoneNumber && !smsPhoneNumber) {
+      setSmsPhoneNumber(userPrefs.phoneNumber);
+    }
+    if (userPrefs?.smsNotifications != null) {
+      setSmsNotification(userPrefs.smsNotifications);
+    }
+  }, [userPrefs]);
 
   // Favorites functionality
   const { data: favorites, refetch: refetchFavorites } =
@@ -157,6 +203,20 @@ export default function BookingPage() {
     setPassengers(updated);
   };
 
+  const fillFromSaved = (index: number, data: PassengerData | null) => {
+    if (!data) return;
+    const updated = [...passengers];
+    updated[index] = {
+      ...updated[index],
+      firstName: data.firstName,
+      lastName: data.lastName,
+      dateOfBirth: data.dateOfBirth,
+      passportNumber: data.passportNumber,
+      nationality: data.nationality,
+    };
+    setPassengers(updated);
+  };
+
   const handleSubmit = async () => {
     if (!isAuthenticated) {
       window.location.href = getLoginUrl();
@@ -191,6 +251,23 @@ export default function BookingPage() {
         method: "card",
       });
 
+      // Save passengers that are marked for future use
+      for (const p of passengers) {
+        if (p.saveForFuture) {
+          try {
+            await savePassengerMutation.mutateAsync({
+              firstName: p.firstName,
+              lastName: p.lastName,
+              dateOfBirth: p.dateOfBirth,
+              nationality: p.nationality,
+              passportNumber: p.passportNumber,
+            });
+          } catch {
+            // Silently fail - don't block booking for save failure
+          }
+        }
+      }
+
       toast.success(t("common.success"));
       navigate(`/my-bookings`);
     } catch (error: { message?: string } | unknown) {
@@ -198,6 +275,68 @@ export default function BookingPage() {
         error instanceof Error ? error.message : t("common.error");
       toast.error(errorMessage);
     }
+  };
+
+  const handleSplitPayment = async () => {
+    if (!isAuthenticated) {
+      window.location.href = getLoginUrl();
+      return;
+    }
+
+    // Validate passengers
+    const isValid = passengers.every(p => p.firstName && p.lastName);
+    if (!isValid) {
+      toast.error(t("common.error"));
+      return;
+    }
+
+    try {
+      // Generate session ID for inventory locking
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+      // Create booking (without processing payment)
+      const booking = await createBooking.mutateAsync({
+        flightId,
+        cabinClass,
+        passengers,
+        sessionId,
+        ancillaries:
+          selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
+      });
+
+      // Save passengers that are marked for future use
+      for (const p of passengers) {
+        if (p.saveForFuture) {
+          try {
+            await savePassengerMutation.mutateAsync({
+              firstName: p.firstName,
+              lastName: p.lastName,
+              dateOfBirth: p.dateOfBirth,
+              nationality: p.nationality,
+              passportNumber: p.passportNumber,
+            });
+          } catch {
+            // Silently fail - don't block booking for save failure
+          }
+        }
+      }
+
+      // Store booking details for split payment form
+      setCreatedBookingId(booking.bookingId);
+      setCreatedBookingRef(booking.bookingReference);
+      setCreatedBookingAmount(booking.totalAmount);
+      setShowSplitPayment(true);
+    } catch (error: { message?: string } | unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : t("common.error");
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleSplitPaymentSuccess = () => {
+    setShowSplitPayment(false);
+    toast.success(t("splitPayment.initiateSuccess"));
+    navigate(`/my-bookings`);
   };
 
   if (isLoading) {
@@ -468,6 +607,19 @@ export default function BookingPage() {
                       )}
                     </div>
 
+                    {/* Saved Passenger Select */}
+                    {isAuthenticated && (
+                      <div className="mb-4">
+                        <Label className="flex items-center gap-2 mb-2">
+                          <Users className="h-4 w-4" />
+                          {t("savedPassengers.selectSaved")}
+                        </Label>
+                        <SavedPassengerSelect
+                          onSelect={data => fillFromSaved(index, data)}
+                        />
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>{t("booking.passengerType")}</Label>
@@ -571,6 +723,25 @@ export default function BookingPage() {
                         />
                       </div>
                     </div>
+
+                    {/* Save for future checkbox */}
+                    {isAuthenticated && (
+                      <div className="flex items-center space-x-2 mt-4 pt-4 border-t">
+                        <Checkbox
+                          id={`save-passenger-${index}`}
+                          checked={passenger.saveForFuture || false}
+                          onCheckedChange={(checked: boolean) =>
+                            updatePassenger(index, "saveForFuture", checked)
+                          }
+                        />
+                        <Label
+                          htmlFor={`save-passenger-${index}`}
+                          className="text-sm font-normal cursor-pointer"
+                        >
+                          {t("savedPassengers.saveThisPassenger")}
+                        </Label>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -663,17 +834,66 @@ export default function BookingPage() {
                 </div>
               </div>
 
-              <Button
-                onClick={handleSubmit}
-                className="w-full shadow-lg"
-                size="lg"
-                disabled={createBooking.isPending || createPayment.isPending}
-              >
-                <CreditCard className="h-5 w-5 mr-2" />
-                {createBooking.isPending || createPayment.isPending
-                  ? t("booking.processing")
-                  : t("booking.completeBooking")}
-              </Button>
+              {/* SMS Notification Option */}
+              <div className="mb-6 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-start space-x-3">
+                  <Checkbox
+                    id="sms-notification"
+                    checked={smsNotification}
+                    onCheckedChange={(checked: boolean) =>
+                      setSmsNotification(checked)
+                    }
+                  />
+                  <div className="space-y-1 flex-1">
+                    <Label
+                      htmlFor="sms-notification"
+                      className="text-sm font-medium cursor-pointer flex items-center gap-2"
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      {t("sms.receiveNotifications")}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {t("sms.notificationDescription")}
+                    </p>
+                    {smsNotification && (
+                      <div className="mt-2">
+                        <Input
+                          type="tel"
+                          placeholder={t("sms.phoneNumberPlaceholder")}
+                          value={smsPhoneNumber}
+                          onChange={(e) => setSmsPhoneNumber(e.target.value)}
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Button
+                  onClick={handleSubmit}
+                  className="w-full shadow-lg"
+                  size="lg"
+                  disabled={createBooking.isPending || createPayment.isPending}
+                >
+                  <CreditCard className="h-5 w-5 mr-2" />
+                  {createBooking.isPending || createPayment.isPending
+                    ? t("booking.processing")
+                    : t("booking.completeBooking")}
+                </Button>
+
+                <Button
+                  onClick={handleSplitPayment}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                  disabled={createBooking.isPending || createPayment.isPending}
+                >
+                  <Split className="h-5 w-5 mr-2" />
+                  {t("splitPayment.splitWithOthers")}
+                </Button>
+              </div>
 
               <p className="text-xs text-muted-foreground text-center mt-4">
                 {t("booking.termsAgree")}
@@ -682,6 +902,27 @@ export default function BookingPage() {
           </div>
         </div>
       </div>
+
+      {/* Split Payment Dialog */}
+      <Dialog open={showSplitPayment} onOpenChange={setShowSplitPayment}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t("splitPayment.title")}</DialogTitle>
+            <DialogDescription>
+              {t("splitPayment.description")}
+            </DialogDescription>
+          </DialogHeader>
+          {createdBookingId && createdBookingRef && (
+            <SplitPaymentForm
+              bookingId={createdBookingId}
+              totalAmount={createdBookingAmount}
+              bookingReference={createdBookingRef}
+              onSuccess={handleSplitPaymentSuccess}
+              onCancel={() => setShowSplitPayment(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardSkeleton } from "@/components/skeletons";
 import {
   Table,
   TableBody,
@@ -174,46 +175,8 @@ function AnimatedProgressBar({
   );
 }
 
-// Loading Skeleton Components
-function LoadingSkeleton() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
-      {/* Header Skeleton */}
-      <header className="bg-white/80 backdrop-blur-sm border-b sticky top-0 z-50">
-        <div className="container py-6">
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-10 w-10 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-4 w-32" />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="container py-8 space-y-6">
-        {/* Stats Skeleton */}
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} className="h-32 rounded-xl" />
-          ))}
-        </div>
-
-        {/* Main Content Skeleton */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <Skeleton className="h-80 rounded-xl" />
-            <Skeleton className="h-96 rounded-xl" />
-          </div>
-          <div className="space-y-6">
-            <Skeleton className="h-64 rounded-xl" />
-            <Skeleton className="h-80 rounded-xl" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+// Loading Skeleton Component - imported from @/components/skeletons
+// Using DashboardSkeleton for consistent loading state
 
 // Tier Benefit Card
 function TierBenefitCard({
@@ -406,7 +369,7 @@ export default function LoyaltyDashboard() {
   }, [transactions]);
 
   if (authLoading || accountLoading) {
-    return <LoadingSkeleton />;
+    return <DashboardSkeleton />;
   }
 
   if (!user) {
