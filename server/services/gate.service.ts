@@ -104,7 +104,9 @@ export async function createGate(input: CreateGateInput) {
     });
 
     const insertId = (result as any).insertId;
-    console.info(`[Gate] Created gate ${input.gateNumber} at airport ${input.airportId}`);
+    console.info(
+      `[Gate] Created gate ${input.gateNumber} at airport ${input.airportId}`
+    );
 
     return { id: insertId, gateNumber: input.gateNumber };
   } catch (error) {
@@ -160,7 +162,9 @@ export async function updateGateStatus(input: UpdateGateStatusInput) {
       })
       .where(eq(airportGates.id, input.gateId));
 
-    console.info(`[Gate] Updated gate ${input.gateId} status to ${input.status}`);
+    console.info(
+      `[Gate] Updated gate ${input.gateId} status to ${input.status}`
+    );
     return { success: true };
   } catch (error) {
     console.error("Error updating gate status:", error);
@@ -192,7 +196,10 @@ export async function getAvailableGates(input: GetAvailableGatesInput) {
       );
     } else if (input.flightType === "international") {
       typeConditions.push(
-        or(eq(airportGates.type, "international"), eq(airportGates.type, "both"))
+        or(
+          eq(airportGates.type, "international"),
+          eq(airportGates.type, "both")
+        )
       );
     }
 
@@ -234,7 +241,9 @@ export async function getAvailableGates(input: GetAvailableGatesInput) {
     const occupiedGateIds = new Set(activeAssignments.map(a => a.gateId));
 
     // Filter out occupied gates
-    const availableGates = allGates.filter(gate => !occupiedGateIds.has(gate.id));
+    const availableGates = allGates.filter(
+      gate => !occupiedGateIds.has(gate.id)
+    );
 
     return availableGates.map(gate => ({
       ...gate,

@@ -33,12 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Ticket,
   Plus,
@@ -115,7 +110,7 @@ export default function VoucherManagement() {
       setFormData(initialFormState);
       refetchVouchers();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message);
     },
   });
@@ -125,7 +120,7 @@ export default function VoucherManagement() {
       toast.success(t("admin.voucher.deactivated"));
       refetchVouchers();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message);
     },
   });
@@ -167,9 +162,10 @@ export default function VoucherManagement() {
 
   const stats = {
     totalVouchers: vouchers?.length ?? 0,
-    activeVouchers: vouchers?.filter((v) => v.isActive).length ?? 0,
+    activeVouchers: vouchers?.filter(v => v.isActive).length ?? 0,
     totalUsage: vouchers?.reduce((sum, v) => sum + v.usedCount, 0) ?? 0,
-    totalCredits: credits?.reduce((sum, c) => sum + c.amount - c.usedAmount, 0) ?? 0,
+    totalCredits:
+      credits?.reduce((sum, c) => sum + c.amount - c.usedAmount, 0) ?? 0,
   };
 
   return (
@@ -206,7 +202,7 @@ export default function VoucherManagement() {
                 <Input
                   id="code"
                   value={formData.code}
-                  onChange={(e) =>
+                  onChange={e =>
                     setFormData({
                       ...formData,
                       code: e.target.value.toUpperCase(),
@@ -249,8 +245,11 @@ export default function VoucherManagement() {
                     type="number"
                     min="0"
                     value={formData.value}
-                    onChange={(e) =>
-                      setFormData({ ...formData, value: Number(e.target.value) })
+                    onChange={e =>
+                      setFormData({
+                        ...formData,
+                        value: Number(e.target.value),
+                      })
                     }
                   />
                 </div>
@@ -265,7 +264,7 @@ export default function VoucherManagement() {
                     type="number"
                     min="0"
                     value={formData.minPurchase}
-                    onChange={(e) =>
+                    onChange={e =>
                       setFormData({
                         ...formData,
                         minPurchase: Number(e.target.value),
@@ -280,7 +279,7 @@ export default function VoucherManagement() {
                     type="number"
                     min="0"
                     value={formData.maxUses ?? ""}
-                    onChange={(e) =>
+                    onChange={e =>
                       setFormData({
                         ...formData,
                         maxUses: e.target.value ? Number(e.target.value) : null,
@@ -299,7 +298,7 @@ export default function VoucherManagement() {
                     id="validFrom"
                     type="date"
                     value={formData.validFrom}
-                    onChange={(e) =>
+                    onChange={e =>
                       setFormData({ ...formData, validFrom: e.target.value })
                     }
                   />
@@ -312,7 +311,7 @@ export default function VoucherManagement() {
                     id="validUntil"
                     type="date"
                     value={formData.validUntil}
-                    onChange={(e) =>
+                    onChange={e =>
                       setFormData({ ...formData, validUntil: e.target.value })
                     }
                   />
@@ -325,7 +324,7 @@ export default function VoucherManagement() {
                 <Input
                   id="description"
                   value={formData.description}
-                  onChange={(e) =>
+                  onChange={e =>
                     setFormData({ ...formData, description: e.target.value })
                   }
                   placeholder={t("admin.voucher.descriptionPlaceholder")}
@@ -335,7 +334,7 @@ export default function VoucherManagement() {
                 <Switch
                   id="isActive"
                   checked={formData.isActive}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={checked =>
                     setFormData({ ...formData, isActive: checked })
                   }
                 />
@@ -416,7 +415,7 @@ export default function VoucherManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {new Set(credits?.map((c) => c.userId) ?? []).size}
+              {new Set(credits?.map(c => c.userId) ?? []).size}
             </div>
             <p className="text-xs text-muted-foreground">
               {t("admin.voucher.usersWithCredits")}
@@ -443,7 +442,7 @@ export default function VoucherManagement() {
             <CardContent className="p-0">
               {vouchersLoading ? (
                 <div className="space-y-4 p-6">
-                  {[1, 2, 3].map((i) => (
+                  {[1, 2, 3].map(i => (
                     <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
@@ -461,7 +460,7 @@ export default function VoucherManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {vouchers?.map((voucher) => (
+                    {vouchers?.map(voucher => (
                       <TableRow key={voucher.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -565,7 +564,7 @@ export default function VoucherManagement() {
             <CardContent className="p-0">
               {creditsLoading ? (
                 <div className="space-y-4 p-6">
-                  {[1, 2, 3].map((i) => (
+                  {[1, 2, 3].map(i => (
                     <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
@@ -582,14 +581,15 @@ export default function VoucherManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {credits?.map((credit) => (
+                    {credits?.map(credit => (
                       <TableRow key={credit.id}>
                         <TableCell>#{credit.userId}</TableCell>
                         <TableCell>
                           {(credit.amount / 100).toFixed(2)} {t("common.sar")}
                         </TableCell>
                         <TableCell>
-                          {(credit.usedAmount / 100).toFixed(2)} {t("common.sar")}
+                          {(credit.usedAmount / 100).toFixed(2)}{" "}
+                          {t("common.sar")}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">

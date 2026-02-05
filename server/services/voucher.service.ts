@@ -548,10 +548,7 @@ export async function useCredit(
         and(
           eq(userCredits.userId, userId),
           or(isNull(userCredits.expiresAt), gte(userCredits.expiresAt, now)),
-          gt(
-            sql`${userCredits.amount} - ${userCredits.usedAmount}`,
-            0
-          )
+          gt(sql`${userCredits.amount} - ${userCredits.usedAmount}`, 0)
         )
       )
       .orderBy(userCredits.expiresAt, userCredits.createdAt);
@@ -664,10 +661,7 @@ export async function processExpiredCredits() {
       .where(
         and(
           lte(userCredits.expiresAt, now),
-          gt(
-            sql`${userCredits.amount} - ${userCredits.usedAmount}`,
-            0
-          )
+          gt(sql`${userCredits.amount} - ${userCredits.usedAmount}`, 0)
         )
       );
 

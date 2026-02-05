@@ -35,12 +35,8 @@ const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
 const GroupBookingsManagement = lazy(
   () => import("./pages/admin/GroupBookingsManagement")
 );
-const VoucherManagement = lazy(
-  () => import("./pages/admin/VoucherManagement")
-);
-const GateManagement = lazy(
-  () => import("./pages/admin/GateManagement")
-);
+const VoucherManagement = lazy(() => import("./pages/admin/VoucherManagement"));
+const GateManagement = lazy(() => import("./pages/admin/GateManagement"));
 
 // Group booking pages
 const GroupBookingRequest = lazy(() => import("./pages/GroupBookingRequest"));

@@ -40,9 +40,7 @@ export function CreditBalance({
   const balance = creditData?.balance ?? 0;
   const credits = creditData?.credits ?? [];
 
-  const applicableAmount = maxAmount
-    ? Math.min(balance, maxAmount)
-    : balance;
+  const applicableAmount = maxAmount ? Math.min(balance, maxAmount) : balance;
 
   const handleToggleCredits = (checked: boolean) => {
     setUseFullBalance(checked);
@@ -112,7 +110,7 @@ export function CreditBalance({
               {t("credits.breakdown")}
             </Label>
             <div className="max-h-32 space-y-1 overflow-y-auto">
-              {credits.map((credit) => (
+              {credits.map(credit => (
                 <div
                   key={credit.id}
                   className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2 text-sm"

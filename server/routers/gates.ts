@@ -112,10 +112,7 @@ export const gatesRouter = router({
       z.object({
         flightId: z.number().describe("Flight ID"),
         gateId: z.number().describe("Gate ID to assign"),
-        boardingStartTime: z
-          .date()
-          .optional()
-          .describe("Boarding start time"),
+        boardingStartTime: z.date().optional().describe("Boarding start time"),
         boardingEndTime: z.date().optional().describe("Boarding end time"),
       })
     )
@@ -262,10 +259,7 @@ export const gatesRouter = router({
           .max(50)
           .optional()
           .describe("Aircraft capacity (e.g., narrow-body, wide-body)"),
-        amenities: z
-          .array(z.string())
-          .optional()
-          .describe("List of amenities"),
+        amenities: z.array(z.string()).optional().describe("List of amenities"),
       })
     )
     .mutation(async ({ input }) => {
@@ -359,8 +353,7 @@ export const gatesRouter = router({
         path: "/gates/notify",
         tags: ["Gates", "Admin"],
         summary: "Send gate change notification",
-        description:
-          "Manually trigger gate change notifications for a flight.",
+        description: "Manually trigger gate change notifications for a flight.",
       },
     })
     .input(

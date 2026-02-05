@@ -31,7 +31,7 @@ export function VoucherInput({
   const [isValidating, setIsValidating] = useState(false);
 
   const validateMutation = trpc.vouchers.validate.useMutation({
-    onSuccess: (data) => {
+    onSuccess: data => {
       if (data.valid) {
         onVoucherApplied(data.discountAmount, data.voucher.code);
         toast.success(
@@ -42,7 +42,7 @@ export function VoucherInput({
         setCode("");
       }
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message);
     },
     onSettled: () => {
@@ -113,7 +113,7 @@ export function VoucherInput({
             id="voucher-code"
             type="text"
             value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            onChange={e => setCode(e.target.value.toUpperCase())}
             onKeyDown={handleKeyDown}
             placeholder={t("voucher.placeholder")}
             className="pl-10 uppercase"

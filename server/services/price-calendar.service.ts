@@ -232,7 +232,8 @@ export async function getFlexiblePrices(
 
   try {
     // Try to get from cache
-    const cached = await redisCacheService.getRaw<FlexiblePriceResult>(cacheKey);
+    const cached =
+      await redisCacheService.getRaw<FlexiblePriceResult>(cacheKey);
     if (cached) {
       return cached;
     }

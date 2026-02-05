@@ -96,14 +96,18 @@ export function GateChangeAlert({
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 rounded-lg bg-white px-4 py-2 dark:bg-amber-900">
             <div className="text-center">
-              <p className="text-xs text-muted-foreground">{t("gates.oldGate")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("gates.oldGate")}
+              </p>
               <p className="font-mono text-lg font-bold line-through opacity-60">
                 {oldGate}
               </p>
             </div>
             <ArrowRight className="h-5 w-5 text-amber-600" />
             <div className="text-center">
-              <p className="text-xs text-muted-foreground">{t("gates.newGate")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("gates.newGate")}
+              </p>
               <p className="font-mono text-lg font-bold text-amber-700 dark:text-amber-300">
                 {newGate}
               </p>
@@ -147,7 +151,9 @@ export function GateChangeAlert({
           {/* Gate change display */}
           <div className="flex items-center gap-4 rounded-lg bg-white p-3 dark:bg-amber-900/50">
             <div className="flex-1">
-              <p className="text-xs text-muted-foreground">{t("gates.oldGate")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("gates.oldGate")}
+              </p>
               <div className="flex items-center gap-2">
                 <DoorOpen className="h-4 w-4 text-muted-foreground" />
                 <span className="font-mono text-lg font-semibold line-through opacity-60">
@@ -165,7 +171,9 @@ export function GateChangeAlert({
             <ArrowRight className="h-6 w-6 text-amber-500" />
 
             <div className="flex-1">
-              <p className="text-xs text-muted-foreground">{t("gates.newGate")}</p>
+              <p className="text-xs text-muted-foreground">
+                {t("gates.newGate")}
+              </p>
               <div className="flex items-center gap-2">
                 <DoorOpen className="h-4 w-4 text-amber-600" />
                 <span className="font-mono text-lg font-bold text-amber-700 dark:text-amber-300">

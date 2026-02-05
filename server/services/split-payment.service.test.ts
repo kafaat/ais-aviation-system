@@ -73,11 +73,7 @@ describe("Split Payment Service", () => {
 
     it("should sum to 100% for valid splits", () => {
       const totalAmount = 100000;
-      const splits = [
-        { amount: 30000 },
-        { amount: 50000 },
-        { amount: 20000 },
-      ];
+      const splits = [{ amount: 30000 }, { amount: 50000 }, { amount: 20000 }];
 
       const totalPercentage = splits.reduce(
         (sum, split) => sum + (split.amount / totalAmount) * 100,
@@ -140,11 +136,7 @@ describe("Split Payment Service", () => {
     });
 
     it("should accept valid split amounts", () => {
-      const splits = [
-        { amount: 50000 },
-        { amount: 30000 },
-        { amount: 20000 },
-      ];
+      const splits = [{ amount: 50000 }, { amount: 30000 }, { amount: 20000 }];
 
       const allValid = splits.every(s => s.amount >= MIN_SPLIT_AMOUNT);
       expect(allValid).toBe(true);

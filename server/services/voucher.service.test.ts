@@ -165,9 +165,24 @@ describe("Voucher Service", () => {
     it("should use credits in order (oldest first)", () => {
       // Simulating FIFO credit usage
       const credits = [
-        { id: 1, amount: 2000, usedAmount: 0, createdAt: new Date("2024-01-01") },
-        { id: 2, amount: 3000, usedAmount: 0, createdAt: new Date("2024-02-01") },
-        { id: 3, amount: 1000, usedAmount: 0, createdAt: new Date("2024-03-01") },
+        {
+          id: 1,
+          amount: 2000,
+          usedAmount: 0,
+          createdAt: new Date("2024-01-01"),
+        },
+        {
+          id: 2,
+          amount: 3000,
+          usedAmount: 0,
+          createdAt: new Date("2024-02-01"),
+        },
+        {
+          id: 3,
+          amount: 1000,
+          usedAmount: 0,
+          createdAt: new Date("2024-03-01"),
+        },
       ];
 
       // Sort by creation date (oldest first)
@@ -197,9 +212,7 @@ describe("Voucher Service", () => {
     });
 
     it("should handle insufficient credits", () => {
-      const credits = [
-        { id: 1, amount: 1000, usedAmount: 500 },
-      ];
+      const credits = [{ id: 1, amount: 1000, usedAmount: 500 }];
 
       const totalAvailable = credits.reduce(
         (sum, c) => sum + (c.amount - c.usedAmount),

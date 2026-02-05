@@ -35,11 +35,7 @@ export const smsRouter = router({
           .max(100)
           .default(20)
           .describe("Maximum logs to return"),
-        offset: z
-          .number()
-          .min(0)
-          .default(0)
-          .describe("Number of logs to skip"),
+        offset: z.number().min(0).default(0).describe("Number of logs to skip"),
         type: z
           .enum([
             "booking_confirmation",
@@ -317,7 +313,8 @@ export const smsRouter = router({
         path: "/admin/sms/send-templated",
         tags: ["SMS", "Admin"],
         summary: "Send templated SMS",
-        description: "Admin endpoint to send an SMS using a predefined template.",
+        description:
+          "Admin endpoint to send an SMS using a predefined template.",
         protect: true,
       },
     })
@@ -340,7 +337,10 @@ export const smsRouter = router({
         variables: z
           .record(z.string(), z.string())
           .describe("Template variables"),
-        language: z.enum(["ar", "en"]).default("ar").describe("Message language"),
+        language: z
+          .enum(["ar", "en"])
+          .default("ar")
+          .describe("Message language"),
         bookingId: z.number().optional().describe("Related booking ID"),
         flightId: z.number().optional().describe("Related flight ID"),
       })

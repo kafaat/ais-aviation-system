@@ -2993,8 +2993,12 @@ export const userCredits = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     userId: int("userId").notNull(), // User who owns the credit
     amount: int("amount").notNull(), // Credit amount in cents
-    source: mysqlEnum("source", ["refund", "promo", "compensation", "bonus"])
-      .notNull(), // Source of credit
+    source: mysqlEnum("source", [
+      "refund",
+      "promo",
+      "compensation",
+      "bonus",
+    ]).notNull(), // Source of credit
     description: text("description"), // Description of why credit was given
     expiresAt: timestamp("expiresAt"), // Expiration date (null = never expires)
     usedAmount: int("usedAmount").default(0).notNull(), // Amount already used

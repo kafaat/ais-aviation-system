@@ -3,22 +3,23 @@
 ## What's Changed in v1.1.1
 
 ### Bug Fixes
+
 - fix: handle repository-dispatch permission issue gracefully (2c3fe3c)
 - fix: resolve duplicate import errors in MyBookings and SearchResults (248c94c)
 - fix: make dependency review optional when Dependency Graph is disabled (f14c385)
 - fix: update lockfile and fix breaking changes check script (6134101)
 
 ### Maintenance
+
 - chore: trigger CI rebuild (bea3dff)
 
 ### Other Changes
+
 - style: fix Prettier formatting issues across codebase (40ebac1)
 - Merge branch 'main' into claude/add-claude-documentation-hFQZh (3de320d)
 - Merge pull request #39 from kafaat/claude/add-claude-documentation-hFQZh (b6c18e5)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.1.0...v1.1.1
-
 
 ---
 

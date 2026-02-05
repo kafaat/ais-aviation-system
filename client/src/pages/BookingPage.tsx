@@ -839,13 +839,17 @@ export default function BookingPage() {
                   {voucherDiscount > 0 && (
                     <div className="flex justify-between items-center mb-2 text-green-600">
                       <span className="text-sm">{t("voucher.title")}</span>
-                      <span>-{voucherDiscount.toFixed(2)} {t("common.currency")}</span>
+                      <span>
+                        -{voucherDiscount.toFixed(2)} {t("common.currency")}
+                      </span>
                     </div>
                   )}
                   {creditDiscount > 0 && (
                     <div className="flex justify-between items-center mb-2 text-green-600">
                       <span className="text-sm">{t("credits.title")}</span>
-                      <span>-{creditDiscount.toFixed(2)} {t("common.currency")}</span>
+                      <span>
+                        -{creditDiscount.toFixed(2)} {t("common.currency")}
+                      </span>
                     </div>
                   )}
                   <div className="flex justify-between items-center text-lg font-bold mt-4 pt-4 border-t">
@@ -908,7 +912,7 @@ export default function BookingPage() {
                           type="tel"
                           placeholder={t("sms.phoneNumberPlaceholder")}
                           value={smsPhoneNumber}
-                          onChange={(e) => setSmsPhoneNumber(e.target.value)}
+                          onChange={e => setSmsPhoneNumber(e.target.value)}
                           className="h-9 text-sm"
                         />
                       </div>

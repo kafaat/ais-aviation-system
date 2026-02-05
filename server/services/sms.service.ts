@@ -659,7 +659,14 @@ export async function getSMSLogs(
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
-    const { limit = 50, offset = 0, type, status, startDate, endDate } = options;
+    const {
+      limit = 50,
+      offset = 0,
+      type,
+      status,
+      startDate,
+      endDate,
+    } = options;
 
     // Build conditions
     const conditions = [eq(smsLogs.userId, userId)];
@@ -708,7 +715,14 @@ export async function getAllSMSLogs(
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
-    const { limit = 50, offset = 0, type, status, startDate, endDate } = options;
+    const {
+      limit = 50,
+      offset = 0,
+      type,
+      status,
+      startDate,
+      endDate,
+    } = options;
 
     // Build conditions
     const conditions: ReturnType<typeof eq>[] = [];
@@ -729,8 +743,7 @@ export async function getAllSMSLogs(
       conditions.push(sql`${smsLogs.createdAt} <= ${endDate}` as any);
     }
 
-    const whereClause =
-      conditions.length > 0 ? and(...conditions) : undefined;
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     // Get logs
     const logs = await db
@@ -810,19 +823,14 @@ export async function getSMSStats(): Promise<{
       .select({ count: count() })
       .from(smsLogs)
       .where(
-        and(
-          eq(smsLogs.status, "sent"),
-          sql`${smsLogs.createdAt} >= ${today}`
-        )
+        and(eq(smsLogs.status, "sent"), sql`${smsLogs.createdAt} >= ${today}`)
       );
 
     // Process results
     const statusMap = Object.fromEntries(
       statusCounts.map(r => [r.status, r.count])
     );
-    const typeMap = Object.fromEntries(
-      typeCounts.map(r => [r.type, r.count])
-    );
+    const typeMap = Object.fromEntries(typeCounts.map(r => [r.type, r.count]));
     const providerMap = Object.fromEntries(
       providerCounts.map(r => [r.provider, r.count])
     );

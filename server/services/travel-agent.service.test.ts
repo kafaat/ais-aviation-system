@@ -93,7 +93,10 @@ describe("Travel Agent Service", () => {
       const hash = crypto.createHash("sha256").update(secret).digest("hex");
 
       // Correct secret should verify
-      const inputHash = crypto.createHash("sha256").update(secret).digest("hex");
+      const inputHash = crypto
+        .createHash("sha256")
+        .update(secret)
+        .digest("hex");
       expect(inputHash).toBe(hash);
 
       // Incorrect secret should not verify
@@ -110,7 +113,9 @@ describe("Travel Agent Service", () => {
       const bookingAmount = 100000; // 1000 SAR in cents
       const commissionRate = 5; // 5%
 
-      const commissionAmount = Math.round((bookingAmount * commissionRate) / 100);
+      const commissionAmount = Math.round(
+        (bookingAmount * commissionRate) / 100
+      );
       expect(commissionAmount).toBe(5000); // 50 SAR in cents
     });
 
@@ -118,7 +123,9 @@ describe("Travel Agent Service", () => {
       const bookingAmount = 100000;
       const commissionRate = 7.5;
 
-      const commissionAmount = Math.round((bookingAmount * commissionRate) / 100);
+      const commissionAmount = Math.round(
+        (bookingAmount * commissionRate) / 100
+      );
       expect(commissionAmount).toBe(7500);
     });
 
@@ -126,7 +133,9 @@ describe("Travel Agent Service", () => {
       const bookingAmount = 100000;
       const commissionRate = 0;
 
-      const commissionAmount = Math.round((bookingAmount * commissionRate) / 100);
+      const commissionAmount = Math.round(
+        (bookingAmount * commissionRate) / 100
+      );
       expect(commissionAmount).toBe(0);
     });
 
@@ -134,7 +143,9 @@ describe("Travel Agent Service", () => {
       const bookingAmount = 10000000; // 100,000 SAR in cents
       const commissionRate = 10;
 
-      const commissionAmount = Math.round((bookingAmount * commissionRate) / 100);
+      const commissionAmount = Math.round(
+        (bookingAmount * commissionRate) / 100
+      );
       expect(commissionAmount).toBe(1000000); // 10,000 SAR in cents
     });
   });
@@ -292,7 +303,10 @@ describe("Travel Agent Service", () => {
         { bookingAmount: 100000 },
       ];
 
-      const totalRevenue = bookings.reduce((sum, b) => sum + b.bookingAmount, 0);
+      const totalRevenue = bookings.reduce(
+        (sum, b) => sum + b.bookingAmount,
+        0
+      );
       expect(totalRevenue).toBe(225000);
     });
 

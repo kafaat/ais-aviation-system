@@ -32,12 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DoorOpen,
   Plus,
@@ -82,7 +77,9 @@ export default function GateManagement() {
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [formData, setFormData] = useState<CreateGateForm>(initialFormState);
-  const [selectedAirportId, setSelectedAirportId] = useState<number | null>(null);
+  const [selectedAirportId, setSelectedAirportId] = useState<number | null>(
+    null
+  );
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
@@ -121,7 +118,7 @@ export default function GateManagement() {
       setFormData(initialFormState);
       refetchGates();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message);
     },
   });
@@ -131,7 +128,7 @@ export default function GateManagement() {
       toast.success(t("admin.gates.statusUpdated"));
       refetchGates();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message);
     },
   });
@@ -141,7 +138,7 @@ export default function GateManagement() {
       toast.success(t("admin.gates.deleted"));
       refetchGates();
     },
-    onError: (error) => {
+    onError: error => {
       toast.error(error.message);
     },
   });
@@ -215,7 +212,9 @@ export default function GateManagement() {
       case "domestic":
         return <Badge variant="outline">{t("admin.gates.typeDomestic")}</Badge>;
       case "international":
-        return <Badge variant="outline">{t("admin.gates.typeInternational")}</Badge>;
+        return (
+          <Badge variant="outline">{t("admin.gates.typeInternational")}</Badge>
+        );
       case "both":
         return <Badge variant="secondary">{t("admin.gates.typeBoth")}</Badge>;
     }
@@ -231,7 +230,9 @@ export default function GateManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{t("admin.gates.title")}</h1>
-          <p className="text-muted-foreground">{t("admin.gates.description")}</p>
+          <p className="text-muted-foreground">
+            {t("admin.gates.description")}
+          </p>
         </div>
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
@@ -252,7 +253,7 @@ export default function GateManagement() {
                 <Label htmlFor="airport">{t("admin.gates.airport")}</Label>
                 <Select
                   value={formData.airportId?.toString() ?? ""}
-                  onValueChange={(value) =>
+                  onValueChange={value =>
                     setFormData({ ...formData, airportId: parseInt(value) })
                   }
                 >
@@ -260,8 +261,11 @@ export default function GateManagement() {
                     <SelectValue placeholder={t("admin.gates.selectAirport")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {airports?.map((airport) => (
-                      <SelectItem key={airport.id} value={airport.id.toString()}>
+                    {airports?.map(airport => (
+                      <SelectItem
+                        key={airport.id}
+                        value={airport.id.toString()}
+                      >
                         {airport.code} - {airport.name}
                       </SelectItem>
                     ))}
@@ -270,11 +274,13 @@ export default function GateManagement() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="gateNumber">{t("admin.gates.gateNumber")}</Label>
+                  <Label htmlFor="gateNumber">
+                    {t("admin.gates.gateNumber")}
+                  </Label>
                   <Input
                     id="gateNumber"
                     value={formData.gateNumber}
-                    onChange={(e) =>
+                    onChange={e =>
                       setFormData({
                         ...formData,
                         gateNumber: e.target.value.toUpperCase(),
@@ -289,7 +295,7 @@ export default function GateManagement() {
                   <Input
                     id="terminal"
                     value={formData.terminal}
-                    onChange={(e) =>
+                    onChange={e =>
                       setFormData({ ...formData, terminal: e.target.value })
                     }
                     placeholder="1"
@@ -325,12 +331,14 @@ export default function GateManagement() {
                   <Label htmlFor="capacity">{t("admin.gates.capacity")}</Label>
                   <Select
                     value={formData.capacity}
-                    onValueChange={(value) =>
+                    onValueChange={value =>
                       setFormData({ ...formData, capacity: value })
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t("admin.gates.selectCapacity")} />
+                      <SelectValue
+                        placeholder={t("admin.gates.selectCapacity")}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="narrow-body">Narrow-body</SelectItem>
@@ -367,16 +375,18 @@ export default function GateManagement() {
         <CardContent className="pt-6">
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <Label htmlFor="airport-filter">{t("admin.gates.filterByAirport")}</Label>
+              <Label htmlFor="airport-filter">
+                {t("admin.gates.filterByAirport")}
+              </Label>
               <Select
                 value={selectedAirportId?.toString() ?? ""}
-                onValueChange={(value) => setSelectedAirportId(parseInt(value))}
+                onValueChange={value => setSelectedAirportId(parseInt(value))}
               >
                 <SelectTrigger className="mt-2">
                   <SelectValue placeholder={t("admin.gates.selectAirport")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {airports?.map((airport) => (
+                  {airports?.map(airport => (
                     <SelectItem key={airport.id} value={airport.id.toString()}>
                       {airport.code} - {airport.name}
                     </SelectItem>
@@ -474,7 +484,7 @@ export default function GateManagement() {
               <CardContent className="p-0">
                 {gatesLoading ? (
                   <div className="space-y-4 p-6">
-                    {[1, 2, 3].map((i) => (
+                    {[1, 2, 3].map(i => (
                       <Skeleton key={i} className="h-16 w-full" />
                     ))}
                   </div>
@@ -491,7 +501,7 @@ export default function GateManagement() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {gates?.map((gate) => (
+                      {gates?.map(gate => (
                         <TableRow key={gate.id}>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -511,9 +521,13 @@ export default function GateManagement() {
                               "-"
                             )}
                           </TableCell>
-                          <TableCell>{getTypeBadge(gate.type as GateType)}</TableCell>
+                          <TableCell>
+                            {getTypeBadge(gate.type as GateType)}
+                          </TableCell>
                           <TableCell>{gate.capacity || "-"}</TableCell>
-                          <TableCell>{getStatusBadge(gate.status as GateStatus)}</TableCell>
+                          <TableCell>
+                            {getStatusBadge(gate.status as GateStatus)}
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Select
@@ -574,7 +588,7 @@ export default function GateManagement() {
                   <Input
                     type="date"
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+                    onChange={e => setSelectedDate(e.target.value)}
                     className="w-auto"
                   />
                 </div>
@@ -582,21 +596,20 @@ export default function GateManagement() {
               <CardContent>
                 {scheduleLoading ? (
                   <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
+                    {[1, 2, 3].map(i => (
                       <Skeleton key={i} className="h-24 w-full" />
                     ))}
                   </div>
                 ) : scheduleData?.gates && scheduleData.gates.length > 0 ? (
                   <div className="space-y-4">
-                    {scheduleData.gates.map((gate) => (
-                      <div
-                        key={gate.id}
-                        className="rounded-lg border p-4"
-                      >
+                    {scheduleData.gates.map(gate => (
+                      <div key={gate.id} className="rounded-lg border p-4">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <DoorOpen className="h-5 w-5" />
-                            <span className="font-semibold">{gate.gateNumber}</span>
+                            <span className="font-semibold">
+                              {gate.gateNumber}
+                            </span>
                             {gate.terminal && (
                               <Badge variant="outline">
                                 <Building2 className="mr-1 h-3 w-3" />
@@ -608,7 +621,7 @@ export default function GateManagement() {
                         </div>
                         {gate.assignments && gate.assignments.length > 0 ? (
                           <div className="space-y-2">
-                            {gate.assignments.map((assignment) => (
+                            {gate.assignments.map(assignment => (
                               <div
                                 key={assignment.id}
                                 className="flex items-center justify-between rounded bg-muted/50 p-2 text-sm"
