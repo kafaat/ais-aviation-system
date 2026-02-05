@@ -84,7 +84,8 @@ describe("RedisCacheService", () => {
     it("should cache flight search results", async () => {
       await redisCacheService.cacheFlightSearch(searchParams, searchResults);
 
-      const cached = await redisCacheService.getCachedFlightSearch(searchParams);
+      const cached =
+        await redisCacheService.getCachedFlightSearch(searchParams);
 
       expect(cached).toEqual(searchResults);
     });
@@ -201,7 +202,8 @@ describe("RedisCacheService", () => {
       await redisCacheService.invalidateFlightSearchCache();
 
       // After invalidation, namespace version is bumped, so old keys won't be found
-      const cached = await redisCacheService.getCachedFlightSearch(searchParams);
+      const cached =
+        await redisCacheService.getCachedFlightSearch(searchParams);
       expect(cached).toBeNull();
     });
   });
@@ -221,7 +223,12 @@ describe("RedisCacheService", () => {
   describe("Statistics", () => {
     it("should track cache statistics", async () => {
       // Perform some cache operations
-      await redisCacheService.set(CacheNamespace.SEARCH, { test: 1 }, { data: 1 }, 60);
+      await redisCacheService.set(
+        CacheNamespace.SEARCH,
+        { test: 1 },
+        { data: 1 },
+        60
+      );
       await redisCacheService.get(CacheNamespace.SEARCH, { test: 1 });
       await redisCacheService.get(CacheNamespace.SEARCH, { test: 2 }); // miss
 

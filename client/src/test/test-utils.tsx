@@ -15,9 +15,24 @@ import { vi } from "vitest";
 // ============================================================================
 
 export const mockAirports = [
-  { id: 1, code: "RUH", city: "Riyadh", name: "King Khalid International Airport" },
-  { id: 2, code: "JED", city: "Jeddah", name: "King Abdulaziz International Airport" },
-  { id: 3, code: "DMM", city: "Dammam", name: "King Fahd International Airport" },
+  {
+    id: 1,
+    code: "RUH",
+    city: "Riyadh",
+    name: "King Khalid International Airport",
+  },
+  {
+    id: 2,
+    code: "JED",
+    city: "Jeddah",
+    name: "King Abdulaziz International Airport",
+  },
+  {
+    id: 3,
+    code: "DMM",
+    city: "Dammam",
+    name: "King Fahd International Airport",
+  },
 ];
 
 export const mockFlight = {
@@ -234,7 +249,9 @@ export const createMockTrpc = () => {
       remove: { useMutation: vi.fn(() => mockMutation()) },
     },
     userPreferences: {
-      getMyPreferences: { useQuery: vi.fn(() => mockQuery(mockUserPreferences)) },
+      getMyPreferences: {
+        useQuery: vi.fn(() => mockQuery(mockUserPreferences)),
+      },
       updateMyPreferences: { useMutation: vi.fn(() => mockMutation()) },
     },
     useUtils: vi.fn(() => ({
@@ -248,7 +265,9 @@ export const createMockTrpc = () => {
 // Mock Auth Hook
 // ============================================================================
 
-export const createMockAuthHook = (user: typeof mockUser | null = mockUser) => ({
+export const createMockAuthHook = (
+  user: typeof mockUser | null = mockUser
+) => ({
   user,
   loading: false,
   error: null,
@@ -296,9 +315,7 @@ export const AllProviders = ({ children }: AllProvidersProps) => {
   const queryClient = createTestQueryClient();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 };
 
@@ -328,7 +345,7 @@ export const waitForCondition = async (
 ): Promise<void> => {
   const startTime = Date.now();
   while (!condition() && Date.now() - startTime < timeout) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
   if (!condition()) {
     throw new Error("Condition not met within timeout");

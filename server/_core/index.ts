@@ -240,22 +240,13 @@ async function startServer() {
   );
 
   // Auth endpoints get stricter rate limiting
-  app.use(
-    "/api/trpc/auth",
-    createStrictRateLimitMiddleware("auth")
-  );
+  app.use("/api/trpc/auth", createStrictRateLimitMiddleware("auth"));
 
   // Payment endpoints get stricter rate limiting
-  app.use(
-    "/api/trpc/payments",
-    createStrictRateLimitMiddleware("payment")
-  );
+  app.use("/api/trpc/payments", createStrictRateLimitMiddleware("payment"));
 
   // Booking creation gets stricter rate limiting
-  app.use(
-    "/api/trpc/bookings",
-    createStrictRateLimitMiddleware("booking")
-  );
+  app.use("/api/trpc/bookings", createStrictRateLimitMiddleware("booking"));
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
@@ -273,16 +264,25 @@ async function startServer() {
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
-    log.info({ event: "port_fallback", preferredPort, actualPort: port }, `Port ${preferredPort} is busy, using port ${port} instead`);
+    log.info(
+      { event: "port_fallback", preferredPort, actualPort: port },
+      `Port ${preferredPort} is busy, using port ${port} instead`
+    );
   }
 
   server.listen(port, () => {
-    log.info({ event: "server_started", port, env: process.env.NODE_ENV }, `Server running on http://localhost:${port}/`);
+    log.info(
+      { event: "server_started", port, env: process.env.NODE_ENV },
+      `Server running on http://localhost:${port}/`
+    );
   });
 
   // Graceful shutdown
   const gracefulShutdown = async (signal: string) => {
-    log.info({ event: "shutdown_initiated", signal }, `${signal} received. Starting graceful shutdown...`);
+    log.info(
+      { event: "shutdown_initiated", signal },
+      `${signal} received. Starting graceful shutdown...`
+    );
 
     server.close(async () => {
       log.info({ event: "http_server_closed" }, "HTTP server closed.");
@@ -296,7 +296,10 @@ async function startServer() {
         await flushSentry(2000);
         log.info({ event: "sentry_flushed" }, "Sentry events flushed.");
       } catch (error) {
-        log.error({ event: "sentry_flush_error", error }, "Error flushing Sentry");
+        log.error(
+          { event: "sentry_flush_error", error },
+          "Error flushing Sentry"
+        );
       }
 
       // Close database connections
@@ -304,10 +307,16 @@ async function startServer() {
         const { getDb } = await import("../db.js");
         const db = await getDb();
         if (db) {
-          log.info({ event: "database_closed" }, "Database connections closed.");
+          log.info(
+            { event: "database_closed" },
+            "Database connections closed."
+          );
         }
       } catch (error) {
-        log.error({ event: "database_close_error", error }, "Error closing database");
+        log.error(
+          { event: "database_close_error", error },
+          "Error closing database"
+        );
       }
 
       log.info({ event: "shutdown_completed" }, "Graceful shutdown completed.");
@@ -316,7 +325,10 @@ async function startServer() {
 
     // Force shutdown after 10 seconds
     setTimeout(() => {
-      log.error({ event: "forced_shutdown" }, "Forceful shutdown after timeout.");
+      log.error(
+        { event: "forced_shutdown" },
+        "Forceful shutdown after timeout."
+      );
       process.exit(1);
     }, 10000);
   };
@@ -325,7 +337,7 @@ async function startServer() {
   process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 
-startServer().catch((error) => {
+startServer().catch(error => {
   log.fatal(error, "Server startup failed");
   process.exit(1);
 });

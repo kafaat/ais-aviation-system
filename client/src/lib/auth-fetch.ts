@@ -75,12 +75,19 @@ export function isTokenExpired(): boolean {
 /**
  * Store new tokens
  */
-function storeTokens(accessToken: string, refreshToken: string, expiresIn: number): void {
+function storeTokens(
+  accessToken: string,
+  refreshToken: string,
+  expiresIn: number
+): void {
   try {
     const expiresAt = Date.now() + expiresIn * 1000;
     localStorage.setItem(AUTH_STORAGE_KEYS.ACCESS_TOKEN, accessToken);
     localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
-    localStorage.setItem(AUTH_STORAGE_KEYS.TOKEN_EXPIRES_AT, expiresAt.toString());
+    localStorage.setItem(
+      AUTH_STORAGE_KEYS.TOKEN_EXPIRES_AT,
+      expiresAt.toString()
+    );
   } catch (error) {
     console.error("[Auth] Failed to store tokens:", error);
   }

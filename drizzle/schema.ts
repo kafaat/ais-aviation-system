@@ -1696,7 +1696,9 @@ export const userConsents = mysqlTable(
 
     // Personalization
     personalizedAds: boolean("personalizedAds").default(false).notNull(),
-    personalizedContent: boolean("personalizedContent").default(false).notNull(),
+    personalizedContent: boolean("personalizedContent")
+      .default(false)
+      .notNull(),
 
     // Consent metadata
     consentVersion: varchar("consentVersion", { length: 20 })
@@ -1707,12 +1709,17 @@ export const userConsents = mysqlTable(
 
     // Timestamps
     consentGivenAt: timestamp("consentGivenAt").defaultNow().notNull(),
-    lastUpdatedAt: timestamp("lastUpdatedAt").defaultNow().onUpdateNow().notNull(),
+    lastUpdatedAt: timestamp("lastUpdatedAt")
+      .defaultNow()
+      .onUpdateNow()
+      .notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
     userIdIdx: index("user_consents_user_id_idx").on(table.userId),
-    consentVersionIdx: index("user_consents_version_idx").on(table.consentVersion),
+    consentVersionIdx: index("user_consents_version_idx").on(
+      table.consentVersion
+    ),
   })
 );
 
@@ -1786,9 +1793,7 @@ export const dataExportRequests = mysqlTable(
       .notNull(),
 
     // Export format
-    format: mysqlEnum("format", ["json", "csv"])
-      .default("json")
-      .notNull(),
+    format: mysqlEnum("format", ["json", "csv"]).default("json").notNull(),
 
     // Export details
     downloadUrl: text("downloadUrl"), // Temporary signed URL
@@ -1879,7 +1884,8 @@ export const accountDeletionRequests = mysqlTable(
   })
 );
 
-export type AccountDeletionRequest = typeof accountDeletionRequests.$inferSelect;
+export type AccountDeletionRequest =
+  typeof accountDeletionRequests.$inferSelect;
 export type InsertAccountDeletionRequest =
   typeof accountDeletionRequests.$inferInsert;
 

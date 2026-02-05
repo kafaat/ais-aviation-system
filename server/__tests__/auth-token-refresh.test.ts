@@ -9,9 +9,8 @@ import { describe, it, expect } from "vitest";
 
 describe("Auth Token Types", () => {
   it("should export correct type definitions", async () => {
-    const { AUTH_STORAGE_KEYS, TOKEN_TIMING } = await import(
-      "../../shared/auth.types"
-    );
+    const { AUTH_STORAGE_KEYS, TOKEN_TIMING } =
+      await import("../../shared/auth.types");
 
     expect(AUTH_STORAGE_KEYS.ACCESS_TOKEN).toBe("ais_access_token");
     expect(AUTH_STORAGE_KEYS.REFRESH_TOKEN).toBe("ais_refresh_token");

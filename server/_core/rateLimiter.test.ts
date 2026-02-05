@@ -28,7 +28,11 @@ vi.mock("../services/rate-limit.service", () => ({
   rateLimitService: {},
   RATE_LIMIT_TIERS: {
     anonymous: { name: "anonymous", requestsPerWindow: 60, windowMs: 60000 },
-    authenticated: { name: "authenticated", requestsPerWindow: 120, windowMs: 60000 },
+    authenticated: {
+      name: "authenticated",
+      requestsPerWindow: 120,
+      windowMs: 60000,
+    },
   },
   STRICT_RATE_LIMITS: {
     auth: { name: "auth", requestsPerWindow: 5, windowMs: 900000 },

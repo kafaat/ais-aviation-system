@@ -18,7 +18,7 @@ export function sentryErrorMiddleware(
     return;
   }
 
-  Sentry.withScope((scope) => {
+  Sentry.withScope(scope => {
     // Set request context
     scope.setTag("transaction_id", req.id || "unknown");
     scope.setTag("path", req.path);
@@ -30,7 +30,9 @@ export function sentryErrorMiddleware(
     scope.setExtra("headers", sanitizeHeaders(req.headers));
 
     // Add user context if available
-    const user = (req as Request & { user?: { id: string; email?: string; role?: string } }).user;
+    const user = (
+      req as Request & { user?: { id: string; email?: string; role?: string } }
+    ).user;
     if (user) {
       scope.setUser({
         id: user.id,
@@ -40,7 +42,8 @@ export function sentryErrorMiddleware(
     }
 
     // Set error level based on status code
-    const statusCode = (err as Error & { statusCode?: number }).statusCode || 500;
+    const statusCode =
+      (err as Error & { statusCode?: number }).statusCode || 500;
     if (statusCode >= 500) {
       scope.setLevel("error");
     } else if (statusCode >= 400) {
@@ -116,7 +119,7 @@ function sanitizeBody(body: unknown): unknown {
 
   for (const key of Object.keys(sanitized)) {
     const lowerKey = key.toLowerCase();
-    if (sensitiveKeys.some((sensitive) => lowerKey.includes(sensitive))) {
+    if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
       sanitized[key] = "[REDACTED]";
     }
   }

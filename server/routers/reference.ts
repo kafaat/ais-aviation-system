@@ -1,9 +1,6 @@
 import { publicProcedure, router } from "../_core/trpc";
 import * as db from "../db";
-import {
-  redisCacheService,
-  CacheTTL,
-} from "../services/redis-cache.service";
+import { redisCacheService, CacheTTL } from "../services/redis-cache.service";
 
 /**
  * Reference Data Router

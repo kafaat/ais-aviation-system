@@ -68,7 +68,9 @@ describe("SearchForm", () => {
     onSearch = vi.fn();
   });
 
-  const renderSearchForm = (props: Partial<React.ComponentProps<typeof SearchForm>> = {}) => {
+  const renderSearchForm = (
+    props: Partial<React.ComponentProps<typeof SearchForm>> = {}
+  ) => {
     const defaultProps: React.ComponentProps<typeof SearchForm> = {
       airports: mockAirports,
       originId: "",
@@ -364,12 +366,16 @@ describe("SearchForm", () => {
     it("can display all airports when selected", () => {
       // Test that each airport can be displayed when selected
       renderSearchForm({ originId: "1" });
-      expect(screen.getByTestId("origin-select")).toHaveTextContent("Riyadh (RUH)");
+      expect(screen.getByTestId("origin-select")).toHaveTextContent(
+        "Riyadh (RUH)"
+      );
     });
 
     it("can display different airport when selected", () => {
       renderSearchForm({ destinationId: "3" });
-      expect(screen.getByTestId("destination-select")).toHaveTextContent("Dammam (DMM)");
+      expect(screen.getByTestId("destination-select")).toHaveTextContent(
+        "Dammam (DMM)"
+      );
     });
   });
 

@@ -96,7 +96,11 @@ export function UserProfileForm({
         </p>
       )}
 
-      <Tabs defaultValue="travel" className="space-y-6" data-testid="profile-tabs">
+      <Tabs
+        defaultValue="travel"
+        className="space-y-6"
+        data-testid="profile-tabs"
+      >
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="travel" data-testid="tab-travel">
             <Plane className="h-4 w-4 mr-2" />
@@ -117,12 +121,16 @@ export function UserProfileForm({
           <Card>
             <CardHeader>
               <CardTitle>{t("profile.travel.title")}</CardTitle>
-              <CardDescription>{t("profile.travel.description")}</CardDescription>
+              <CardDescription>
+                {t("profile.travel.description")}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Seat Preference */}
               <div className="space-y-2">
-                <Label htmlFor="seat-preference">{t("profile.travel.preferredSeat")}</Label>
+                <Label htmlFor="seat-preference">
+                  {t("profile.travel.preferredSeat")}
+                </Label>
                 <Select
                   value={formData.preferredSeatType}
                   onValueChange={(value: SeatType) =>
@@ -133,16 +141,24 @@ export function UserProfileForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="window">{t("profile.travel.window")}</SelectItem>
-                    <SelectItem value="aisle">{t("profile.travel.aisle")}</SelectItem>
-                    <SelectItem value="middle">{t("profile.travel.middle")}</SelectItem>
+                    <SelectItem value="window">
+                      {t("profile.travel.window")}
+                    </SelectItem>
+                    <SelectItem value="aisle">
+                      {t("profile.travel.aisle")}
+                    </SelectItem>
+                    <SelectItem value="middle">
+                      {t("profile.travel.middle")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Cabin Class */}
               <div className="space-y-2">
-                <Label htmlFor="cabin-class">{t("profile.travel.preferredClass")}</Label>
+                <Label htmlFor="cabin-class">
+                  {t("profile.travel.preferredClass")}
+                </Label>
                 <Select
                   value={formData.preferredCabinClass}
                   onValueChange={(value: CabinClass) =>
@@ -153,16 +169,24 @@ export function UserProfileForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="economy">{t("profile.travel.economy")}</SelectItem>
-                    <SelectItem value="business">{t("profile.travel.business")}</SelectItem>
-                    <SelectItem value="first">{t("profile.travel.first")}</SelectItem>
+                    <SelectItem value="economy">
+                      {t("profile.travel.economy")}
+                    </SelectItem>
+                    <SelectItem value="business">
+                      {t("profile.travel.business")}
+                    </SelectItem>
+                    <SelectItem value="first">
+                      {t("profile.travel.first")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Meal Preference */}
               <div className="space-y-2">
-                <Label htmlFor="meal-preference">{t("profile.travel.mealPreference")}</Label>
+                <Label htmlFor="meal-preference">
+                  {t("profile.travel.mealPreference")}
+                </Label>
                 <Select
                   value={formData.mealPreference}
                   onValueChange={(value: MealPreference) =>
@@ -173,12 +197,24 @@ export function UserProfileForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="regular">{t("profile.travel.meals.regular")}</SelectItem>
-                    <SelectItem value="vegetarian">{t("profile.travel.meals.vegetarian")}</SelectItem>
-                    <SelectItem value="vegan">{t("profile.travel.meals.vegan")}</SelectItem>
-                    <SelectItem value="halal">{t("profile.travel.meals.halal")}</SelectItem>
-                    <SelectItem value="kosher">{t("profile.travel.meals.kosher")}</SelectItem>
-                    <SelectItem value="gluten_free">{t("profile.travel.meals.glutenFree")}</SelectItem>
+                    <SelectItem value="regular">
+                      {t("profile.travel.meals.regular")}
+                    </SelectItem>
+                    <SelectItem value="vegetarian">
+                      {t("profile.travel.meals.vegetarian")}
+                    </SelectItem>
+                    <SelectItem value="vegan">
+                      {t("profile.travel.meals.vegan")}
+                    </SelectItem>
+                    <SelectItem value="halal">
+                      {t("profile.travel.meals.halal")}
+                    </SelectItem>
+                    <SelectItem value="kosher">
+                      {t("profile.travel.meals.kosher")}
+                    </SelectItem>
+                    <SelectItem value="gluten_free">
+                      {t("profile.travel.meals.glutenFree")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -186,21 +222,31 @@ export function UserProfileForm({
               {/* Special Services */}
               <div className="space-y-4">
                 <Label>{t("profile.travel.specialServices")}</Label>
-                <div className="flex items-center justify-between" data-testid="wheelchair-toggle">
-                  <span className="text-sm">{t("profile.travel.wheelchair")}</span>
+                <div
+                  className="flex items-center justify-between"
+                  data-testid="wheelchair-toggle"
+                >
+                  <span className="text-sm">
+                    {t("profile.travel.wheelchair")}
+                  </span>
                   <Switch
                     checked={formData.wheelchairAssistance}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={checked =>
                       updateField("wheelchairAssistance", checked)
                     }
                     data-testid="wheelchair-switch"
                   />
                 </div>
-                <div className="flex items-center justify-between" data-testid="legroom-toggle">
-                  <span className="text-sm">{t("profile.travel.extraLegroom")}</span>
+                <div
+                  className="flex items-center justify-between"
+                  data-testid="legroom-toggle"
+                >
+                  <span className="text-sm">
+                    {t("profile.travel.extraLegroom")}
+                  </span>
                   <Switch
                     checked={formData.extraLegroom}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={checked =>
                       updateField("extraLegroom", checked)
                     }
                     data-testid="legroom-switch"
@@ -216,16 +262,20 @@ export function UserProfileForm({
           <Card>
             <CardHeader>
               <CardTitle>{t("profile.personal.title")}</CardTitle>
-              <CardDescription>{t("profile.personal.description")}</CardDescription>
+              <CardDescription>
+                {t("profile.personal.description")}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Passport Number */}
               <div className="space-y-2">
-                <Label htmlFor="passport-number">{t("profile.personal.passportNumber")}</Label>
+                <Label htmlFor="passport-number">
+                  {t("profile.personal.passportNumber")}
+                </Label>
                 <Input
                   id="passport-number"
                   value={formData.passportNumber}
-                  onChange={(e) => updateField("passportNumber", e.target.value)}
+                  onChange={e => updateField("passportNumber", e.target.value)}
                   placeholder={t("profile.personal.passportPlaceholder")}
                   data-testid="passport-input"
                 />
@@ -252,7 +302,7 @@ export function UserProfileForm({
                     <Calendar
                       mode="single"
                       selected={formData.passportExpiry}
-                      onSelect={(date) => updateField("passportExpiry", date)}
+                      onSelect={date => updateField("passportExpiry", date)}
                       data-testid="passport-expiry-calendar"
                     />
                   </PopoverContent>
@@ -261,11 +311,13 @@ export function UserProfileForm({
 
               {/* Nationality */}
               <div className="space-y-2">
-                <Label htmlFor="nationality">{t("profile.personal.nationality")}</Label>
+                <Label htmlFor="nationality">
+                  {t("profile.personal.nationality")}
+                </Label>
                 <Input
                   id="nationality"
                   value={formData.nationality}
-                  onChange={(e) => updateField("nationality", e.target.value)}
+                  onChange={e => updateField("nationality", e.target.value)}
                   placeholder={t("profile.personal.nationalityPlaceholder")}
                   data-testid="nationality-input"
                 />
@@ -277,7 +329,7 @@ export function UserProfileForm({
                 <Input
                   id="phone"
                   value={formData.phoneNumber}
-                  onChange={(e) => updateField("phoneNumber", e.target.value)}
+                  onChange={e => updateField("phoneNumber", e.target.value)}
                   placeholder="+966 5X XXX XXXX"
                   data-testid="phone-input"
                 />
@@ -285,23 +337,31 @@ export function UserProfileForm({
 
               {/* Emergency Contact */}
               <div className="space-y-2">
-                <Label htmlFor="emergency-contact">{t("profile.personal.emergencyContact")}</Label>
+                <Label htmlFor="emergency-contact">
+                  {t("profile.personal.emergencyContact")}
+                </Label>
                 <Input
                   id="emergency-contact"
                   value={formData.emergencyContact}
-                  onChange={(e) => updateField("emergencyContact", e.target.value)}
-                  placeholder={t("profile.personal.emergencyContactPlaceholder")}
+                  onChange={e =>
+                    updateField("emergencyContact", e.target.value)
+                  }
+                  placeholder={t(
+                    "profile.personal.emergencyContactPlaceholder"
+                  )}
                   data-testid="emergency-contact-input"
                 />
               </div>
 
               {/* Emergency Phone */}
               <div className="space-y-2">
-                <Label htmlFor="emergency-phone">{t("profile.personal.emergencyPhone")}</Label>
+                <Label htmlFor="emergency-phone">
+                  {t("profile.personal.emergencyPhone")}
+                </Label>
                 <Input
                   id="emergency-phone"
                   value={formData.emergencyPhone}
-                  onChange={(e) => updateField("emergencyPhone", e.target.value)}
+                  onChange={e => updateField("emergencyPhone", e.target.value)}
                   placeholder="+966 5X XXX XXXX"
                   data-testid="emergency-phone-input"
                 />
@@ -311,39 +371,54 @@ export function UserProfileForm({
         </TabsContent>
 
         {/* Notifications Tab */}
-        <TabsContent value="notifications" data-testid="tab-content-notifications">
+        <TabsContent
+          value="notifications"
+          data-testid="tab-content-notifications"
+        >
           <Card>
             <CardHeader>
               <CardTitle>{t("profile.notifications.title")}</CardTitle>
-              <CardDescription>{t("profile.notifications.description")}</CardDescription>
+              <CardDescription>
+                {t("profile.notifications.description")}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center justify-between" data-testid="email-notifications">
+              <div
+                className="flex items-center justify-between"
+                data-testid="email-notifications"
+              >
                 <div>
-                  <p className="font-medium">{t("profile.notifications.email")}</p>
+                  <p className="font-medium">
+                    {t("profile.notifications.email")}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {t("profile.notifications.emailDesc")}
                   </p>
                 </div>
                 <Switch
                   checked={formData.emailNotifications}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={checked =>
                     updateField("emailNotifications", checked)
                   }
                   data-testid="email-switch"
                 />
               </div>
 
-              <div className="flex items-center justify-between" data-testid="sms-notifications">
+              <div
+                className="flex items-center justify-between"
+                data-testid="sms-notifications"
+              >
                 <div>
-                  <p className="font-medium">{t("profile.notifications.sms")}</p>
+                  <p className="font-medium">
+                    {t("profile.notifications.sms")}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {t("profile.notifications.smsDesc")}
                   </p>
                 </div>
                 <Switch
                   checked={formData.smsNotifications}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={checked =>
                     updateField("smsNotifications", checked)
                   }
                   data-testid="sms-switch"

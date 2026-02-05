@@ -146,7 +146,10 @@ export const rateLimitRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      await rateLimitService.resetRateLimit(`user:${input.userId}`, input.scope);
+      await rateLimitService.resetRateLimit(
+        `user:${input.userId}`,
+        input.scope
+      );
 
       return {
         success: true,
@@ -187,7 +190,9 @@ export const rateLimitRouter = router({
       // Create a minimal user object for rate limit lookup
       const mockUser = { id: input.userId, role: "user" as const };
       const tier = await rateLimitService.getRateLimitTier(mockUser);
-      const loyaltyTier = await rateLimitService.getUserLoyaltyTier(input.userId);
+      const loyaltyTier = await rateLimitService.getUserLoyaltyTier(
+        input.userId
+      );
 
       return {
         userId: input.userId,

@@ -112,7 +112,8 @@ export function createUserRateLimitMiddleware(options?: {
     // Skip rate limiting in development for localhost
     if (skipInDevelopment) {
       const isDevelopment = process.env.NODE_ENV !== "production";
-      const isLocalhost = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+      const isLocalhost =
+        ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
 
       if (isDevelopment && isLocalhost) {
         return next();
@@ -197,7 +198,8 @@ export function createStrictRateLimitMiddleware(
 
     // Skip in development for localhost
     const isDevelopment = process.env.NODE_ENV !== "production";
-    const isLocalhost = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+    const isLocalhost =
+      ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
 
     if (isDevelopment && isLocalhost) {
       return next();
@@ -251,7 +253,10 @@ export function createStrictRateLimitMiddleware(
 
       next();
     } catch (error) {
-      logger.error({ ip, endpoint, error }, "Strict rate limit middleware error");
+      logger.error(
+        { ip, endpoint, error },
+        "Strict rate limit middleware error"
+      );
       next();
     }
   };

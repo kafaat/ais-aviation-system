@@ -29,7 +29,10 @@ function getRedisUrl(): string | null {
     if (REDIS_REQUIRED) {
       throw new Error("REDIS_URL is required in production environment");
     }
-    log.warn({ event: "redis_url_missing", env: NODE_ENV }, "REDIS_URL not set, queues will be disabled");
+    log.warn(
+      { event: "redis_url_missing", env: NODE_ENV },
+      "REDIS_URL not set, queues will be disabled"
+    );
     return null;
   }
 
@@ -64,7 +67,10 @@ export function getRedisConnection(): IORedis | null {
       enableReadyCheck: false,
       retryStrategy: times => {
         if (times > 3) {
-          log.error({ event: "redis_connection_failed", retryCount: times }, "Redis connection failed after 3 retries");
+          log.error(
+            { event: "redis_connection_failed", retryCount: times },
+            "Redis connection failed after 3 retries"
+          );
           if (!REDIS_REQUIRED) {
             connectionFailed = true;
             return null; // Stop retrying in dev
@@ -76,7 +82,10 @@ export function getRedisConnection(): IORedis | null {
     });
 
     connection.on("error", err => {
-      log.error({ event: "redis_error", error: err.message }, "Redis connection error");
+      log.error(
+        { event: "redis_error", error: err.message },
+        "Redis connection error"
+      );
       if (!REDIS_REQUIRED) {
         connectionFailed = true;
       }
@@ -94,7 +103,10 @@ export function getRedisConnection(): IORedis | null {
     return connection;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    log.error({ event: "redis_creation_failed", error: errorMessage }, "Failed to create Redis connection");
+    log.error(
+      { event: "redis_creation_failed", error: errorMessage },
+      "Failed to create Redis connection"
+    );
 
     if (REDIS_REQUIRED) {
       throw error;
@@ -115,7 +127,10 @@ function createQueue(
 ): Queue | null {
   const conn = getRedisConnection();
   if (!conn) {
-    log.warn({ event: "queue_not_created", queueName: name }, `Queue "${name}" not created - Redis not available`);
+    log.warn(
+      { event: "queue_not_created", queueName: name },
+      `Queue "${name}" not created - Redis not available`
+    );
     return null;
   }
 
@@ -200,7 +215,10 @@ export function queuesAvailable(): boolean {
  */
 export async function initializeQueues(): Promise<void> {
   if (!queuesAvailable()) {
-    log.warn({ event: "queues_unavailable" }, "Queues not available - skipping initialization");
+    log.warn(
+      { event: "queues_unavailable" },
+      "Queues not available - skipping initialization"
+    );
     return;
   }
 
@@ -217,7 +235,10 @@ export async function initializeQueues(): Promise<void> {
           jobId: "daily-reconciliation",
         }
       );
-      log.info({ event: "job_scheduled", jobName: "daily-reconciliation" }, "Scheduled daily reconciliation job");
+      log.info(
+        { event: "job_scheduled", jobName: "daily-reconciliation" },
+        "Scheduled daily reconciliation job"
+      );
     }
 
     // Schedule hourly cleanup
@@ -230,13 +251,22 @@ export async function initializeQueues(): Promise<void> {
           jobId: "hourly-cleanup",
         }
       );
-      log.info({ event: "job_scheduled", jobName: "hourly-cleanup" }, "Scheduled hourly cleanup job");
+      log.info(
+        { event: "job_scheduled", jobName: "hourly-cleanup" },
+        "Scheduled hourly cleanup job"
+      );
     }
 
-    log.info({ event: "queues_initialized" }, "Queues initialized successfully");
+    log.info(
+      { event: "queues_initialized" },
+      "Queues initialized successfully"
+    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    log.error({ event: "queues_init_failed", error: errorMessage }, "Failed to initialize queues");
+    log.error(
+      { event: "queues_init_failed", error: errorMessage },
+      "Failed to initialize queues"
+    );
 
     if (REDIS_REQUIRED) {
       throw error;
@@ -262,7 +292,14 @@ export async function closeQueues(): Promise<void> {
       .filter((q): q is Queue => q !== null)
       .map(q =>
         q.close().catch(err => {
-          log.error({ event: "queue_close_error", queueName: q.name, error: err.message }, `Error closing queue ${q.name}`);
+          log.error(
+            {
+              event: "queue_close_error",
+              queueName: q.name,
+              error: err.message,
+            },
+            `Error closing queue ${q.name}`
+          );
         })
       )
   );
@@ -340,7 +377,10 @@ export async function checkQueueHealth(): Promise<QueueHealthStatus> {
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    log.error({ event: "queue_health_check_failed", error: errorMessage }, "Queue health check failed");
+    log.error(
+      { event: "queue_health_check_failed", error: errorMessage },
+      "Queue health check failed"
+    );
 
     return {
       available: true,
@@ -364,7 +404,10 @@ export async function addJob<T>(
   options?: Parameters<Queue["add"]>[2]
 ): Promise<string | null> {
   if (!queue) {
-    log.warn({ event: "job_not_added", jobName: name }, `Cannot add job "${name}" - queue not available`);
+    log.warn(
+      { event: "job_not_added", jobName: name },
+      `Cannot add job "${name}" - queue not available`
+    );
     return null;
   }
 

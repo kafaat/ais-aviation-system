@@ -34,7 +34,10 @@ export function responseTimeMiddleware(
   // Override res.end to add timing header
   const originalEnd = res.end.bind(res);
 
-  res.end = function(this: Response, ...args: Parameters<Response["end"]>): Response {
+  res.end = function (
+    this: Response,
+    ...args: Parameters<Response["end"]>
+  ): Response {
     const duration = Number(process.hrtime.bigint() - start) / 1e9;
 
     if (!res.headersSent) {
@@ -74,7 +77,10 @@ export function startTrpcTiming(
 /**
  * End timing a tRPC procedure and record metrics
  */
-export function endTrpcTiming(context: TrpcTimingContext, success: boolean): void {
+export function endTrpcTiming(
+  context: TrpcTimingContext,
+  success: boolean
+): void {
   const duration = context.timer.end();
   recordTrpcTiming(context.procedure, context.type, duration, success);
 }
@@ -118,7 +124,10 @@ export function skipApmForHealthChecks(
     const start = process.hrtime.bigint();
     const originalEnd = res.end.bind(res);
 
-    res.end = function(this: Response, ...args: Parameters<Response["end"]>): Response {
+    res.end = function (
+      this: Response,
+      ...args: Parameters<Response["end"]>
+    ): Response {
       const duration = Number(process.hrtime.bigint() - start) / 1e9;
       if (!res.headersSent) {
         res.setHeader("X-Response-Time", `${(duration * 1000).toFixed(3)}ms`);

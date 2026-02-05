@@ -157,16 +157,29 @@ if (isBrowser) {
           React.createElement("header", props, children),
         section: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
           React.createElement("section", props, children),
-        h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) =>
+        h2: ({
+          children,
+          ...props
+        }: React.HTMLAttributes<HTMLHeadingElement>) =>
           React.createElement("h2", props, children),
-        h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) =>
+        h3: ({
+          children,
+          ...props
+        }: React.HTMLAttributes<HTMLHeadingElement>) =>
           React.createElement("h3", props, children),
-        p: ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) =>
+        p: ({
+          children,
+          ...props
+        }: React.HTMLAttributes<HTMLParagraphElement>) =>
           React.createElement("p", props, children),
-        button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
+        button: ({
+          children,
+          ...props
+        }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
           React.createElement("button", props, children),
       },
-      AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
+      AnimatePresence: ({ children }: { children: React.ReactNode }) =>
+        children,
       useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
       useInView: () => true,
     };

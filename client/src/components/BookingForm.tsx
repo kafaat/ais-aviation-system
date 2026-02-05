@@ -34,7 +34,11 @@ export interface Passenger {
 
 export interface BookingFormProps {
   passengers: Passenger[];
-  onPassengerChange: (index: number, field: keyof Passenger, value: Passenger[keyof Passenger]) => void;
+  onPassengerChange: (
+    index: number,
+    field: keyof Passenger,
+    value: Passenger[keyof Passenger]
+  ) => void;
   onAddPassenger: () => void;
   onRemovePassenger: (index: number) => void;
   disabled?: boolean;
@@ -75,7 +79,10 @@ export function BookingForm({
             data-testid={`passenger-form-${index}`}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium" data-testid={`passenger-header-${index}`}>
+              <h3
+                className="font-medium"
+                data-testid={`passenger-header-${index}`}
+              >
                 {t("booking.passenger")} {index + 1}
               </h3>
               {passengers.length > 1 && (
@@ -114,7 +121,9 @@ export function BookingForm({
                   <SelectContent>
                     <SelectItem value="adult">{t("booking.adult")}</SelectItem>
                     <SelectItem value="child">{t("booking.child")}</SelectItem>
-                    <SelectItem value="infant">{t("booking.infant")}</SelectItem>
+                    <SelectItem value="infant">
+                      {t("booking.infant")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -126,7 +135,7 @@ export function BookingForm({
                 </Label>
                 <Select
                   value={passenger.title || ""}
-                  onValueChange={(value) =>
+                  onValueChange={value =>
                     onPassengerChange(index, "title", value)
                   }
                   disabled={disabled}
@@ -153,7 +162,7 @@ export function BookingForm({
                 <Input
                   id={`passenger-firstname-${index}`}
                   value={passenger.firstName}
-                  onChange={(e) =>
+                  onChange={e =>
                     onPassengerChange(index, "firstName", e.target.value)
                   }
                   placeholder={t("booking.firstName")}
@@ -171,7 +180,7 @@ export function BookingForm({
                 <Input
                   id={`passenger-lastname-${index}`}
                   value={passenger.lastName}
-                  onChange={(e) =>
+                  onChange={e =>
                     onPassengerChange(index, "lastName", e.target.value)
                   }
                   placeholder={t("booking.lastName")}
@@ -189,7 +198,7 @@ export function BookingForm({
                 <Input
                   id={`passenger-passport-${index}`}
                   value={passenger.passportNumber || ""}
-                  onChange={(e) =>
+                  onChange={e =>
                     onPassengerChange(index, "passportNumber", e.target.value)
                   }
                   placeholder={t("booking.passportNumber")}
@@ -206,7 +215,7 @@ export function BookingForm({
                 <Input
                   id={`passenger-nationality-${index}`}
                   value={passenger.nationality || ""}
-                  onChange={(e) =>
+                  onChange={e =>
                     onPassengerChange(index, "nationality", e.target.value)
                   }
                   placeholder={t("booking.nationality")}

@@ -94,7 +94,8 @@ export const metricsRouter = router({
       http: {
         totalRequests,
         errorRequests,
-        errorRate: totalRequests > 0 ? (errorRequests / totalRequests) * 100 : 0,
+        errorRate:
+          totalRequests > 0 ? (errorRequests / totalRequests) * 100 : 0,
         avgResponseTimeMs: avgResponseTime * 1000,
       },
       database: {
@@ -103,10 +104,12 @@ export const metricsRouter = router({
         errorRate: totalDbQueries > 0 ? (dbErrors / totalDbQueries) * 100 : 0,
       },
       memory: {
-        heapUsedMb: Math.round(memUsage.heapUsed / 1024 / 1024 * 100) / 100,
-        heapTotalMb: Math.round(memUsage.heapTotal / 1024 / 1024 * 100) / 100,
-        rssMb: Math.round(memUsage.rss / 1024 / 1024 * 100) / 100,
-        heapUsagePercent: Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100 * 100) / 100,
+        heapUsedMb: Math.round((memUsage.heapUsed / 1024 / 1024) * 100) / 100,
+        heapTotalMb: Math.round((memUsage.heapTotal / 1024 / 1024) * 100) / 100,
+        rssMb: Math.round((memUsage.rss / 1024 / 1024) * 100) / 100,
+        heapUsagePercent:
+          Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100 * 100) /
+          100,
       },
       activeConnections: getGaugeValue(activeConnections, {}),
     };
@@ -125,9 +128,11 @@ export const metricsRouter = router({
    * Get metrics for a specific category
    */
   category: publicProcedure
-    .input(z.object({
-      category: z.enum(["http", "database", "trpc", "system", "business"]),
-    }))
+    .input(
+      z.object({
+        category: z.enum(["http", "database", "trpc", "system", "business"]),
+      })
+    )
     .query(async ({ input }) => {
       collectSystemMetrics();
 
@@ -221,7 +226,10 @@ function getCounterStats(counter: typeof httpRequestsTotal) {
   return stats;
 }
 
-function getGaugeValue(gauge: typeof activeConnections, labels: Record<string, string>): number {
+function getGaugeValue(
+  gauge: typeof activeConnections,
+  labels: Record<string, string>
+): number {
   const key = Object.entries(labels)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([k, v]) => `${k}="${v}"`)

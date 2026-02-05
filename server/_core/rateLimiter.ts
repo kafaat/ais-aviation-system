@@ -26,9 +26,7 @@ function shouldSkipRateLimit(req: { ip?: string }): boolean {
   const isDevelopment = process.env.NODE_ENV !== "production";
   const ip = req.ip || "";
   const isLocalhost =
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip === "::ffff:127.0.0.1";
+    ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
   return isDevelopment && isLocalhost;
 }
 
@@ -160,4 +158,7 @@ export {
   STRICT_RATE_LIMITS,
 } from "../services/rate-limit.service";
 
-export type { RateLimitTier, RateLimitResult } from "../services/rate-limit.service";
+export type {
+  RateLimitTier,
+  RateLimitResult,
+} from "../services/rate-limit.service";

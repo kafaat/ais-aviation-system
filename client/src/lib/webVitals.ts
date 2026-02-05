@@ -17,7 +17,8 @@ import type { Metric } from "web-vitals";
 
 // Environment detection
 const isDevelopment = import.meta.env.MODE === "development";
-const analyticsEndpoint = import.meta.env.VITE_ANALYTICS_ENDPOINT || "/api/analytics/vitals";
+const analyticsEndpoint =
+  import.meta.env.VITE_ANALYTICS_ENDPOINT || "/api/analytics/vitals";
 
 /**
  * Performance budgets based on Google's recommendations
@@ -141,7 +142,10 @@ export function exceedsBudget(name: string, value: number): boolean {
 /**
  * Calculate the delta from the budget threshold
  */
-export function getBudgetDelta(name: string, value: number): number | undefined {
+export function getBudgetDelta(
+  name: string,
+  value: number
+): number | undefined {
   const budget = PERFORMANCE_BUDGETS[name as keyof typeof PERFORMANCE_BUDGETS];
   if (!budget) return undefined;
   return value - budget.good;
@@ -196,7 +200,8 @@ function logMetricToConsole(metric: WebVitalMetric): void {
 function logBudgetWarning(metric: WebVitalMetric): void {
   if (!metric.budgetExceeded || metric.budgetDelta === undefined) return;
 
-  const budget = PERFORMANCE_BUDGETS[metric.name as keyof typeof PERFORMANCE_BUDGETS];
+  const budget =
+    PERFORMANCE_BUDGETS[metric.name as keyof typeof PERFORMANCE_BUDGETS];
   if (!budget) return;
 
   const deltaFormatted =
@@ -252,7 +257,7 @@ async function sendToAnalytics(
     userAgent: navigator.userAgent,
     connection: getConnectionInfo(),
     deviceMemory: getDeviceMemory(),
-    metrics: metrics.map((m) => ({
+    metrics: metrics.map(m => ({
       name: m.name,
       value: m.value,
       delta: m.delta,
@@ -418,11 +423,11 @@ export async function initWebVitals(
     const webVitals = await import("web-vitals");
 
     // Track all Core Web Vitals
-    webVitals.onLCP((metric) => processMetric(metric, config));
-    webVitals.onINP((metric) => processMetric(metric, config));
-    webVitals.onCLS((metric) => processMetric(metric, config));
-    webVitals.onTTFB((metric) => processMetric(metric, config));
-    webVitals.onFCP((metric) => processMetric(metric, config));
+    webVitals.onLCP(metric => processMetric(metric, config));
+    webVitals.onINP(metric => processMetric(metric, config));
+    webVitals.onCLS(metric => processMetric(metric, config));
+    webVitals.onTTFB(metric => processMetric(metric, config));
+    webVitals.onFCP(metric => processMetric(metric, config));
 
     // Flush metrics on page unload
     if (typeof window !== "undefined") {
@@ -498,7 +503,9 @@ export function trackInteraction(
   const duration = performance.now() - startTime;
 
   if (isDevelopment) {
-    console.info(`[Web Vitals] Interaction "${interactionName}": ${Math.round(duration)}ms`);
+    console.info(
+      `[Web Vitals] Interaction "${interactionName}": ${Math.round(duration)}ms`
+    );
   }
 
   // Check against INP budget for custom interactions

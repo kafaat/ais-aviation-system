@@ -31,9 +31,15 @@ export function initSentry(app?: Express): void {
   const config: SentryConfig = {
     dsn,
     environment: process.env.NODE_ENV || "development",
-    release: process.env.SENTRY_RELEASE || `ais-aviation-system@${process.env.npm_package_version || "1.0.0"}`,
-    tracesSampleRate: parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1"),
-    profilesSampleRate: parseFloat(process.env.SENTRY_PROFILES_SAMPLE_RATE || "0.1"),
+    release:
+      process.env.SENTRY_RELEASE ||
+      `ais-aviation-system@${process.env.npm_package_version || "1.0.0"}`,
+    tracesSampleRate: parseFloat(
+      process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1"
+    ),
+    profilesSampleRate: parseFloat(
+      process.env.SENTRY_PROFILES_SAMPLE_RATE || "0.1"
+    ),
   };
 
   Sentry.init({
@@ -56,7 +62,10 @@ export function initSentry(app?: Express): void {
       // Don't send expected errors
       if (error instanceof Error) {
         // Filter out 4xx errors that are expected user errors
-        if (error.message.includes("UNAUTHORIZED") || error.message.includes("NOT_FOUND")) {
+        if (
+          error.message.includes("UNAUTHORIZED") ||
+          error.message.includes("NOT_FOUND")
+        ) {
           return null;
         }
       }
@@ -74,9 +83,7 @@ export function initSentry(app?: Express): void {
     },
   });
 
-  console.info(
-    `[Sentry] Initialized for environment: ${config.environment}`
-  );
+  console.info(`[Sentry] Initialized for environment: ${config.environment}`);
 }
 
 /**
@@ -99,7 +106,7 @@ export function sentryErrorHandler(): (
 ) => void {
   return (err: Error, req: Request, res: Response, next: NextFunction) => {
     // Add request context to the error
-    Sentry.withScope((scope) => {
+    Sentry.withScope(scope => {
       // Add request information
       scope.setExtra("requestId", req.id);
       scope.setExtra("path", req.path);
@@ -108,7 +115,8 @@ export function sentryErrorHandler(): (
 
       // Add user information if available
       if ((req as Request & { user?: { id: string; email?: string } }).user) {
-        const user = (req as Request & { user: { id: string; email?: string } }).user;
+        const user = (req as Request & { user: { id: string; email?: string } })
+          .user;
         scope.setUser({
           id: user.id,
           email: user.email,
@@ -152,7 +160,9 @@ export function captureMessage(
 /**
  * Set user information for error tracking
  */
-export function setUser(user: { id: string; email?: string; username?: string } | null): void {
+export function setUser(
+  user: { id: string; email?: string; username?: string } | null
+): void {
   Sentry.setUser(user);
 }
 
@@ -166,7 +176,10 @@ export function addBreadcrumb(breadcrumb: Sentry.Breadcrumb): void {
 /**
  * Create a transaction for performance monitoring
  */
-export function startTransaction(name: string, op: string): Sentry.Span | undefined {
+export function startTransaction(
+  name: string,
+  op: string
+): Sentry.Span | undefined {
   return Sentry.startInactiveSpan({
     name,
     op,

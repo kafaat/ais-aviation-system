@@ -60,10 +60,14 @@ export function SearchForm({
   const { t, i18n } = useTranslation();
   const currentLocale = i18n.language === "ar" ? ar : enUS;
 
-  const isSearchDisabled = !originId || !destinationId || !departureDate || isLoading;
+  const isSearchDisabled =
+    !originId || !destinationId || !departureDate || isLoading;
 
   return (
-    <Card className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 backdrop-blur-sm" data-testid="search-form">
+    <Card
+      className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 backdrop-blur-sm"
+      data-testid="search-form"
+    >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Origin Selection */}
         <div className="space-y-2" data-testid="origin-field">
@@ -83,7 +87,7 @@ export function SearchForm({
               <SelectValue placeholder={t("home.search.selectCity")} />
             </SelectTrigger>
             <SelectContent>
-              {airports.map((airport) => (
+              {airports.map(airport => (
                 <SelectItem
                   key={airport.id}
                   value={airport.id.toString()}
@@ -114,7 +118,7 @@ export function SearchForm({
               <SelectValue placeholder={t("home.search.selectCity")} />
             </SelectTrigger>
             <SelectContent>
-              {airports.map((airport) => (
+              {airports.map(airport => (
                 <SelectItem
                   key={airport.id}
                   value={airport.id.toString()}
@@ -149,18 +153,24 @@ export function SearchForm({
                     {format(departureDate, "PPP", { locale: currentLocale })}
                   </span>
                 ) : (
-                  <span className="text-muted-foreground" data-testid="date-placeholder">
+                  <span
+                    className="text-muted-foreground"
+                    data-testid="date-placeholder"
+                  >
                     {t("home.search.selectDate")}
                   </span>
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" data-testid="calendar-popover">
+            <PopoverContent
+              className="w-auto p-0"
+              data-testid="calendar-popover"
+            >
               <Calendar
                 mode="single"
                 selected={departureDate}
                 onSelect={onDateChange}
-                disabled={(date) => date < new Date()}
+                disabled={date => date < new Date()}
                 initialFocus
                 data-testid="calendar"
               />
@@ -184,10 +194,16 @@ export function SearchForm({
 
       {/* Validation Message */}
       {isSearchDisabled && !isLoading && (
-        <p className="text-sm text-muted-foreground text-center mt-4" data-testid="validation-message">
+        <p
+          className="text-sm text-muted-foreground text-center mt-4"
+          data-testid="validation-message"
+        >
           {!originId && t("home.search.selectOrigin")}
           {originId && !destinationId && t("home.search.selectDestination")}
-          {originId && destinationId && !departureDate && t("home.search.selectDate")}
+          {originId &&
+            destinationId &&
+            !departureDate &&
+            t("home.search.selectDate")}
         </p>
       )}
     </Card>

@@ -20,7 +20,14 @@ import { eq } from "drizzle-orm";
 // Minimal user type for rate limiting (only needs id and role)
 export type RateLimitUser = {
   id: number;
-  role: "user" | "admin" | "super_admin" | "airline_admin" | "finance" | "ops" | "support";
+  role:
+    | "user"
+    | "admin"
+    | "super_admin"
+    | "airline_admin"
+    | "finance"
+    | "ops"
+    | "support";
 };
 
 const RATE_LIMIT_PREFIX = process.env.CACHE_PREFIX || "ais";
@@ -153,14 +160,17 @@ interface InMemoryRateLimitEntry {
 const inMemoryStore = new Map<string, InMemoryRateLimitEntry>();
 
 // Cleanup expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of inMemoryStore.entries()) {
-    if (entry.expiresAt < now) {
-      inMemoryStore.delete(key);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [key, entry] of inMemoryStore.entries()) {
+      if (entry.expiresAt < now) {
+        inMemoryStore.delete(key);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  },
+  5 * 60 * 1000
+);
 
 /**
  * Per-User Rate Limit Service
@@ -169,10 +179,7 @@ class RateLimitService {
   /**
    * Get the rate limit key for a user/IP
    */
-  private getKey(
-    identifier: string,
-    scope: string = "api"
-  ): string {
+  private getKey(identifier: string, scope: string = "api"): string {
     return `${RATE_LIMIT_PREFIX}:ratelimit:${scope}:${identifier}`;
   }
 
@@ -497,7 +504,9 @@ class RateLimitService {
     const headers: Record<string, string> = {
       "X-RateLimit-Limit": result.limit.toString(),
       "X-RateLimit-Remaining": result.remaining.toString(),
-      "X-RateLimit-Reset": Math.floor(result.resetAt.getTime() / 1000).toString(),
+      "X-RateLimit-Reset": Math.floor(
+        result.resetAt.getTime() / 1000
+      ).toString(),
       "X-RateLimit-Tier": result.tier,
     };
 

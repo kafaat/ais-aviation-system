@@ -8,10 +8,7 @@
  * @date 2026-02-05
  */
 
-import {
-  redisCacheService,
-  CacheTTL,
-} from "./redis-cache.service";
+import { redisCacheService, CacheTTL } from "./redis-cache.service";
 import { getDb } from "../db";
 import { bookings, flights, airports } from "../../drizzle/schema";
 import { eq, desc, sql, and, gte } from "drizzle-orm";
@@ -72,7 +69,10 @@ export async function trackRouteSearch(
       searchTracking.set(routeKey, current + 1);
     }
   } catch (error) {
-    logger.error({ originId, destinationId, error }, "Failed to track route search");
+    logger.error(
+      { originId, destinationId, error },
+      "Failed to track route search"
+    );
   }
 }
 
@@ -134,7 +134,7 @@ export async function getPopularRoutesFromDb(
       .orderBy(desc(sql`COUNT(${bookings.id})`))
       .limit(limit);
 
-    return results.map((r) => ({
+    return results.map(r => ({
       originId: r.originId,
       destinationId: r.destinationId,
       originCode: r.originCode,
@@ -282,7 +282,7 @@ export async function getSuggestedDestinations(
       .orderBy(desc(sql`COUNT(${bookings.id})`))
       .limit(limit);
 
-    const routes: PopularRoute[] = results.map((r) => ({
+    const routes: PopularRoute[] = results.map(r => ({
       originId: r.originId,
       destinationId: r.destinationId,
       originCode: r.originCode,
@@ -298,7 +298,12 @@ export async function getSuggestedDestinations(
 
     // Cache the suggestions
     if (routes.length > 0) {
-      await redisCacheService.cacheRoute(originId, 0, routes, CacheTTL.POPULAR_ROUTES);
+      await redisCacheService.cacheRoute(
+        originId,
+        0,
+        routes,
+        CacheTTL.POPULAR_ROUTES
+      );
     }
 
     return routes;

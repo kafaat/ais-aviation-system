@@ -3,10 +3,7 @@ import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { mobileAuthServiceV2 } from "../services/mobile-auth-v2.service";
 import * as db from "../db";
-import {
-  redisCacheService,
-  CacheTTL,
-} from "../services/redis-cache.service";
+import { redisCacheService, CacheTTL } from "../services/redis-cache.service";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];

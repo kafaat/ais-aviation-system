@@ -32,8 +32,11 @@ export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 // ============================================================================
 
 const NODE_ENV = process.env.NODE_ENV || "development";
-const LOG_LEVEL = (process.env.LOG_LEVEL as LogLevel) || (NODE_ENV === "production" ? "info" : "debug");
-const LOG_FORMAT = process.env.LOG_FORMAT || (NODE_ENV === "production" ? "json" : "pretty");
+const LOG_LEVEL =
+  (process.env.LOG_LEVEL as LogLevel) ||
+  (NODE_ENV === "production" ? "info" : "debug");
+const LOG_FORMAT =
+  process.env.LOG_FORMAT || (NODE_ENV === "production" ? "json" : "pretty");
 const LOG_FILE_PATH = process.env.LOG_FILE_PATH;
 const LOG_SERVICE_NAME = process.env.LOG_SERVICE_NAME || "ais-aviation";
 const LOG_VERSION = process.env.LOG_VERSION || "1.0.0";
@@ -141,10 +144,15 @@ function redactPII(obj: unknown, depth = 0): unknown {
 
     // Check if this field should be redacted
     const shouldRedact = PII_FIELDS.some(field => {
-      const lowerField = field.toLowerCase().replace(/\[\*\]/g, "").replace(/\.\*/g, "");
-      return lowerKey === lowerField ||
-             lowerKey.includes(lowerField) ||
-             lowerField.includes(lowerKey);
+      const lowerField = field
+        .toLowerCase()
+        .replace(/\[\*\]/g, "")
+        .replace(/\.\*/g, "");
+      return (
+        lowerKey === lowerField ||
+        lowerKey.includes(lowerField) ||
+        lowerField.includes(lowerKey)
+      );
     });
 
     if (shouldRedact && typeof value === "string" && value.length > 0) {
@@ -184,7 +192,11 @@ function redactValue(key: string, value: string): string {
   }
 
   // Card number: show last 4 digits
-  if (lowerKey.includes("card") && !lowerKey.includes("cvv") && !lowerKey.includes("cvc")) {
+  if (
+    lowerKey.includes("card") &&
+    !lowerKey.includes("cvv") &&
+    !lowerKey.includes("cvc")
+  ) {
     const digits = value.replace(/\D/g, "");
     if (digits.length >= 4) {
       return "****-****-****-" + digits.slice(-4);
@@ -302,12 +314,12 @@ function buildLoggerOptions(): LoggerOptions {
 
     // Format the level as string
     formatters: {
-      level: (label) => ({ level: label }),
-      bindings: (bindings) => ({
+      level: label => ({ level: label }),
+      bindings: bindings => ({
         ...bindings,
         hostname: bindings.hostname,
       }),
-      log: (object) => {
+      log: object => {
         // Add context from AsyncLocalStorage
         const context = getLogContext();
 
@@ -327,7 +339,7 @@ function buildLoggerOptions(): LoggerOptions {
     // Serializers for common objects
     serializers: {
       err: pino.stdSerializers.err,
-      req: (req) => ({
+      req: req => ({
         method: req.method,
         url: req.url,
         headers: {
@@ -339,7 +351,7 @@ function buildLoggerOptions(): LoggerOptions {
         },
         remoteAddress: req.socket?.remoteAddress,
       }),
-      res: (res) => ({
+      res: res => ({
         statusCode: res.statusCode,
         headers: res.getHeaders?.(),
       }),
@@ -354,9 +366,7 @@ function buildLoggerOptions(): LoggerOptions {
 
   // Add transport configuration
   if (targets.length > 0) {
-    options.transport = targets.length === 1
-      ? targets[0]
-      : { targets };
+    options.transport = targets.length === 1 ? targets[0] : { targets };
   }
 
   return options;
@@ -382,10 +392,10 @@ class StructuredLogger {
    * Create a child logger with additional context
    */
   child(context: LogContext): StructuredLogger {
-    return new StructuredLogger(
-      this.logger.child(context),
-      { ...this.context, ...context }
-    );
+    return new StructuredLogger(this.logger.child(context), {
+      ...this.context,
+      ...context,
+    });
   }
 
   /**
@@ -419,17 +429,23 @@ class StructuredLogger {
   /**
    * Log at error level
    */
-  error(msgOrObj: string | Record<string, unknown> | Error, msg?: string): void {
+  error(
+    msgOrObj: string | Record<string, unknown> | Error,
+    msg?: string
+  ): void {
     if (msgOrObj instanceof Error) {
-      this.logger.error({
-        ...this.context,
-        ...getLogContext(),
-        error: {
-          name: msgOrObj.name,
-          message: msgOrObj.message,
-          stack: msgOrObj.stack,
+      this.logger.error(
+        {
+          ...this.context,
+          ...getLogContext(),
+          error: {
+            name: msgOrObj.name,
+            message: msgOrObj.message,
+            stack: msgOrObj.stack,
+          },
         },
-      }, msg || msgOrObj.message);
+        msg || msgOrObj.message
+      );
     } else {
       this.log("error", msgOrObj, msg);
     }
@@ -438,17 +454,23 @@ class StructuredLogger {
   /**
    * Log at fatal level
    */
-  fatal(msgOrObj: string | Record<string, unknown> | Error, msg?: string): void {
+  fatal(
+    msgOrObj: string | Record<string, unknown> | Error,
+    msg?: string
+  ): void {
     if (msgOrObj instanceof Error) {
-      this.logger.fatal({
-        ...this.context,
-        ...getLogContext(),
-        error: {
-          name: msgOrObj.name,
-          message: msgOrObj.message,
-          stack: msgOrObj.stack,
+      this.logger.fatal(
+        {
+          ...this.context,
+          ...getLogContext(),
+          error: {
+            name: msgOrObj.name,
+            message: msgOrObj.message,
+            stack: msgOrObj.stack,
+          },
         },
-      }, msg || msgOrObj.message);
+        msg || msgOrObj.message
+      );
     } else {
       this.log("fatal", msgOrObj, msg);
     }
@@ -492,7 +514,10 @@ export const logger = new StructuredLogger(baseLogger);
 /**
  * Create a child logger for a specific service/module
  */
-export function createServiceLogger(service: string, context?: LogContext): StructuredLogger {
+export function createServiceLogger(
+  service: string,
+  context?: LogContext
+): StructuredLogger {
   return logger.child({ service, ...context });
 }
 
@@ -516,7 +541,10 @@ export function createRequestLogger(
 /**
  * Create a logger for background jobs
  */
-export function createJobLogger(jobName: string, jobId?: string): StructuredLogger {
+export function createJobLogger(
+  jobName: string,
+  jobId?: string
+): StructuredLogger {
   return logger.child({
     service: "job",
     jobName,
@@ -527,7 +555,10 @@ export function createJobLogger(jobName: string, jobId?: string): StructuredLogg
 /**
  * Create a logger for queue workers
  */
-export function createWorkerLogger(workerName: string, queueName: string): StructuredLogger {
+export function createWorkerLogger(
+  workerName: string,
+  queueName: string
+): StructuredLogger {
   return logger.child({
     service: "worker",
     workerName,
@@ -542,19 +573,19 @@ export function createWorkerLogger(workerName: string, queueName: string): Struc
 /**
  * Log an error with full context
  */
-export function logError(
-  error: Error,
-  context?: LogContext
-): void {
+export function logError(error: Error, context?: LogContext): void {
   const combinedContext = { ...getLogContext(), ...context };
-  logger.error({
-    ...combinedContext,
-    error: {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
+  logger.error(
+    {
+      ...combinedContext,
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
     },
-  }, error.message);
+    error.message
+  );
 }
 
 /**
@@ -586,13 +617,13 @@ export function logDebug(message: string, context?: LogContext): void {
  * Express middleware for request logging and context
  */
 export function loggerMiddleware(req: any, res: any, next: any): void {
-  const requestId = req.headers["x-request-id"] as string ||
-                    req.id ||
-                    generateRequestId();
+  const requestId =
+    (req.headers["x-request-id"] as string) || req.id || generateRequestId();
 
-  const correlationId = req.headers["x-correlation-id"] as string ||
-                        req.correlationId ||
-                        requestId;
+  const correlationId =
+    (req.headers["x-correlation-id"] as string) ||
+    req.correlationId ||
+    requestId;
 
   // Set context for this request
   const context: LogContext = {
@@ -605,11 +636,16 @@ export function loggerMiddleware(req: any, res: any, next: any): void {
   };
 
   // Create request-scoped logger
-  const requestLogger = createRequestLogger(requestId, req.method, req.path || req.url, {
-    correlationId,
-    ip: req.ip,
-    userAgent: req.headers["user-agent"],
-  });
+  const requestLogger = createRequestLogger(
+    requestId,
+    req.method,
+    req.path || req.url,
+    {
+      correlationId,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    }
+  );
 
   // Attach to request object
   req.requestId = requestId;
@@ -624,11 +660,14 @@ export function loggerMiddleware(req: any, res: any, next: any): void {
   const startTime = process.hrtime.bigint();
 
   // Log request start
-  requestLogger.info({
-    event: "request_start",
-    query: req.query,
-    contentLength: req.headers["content-length"],
-  }, `${req.method} ${req.path || req.url} - Request started`);
+  requestLogger.info(
+    {
+      event: "request_start",
+      query: req.query,
+      contentLength: req.headers["content-length"],
+    },
+    `${req.method} ${req.path || req.url} - Request started`
+  );
 
   // Run rest of request within log context
   runWithLogContext(context, () => {
@@ -646,11 +685,20 @@ export function loggerMiddleware(req: any, res: any, next: any): void {
 
       // Use appropriate log level based on status code
       if (res.statusCode >= 500) {
-        requestLogger.error(logData, `${req.method} ${req.path || req.url} - ${res.statusCode} (${durationMs}ms)`);
+        requestLogger.error(
+          logData,
+          `${req.method} ${req.path || req.url} - ${res.statusCode} (${durationMs}ms)`
+        );
       } else if (res.statusCode >= 400) {
-        requestLogger.warn(logData, `${req.method} ${req.path || req.url} - ${res.statusCode} (${durationMs}ms)`);
+        requestLogger.warn(
+          logData,
+          `${req.method} ${req.path || req.url} - ${res.statusCode} (${durationMs}ms)`
+        );
       } else {
-        requestLogger.info(logData, `${req.method} ${req.path || req.url} - ${res.statusCode} (${durationMs}ms)`);
+        requestLogger.info(
+          logData,
+          `${req.method} ${req.path || req.url} - ${res.statusCode} (${durationMs}ms)`
+        );
       }
     });
 
@@ -678,7 +726,7 @@ export function redactFromString(message: string): string {
   // Email pattern
   message = message.replace(
     /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
-    (match) => match[0] + "***@" + match.split("@")[1]
+    match => match[0] + "***@" + match.split("@")[1]
   );
 
   // Phone pattern (various formats)

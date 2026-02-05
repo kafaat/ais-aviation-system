@@ -20,13 +20,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { FlightStatusBadge } from "@/components/FlightStatusBadge";
-import {
-  Plane,
-  Clock,
-  Heart,
-  Loader2,
-  Share2,
-} from "lucide-react";
+import { Plane, Clock, Heart, Loader2, Share2 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import type { FlightStatusType } from "@/hooks/useFlightStatus";
@@ -127,17 +121,17 @@ export function FlightCard({
               />
             ) : (
               <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Plane
-                  className="h-6 w-6 text-primary"
-                  aria-hidden="true"
-                />
+                <Plane className="h-6 w-6 text-primary" aria-hidden="true" />
               </div>
             )}
             <div>
               <p className="font-semibold" data-testid="airline-name">
                 {flight.airline.name}
               </p>
-              <p className="text-sm text-muted-foreground" data-testid="flight-number">
+              <p
+                className="text-sm text-muted-foreground"
+                data-testid="flight-number"
+              >
                 {flight.flightNumber}
               </p>
               <FlightStatusBadge
@@ -160,7 +154,10 @@ export function FlightCard({
                 {formatTime(flight.departureTime)}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                <span className="font-semibold text-foreground" data-testid="origin-code">
+                <span
+                  className="font-semibold text-foreground"
+                  data-testid="origin-code"
+                >
                   {flight.origin.code}
                 </span>{" "}
                 - {flight.origin.city}
@@ -174,7 +171,10 @@ export function FlightCard({
                   <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
                     <Clock className="h-3 w-3" aria-hidden="true" />
                     <span data-testid="flight-duration">
-                      {calculateDuration(flight.departureTime, flight.arrivalTime)}
+                      {calculateDuration(
+                        flight.departureTime,
+                        flight.arrivalTime
+                      )}
                     </span>
                   </div>
                 </div>
@@ -191,7 +191,10 @@ export function FlightCard({
                 {formatTime(flight.arrivalTime)}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                <span className="font-semibold text-foreground" data-testid="destination-code">
+                <span
+                  className="font-semibold text-foreground"
+                  data-testid="destination-code"
+                >
                   {flight.destination.code}
                 </span>{" "}
                 - {flight.destination.city}
@@ -223,7 +226,10 @@ export function FlightCard({
                   data-testid="favorite-button"
                 >
                   {isFavoriteLoading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                    <Loader2
+                      className="h-5 w-5 animate-spin"
+                      aria-hidden="true"
+                    />
                   ) : (
                     <Heart
                       className={`h-5 w-5 ${isFavorited ? "fill-current" : ""}`}
@@ -268,13 +274,19 @@ export function FlightCard({
                   <p className="text-xs text-muted-foreground mb-1">
                     {t("search.economy")}
                   </p>
-                  <p className="text-2xl font-bold text-primary" data-testid="economy-price">
+                  <p
+                    className="text-2xl font-bold text-primary"
+                    data-testid="economy-price"
+                  >
                     {formatPrice(flight.economyPrice)}{" "}
                     <span className="text-sm font-normal">
                       {t("common.currency")}
                     </span>
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1" data-testid="economy-seats">
+                  <p
+                    className="text-xs text-muted-foreground mt-1"
+                    data-testid="economy-seats"
+                  >
                     {t("search.seatsAvailable", {
                       count: flight.economyAvailable,
                     })}
@@ -300,13 +312,19 @@ export function FlightCard({
                   <p className="text-xs text-amber-700 mb-1 font-medium">
                     {t("search.business")}
                   </p>
-                  <p className="text-2xl font-bold text-amber-700" data-testid="business-price">
+                  <p
+                    className="text-2xl font-bold text-amber-700"
+                    data-testid="business-price"
+                  >
                     {formatPrice(flight.businessPrice)}{" "}
                     <span className="text-sm font-normal">
                       {t("common.currency")}
                     </span>
                   </p>
-                  <p className="text-xs text-amber-600 mt-1" data-testid="business-seats">
+                  <p
+                    className="text-xs text-amber-600 mt-1"
+                    data-testid="business-seats"
+                  >
                     {t("search.seatsAvailable", {
                       count: flight.businessAvailable,
                     })}

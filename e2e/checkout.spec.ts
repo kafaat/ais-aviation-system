@@ -115,7 +115,9 @@ test.describe("Checkout Flow", () => {
       const hasPassengerForm =
         (await passengerForm.isVisible()) ||
         (await page.getByLabel(/الاسم الأول|First name/i).isVisible()) ||
-        (await page.getByText(/بيانات المسافر|Passenger information/i).isVisible());
+        (await page
+          .getByText(/بيانات المسافر|Passenger information/i)
+          .isVisible());
 
       expect(hasPassengerForm).toBeTruthy();
     });
@@ -145,7 +147,9 @@ test.describe("Checkout Flow", () => {
 
       // Verify fields are filled
       if (await firstNameInput.isVisible()) {
-        await expect(firstNameInput).toHaveValue(testPassengers.adult1.firstName);
+        await expect(firstNameInput).toHaveValue(
+          testPassengers.adult1.firstName
+        );
       }
     });
 
@@ -300,8 +304,12 @@ test.describe("Checkout Flow", () => {
 
       // Look for ancillary services section
       const hasAncillaries =
-        (await page.locator('[data-testid="ancillary-services"]').isVisible()) ||
-        (await page.getByText(/خدمات إضافية|Additional services/i).isVisible()) ||
+        (await page
+          .locator('[data-testid="ancillary-services"]')
+          .isVisible()) ||
+        (await page
+          .getByText(/خدمات إضافية|Additional services/i)
+          .isVisible()) ||
         (await page.getByText(/الأمتعة|Baggage|حقائب/i).isVisible()) ||
         (await page.getByText(/الوجبات|Meals/i).isVisible());
 
@@ -443,13 +451,19 @@ test.describe("Checkout Flow", () => {
       // Check for payment form (Stripe or custom)
       const hasPaymentForm =
         (await page.locator('[data-testid="payment-form"]').isVisible()) ||
-        (await page.locator('iframe[name^="__privateStripeFrame"]').isVisible()) ||
+        (await page
+          .locator('iframe[name^="__privateStripeFrame"]')
+          .isVisible()) ||
         (await page.getByLabel(/رقم البطاقة|Card number/i).isVisible()) ||
-        (await page.getByText(/معلومات الدفع|Payment information/i).isVisible());
+        (await page
+          .getByText(/معلومات الدفع|Payment information/i)
+          .isVisible());
 
       // Payment may redirect to Stripe, so this is expected
       expect(
-        hasPaymentForm || page.url().includes("stripe") || page.url().includes("checkout")
+        hasPaymentForm ||
+          page.url().includes("stripe") ||
+          page.url().includes("checkout")
       ).toBeTruthy();
     });
 
@@ -489,7 +503,9 @@ test.describe("Checkout Flow", () => {
             (await page
               .locator('[data-testid="booking-confirmation"]')
               .isVisible()) ||
-            (await page.getByText(/تم الحجز بنجاح|Booking confirmed/i).isVisible()) ||
+            (await page
+              .getByText(/تم الحجز بنجاح|Booking confirmed/i)
+              .isVisible()) ||
             page.url().includes("confirmation") ||
             page.url().includes("success");
 
@@ -591,7 +607,9 @@ test.describe("Checkout Flow", () => {
       // Check for passenger info
       const hasPassengerInfo =
         (await page.locator('[data-testid="passenger-info"]').isVisible()) ||
-        (await page.getByText(/معلومات المسافر|Passenger information/i).isVisible());
+        (await page
+          .getByText(/معلومات المسافر|Passenger information/i)
+          .isVisible());
 
       expect(hasFlightInfo || hasPassengerInfo).toBeTruthy();
     });
@@ -611,7 +629,7 @@ test.describe("Checkout Flow", () => {
         // Check for success message
         const hasSentMessage =
           (await page.getByText(/تم الإرسال|Email sent/i).isVisible()) ||
-          (await page.locator('[data-sonner-toast]').isVisible());
+          (await page.locator("[data-sonner-toast]").isVisible());
 
         expect(hasSentMessage).toBeTruthy();
       }
@@ -766,7 +784,9 @@ test.describe("Checkout Flow", () => {
           (await page
             .locator('[data-testid="booking-confirmation"]')
             .isVisible()) ||
-          (await page.getByText(/تم الحجز بنجاح|Booking confirmed/i).isVisible()) ||
+          (await page
+            .getByText(/تم الحجز بنجاح|Booking confirmed/i)
+            .isVisible()) ||
           page.url().includes("confirmation") ||
           page.url().includes("success");
 

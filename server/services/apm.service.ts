@@ -17,7 +17,10 @@ interface Histogram {
   help: string;
   labels: string[];
   buckets: number[];
-  values: Map<string, { sum: number; count: number; buckets: HistogramBucket[] }>;
+  values: Map<
+    string,
+    { sum: number; count: number; buckets: HistogramBucket[] }
+  >;
 }
 
 interface Counter {
@@ -44,9 +47,15 @@ interface Summary {
 
 // ============ Default Histogram Buckets ============
 
-const DEFAULT_HTTP_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
-const DEFAULT_DB_BUCKETS = [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5];
-const DEFAULT_EXTERNAL_API_BUCKETS = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30];
+const DEFAULT_HTTP_BUCKETS = [
+  0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
+];
+const DEFAULT_DB_BUCKETS = [
+  0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5,
+];
+const DEFAULT_EXTERNAL_API_BUCKETS = [
+  0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30,
+];
 
 // ============ Metrics Registry ============
 
@@ -117,7 +126,11 @@ class MetricsRegistry {
   }
 
   // Observe a histogram value
-  observeHistogram(histogram: Histogram, value: number, labelValues: Record<string, string> = {}): void {
+  observeHistogram(
+    histogram: Histogram,
+    value: number,
+    labelValues: Record<string, string> = {}
+  ): void {
     const key = this.getLabelKey(labelValues);
     let data = histogram.values.get(key);
 
@@ -141,34 +154,54 @@ class MetricsRegistry {
   }
 
   // Increment a counter
-  incrementCounter(counter: Counter, value: number = 1, labelValues: Record<string, string> = {}): void {
+  incrementCounter(
+    counter: Counter,
+    value: number = 1,
+    labelValues: Record<string, string> = {}
+  ): void {
     const key = this.getLabelKey(labelValues);
     const current = counter.values.get(key) || 0;
     counter.values.set(key, current + value);
   }
 
   // Set a gauge value
-  setGauge(gauge: Gauge, value: number, labelValues: Record<string, string> = {}): void {
+  setGauge(
+    gauge: Gauge,
+    value: number,
+    labelValues: Record<string, string> = {}
+  ): void {
     const key = this.getLabelKey(labelValues);
     gauge.values.set(key, value);
   }
 
   // Increment a gauge
-  incrementGauge(gauge: Gauge, value: number = 1, labelValues: Record<string, string> = {}): void {
+  incrementGauge(
+    gauge: Gauge,
+    value: number = 1,
+    labelValues: Record<string, string> = {}
+  ): void {
     const key = this.getLabelKey(labelValues);
     const current = gauge.values.get(key) || 0;
     gauge.values.set(key, current + value);
   }
 
   // Decrement a gauge
-  decrementGauge(gauge: Gauge, value: number = 1, labelValues: Record<string, string> = {}): void {
+  decrementGauge(
+    gauge: Gauge,
+    value: number = 1,
+    labelValues: Record<string, string> = {}
+  ): void {
     const key = this.getLabelKey(labelValues);
     const current = gauge.values.get(key) || 0;
     gauge.values.set(key, current - value);
   }
 
   // Observe a summary value
-  observeSummary(summary: Summary, value: number, labelValues: Record<string, string> = {}): void {
+  observeSummary(
+    summary: Summary,
+    value: number,
+    labelValues: Record<string, string> = {}
+  ): void {
     const key = this.getLabelKey(labelValues);
     let data = summary.values.get(key);
 
@@ -202,12 +235,16 @@ class MetricsRegistry {
 
         for (const bucket of data.buckets) {
           const bucketLabels = { ...labels, le: String(bucket.le) };
-          lines.push(`${histogram.name}_bucket{${this.formatLabels(bucketLabels)}} ${bucket.count}`);
+          lines.push(
+            `${histogram.name}_bucket{${this.formatLabels(bucketLabels)}} ${bucket.count}`
+          );
         }
 
         // +Inf bucket
         const infLabels = { ...labels, le: "+Inf" };
-        lines.push(`${histogram.name}_bucket{${this.formatLabels(infLabels)}} ${data.count}`);
+        lines.push(
+          `${histogram.name}_bucket{${this.formatLabels(infLabels)}} ${data.count}`
+        );
         lines.push(`${histogram.name}_sum{${labelStr}} ${data.sum}`);
         lines.push(`${histogram.name}_count{${labelStr}} ${data.count}`);
       }
@@ -221,7 +258,9 @@ class MetricsRegistry {
       for (const [key, value] of counter.values) {
         const labels = this.parseLabels(key);
         const labelStr = this.formatLabels(labels);
-        lines.push(`${counter.name}${labelStr ? `{${labelStr}}` : ""} ${value}`);
+        lines.push(
+          `${counter.name}${labelStr ? `{${labelStr}}` : ""} ${value}`
+        );
       }
     }
 
@@ -254,7 +293,9 @@ class MetricsRegistry {
           for (const q of quantiles) {
             const idx = Math.ceil(q * sorted.length) - 1;
             const quantileLabels = { ...labels, quantile: String(q) };
-            lines.push(`${summary.name}{${this.formatLabels(quantileLabels)}} ${sorted[Math.max(0, idx)]}`);
+            lines.push(
+              `${summary.name}{${this.formatLabels(quantileLabels)}} ${sorted[Math.max(0, idx)]}`
+            );
           }
         }
 
@@ -492,8 +533,17 @@ export async function timeExternalApi<T>(
     throw error;
   } finally {
     const duration = timer.end();
-    registry.observeHistogram(externalApiDuration, duration, { service, endpoint, method });
-    registry.incrementCounter(externalApiRequestsTotal, 1, { service, endpoint, method, status });
+    registry.observeHistogram(externalApiDuration, duration, {
+      service,
+      endpoint,
+      method,
+    });
+    registry.incrementCounter(externalApiRequestsTotal, 1, {
+      service,
+      endpoint,
+      method,
+      status,
+    });
   }
 }
 
@@ -509,7 +559,11 @@ export function recordCounter(
 ): void {
   let counter = registry["counters"].get(name);
   if (!counter) {
-    counter = registry.createCounter(name, `Custom counter: ${name}`, Object.keys(labels));
+    counter = registry.createCounter(
+      name,
+      `Custom counter: ${name}`,
+      Object.keys(labels)
+    );
   }
   registry.incrementCounter(counter, value, labels);
 }
@@ -524,7 +578,11 @@ export function recordGauge(
 ): void {
   let gauge = registry["gauges"].get(name);
   if (!gauge) {
-    gauge = registry.createGauge(name, `Custom gauge: ${name}`, Object.keys(labels));
+    gauge = registry.createGauge(
+      name,
+      `Custom gauge: ${name}`,
+      Object.keys(labels)
+    );
   }
   registry.setGauge(gauge, value, labels);
 }
@@ -540,7 +598,12 @@ export function recordHistogram(
 ): void {
   let histogram = registry["histograms"].get(name);
   if (!histogram) {
-    histogram = registry.createHistogram(name, `Custom histogram: ${name}`, Object.keys(labels), buckets);
+    histogram = registry.createHistogram(
+      name,
+      `Custom histogram: ${name}`,
+      Object.keys(labels),
+      buckets
+    );
   }
   registry.observeHistogram(histogram, value, labels);
 }
@@ -557,12 +620,16 @@ export function collectSystemMetrics(): void {
   // Memory metrics
   const memUsage = process.memoryUsage();
   registry.setGauge(memoryUsageBytes, memUsage.heapUsed, { type: "heap_used" });
-  registry.setGauge(memoryUsageBytes, memUsage.heapTotal, { type: "heap_total" });
+  registry.setGauge(memoryUsageBytes, memUsage.heapTotal, {
+    type: "heap_total",
+  });
   registry.setGauge(memoryUsageBytes, memUsage.rss, { type: "rss" });
   registry.setGauge(memoryUsageBytes, memUsage.external, { type: "external" });
 
   if (memUsage.arrayBuffers !== undefined) {
-    registry.setGauge(memoryUsageBytes, memUsage.arrayBuffers, { type: "array_buffers" });
+    registry.setGauge(memoryUsageBytes, memUsage.arrayBuffers, {
+      type: "array_buffers",
+    });
   }
 
   // CPU metrics
@@ -571,7 +638,9 @@ export function collectSystemMetrics(): void {
   const elapsedMs = currentTime - lastCpuTime;
 
   if (elapsedMs > 0) {
-    const cpuPercent = ((currentCpuUsage.user + currentCpuUsage.system) / 1000) / elapsedMs * 100;
+    const cpuPercent =
+      ((currentCpuUsage.user + currentCpuUsage.system) / 1000 / elapsedMs) *
+      100;
     registry.setGauge(cpuUsagePercent, Math.min(cpuPercent, 100));
   }
 
@@ -633,7 +702,10 @@ export function apmRequestMiddleware(
   // Override res.end to capture timing
   const originalEnd = res.end.bind(res);
 
-  res.end = function(this: Response, ...args: Parameters<Response["end"]>): Response {
+  res.end = function (
+    this: Response,
+    ...args: Parameters<Response["end"]>
+  ): Response {
     // Calculate duration
     const duration = req.apmStartTime
       ? Number(process.hrtime.bigint() - req.apmStartTime) / 1e9
@@ -689,7 +761,10 @@ function normalizeRoute(req: Request): string {
     // Replace numeric IDs
     .replace(/\/\d+/g, "/:id")
     // Replace UUIDs
-    .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "/:uuid")
+    .replace(
+      /\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
+      "/:uuid"
+    )
     // Replace common ID patterns
     .replace(/\/[A-Z0-9]{6,}/g, "/:ref");
 
@@ -721,13 +796,21 @@ export function recordTrpcTiming(
  * Record a new booking
  */
 export function recordBooking(status: string, cabinClass: string): void {
-  registry.incrementCounter(bookingsTotal, 1, { status, cabin_class: cabinClass });
+  registry.incrementCounter(bookingsTotal, 1, {
+    status,
+    cabin_class: cabinClass,
+  });
 }
 
 /**
  * Record a payment
  */
-export function recordPayment(status: string, provider: string, amount: number, currency: string): void {
+export function recordPayment(
+  status: string,
+  provider: string,
+  amount: number,
+  currency: string
+): void {
   registry.incrementCounter(paymentsTotal, 1, { status, provider });
   registry.incrementCounter(paymentAmountTotal, amount, { currency });
 }

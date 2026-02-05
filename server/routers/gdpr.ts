@@ -47,7 +47,11 @@ export const gdprRouter = router({
         userAgent: ctx.req.headers["user-agent"],
       };
 
-      return await gdprService.updateConsent(ctx.user.id, input, requestContext);
+      return await gdprService.updateConsent(
+        ctx.user.id,
+        input,
+        requestContext
+      );
     }),
 
   /**
@@ -134,7 +138,10 @@ export const gdprRouter = router({
         .optional()
     )
     .query(async ({ ctx, input }) => {
-      return await gdprService.getExportHistory(ctx.user.id, input?.limit ?? 10);
+      return await gdprService.getExportHistory(
+        ctx.user.id,
+        input?.limit ?? 10
+      );
     }),
 
   /**

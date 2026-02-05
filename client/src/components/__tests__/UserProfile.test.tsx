@@ -453,21 +453,30 @@ describe("UserProfileForm", () => {
 
   describe("Select Options", () => {
     it("seat select displays current value", () => {
-      const formData = { ...createDefaultFormData(), preferredSeatType: "aisle" as const };
+      const formData = {
+        ...createDefaultFormData(),
+        preferredSeatType: "aisle" as const,
+      };
       renderForm({ formData });
 
       expect(screen.getByTestId("seat-select")).toHaveTextContent("Aisle");
     });
 
     it("cabin select displays current value", () => {
-      const formData = { ...createDefaultFormData(), preferredCabinClass: "business" as const };
+      const formData = {
+        ...createDefaultFormData(),
+        preferredCabinClass: "business" as const,
+      };
       renderForm({ formData });
 
       expect(screen.getByTestId("cabin-select")).toHaveTextContent("Business");
     });
 
     it("meal select displays current value", () => {
-      const formData = { ...createDefaultFormData(), mealPreference: "halal" as const };
+      const formData = {
+        ...createDefaultFormData(),
+        mealPreference: "halal" as const,
+      };
       renderForm({ formData });
 
       expect(screen.getByTestId("meal-select")).toHaveTextContent("Halal");
@@ -484,7 +493,10 @@ describe("UserProfileForm", () => {
 
   describe("Toggle States", () => {
     it("reflects wheelchair toggle state", () => {
-      const formData = { ...createDefaultFormData(), wheelchairAssistance: true };
+      const formData = {
+        ...createDefaultFormData(),
+        wheelchairAssistance: true,
+      };
       renderForm({ formData });
 
       const wheelchairSwitch = screen.getByTestId("wheelchair-switch");
@@ -536,7 +548,9 @@ describe("UserProfileForm", () => {
 
       await user.click(screen.getByTestId("tab-personal"));
       const nationalityInput = screen.getByTestId("nationality-input");
-      fireEvent.change(nationalityInput, { target: { value: "المملكة العربية السعودية" } });
+      fireEvent.change(nationalityInput, {
+        target: { value: "المملكة العربية السعودية" },
+      });
 
       expect(onFormDataChange).toHaveBeenCalledWith(
         expect.objectContaining({ nationality: "المملكة العربية السعودية" })
