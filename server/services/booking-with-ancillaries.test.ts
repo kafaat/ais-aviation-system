@@ -34,12 +34,12 @@ describe("Booking with Ancillaries Integration", () => {
     }
 
     // Create test user
+    const ts = Date.now();
     const userResult = await db.insert(users).values({
-      email: `booking-ancillary-test-${Date.now()}@example.com`,
-      password: "hashedpassword123",
+      email: `booking-ancillary-test-${ts}@example.com`,
       name: "Booking Ancillary Test User",
       role: "user",
-      openId: `test-booking-ancillary-${Date.now()}`,
+      openId: `test-booking-ancillary-${ts}`,
     });
     testUserId = (userResult as any).insertId;
 

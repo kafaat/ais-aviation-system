@@ -57,7 +57,6 @@ describe("Corporate Service", () => {
     const timestamp = Date.now();
     const userResult = await db.insert(users).values({
       email: `corporate-test-${timestamp}@example.com`,
-      password: "hashedpassword123",
       name: "Corporate Test User",
       role: "user",
       openId: `test-corporate-user-${timestamp}`,
@@ -66,7 +65,6 @@ describe("Corporate Service", () => {
 
     const adminUserResult = await db.insert(users).values({
       email: `corporate-admin-${timestamp}@example.com`,
-      password: "hashedpassword123",
       name: "Corporate Admin User",
       role: "admin",
       openId: `test-corporate-admin-${timestamp}`,
