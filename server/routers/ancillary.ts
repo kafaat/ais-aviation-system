@@ -2,6 +2,9 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import * as ancillaryService from "../services/ancillary-services.service";
 import { TRPCError } from "@trpc/server";
+import { getDb } from "../db";
+import { bookings, bookingAncillaries } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Ancillary Services Router
@@ -82,7 +85,29 @@ export const ancillaryRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      // TODO: Verify booking belongs to user
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [booking] = await db
+        .select({ userId: bookings.userId })
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+
+      if (!booking) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      }
+
+      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied",
+        });
+      }
+
       return await ancillaryService.addAncillaryToBooking(input);
     }),
 
@@ -92,7 +117,29 @@ export const ancillaryRouter = router({
   getBookingAncillaries: protectedProcedure
     .input(z.object({ bookingId: z.number() }))
     .query(async ({ input, ctx }) => {
-      // TODO: Verify booking belongs to user
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [booking] = await db
+        .select({ userId: bookings.userId })
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+
+      if (!booking) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      }
+
+      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied",
+        });
+      }
+
       return await ancillaryService.getBookingAncillaries(input.bookingId);
     }),
 
@@ -102,7 +149,38 @@ export const ancillaryRouter = router({
   removeFromBooking: protectedProcedure
     .input(z.object({ ancillaryId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      // TODO: Verify ancillary belongs to user's booking
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [ancillary] = await db
+        .select({ bookingId: bookingAncillaries.bookingId })
+        .from(bookingAncillaries)
+        .where(eq(bookingAncillaries.id, input.ancillaryId))
+        .limit(1);
+
+      if (!ancillary) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking ancillary not found",
+        });
+      }
+
+      const [booking] = await db
+        .select({ userId: bookings.userId })
+        .from(bookings)
+        .where(eq(bookings.id, ancillary.bookingId))
+        .limit(1);
+
+      if (
+        !booking ||
+        (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied",
+        });
+      }
+
       return await ancillaryService.removeAncillaryFromBooking(
         input.ancillaryId
       );

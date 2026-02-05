@@ -44,6 +44,9 @@ describe("Corporate Service", () => {
   const testOriginId = 999802;
   const testDestinationId = 999803;
 
+  // Short unique suffix for varchar(6) fields
+  const shortId = String(Date.now()).slice(-3);
+
   beforeAll(async () => {
     const db = await getDb();
     if (!db) {
@@ -51,21 +54,20 @@ describe("Corporate Service", () => {
     }
 
     // Create test users
+    const timestamp = Date.now();
     const userResult = await db.insert(users).values({
-      email: "corporate-test@example.com",
-      password: "hashedpassword123",
+      email: `corporate-test-${timestamp}@example.com`,
       name: "Corporate Test User",
       role: "user",
-      openId: `test-corporate-user-${Date.now()}`,
+      openId: `test-corporate-user-${timestamp}`,
     });
     testUserId = (userResult as any).insertId;
 
     const adminUserResult = await db.insert(users).values({
-      email: "corporate-admin@example.com",
-      password: "hashedpassword123",
+      email: `corporate-admin-${timestamp}@example.com`,
       name: "Corporate Admin User",
       role: "admin",
-      openId: `test-corporate-admin-${Date.now()}`,
+      openId: `test-corporate-admin-${timestamp}`,
     });
     testAdminUserId = (adminUserResult as any).insertId;
 
@@ -385,7 +387,7 @@ describe("Corporate Service", () => {
       expect(Array.isArray(users)).toBe(true);
       expect(users.length).toBeGreaterThan(0);
       expect(users[0].user).toBeDefined();
-      expect(users[0].user.email).toBe("corporate-test@example.com");
+      expect(users[0].user.email).toContain("corporate-test-");
     });
   });
 
@@ -429,13 +431,15 @@ describe("Corporate Service", () => {
 
       // Create test booking
       const bookingResult = await db.insert(bookings).values({
-        bookingReference: "CORP-TEST-001",
+        bookingReference: `CP${shortId}`,
+        pnr: `CP${shortId}`,
         userId: testUserId,
         flightId: testFlightId,
         status: "pending",
         paymentStatus: "pending",
         totalAmount: 50000,
         cabinClass: "economy",
+        numberOfPassengers: 1,
       });
       testBookingId = (bookingResult as any).insertId;
     });
@@ -525,13 +529,15 @@ describe("Corporate Service", () => {
 
       // Create test booking to reject
       const bookingResult = await db.insert(bookings).values({
-        bookingReference: "CORP-REJECT-001",
+        bookingReference: `CJ${shortId}`,
+        pnr: `CJ${shortId}`,
         userId: testUserId,
         flightId: testFlightId,
         status: "pending",
         paymentStatus: "pending",
         totalAmount: 50000,
         cabinClass: "economy",
+        numberOfPassengers: 1,
       });
       rejectTestBookingId = (bookingResult as any).insertId;
 

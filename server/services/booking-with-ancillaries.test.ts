@@ -34,12 +34,12 @@ describe("Booking with Ancillaries Integration", () => {
     }
 
     // Create test user
+    const ts = Date.now();
     const userResult = await db.insert(users).values({
-      email: `booking-ancillary-test-${Date.now()}@example.com`,
-      password: "hashedpassword123",
+      email: `booking-ancillary-test-${ts}@example.com`,
       name: "Booking Ancillary Test User",
       role: "user",
-      openId: `test-booking-ancillary-${Date.now()}`,
+      openId: `test-booking-ancillary-${ts}`,
     });
     testUserId = (userResult as any).insertId;
 
@@ -86,10 +86,10 @@ describe("Booking with Ancillaries Integration", () => {
       arrivalTime: arrivalTime,
       economyPrice: 50000,
       businessPrice: 100000,
-      firstClassPrice: 200000,
       economySeats: 100,
       businessSeats: 20,
-      firstClassSeats: 10,
+      economyAvailable: 100,
+      businessAvailable: 20,
       status: "scheduled",
     });
     testFlightId = (flightResult as any).insertId;
