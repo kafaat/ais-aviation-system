@@ -42,7 +42,9 @@ export function ModifyBookingDialog({
   booking,
 }: ModifyBookingDialogProps) {
   const [selectedTab, setSelectedTab] = useState<"date" | "upgrade">("date");
-  const [selectedFlightId, _setSelectedFlightId] = useState<number | null>(null);
+  const [selectedFlightId, _setSelectedFlightId] = useState<number | null>(
+    null
+  );
   const [isProcessing, setIsProcessing] = useState(false);
 
   const utils = trpc.useUtils();
