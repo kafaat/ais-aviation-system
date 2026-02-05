@@ -293,6 +293,20 @@ pnpm test booking.test.ts           # Run specific test file
 | `loyaltyAccounts`   | User loyalty/miles program                                |
 | `ancillaryServices` | Add-on services (baggage, meals, etc.)                    |
 
+### Phase 2 Entities
+
+| Entity              | Description                                     |
+| ------------------- | ----------------------------------------------- |
+| `airportGates`      | Airport gate definitions with terminal info     |
+| `gateAssignments`   | Flight-to-gate assignments with change tracking |
+| `vouchers`          | Promotional/discount codes                      |
+| `userCredits`       | User credit balances from refunds/promos        |
+| `voucherUsage`      | Voucher transaction history                     |
+| `creditUsage`       | Credit usage tracking                           |
+| `waitlist`          | Flight waitlist entries                         |
+| `corporateAccounts` | Business travel accounts                        |
+| `travelAgents`      | Travel agent profiles and commissions           |
+
 ### Booking Flow
 
 1. User searches flights (`flights.search`)
@@ -311,17 +325,27 @@ pnpm test booking.test.ts           # Run specific test file
 
 All tRPC routes are under `/api/trpc/*`. Main routers:
 
-| Router      | Purpose                     |
-| ----------- | --------------------------- |
-| `auth`      | Authentication (me, logout) |
-| `flights`   | Flight search and details   |
-| `bookings`  | Booking CRUD operations     |
-| `payments`  | Payment processing          |
-| `refunds`   | Refund handling             |
-| `loyalty`   | Loyalty program             |
-| `admin`     | Admin operations            |
-| `analytics` | Reports and statistics      |
-| `health`    | Health check endpoints      |
+| Router          | Purpose                           |
+| --------------- | --------------------------------- |
+| `auth`          | Authentication (me, logout)       |
+| `flights`       | Flight search and details         |
+| `bookings`      | Booking CRUD operations           |
+| `payments`      | Payment processing                |
+| `refunds`       | Refund handling                   |
+| `loyalty`       | Loyalty program                   |
+| `admin`         | Admin operations                  |
+| `analytics`     | Reports and statistics            |
+| `health`        | Health check endpoints            |
+| `gates`         | Gate management and assignments   |
+| `vouchers`      | Voucher codes and user credits    |
+| `splitPayments` | Split payment between users       |
+| `priceCalendar` | Price calendar for flexible dates |
+| `waitlist`      | Flight waitlist management        |
+| `corporate`     | Corporate/business bookings       |
+| `travelAgent`   | Travel agent portal               |
+| `groupBookings` | Group booking requests            |
+| `notifications` | User notifications                |
+| `priceAlerts`   | Price drop alerts                 |
 
 ## Environment Variables
 
@@ -410,6 +434,73 @@ pnpm check        # Verify types
 
 - Use Stripe CLI for local testing: `stripe listen --forward-to localhost:3000/api/stripe/webhook`
 - Update `STRIPE_WEBHOOK_SECRET` with the secret from CLI
+
+## Phase 2 Features
+
+### Gate Management System
+
+Components for managing airport gates:
+
+```typescript
+// Display gate info
+import { GateDisplay } from "@/components/GateDisplay";
+<GateDisplay flightId={123} compact />
+
+// Gate change alerts
+import { GateChangeAlert } from "@/components/GateChangeAlert";
+<GateChangeAlert flightNumber="SV123" oldGate="A1" newGate="B5" />
+
+// Admin management
+// Route: /admin/gates
+```
+
+### Voucher & Credits System
+
+```typescript
+// Apply voucher at checkout
+import { VoucherInput } from "@/components/VoucherInput";
+<VoucherInput bookingAmount={500} onVoucherApplied={(v) => setDiscount(v.discount)} />
+
+// Display user credits
+import { CreditBalance } from "@/components/CreditBalance";
+<CreditBalance onCreditsSelect={(amount) => setCreditsToUse(amount)} />
+
+// Admin management
+// Route: /admin/vouchers
+```
+
+### Split Payments
+
+Allow multiple users to share booking costs:
+
+```typescript
+trpc.splitPayments.createSplit.useMutation();
+trpc.splitPayments.getShareLink.useQuery({ bookingId });
+// Pay share page: /pay-share/:token
+```
+
+### Price Calendar
+
+Visual price comparison across dates:
+
+```typescript
+trpc.priceCalendar.getCalendar.useQuery({
+  originId,
+  destinationId,
+  month,
+  year,
+});
+```
+
+### Other Phase 2 Features
+
+| Feature        | Route            | Description                    |
+| -------------- | ---------------- | ------------------------------ |
+| Waitlist       | `/waitlist`      | Join waitlist for full flights |
+| Corporate      | `/corporate`     | Business travel management     |
+| Travel Agent   | `/agent`         | Agent booking portal           |
+| Group Bookings | `/group-booking` | Request group discounts        |
+| Price Alerts   | `/price-alerts`  | Get notified on price drops    |
 
 ## Additional Resources
 
