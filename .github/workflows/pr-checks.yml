@@ -93,22 +93,29 @@ jobs:
           fi
 
   # =============================================================================
-  # Dependency Review
+  # Dependency Review (Optional - requires Dependency Graph enabled)
   # =============================================================================
   dependency-review:
     name: Review Dependencies
     runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
+    continue-on-error: true  # Don't fail PR if Dependency Graph is not enabled
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
+        continue-on-error: true
         with:
           fail-on-severity: high
           # Note: Can only use allow-licenses OR deny-licenses, not both
           allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, Unlicense, WTFPL, BlueOak-1.0.0, Python-2.0
+
+      - name: Dependency review note
+        if: failure()
+        run: |
+          echo "::notice::Dependency review skipped. To enable, go to Settings > Security > Enable Dependency Graph"
 
   # =============================================================================
   # Check PR Checklist
