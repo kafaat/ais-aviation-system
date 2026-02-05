@@ -171,7 +171,10 @@ export const ancillaryRouter = router({
         .where(eq(bookings.id, ancillary.bookingId))
         .limit(1);
 
-      if (!booking || (booking.userId !== ctx.user.id && ctx.user.role !== "admin")) {
+      if (
+        !booking ||
+        (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
+      ) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied",
