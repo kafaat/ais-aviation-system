@@ -35,6 +35,9 @@ const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
 const GroupBookingsManagement = lazy(
   () => import("./pages/admin/GroupBookingsManagement")
 );
+const VoucherManagement = lazy(
+  () => import("./pages/admin/VoucherManagement")
+);
 
 // Group booking pages
 const GroupBookingRequest = lazy(() => import("./pages/GroupBookingRequest"));
@@ -249,6 +252,13 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <GroupBookingsManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/vouchers">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <VoucherManagement />
               </Suspense>
             </AdminRoute>
           </Route>
