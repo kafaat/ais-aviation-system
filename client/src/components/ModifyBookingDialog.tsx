@@ -42,7 +42,7 @@ export function ModifyBookingDialog({
   booking,
 }: ModifyBookingDialogProps) {
   const [selectedTab, setSelectedTab] = useState<"date" | "upgrade">("date");
-  const [selectedFlightId, setSelectedFlightId] = useState<number | null>(null);
+  const [selectedFlightId, _setSelectedFlightId] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const utils = trpc.useUtils();
@@ -50,7 +50,7 @@ export function ModifyBookingDialog({
   // Search for alternative flights on the same route
   // Only enabled when both origin and destination IDs are available
   const hasRouteIds = Boolean(booking.originId && booking.destinationId);
-  const { data: alternativeFlights, isLoading: isSearching } =
+  const { data: _alternativeFlights, isLoading: isSearching } =
     trpc.flights.search.useQuery(
       {
         originId: booking.originId || 0,
@@ -86,7 +86,7 @@ export function ModifyBookingDialog({
     });
 
   const requestUpgradeMutation = trpc.modifications.requestUpgrade.useMutation({
-    onSuccess: async data => {
+    onSuccess: async _data => {
       toast.success("Upgrade request created! Redirecting to payment...");
       // TODO: Create Stripe payment intent for upgrade
       await utils.bookings.myBookings.invalidate();
@@ -99,7 +99,7 @@ export function ModifyBookingDialog({
     },
   });
 
-  const handleChangeDate = () => {
+  const _handleChangeDate = () => {
     if (!selectedFlightId) {
       toast.error("Please select a new flight");
       return;

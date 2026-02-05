@@ -240,7 +240,7 @@ export function SearchHistory({
       </CardHeader>
       <CardContent className="p-0">
         <div className="divide-y">
-          {history.map((entry, index) => (
+          {history.map((entry, _index) => (
             <div
               key={entry.id}
               className="flex items-center justify-between p-4 hover:bg-muted/30 transition-colors group"

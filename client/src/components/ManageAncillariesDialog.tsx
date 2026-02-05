@@ -8,7 +8,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
@@ -53,7 +52,7 @@ export function ManageAncillariesDialog({
   open,
   onOpenChange,
   bookingId,
-  cabinClass,
+  cabinClass: _cabinClass,
   numberOfPassengers,
 }: ManageAncillariesDialogProps) {
   const utils = trpc.useUtils();
@@ -92,7 +91,7 @@ export function ManageAncillariesDialog({
     },
   });
 
-  const handleAddService = async (serviceId: number, price: number) => {
+  const handleAddService = async (serviceId: number, _price: number) => {
     const quantity = selectedServices[serviceId] || 1;
     await addAncillary.mutateAsync({
       bookingId,

@@ -505,9 +505,7 @@ describe("BookingForm", () => {
       );
     });
 
-    it("handles Arabic characters in names", async () => {
-      const user = userEvent.setup();
-
+    it("handles Arabic characters in names", () => {
       render(
         <BookingForm
           passengers={[createEmptyPassenger()]}

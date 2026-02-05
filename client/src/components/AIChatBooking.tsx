@@ -20,12 +20,9 @@ import {
   User,
   Plane,
   Calendar,
-  Clock,
-  CreditCard,
   MessageCircle,
   X,
   Minimize2,
-  Maximize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -112,7 +109,7 @@ export default function AIChatBooking({
         },
       ]);
       setIsOpen(true);
-    } catch (error) {
+    } catch (_error) {
       toast.error(t("chat.errorStarting"));
     } finally {
       setIsLoading(false);
@@ -152,7 +149,7 @@ export default function AIChatBooking({
       if (response.suggestions) {
         setSuggestions(response.suggestions);
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error(t("chat.errorSending"));
     } finally {
       setIsLoading(false);
@@ -175,7 +172,7 @@ export default function AIChatBooking({
       }
 
       toast.success(t("chat.bookingSelected"));
-    } catch (error) {
+    } catch (_error) {
       toast.error(t("chat.errorSelecting"));
     } finally {
       setIsLoading(false);

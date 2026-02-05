@@ -50,7 +50,7 @@ export function VoucherInput({
     },
   });
 
-  const handleApply = async () => {
+  const handleApply = () => {
     if (!code.trim()) {
       toast.error(t("voucher.enterCode"));
       return;

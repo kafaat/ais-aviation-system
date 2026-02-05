@@ -9,7 +9,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -22,7 +21,6 @@ import {
   PlaneIcon,
   Plus,
   Minus,
-  Check,
 } from "lucide-react";
 
 interface AncillarySelectionProps {
@@ -91,7 +89,7 @@ export default function AncillarySelection({
   const handleQuantityChange = (
     serviceId: number,
     delta: number,
-    price: number
+    _price: number
   ) => {
     const newSelected = new Map(selectedServices);
     const current = newSelected.get(serviceId) || 0;
@@ -129,12 +127,12 @@ export default function AncillarySelection({
     onSelectionChange(selected, totalCost);
   };
 
-  const toggleService = (serviceId: number, price: number) => {
+  const toggleService = (serviceId: number, _price: number) => {
     const current = selectedServices.get(serviceId) || 0;
     if (current > 0) {
-      handleQuantityChange(serviceId, -current, price);
+      handleQuantityChange(serviceId, -current, _price);
     } else {
-      handleQuantityChange(serviceId, 1, price);
+      handleQuantityChange(serviceId, 1, _price);
     }
   };
 

@@ -440,7 +440,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     if (isTokenExpiringSoon(stored.expiresAt)) {
-      return refreshTokenInternal(stored.refreshToken);
+      return await refreshTokenInternal(stored.refreshToken);
     }
 
     return stored.accessToken;

@@ -16,7 +16,6 @@ import {
   PlaneLanding,
   Clock,
   XCircle,
-  CheckCircle,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -203,7 +202,7 @@ export function FlightStatusIndicator({
   statusData?: FlightStatusData;
   isConnected?: boolean;
 }) {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
 
   if (!statusData) {
     return null;

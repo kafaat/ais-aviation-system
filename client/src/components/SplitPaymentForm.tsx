@@ -77,7 +77,7 @@ export function SplitPaymentForm({
       percentage: 50,
     },
   ]);
-  const [equalSplit, setEqualSplit] = useState(true);
+  const [_equalSplit, setEqualSplit] = useState(true);
 
   const initiateMutation = trpc.splitPayments.initiate.useMutation({
     onSuccess: () => {
