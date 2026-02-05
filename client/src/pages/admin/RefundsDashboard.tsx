@@ -17,8 +17,9 @@ import {
   Clock,
   RefreshCw,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
+import { ExportReportButton } from "@/components/ExportReportButton";
 
 export default function RefundsDashboard() {
   const { data: stats, isLoading: statsLoading } =
@@ -42,14 +43,23 @@ export default function RefundsDashboard() {
     );
   }
 
+  // Default date filters for export (last 30 days)
+  const exportFilters = {
+    startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
+    endDate: format(new Date(), "yyyy-MM-dd"),
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">إدارة الاستردادات</h1>
-        <p className="text-muted-foreground">
-          عرض وإدارة جميع عمليات استرداد الأموال
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">إدارة الاستردادات</h1>
+          <p className="text-muted-foreground">
+            عرض وإدارة جميع عمليات استرداد الأموال
+          </p>
+        </div>
+        <ExportReportButton reportType="refunds" filters={exportFilters} />
       </div>
 
       {/* Statistics Cards */}

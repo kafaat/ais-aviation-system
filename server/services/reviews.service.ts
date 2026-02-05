@@ -420,3 +420,196 @@ export async function markReviewHelpful(reviewId: number) {
     });
   }
 }
+
+/**
+ * Get aggregated reviews for an airline
+ */
+export async function getAirlineReviews(
+  airlineId: number,
+  options?: {
+    limit?: number;
+    offset?: number;
+    minRating?: number;
+  }
+) {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+
+  try {
+    const limit = options?.limit || 20;
+    const offset = options?.offset || 0;
+
+    // Join flight_reviews with flights to get reviews for flights by this airline
+    const reviews = await db
+      .select({
+        review: flightReviews,
+        flight: flights,
+      })
+      .from(flightReviews)
+      .innerJoin(flights, eq(flightReviews.flightId, flights.id))
+      .where(
+        and(
+          eq(flights.airlineId, airlineId),
+          eq(flightReviews.status, "approved"),
+          options?.minRating
+            ? sql`${flightReviews.rating} >= ${options.minRating}`
+            : undefined
+        )
+      )
+      .orderBy(desc(flightReviews.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return reviews;
+  } catch (error) {
+    console.error("[Reviews Service] Error getting airline reviews:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to get airline reviews",
+    });
+  }
+}
+
+/**
+ * Get aggregated statistics for an airline
+ */
+export async function getAirlineReviewStats(airlineId: number) {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+
+  try {
+    const [stats] = await db
+      .select({
+        totalReviews: count(),
+        averageRating: avg(flightReviews.rating),
+        averageComfort: avg(flightReviews.comfortRating),
+        averageService: avg(flightReviews.serviceRating),
+        averageValue: avg(flightReviews.valueRating),
+      })
+      .from(flightReviews)
+      .innerJoin(flights, eq(flightReviews.flightId, flights.id))
+      .where(
+        and(
+          eq(flights.airlineId, airlineId),
+          eq(flightReviews.status, "approved")
+        )
+      );
+
+    // Get rating distribution
+    const ratingDistribution = await db
+      .select({
+        rating: flightReviews.rating,
+        count: count(),
+      })
+      .from(flightReviews)
+      .innerJoin(flights, eq(flightReviews.flightId, flights.id))
+      .where(
+        and(
+          eq(flights.airlineId, airlineId),
+          eq(flightReviews.status, "approved")
+        )
+      )
+      .groupBy(flightReviews.rating);
+
+    const distribution: Record<number, number> = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+    };
+
+    ratingDistribution.forEach(item => {
+      if (item.rating) {
+        distribution[item.rating] = Number(item.count) || 0;
+      }
+    });
+
+    return {
+      totalReviews: Number(stats?.totalReviews) || 0,
+      averageRating: Number(stats?.averageRating) || 0,
+      averageComfort: Number(stats?.averageComfort) || 0,
+      averageService: Number(stats?.averageService) || 0,
+      averageValue: Number(stats?.averageValue) || 0,
+      ratingDistribution: distribution,
+    };
+  } catch (error) {
+    console.error(
+      "[Reviews Service] Error getting airline review stats:",
+      error
+    );
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to get airline review statistics",
+    });
+  }
+}
+
+/**
+ * Check if user can review a flight (must have completed booking)
+ */
+export async function canUserReviewFlight(
+  userId: number,
+  flightId: number
+): Promise<{ canReview: boolean; bookingId?: number; reason?: string }> {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+
+  try {
+    // Check if user already has a review for this flight
+    const existingReview = await db
+      .select()
+      .from(flightReviews)
+      .where(
+        and(
+          eq(flightReviews.userId, userId),
+          eq(flightReviews.flightId, flightId)
+        )
+      )
+      .limit(1);
+
+    if (existingReview.length > 0) {
+      return { canReview: false, reason: "already_reviewed" };
+    }
+
+    // Check if user has a completed booking for this flight
+    const completedBooking = await db
+      .select()
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.userId, userId),
+          eq(bookings.flightId, flightId),
+          eq(bookings.status, "completed")
+        )
+      )
+      .limit(1);
+
+    if (completedBooking.length > 0) {
+      return { canReview: true, bookingId: completedBooking[0].id };
+    }
+
+    return { canReview: false, reason: "no_completed_booking" };
+  } catch (error) {
+    console.error(
+      "[Reviews Service] Error checking if user can review:",
+      error
+    );
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to check review eligibility",
+    });
+  }
+}

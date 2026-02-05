@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Card,
@@ -23,6 +24,8 @@ import {
   Cell,
 } from "recharts";
 import { TrendingUp, Users, DollarSign, XCircle, Plane } from "lucide-react";
+import { ExportReportButton } from "@/components/ExportReportButton";
+import { format, subDays } from "date-fns";
 
 const COLORS = [
   "#3b82f6",
@@ -45,11 +48,31 @@ export default function AnalyticsDashboard() {
   const { data: flightOccupancy, isLoading: occupancyLoading } =
     trpc.analytics.getFlightOccupancy.useQuery();
 
+  // Default date filters for export (last 30 days)
+  const exportFilters = {
+    startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
+    endDate: format(new Date(), "yyyy-MM-dd"),
+  };
+
   return (
     <div className="container py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">لوحة التحليلات</h1>
-        <p className="text-muted-foreground">نظرة شاملة على أداء النظام</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">لوحة التحليلات</h1>
+          <p className="text-muted-foreground">نظرة شاملة على أداء النظام</p>
+        </div>
+        <div className="flex gap-2">
+          <ExportReportButton
+            reportType="bookings"
+            filters={exportFilters}
+            variant="outline"
+          />
+          <ExportReportButton
+            reportType="revenue"
+            filters={exportFilters}
+            variant="outline"
+          />
+        </div>
       </div>
 
       {/* KPI Cards */}

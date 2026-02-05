@@ -7,8 +7,10 @@ import {
   flights,
   airports,
   airlines,
+  userFlightFavorites,
   type InsertFavoriteFlight,
   type InsertPriceAlertHistory,
+  type InsertUserFlightFavorite,
 } from "../../drizzle/schema";
 
 /**
@@ -543,5 +545,206 @@ export async function getBestPricesForFavorite(
       code: "INTERNAL_SERVER_ERROR",
       message: "Failed to get best prices",
     });
+  }
+}
+
+// ============================================================================
+// Individual Flight Favorites (specific flights, not routes)
+// ============================================================================
+
+/**
+ * Add a specific flight to favorites
+ */
+export async function addFlightFavorite(userId: number, flightId: number) {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+
+  try {
+    // Check if already favorited
+    const [existing] = await db
+      .select()
+      .from(userFlightFavorites)
+      .where(
+        and(
+          eq(userFlightFavorites.userId, userId),
+          eq(userFlightFavorites.flightId, flightId)
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This flight is already in your favorites",
+      });
+    }
+
+    // Verify flight exists
+    const [flight] = await db
+      .select()
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .limit(1);
+
+    if (!flight) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Flight not found",
+      });
+    }
+
+    const favoriteData: InsertUserFlightFavorite = {
+      userId,
+      flightId,
+    };
+
+    const [result] = await db.insert(userFlightFavorites).values(favoriteData);
+
+    return {
+      id: result.insertId,
+      ...favoriteData,
+      createdAt: new Date(),
+    };
+  } catch (error) {
+    if (error instanceof TRPCError) throw error;
+    console.error("[Favorites Service] Error adding flight favorite:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to add flight to favorites",
+    });
+  }
+}
+
+/**
+ * Remove a specific flight from favorites
+ */
+export async function removeFlightFavorite(userId: number, flightId: number) {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+
+  try {
+    // Verify ownership
+    const [favorite] = await db
+      .select()
+      .from(userFlightFavorites)
+      .where(
+        and(
+          eq(userFlightFavorites.userId, userId),
+          eq(userFlightFavorites.flightId, flightId)
+        )
+      )
+      .limit(1);
+
+    if (!favorite) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Favorite not found",
+      });
+    }
+
+    await db
+      .delete(userFlightFavorites)
+      .where(eq(userFlightFavorites.id, favorite.id));
+
+    return { success: true };
+  } catch (error) {
+    if (error instanceof TRPCError) throw error;
+    console.error("[Favorites Service] Error removing flight favorite:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to remove flight from favorites",
+    });
+  }
+}
+
+/**
+ * Get all flight favorites for a user
+ */
+export async function getUserFlightFavorites(userId: number) {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+
+  try {
+    const favorites = await db
+      .select({
+        favorite: userFlightFavorites,
+        flight: flights,
+        origin: {
+          id: airports.id,
+          code: airports.code,
+          name: airports.name,
+          city: airports.city,
+          country: airports.country,
+        },
+        destination: {
+          id: sql<number>`dest.id`,
+          code: sql<string>`dest.code`,
+          name: sql<string>`dest.name`,
+          city: sql<string>`dest.city`,
+          country: sql<string>`dest.country`,
+        },
+        airline: {
+          id: airlines.id,
+          code: airlines.code,
+          name: airlines.name,
+          logo: airlines.logo,
+        },
+      })
+      .from(userFlightFavorites)
+      .innerJoin(flights, eq(userFlightFavorites.flightId, flights.id))
+      .innerJoin(airports, eq(flights.originId, airports.id))
+      .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
+      .innerJoin(airlines, eq(flights.airlineId, airlines.id))
+      .where(eq(userFlightFavorites.userId, userId))
+      .orderBy(desc(userFlightFavorites.createdAt));
+
+    return favorites;
+  } catch (error) {
+    console.error("[Favorites Service] Error getting flight favorites:", error);
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to get flight favorites",
+    });
+  }
+}
+
+/**
+ * Check if a specific flight is favorited
+ */
+export async function isFlightFavorited(userId: number, flightId: number) {
+  const db = await getDb();
+  if (!db) return false;
+
+  try {
+    const [favorite] = await db
+      .select({ id: userFlightFavorites.id })
+      .from(userFlightFavorites)
+      .where(
+        and(
+          eq(userFlightFavorites.userId, userId),
+          eq(userFlightFavorites.flightId, flightId)
+        )
+      )
+      .limit(1);
+
+    return !!favorite;
+  } catch (error) {
+    console.error(
+      "[Favorites Service] Error checking if flight favorited:",
+      error
+    );
+    return false;
   }
 }

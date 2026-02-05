@@ -17,6 +17,7 @@ import { ancillaryRouter } from "./routers/ancillary";
 import { healthRouter } from "./routers/health";
 import { reviewsRouter } from "./routers/reviews";
 import { favoritesRouter } from "./routers/favorites";
+import { priceAlertsRouter } from "./routers/price-alerts";
 import { aiChatRouter } from "./routers/ai-chat";
 import { reportsRouter } from "./routers/reports";
 import { gdprRouter } from "./routers/gdpr";
@@ -24,6 +25,8 @@ import { rateLimitRouter } from "./routers/rate-limit";
 import { metricsRouter } from "./routers/metrics";
 import { authRouter } from "./routers/auth";
 import { cacheRouter } from "./routers/cache";
+import { groupBookingsRouter } from "./routers/group-bookings";
+import { specialServicesRouter } from "./routers/special-services";
 
 /**
  * Main Application Router
@@ -62,12 +65,15 @@ export const appRouter = router({
   health: healthRouter,
   reviews: reviewsRouter,
   favorites: favoritesRouter,
+  priceAlerts: priceAlertsRouter,
   aiChat: aiChatRouter,
   reports: reportsRouter,
   gdpr: gdprRouter,
   rateLimit: rateLimitRouter,
   metrics: metricsRouter,
   cache: cacheRouter,
+  groupBookings: groupBookingsRouter,
+  specialServices: specialServicesRouter,
 });
 
 export type AppRouter = typeof appRouter;

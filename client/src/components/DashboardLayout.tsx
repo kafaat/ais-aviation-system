@@ -25,6 +25,7 @@ import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   BarChart3,
+  Bell,
   FileText,
   Heart,
   Home,
@@ -37,6 +38,7 @@ import {
   Star,
   Ticket,
   User,
+  Users,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -58,6 +60,7 @@ const menuItems: MenuItem[] = [
   { icon: Search, labelKey: "nav.searchFlights", path: "/search" },
   { icon: Ticket, labelKey: "nav.myBookings", path: "/my-bookings" },
   { icon: Heart, labelKey: "nav.favorites", path: "/favorites" },
+  { icon: Bell, labelKey: "nav.priceAlerts", path: "/price-alerts" },
   { icon: Star, labelKey: "nav.loyalty", path: "/loyalty" },
   { icon: Plane, labelKey: "nav.checkIn", path: "/check-in" },
   { icon: User, labelKey: "nav.profile", path: "/profile" },
@@ -81,6 +84,12 @@ const adminMenuItems: MenuItem[] = [
     icon: RefreshCcw,
     labelKey: "nav.refunds",
     path: "/admin/refunds",
+    adminOnly: true,
+  },
+  {
+    icon: Users,
+    labelKey: "nav.groupBookings",
+    path: "/admin/group-bookings",
     adminOnly: true,
   },
 ];

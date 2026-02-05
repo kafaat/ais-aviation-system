@@ -18,12 +18,19 @@ const CheckIn = lazy(() => import("./pages/CheckIn"));
 const Profile = lazy(() => import("./pages/Profile"));
 const LoyaltyDashboard = lazy(() => import("./pages/LoyaltyDashboard"));
 const FavoritesPage = lazy(() => import("./pages/FavoritesPage"));
+const PriceAlerts = lazy(() => import("./pages/PriceAlerts"));
 
 // Admin pages
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AnalyticsDashboard = lazy(() => import("./pages/AnalyticsDashboard"));
 const RefundsDashboard = lazy(() => import("./pages/admin/RefundsDashboard"));
 const ReportsDashboard = lazy(() => import("./pages/admin/ReportsDashboard"));
+const GroupBookingsManagement = lazy(
+  () => import("./pages/admin/GroupBookingsManagement")
+);
+
+// Group booking pages
+const GroupBookingRequest = lazy(() => import("./pages/GroupBookingRequest"));
 
 // Error/utility pages
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -151,6 +158,16 @@ function Router() {
               <FavoritesPage />
             </Suspense>
           </Route>
+          <Route path="/price-alerts">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <PriceAlerts />
+            </Suspense>
+          </Route>
+          <Route path="/group-booking/:id">
+            <Suspense fallback={<PageLoadingFallback variant="form" />}>
+              <GroupBookingRequest />
+            </Suspense>
+          </Route>
 
           {/* Admin pages */}
           <Route path="/admin">
@@ -178,6 +195,13 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <ReportsDashboard />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/group-bookings">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <GroupBookingsManagement />
               </Suspense>
             </AdminRoute>
           </Route>

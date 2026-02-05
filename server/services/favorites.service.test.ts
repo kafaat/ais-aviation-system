@@ -202,4 +202,74 @@ describe("Favorites Service", () => {
     });
     expect(isFav).toBe(false);
   });
+
+  // ============================================================================
+  // Flight Favorites Tests (individual flights)
+  // ============================================================================
+
+  describe("Flight Favorites (individual flights)", () => {
+    it("should add a specific flight to favorites", async () => {
+      const favorite = await favoritesService.addFlightFavorite(
+        testUserId,
+        testFlightId
+      );
+
+      expect(favorite).toBeDefined();
+      expect(favorite.flightId).toBe(testFlightId);
+      expect(favorite.userId).toBe(testUserId);
+    });
+
+    it("should prevent duplicate flight favorites", async () => {
+      await expect(
+        favoritesService.addFlightFavorite(testUserId, testFlightId)
+      ).rejects.toThrow("already in your favorites");
+    });
+
+    it("should check if a flight is favorited", async () => {
+      const isFav = await favoritesService.isFlightFavorited(
+        testUserId,
+        testFlightId
+      );
+      expect(isFav).toBe(true);
+    });
+
+    it("should return false for non-favorited flight", async () => {
+      const isFav = await favoritesService.isFlightFavorited(
+        testUserId,
+        999999
+      );
+      expect(isFav).toBe(false);
+    });
+
+    it("should get user flight favorites with details", async () => {
+      const favorites =
+        await favoritesService.getUserFlightFavorites(testUserId);
+      expect(favorites.length).toBeGreaterThan(0);
+      expect(favorites[0].flight).toBeDefined();
+      expect(favorites[0].origin).toBeDefined();
+      expect(favorites[0].destination).toBeDefined();
+      expect(favorites[0].airline).toBeDefined();
+    });
+
+    it("should remove a flight from favorites", async () => {
+      const result = await favoritesService.removeFlightFavorite(
+        testUserId,
+        testFlightId
+      );
+      expect(result.success).toBe(true);
+
+      // Verify removal
+      const isFav = await favoritesService.isFlightFavorited(
+        testUserId,
+        testFlightId
+      );
+      expect(isFav).toBe(false);
+    });
+
+    it("should throw error when removing non-existent favorite", async () => {
+      await expect(
+        favoritesService.removeFlightFavorite(testUserId, 999999)
+      ).rejects.toThrow("not found");
+    });
+  });
 });
