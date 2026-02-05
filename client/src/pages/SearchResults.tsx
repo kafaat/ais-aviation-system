@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AdvancedFilters } from "@/components/AdvancedFilters";
-import { Plane, Clock, ArrowRight, ChevronLeft } from "lucide-react";
+import { SearchHistory, saveSearchToHistory } from "@/components/SearchHistory";
+import { Plane, Clock, ChevronLeft } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -52,6 +53,22 @@ export default function SearchResults() {
   const { data: flights, isLoading } = trpc.flights.search.useQuery(params!, {
     enabled: !!params,
   });
+
+  // Save search to history when we get results
+  useEffect(() => {
+    if (flights && flights.length > 0 && params) {
+      const flight = flights[0];
+      saveSearchToHistory({
+        originCode: flight.origin.code,
+        originCity: flight.origin.city,
+        destinationCode: flight.destination.code,
+        destinationCity: flight.destination.city,
+        departureDate: params.departureDate.toISOString().split("T")[0],
+        cabinClass: "economy",
+        passengers: 1,
+      });
+    }
+  }, [flights, params]);
 
   // Filter and sort flights based on selected filters
   const filteredFlights = useMemo(() => {
@@ -186,18 +203,25 @@ export default function SearchResults() {
       {/* Results */}
       <div className="container py-8">
         {!flights || flights.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Plane className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold mb-2">لا توجد رحلات متاحة</h2>
-            <p className="text-muted-foreground mb-6">
-              عذراً، لم نجد أي رحلات متاحة لهذا المسار في التاريخ المحدد
-            </p>
-            <Button asChild>
-              <Link href="/">
-                <a>العودة للبحث</a>
-              </Link>
-            </Button>
-          </Card>
+          <div className="space-y-6">
+            <Card className="p-12 text-center">
+              <Plane className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-2xl font-semibold mb-2">
+                لا توجد رحلات متاحة
+              </h2>
+              <p className="text-muted-foreground mb-6">
+                عذراً، لم نجد أي رحلات متاحة لهذا المسار في التاريخ المحدد
+              </p>
+              <Button asChild>
+                <Link href="/">
+                  <a>العودة للبحث</a>
+                </Link>
+              </Button>
+            </Card>
+
+            {/* Recent Searches */}
+            <SearchHistory />
+          </div>
         ) : (
           <div className="space-y-6">
             {/* Filters */}
