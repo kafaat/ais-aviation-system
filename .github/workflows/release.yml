@@ -1,0 +1,339 @@
+name: Release Automation
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: 'Create as prerelease'
+        required: false
+        default: false
+        type: boolean
+      custom_version:
+        description: 'Custom version (leave empty to auto-increment)'
+        required: false
+        type: string
+
+env:
+  NODE_VERSION: "22.x"
+  PNPM_VERSION: "10.4.1"
+
+jobs:
+  # =============================================================================
+  # Check if Release is Needed
+  # =============================================================================
+  check-release:
+    name: Check Release Conditions
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      release_type: ${{ steps.check.outputs.release_type }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check commits for release triggers
+        id: check
+        run: |
+          # For manual workflow dispatch, always release
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "release_type=${{ github.event.inputs.release_type }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Get commits since last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --oneline)
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --oneline)
+          fi
+
+          # Determine release type from conventional commits
+          RELEASE_TYPE="none"
+
+          if echo "$COMMITS" | grep -qE "^[a-f0-9]+ (feat|feature)(\(.+\))?!:"; then
+            RELEASE_TYPE="major"
+          elif echo "$COMMITS" | grep -qE "^[a-f0-9]+ BREAKING CHANGE"; then
+            RELEASE_TYPE="major"
+          elif echo "$COMMITS" | grep -qE "^[a-f0-9]+ (feat|feature)(\(.+\))?:"; then
+            RELEASE_TYPE="minor"
+          elif echo "$COMMITS" | grep -qE "^[a-f0-9]+ (fix|bugfix|perf|refactor)(\(.+\))?:"; then
+            RELEASE_TYPE="patch"
+          fi
+
+          if [ "$RELEASE_TYPE" != "none" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+          else
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "release_type=none" >> $GITHUB_OUTPUT
+          fi
+
+  # =============================================================================
+  # Calculate Version
+  # =============================================================================
+  version:
+    name: Calculate Version
+    needs: check-release
+    if: needs.check-release.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+      current_version: ${{ steps.version.outputs.current_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate new version
+        id: version
+        run: |
+          # Get current version from package.json
+          CURRENT_VERSION=$(jq -r '.version' package.json)
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+          # If custom version is provided, use it
+          if [ -n "${{ github.event.inputs.custom_version }}" ]; then
+            NEW_VERSION="${{ github.event.inputs.custom_version }}"
+            echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Parse current version
+          MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
+          MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
+          PATCH=$(echo $CURRENT_VERSION | cut -d. -f3 | cut -d- -f1)
+
+          # Increment based on release type
+          RELEASE_TYPE="${{ needs.check-release.outputs.release_type }}"
+
+          case $RELEASE_TYPE in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+
+          # Add prerelease suffix if requested
+          if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
+            NEW_VERSION="${NEW_VERSION}-rc.$(date +%Y%m%d%H%M)"
+          fi
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # Generate Changelog
+  # =============================================================================
+  changelog:
+    name: Generate Changelog
+    needs: [check-release, version]
+    runs-on: ubuntu-latest
+    outputs:
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get last tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          # Generate changelog content
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --reverse)
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
+          fi
+
+          # Categorize commits
+          FEATURES=$(echo "$COMMITS" | grep -E "^- (feat|feature)" || true)
+          FIXES=$(echo "$COMMITS" | grep -E "^- (fix|bugfix)" || true)
+          PERF=$(echo "$COMMITS" | grep -E "^- perf" || true)
+          DOCS=$(echo "$COMMITS" | grep -E "^- docs" || true)
+          CHORE=$(echo "$COMMITS" | grep -E "^- (chore|build|ci)" || true)
+          REFACTOR=$(echo "$COMMITS" | grep -E "^- refactor" || true)
+          OTHER=$(echo "$COMMITS" | grep -vE "^- (feat|feature|fix|bugfix|perf|docs|chore|build|ci|refactor)" || true)
+
+          # Build changelog
+          CHANGELOG="## What's Changed in v${{ needs.version.outputs.new_version }}\n\n"
+
+          if [ -n "$FEATURES" ]; then
+            CHANGELOG+="### Features\n$FEATURES\n\n"
+          fi
+
+          if [ -n "$FIXES" ]; then
+            CHANGELOG+="### Bug Fixes\n$FIXES\n\n"
+          fi
+
+          if [ -n "$PERF" ]; then
+            CHANGELOG+="### Performance Improvements\n$PERF\n\n"
+          fi
+
+          if [ -n "$REFACTOR" ]; then
+            CHANGELOG+="### Code Refactoring\n$REFACTOR\n\n"
+          fi
+
+          if [ -n "$DOCS" ]; then
+            CHANGELOG+="### Documentation\n$DOCS\n\n"
+          fi
+
+          if [ -n "$CHORE" ]; then
+            CHANGELOG+="### Maintenance\n$CHORE\n\n"
+          fi
+
+          if [ -n "$OTHER" ]; then
+            CHANGELOG+="### Other Changes\n$OTHER\n\n"
+          fi
+
+          # Add comparison link
+          if [ -n "$LAST_TAG" ]; then
+            CHANGELOG+="\n**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${{ needs.version.outputs.new_version }}"
+          fi
+
+          # Save to output (escape for multiline)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # Create Release
+  # =============================================================================
+  release:
+    name: Create Release
+    needs: [check-release, version, changelog]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update version in package.json
+        run: |
+          npm version ${{ needs.version.outputs.new_version }} --no-git-tag-version
+
+      - name: Update CHANGELOG.md
+        run: |
+          NEW_CHANGELOG="# Changelog\n\n${{ needs.changelog.outputs.changelog }}\n\n"
+
+          if [ -f CHANGELOG.md ]; then
+            # Append new changelog to existing, after header
+            EXISTING=$(tail -n +3 CHANGELOG.md)
+            echo -e "$NEW_CHANGELOG\n---\n\n$EXISTING" > CHANGELOG.md
+          else
+            echo -e "$NEW_CHANGELOG" > CHANGELOG.md
+          fi
+
+      - name: Commit version bump
+        run: |
+          git add package.json CHANGELOG.md
+          git commit -m "chore(release): v${{ needs.version.outputs.new_version }}"
+          git push
+
+      - name: Create and push tag
+        run: |
+          git tag -a "v${{ needs.version.outputs.new_version }}" \
+            -m "Release v${{ needs.version.outputs.new_version }}"
+          git push origin "v${{ needs.version.outputs.new_version }}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.new_version }}
+          name: v${{ needs.version.outputs.new_version }}
+          body: ${{ needs.changelog.outputs.changelog }}
+          draft: false
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify release
+        if: vars.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "New Release Published",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*New Release: v${{ needs.version.outputs.new_version }}* :rocket:\n\nView release: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.version.outputs.new_version }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # =============================================================================
+  # Trigger Deployment
+  # =============================================================================
+  trigger-deployment:
+    name: Trigger Deployment
+    needs: [version, release]
+    runs-on: ubuntu-latest
+    if: github.event.inputs.prerelease != 'true'
+    steps:
+      - name: Trigger deployment workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: release-deployment
+          client-payload: '{"version": "${{ needs.version.outputs.new_version }}", "ref": "v${{ needs.version.outputs.new_version }}"}'

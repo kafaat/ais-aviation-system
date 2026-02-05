@@ -1,4 +1,10 @@
 import { cn } from "@/lib/utils";
+import {
+  captureError,
+  showReportDialog,
+  isSentryInitialized,
+  addBreadcrumb,
+} from "@/lib/sentry";
 import { AlertTriangle, RotateCcw, Bug, Home, ChevronDown } from "lucide-react";
 import React, { Component, ReactNode } from "react";
 
@@ -12,6 +18,7 @@ interface State {
   error: Error | null;
   errorInfo: React.ErrorInfo | null;
   showDetails: boolean;
+  eventId: string | null;
 }
 
 class ErrorBoundary extends Component<Props, State> {
@@ -22,6 +29,7 @@ class ErrorBoundary extends Component<Props, State> {
       error: null,
       errorInfo: null,
       showDetails: false,
+      eventId: null,
     };
   }
 
@@ -30,11 +38,28 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    this.setState({ errorInfo });
     // Log error details for debugging
     console.error("ErrorBoundary caught an error:", error);
     console.error("Component stack:", errorInfo.componentStack);
-    // In production, send to error reporting service (e.g., Sentry)
+
+    // Add breadcrumb for context
+    addBreadcrumb({
+      category: "error-boundary",
+      message: "React error boundary triggered",
+      level: "error",
+      data: {
+        componentStack: errorInfo.componentStack,
+      },
+    });
+
+    // Capture error to Sentry and store the event ID
+    const eventId = captureError(error, {
+      componentStack: errorInfo.componentStack,
+      errorBoundary: true,
+      url: window.location.href,
+    });
+
+    this.setState({ errorInfo, eventId });
   }
 
   handleRetry = () => {
@@ -43,12 +68,20 @@ class ErrorBoundary extends Component<Props, State> {
       error: null,
       errorInfo: null,
       showDetails: false,
+      eventId: null,
     });
   };
 
   handleReportError = () => {
-    const { error, errorInfo } = this.state;
-    // Create error report
+    const { error, errorInfo, eventId } = this.state;
+
+    // If Sentry is initialized, show the Sentry report dialog
+    if (isSentryInitialized() && eventId) {
+      showReportDialog(eventId);
+      return;
+    }
+
+    // Fallback: Create and log error report manually
     const errorReport = {
       message: error?.message,
       stack: error?.stack,
@@ -58,7 +91,7 @@ class ErrorBoundary extends Component<Props, State> {
       userAgent: navigator.userAgent,
     };
 
-    // Log the report (in production, send to error reporting service)
+    // Log the report
     console.info("Error Report:", errorReport);
 
     // Show confirmation to user
@@ -172,6 +205,11 @@ class ErrorBoundary extends Component<Props, State> {
                 {this.state.showDetails && (
                   <div className="px-6 pb-6">
                     <div className="bg-slate-100 dark:bg-slate-800 rounded-xl p-4 overflow-auto max-h-48">
+                      {this.state.eventId && (
+                        <p className="text-xs text-slate-500 dark:text-slate-500 mb-2 font-mono">
+                          Error ID: {this.state.eventId}
+                        </p>
+                      )}
                       <p className="text-sm font-semibold text-red-600 dark:text-red-400 mb-2">
                         {this.state.error?.name}: {this.state.error?.message}
                       </p>

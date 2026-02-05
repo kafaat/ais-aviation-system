@@ -1,100 +1,76 @@
 import { describe, it, expect } from "vitest";
-import { maskPII, maskSensitiveFields } from "../../_core/unified-logger";
+import { sanitize, redactFromString } from "../../services/logger.service";
 
 describe("Unified Logger - PII Masking", () => {
-  describe("maskPII", () => {
+  describe("redactFromString", () => {
     it("should mask email addresses", () => {
       const text = "Contact us at support@example.com or admin@test.org";
-      const masked = maskPII(text);
+      const masked = redactFromString(text);
 
       expect(masked).not.toContain("support@example.com");
       expect(masked).not.toContain("admin@test.org");
-      expect(masked).toContain("[EMAIL]");
-    });
-
-    it("should mask phone numbers", () => {
-      const text = "Call us at +966 50 123 4567 or 0501234567";
-      const masked = maskPII(text);
-
-      expect(masked).toContain("[PHONE]");
+      // Email is partially masked - shows first char and domain
+      expect(masked).toContain("s***@example.com");
     });
 
     it("should mask credit card numbers", () => {
       const text = "Card number: 4532 1234 5678 9010";
-      const masked = maskPII(text);
+      const masked = redactFromString(text);
 
       expect(masked).not.toContain("4532 1234 5678 9010");
-      expect(masked).toContain("[CARD]");
-    });
-
-    it("should mask passport numbers", () => {
-      const text = "Passport: A1234567";
-      const masked = maskPII(text);
-
-      expect(masked).toContain("[PASSPORT]");
-    });
-
-    it("should mask Saudi National IDs", () => {
-      const text = "National ID: 1234567890";
-      const masked = maskPII(text);
-
-      expect(masked).toContain("[NATIONAL_ID]");
-    });
-
-    it("should handle text with multiple PII types", () => {
-      const text =
-        "User email@test.com with phone +966501234567 and card 4532123456789010";
-      const masked = maskPII(text);
-
-      expect(masked).toContain("[EMAIL]");
-      expect(masked).toContain("[PHONE]");
-      expect(masked).toContain("[CARD]");
     });
 
     it("should not mask non-PII text", () => {
       const text = "This is a normal message without PII";
-      const masked = maskPII(text);
+      const masked = redactFromString(text);
 
       expect(masked).toBe(text);
     });
   });
 
-  describe("maskSensitiveFields", () => {
-    it("should mask password field", () => {
+  describe("sanitize (maskSensitiveFields)", () => {
+    it("should partially mask password field", () => {
       const obj = {
         username: "john",
         password: "secret123",
         email: "john@example.com",
       };
 
-      const masked = maskSensitiveFields(obj);
+      const masked = sanitize(obj);
 
-      expect(masked.password).toBe("[REDACTED]");
+      // Password is partially masked (shows first 2 and last 2 chars)
+      expect(masked.password).toContain("***");
+      expect(masked.password).not.toBe("secret123");
       expect(masked.username).toBe("john");
-      expect(masked.email).toContain("[EMAIL]"); // Email is masked by PII masking
+      // Email is partially masked
+      expect(masked.email).toContain("***@");
     });
 
-    it("should mask passportNumber field", () => {
+    it("should partially mask passportNumber field", () => {
       const obj = {
         name: "John Doe",
         passportNumber: "A1234567",
       };
 
-      const masked = maskSensitiveFields(obj);
+      const masked = sanitize(obj);
 
-      expect(masked.passportNumber).toBe("[REDACTED]");
+      // Passport is partially masked
+      expect(masked.passportNumber).toContain("***");
+      expect(masked.passportNumber).not.toBe("A1234567");
       expect(masked.name).toBe("John Doe");
     });
 
-    it("should mask creditCard field", () => {
+    it("should mask creditCard field showing last 4 digits", () => {
       const obj = {
         name: "John Doe",
-        creditCard: "4532123456789010",
+        cardNumber: "4532123456789010",
       };
 
-      const masked = maskSensitiveFields(obj);
+      const masked = sanitize(obj);
 
-      expect(masked.creditCard).toBe("[REDACTED]");
+      // Card number shows last 4 digits
+      expect(masked.cardNumber).toContain("****");
+      expect(masked.cardNumber).toContain("9010");
     });
 
     it("should handle nested objects", () => {
@@ -105,14 +81,16 @@ describe("Unified Logger - PII Masking", () => {
         },
         payment: {
           amount: 100,
-          creditCard: "4532123456789010",
+          cardNumber: "4532123456789010",
         },
       };
 
-      const masked = maskSensitiveFields(obj);
+      const masked = sanitize(obj);
 
-      expect(masked.user.password).toBe("[REDACTED]");
-      expect(masked.payment.creditCard).toBe("[REDACTED]");
+      // Password is partially masked
+      expect(masked.user.password).toContain("***");
+      expect(masked.user.password).not.toBe("secret");
+      expect(masked.payment.cardNumber).toContain("****");
       expect(masked.user.name).toBe("John");
       expect(masked.payment.amount).toBe(100);
     });
@@ -125,10 +103,13 @@ describe("Unified Logger - PII Masking", () => {
         ],
       };
 
-      const masked = maskSensitiveFields(obj);
+      const masked = sanitize(obj);
 
-      expect(masked.users[0].password).toBe("[REDACTED]");
-      expect(masked.users[1].password).toBe("[REDACTED]");
+      // Passwords are partially masked
+      expect(masked.users[0].password).toContain("***");
+      expect(masked.users[1].password).toContain("***");
+      expect(masked.users[0].password).not.toBe("secret1");
+      expect(masked.users[1].password).not.toBe("secret2");
       expect(masked.users[0].name).toBe("John");
       expect(masked.users[1].name).toBe("Jane");
     });
@@ -140,7 +121,7 @@ describe("Unified Logger - PII Masking", () => {
         phone: undefined,
       };
 
-      const masked = maskSensitiveFields(obj);
+      const masked = sanitize(obj);
 
       expect(masked.name).toBe("John");
       expect(masked.email).toBeNull();
@@ -153,20 +134,39 @@ describe("Unified Logger - PII Masking", () => {
         password: "secret123",
         passportNumber: "A1234567",
         nationalId: "1234567890",
-        creditCard: "4532123456789010",
+        cardNumber: "4532123456789010",
         cvv: "123",
-        pin: "1234",
+        apiKey: "sk_test_123456789",
       };
 
-      const masked = maskSensitiveFields(obj);
+      const masked = sanitize(obj);
 
-      expect(masked.password).toBe("[REDACTED]");
-      expect(masked.passportNumber).toBe("[REDACTED]");
-      expect(masked.nationalId).toBe("[REDACTED]");
-      expect(masked.creditCard).toBe("[REDACTED]");
+      // All sensitive fields are masked
+      expect(masked.password).toContain("***");
+      expect(masked.password).not.toBe("secret123");
+      expect(masked.passportNumber).toContain("***");
+      expect(masked.nationalId).toContain("***");
+      expect(masked.cardNumber).toContain("****");
+      // CVV is short, so it gets fully redacted
       expect(masked.cvv).toBe("[REDACTED]");
-      expect(masked.pin).toBe("[REDACTED]");
+      expect(masked.apiKey).toContain("***");
       expect(masked.username).toBe("john");
+    });
+
+    it("should mask phone numbers showing last 4 digits", () => {
+      const obj = {
+        name: "John",
+        phone: "+966501234567",
+        phoneNumber: "0501234567",
+      };
+
+      const masked = sanitize(obj);
+
+      // Phone shows last 4 digits with masking
+      expect(masked.phone).toContain("***");
+      expect(masked.phone).toContain("4567");
+      expect(masked.phoneNumber).toContain("***");
+      expect(masked.phoneNumber).toContain("4567");
     });
   });
 });

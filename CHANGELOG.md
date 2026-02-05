@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+#### CI/CD Pipeline
+- Complete deployment pipeline with staging and production environments
+- Docker image building and pushing to GitHub Container Registry (GHCR)
+- Kubernetes deployment manifests with HPA, PDB, and resource limits
+- Horizontal Pod Autoscaler for automatic scaling
+- Pod Disruption Budget for high availability
+- Network policies for security isolation
+
+#### Deployment Automation
+- Automated database migrations during deployment
+- Pre-deployment database backup for production
+- Blue-green deployment strategy with health checks
+- Automated rollback on smoke test failure
+- Post-deployment monitoring for 5 minutes
+
+#### Testing & Verification
+- Smoke tests script for deployment verification
+- E2E critical path tests for production deployments
+- Health check verification before traffic switching
+- Synthetic test triggering (Datadog integration)
+
+#### Release Automation
+- Automatic changelog generation from conventional commits
+- Version bumping with semantic versioning
+- GitHub Release creation with release notes
+- PR title validation for conventional commits
+- Dependency review for security vulnerabilities
+
+#### Scripts & Tools
+- `scripts/smoke-tests.sh` - Deployment verification tests
+- `scripts/e2e-critical.sh` - Critical path E2E tests
+- `scripts/rollback.sh` - Manual rollback script
+- `scripts/version-bump.sh` - Version management script
+- Commitlint configuration for commit message validation
+
+#### Kubernetes Manifests
+- Base deployment with probes and resource limits
+- Service with ClusterIP and headless service
+- ConfigMap for non-sensitive configuration
+- Staging ingress with TLS and rate limiting
+- Production ingress with security headers and HSTS
+- Resource quotas and limit ranges per environment
+
+#### Notifications
+- Slack notifications for deployment status
+- Deployment success/failure alerts
+- Release publication notifications
+
+### Security
+- Trivy vulnerability scanning for filesystem and containers
+- Gitleaks secret detection
+- SBOM generation for container images
+- SARIF report uploads to GitHub Security
+- Network policies for pod communication
+- Security headers in production ingress
+
+---
+
 ## [2.0.0] - 2026-01-12
 
 ### 🎉 Major Release - Comprehensive Documentation & Review

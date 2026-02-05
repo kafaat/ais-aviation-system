@@ -10,6 +10,10 @@ import {
   convertLockToBooking,
   verifyLock,
 } from "./inventory-lock.service";
+import {
+  trackBookingStarted,
+  trackBookingCancelled,
+} from "./metrics.service";
 
 /**
  * Bookings Service
@@ -132,6 +136,17 @@ export async function createBooking(input: CreateBookingInput) {
       }
     }
 
+    // Track booking started event for metrics
+    trackBookingStarted({
+      userId: input.userId,
+      sessionId: input.sessionId,
+      bookingId,
+      flightId: input.flightId,
+      cabinClass: input.cabinClass,
+      passengerCount: input.passengers.length,
+      totalAmount,
+    });
+
     return {
       bookingId,
       bookingReference,
@@ -222,6 +237,16 @@ export async function cancelBooking(bookingId: number, userId: number) {
     }
 
     await db.updateBookingStatus(bookingId, "cancelled");
+
+    // Track booking cancellation event for metrics
+    trackBookingCancelled({
+      userId,
+      bookingId,
+      flightId: booking.flightId,
+      cabinClass: booking.cabinClass as "economy" | "business",
+      passengerCount: booking.numberOfPassengers,
+      totalAmount: booking.totalAmount,
+    });
 
     return { success: true };
   } catch (error) {

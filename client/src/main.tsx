@@ -1,3 +1,15 @@
+// Initialize Sentry first (before other imports that might throw)
+import { initSentry, captureError } from "@/lib/sentry";
+initSentry();
+
+// Initialize Web Vitals tracking (async to not block render)
+import { initWebVitals } from "@/lib/webVitals";
+initWebVitals({
+  enableAnalytics: import.meta.env.PROD,
+  enableConsoleLogging: import.meta.env.DEV,
+  enableBudgetWarnings: true,
+});
+
 import { trpc } from "@/lib/trpc";
 import "./i18n/config";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
@@ -65,6 +77,13 @@ queryClient.getQueryCache().subscribe(event => {
     const error = event.query.state.error;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Query Error]", error);
+    // Capture error to Sentry (excluding auth errors which are expected)
+    if (error instanceof Error && !error.message.includes(UNAUTHED_ERR_MSG)) {
+      captureError(error, {
+        type: "query",
+        queryKey: event.query.queryKey,
+      });
+    }
   }
 });
 
@@ -73,6 +92,13 @@ queryClient.getMutationCache().subscribe(event => {
     const error = event.mutation.state.error;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Mutation Error]", error);
+    // Capture error to Sentry (excluding auth errors which are expected)
+    if (error instanceof Error && !error.message.includes(UNAUTHED_ERR_MSG)) {
+      captureError(error, {
+        type: "mutation",
+        mutationKey: event.mutation.options.mutationKey,
+      });
+    }
   }
 });
 

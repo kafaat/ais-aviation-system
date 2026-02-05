@@ -5,6 +5,7 @@ import * as db from "../db";
 import { getDb } from "../db";
 import { bookings } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { auditPayment } from "../services/audit.service";
 
 /**
  * Payments Router
@@ -15,7 +16,24 @@ export const paymentsRouter = router({
    * Create Stripe checkout session
    */
   createCheckoutSession: protectedProcedure
-    .input(z.object({ bookingId: z.number() }))
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/payments/checkout",
+        tags: ["Payments"],
+        summary: "Create Stripe checkout session",
+        description:
+          "Create a Stripe checkout session for a pending booking. Returns a session ID and URL to redirect the user to the Stripe payment page. The booking must belong to the authenticated user and not already be paid.",
+        protect: true,
+      },
+    })
+    .input(z.object({ bookingId: z.number().describe("Booking ID to pay for") }))
+    .output(
+      z.object({
+        sessionId: z.string().describe("Stripe session ID"),
+        url: z.string().nullable().describe("Stripe checkout URL"),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
       if (!database) throw new Error("Database not available");
@@ -86,6 +104,18 @@ export const paymentsRouter = router({
         .set({ stripeCheckoutSessionId: session.id })
         .where(eq(bookings.id, input.bookingId));
 
+      // Audit log: Payment initiated
+      await auditPayment(
+        input.bookingId,
+        bookingData.bookingReference,
+        bookingData.totalAmount,
+        "PAYMENT_INITIATED",
+        ctx.user.id,
+        session.id,
+        ctx.req.ip,
+        ctx.req.headers["x-request-id"] as string
+      );
+
       return {
         sessionId: session.id,
         url: session.url,
@@ -96,7 +126,24 @@ export const paymentsRouter = router({
    * Verify Stripe session
    */
   verifySession: protectedProcedure
-    .input(z.object({ sessionId: z.string() }))
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/payments/verify/{sessionId}",
+        tags: ["Payments"],
+        summary: "Verify Stripe session status",
+        description:
+          "Verify the payment status of a Stripe checkout session. Use this after redirect from Stripe to confirm payment completion.",
+        protect: true,
+      },
+    })
+    .input(z.object({ sessionId: z.string().describe("Stripe session ID") }))
+    .output(
+      z.object({
+        status: z.string().describe("Payment status (paid, unpaid, no_payment_required)"),
+        customerEmail: z.string().nullable().describe("Customer email"),
+      })
+    )
     .query(async ({ input }) => {
       const session = await stripe.checkout.sessions.retrieve(input.sessionId);
       return {
@@ -109,14 +156,36 @@ export const paymentsRouter = router({
    * Create payment record (legacy - for non-Stripe payments)
    */
   create: protectedProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/payments",
+        tags: ["Payments"],
+        summary: "Create payment (legacy)",
+        description:
+          "Create a payment record for non-Stripe payment methods. This is a legacy endpoint for direct card, wallet, or bank transfer payments. For new integrations, use the Stripe checkout flow.",
+        protect: true,
+      },
+    })
     .input(
       z.object({
-        bookingId: z.number(),
-        amount: z.number(),
-        method: z.enum(["card", "wallet", "bank_transfer"]),
+        bookingId: z.number().describe("Booking ID"),
+        amount: z.number().describe("Payment amount in smallest currency unit"),
+        method: z.enum(["card", "wallet", "bank_transfer"]).describe("Payment method"),
       })
     )
-    .mutation(async ({ input }) => {
+    .output(
+      z.object({
+        paymentId: z.number(),
+        transactionId: z.string(),
+        status: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get booking reference for audit
+      const booking = await db.getBookingByIdWithDetails(input.bookingId);
+      const bookingReference = booking?.bookingReference || `booking-${input.bookingId}`;
+
       // Create payment record
       const paymentResult = await db.createPayment({
         bookingId: input.bookingId,
@@ -137,6 +206,18 @@ export const paymentsRouter = router({
 
       await db.updatePaymentStatus(paymentId, "completed", transactionId);
       await db.updateBookingStatus(input.bookingId, "confirmed");
+
+      // Audit log: Payment success
+      await auditPayment(
+        input.bookingId,
+        bookingReference,
+        input.amount,
+        "PAYMENT_SUCCESS",
+        ctx.user.id,
+        transactionId,
+        ctx.req.ip,
+        ctx.req.headers["x-request-id"] as string
+      );
 
       return {
         paymentId,

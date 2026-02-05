@@ -1,5 +1,8 @@
 # نظام الطيران المتكامل (AIS)
 
+[![codecov](https://codecov.io/gh/kafaat/ais-aviation-system/branch/main/graph/badge.svg)](https://codecov.io/gh/kafaat/ais-aviation-system)
+[![CI/CD Pipeline](https://github.com/kafaat/ais-aviation-system/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/kafaat/ais-aviation-system/actions/workflows/ci-cd.yml)
+
 نظام شامل لحجز تذاكر الطيران وإدارة الرحلات مبني باستخدام React، TypeScript، tRPC، وMySQL.
 
 ## 🌟 المميزات

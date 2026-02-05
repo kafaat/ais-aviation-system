@@ -1,6 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import Stripe from "stripe";
+import {
+  trackPaymentInitiated,
+  trackPaymentSuccess,
+  trackPaymentFailed,
+  trackBookingCompleted,
+} from "./metrics.service";
 
 /**
  * Payments Service
@@ -105,6 +111,15 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       idempotencyKey: input.idempotencyKey,
     });
 
+    // Track payment initiated event for metrics
+    trackPaymentInitiated({
+      userId: input.userId,
+      bookingId: input.bookingId,
+      amount: input.amount,
+      currency: input.currency || "SAR",
+      paymentMethod: "card",
+    });
+
     return {
       sessionId: session.id,
       url: session.url,
@@ -137,12 +152,39 @@ export async function handlePaymentSuccess(
     }
 
     const bookingId = parseInt(session.metadata.bookingId);
+    const userId = session.metadata.userId
+      ? parseInt(session.metadata.userId)
+      : undefined;
+
+    // Get booking details for metrics tracking
+    const booking = await db.getBookingByIdWithDetails(bookingId);
 
     // Update payment status
     await db.updatePaymentStatus(bookingId, "completed", paymentIntentId);
 
     // Update booking status
     await db.updateBookingStatus(bookingId, "confirmed");
+
+    // Track payment success event for metrics
+    if (booking && userId) {
+      trackPaymentSuccess({
+        userId,
+        bookingId,
+        amount: booking.totalAmount,
+        currency: session.currency || "SAR",
+        paymentMethod: "card",
+      });
+
+      // Track booking completed event for metrics
+      trackBookingCompleted({
+        userId,
+        bookingId,
+        flightId: booking.flightId,
+        cabinClass: booking.cabinClass as "economy" | "business",
+        passengerCount: booking.numberOfPassengers,
+        totalAmount: booking.totalAmount,
+      });
+    }
 
     return { success: true };
   } catch (error) {
@@ -163,9 +205,28 @@ export async function handlePaymentFailure(sessionId: string) {
     }
 
     const bookingId = parseInt(session.metadata.bookingId);
+    const userId = session.metadata.userId
+      ? parseInt(session.metadata.userId)
+      : undefined;
+
+    // Get booking details for metrics tracking
+    const booking = await db.getBookingByIdWithDetails(bookingId);
 
     // Update payment status
     await db.updatePaymentStatus(bookingId, "failed");
+
+    // Track payment failure event for metrics
+    if (booking && userId) {
+      trackPaymentFailed({
+        userId,
+        bookingId,
+        amount: booking.totalAmount,
+        currency: session.currency || "SAR",
+        paymentMethod: "card",
+        errorCode: "payment_failed",
+        errorMessage: "Payment was not completed",
+      });
+    }
 
     return { success: true };
   } catch (error) {

@@ -6,8 +6,9 @@
  * - Transaction safety (rollback on failure)
  * - Financial ledger entries
  * - Proper error handling with retry support
+ * - Structured logging with correlation
  *
- * @version 2.0.0
+ * @version 2.1.0
  * @date 2026-01-26
  */
 
@@ -29,6 +30,10 @@ import { eq } from "drizzle-orm";
 import { sendBookingConfirmation } from "../services/email.service";
 import { awardMilesForBooking } from "../services/loyalty.service";
 import { generateETicketForPassenger } from "../services/eticket.service";
+import { createServiceLogger } from "../_core/logger";
+
+// Create service-specific logger
+const log = createServiceLogger("webhook:stripe");
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -49,7 +54,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   const sig = req.headers["stripe-signature"];
 
   if (!sig || !webhookSecret) {
-    console.error("[Webhook] Missing signature or webhook secret");
+    log.error({ event: "webhook_error", reason: "missing_signature" }, "Missing signature or webhook secret");
     return res.status(400).json({
       error: "Missing signature",
       retryable: false,
@@ -62,7 +67,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err: any) {
-    console.error(`[Webhook] Signature verification failed:`, err.message);
+    log.error({ event: "webhook_error", reason: "signature_verification_failed", error: err.message }, `Signature verification failed: ${err.message}`);
     return res.status(400).json({
       error: `Signature verification failed: ${err.message}`,
       retryable: false,
@@ -71,17 +76,15 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
   // Handle test events
   if (event.id.startsWith("evt_test_")) {
-    console.log(
-      "[Webhook] Test event detected, returning verification response"
-    );
+    log.info({ event: "webhook_test", eventId: event.id }, "Test event detected, returning verification response");
     return res.json({ verified: true });
   }
 
-  console.log(`[Webhook] Processing event: ${event.type} (${event.id})`);
+  log.info({ event: "webhook_processing", eventType: event.type, eventId: event.id }, `Processing event: ${event.type} (${event.id})`);
 
   const db = await getDb();
   if (!db) {
-    console.error("[Webhook] Database not available");
+    log.error({ event: "webhook_error", reason: "database_unavailable", eventId: event.id }, "Database not available");
     return res.status(500).json({
       error: "Database not available",
       retryable: true,
@@ -99,7 +102,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
     // If already processed successfully, return 200 (idempotent success)
     if (existing?.processed) {
-      console.log(`[Webhook] Event ${event.id} already processed, skipping`);
+      log.info({ event: "webhook_deduplicated", eventId: event.id }, `Event ${event.id} already processed, skipping`);
       return res.json({ received: true, deduplicated: true });
     }
 
@@ -122,9 +125,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           insertErr.code === "23505" ||
           insertErr.code === "23000"
         ) {
-          console.log(
-            `[Webhook] Event ${event.id} already stored by another process`
-          );
+          log.info({ event: "webhook_race_condition", eventId: event.id }, `Event ${event.id} already stored by another process`);
           // Re-check if processed
           const recheckResult = await db
             .select()
@@ -156,11 +157,11 @@ export async function handleStripeWebhook(req: Request, res: Response) {
         .where(eq(stripeEvents.id, event.id));
     });
 
-    console.log(`[Webhook] Event ${event.id} processed successfully`);
+    log.info({ event: "webhook_success", eventId: event.id, eventType: event.type }, `Event ${event.id} processed successfully`);
     return res.json({ received: true });
   } catch (error: any) {
     const errorMsg = error.message || "Unknown error";
-    console.error(`[Webhook] Error processing event ${event.id}:`, errorMsg);
+    log.error({ event: "webhook_error", eventId: event.id, error: errorMsg, stack: error.stack }, `Error processing event ${event.id}: ${errorMsg}`);
 
     // Update error info (processed=false allows retry)
     try {
@@ -180,7 +181,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
         })
         .where(eq(stripeEvents.id, event.id));
     } catch (updateErr) {
-      console.error(`[Webhook] Failed to update error status:`, updateErr);
+      log.error({ event: "webhook_error", reason: "update_error_status_failed", eventId: event.id, error: updateErr }, "Failed to update error status");
     }
 
     // Return 500 to trigger Stripe retry
@@ -225,7 +226,7 @@ async function processEvent(tx: any, event: Stripe.Event): Promise<void> {
       );
 
     default:
-      console.log(`[Webhook] Unhandled event type: ${event.type}`);
+      log.info({ event: "webhook_unhandled", eventType: event.type }, `Unhandled event type: ${event.type}`);
       return;
   }
 }
@@ -238,7 +239,7 @@ async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session,
   eventId: string
 ) {
-  console.log(`[Webhook] Checkout session completed: ${session.id}`);
+  log.info({ event: "checkout_completed", sessionId: session.id }, `Checkout session completed: ${session.id}`);
 
   const bookingId = session.metadata?.bookingId;
   if (!bookingId) {
@@ -258,7 +259,7 @@ async function handleCheckoutSessionCompleted(
 
   // 2. Check state transition is valid (idempotent)
   if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
-    console.log(`[Webhook] Booking ${bookingId} already confirmed, skipping`);
+    log.info({ event: "booking_already_confirmed", bookingId }, `Booking ${bookingId} already confirmed, skipping`);
     return;
   }
 
@@ -297,9 +298,7 @@ async function handleCheckoutSessionCompleted(
       ledgerErr.code === "23505" ||
       ledgerErr.code === "23000"
     ) {
-      console.log(
-        `[Webhook] Ledger entry already exists for ${paymentIntentId}, skipping`
-      );
+      log.info({ event: "ledger_entry_exists", paymentIntentId, bookingId }, `Ledger entry already exists for ${paymentIntentId}, skipping`);
       // Continue - this is OK (idempotent)
     } else {
       throw ledgerErr;
@@ -330,7 +329,7 @@ async function handleCheckoutSessionCompleted(
     });
   }
 
-  console.log(`[Webhook] Booking ${bookingId} marked as paid and confirmed`);
+  log.info({ event: "booking_confirmed", bookingId, paymentIntentId }, `Booking ${bookingId} marked as paid and confirmed`);
 
   // 6. Post-transaction tasks (outside transaction to avoid blocking)
   // These are queued/executed after commit
@@ -338,7 +337,7 @@ async function handleCheckoutSessionCompleted(
     try {
       await sendConfirmationAndAwardMiles(parseInt(bookingId));
     } catch (postErr) {
-      console.error(`[Webhook] Post-transaction tasks failed:`, postErr);
+      log.error({ event: "post_transaction_failed", bookingId, error: postErr }, "Post-transaction tasks failed");
       // Don't fail the webhook
     }
   });
@@ -354,11 +353,11 @@ async function handlePaymentIntentSucceeded(
 ) {
   const bookingId = pi.metadata?.bookingId;
   if (!bookingId) {
-    console.log(`[Webhook] No bookingId in PaymentIntent ${pi.id} metadata`);
+    log.info({ event: "payment_intent_no_booking", paymentIntentId: pi.id }, `No bookingId in PaymentIntent ${pi.id} metadata`);
     return;
   }
 
-  console.log(`[Webhook] PaymentIntent succeeded for booking ${bookingId}`);
+  log.info({ event: "payment_intent_succeeded", bookingId, paymentIntentId: pi.id }, `PaymentIntent succeeded for booking ${bookingId}`);
 
   // Check if already handled by checkout event
   const [booking] = await tx
@@ -368,13 +367,13 @@ async function handlePaymentIntentSucceeded(
     .limit(1);
 
   if (!booking) {
-    console.log(`[Webhook] Booking ${bookingId} not found`);
+    log.info({ event: "booking_not_found", bookingId, paymentIntentId: pi.id }, `Booking ${bookingId} not found`);
     return;
   }
 
   // If already confirmed, skip (handled by checkout event)
   if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
-    console.log(`[Webhook] Booking ${bookingId} already confirmed`);
+    log.info({ event: "booking_already_confirmed", bookingId }, `Booking ${bookingId} already confirmed`);
     return;
   }
 
@@ -390,7 +389,7 @@ async function handlePaymentIntentSucceeded(
       })
       .where(eq(bookings.id, parseInt(bookingId)));
 
-    console.log(`[Webhook] Booking ${bookingId} confirmed via payment_intent`);
+    log.info({ event: "booking_confirmed_via_pi", bookingId, paymentIntentId: pi.id }, `Booking ${bookingId} confirmed via payment_intent`);
   }
 }
 
@@ -402,7 +401,7 @@ async function handlePaymentFailed(
   paymentIntent: Stripe.PaymentIntent,
   eventId: string
 ) {
-  console.log(`[Webhook] Payment failed: ${paymentIntent.id}`);
+  log.info({ event: "payment_failed", paymentIntentId: paymentIntent.id }, `Payment failed: ${paymentIntent.id}`);
 
   // Find booking by payment intent ID or metadata
   const bookingId = paymentIntent.metadata?.bookingId;
@@ -423,9 +422,7 @@ async function handlePaymentFailed(
   }
 
   if (!booking) {
-    console.log(
-      `[Webhook] No booking found for payment intent ${paymentIntent.id}`
-    );
+    log.info({ event: "booking_not_found", paymentIntentId: paymentIntent.id }, `No booking found for payment intent ${paymentIntent.id}`);
     return;
   }
 
@@ -452,7 +449,7 @@ async function handlePaymentFailed(
       createdAt: new Date(),
     });
 
-    console.log(`[Webhook] Booking ${booking.id} marked as payment failed`);
+    log.info({ event: "booking_payment_failed", bookingId: booking.id }, `Booking ${booking.id} marked as payment failed`);
   }
 }
 
@@ -466,11 +463,11 @@ async function handleChargeRefunded(
 ) {
   const bookingId = charge.metadata?.bookingId;
   if (!bookingId) {
-    console.log(`[Webhook] No bookingId in Charge ${charge.id} metadata`);
+    log.info({ event: "charge_no_booking", chargeId: charge.id }, `No bookingId in Charge ${charge.id} metadata`);
     return;
   }
 
-  console.log(`[Webhook] Charge refunded for booking ${bookingId}`);
+  log.info({ event: "charge_refunded", bookingId, chargeId: charge.id }, `Charge refunded for booking ${bookingId}`);
 
   const [booking] = await tx
     .select()
@@ -479,7 +476,7 @@ async function handleChargeRefunded(
     .limit(1);
 
   if (!booking) {
-    console.log(`[Webhook] Booking ${bookingId} not found`);
+    log.info({ event: "booking_not_found", bookingId }, `Booking ${bookingId} not found`);
     return;
   }
 
@@ -511,7 +508,7 @@ async function handleChargeRefunded(
       ledgerErr.code === "23505" ||
       ledgerErr.code === "23000"
     ) {
-      console.log(`[Webhook] Refund entry already exists, skipping`);
+      log.info({ event: "refund_entry_exists", bookingId, chargeId: charge.id }, "Refund entry already exists, skipping");
       return; // Idempotent
     }
     throw ledgerErr;
@@ -542,7 +539,7 @@ async function handleChargeRefunded(
     createdAt: new Date(),
   });
 
-  console.log(`[Webhook] Booking ${bookingId} ${newStatus}`);
+  log.info({ event: "booking_refunded", bookingId, status: newStatus, refundAmount }, `Booking ${bookingId} ${newStatus}`);
 }
 
 /**
@@ -620,12 +617,10 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
             };
           })
         );
-        console.log(
-          `[Webhook] Generated ${eticketAttachments.length} e-ticket PDFs`
-        );
+        log.info({ event: "etickets_generated", bookingId, count: eticketAttachments.length }, `Generated ${eticketAttachments.length} e-ticket PDFs`);
       }
     } catch (eticketError) {
-      console.error("[Webhook] Failed to generate e-tickets:", eticketError);
+      log.error({ event: "eticket_generation_failed", bookingId, error: eticketError }, "Failed to generate e-tickets");
     }
 
     // Send email
@@ -646,7 +641,7 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
         eticketAttachments.length > 0 ? eticketAttachments : undefined,
     });
 
-    console.log(`[Webhook] Sent booking confirmation to ${booking.userEmail}`);
+    log.info({ event: "confirmation_sent", bookingId, email: booking.userEmail }, `Sent booking confirmation to ${booking.userEmail}`);
 
     // Award loyalty miles
     const result = await awardMilesForBooking(
@@ -656,10 +651,8 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
       booking.totalAmount
     );
 
-    console.log(
-      `[Webhook] Awarded ${result.milesEarned} miles to user ${booking.userId}`
-    );
+    log.info({ event: "miles_awarded", bookingId, userId: booking.userId, milesEarned: result.milesEarned }, `Awarded ${result.milesEarned} miles to user ${booking.userId}`);
   } catch (error) {
-    console.error("[Webhook] Post-transaction tasks failed:", error);
+    log.error({ event: "post_transaction_failed", bookingId, error }, "Post-transaction tasks failed");
   }
 }

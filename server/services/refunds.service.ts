@@ -6,6 +6,7 @@ import { bookings, payments, users, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
+import { trackRefundIssued } from "./metrics.service";
 
 /**
  * Refunds Service
@@ -159,6 +160,15 @@ export async function createRefund(input: CreateRefundInput) {
         })
         .where(eq(payments.id, paymentResult[0].id));
     }
+
+    // Track refund issued event for metrics
+    trackRefundIssued({
+      userId: input.userId,
+      bookingId: input.bookingId,
+      refundAmount: refund.amount || booking.totalAmount,
+      originalAmount: booking.totalAmount,
+      reason: input.reason,
+    });
 
     // Send refund confirmation email
     try {
