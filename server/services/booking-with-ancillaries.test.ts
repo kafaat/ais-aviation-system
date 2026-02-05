@@ -86,10 +86,10 @@ describe("Booking with Ancillaries Integration", () => {
       arrivalTime: arrivalTime,
       economyPrice: 50000,
       businessPrice: 100000,
-      firstClassPrice: 200000,
       economySeats: 100,
       businessSeats: 20,
-      firstClassSeats: 10,
+      economyAvailable: 100,
+      businessAvailable: 20,
       status: "scheduled",
     });
     testFlightId = (flightResult as any).insertId;
