@@ -415,7 +415,7 @@ async function handleCheckoutSessionCompleted(
 async function handlePaymentIntentSucceeded(
   tx: any,
   pi: Stripe.PaymentIntent,
-  eventId: string
+  _eventId: string
 ) {
   const bookingId = pi.metadata?.bookingId;
   if (!bookingId) {
@@ -480,7 +480,7 @@ async function handlePaymentIntentSucceeded(
 async function handlePaymentFailed(
   tx: any,
   paymentIntent: Stripe.PaymentIntent,
-  eventId: string
+  _eventId: string
 ) {
   log.info(
     { event: "payment_failed", paymentIntentId: paymentIntent.id },

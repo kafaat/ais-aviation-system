@@ -224,7 +224,7 @@ export async function exportRevenueToCSV(
  * Export flight performance to CSV
  */
 export async function exportFlightPerformanceToCSV(
-  filters: ReportFilters
+  _filters: ReportFilters
 ): Promise<string> {
   const db = await getDb();
   if (!db)
@@ -791,7 +791,7 @@ export async function exportRevenueToExcel(
  * Export flight performance to Excel format
  */
 export async function exportFlightPerformanceToExcel(
-  filters: ReportFilters
+  _filters: ReportFilters
 ): Promise<Buffer> {
   const db = await getDb();
   if (!db)
@@ -1259,7 +1259,7 @@ export async function generateRefundsPDF(
  * Generate flight performance PDF report
  */
 export async function generateFlightPerformancePDF(
-  filters: ReportFilters
+  _filters: ReportFilters
 ): Promise<Buffer> {
   const db = await getDb();
   if (!db)

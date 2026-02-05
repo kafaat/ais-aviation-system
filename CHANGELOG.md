@@ -3,18 +3,18 @@
 ## What's Changed in v1.3.2
 
 ### Bug Fixes
+
 - fix: add booking ownership verification to ancillary service endpoints (2181b21)
 - fix: align test fixtures with current database schema (e967302)
 - fix: remove non-existent password field from test user inserts (dba030b)
 
 ### Other Changes
+
 - style: fix Prettier formatting in ancillary router (8adf46d)
 - style: fix Prettier formatting in CHANGELOG.md (dc876f2)
 - Merge pull request #43 from kafaat/claude/implement-todo-zrBPj (2fc7daa)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.3.1...v1.3.2
-
 
 ---
 

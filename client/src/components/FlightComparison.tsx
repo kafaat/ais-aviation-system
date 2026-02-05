@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, Plane, Clock, DollarSign, Check } from "lucide-react";
+import { X, Plane, Clock, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 
@@ -76,7 +76,7 @@ export function FlightComparison({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {flights.map((flight, index) => (
+          {flights.map((flight, _index) => (
             <Card key={flight.id} className="relative">
               <Button
                 variant="ghost"

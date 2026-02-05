@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  publicProcedure,
-  protectedProcedure,
-  adminProcedure,
-  router,
-} from "../_core/trpc";
+import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as gateService from "../services/gate.service";
 
 /**

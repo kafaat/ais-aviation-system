@@ -11,7 +11,6 @@ import {
   Calendar,
   Megaphone,
   Bell,
-  Check,
   CheckCheck,
   Trash2,
   ChevronRight,
