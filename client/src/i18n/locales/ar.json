@@ -324,5 +324,18 @@
     "subtotal": "المجموع الفرعي",
     "totalExtras": "إجمالي الخدمات الإضافية",
     "servicesSelected": "خدمة مختارة"
+  },
+  "chat": {
+    "title": "مساعد الحجز الذكي",
+    "placeholder": "اكتب رسالتك هنا...",
+    "suggestions": "اقتراحات الرحلات",
+    "errorStarting": "خطأ في بدء المحادثة",
+    "errorSending": "خطأ في إرسال الرسالة",
+    "errorSelecting": "خطأ في اختيار الرحلة",
+    "bookingSelected": "تم اختيار الرحلة بنجاح"
+  },
+  "cabin": {
+    "economy": "اقتصادي",
+    "business": "رجال الأعمال"
   }
 }

@@ -347,5 +347,18 @@
     "subtotal": "Subtotal",
     "totalExtras": "Total Extras",
     "servicesSelected": "services selected"
+  },
+  "chat": {
+    "title": "Smart Booking Assistant",
+    "placeholder": "Type your message here...",
+    "suggestions": "Flight Suggestions",
+    "errorStarting": "Error starting conversation",
+    "errorSending": "Error sending message",
+    "errorSelecting": "Error selecting flight",
+    "bookingSelected": "Flight selected successfully"
+  },
+  "cabin": {
+    "economy": "Economy",
+    "business": "Business"
   }
 }
