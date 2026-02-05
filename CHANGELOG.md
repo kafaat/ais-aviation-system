@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.3.3
+
+### Bug Fixes
+- fix: resolve 41 lint warnings across client and server (0708071)
+- fix: update critical-paths.test.ts to use correct schema (a7048f1)
+
+### Maintenance
+- chore: update CodeQL to v4 and fix coverage thresholds (4278905)
+
+### Other Changes
+- style: fix prettier formatting (bdd140a)
+- Merge pull request #44 from kafaat/claude/add-claude-documentation-hFQZh (033032d)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.3.2...v1.3.3
+
+
+---
+
 ## What's Changed in v1.3.2
 
 ### Bug Fixes
