@@ -320,17 +320,27 @@ jobs:
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
   # =============================================================================
-  # Trigger Deployment
+  # Trigger Deployment (Optional)
+  # Note: Requires a PAT with repo scope stored as DEPLOYMENT_PAT secret
+  # GITHUB_TOKEN doesn't have permission for repository-dispatch
   # =============================================================================
   trigger-deployment:
     name: Trigger Deployment
     needs: [version, release]
     runs-on: ubuntu-latest
     if: github.event.inputs.prerelease != 'true'
+    continue-on-error: true  # Don't fail release if deployment trigger fails
     steps:
       - name: Trigger deployment workflow
         uses: peter-evans/repository-dispatch@v3
+        continue-on-error: true
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use DEPLOYMENT_PAT if available, fall back to GITHUB_TOKEN
+          token: ${{ secrets.DEPLOYMENT_PAT || secrets.GITHUB_TOKEN }}
           event-type: release-deployment
           client-payload: '{"version": "${{ needs.version.outputs.new_version }}", "ref": "v${{ needs.version.outputs.new_version }}"}'
+
+      - name: Deployment trigger note
+        if: failure()
+        run: |
+          echo "::notice::Deployment trigger skipped. To enable automatic deployment triggers, add a PAT with repo scope as DEPLOYMENT_PAT secret."
