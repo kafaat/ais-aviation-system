@@ -268,7 +268,7 @@ describe("Travel Agent Service", () => {
 
     it("should block bookings when daily limit exceeded", () => {
       const dailyLimit = 100;
-      let dailyCount = 100;
+      const dailyCount = 100;
 
       const canBook = dailyCount < dailyLimit;
       expect(canBook).toBe(false);
@@ -276,7 +276,7 @@ describe("Travel Agent Service", () => {
 
     it("should track monthly booking count", () => {
       const monthlyLimit = 2000;
-      let monthlyCount = 1500;
+      const monthlyCount = 1500;
 
       const remainingBookings = monthlyLimit - monthlyCount;
       expect(remainingBookings).toBe(500);

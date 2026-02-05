@@ -33,6 +33,7 @@ import {
   Share2,
   Users,
   Split,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
@@ -56,7 +57,6 @@ import {
 import SplitPaymentForm from "@/components/SplitPaymentForm";
 import { VoucherInput } from "@/components/VoucherInput";
 import { CreditBalance } from "@/components/CreditBalance";
-import { MessageSquare } from "lucide-react";
 
 type Passenger = {
   type: "adult" | "child" | "infant";
