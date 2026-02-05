@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.2.0
+
+### Features
+- feat: implement Phase 2 features - advanced aviation system capabilities (ac7ce89)
+
+### Other Changes
+- Merge branch 'main' into claude/add-claude-documentation-hFQZh (3631b0c)
+- Merge pull request #40 from kafaat/claude/add-claude-documentation-hFQZh (cb9ee3a)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.1.1...v1.2.0
+
+
+---
+
 ## What's Changed in v1.1.1
 
 ### Bug Fixes
