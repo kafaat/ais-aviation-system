@@ -10,7 +10,6 @@ on:
 
 env:
   NODE_VERSION: "22.x"
-  PNPM_VERSION: "10.4.1"
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
@@ -37,8 +36,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Get pnpm store directory
         shell: bash
@@ -108,8 +105,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Get pnpm store directory
         shell: bash
@@ -202,8 +197,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Get pnpm store directory
         shell: bash
@@ -288,8 +281,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Get pnpm store directory
         shell: bash
@@ -423,8 +414,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Get pnpm store directory
         shell: bash

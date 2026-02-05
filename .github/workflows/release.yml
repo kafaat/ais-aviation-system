@@ -31,7 +31,6 @@ on:
 
 env:
   NODE_VERSION: "22.x"
-  PNPM_VERSION: "10.4.1"
 
 jobs:
   # =============================================================================
@@ -253,8 +252,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
 
       - name: Configure Git
         run: |
