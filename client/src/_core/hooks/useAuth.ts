@@ -18,7 +18,8 @@ export function useAuth(options?: UseAuthOptions) {
     refetchOnWindowFocus: false,
   });
 
-  const logoutMutation = trpc.auth.logout.useMutation({
+  // Use logoutCookie for cookie-based web clients
+  const logoutMutation = trpc.auth.logoutCookie.useMutation({
     onSuccess: () => {
       utils.auth.me.setData(undefined, null);
     },

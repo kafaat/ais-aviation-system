@@ -13,27 +13,43 @@ import {
 /**
  * Core user table backing auth flow.
  */
-export const users = mysqlTable("users", {
-  id: int("id").autoincrement().primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", [
-    "user",
-    "admin",
-    "super_admin",
-    "airline_admin",
-    "finance",
-    "ops",
-    "support",
-  ])
-    .default("user")
-    .notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+export const users = mysqlTable(
+  "users",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    openId: varchar("openId", { length: 64 }).notNull().unique(),
+    name: text("name"),
+    email: varchar("email", { length: 320 }),
+    loginMethod: varchar("loginMethod", { length: 64 }),
+    role: mysqlEnum("role", [
+      "user",
+      "admin",
+      "super_admin",
+      "airline_admin",
+      "finance",
+      "ops",
+      "support",
+    ])
+      .default("user")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  },
+  table => ({
+    // Index for email lookups (login, password reset)
+    emailIdx: index("users_email_idx").on(table.email),
+    // Index for role-based queries (admin panels, RBAC)
+    roleIdx: index("users_role_idx").on(table.role),
+    // Index for user listing sorted by creation date
+    createdAtIdx: index("users_created_at_idx").on(table.createdAt),
+    // Composite index for role + createdAt (admin user listing with filters)
+    roleCreatedAtIdx: index("users_role_created_at_idx").on(
+      table.role,
+      table.createdAt
+    ),
+  })
+);
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -41,15 +57,29 @@ export type InsertUser = typeof users.$inferInsert;
 /**
  * Airlines table
  */
-export const airlines = mysqlTable("airlines", {
-  id: int("id").autoincrement().primaryKey(),
-  code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., SV, MS)
-  name: varchar("name", { length: 255 }).notNull(),
-  country: varchar("country", { length: 100 }),
-  logo: text("logo"), // URL to airline logo
-  active: boolean("active").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+export const airlines = mysqlTable(
+  "airlines",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., SV, MS)
+    name: varchar("name", { length: 255 }).notNull(),
+    country: varchar("country", { length: 100 }),
+    logo: text("logo"), // URL to airline logo
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    // Index for active airlines lookup (common filter)
+    activeIdx: index("airlines_active_idx").on(table.active),
+    // Index for country-based filtering
+    countryIdx: index("airlines_country_idx").on(table.country),
+    // Composite index for active airlines by country
+    activeCountryIdx: index("airlines_active_country_idx").on(
+      table.active,
+      table.country
+    ),
+  })
+);
 
 export type Airline = typeof airlines.$inferSelect;
 export type InsertAirline = typeof airlines.$inferInsert;
@@ -57,15 +87,29 @@ export type InsertAirline = typeof airlines.$inferInsert;
 /**
  * Airports table
  */
-export const airports = mysqlTable("airports", {
-  id: int("id").autoincrement().primaryKey(),
-  code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., JED, RUH)
-  name: varchar("name", { length: 255 }).notNull(),
-  city: varchar("city", { length: 100 }).notNull(),
-  country: varchar("country", { length: 100 }).notNull(),
-  timezone: varchar("timezone", { length: 50 }), // e.g., "Asia/Riyadh"
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+export const airports = mysqlTable(
+  "airports",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., JED, RUH)
+    name: varchar("name", { length: 255 }).notNull(),
+    city: varchar("city", { length: 100 }).notNull(),
+    country: varchar("country", { length: 100 }).notNull(),
+    timezone: varchar("timezone", { length: 50 }), // e.g., "Asia/Riyadh"
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    // Index for city search (autocomplete, search)
+    cityIdx: index("airports_city_idx").on(table.city),
+    // Index for country filtering
+    countryIdx: index("airports_country_idx").on(table.country),
+    // Composite index for country + city (location-based search)
+    countryCity: index("airports_country_city_idx").on(
+      table.country,
+      table.city
+    ),
+  })
+);
 
 export type Airport = typeof airports.$inferSelect;
 export type InsertAirport = typeof airports.$inferInsert;
@@ -158,12 +202,54 @@ export const bookings = mysqlTable(
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
     numberOfPassengers: int("numberOfPassengers").notNull(),
     checkedIn: boolean("checkedIn").default(false).notNull(),
+    checkInReminderSentAt: timestamp("checkInReminderSentAt"), // When check-in reminder email was sent
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
     userIdIdx: index("user_id_idx").on(table.userId),
     pnrIdx: index("pnr_idx").on(table.pnr),
+    // Index for flight-based queries (flight manifest, seat availability)
+    flightIdIdx: index("bookings_flight_id_idx").on(table.flightId),
+    // Index for status filtering (admin panels, reports)
+    statusIdx: index("bookings_status_idx").on(table.status),
+    // Index for payment status queries
+    paymentStatusIdx: index("bookings_payment_status_idx").on(
+      table.paymentStatus
+    ),
+    // Index for Stripe checkout session lookups (webhook processing)
+    stripeCheckoutIdx: index("bookings_stripe_checkout_idx").on(
+      table.stripeCheckoutSessionId
+    ),
+    // Index for Stripe payment intent lookups (webhook processing)
+    stripePaymentIntentIdx: index("bookings_stripe_payment_intent_idx").on(
+      table.stripePaymentIntentId
+    ),
+    // Index for creation date sorting (user booking history)
+    createdAtIdx: index("bookings_created_at_idx").on(table.createdAt),
+    // Composite index for user bookings sorted by date
+    userCreatedAtIdx: index("bookings_user_created_at_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+    // Composite index for user + status filtering
+    userStatusIdx: index("bookings_user_status_idx").on(
+      table.userId,
+      table.status
+    ),
+    // Composite index for flight + status (seat availability calculation)
+    flightStatusIdx: index("bookings_flight_status_idx").on(
+      table.flightId,
+      table.status
+    ),
+    // Index for check-in status queries
+    checkedInIdx: index("bookings_checked_in_idx").on(table.checkedIn),
+    // Composite index for check-in reminder queries
+    checkInReminderIdx: index("bookings_check_in_reminder_idx").on(
+      table.status,
+      table.checkedIn,
+      table.checkInReminderSentAt
+    ),
   })
 );
 
@@ -193,6 +279,16 @@ export const passengers = mysqlTable(
   },
   table => ({
     bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+    // Index for ticket number lookups (e-ticket verification)
+    ticketNumberIdx: index("passengers_ticket_number_idx").on(
+      table.ticketNumber
+    ),
+    // Index for passport lookups (identity verification)
+    passportIdx: index("passengers_passport_idx").on(table.passportNumber),
+    // Composite index for name search (customer lookup)
+    nameIdx: index("passengers_name_idx").on(table.lastName, table.firstName),
+    // Index for passenger type filtering (pricing calculations)
+    typeIdx: index("passengers_type_idx").on(table.type),
   })
 );
 
@@ -203,26 +299,50 @@ export type InsertPassenger = typeof passengers.$inferInsert;
  * Flight Status History table
  * Tracks all status changes for flights
  */
-export const flightStatusHistory = mysqlTable("flight_status_history", {
-  id: int("id").autoincrement().primaryKey(),
-  flightId: int("flightId").notNull(),
-  oldStatus: mysqlEnum("oldStatus", [
-    "scheduled",
-    "delayed",
-    "cancelled",
-    "completed",
-  ]),
-  newStatus: mysqlEnum("newStatus", [
-    "scheduled",
-    "delayed",
-    "cancelled",
-    "completed",
-  ]).notNull(),
-  delayMinutes: int("delayMinutes"),
-  reason: text("reason"),
-  changedBy: int("changedBy"), // User ID who made the change (admin)
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+export const flightStatusHistory = mysqlTable(
+  "flight_status_history",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    oldStatus: mysqlEnum("oldStatus", [
+      "scheduled",
+      "delayed",
+      "cancelled",
+      "completed",
+    ]),
+    newStatus: mysqlEnum("newStatus", [
+      "scheduled",
+      "delayed",
+      "cancelled",
+      "completed",
+    ]).notNull(),
+    delayMinutes: int("delayMinutes"),
+    reason: text("reason"),
+    changedBy: int("changedBy"), // User ID who made the change (admin)
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    // Index for flight history lookup
+    flightIdIdx: index("flight_status_history_flight_idx").on(table.flightId),
+    // Index for status filtering
+    newStatusIdx: index("flight_status_history_new_status_idx").on(
+      table.newStatus
+    ),
+    // Index for admin audit trail
+    changedByIdx: index("flight_status_history_changed_by_idx").on(
+      table.changedBy
+    ),
+    // Index for chronological queries
+    createdAtIdx: index("flight_status_history_created_at_idx").on(
+      table.createdAt
+    ),
+    // Composite index for flight status timeline
+    flightCreatedAtIdx: index("flight_status_history_flight_created_idx").on(
+      table.flightId,
+      table.createdAt
+    ),
+  })
+);
 
 export type FlightStatusHistory = typeof flightStatusHistory.$inferSelect;
 export type InsertFlightStatusHistory = typeof flightStatusHistory.$inferInsert;
@@ -250,6 +370,25 @@ export const payments = mysqlTable(
   table => ({
     bookingIdIdx: index("booking_id_idx").on(table.bookingId),
     idempotencyKeyIdx: index("idempotency_key_idx").on(table.idempotencyKey),
+    // Index for status filtering (reconciliation, reports)
+    statusIdx: index("payments_status_idx").on(table.status),
+    // Index for Stripe payment intent lookups
+    stripePaymentIntentIdx: index("payments_stripe_payment_intent_idx").on(
+      table.stripePaymentIntentId
+    ),
+    // Index for transaction ID lookups
+    transactionIdIdx: index("payments_transaction_id_idx").on(
+      table.transactionId
+    ),
+    // Index for date range queries (financial reports)
+    createdAtIdx: index("payments_created_at_idx").on(table.createdAt),
+    // Composite index for status + date (report filtering)
+    statusCreatedAtIdx: index("payments_status_created_at_idx").on(
+      table.status,
+      table.createdAt
+    ),
+    // Index for payment method filtering
+    methodIdx: index("payments_method_idx").on(table.method),
   })
 );
 
@@ -1524,6 +1663,225 @@ export const deniedBoardingRecords = mysqlTable(
 export type DeniedBoardingRecord = typeof deniedBoardingRecords.$inferSelect;
 export type InsertDeniedBoardingRecord =
   typeof deniedBoardingRecords.$inferInsert;
+
+// ============================================================================
+// GDPR Compliance Tables
+// ============================================================================
+
+/**
+ * User Consent Records
+ * Tracks user consent preferences for GDPR compliance
+ */
+export const userConsents = mysqlTable(
+  "user_consents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().unique(),
+
+    // Marketing consent
+    marketingEmails: boolean("marketingEmails").default(false).notNull(),
+    marketingSms: boolean("marketingSms").default(false).notNull(),
+    marketingPush: boolean("marketingPush").default(false).notNull(),
+
+    // Analytics consent
+    analyticsTracking: boolean("analyticsTracking").default(false).notNull(),
+    performanceCookies: boolean("performanceCookies").default(false).notNull(),
+
+    // Third-party data sharing
+    thirdPartySharing: boolean("thirdPartySharing").default(false).notNull(),
+    partnerOffers: boolean("partnerOffers").default(false).notNull(),
+
+    // Essential consent (always true for service operation)
+    essentialCookies: boolean("essentialCookies").default(true).notNull(),
+
+    // Personalization
+    personalizedAds: boolean("personalizedAds").default(false).notNull(),
+    personalizedContent: boolean("personalizedContent").default(false).notNull(),
+
+    // Consent metadata
+    consentVersion: varchar("consentVersion", { length: 20 })
+      .default("1.0")
+      .notNull(),
+    ipAddressAtConsent: varchar("ipAddressAtConsent", { length: 45 }),
+    userAgentAtConsent: text("userAgentAtConsent"),
+
+    // Timestamps
+    consentGivenAt: timestamp("consentGivenAt").defaultNow().notNull(),
+    lastUpdatedAt: timestamp("lastUpdatedAt").defaultNow().onUpdateNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("user_consents_user_id_idx").on(table.userId),
+    consentVersionIdx: index("user_consents_version_idx").on(table.consentVersion),
+  })
+);
+
+export type UserConsent = typeof userConsents.$inferSelect;
+export type InsertUserConsent = typeof userConsents.$inferInsert;
+
+/**
+ * Consent Change History
+ * Audit trail of all consent changes for compliance reporting
+ */
+export const consentHistory = mysqlTable(
+  "consent_history",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+
+    // Change details
+    consentType: varchar("consentType", { length: 50 }).notNull(), // e.g., "marketingEmails", "analyticsTracking"
+    previousValue: boolean("previousValue"),
+    newValue: boolean("newValue").notNull(),
+
+    // Request context
+    ipAddress: varchar("ipAddress", { length: 45 }),
+    userAgent: text("userAgent"),
+
+    // Consent version at time of change
+    consentVersion: varchar("consentVersion", { length: 20 }).notNull(),
+
+    // Change reason
+    changeReason: mysqlEnum("changeReason", [
+      "user_update",
+      "initial_consent",
+      "withdrawal",
+      "account_deletion",
+      "system_update",
+    ])
+      .default("user_update")
+      .notNull(),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("consent_history_user_id_idx").on(table.userId),
+    consentTypeIdx: index("consent_history_type_idx").on(table.consentType),
+    createdAtIdx: index("consent_history_created_at_idx").on(table.createdAt),
+  })
+);
+
+export type ConsentHistoryRecord = typeof consentHistory.$inferSelect;
+export type InsertConsentHistory = typeof consentHistory.$inferInsert;
+
+/**
+ * Data Export Requests
+ * Tracks user data export requests (GDPR Article 20 - Right to Data Portability)
+ */
+export const dataExportRequests = mysqlTable(
+  "data_export_requests",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+
+    // Request status
+    status: mysqlEnum("status", [
+      "pending",
+      "processing",
+      "completed",
+      "failed",
+      "expired",
+    ])
+      .default("pending")
+      .notNull(),
+
+    // Export format
+    format: mysqlEnum("format", ["json", "csv"])
+      .default("json")
+      .notNull(),
+
+    // Export details
+    downloadUrl: text("downloadUrl"), // Temporary signed URL
+    downloadExpiresAt: timestamp("downloadExpiresAt"),
+    fileSizeBytes: int("fileSizeBytes"),
+
+    // Request context
+    ipAddress: varchar("ipAddress", { length: 45 }),
+    userAgent: text("userAgent"),
+
+    // Error tracking
+    errorMessage: text("errorMessage"),
+
+    // Timestamps
+    requestedAt: timestamp("requestedAt").defaultNow().notNull(),
+    processedAt: timestamp("processedAt"),
+    completedAt: timestamp("completedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("data_export_requests_user_id_idx").on(table.userId),
+    statusIdx: index("data_export_requests_status_idx").on(table.status),
+    requestedAtIdx: index("data_export_requests_requested_at_idx").on(
+      table.requestedAt
+    ),
+  })
+);
+
+export type DataExportRequest = typeof dataExportRequests.$inferSelect;
+export type InsertDataExportRequest = typeof dataExportRequests.$inferInsert;
+
+/**
+ * Account Deletion Requests
+ * Tracks user account deletion requests (GDPR Article 17 - Right to Erasure)
+ */
+export const accountDeletionRequests = mysqlTable(
+  "account_deletion_requests",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+
+    // Request status
+    status: mysqlEnum("status", [
+      "pending",
+      "processing",
+      "completed",
+      "cancelled",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+
+    // Deletion type
+    deletionType: mysqlEnum("deletionType", ["full", "anonymize"])
+      .default("anonymize")
+      .notNull(),
+
+    // Reason for deletion
+    reason: text("reason"),
+
+    // Request context
+    ipAddress: varchar("ipAddress", { length: 45 }),
+    userAgent: text("userAgent"),
+
+    // Confirmation
+    confirmationToken: varchar("confirmationToken", { length: 64 }),
+    confirmedAt: timestamp("confirmedAt"),
+
+    // Processing details
+    dataAnonymizedAt: timestamp("dataAnonymizedAt"),
+    errorMessage: text("errorMessage"),
+
+    // Scheduled deletion (grace period)
+    scheduledDeletionAt: timestamp("scheduledDeletionAt"),
+
+    // Timestamps
+    requestedAt: timestamp("requestedAt").defaultNow().notNull(),
+    processedAt: timestamp("processedAt"),
+    completedAt: timestamp("completedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    userIdIdx: index("account_deletion_requests_user_id_idx").on(table.userId),
+    statusIdx: index("account_deletion_requests_status_idx").on(table.status),
+    scheduledIdx: index("account_deletion_requests_scheduled_idx").on(
+      table.scheduledDeletionAt
+    ),
+  })
+);
+
+export type AccountDeletionRequest = typeof accountDeletionRequests.$inferSelect;
+export type InsertAccountDeletionRequest =
+  typeof accountDeletionRequests.$inferInsert;
 
 // Export chat and notification schemas
 export * from "./chat-schema";

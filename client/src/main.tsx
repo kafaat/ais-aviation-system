@@ -1,3 +1,15 @@
+// Initialize Sentry first (before other imports that might throw)
+import { initSentry, captureError } from "@/lib/sentry";
+initSentry();
+
+// Initialize Web Vitals tracking (async to not block render)
+import { initWebVitals } from "@/lib/webVitals";
+initWebVitals({
+  enableAnalytics: import.meta.env.PROD,
+  enableConsoleLogging: import.meta.env.DEV,
+  enableBudgetWarnings: true,
+});
+
 import { trpc } from "@/lib/trpc";
 import "./i18n/config";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
@@ -8,6 +20,44 @@ import superjson from "superjson";
 import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
+
+// Service Worker Registration
+const registerServiceWorker = async () => {
+  if ("serviceWorker" in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+      });
+
+      // Check for updates
+      registration.addEventListener("updatefound", () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener("statechange", () => {
+            if (
+              newWorker.state === "installed" &&
+              navigator.serviceWorker.controller
+            ) {
+              // New content is available, dispatch event for UI notification
+              window.dispatchEvent(
+                new CustomEvent("swUpdate", { detail: registration })
+              );
+            }
+          });
+        }
+      });
+
+      console.info("[PWA] Service Worker registered successfully");
+    } catch (error) {
+      console.error("[PWA] Service Worker registration failed:", error);
+    }
+  }
+};
+
+// Register SW after page load
+if (typeof window !== "undefined") {
+  window.addEventListener("load", registerServiceWorker);
+}
 
 const queryClient = new QueryClient();
 
@@ -27,6 +77,13 @@ queryClient.getQueryCache().subscribe(event => {
     const error = event.query.state.error;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Query Error]", error);
+    // Capture error to Sentry (excluding auth errors which are expected)
+    if (error instanceof Error && !error.message.includes(UNAUTHED_ERR_MSG)) {
+      captureError(error, {
+        type: "query",
+        queryKey: event.query.queryKey,
+      });
+    }
   }
 });
 
@@ -35,6 +92,13 @@ queryClient.getMutationCache().subscribe(event => {
     const error = event.mutation.state.error;
     redirectToLoginIfUnauthorized(error);
     console.error("[API Mutation Error]", error);
+    // Capture error to Sentry (excluding auth errors which are expected)
+    if (error instanceof Error && !error.message.includes(UNAUTHED_ERR_MSG)) {
+      captureError(error, {
+        type: "mutation",
+        mutationKey: event.mutation.options.mutationKey,
+      });
+    }
   }
 });
 

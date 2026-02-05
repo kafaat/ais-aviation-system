@@ -1,7 +1,5 @@
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { router } from "./_core/trpc";
 
 // Import domain routers
 import { flightsRouter } from "./routers/flights";
@@ -21,6 +19,11 @@ import { reviewsRouter } from "./routers/reviews";
 import { favoritesRouter } from "./routers/favorites";
 import { aiChatRouter } from "./routers/ai-chat";
 import { reportsRouter } from "./routers/reports";
+import { gdprRouter } from "./routers/gdpr";
+import { rateLimitRouter } from "./routers/rate-limit";
+import { metricsRouter } from "./routers/metrics";
+import { authRouter } from "./routers/auth";
+import { cacheRouter } from "./routers/cache";
 
 /**
  * Main Application Router
@@ -30,15 +33,18 @@ export const appRouter = router({
   // System router (AI, notifications, etc.)
   system: systemRouter,
 
-  // Authentication routes
-  auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
-    }),
-  }),
+  // Authentication routes (JWT token-based auth with refresh)
+  // Endpoints:
+  //   - me: Get current authenticated user (works with cookie or JWT)
+  //   - login: Login with email/password -> returns access + refresh tokens
+  //   - refreshToken: Refresh access token using refresh token (implements rotation)
+  //   - logout: Revoke refresh token (for JWT clients)
+  //   - logoutCookie: Clear session cookie (for web clients)
+  //   - logoutAllDevices: Revoke all refresh tokens for user
+  //   - getActiveSessions: List all active sessions for user
+  //   - revokeSession: Revoke a specific session
+  //   - verifyToken: Verify and decode an access token
+  auth: authRouter,
 
   // Domain routers
   flights: flightsRouter,
@@ -58,6 +64,10 @@ export const appRouter = router({
   favorites: favoritesRouter,
   aiChat: aiChatRouter,
   reports: reportsRouter,
+  gdpr: gdprRouter,
+  rateLimit: rateLimitRouter,
+  metrics: metricsRouter,
+  cache: cacheRouter,
 });
 
 export type AppRouter = typeof appRouter;

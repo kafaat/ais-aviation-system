@@ -1,0 +1,127 @@
+# Codecov Configuration
+# Documentation: https://docs.codecov.com/docs/codecov-yaml
+
+# Coverage configuration
+coverage:
+  # Precision of coverage percentage
+  precision: 2
+  # Rounding method (down, up, nearest)
+  round: down
+  # Range for coverage color coding [red, green]
+  range: "50...100"
+
+  # Status checks configuration
+  status:
+    # Project-level coverage status
+    project:
+      default:
+        # Target coverage percentage
+        target: 80%
+        # Threshold for coverage changes (allow small drops)
+        threshold: 1%
+        # Only consider this status after n builds
+        # if_ci_failed: error
+        # Only run on these paths
+        paths:
+          - "server/**"
+          - "client/src/**"
+          - "shared/**"
+        # Exclude these paths
+        exclude:
+          - "**/*.test.ts"
+          - "**/*.test.tsx"
+          - "**/*.spec.ts"
+          - "**/node_modules/**"
+          - "**/dist/**"
+          - "**/drizzle/migrations/**"
+
+      # Separate status for server code
+      server:
+        target: 80%
+        threshold: 1%
+        paths:
+          - "server/**"
+        flags:
+          - server
+
+      # Separate status for client code
+      client:
+        target: 75%
+        threshold: 2%
+        paths:
+          - "client/src/**"
+        flags:
+          - client
+
+    # Patch coverage (coverage on changed lines)
+    patch:
+      default:
+        target: 70%
+        threshold: 5%
+        # Only run patch on PRs
+        only_pulls: true
+
+# Flags configuration
+flags:
+  unittests:
+    paths:
+      - server/
+      - client/src/
+      - shared/
+    carryforward: true
+
+  server:
+    paths:
+      - server/
+    carryforward: true
+
+  client:
+    paths:
+      - client/src/
+    carryforward: true
+
+# Comment configuration for PRs
+comment:
+  # Layout of the comment
+  layout: "reach,diff,flags,files,footer"
+  # Behavior of the comment (default, once, new, etc.)
+  behavior: default
+  # Require changes to post a comment
+  require_changes: false
+  # Require base coverage for comparison
+  require_base: false
+  # Require head coverage for comparison
+  require_head: true
+  # Show project coverage
+  show_project_coverage: true
+
+# Ignore certain paths from coverage
+ignore:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "**/tests/**"
+  - "**/__tests__/**"
+  - "**/test/**"
+  - "**/mocks/**"
+  - "**/__mocks__/**"
+  - "**/drizzle/migrations/**"
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/*.d.ts"
+  - "**/vitest.config.ts"
+  - "**/vite.config.ts"
+
+# Parsers configuration
+parsers:
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no
+
+# GitHub checks configuration
+github_checks:
+  annotations: true

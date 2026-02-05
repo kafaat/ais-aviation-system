@@ -39,12 +39,16 @@
   },
   "nav": {
     "home": "Home",
+    "searchFlights": "Search Flights",
     "myBookings": "My Bookings",
+    "favorites": "Favorites",
     "checkIn": "Check-in",
     "profile": "Profile",
-    "loyalty": "Loyalty",
+    "loyalty": "Loyalty Program",
     "admin": "Dashboard",
-    "analytics": "Analytics"
+    "analytics": "Analytics",
+    "reports": "Reports",
+    "refunds": "Refunds"
   },
   "home": {
     "hero": {
@@ -89,8 +93,9 @@
     "selectFlight": "Select Flight",
     "available": "available",
     "full": "Full",
-    "economy": "Economy",
-    "business": "Business"
+    "total": "total",
+    "noMatchingFlights": "No flights match your filters",
+    "tryChangingFilters": "Try adjusting your filter options to find flights"
   },
   "booking": {
     "title": "Complete Booking",
@@ -132,14 +137,43 @@
     "subtitle": "View and manage all your bookings",
     "noBookings": "No Bookings",
     "noBookingsDesc": "You haven't made any bookings yet",
+    "noBookingsHint": "Start exploring flights and book your next adventure",
+    "searchFlights": "Search Flights",
+    "loginRequired": "Login Required",
+    "loginRequiredDesc": "Please login to view your bookings",
     "bookingRef": "Booking Reference",
     "pnr": "PNR",
     "from": "From",
     "to": "To",
     "departureDate": "Departure Date",
     "totalAmount": "Total Amount",
+    "passengers": "Passengers",
+    "passengerCount": "{{count}} passenger(s)",
     "checkInNow": "Check-in",
     "checkedIn": "Checked In",
+    "modify": "Modify",
+    "cancelBooking": "Cancel",
+    "manageServices": "Manage Services",
+    "adult": "Adult",
+    "child": "Child",
+    "infant": "Infant",
+    "seat": "Seat",
+    "filters": {
+      "title": "Filters",
+      "status": "Status",
+      "allStatuses": "All Statuses",
+      "dateRange": "Date Range",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "clearFilters": "Clear Filters"
+    },
+    "sort": {
+      "title": "Sort By",
+      "dateDesc": "Newest First",
+      "dateAsc": "Oldest First",
+      "priceDesc": "Highest Price",
+      "priceAsc": "Lowest Price"
+    },
     "status": {
       "pending": "Pending",
       "confirmed": "Confirmed",
@@ -151,7 +185,10 @@
       "paid": "Paid",
       "refunded": "Refunded",
       "failed": "Failed"
-    }
+    },
+    "resultsCount": "Showing {{count}} booking(s)",
+    "noResults": "No bookings match your filters",
+    "noResultsHint": "Try adjusting your filters to see more results"
   },
   "checkIn": {
     "title": "Check-in",
@@ -165,8 +202,29 @@
     "bookingDetails": "Booking Details",
     "passengers": "Passengers",
     "checkInButton": "Check-in",
-    "checkInSuccess": "✓ Check-in Successful",
-    "checkInSuccessDesc": "You can proceed to the boarding gate"
+    "checkInSuccess": "Check-in Successful",
+    "checkInSuccessDesc": "You can proceed to the boarding gate",
+    "loginRequired": "Login Required",
+    "loginRequiredDesc": "Please login to complete the check-in process",
+    "findBooking": "Find Your Booking",
+    "invalidPnr": "Please enter a valid PNR (6 characters)",
+    "successMessage": "Check-in completed successfully!",
+    "errorMessage": "An error occurred during check-in",
+    "processing": "Processing...",
+    "bookingRef": "Booking Reference",
+    "departure": "Departure",
+    "status": "Status",
+    "passengerCount": "Passengers",
+    "flightNumber": "Flight",
+    "boardingPass": "Boarding Pass",
+    "passenger": "Passenger",
+    "date": "Date",
+    "boardingTime": "Boarding Time",
+    "seat": "Seat",
+    "gate": "Gate",
+    "class": "Class",
+    "boardingPassNote": "Please arrive at the gate at least 30 minutes before departure",
+    "printBoardingPass": "Print Boarding Pass"
   },
   "analytics": {
     "title": "Analytics Dashboard",
@@ -226,7 +284,21 @@
   },
   "profile": {
     "title": "User Profile",
+    "subtitle": "Manage your account settings and preferences",
     "updateSuccess": "Preferences updated successfully",
+    "updateError": "Failed to update preferences",
+    "saving": "Saving...",
+    "avatar": {
+      "change": "Change profile photo",
+      "invalidType": "Please select an image file",
+      "tooLarge": "Image must be less than 5MB",
+      "uploadSuccess": "Photo updated successfully"
+    },
+    "validation": {
+      "invalidPassport": "Passport number must be 6-12 alphanumeric characters",
+      "invalidPhone": "Please enter a valid phone number",
+      "pleaseCorrect": "Please correct the errors before saving"
+    },
     "tabs": {
       "travel": "Travel Preferences",
       "personal": "Personal Information",
@@ -330,7 +402,32 @@
     "tierBonus": "Tier Bonuses",
     "tierBonusDesc": "Get extra multipliers based on your tier",
     "specialOffers": "Special Offers",
-    "specialOffersDesc": "Exclusive promotional offers for members"
+    "specialOffersDesc": "Exclusive promotional offers for members",
+    "milesHistory": "Miles History",
+    "milesHistoryDesc": "Track your miles earnings over time",
+    "last6Months": "Last 6 Months",
+    "compareTiers": "Compare Tiers",
+    "compareTiersDesc": "See what benefits each tier offers",
+    "currentTier": "Current Tier",
+    "yourTier": "Your Tier",
+    "benefits": {
+      "priorityBoarding": "Priority Boarding",
+      "loungeAccess": "Lounge Access",
+      "extraBaggage": "Extra Baggage Allowance",
+      "seatSelection": "Free Seat Selection",
+      "upgrades": "Complimentary Upgrades",
+      "dedicatedSupport": "Dedicated Support Line",
+      "partnerBenefits": "Partner Benefits",
+      "exclusiveOffers": "Exclusive Offers",
+      "bonusMiles": "Bonus Miles on Flights",
+      "flexibleBooking": "Flexible Booking Changes"
+    },
+    "tierRequirements": "Tier Requirements",
+    "milesRequired": "{{miles}} miles required",
+    "unlimitedBenefits": "All benefits unlocked",
+    "earnedThisMonth": "Earned This Month",
+    "redeemedThisMonth": "Redeemed This Month",
+    "viewAll": "View All"
   },
   "ancillary": {
     "title": "Additional Services",
@@ -357,8 +454,167 @@
     "errorSelecting": "Error selecting flight",
     "bookingSelected": "Flight selected successfully"
   },
+  "theme": {
+    "darkMode": "Dark Mode",
+    "lightMode": "Light Mode"
+  },
   "cabin": {
     "economy": "Economy",
     "business": "Business"
+  },
+  "reports": {
+    "title": "Reports Dashboard",
+    "subtitle": "Generate and export reports",
+    "filters": "Report Filters",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "selectStartDate": "Select start date",
+    "selectEndDate": "Select end date",
+    "status": "Status",
+    "allStatuses": "All Statuses",
+    "exportFormat": "Export Format",
+    "availableReports": "Available Reports",
+    "bookingsReport": "Bookings Report",
+    "bookingsReportDesc": "Export booking data with passenger and payment details",
+    "revenueReport": "Revenue Report",
+    "revenueReportDesc": "Daily revenue report with confirmed payments",
+    "flightPerformanceReport": "Flight Performance Report",
+    "flightPerformanceReportDesc": "Occupancy rates and estimated revenue per flight",
+    "exportCSV": "Export CSV",
+    "exportPDF": "Export PDF",
+    "exporting": "Exporting...",
+    "exportSuccess": "Report exported successfully",
+    "exportError": "Error exporting report"
+  },
+  "favorites": {
+    "title": "Favorite Routes",
+    "empty": "No favorite routes yet",
+    "emptyHint": "Add routes to your favorites to track prices",
+    "alertUpdated": "Alert settings updated",
+    "alertSet": "Price alert set successfully",
+    "removed": "Route removed from favorites",
+    "invalidPrice": "Please enter a valid price",
+    "alertAt": "Alert at",
+    "setPriceAlert": "Set Price Alert",
+    "enableAlert": "Enable price alert",
+    "targetPrice": "Target price",
+    "enterPrice": "Enter target price",
+    "alertDescription": "You will be notified when the price drops below this amount",
+    "addToFavorites": "Add to favorites",
+    "removeFromFavorites": "Remove from favorites"
+  },
+  "favoritesPage": {
+    "title": "My Favorite Routes",
+    "subtitle": "Manage your saved routes and price alerts",
+    "searchFlights": "Search Flights",
+    "features": {
+      "saveRoutes": {
+        "title": "Save Routes",
+        "description": "Save your frequently traveled routes for quick access"
+      },
+      "priceAlerts": {
+        "title": "Price Alerts",
+        "description": "Get notified when prices drop below your target"
+      },
+      "trackPrices": {
+        "title": "Track Prices",
+        "description": "Monitor price changes over time for your favorite routes"
+      }
+    },
+    "howItWorks": {
+      "title": "How It Works",
+      "step1": {
+        "title": "Search & Save",
+        "description": "Search for a flight and click the heart icon to save it"
+      },
+      "step2": {
+        "title": "Set Target Price",
+        "description": "Set a price alert to get notified when it drops"
+      },
+      "step3": {
+        "title": "Book at Best Price",
+        "description": "When the price drops, you'll receive a notification to book immediately"
+      }
+    }
+  },
+  "searchHistory": {
+    "title": "Recent Searches",
+    "recent": "Recent Searches",
+    "empty": "No recent searches",
+    "emptyHint": "Start searching for your first flight",
+    "passengers": "passengers",
+    "searchAgain": "Search",
+    "justNow": "Just now",
+    "minutesAgo": "{{count}} min ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
+  "priceCalendar": {
+    "title": "Price Calendar",
+    "subtitle": "View flight prices by date",
+    "selectDate": "Select departure date",
+    "lowestPrice": "Lowest Price",
+    "averagePrice": "Average Price",
+    "highestPrice": "Highest Price",
+    "priceFor": "Price for",
+    "noFlights": "No flights",
+    "legend": "Legend",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "perPerson": "per person"
+  },
+  "pwa": {
+    "install": "Install App",
+    "installPrompt": "Install AIS Aviation on your device for quick access and offline support.",
+    "offline": "You're offline. Some features may be unavailable.",
+    "updateAvailable": "Update Available",
+    "updateNow": "Update Now"
+  },
+  "errors": {
+    "somethingWentWrong": "Something went wrong",
+    "tryAgain": "Try Again",
+    "reportError": "Report this Error",
+    "pageNotFound": "Page Not Found",
+    "pageNotFoundDescription": "Sorry, the page you are looking for doesn't exist or has been moved.",
+    "pageNotFoundHint": "It may have been removed, had its name changed, or is temporarily unavailable.",
+    "goHome": "Go Home",
+    "popularPages": "Popular pages you might be looking for:",
+    "needHelp": "Need help?",
+    "contactSupport": "Contact our support team",
+    "technicalDetails": "Technical Details",
+    "errorApology": "We apologize for the inconvenience. An unexpected error has occurred.",
+    "persistentError": "If this problem persists, please contact our support team."
+  },
+  "flightStatus": {
+    "live": "Live",
+    "scheduled": "Scheduled",
+    "boarding": "Boarding",
+    "departed": "Departed",
+    "delayed": "Delayed",
+    "cancelled": "Cancelled",
+    "landed": "Landed",
+    "staticStatus": "Status (not live)",
+    "disconnected": "Disconnected",
+    "delayedBy": "Delayed by {{minutes}} minutes",
+    "flightDelayed": "Flight {{flightNumber}} is delayed",
+    "flightCancelled": "Flight {{flightNumber}} has been cancelled"
+  },
+  "accessibility": {
+    "skipToContent": "Skip to main content",
+    "mainNavigation": "Main navigation",
+    "adminNavigation": "Admin navigation",
+    "reducedMotion": "Reduced motion",
+    "highContrast": "High contrast",
+    "fontSize": "Font size",
+    "fontSizeNormal": "Normal",
+    "fontSizeLarge": "Large",
+    "fontSizeLarger": "Larger",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "userMenu": "User menu",
+    "closeDialog": "Close dialog",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   }
 }

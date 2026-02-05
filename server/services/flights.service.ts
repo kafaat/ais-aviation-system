@@ -5,6 +5,10 @@ import {
   calculateOccupancyRate,
   getDaysUntilDeparture,
 } from "./dynamic-pricing.service";
+import {
+  redisCacheService,
+  CacheTTL,
+} from "./redis-cache.service";
 
 /**
  * Flights Service
@@ -21,12 +25,39 @@ export interface GetFlightInput {
   id: number;
 }
 
+// Type for flight search results
+export type FlightSearchResult = Awaited<ReturnType<typeof import("../db").searchFlights>>;
+
 /**
  * Search for flights based on origin, destination, and date
+ * Results are cached for 2 minutes to improve performance
  */
-export async function searchFlights(input: SearchFlightsInput) {
+export async function searchFlights(input: SearchFlightsInput): Promise<FlightSearchResult> {
   try {
-    return await db.searchFlights(input);
+    // Create cache key params
+    const cacheParams = {
+      originId: input.originId,
+      destinationId: input.destinationId,
+      departureDate: input.departureDate.toISOString().split("T")[0],
+    };
+
+    // Try to get from cache
+    const cached = await redisCacheService.getCachedFlightSearch(cacheParams);
+    if (cached) {
+      return cached as FlightSearchResult;
+    }
+
+    // Fetch from database
+    const results = await db.searchFlights(input);
+
+    // Cache the results
+    await redisCacheService.cacheFlightSearch(
+      cacheParams,
+      results,
+      CacheTTL.FLIGHT_SEARCH
+    );
+
+    return results;
   } catch (error) {
     console.error("Error searching flights:", error);
     throw new TRPCError({
@@ -38,9 +69,17 @@ export async function searchFlights(input: SearchFlightsInput) {
 
 /**
  * Get flight details by ID
+ * Results are cached for 5 minutes to improve performance
  */
 export async function getFlightById(input: GetFlightInput) {
   try {
+    // Try to get from cache
+    const cached = await redisCacheService.getCachedFlightDetails(input.id);
+    if (cached) {
+      return cached as Awaited<ReturnType<typeof db.getFlightById>>;
+    }
+
+    // Fetch from database
     const flight = await db.getFlightById(input.id);
 
     if (!flight) {
@@ -49,6 +88,13 @@ export async function getFlightById(input: GetFlightInput) {
         message: "Flight not found",
       });
     }
+
+    // Cache the result
+    await redisCacheService.cacheFlightDetails(
+      input.id,
+      flight,
+      CacheTTL.FLIGHT_DETAILS
+    );
 
     return flight;
   } catch (error) {

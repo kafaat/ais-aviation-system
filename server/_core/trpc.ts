@@ -1,9 +1,21 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from "@shared/const";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
+import type { OpenApiMeta } from "trpc-openapi";
 import type { TrpcContext } from "./context";
 
-const t = initTRPC.context<TrpcContext>().create({
+/**
+ * Initialize tRPC with OpenAPI metadata support
+ *
+ * The meta object allows attaching OpenAPI documentation to each procedure:
+ * - openapi.method: HTTP method (GET, POST, PUT, DELETE, PATCH)
+ * - openapi.path: REST path for the endpoint
+ * - openapi.summary: Short description shown in Swagger UI
+ * - openapi.description: Detailed description for documentation
+ * - openapi.tags: Array of tags for grouping endpoints
+ * - openapi.protect: Whether the endpoint requires authentication
+ */
+const t = initTRPC.context<TrpcContext>().meta<OpenApiMeta>().create({
   transformer: superjson,
 });
 

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline - AIS Aviation</title>
+    <style>
+      :root {
+        --primary-color: #3b82f6;
+        --background-color: #f8fafc;
+        --text-color: #1e293b;
+        --text-secondary: #64748b;
+        --card-background: #ffffff;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background-color: #0f172a;
+          --text-color: #f1f5f9;
+          --text-secondary: #94a3b8;
+          --card-background: #1e293b;
+        }
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background-color: var(--background-color);
+        color: var(--text-color);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+
+      .container {
+        text-align: center;
+        max-width: 400px;
+        padding: 2rem;
+        background-color: var(--card-background);
+        border-radius: 1rem;
+        box-shadow:
+          0 4px 6px -1px rgba(0, 0, 0, 0.1),
+          0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      }
+
+      .icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 1.5rem;
+        color: var(--primary-color);
+      }
+
+      .icon svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0.75rem;
+        color: var(--text-color);
+      }
+
+      p {
+        color: var(--text-secondary);
+        margin-bottom: 1.5rem;
+        line-height: 1.6;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 0.5rem;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition:
+          background-color 0.2s,
+          transform 0.1s;
+      }
+
+      .btn:hover {
+        background-color: #2563eb;
+      }
+
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .lang-switch {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--text-secondary);
+        opacity: 0.6;
+      }
+
+      .lang-switch button {
+        background: none;
+        border: none;
+        color: var(--primary-color);
+        cursor: pointer;
+        font-size: 0.875rem;
+        text-decoration: underline;
+      }
+
+      /* RTL Support */
+      [dir="rtl"] .container {
+        direction: rtl;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container" id="content">
+      <div class="icon">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+          />
+        </svg>
+      </div>
+      <h1 id="title">You're Offline</h1>
+      <p id="description">
+        It looks like you've lost your internet connection. Please check your
+        network settings and try again.
+      </p>
+      <button class="btn" onclick="window.location.reload()">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+          />
+        </svg>
+        <span id="retry-text">Try Again</span>
+      </button>
+      <div class="lang-switch">
+        <button onclick="toggleLanguage()" id="lang-toggle">العربية</button>
+      </div>
+    </div>
+
+    <script>
+      const translations = {
+        en: {
+          title: "You're Offline",
+          description:
+            "It looks like you've lost your internet connection. Please check your network settings and try again.",
+          retry: "Try Again",
+          langToggle: "العربية",
+          dir: "ltr",
+          lang: "en",
+        },
+        ar: {
+          title: "غير متصل بالإنترنت",
+          description:
+            "يبدو أنك فقدت اتصالك بالإنترنت. يرجى التحقق من إعدادات الشبكة والمحاولة مرة أخرى.",
+          retry: "حاول مرة أخرى",
+          langToggle: "English",
+          dir: "rtl",
+          lang: "ar",
+        },
+      };
+
+      let currentLang = "en";
+
+      // Check for stored language preference
+      try {
+        const storedLang = localStorage.getItem("i18nextLng");
+        if (
+          storedLang &&
+          (storedLang === "ar" || storedLang.startsWith("ar"))
+        ) {
+          currentLang = "ar";
+          applyLanguage("ar");
+        }
+      } catch (e) {
+        // localStorage might not be available
+      }
+
+      function toggleLanguage() {
+        currentLang = currentLang === "en" ? "ar" : "en";
+        applyLanguage(currentLang);
+      }
+
+      function applyLanguage(lang) {
+        const t = translations[lang];
+        document.documentElement.lang = t.lang;
+        document.documentElement.dir = t.dir;
+        document.getElementById("title").textContent = t.title;
+        document.getElementById("description").textContent = t.description;
+        document.getElementById("retry-text").textContent = t.retry;
+        document.getElementById("lang-toggle").textContent = t.langToggle;
+      }
+
+      // Auto-retry when connection is restored
+      window.addEventListener("online", () => {
+        window.location.reload();
+      });
+    </script>
+  </body>
+</html>
