@@ -59,7 +59,10 @@
     "analytics": "التحليلات",
     "reports": "التقارير",
     "refunds": "المبالغ المستردة",
-    "groupBookings": "الحجوزات الجماعية"
+    "groupBookings": "الحجوزات الجماعية",
+    "baggage": "إدارة الأمتعة",
+    "corporate": "الحسابات المؤسسية",
+    "travelAgents": "وكلاء السفر"
   },
   "home": {
     "hero": {

@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { FlightCompareProvider } from "./contexts/FlightCompareContext";
+import { AccessibilityProvider } from "./contexts/AccessibilityContext";
 import { AdminRoute } from "./components/AdminRoute";
 import { PageLoadingFallback } from "./components/PageLoadingFallback";
 import { InstallPrompt } from "./components/InstallPrompt";
@@ -48,6 +49,26 @@ const GroupBookingRequest = lazy(() => import("./pages/GroupBookingRequest"));
 
 // Split payment pages
 const PayYourShare = lazy(() => import("./pages/PayYourShare"));
+
+// Baggage pages
+const BaggageStatus = lazy(() => import("./pages/BaggageStatus"));
+
+// Admin additional pages
+const BaggageManagement = lazy(() => import("./pages/admin/BaggageManagement"));
+const CorporateManagement = lazy(
+  () => import("./pages/admin/CorporateManagement")
+);
+const TravelAgentManagement = lazy(
+  () => import("./pages/admin/TravelAgentManagement")
+);
+
+// Corporate pages
+const CorporateDashboard = lazy(
+  () => import("./pages/corporate/CorporateDashboard")
+);
+const CorporateBookings = lazy(
+  () => import("./pages/corporate/CorporateBookings")
+);
 
 // Error/utility pages
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -303,6 +324,46 @@ function Router() {
               </Suspense>
             </AdminRoute>
           </Route>
+          <Route path="/admin/baggage">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <BaggageManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/corporate">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <CorporateManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/travel-agents">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <TravelAgentManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+
+          {/* Baggage page */}
+          <Route path="/baggage">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <BaggageStatus />
+            </Suspense>
+          </Route>
+
+          {/* Corporate pages */}
+          <Route path="/corporate">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <CorporateDashboard />
+            </Suspense>
+          </Route>
+          <Route path="/corporate/bookings">
+            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+              <CorporateBookings />
+            </Suspense>
+          </Route>
 
           {/* Error/utility pages */}
           <Route path="/404" component={NotFound} />
@@ -317,13 +378,15 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light" switchable>
-        <FlightCompareProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Router />
-            <InstallPrompt />
-          </TooltipProvider>
-        </FlightCompareProvider>
+        <AccessibilityProvider>
+          <FlightCompareProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Router />
+              <InstallPrompt />
+            </TooltipProvider>
+          </FlightCompareProvider>
+        </AccessibilityProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

@@ -26,10 +26,12 @@ import { useIsMobile } from "@/hooks/useMobile";
 import {
   BarChart3,
   Bell,
+  Briefcase,
   FileText,
   Heart,
   Home,
   LogOut,
+  Luggage,
   PanelLeft,
   Plane,
   RefreshCcw,
@@ -38,6 +40,7 @@ import {
   Star,
   Ticket,
   User,
+  UserCheck,
   Users,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -90,6 +93,24 @@ const adminMenuItems: MenuItem[] = [
     icon: Users,
     labelKey: "nav.groupBookings",
     path: "/admin/group-bookings",
+    adminOnly: true,
+  },
+  {
+    icon: Luggage,
+    labelKey: "nav.baggage",
+    path: "/admin/baggage",
+    adminOnly: true,
+  },
+  {
+    icon: Briefcase,
+    labelKey: "nav.corporate",
+    path: "/admin/corporate",
+    adminOnly: true,
+  },
+  {
+    icon: UserCheck,
+    labelKey: "nav.travelAgents",
+    path: "/admin/travel-agents",
     adminOnly: true,
   },
 ];

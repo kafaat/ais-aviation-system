@@ -59,7 +59,10 @@
     "analytics": "Analytics",
     "reports": "Reports",
     "refunds": "Refunds",
-    "groupBookings": "Group Bookings"
+    "groupBookings": "Group Bookings",
+    "baggage": "Baggage Management",
+    "corporate": "Corporate Accounts",
+    "travelAgents": "Travel Agents"
   },
   "home": {
     "hero": {
