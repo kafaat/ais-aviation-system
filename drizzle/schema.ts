@@ -644,6 +644,9 @@ export const userPreferences = mysqlTable(
     emailNotifications: boolean("emailNotifications").default(true),
     smsNotifications: boolean("smsNotifications").default(false),
 
+    // Auto check-in preference
+    autoCheckIn: boolean("autoCheckIn").default(false),
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -3349,3 +3352,193 @@ export const flightDisruptions = mysqlTable(
 
 export type FlightDisruption = typeof flightDisruptions.$inferSelect;
 export type InsertFlightDisruption = typeof flightDisruptions.$inferInsert;
+
+// ============================================================================
+// Departure Control System (DCS) - Phase 3
+// ============================================================================
+
+/**
+ * Aircraft types configuration
+ * Stores aircraft models with weight limits and zone configs
+ */
+export const aircraftTypes = mysqlTable("aircraft_types", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 10 }).notNull().unique(), // e.g., "B777", "A320"
+  name: varchar("name", { length: 100 }).notNull(), // e.g., "Boeing 777-300ER"
+  manufacturer: varchar("manufacturer", { length: 50 }).notNull(),
+
+  // Weight limits (kg)
+  maxTakeoffWeight: int("maxTakeoffWeight").notNull(), // MTOW
+  maxLandingWeight: int("maxLandingWeight").notNull(),
+  maxZeroFuelWeight: int("maxZeroFuelWeight").notNull(),
+  operatingEmptyWeight: int("operatingEmptyWeight").notNull(), // OEW
+  maxPayload: int("maxPayload").notNull(),
+  maxFuelCapacity: int("maxFuelCapacity").notNull(), // kg
+
+  // Seating
+  totalSeats: int("totalSeats").notNull(),
+  economySeats: int("economySeats").notNull(),
+  businessSeats: int("businessSeats").notNull(),
+
+  // Cargo zones configuration (JSON)
+  cargoZones: text("cargoZones"), // JSON: [{zone: "FWD", maxWeight: 5000}, ...]
+
+  // CG limits (% MAC)
+  forwardCgLimit: decimal("forwardCgLimit", { precision: 5, scale: 2 }),
+  aftCgLimit: decimal("aftCgLimit", { precision: 5, scale: 2 }),
+
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AircraftType = typeof aircraftTypes.$inferSelect;
+export type InsertAircraftType = typeof aircraftTypes.$inferInsert;
+
+/**
+ * Crew members
+ * Airline crew profiles (pilots, cabin crew)
+ */
+export const crewMembers = mysqlTable(
+  "crew_members",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    employeeId: varchar("employeeId", { length: 20 }).notNull().unique(),
+    firstName: varchar("firstName", { length: 100 }).notNull(),
+    lastName: varchar("lastName", { length: 100 }).notNull(),
+    role: mysqlEnum("role", [
+      "captain",
+      "first_officer",
+      "purser",
+      "cabin_crew",
+    ]).notNull(),
+    airlineId: int("airlineId").notNull(),
+
+    // Qualifications
+    licenseNumber: varchar("licenseNumber", { length: 50 }),
+    licenseExpiry: timestamp("licenseExpiry"),
+    medicalExpiry: timestamp("medicalExpiry"),
+
+    // Qualified aircraft types (JSON array of codes)
+    qualifiedAircraft: text("qualifiedAircraft"), // JSON: ["B777", "A320"]
+
+    status: mysqlEnum("status", ["active", "on_leave", "training", "inactive"])
+      .default("active")
+      .notNull(),
+
+    phone: varchar("phone", { length: 20 }),
+    email: varchar("email", { length: 320 }),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    airlineIdx: index("crew_airline_idx").on(table.airlineId),
+    roleIdx: index("crew_role_idx").on(table.role),
+    statusIdx: index("crew_status_idx").on(table.status),
+  })
+);
+
+export type CrewMember = typeof crewMembers.$inferSelect;
+export type InsertCrewMember = typeof crewMembers.$inferInsert;
+
+/**
+ * Crew assignments to flights
+ */
+export const crewAssignments = mysqlTable(
+  "crew_assignments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    crewMemberId: int("crewMemberId").notNull(),
+    role: mysqlEnum("role", [
+      "captain",
+      "first_officer",
+      "purser",
+      "cabin_crew",
+    ]).notNull(),
+    status: mysqlEnum("status", ["assigned", "confirmed", "onboard", "removed"])
+      .default("assigned")
+      .notNull(),
+    notes: text("notes"),
+    assignedBy: int("assignedBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    flightIdx: index("crew_assign_flight_idx").on(table.flightId),
+    crewIdx: index("crew_assign_crew_idx").on(table.crewMemberId),
+    flightCrewIdx: index("crew_assign_flight_crew_idx").on(
+      table.flightId,
+      table.crewMemberId
+    ),
+  })
+);
+
+export type CrewAssignment = typeof crewAssignments.$inferSelect;
+export type InsertCrewAssignment = typeof crewAssignments.$inferInsert;
+
+/**
+ * Load plans for flights
+ * Weight & balance calculations and cargo distribution
+ */
+export const loadPlans = mysqlTable(
+  "load_plans",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    aircraftTypeId: int("aircraftTypeId").notNull(),
+
+    // Passenger weights (kg)
+    passengerCount: int("passengerCount").notNull().default(0),
+    passengerWeight: int("passengerWeight").notNull().default(0),
+
+    // Baggage weights (kg)
+    baggageCount: int("baggageCount").notNull().default(0),
+    baggageWeight: int("baggageWeight").notNull().default(0),
+
+    // Cargo weights per zone (JSON)
+    cargoDistribution: text("cargoDistribution"), // JSON: [{zone: "FWD", weight: 2000}, ...]
+    totalCargoWeight: int("totalCargoWeight").notNull().default(0),
+
+    // Fuel (kg)
+    fuelWeight: int("fuelWeight").notNull().default(0),
+
+    // Calculated totals
+    zeroFuelWeight: int("zeroFuelWeight").notNull().default(0),
+    takeoffWeight: int("takeoffWeight").notNull().default(0),
+    landingWeight: int("landingWeight").notNull().default(0),
+
+    // Center of Gravity (% MAC)
+    cgPosition: decimal("cgPosition", { precision: 5, scale: 2 }),
+
+    // Status
+    status: mysqlEnum("status", [
+      "draft",
+      "calculated",
+      "approved",
+      "finalized",
+    ])
+      .default("draft")
+      .notNull(),
+
+    // Safety checks
+    withinLimits: boolean("withinLimits").default(false).notNull(),
+    warnings: text("warnings"), // JSON array of warning messages
+
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    finalizedBy: int("finalizedBy"),
+    finalizedAt: timestamp("finalizedAt"),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    flightIdx: index("load_plan_flight_idx").on(table.flightId),
+    statusIdx: index("load_plan_status_idx").on(table.status),
+  })
+);
+
+export type LoadPlan = typeof loadPlans.$inferSelect;
+export type InsertLoadPlan = typeof loadPlans.$inferInsert;

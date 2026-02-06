@@ -198,9 +198,8 @@ describe("Waitlist Service", () => {
       );
 
       vi.resetModules();
-      const { getWaitlistPosition } = await import(
-        "../../services/waitlist.service"
-      );
+      const { getWaitlistPosition } =
+        await import("../../services/waitlist.service");
 
       const result = await getWaitlistPosition(1, 1, "economy");
 
@@ -213,9 +212,8 @@ describe("Waitlist Service", () => {
       mockDb._setResults([]);
 
       vi.resetModules();
-      const { getWaitlistPosition } = await import(
-        "../../services/waitlist.service"
-      );
+      const { getWaitlistPosition } =
+        await import("../../services/waitlist.service");
 
       const result = await getWaitlistPosition(1, 1, "economy");
 
@@ -393,9 +391,8 @@ describe("Waitlist Service", () => {
       );
 
       vi.resetModules();
-      const { cancelWaitlistEntry } = await import(
-        "../../services/waitlist.service"
-      );
+      const { cancelWaitlistEntry } =
+        await import("../../services/waitlist.service");
 
       const result = await cancelWaitlistEntry(1, 1);
 
@@ -415,9 +412,8 @@ describe("Waitlist Service", () => {
       ]);
 
       vi.resetModules();
-      const { cancelWaitlistEntry } = await import(
-        "../../services/waitlist.service"
-      );
+      const { cancelWaitlistEntry } =
+        await import("../../services/waitlist.service");
 
       await expect(cancelWaitlistEntry(1, 1)).rejects.toThrow(
         "Cannot cancel this waitlist entry"
@@ -436,9 +432,8 @@ describe("Waitlist Service", () => {
       );
 
       vi.resetModules();
-      const { getWaitlistStats } = await import(
-        "../../services/waitlist.service"
-      );
+      const { getWaitlistStats } =
+        await import("../../services/waitlist.service");
 
       const result = await getWaitlistStats();
 

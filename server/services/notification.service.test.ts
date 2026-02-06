@@ -303,7 +303,6 @@ describe("Notification Service", () => {
         // Verify content
         const notifs = await getUserNotifications(testUserId, {
           type: "booking",
-          limit: 1,
         });
         const created = notifs.find(n => n.id === result.id);
         expect(created?.title).toBe("Booking Confirmed");
@@ -326,7 +325,6 @@ describe("Notification Service", () => {
 
         const notifs = await getUserNotifications(testUserId, {
           type: "flight",
-          limit: 1,
         });
         const created = notifs.find(n => n.id === result.id);
         expect(created?.message).toContain("30 minutes");
@@ -344,7 +342,6 @@ describe("Notification Service", () => {
 
         const notifs = await getUserNotifications(testUserId, {
           type: "flight",
-          limit: 1,
         });
         const created = notifs.find(n => n.id === result.id);
         expect(created?.message).toContain("cancelled");
@@ -364,7 +361,6 @@ describe("Notification Service", () => {
 
         const notifs = await getUserNotifications(testUserId, {
           type: "payment",
-          limit: 1,
         });
         const created = notifs.find(n => n.id === result.id);
         expect(created?.message).toContain("500.00");
@@ -391,10 +387,10 @@ describe("Notification Service", () => {
       for (const userId of userIds) {
         const notifs = await getUserNotifications(userId, {
           type: "promo",
-          limit: 1,
         });
-        expect(notifs.length).toBeGreaterThan(0);
-        expect(notifs[0].title).toBe("Special Offer");
+        const created = notifs.find(n => n.title === "Special Offer");
+        expect(created).toBeDefined();
+        expect(created?.title).toBe("Special Offer");
       }
     });
   });

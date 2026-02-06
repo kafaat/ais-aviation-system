@@ -142,12 +142,45 @@ export async function checkFlightAvailability(
 }
 
 /**
- * Calculate flight price with dynamic pricing
+ * Passenger type discount multipliers (IATA standard)
+ * Adult: 100%, Child (2-11): 75%, Infant (0-2): 10%
+ */
+const PASSENGER_TYPE_MULTIPLIERS: Record<string, number> = {
+  adult: 1.0,
+  child: 0.75,
+  infant: 0.1,
+};
+
+/**
+ * Calculate total price considering passenger type discounts
+ */
+function calculatePassengerTypePrice(
+  perPassengerPrice: number,
+  passengers?: Array<{ type: "adult" | "child" | "infant" }>
+): { total: number; breakdown: Array<{ type: string; price: number }> } {
+  if (!passengers || passengers.length === 0) {
+    return { total: perPassengerPrice, breakdown: [] };
+  }
+
+  const breakdown = passengers.map(p => ({
+    type: p.type,
+    price: Math.round(
+      perPassengerPrice * (PASSENGER_TYPE_MULTIPLIERS[p.type] ?? 1.0)
+    ),
+  }));
+
+  const total = breakdown.reduce((sum, b) => sum + b.price, 0);
+  return { total, breakdown };
+}
+
+/**
+ * Calculate flight price with dynamic pricing and passenger type discounts
  */
 export async function calculateFlightPrice(
   flight: NonNullable<Awaited<ReturnType<typeof db.getFlightById>>>,
   cabinClass: "economy" | "business",
-  passengerCount: number
+  passengerCount: number,
+  passengers?: Array<{ type: "adult" | "child" | "infant" }>
 ): Promise<{ price: number; pricing?: any }> {
   const basePrice =
     cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
@@ -169,8 +202,14 @@ export async function calculateFlightPrice(
       cabinClass,
     });
 
-    // Multiply by passenger count
-    const totalPrice = pricingResult.finalPrice * passengerCount;
+    // Apply passenger type discounts (child 75%, infant 10%)
+    const typeBreakdown = calculatePassengerTypePrice(
+      pricingResult.finalPrice,
+      passengers
+    );
+    const totalPrice = passengers
+      ? typeBreakdown.total
+      : pricingResult.finalPrice * passengerCount;
 
     return {
       price: totalPrice,
@@ -178,15 +217,17 @@ export async function calculateFlightPrice(
         ...pricingResult,
         finalPrice: totalPrice,
         perPassenger: pricingResult.finalPrice,
+        passengerBreakdown: typeBreakdown.breakdown,
         occupancyRate,
         daysUntilDeparture,
       },
     };
   } catch (error) {
     console.error("Error calculating dynamic price:", error);
-    // Fallback to base price if dynamic pricing fails
+    // Fallback to base price with passenger type discounts
+    const typeBreakdown = calculatePassengerTypePrice(basePrice, passengers);
     return {
-      price: basePrice * passengerCount,
+      price: passengers ? typeBreakdown.total : basePrice * passengerCount,
     };
   }
 }

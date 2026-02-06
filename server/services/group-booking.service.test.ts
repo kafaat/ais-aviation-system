@@ -6,7 +6,7 @@ import {
   airlines,
   airports,
 } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   calculateGroupDiscount,
   createGroupBookingRequest,
@@ -23,9 +23,9 @@ describe("Group Booking Service", () => {
   // Test data IDs
   let testFlightId: number;
   let testGroupBookingId: number;
-  const testAirlineId = 999901;
-  const testOriginId = 999902;
-  const testDestinationId = 999903;
+  const testAirlineId = 999801;
+  const testOriginId = 999802;
+  const testDestinationId = 999803;
 
   beforeAll(async () => {
     const db = await getDb();
@@ -33,35 +33,22 @@ describe("Group Booking Service", () => {
       throw new Error("Database not available for tests");
     }
 
-    // Create test airline
-    await db.insert(airlines).values({
-      id: testAirlineId,
-      code: "TG9",
-      name: "Test Group Airline",
-      active: true,
-    });
+    // Create test airline (use INSERT IGNORE to avoid conflicts with parallel tests)
+    await db.execute(
+      sql`INSERT IGNORE INTO airlines (id, code, name, active) VALUES (${testAirlineId}, 'GB9', 'Test Group Airline', 1)`
+    );
 
     // Create test airports
-    await db.insert(airports).values([
-      {
-        id: testOriginId,
-        code: "TG1",
-        name: "Test Group Origin",
-        city: "Test City 1",
-        country: "Saudi Arabia",
-      },
-      {
-        id: testDestinationId,
-        code: "TG2",
-        name: "Test Group Destination",
-        city: "Test City 2",
-        country: "Saudi Arabia",
-      },
-    ]);
+    await db.execute(
+      sql`INSERT IGNORE INTO airports (id, code, name, city, country) VALUES (${testOriginId}, 'GB1', 'Test Group Origin', 'Test City 1', 'Saudi Arabia')`
+    );
+    await db.execute(
+      sql`INSERT IGNORE INTO airports (id, code, name, city, country) VALUES (${testDestinationId}, 'GB2', 'Test Group Destination', 'Test City 2', 'Saudi Arabia')`
+    );
 
     // Create test flight
     const flightResult = await db.insert(flights).values({
-      flightNumber: "TG999",
+      flightNumber: "GB999",
       airlineId: testAirlineId,
       originId: testOriginId,
       destinationId: testDestinationId,
@@ -78,8 +65,9 @@ describe("Group Booking Service", () => {
       status: "scheduled",
     });
 
-    testFlightId =
-      (flightResult as any).insertId || (flightResult as any)[0]?.insertId;
+    testFlightId = Number(
+      (flightResult as any)[0]?.insertId ?? (flightResult as any).insertId
+    );
   });
 
   afterAll(async () => {

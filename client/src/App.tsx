@@ -26,6 +26,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const MyWaitlist = lazy(() => import("./pages/MyWaitlist"));
 const MultiCityResults = lazy(() => import("./pages/MultiCityResults"));
 const LiveFlightTracking = lazy(() => import("./pages/LiveFlightTracking"));
+const RebookPage = lazy(() => import("./pages/RebookPage"));
 
 // Admin pages
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
@@ -37,6 +38,7 @@ const GroupBookingsManagement = lazy(
 );
 const VoucherManagement = lazy(() => import("./pages/admin/VoucherManagement"));
 const GateManagement = lazy(() => import("./pages/admin/GateManagement"));
+const DcsDashboard = lazy(() => import("./pages/admin/DcsDashboard"));
 
 // Group booking pages
 const GroupBookingRequest = lazy(() => import("./pages/GroupBookingRequest"));
@@ -210,6 +212,11 @@ function Router() {
               <LiveFlightTracking />
             </Suspense>
           </Route>
+          <Route path="/rebook/:bookingId">
+            <Suspense fallback={<PageLoadingFallback variant="form" />}>
+              <RebookPage />
+            </Suspense>
+          </Route>
 
           {/* Split payment pages (public - accessed via email link) */}
           <Route path="/pay/:token/:status?">
@@ -265,6 +272,13 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <GateManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/dcs">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <DcsDashboard />
               </Suspense>
             </AdminRoute>
           </Route>

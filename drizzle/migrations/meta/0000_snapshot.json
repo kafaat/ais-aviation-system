@@ -127,23 +127,17 @@
       "indexes": {
         "account_deletion_requests_user_id_idx": {
           "name": "account_deletion_requests_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "account_deletion_requests_status_idx": {
           "name": "account_deletion_requests_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "account_deletion_requests_scheduled_idx": {
           "name": "account_deletion_requests_scheduled_idx",
-          "columns": [
-            "scheduledDeletionAt"
-          ],
+          "columns": ["scheduledDeletionAt"],
           "isUnique": false
         }
       },
@@ -151,9 +145,7 @@
       "compositePrimaryKeys": {
         "account_deletion_requests_id": {
           "name": "account_deletion_requests_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -247,38 +239,27 @@
       "indexes": {
         "agent_bookings_agent_id_idx": {
           "name": "agent_bookings_agent_id_idx",
-          "columns": [
-            "agentId"
-          ],
+          "columns": ["agentId"],
           "isUnique": false
         },
         "agent_bookings_booking_id_idx": {
           "name": "agent_bookings_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "agent_bookings_commission_status_idx": {
           "name": "agent_bookings_commission_status_idx",
-          "columns": [
-            "commissionStatus"
-          ],
+          "columns": ["commissionStatus"],
           "isUnique": false
         },
         "agent_bookings_created_at_idx": {
           "name": "agent_bookings_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "agent_bookings_agent_commission_idx": {
           "name": "agent_bookings_agent_commission_idx",
-          "columns": [
-            "agentId",
-            "commissionStatus"
-          ],
+          "columns": ["agentId", "commissionStatus"],
           "isUnique": false
         }
       },
@@ -286,17 +267,13 @@
       "compositePrimaryKeys": {
         "agent_bookings_id": {
           "name": "agent_bookings_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "agent_bookings_bookingId_unique": {
           "name": "agent_bookings_bookingId_unique",
-          "columns": [
-            "bookingId"
-          ]
+          "columns": ["bookingId"]
         }
       },
       "checkConstraint": {}
@@ -359,24 +336,17 @@
       "indexes": {
         "airlines_active_idx": {
           "name": "airlines_active_idx",
-          "columns": [
-            "active"
-          ],
+          "columns": ["active"],
           "isUnique": false
         },
         "airlines_country_idx": {
           "name": "airlines_country_idx",
-          "columns": [
-            "country"
-          ],
+          "columns": ["country"],
           "isUnique": false
         },
         "airlines_active_country_idx": {
           "name": "airlines_active_country_idx",
-          "columns": [
-            "active",
-            "country"
-          ],
+          "columns": ["active", "country"],
           "isUnique": false
         }
       },
@@ -384,17 +354,13 @@
       "compositePrimaryKeys": {
         "airlines_id": {
           "name": "airlines_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "airlines_code_unique": {
           "name": "airlines_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -481,54 +447,37 @@
       "indexes": {
         "airport_gates_airport_id_idx": {
           "name": "airport_gates_airport_id_idx",
-          "columns": [
-            "airportId"
-          ],
+          "columns": ["airportId"],
           "isUnique": false
         },
         "airport_gates_gate_number_idx": {
           "name": "airport_gates_gate_number_idx",
-          "columns": [
-            "gateNumber"
-          ],
+          "columns": ["gateNumber"],
           "isUnique": false
         },
         "airport_gates_status_idx": {
           "name": "airport_gates_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "airport_gates_type_idx": {
           "name": "airport_gates_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "airport_gates_airport_status_idx": {
           "name": "airport_gates_airport_status_idx",
-          "columns": [
-            "airportId",
-            "status"
-          ],
+          "columns": ["airportId", "status"],
           "isUnique": false
         },
         "airport_gates_airport_type_idx": {
           "name": "airport_gates_airport_type_idx",
-          "columns": [
-            "airportId",
-            "type"
-          ],
+          "columns": ["airportId", "type"],
           "isUnique": false
         },
         "airport_gates_airport_gate_unique_idx": {
           "name": "airport_gates_airport_gate_unique_idx",
-          "columns": [
-            "airportId",
-            "gateNumber"
-          ],
+          "columns": ["airportId", "gateNumber"],
           "isUnique": false
         }
       },
@@ -536,9 +485,7 @@
       "compositePrimaryKeys": {
         "airport_gates_id": {
           "name": "airport_gates_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -601,24 +548,17 @@
       "indexes": {
         "airports_city_idx": {
           "name": "airports_city_idx",
-          "columns": [
-            "city"
-          ],
+          "columns": ["city"],
           "isUnique": false
         },
         "airports_country_idx": {
           "name": "airports_country_idx",
-          "columns": [
-            "country"
-          ],
+          "columns": ["country"],
           "isUnique": false
         },
         "airports_country_city_idx": {
           "name": "airports_country_city_idx",
-          "columns": [
-            "country",
-            "city"
-          ],
+          "columns": ["country", "city"],
           "isUnique": false
         }
       },
@@ -626,17 +566,13 @@
       "compositePrimaryKeys": {
         "airports_id": {
           "name": "airports_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "airports_code_unique": {
           "name": "airports_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -744,16 +680,12 @@
       "indexes": {
         "category_idx": {
           "name": "category_idx",
-          "columns": [
-            "category"
-          ],
+          "columns": ["category"],
           "isUnique": false
         },
         "available_idx": {
           "name": "available_idx",
-          "columns": [
-            "available"
-          ],
+          "columns": ["available"],
           "isUnique": false
         }
       },
@@ -761,17 +693,13 @@
       "compositePrimaryKeys": {
         "ancillary_services_id": {
           "name": "ancillary_services_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "ancillary_services_code_unique": {
           "name": "ancillary_services_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -927,66 +855,47 @@
       "indexes": {
         "event_type_idx": {
           "name": "event_type_idx",
-          "columns": [
-            "eventType"
-          ],
+          "columns": ["eventType"],
           "isUnique": false
         },
         "event_category_idx": {
           "name": "event_category_idx",
-          "columns": [
-            "eventCategory"
-          ],
+          "columns": ["eventCategory"],
           "isUnique": false
         },
         "user_id_idx": {
           "name": "user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "resource_type_idx": {
           "name": "resource_type_idx",
-          "columns": [
-            "resourceType"
-          ],
+          "columns": ["resourceType"],
           "isUnique": false
         },
         "resource_id_idx": {
           "name": "resource_id_idx",
-          "columns": [
-            "resourceId"
-          ],
+          "columns": ["resourceId"],
           "isUnique": false
         },
         "timestamp_idx": {
           "name": "timestamp_idx",
-          "columns": [
-            "timestamp"
-          ],
+          "columns": ["timestamp"],
           "isUnique": false
         },
         "outcome_idx": {
           "name": "outcome_idx",
-          "columns": [
-            "outcome"
-          ],
+          "columns": ["outcome"],
           "isUnique": false
         },
         "severity_idx": {
           "name": "severity_idx",
-          "columns": [
-            "severity"
-          ],
+          "columns": ["severity"],
           "isUnique": false
         },
         "category_outcome_idx": {
           "name": "category_outcome_idx",
-          "columns": [
-            "eventCategory",
-            "outcome"
-          ],
+          "columns": ["eventCategory", "outcome"],
           "isUnique": false
         }
       },
@@ -994,17 +903,13 @@
       "compositePrimaryKeys": {
         "audit_logs_id": {
           "name": "audit_logs_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "audit_logs_eventId_unique": {
           "name": "audit_logs_eventId_unique",
-          "columns": [
-            "eventId"
-          ]
+          "columns": ["eventId"]
         }
       },
       "checkConstraint": {}
@@ -1111,46 +1016,32 @@
       "indexes": {
         "baggage_items_booking_id_idx": {
           "name": "baggage_items_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "baggage_items_passenger_id_idx": {
           "name": "baggage_items_passenger_id_idx",
-          "columns": [
-            "passengerId"
-          ],
+          "columns": ["passengerId"],
           "isUnique": false
         },
         "baggage_items_tag_number_idx": {
           "name": "baggage_items_tag_number_idx",
-          "columns": [
-            "tagNumber"
-          ],
+          "columns": ["tagNumber"],
           "isUnique": false
         },
         "baggage_items_status_idx": {
           "name": "baggage_items_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "baggage_items_booking_passenger_idx": {
           "name": "baggage_items_booking_passenger_idx",
-          "columns": [
-            "bookingId",
-            "passengerId"
-          ],
+          "columns": ["bookingId", "passengerId"],
           "isUnique": false
         },
         "baggage_items_lost_status_idx": {
           "name": "baggage_items_lost_status_idx",
-          "columns": [
-            "status",
-            "lostReportedAt"
-          ],
+          "columns": ["status", "lostReportedAt"],
           "isUnique": false
         }
       },
@@ -1158,17 +1049,13 @@
       "compositePrimaryKeys": {
         "baggage_items_id": {
           "name": "baggage_items_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "baggage_items_tagNumber_unique": {
           "name": "baggage_items_tagNumber_unique",
-          "columns": [
-            "tagNumber"
-          ]
+          "columns": ["tagNumber"]
         }
       },
       "checkConstraint": {}
@@ -1238,38 +1125,27 @@
       "indexes": {
         "baggage_tracking_baggage_id_idx": {
           "name": "baggage_tracking_baggage_id_idx",
-          "columns": [
-            "baggageId"
-          ],
+          "columns": ["baggageId"],
           "isUnique": false
         },
         "baggage_tracking_status_idx": {
           "name": "baggage_tracking_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "baggage_tracking_scanned_at_idx": {
           "name": "baggage_tracking_scanned_at_idx",
-          "columns": [
-            "scannedAt"
-          ],
+          "columns": ["scannedAt"],
           "isUnique": false
         },
         "baggage_tracking_scanned_by_idx": {
           "name": "baggage_tracking_scanned_by_idx",
-          "columns": [
-            "scannedBy"
-          ],
+          "columns": ["scannedBy"],
           "isUnique": false
         },
         "baggage_tracking_baggage_timeline_idx": {
           "name": "baggage_tracking_baggage_timeline_idx",
-          "columns": [
-            "baggageId",
-            "scannedAt"
-          ],
+          "columns": ["baggageId", "scannedAt"],
           "isUnique": false
         }
       },
@@ -1277,9 +1153,7 @@
       "compositePrimaryKeys": {
         "baggage_tracking_id": {
           "name": "baggage_tracking_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1374,23 +1248,17 @@
       "indexes": {
         "booking_id_idx": {
           "name": "booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "passenger_id_idx": {
           "name": "passenger_id_idx",
-          "columns": [
-            "passengerId"
-          ],
+          "columns": ["passengerId"],
           "isUnique": false
         },
         "ancillary_service_id_idx": {
           "name": "ancillary_service_id_idx",
-          "columns": [
-            "ancillaryServiceId"
-          ],
+          "columns": ["ancillaryServiceId"],
           "isUnique": false
         }
       },
@@ -1398,9 +1266,7 @@
       "compositePrimaryKeys": {
         "booking_ancillaries_id": {
           "name": "booking_ancillaries_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1566,23 +1432,17 @@
       "indexes": {
         "booking_id_idx": {
           "name": "booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "user_id_idx": {
           "name": "user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "status_idx": {
           "name": "status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -1590,9 +1450,7 @@
       "compositePrimaryKeys": {
         "booking_modifications_id": {
           "name": "booking_modifications_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1665,31 +1523,22 @@
       "indexes": {
         "booking_segments_booking_id_idx": {
           "name": "booking_segments_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "booking_segments_flight_id_idx": {
           "name": "booking_segments_flight_id_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "booking_segments_booking_order_idx": {
           "name": "booking_segments_booking_order_idx",
-          "columns": [
-            "bookingId",
-            "segmentOrder"
-          ],
+          "columns": ["bookingId", "segmentOrder"],
           "isUnique": false
         },
         "booking_segments_status_idx": {
           "name": "booking_segments_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -1697,9 +1546,7 @@
       "compositePrimaryKeys": {
         "booking_segments_id": {
           "name": "booking_segments_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -1814,45 +1661,32 @@
       "indexes": {
         "booking_id_idx": {
           "name": "booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "booking_reference_idx": {
           "name": "booking_reference_idx",
-          "columns": [
-            "bookingReference"
-          ],
+          "columns": ["bookingReference"],
           "isUnique": false
         },
         "new_status_idx": {
           "name": "new_status_idx",
-          "columns": [
-            "newStatus"
-          ],
+          "columns": ["newStatus"],
           "isUnique": false
         },
         "transitioned_at_idx": {
           "name": "transitioned_at_idx",
-          "columns": [
-            "transitionedAt"
-          ],
+          "columns": ["transitionedAt"],
           "isUnique": false
         },
         "changed_by_idx": {
           "name": "changed_by_idx",
-          "columns": [
-            "changedBy"
-          ],
+          "columns": ["changedBy"],
           "isUnique": false
         },
         "booking_status_idx": {
           "name": "booking_status_idx",
-          "columns": [
-            "bookingId",
-            "newStatus"
-          ],
+          "columns": ["bookingId", "newStatus"],
           "isUnique": false
         }
       },
@@ -1860,9 +1694,7 @@
       "compositePrimaryKeys": {
         "booking_status_history_id": {
           "name": "booking_status_history_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2001,98 +1833,67 @@
       "indexes": {
         "user_id_idx": {
           "name": "user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "pnr_idx": {
           "name": "pnr_idx",
-          "columns": [
-            "pnr"
-          ],
+          "columns": ["pnr"],
           "isUnique": false
         },
         "bookings_flight_id_idx": {
           "name": "bookings_flight_id_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "bookings_status_idx": {
           "name": "bookings_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "bookings_payment_status_idx": {
           "name": "bookings_payment_status_idx",
-          "columns": [
-            "paymentStatus"
-          ],
+          "columns": ["paymentStatus"],
           "isUnique": false
         },
         "bookings_stripe_checkout_idx": {
           "name": "bookings_stripe_checkout_idx",
-          "columns": [
-            "stripeCheckoutSessionId"
-          ],
+          "columns": ["stripeCheckoutSessionId"],
           "isUnique": false
         },
         "bookings_stripe_payment_intent_idx": {
           "name": "bookings_stripe_payment_intent_idx",
-          "columns": [
-            "stripePaymentIntentId"
-          ],
+          "columns": ["stripePaymentIntentId"],
           "isUnique": false
         },
         "bookings_created_at_idx": {
           "name": "bookings_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "bookings_user_created_at_idx": {
           "name": "bookings_user_created_at_idx",
-          "columns": [
-            "userId",
-            "createdAt"
-          ],
+          "columns": ["userId", "createdAt"],
           "isUnique": false
         },
         "bookings_user_status_idx": {
           "name": "bookings_user_status_idx",
-          "columns": [
-            "userId",
-            "status"
-          ],
+          "columns": ["userId", "status"],
           "isUnique": false
         },
         "bookings_flight_status_idx": {
           "name": "bookings_flight_status_idx",
-          "columns": [
-            "flightId",
-            "status"
-          ],
+          "columns": ["flightId", "status"],
           "isUnique": false
         },
         "bookings_checked_in_idx": {
           "name": "bookings_checked_in_idx",
-          "columns": [
-            "checkedIn"
-          ],
+          "columns": ["checkedIn"],
           "isUnique": false
         },
         "bookings_check_in_reminder_idx": {
           "name": "bookings_check_in_reminder_idx",
-          "columns": [
-            "status",
-            "checkedIn",
-            "checkInReminderSentAt"
-          ],
+          "columns": ["status", "checkedIn", "checkInReminderSentAt"],
           "isUnique": false
         }
       },
@@ -2100,29 +1901,21 @@
       "compositePrimaryKeys": {
         "bookings_id": {
           "name": "bookings_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "bookings_bookingReference_unique": {
           "name": "bookings_bookingReference_unique",
-          "columns": [
-            "bookingReference"
-          ]
+          "columns": ["bookingReference"]
         },
         "bookings_pnr_unique": {
           "name": "bookings_pnr_unique",
-          "columns": [
-            "pnr"
-          ]
+          "columns": ["pnr"]
         },
         "bookings_idempotencyKey_unique": {
           "name": "bookings_idempotencyKey_unique",
-          "columns": [
-            "idempotencyKey"
-          ]
+          "columns": ["idempotencyKey"]
         }
       },
       "checkConstraint": {}
@@ -2206,23 +1999,17 @@
       "indexes": {
         "consent_history_user_id_idx": {
           "name": "consent_history_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "consent_history_type_idx": {
           "name": "consent_history_type_idx",
-          "columns": [
-            "consentType"
-          ],
+          "columns": ["consentType"],
           "isUnique": false
         },
         "consent_history_created_at_idx": {
           "name": "consent_history_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -2230,9 +2017,7 @@
       "compositePrimaryKeys": {
         "consent_history_id": {
           "name": "consent_history_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2357,37 +2142,27 @@
       "indexes": {
         "corporate_accounts_company_name_idx": {
           "name": "corporate_accounts_company_name_idx",
-          "columns": [
-            "companyName"
-          ],
+          "columns": ["companyName"],
           "isUnique": false
         },
         "corporate_accounts_tax_id_idx": {
           "name": "corporate_accounts_tax_id_idx",
-          "columns": [
-            "taxId"
-          ],
+          "columns": ["taxId"],
           "isUnique": false
         },
         "corporate_accounts_status_idx": {
           "name": "corporate_accounts_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "corporate_accounts_contact_email_idx": {
           "name": "corporate_accounts_contact_email_idx",
-          "columns": [
-            "contactEmail"
-          ],
+          "columns": ["contactEmail"],
           "isUnique": false
         },
         "corporate_accounts_created_at_idx": {
           "name": "corporate_accounts_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -2395,17 +2170,13 @@
       "compositePrimaryKeys": {
         "corporate_accounts_id": {
           "name": "corporate_accounts_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "corporate_accounts_taxId_unique": {
           "name": "corporate_accounts_taxId_unique",
-          "columns": [
-            "taxId"
-          ]
+          "columns": ["taxId"]
         }
       },
       "checkConstraint": {}
@@ -2512,59 +2283,42 @@
       "indexes": {
         "corporate_bookings_account_id_idx": {
           "name": "corporate_bookings_account_id_idx",
-          "columns": [
-            "corporateAccountId"
-          ],
+          "columns": ["corporateAccountId"],
           "isUnique": false
         },
         "corporate_bookings_booking_id_idx": {
           "name": "corporate_bookings_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "corporate_bookings_approval_status_idx": {
           "name": "corporate_bookings_approval_status_idx",
-          "columns": [
-            "approvalStatus"
-          ],
+          "columns": ["approvalStatus"],
           "isUnique": false
         },
         "corporate_bookings_cost_center_idx": {
           "name": "corporate_bookings_cost_center_idx",
-          "columns": [
-            "costCenter"
-          ],
+          "columns": ["costCenter"],
           "isUnique": false
         },
         "corporate_bookings_project_code_idx": {
           "name": "corporate_bookings_project_code_idx",
-          "columns": [
-            "projectCode"
-          ],
+          "columns": ["projectCode"],
           "isUnique": false
         },
         "corporate_bookings_booked_by_idx": {
           "name": "corporate_bookings_booked_by_idx",
-          "columns": [
-            "bookedByUserId"
-          ],
+          "columns": ["bookedByUserId"],
           "isUnique": false
         },
         "corporate_bookings_created_at_idx": {
           "name": "corporate_bookings_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "corporate_bookings_account_approval_idx": {
           "name": "corporate_bookings_account_approval_idx",
-          "columns": [
-            "corporateAccountId",
-            "approvalStatus"
-          ],
+          "columns": ["corporateAccountId", "approvalStatus"],
           "isUnique": false
         }
       },
@@ -2572,17 +2326,13 @@
       "compositePrimaryKeys": {
         "corporate_bookings_id": {
           "name": "corporate_bookings_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "corporate_bookings_bookingId_unique": {
           "name": "corporate_bookings_bookingId_unique",
-          "columns": [
-            "bookingId"
-          ]
+          "columns": ["bookingId"]
         }
       },
       "checkConstraint": {}
@@ -2648,38 +2398,27 @@
       "indexes": {
         "corporate_users_account_id_idx": {
           "name": "corporate_users_account_id_idx",
-          "columns": [
-            "corporateAccountId"
-          ],
+          "columns": ["corporateAccountId"],
           "isUnique": false
         },
         "corporate_users_user_id_idx": {
           "name": "corporate_users_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "corporate_users_role_idx": {
           "name": "corporate_users_role_idx",
-          "columns": [
-            "role"
-          ],
+          "columns": ["role"],
           "isUnique": false
         },
         "corporate_users_user_account_unique_idx": {
           "name": "corporate_users_user_account_unique_idx",
-          "columns": [
-            "userId",
-            "corporateAccountId"
-          ],
+          "columns": ["userId", "corporateAccountId"],
           "isUnique": false
         },
         "corporate_users_is_active_idx": {
           "name": "corporate_users_is_active_idx",
-          "columns": [
-            "isActive"
-          ],
+          "columns": ["isActive"],
           "isUnique": false
         }
       },
@@ -2687,9 +2426,7 @@
       "compositePrimaryKeys": {
         "corporate_users_id": {
           "name": "corporate_users_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2745,30 +2482,22 @@
       "indexes": {
         "credit_usage_user_credit_id_idx": {
           "name": "credit_usage_user_credit_id_idx",
-          "columns": [
-            "userCreditId"
-          ],
+          "columns": ["userCreditId"],
           "isUnique": false
         },
         "credit_usage_user_id_idx": {
           "name": "credit_usage_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "credit_usage_booking_id_idx": {
           "name": "credit_usage_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "credit_usage_used_at_idx": {
           "name": "credit_usage_used_at_idx",
-          "columns": [
-            "usedAt"
-          ],
+          "columns": ["usedAt"],
           "isUnique": false
         }
       },
@@ -2776,9 +2505,7 @@
       "compositePrimaryKeys": {
         "credit_usage_id": {
           "name": "credit_usage_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -2891,16 +2618,12 @@
       "indexes": {
         "currencies_code_idx": {
           "name": "currencies_code_idx",
-          "columns": [
-            "code"
-          ],
+          "columns": ["code"],
           "isUnique": false
         },
         "currencies_active_idx": {
           "name": "currencies_active_idx",
-          "columns": [
-            "isActive"
-          ],
+          "columns": ["isActive"],
           "isUnique": false
         }
       },
@@ -2908,17 +2631,13 @@
       "compositePrimaryKeys": {
         "currencies_id": {
           "name": "currencies_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "currencies_code_unique": {
           "name": "currencies_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -3032,23 +2751,17 @@
       "indexes": {
         "data_export_requests_user_id_idx": {
           "name": "data_export_requests_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "data_export_requests_status_idx": {
           "name": "data_export_requests_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "data_export_requests_requested_at_idx": {
           "name": "data_export_requests_requested_at_idx",
-          "columns": [
-            "requestedAt"
-          ],
+          "columns": ["requestedAt"],
           "isUnique": false
         }
       },
@@ -3056,9 +2769,7 @@
       "compositePrimaryKeys": {
         "data_export_requests_id": {
           "name": "data_export_requests_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3167,23 +2878,17 @@
       "indexes": {
         "denied_boarding_flight_idx": {
           "name": "denied_boarding_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "denied_boarding_user_idx": {
           "name": "denied_boarding_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "denied_boarding_status_idx": {
           "name": "denied_boarding_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -3191,9 +2896,7 @@
       "compositePrimaryKeys": {
         "denied_boarding_records_id": {
           "name": "denied_boarding_records_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3273,17 +2976,12 @@
       "indexes": {
         "exchange_rates_pair_idx": {
           "name": "exchange_rates_pair_idx",
-          "columns": [
-            "fromCurrency",
-            "toCurrency"
-          ],
+          "columns": ["fromCurrency", "toCurrency"],
           "isUnique": false
         },
         "exchange_rates_valid_idx": {
           "name": "exchange_rates_valid_idx",
-          "columns": [
-            "validFrom"
-          ],
+          "columns": ["validFrom"],
           "isUnique": false
         }
       },
@@ -3291,9 +2989,7 @@
       "compositePrimaryKeys": {
         "exchange_rates_id": {
           "name": "exchange_rates_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3384,31 +3080,22 @@
       "indexes": {
         "family_group_members_group_idx": {
           "name": "family_group_members_group_idx",
-          "columns": [
-            "groupId"
-          ],
+          "columns": ["groupId"],
           "isUnique": false
         },
         "family_group_members_user_idx": {
           "name": "family_group_members_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "family_group_members_status_idx": {
           "name": "family_group_members_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "family_group_members_group_user_idx": {
           "name": "family_group_members_group_user_idx",
-          "columns": [
-            "groupId",
-            "userId"
-          ],
+          "columns": ["groupId", "userId"],
           "isUnique": false
         }
       },
@@ -3416,9 +3103,7 @@
       "compositePrimaryKeys": {
         "family_group_members_id": {
           "name": "family_group_members_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3493,16 +3178,12 @@
       "indexes": {
         "family_groups_owner_idx": {
           "name": "family_groups_owner_idx",
-          "columns": [
-            "ownerId"
-          ],
+          "columns": ["ownerId"],
           "isUnique": false
         },
         "family_groups_status_idx": {
           "name": "family_groups_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -3510,9 +3191,7 @@
       "compositePrimaryKeys": {
         "family_groups_id": {
           "name": "family_groups_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3621,42 +3300,27 @@
       "indexes": {
         "user_id_idx": {
           "name": "user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "route_idx": {
           "name": "route_idx",
-          "columns": [
-            "originId",
-            "destinationId"
-          ],
+          "columns": ["originId", "destinationId"],
           "isUnique": false
         },
         "airline_id_idx": {
           "name": "airline_id_idx",
-          "columns": [
-            "airlineId"
-          ],
+          "columns": ["airlineId"],
           "isUnique": false
         },
         "price_alert_idx": {
           "name": "price_alert_idx",
-          "columns": [
-            "enablePriceAlert",
-            "maxPrice"
-          ],
+          "columns": ["enablePriceAlert", "maxPrice"],
           "isUnique": false
         },
         "user_route_favorite_unique": {
           "name": "user_route_favorite_unique",
-          "columns": [
-            "userId",
-            "originId",
-            "destinationId",
-            "airlineId"
-          ],
+          "columns": ["userId", "originId", "destinationId", "airlineId"],
           "isUnique": false
         }
       },
@@ -3664,9 +3328,7 @@
       "compositePrimaryKeys": {
         "favorite_flights_id": {
           "name": "favorite_flights_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3794,37 +3456,27 @@
       "indexes": {
         "financial_ledger_booking_id_idx": {
           "name": "financial_ledger_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "financial_ledger_user_id_idx": {
           "name": "financial_ledger_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "financial_ledger_type_idx": {
           "name": "financial_ledger_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "financial_ledger_stripe_event_id_idx": {
           "name": "financial_ledger_stripe_event_id_idx",
-          "columns": [
-            "stripeEventId"
-          ],
+          "columns": ["stripeEventId"],
           "isUnique": false
         },
         "financial_ledger_transaction_date_idx": {
           "name": "financial_ledger_transaction_date_idx",
-          "columns": [
-            "transactionDate"
-          ],
+          "columns": ["transactionDate"],
           "isUnique": false
         }
       },
@@ -3832,9 +3484,7 @@
       "compositePrimaryKeys": {
         "financial_ledger_id": {
           "name": "financial_ledger_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -3942,30 +3592,22 @@
       "indexes": {
         "flight_disruptions_flight_idx": {
           "name": "flight_disruptions_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "flight_disruptions_type_idx": {
           "name": "flight_disruptions_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "flight_disruptions_status_idx": {
           "name": "flight_disruptions_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "flight_disruptions_created_at_idx": {
           "name": "flight_disruptions_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -3973,9 +3615,7 @@
       "compositePrimaryKeys": {
         "flight_disruptions_id": {
           "name": "flight_disruptions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4099,45 +3739,32 @@
       "indexes": {
         "user_id_idx": {
           "name": "user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "flight_id_idx": {
           "name": "flight_id_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "booking_id_idx": {
           "name": "booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "rating_idx": {
           "name": "rating_idx",
-          "columns": [
-            "rating"
-          ],
+          "columns": ["rating"],
           "isUnique": false
         },
         "status_idx": {
           "name": "status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "user_flight_unique": {
           "name": "user_flight_unique",
-          "columns": [
-            "userId",
-            "flightId"
-          ],
+          "columns": ["userId", "flightId"],
           "isUnique": false
         }
       },
@@ -4145,9 +3772,7 @@
       "compositePrimaryKeys": {
         "flight_reviews_id": {
           "name": "flight_reviews_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4217,38 +3842,27 @@
       "indexes": {
         "flight_status_history_flight_idx": {
           "name": "flight_status_history_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "flight_status_history_new_status_idx": {
           "name": "flight_status_history_new_status_idx",
-          "columns": [
-            "newStatus"
-          ],
+          "columns": ["newStatus"],
           "isUnique": false
         },
         "flight_status_history_changed_by_idx": {
           "name": "flight_status_history_changed_by_idx",
-          "columns": [
-            "changedBy"
-          ],
+          "columns": ["changedBy"],
           "isUnique": false
         },
         "flight_status_history_created_at_idx": {
           "name": "flight_status_history_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "flight_status_history_flight_created_idx": {
           "name": "flight_status_history_flight_created_idx",
-          "columns": [
-            "flightId",
-            "createdAt"
-          ],
+          "columns": ["flightId", "createdAt"],
           "isUnique": false
         }
       },
@@ -4256,9 +3870,7 @@
       "compositePrimaryKeys": {
         "flight_status_history_id": {
           "name": "flight_status_history_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4394,48 +4006,32 @@
       "indexes": {
         "flight_number_idx": {
           "name": "flight_number_idx",
-          "columns": [
-            "flightNumber"
-          ],
+          "columns": ["flightNumber"],
           "isUnique": false
         },
         "departure_time_idx": {
           "name": "departure_time_idx",
-          "columns": [
-            "departureTime"
-          ],
+          "columns": ["departureTime"],
           "isUnique": false
         },
         "route_idx": {
           "name": "route_idx",
-          "columns": [
-            "originId",
-            "destinationId"
-          ],
+          "columns": ["originId", "destinationId"],
           "isUnique": false
         },
         "airline_idx": {
           "name": "airline_idx",
-          "columns": [
-            "airlineId"
-          ],
+          "columns": ["airlineId"],
           "isUnique": false
         },
         "status_idx": {
           "name": "status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "route_date_status_idx": {
           "name": "route_date_status_idx",
-          "columns": [
-            "originId",
-            "destinationId",
-            "departureTime",
-            "status"
-          ],
+          "columns": ["originId", "destinationId", "departureTime", "status"],
           "isUnique": false
         }
       },
@@ -4443,9 +4039,7 @@
       "compositePrimaryKeys": {
         "flights_id": {
           "name": "flights_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4554,60 +4148,42 @@
       "indexes": {
         "gate_assignments_flight_id_idx": {
           "name": "gate_assignments_flight_id_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "gate_assignments_gate_id_idx": {
           "name": "gate_assignments_gate_id_idx",
-          "columns": [
-            "gateId"
-          ],
+          "columns": ["gateId"],
           "isUnique": false
         },
         "gate_assignments_status_idx": {
           "name": "gate_assignments_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "gate_assignments_assigned_by_idx": {
           "name": "gate_assignments_assigned_by_idx",
-          "columns": [
-            "assignedBy"
-          ],
+          "columns": ["assignedBy"],
           "isUnique": false
         },
         "gate_assignments_boarding_start_idx": {
           "name": "gate_assignments_boarding_start_idx",
-          "columns": [
-            "boardingStartTime"
-          ],
+          "columns": ["boardingStartTime"],
           "isUnique": false
         },
         "gate_assignments_gate_status_idx": {
           "name": "gate_assignments_gate_status_idx",
-          "columns": [
-            "gateId",
-            "status"
-          ],
+          "columns": ["gateId", "status"],
           "isUnique": false
         },
         "gate_assignments_flight_status_idx": {
           "name": "gate_assignments_flight_status_idx",
-          "columns": [
-            "flightId",
-            "status"
-          ],
+          "columns": ["flightId", "status"],
           "isUnique": false
         },
         "gate_assignments_assigned_at_idx": {
           "name": "gate_assignments_assigned_at_idx",
-          "columns": [
-            "assignedAt"
-          ],
+          "columns": ["assignedAt"],
           "isUnique": false
         }
       },
@@ -4615,9 +4191,7 @@
       "compositePrimaryKeys": {
         "gate_assignments_id": {
           "name": "gate_assignments_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4739,38 +4313,27 @@
       "indexes": {
         "group_bookings_organizer_email_idx": {
           "name": "group_bookings_organizer_email_idx",
-          "columns": [
-            "organizerEmail"
-          ],
+          "columns": ["organizerEmail"],
           "isUnique": false
         },
         "group_bookings_flight_id_idx": {
           "name": "group_bookings_flight_id_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "group_bookings_status_idx": {
           "name": "group_bookings_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "group_bookings_created_at_idx": {
           "name": "group_bookings_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "group_bookings_status_created_at_idx": {
           "name": "group_bookings_status_created_at_idx",
-          "columns": [
-            "status",
-            "createdAt"
-          ],
+          "columns": ["status", "createdAt"],
           "isUnique": false
         }
       },
@@ -4778,9 +4341,7 @@
       "compositePrimaryKeys": {
         "group_bookings_id": {
           "name": "group_bookings_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -4874,33 +4435,22 @@
       "indexes": {
         "idempotency_scope_user_key_idx": {
           "name": "idempotency_scope_user_key_idx",
-          "columns": [
-            "scope",
-            "userId",
-            "idempotencyKey"
-          ],
+          "columns": ["scope", "userId", "idempotencyKey"],
           "isUnique": false
         },
         "idempotency_scope_key_idx": {
           "name": "idempotency_scope_key_idx",
-          "columns": [
-            "scope",
-            "idempotencyKey"
-          ],
+          "columns": ["scope", "idempotencyKey"],
           "isUnique": false
         },
         "idempotency_status_idx": {
           "name": "idempotency_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "idempotency_expires_at_idx": {
           "name": "idempotency_expires_at_idx",
-          "columns": [
-            "expiresAt"
-          ],
+          "columns": ["expiresAt"],
           "isUnique": false
         }
       },
@@ -4908,9 +4458,7 @@
       "compositePrimaryKeys": {
         "idempotency_requests_id": {
           "name": "idempotency_requests_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5012,30 +4560,22 @@
       "indexes": {
         "flight_id_idx": {
           "name": "flight_id_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "session_id_idx": {
           "name": "session_id_idx",
-          "columns": [
-            "sessionId"
-          ],
+          "columns": ["sessionId"],
           "isUnique": false
         },
         "status_idx": {
           "name": "status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "expires_at_idx": {
           "name": "expires_at_idx",
-          "columns": [
-            "expiresAt"
-          ],
+          "columns": ["expiresAt"],
           "isUnique": false
         }
       },
@@ -5043,9 +4583,7 @@
       "compositePrimaryKeys": {
         "inventory_locks_id": {
           "name": "inventory_locks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5178,24 +4716,17 @@
       "indexes": {
         "inventory_snapshots_flight_idx": {
           "name": "inventory_snapshots_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "inventory_snapshots_date_idx": {
           "name": "inventory_snapshots_date_idx",
-          "columns": [
-            "snapshotDate"
-          ],
+          "columns": ["snapshotDate"],
           "isUnique": false
         },
         "inventory_snapshots_flight_date_idx": {
           "name": "inventory_snapshots_flight_date_idx",
-          "columns": [
-            "flightId",
-            "snapshotDate"
-          ],
+          "columns": ["flightId", "snapshotDate"],
           "isUnique": false
         }
       },
@@ -5203,9 +4734,7 @@
       "compositePrimaryKeys": {
         "inventory_snapshots_id": {
           "name": "inventory_snapshots_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5305,16 +4834,12 @@
       "indexes": {
         "user_id_idx": {
           "name": "user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "tier_idx": {
           "name": "tier_idx",
-          "columns": [
-            "tier"
-          ],
+          "columns": ["tier"],
           "isUnique": false
         }
       },
@@ -5322,17 +4847,13 @@
       "compositePrimaryKeys": {
         "loyalty_accounts_id": {
           "name": "loyalty_accounts_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "loyalty_accounts_userId_unique": {
           "name": "loyalty_accounts_userId_unique",
-          "columns": [
-            "userId"
-          ]
+          "columns": ["userId"]
         }
       },
       "checkConstraint": {}
@@ -5429,23 +4950,17 @@
       "indexes": {
         "user_id_idx": {
           "name": "user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "loyalty_account_id_idx": {
           "name": "loyalty_account_id_idx",
-          "columns": [
-            "loyaltyAccountId"
-          ],
+          "columns": ["loyaltyAccountId"],
           "isUnique": false
         },
         "type_idx": {
           "name": "type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         }
       },
@@ -5453,9 +4968,7 @@
       "compositePrimaryKeys": {
         "miles_transactions_id": {
           "name": "miles_transactions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5533,39 +5046,27 @@
       "indexes": {
         "notifications_user_id_idx": {
           "name": "notifications_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "notifications_type_idx": {
           "name": "notifications_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "notifications_is_read_idx": {
           "name": "notifications_is_read_idx",
-          "columns": [
-            "isRead"
-          ],
+          "columns": ["isRead"],
           "isUnique": false
         },
         "notifications_created_at_idx": {
           "name": "notifications_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "notifications_user_unread_idx": {
           "name": "notifications_user_unread_idx",
-          "columns": [
-            "userId",
-            "isRead",
-            "createdAt"
-          ],
+          "columns": ["userId", "isRead", "createdAt"],
           "isUnique": false
         }
       },
@@ -5573,9 +5074,7 @@
       "compositePrimaryKeys": {
         "notifications_id": {
           "name": "notifications_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5672,24 +5171,17 @@
       "indexes": {
         "overbooking_route_idx": {
           "name": "overbooking_route_idx",
-          "columns": [
-            "originId",
-            "destinationId"
-          ],
+          "columns": ["originId", "destinationId"],
           "isUnique": false
         },
         "overbooking_airline_idx": {
           "name": "overbooking_airline_idx",
-          "columns": [
-            "airlineId"
-          ],
+          "columns": ["airlineId"],
           "isUnique": false
         },
         "overbooking_active_idx": {
           "name": "overbooking_active_idx",
-          "columns": [
-            "isActive"
-          ],
+          "columns": ["isActive"],
           "isUnique": false
         }
       },
@@ -5697,9 +5189,7 @@
       "compositePrimaryKeys": {
         "overbooking_config_id": {
           "name": "overbooking_config_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5798,38 +5288,27 @@
       "indexes": {
         "booking_id_idx": {
           "name": "booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "passengers_ticket_number_idx": {
           "name": "passengers_ticket_number_idx",
-          "columns": [
-            "ticketNumber"
-          ],
+          "columns": ["ticketNumber"],
           "isUnique": false
         },
         "passengers_passport_idx": {
           "name": "passengers_passport_idx",
-          "columns": [
-            "passportNumber"
-          ],
+          "columns": ["passportNumber"],
           "isUnique": false
         },
         "passengers_name_idx": {
           "name": "passengers_name_idx",
-          "columns": [
-            "lastName",
-            "firstName"
-          ],
+          "columns": ["lastName", "firstName"],
           "isUnique": false
         },
         "passengers_type_idx": {
           "name": "passengers_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         }
       },
@@ -5837,9 +5316,7 @@
       "compositePrimaryKeys": {
         "passengers_id": {
           "name": "passengers_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -5961,52 +5438,37 @@
       "indexes": {
         "payment_splits_booking_id_idx": {
           "name": "payment_splits_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "payment_splits_payer_email_idx": {
           "name": "payment_splits_payer_email_idx",
-          "columns": [
-            "payerEmail"
-          ],
+          "columns": ["payerEmail"],
           "isUnique": false
         },
         "payment_splits_status_idx": {
           "name": "payment_splits_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "payment_splits_token_idx": {
           "name": "payment_splits_token_idx",
-          "columns": [
-            "paymentToken"
-          ],
+          "columns": ["paymentToken"],
           "isUnique": false
         },
         "payment_splits_booking_status_idx": {
           "name": "payment_splits_booking_status_idx",
-          "columns": [
-            "bookingId",
-            "status"
-          ],
+          "columns": ["bookingId", "status"],
           "isUnique": false
         },
         "payment_splits_expires_at_idx": {
           "name": "payment_splits_expires_at_idx",
-          "columns": [
-            "expiresAt"
-          ],
+          "columns": ["expiresAt"],
           "isUnique": false
         },
         "payment_splits_stripe_checkout_idx": {
           "name": "payment_splits_stripe_checkout_idx",
-          "columns": [
-            "stripeCheckoutSessionId"
-          ],
+          "columns": ["stripeCheckoutSessionId"],
           "isUnique": false
         }
       },
@@ -6014,17 +5476,13 @@
       "compositePrimaryKeys": {
         "payment_splits_id": {
           "name": "payment_splits_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "payment_splits_paymentToken_unique": {
           "name": "payment_splits_paymentToken_unique",
-          "columns": [
-            "paymentToken"
-          ]
+          "columns": ["paymentToken"]
         }
       },
       "checkConstraint": {}
@@ -6118,59 +5576,42 @@
       "indexes": {
         "booking_id_idx": {
           "name": "booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "idempotency_key_idx": {
           "name": "idempotency_key_idx",
-          "columns": [
-            "idempotencyKey"
-          ],
+          "columns": ["idempotencyKey"],
           "isUnique": false
         },
         "payments_status_idx": {
           "name": "payments_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "payments_stripe_payment_intent_idx": {
           "name": "payments_stripe_payment_intent_idx",
-          "columns": [
-            "stripePaymentIntentId"
-          ],
+          "columns": ["stripePaymentIntentId"],
           "isUnique": false
         },
         "payments_transaction_id_idx": {
           "name": "payments_transaction_id_idx",
-          "columns": [
-            "transactionId"
-          ],
+          "columns": ["transactionId"],
           "isUnique": false
         },
         "payments_created_at_idx": {
           "name": "payments_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "payments_status_created_at_idx": {
           "name": "payments_status_created_at_idx",
-          "columns": [
-            "status",
-            "createdAt"
-          ],
+          "columns": ["status", "createdAt"],
           "isUnique": false
         },
         "payments_method_idx": {
           "name": "payments_method_idx",
-          "columns": [
-            "method"
-          ],
+          "columns": ["method"],
           "isUnique": false
         }
       },
@@ -6178,17 +5619,13 @@
       "compositePrimaryKeys": {
         "payments_id": {
           "name": "payments_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "payments_idempotencyKey_unique": {
           "name": "payments_idempotencyKey_unique",
-          "columns": [
-            "idempotencyKey"
-          ]
+          "columns": ["idempotencyKey"]
         }
       },
       "checkConstraint": {}
@@ -6265,23 +5702,17 @@
       "indexes": {
         "favorite_flight_id_idx": {
           "name": "favorite_flight_id_idx",
-          "columns": [
-            "favoriteFlightId"
-          ],
+          "columns": ["favoriteFlightId"],
           "isUnique": false
         },
         "flight_id_idx": {
           "name": "flight_id_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "created_at_idx": {
           "name": "created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -6289,9 +5720,7 @@
       "compositePrimaryKeys": {
         "price_alert_history_id": {
           "name": "price_alert_history_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6393,41 +5822,27 @@
       "indexes": {
         "price_alerts_user_id_idx": {
           "name": "price_alerts_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "price_alerts_route_idx": {
           "name": "price_alerts_route_idx",
-          "columns": [
-            "originId",
-            "destinationId"
-          ],
+          "columns": ["originId", "destinationId"],
           "isUnique": false
         },
         "price_alerts_active_idx": {
           "name": "price_alerts_active_idx",
-          "columns": [
-            "isActive"
-          ],
+          "columns": ["isActive"],
           "isUnique": false
         },
         "price_alerts_last_checked_idx": {
           "name": "price_alerts_last_checked_idx",
-          "columns": [
-            "lastChecked"
-          ],
+          "columns": ["lastChecked"],
           "isUnique": false
         },
         "price_alerts_user_route_unique_idx": {
           "name": "price_alerts_user_route_unique_idx",
-          "columns": [
-            "userId",
-            "originId",
-            "destinationId",
-            "cabinClass"
-          ],
+          "columns": ["userId", "originId", "destinationId", "cabinClass"],
           "isUnique": false
         }
       },
@@ -6435,9 +5850,7 @@
       "compositePrimaryKeys": {
         "price_alerts_id": {
           "name": "price_alerts_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6539,39 +5952,27 @@
       "indexes": {
         "price_locks_user_idx": {
           "name": "price_locks_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "price_locks_flight_idx": {
           "name": "price_locks_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "price_locks_status_idx": {
           "name": "price_locks_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "price_locks_expires_at_idx": {
           "name": "price_locks_expires_at_idx",
-          "columns": [
-            "expiresAt"
-          ],
+          "columns": ["expiresAt"],
           "isUnique": false
         },
         "price_locks_user_flight_idx": {
           "name": "price_locks_user_flight_idx",
-          "columns": [
-            "userId",
-            "flightId",
-            "cabinClass"
-          ],
+          "columns": ["userId", "flightId", "cabinClass"],
           "isUnique": false
         }
       },
@@ -6579,9 +5980,7 @@
       "compositePrimaryKeys": {
         "price_locks_id": {
           "name": "price_locks_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6679,23 +6078,17 @@
       "indexes": {
         "pricing_history_flight_idx": {
           "name": "pricing_history_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "pricing_history_booking_idx": {
           "name": "pricing_history_booking_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "pricing_history_created_idx": {
           "name": "pricing_history_created_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -6703,9 +6096,7 @@
       "compositePrimaryKeys": {
         "pricing_history_id": {
           "name": "pricing_history_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6835,46 +6226,32 @@
       "indexes": {
         "pricing_rules_type_idx": {
           "name": "pricing_rules_type_idx",
-          "columns": [
-            "ruleType"
-          ],
+          "columns": ["ruleType"],
           "isUnique": false
         },
         "pricing_rules_airline_idx": {
           "name": "pricing_rules_airline_idx",
-          "columns": [
-            "airlineId"
-          ],
+          "columns": ["airlineId"],
           "isUnique": false
         },
         "pricing_rules_route_idx": {
           "name": "pricing_rules_route_idx",
-          "columns": [
-            "originId",
-            "destinationId"
-          ],
+          "columns": ["originId", "destinationId"],
           "isUnique": false
         },
         "pricing_rules_active_idx": {
           "name": "pricing_rules_active_idx",
-          "columns": [
-            "isActive"
-          ],
+          "columns": ["isActive"],
           "isUnique": false
         },
         "pricing_rules_priority_idx": {
           "name": "pricing_rules_priority_idx",
-          "columns": [
-            "priority"
-          ],
+          "columns": ["priority"],
           "isUnique": false
         },
         "pricing_rules_validity_idx": {
           "name": "pricing_rules_validity_idx",
-          "columns": [
-            "validFrom",
-            "validTo"
-          ],
+          "columns": ["validFrom", "validTo"],
           "isUnique": false
         }
       },
@@ -6882,9 +6259,7 @@
       "compositePrimaryKeys": {
         "pricing_rules_id": {
           "name": "pricing_rules_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -6961,23 +6336,17 @@
       "indexes": {
         "refresh_tokens_user_id_idx": {
           "name": "refresh_tokens_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "refresh_tokens_token_idx": {
           "name": "refresh_tokens_token_idx",
-          "columns": [
-            "token"
-          ],
+          "columns": ["token"],
           "isUnique": false
         },
         "refresh_tokens_expires_at_idx": {
           "name": "refresh_tokens_expires_at_idx",
-          "columns": [
-            "expiresAt"
-          ],
+          "columns": ["expiresAt"],
           "isUnique": false
         }
       },
@@ -6985,17 +6354,13 @@
       "compositePrimaryKeys": {
         "refresh_tokens_id": {
           "name": "refresh_tokens_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "refresh_tokens_token_unique": {
           "name": "refresh_tokens_token_unique",
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "checkConstraint": {}
@@ -7102,25 +6467,17 @@
       "indexes": {
         "saved_passengers_user_id_idx": {
           "name": "saved_passengers_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "saved_passengers_user_default_idx": {
           "name": "saved_passengers_user_default_idx",
-          "columns": [
-            "userId",
-            "isDefault"
-          ],
+          "columns": ["userId", "isDefault"],
           "isUnique": false
         },
         "saved_passengers_name_idx": {
           "name": "saved_passengers_name_idx",
-          "columns": [
-            "lastName",
-            "firstName"
-          ],
+          "columns": ["lastName", "firstName"],
           "isUnique": false
         }
       },
@@ -7128,9 +6485,7 @@
       "compositePrimaryKeys": {
         "saved_passengers_id": {
           "name": "saved_passengers_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7231,17 +6586,12 @@
       "indexes": {
         "seasonal_pricing_dates_idx": {
           "name": "seasonal_pricing_dates_idx",
-          "columns": [
-            "startDate",
-            "endDate"
-          ],
+          "columns": ["startDate", "endDate"],
           "isUnique": false
         },
         "seasonal_pricing_active_idx": {
           "name": "seasonal_pricing_active_idx",
-          "columns": [
-            "isActive"
-          ],
+          "columns": ["isActive"],
           "isUnique": false
         }
       },
@@ -7249,9 +6599,7 @@
       "compositePrimaryKeys": {
         "seasonal_pricing_id": {
           "name": "seasonal_pricing_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7345,37 +6693,27 @@
       "indexes": {
         "seat_holds_flight_idx": {
           "name": "seat_holds_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "seat_holds_user_idx": {
           "name": "seat_holds_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "seat_holds_session_idx": {
           "name": "seat_holds_session_idx",
-          "columns": [
-            "sessionId"
-          ],
+          "columns": ["sessionId"],
           "isUnique": false
         },
         "seat_holds_status_idx": {
           "name": "seat_holds_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "seat_holds_expires_idx": {
           "name": "seat_holds_expires_idx",
-          "columns": [
-            "expiresAt"
-          ],
+          "columns": ["expiresAt"],
           "isUnique": false
         }
       },
@@ -7383,9 +6721,7 @@
       "compositePrimaryKeys": {
         "seat_holds_id": {
           "name": "seat_holds_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7522,74 +6858,52 @@
       "indexes": {
         "sms_logs_user_id_idx": {
           "name": "sms_logs_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "sms_logs_phone_number_idx": {
           "name": "sms_logs_phone_number_idx",
-          "columns": [
-            "phoneNumber"
-          ],
+          "columns": ["phoneNumber"],
           "isUnique": false
         },
         "sms_logs_type_idx": {
           "name": "sms_logs_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "sms_logs_status_idx": {
           "name": "sms_logs_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "sms_logs_provider_idx": {
           "name": "sms_logs_provider_idx",
-          "columns": [
-            "provider"
-          ],
+          "columns": ["provider"],
           "isUnique": false
         },
         "sms_logs_sent_at_idx": {
           "name": "sms_logs_sent_at_idx",
-          "columns": [
-            "sentAt"
-          ],
+          "columns": ["sentAt"],
           "isUnique": false
         },
         "sms_logs_booking_id_idx": {
           "name": "sms_logs_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "sms_logs_created_at_idx": {
           "name": "sms_logs_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "sms_logs_user_created_at_idx": {
           "name": "sms_logs_user_created_at_idx",
-          "columns": [
-            "userId",
-            "createdAt"
-          ],
+          "columns": ["userId", "createdAt"],
           "isUnique": false
         },
         "sms_logs_status_created_at_idx": {
           "name": "sms_logs_status_created_at_idx",
-          "columns": [
-            "status",
-            "createdAt"
-          ],
+          "columns": ["status", "createdAt"],
           "isUnique": false
         }
       },
@@ -7597,9 +6911,7 @@
       "compositePrimaryKeys": {
         "sms_logs_id": {
           "name": "sms_logs_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7686,45 +6998,32 @@
       "indexes": {
         "special_services_booking_id_idx": {
           "name": "special_services_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "special_services_passenger_id_idx": {
           "name": "special_services_passenger_id_idx",
-          "columns": [
-            "passengerId"
-          ],
+          "columns": ["passengerId"],
           "isUnique": false
         },
         "special_services_type_idx": {
           "name": "special_services_type_idx",
-          "columns": [
-            "serviceType"
-          ],
+          "columns": ["serviceType"],
           "isUnique": false
         },
         "special_services_code_idx": {
           "name": "special_services_code_idx",
-          "columns": [
-            "serviceCode"
-          ],
+          "columns": ["serviceCode"],
           "isUnique": false
         },
         "special_services_status_idx": {
           "name": "special_services_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "special_services_booking_passenger_idx": {
           "name": "special_services_booking_passenger_idx",
-          "columns": [
-            "bookingId",
-            "passengerId"
-          ],
+          "columns": ["bookingId", "passengerId"],
           "isUnique": false
         }
       },
@@ -7732,9 +7031,7 @@
       "compositePrimaryKeys": {
         "special_services_id": {
           "name": "special_services_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7813,23 +7110,17 @@
       "indexes": {
         "stripe_events_type_idx": {
           "name": "stripe_events_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "stripe_events_processed_idx": {
           "name": "stripe_events_processed_idx",
-          "columns": [
-            "processed"
-          ],
+          "columns": ["processed"],
           "isUnique": false
         },
         "stripe_events_created_at_idx": {
           "name": "stripe_events_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -7837,9 +7128,7 @@
       "compositePrimaryKeys": {
         "stripe_events_id": {
           "name": "stripe_events_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -7988,37 +7277,27 @@
       "indexes": {
         "travel_agents_iata_number_idx": {
           "name": "travel_agents_iata_number_idx",
-          "columns": [
-            "iataNumber"
-          ],
+          "columns": ["iataNumber"],
           "isUnique": false
         },
         "travel_agents_email_idx": {
           "name": "travel_agents_email_idx",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": false
         },
         "travel_agents_api_key_idx": {
           "name": "travel_agents_api_key_idx",
-          "columns": [
-            "apiKey"
-          ],
+          "columns": ["apiKey"],
           "isUnique": false
         },
         "travel_agents_is_active_idx": {
           "name": "travel_agents_is_active_idx",
-          "columns": [
-            "isActive"
-          ],
+          "columns": ["isActive"],
           "isUnique": false
         },
         "travel_agents_created_at_idx": {
           "name": "travel_agents_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -8026,29 +7305,21 @@
       "compositePrimaryKeys": {
         "travel_agents_id": {
           "name": "travel_agents_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "travel_agents_iataNumber_unique": {
           "name": "travel_agents_iataNumber_unique",
-          "columns": [
-            "iataNumber"
-          ]
+          "columns": ["iataNumber"]
         },
         "travel_agents_email_unique": {
           "name": "travel_agents_email_unique",
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         },
         "travel_agents_apiKey_unique": {
           "name": "travel_agents_apiKey_unique",
-          "columns": [
-            "apiKey"
-          ]
+          "columns": ["apiKey"]
         }
       },
       "checkConstraint": {}
@@ -8201,16 +7472,12 @@
       "indexes": {
         "user_consents_user_id_idx": {
           "name": "user_consents_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "user_consents_version_idx": {
           "name": "user_consents_version_idx",
-          "columns": [
-            "consentVersion"
-          ],
+          "columns": ["consentVersion"],
           "isUnique": false
         }
       },
@@ -8218,17 +7485,13 @@
       "compositePrimaryKeys": {
         "user_consents_id": {
           "name": "user_consents_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "user_consents_userId_unique": {
           "name": "user_consents_userId_unique",
-          "columns": [
-            "userId"
-          ]
+          "columns": ["userId"]
         }
       },
       "checkConstraint": {}
@@ -8321,38 +7584,27 @@
       "indexes": {
         "user_credits_user_id_idx": {
           "name": "user_credits_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "user_credits_source_idx": {
           "name": "user_credits_source_idx",
-          "columns": [
-            "source"
-          ],
+          "columns": ["source"],
           "isUnique": false
         },
         "user_credits_expires_at_idx": {
           "name": "user_credits_expires_at_idx",
-          "columns": [
-            "expiresAt"
-          ],
+          "columns": ["expiresAt"],
           "isUnique": false
         },
         "user_credits_booking_id_idx": {
           "name": "user_credits_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "user_credits_user_available_idx": {
           "name": "user_credits_user_available_idx",
-          "columns": [
-            "userId",
-            "expiresAt"
-          ],
+          "columns": ["userId", "expiresAt"],
           "isUnique": false
         }
       },
@@ -8360,9 +7612,7 @@
       "compositePrimaryKeys": {
         "user_credits_id": {
           "name": "user_credits_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -8404,24 +7654,17 @@
       "indexes": {
         "user_flight_favorites_user_id_idx": {
           "name": "user_flight_favorites_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "user_flight_favorites_flight_id_idx": {
           "name": "user_flight_favorites_flight_id_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "user_flight_favorites_unique_idx": {
           "name": "user_flight_favorites_unique_idx",
-          "columns": [
-            "userId",
-            "flightId"
-          ],
+          "columns": ["userId", "flightId"],
           "isUnique": false
         }
       },
@@ -8429,9 +7672,7 @@
       "compositePrimaryKeys": {
         "user_flight_favorites_id": {
           "name": "user_flight_favorites_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -8570,9 +7811,7 @@
       "indexes": {
         "user_id_idx": {
           "name": "user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         }
       },
@@ -8580,17 +7819,13 @@
       "compositePrimaryKeys": {
         "user_preferences_id": {
           "name": "user_preferences_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "user_preferences_userId_unique": {
           "name": "user_preferences_userId_unique",
-          "columns": [
-            "userId"
-          ]
+          "columns": ["userId"]
         }
       },
       "checkConstraint": {}
@@ -8670,31 +7905,22 @@
       "indexes": {
         "users_email_idx": {
           "name": "users_email_idx",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": false
         },
         "users_role_idx": {
           "name": "users_role_idx",
-          "columns": [
-            "role"
-          ],
+          "columns": ["role"],
           "isUnique": false
         },
         "users_created_at_idx": {
           "name": "users_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         },
         "users_role_created_at_idx": {
           "name": "users_role_created_at_idx",
-          "columns": [
-            "role",
-            "createdAt"
-          ],
+          "columns": ["role", "createdAt"],
           "isUnique": false
         }
       },
@@ -8702,17 +7928,13 @@
       "compositePrimaryKeys": {
         "users_id": {
           "name": "users_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "users_openId_unique": {
           "name": "users_openId_unique",
-          "columns": [
-            "openId"
-          ]
+          "columns": ["openId"]
         }
       },
       "checkConstraint": {}
@@ -8767,38 +7989,27 @@
       "indexes": {
         "voucher_usage_voucher_id_idx": {
           "name": "voucher_usage_voucher_id_idx",
-          "columns": [
-            "voucherId"
-          ],
+          "columns": ["voucherId"],
           "isUnique": false
         },
         "voucher_usage_user_id_idx": {
           "name": "voucher_usage_user_id_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "voucher_usage_booking_id_idx": {
           "name": "voucher_usage_booking_id_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "voucher_usage_used_at_idx": {
           "name": "voucher_usage_used_at_idx",
-          "columns": [
-            "usedAt"
-          ],
+          "columns": ["usedAt"],
           "isUnique": false
         },
         "voucher_usage_voucher_booking_unique": {
           "name": "voucher_usage_voucher_booking_unique",
-          "columns": [
-            "voucherId",
-            "bookingId"
-          ],
+          "columns": ["voucherId", "bookingId"],
           "isUnique": false
         }
       },
@@ -8806,9 +8017,7 @@
       "compositePrimaryKeys": {
         "voucher_usage_id": {
           "name": "voucher_usage_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -8932,39 +8141,27 @@
       "indexes": {
         "vouchers_code_idx": {
           "name": "vouchers_code_idx",
-          "columns": [
-            "code"
-          ],
+          "columns": ["code"],
           "isUnique": false
         },
         "vouchers_is_active_idx": {
           "name": "vouchers_is_active_idx",
-          "columns": [
-            "isActive"
-          ],
+          "columns": ["isActive"],
           "isUnique": false
         },
         "vouchers_valid_from_idx": {
           "name": "vouchers_valid_from_idx",
-          "columns": [
-            "validFrom"
-          ],
+          "columns": ["validFrom"],
           "isUnique": false
         },
         "vouchers_valid_until_idx": {
           "name": "vouchers_valid_until_idx",
-          "columns": [
-            "validUntil"
-          ],
+          "columns": ["validUntil"],
           "isUnique": false
         },
         "vouchers_active_valid_idx": {
           "name": "vouchers_active_valid_idx",
-          "columns": [
-            "isActive",
-            "validFrom",
-            "validUntil"
-          ],
+          "columns": ["isActive", "validFrom", "validUntil"],
           "isUnique": false
         }
       },
@@ -8972,17 +8169,13 @@
       "compositePrimaryKeys": {
         "vouchers_id": {
           "name": "vouchers_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "vouchers_code_unique": {
           "name": "vouchers_code_unique",
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "checkConstraint": {}
@@ -9105,32 +8298,22 @@
       "indexes": {
         "waitlist_flight_idx": {
           "name": "waitlist_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "waitlist_user_idx": {
           "name": "waitlist_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "waitlist_status_idx": {
           "name": "waitlist_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "waitlist_priority_idx": {
           "name": "waitlist_priority_idx",
-          "columns": [
-            "flightId",
-            "cabinClass",
-            "priority"
-          ],
+          "columns": ["flightId", "cabinClass", "priority"],
           "isUnique": false
         }
       },
@@ -9138,9 +8321,7 @@
       "compositePrimaryKeys": {
         "waitlist_id": {
           "name": "waitlist_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -9232,37 +8413,27 @@
       "indexes": {
         "wallet_transactions_wallet_idx": {
           "name": "wallet_transactions_wallet_idx",
-          "columns": [
-            "walletId"
-          ],
+          "columns": ["walletId"],
           "isUnique": false
         },
         "wallet_transactions_user_idx": {
           "name": "wallet_transactions_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "wallet_transactions_type_idx": {
           "name": "wallet_transactions_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "wallet_transactions_booking_idx": {
           "name": "wallet_transactions_booking_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "wallet_transactions_created_at_idx": {
           "name": "wallet_transactions_created_at_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -9270,9 +8441,7 @@
       "compositePrimaryKeys": {
         "wallet_transactions_id": {
           "name": "wallet_transactions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -9340,16 +8509,12 @@
       "indexes": {
         "wallets_user_idx": {
           "name": "wallets_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "wallets_status_idx": {
           "name": "wallets_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         }
       },
@@ -9357,17 +8522,13 @@
       "compositePrimaryKeys": {
         "wallets_id": {
           "name": "wallets_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {
         "wallets_userId_unique": {
           "name": "wallets_userId_unique",
-          "columns": [
-            "userId"
-          ]
+          "columns": ["userId"]
         }
       },
       "checkConstraint": {}
@@ -9488,23 +8649,17 @@
       "indexes": {
         "booking_sug_conv_idx": {
           "name": "booking_sug_conv_idx",
-          "columns": [
-            "conversationId"
-          ],
+          "columns": ["conversationId"],
           "isUnique": false
         },
         "booking_sug_flight_idx": {
           "name": "booking_sug_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "booking_sug_selected_idx": {
           "name": "booking_sug_selected_idx",
-          "columns": [
-            "selected"
-          ],
+          "columns": ["selected"],
           "isUnique": false
         }
       },
@@ -9512,9 +8667,7 @@
       "compositePrimaryKeys": {
         "booking_suggestions_id": {
           "name": "booking_suggestions_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -9602,30 +8755,22 @@
       "indexes": {
         "chat_conv_user_idx": {
           "name": "chat_conv_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "chat_conv_status_idx": {
           "name": "chat_conv_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "chat_conv_booking_idx": {
           "name": "chat_conv_booking_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "chat_conv_last_msg_idx": {
           "name": "chat_conv_last_msg_idx",
-          "columns": [
-            "lastMessageAt"
-          ],
+          "columns": ["lastMessageAt"],
           "isUnique": false
         }
       },
@@ -9633,9 +8778,7 @@
       "compositePrimaryKeys": {
         "chat_conversations_id": {
           "name": "chat_conversations_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -9705,23 +8848,17 @@
       "indexes": {
         "chat_msg_conv_idx": {
           "name": "chat_msg_conv_idx",
-          "columns": [
-            "conversationId"
-          ],
+          "columns": ["conversationId"],
           "isUnique": false
         },
         "chat_msg_role_idx": {
           "name": "chat_msg_role_idx",
-          "columns": [
-            "role"
-          ],
+          "columns": ["role"],
           "isUnique": false
         },
         "chat_msg_created_idx": {
           "name": "chat_msg_created_idx",
-          "columns": [
-            "createdAt"
-          ],
+          "columns": ["createdAt"],
           "isUnique": false
         }
       },
@@ -9729,9 +8866,7 @@
       "compositePrimaryKeys": {
         "chat_messages_id": {
           "name": "chat_messages_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -9913,37 +9048,27 @@
       "indexes": {
         "review_user_idx": {
           "name": "review_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "review_booking_idx": {
           "name": "review_booking_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         },
         "review_flight_idx": {
           "name": "review_flight_idx",
-          "columns": [
-            "flightId"
-          ],
+          "columns": ["flightId"],
           "isUnique": false
         },
         "review_rating_idx": {
           "name": "review_rating_idx",
-          "columns": [
-            "overallRating"
-          ],
+          "columns": ["overallRating"],
           "isUnique": false
         },
         "review_status_idx": {
           "name": "review_status_idx",
-          "columns": [
-            "moderationStatus"
-          ],
+          "columns": ["moderationStatus"],
           "isUnique": false
         }
       },
@@ -9951,9 +9076,7 @@
       "compositePrimaryKeys": {
         "customer_reviews_id": {
           "name": "customer_reviews_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10104,44 +9227,32 @@
       "indexes": {
         "notif_hist_user_idx": {
           "name": "notif_hist_user_idx",
-          "columns": [
-            "userId"
-          ],
+          "columns": ["userId"],
           "isUnique": false
         },
         "notif_hist_type_idx": {
           "name": "notif_hist_type_idx",
-          "columns": [
-            "type"
-          ],
+          "columns": ["type"],
           "isUnique": false
         },
         "notif_hist_channel_idx": {
           "name": "notif_hist_channel_idx",
-          "columns": [
-            "channel"
-          ],
+          "columns": ["channel"],
           "isUnique": false
         },
         "notif_hist_status_idx": {
           "name": "notif_hist_status_idx",
-          "columns": [
-            "status"
-          ],
+          "columns": ["status"],
           "isUnique": false
         },
         "notif_hist_sent_idx": {
           "name": "notif_hist_sent_idx",
-          "columns": [
-            "sentAt"
-          ],
+          "columns": ["sentAt"],
           "isUnique": false
         },
         "notif_hist_booking_idx": {
           "name": "notif_hist_booking_idx",
-          "columns": [
-            "bookingId"
-          ],
+          "columns": ["bookingId"],
           "isUnique": false
         }
       },
@@ -10149,9 +9260,7 @@
       "compositePrimaryKeys": {
         "notification_history_id": {
           "name": "notification_history_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},
@@ -10193,10 +9302,7 @@
       "indexes": {
         "helpful_review_user_idx": {
           "name": "helpful_review_user_idx",
-          "columns": [
-            "reviewId",
-            "userId"
-          ],
+          "columns": ["reviewId", "userId"],
           "isUnique": false
         }
       },
@@ -10204,9 +9310,7 @@
       "compositePrimaryKeys": {
         "review_helpful_votes_id": {
           "name": "review_helpful_votes_id",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {},

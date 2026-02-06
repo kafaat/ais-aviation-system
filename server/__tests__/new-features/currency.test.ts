@@ -44,9 +44,8 @@ describe("Currency Service", () => {
 
   describe("getExchangeRate", () => {
     it("should return 1.0 for same currency conversion", async () => {
-      const { getExchangeRate } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getExchangeRate } =
+        await import("../../services/currency/currency.service");
 
       const rate = await getExchangeRate("SAR", "SAR");
 
@@ -57,9 +56,8 @@ describe("Currency Service", () => {
     });
 
     it("should return fallback rate for SAR to USD", async () => {
-      const { getExchangeRate } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getExchangeRate } =
+        await import("../../services/currency/currency.service");
 
       const rate = await getExchangeRate("SAR", "USD");
 
@@ -70,9 +68,8 @@ describe("Currency Service", () => {
     });
 
     it("should return fallback rate for USD to SAR", async () => {
-      const { getExchangeRate } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getExchangeRate } =
+        await import("../../services/currency/currency.service");
 
       const rate = await getExchangeRate("USD", "SAR");
 
@@ -81,9 +78,8 @@ describe("Currency Service", () => {
     });
 
     it("should return fallback rate for SAR to EUR", async () => {
-      const { getExchangeRate } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getExchangeRate } =
+        await import("../../services/currency/currency.service");
 
       const rate = await getExchangeRate("SAR", "EUR");
 
@@ -91,9 +87,8 @@ describe("Currency Service", () => {
     });
 
     it("should return fallback rate for SAR to GBP", async () => {
-      const { getExchangeRate } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getExchangeRate } =
+        await import("../../services/currency/currency.service");
 
       const rate = await getExchangeRate("SAR", "GBP");
 
@@ -101,9 +96,8 @@ describe("Currency Service", () => {
     });
 
     it("should return fallback rate for SAR to AED", async () => {
-      const { getExchangeRate } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getExchangeRate } =
+        await import("../../services/currency/currency.service");
 
       const rate = await getExchangeRate("SAR", "AED");
 
@@ -113,9 +107,8 @@ describe("Currency Service", () => {
 
   describe("convertCurrency", () => {
     it("should return same amount for same currency", async () => {
-      const { convertCurrency } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { convertCurrency } =
+        await import("../../services/currency/currency.service");
 
       const result = await convertCurrency(100, "SAR", "SAR");
 
@@ -124,9 +117,8 @@ describe("Currency Service", () => {
     });
 
     it("should convert SAR to USD correctly", async () => {
-      const { convertCurrency } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { convertCurrency } =
+        await import("../../services/currency/currency.service");
 
       const result = await convertCurrency(1000, "SAR", "USD");
 
@@ -137,9 +129,8 @@ describe("Currency Service", () => {
     });
 
     it("should convert USD to SAR correctly", async () => {
-      const { convertCurrency } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { convertCurrency } =
+        await import("../../services/currency/currency.service");
 
       const result = await convertCurrency(100, "USD", "SAR");
 
@@ -150,9 +141,8 @@ describe("Currency Service", () => {
 
   describe("convertPriceForDisplay", () => {
     it("should return SAR price unchanged", async () => {
-      const { convertPriceForDisplay } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { convertPriceForDisplay } =
+        await import("../../services/currency/currency.service");
 
       const result = await convertPriceForDisplay(500, "SAR");
 
@@ -162,9 +152,8 @@ describe("Currency Service", () => {
     });
 
     it("should convert to USD for display", async () => {
-      const { convertPriceForDisplay } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { convertPriceForDisplay } =
+        await import("../../services/currency/currency.service");
 
       const result = await convertPriceForDisplay(1000, "USD");
 
@@ -175,9 +164,8 @@ describe("Currency Service", () => {
 
   describe("getCurrencyInfo", () => {
     it("should return SAR currency info", async () => {
-      const { getCurrencyInfo } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getCurrencyInfo } =
+        await import("../../services/currency/currency.service");
 
       const info = getCurrencyInfo("SAR");
 
@@ -188,9 +176,8 @@ describe("Currency Service", () => {
     });
 
     it("should return USD currency info", async () => {
-      const { getCurrencyInfo } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getCurrencyInfo } =
+        await import("../../services/currency/currency.service");
 
       const info = getCurrencyInfo("USD");
 
@@ -200,9 +187,8 @@ describe("Currency Service", () => {
     });
 
     it("should throw error for unsupported currency", async () => {
-      const { getCurrencyInfo } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getCurrencyInfo } =
+        await import("../../services/currency/currency.service");
 
       expect(() => getCurrencyInfo("XYZ")).toThrow("Unsupported currency: XYZ");
     });
@@ -210,9 +196,8 @@ describe("Currency Service", () => {
 
   describe("getSupportedCurrencies", () => {
     it("should return list of supported currencies", async () => {
-      const { getSupportedCurrencies } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { getSupportedCurrencies } =
+        await import("../../services/currency/currency.service");
 
       const currencies = getSupportedCurrencies();
 
@@ -225,9 +210,8 @@ describe("Currency Service", () => {
 
   describe("isCurrencySupported", () => {
     it("should return true for supported currencies", async () => {
-      const { isCurrencySupported } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { isCurrencySupported } =
+        await import("../../services/currency/currency.service");
 
       expect(isCurrencySupported("SAR")).toBe(true);
       expect(isCurrencySupported("USD")).toBe(true);
@@ -235,9 +219,8 @@ describe("Currency Service", () => {
     });
 
     it("should return false for unsupported currencies", async () => {
-      const { isCurrencySupported } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { isCurrencySupported } =
+        await import("../../services/currency/currency.service");
 
       expect(isCurrencySupported("XYZ")).toBe(false);
       expect(isCurrencySupported("ABC")).toBe(false);
@@ -246,9 +229,8 @@ describe("Currency Service", () => {
 
   describe("formatAmount", () => {
     it("should format SAR amount correctly", async () => {
-      const { formatAmount, getCurrencyInfo } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { formatAmount, getCurrencyInfo } =
+        await import("../../services/currency/currency.service");
 
       const sarInfo = getCurrencyInfo("SAR");
       const formatted = formatAmount(1234.56, sarInfo);
@@ -257,9 +239,8 @@ describe("Currency Service", () => {
     });
 
     it("should format KWD with 3 decimal places", async () => {
-      const { formatAmount, getCurrencyInfo } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { formatAmount, getCurrencyInfo } =
+        await import("../../services/currency/currency.service");
 
       const kwdInfo = getCurrencyInfo("KWD");
       const formatted = formatAmount(1234.567, kwdInfo);
@@ -270,9 +251,8 @@ describe("Currency Service", () => {
 
   describe("formatPrice", () => {
     it("should format SAR with symbol after amount", async () => {
-      const { formatPrice } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { formatPrice } =
+        await import("../../services/currency/currency.service");
 
       const formatted = formatPrice(500, "SAR");
 
@@ -281,9 +261,8 @@ describe("Currency Service", () => {
     });
 
     it("should format USD with symbol before amount", async () => {
-      const { formatPrice } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { formatPrice } =
+        await import("../../services/currency/currency.service");
 
       const formatted = formatPrice(500, "USD");
 
@@ -291,9 +270,8 @@ describe("Currency Service", () => {
     });
 
     it("should format EUR with symbol before amount", async () => {
-      const { formatPrice } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { formatPrice } =
+        await import("../../services/currency/currency.service");
 
       const formatted = formatPrice(500, "EUR");
 
@@ -303,9 +281,8 @@ describe("Currency Service", () => {
 
   describe("parseAmount", () => {
     it("should parse formatted amount correctly", async () => {
-      const { parseAmount } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { parseAmount } =
+        await import("../../services/currency/currency.service");
 
       expect(parseAmount("1,234.56")).toBe(1234.56);
       expect(parseAmount("$500.00")).toBe(500);
@@ -313,9 +290,8 @@ describe("Currency Service", () => {
     });
 
     it("should handle amounts without formatting", async () => {
-      const { parseAmount } = await import(
-        "../../services/currency/currency.service"
-      );
+      const { parseAmount } =
+        await import("../../services/currency/currency.service");
 
       expect(parseAmount("500")).toBe(500);
       expect(parseAmount("123.45")).toBe(123.45);
