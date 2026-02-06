@@ -1,4 +1,6 @@
+import "dotenv/config";
 import { drizzle } from "drizzle-orm/mysql2";
+import mysql from "mysql2/promise";
 import {
   airlines,
   airports,
@@ -9,12 +11,40 @@ import {
   seasonalPricing,
 } from "../drizzle/schema.js";
 
-const db = drizzle(process.env.DATABASE_URL);
+// Create MySQL connection pool
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL is required");
+}
+
+const url = new URL(connectionString);
+const pool = mysql.createPool({
+  host: url.hostname,
+  port: parseInt(url.port || "3306", 10),
+  user: url.username,
+  password: url.password,
+  database: url.pathname.slice(1), // Remove leading /
+  waitForConnections: true,
+  connectionLimit: 10,
+});
+
+const db = drizzle(pool);
 
 async function seedData() {
   console.log("🌱 Starting database seeding...");
 
   try {
+    // Clear existing data (in reverse order of dependencies)
+    console.log("🧹 Clearing existing data...");
+    await db.delete(seasonalPricing);
+    await db.delete(pricingRules);
+    await db.delete(ancillaryServices);
+    await db.delete(currencies);
+    await db.delete(flights);
+    await db.delete(airports);
+    await db.delete(airlines);
+    console.log("✓ Existing data cleared");
+
     // Seed Airlines
     console.log("Adding airlines...");
     await db.insert(airlines).values([
@@ -467,5 +497,11 @@ async function seedData() {
 }
 
 seedData()
-  .then(() => process.exit(0))
-  .catch(() => process.exit(1));
+  .then(async () => {
+    await pool.end();
+    process.exit(0);
+  })
+  .catch(async () => {
+    await pool.end();
+    process.exit(1);
+  });
