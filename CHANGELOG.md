@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.7.1
+
+### Bug Fixes
+- fix: CI pipeline and project issues (b0e7be8)
+- fix: resolve vite config function before spreading in dev server (a6e5ace)
+
+### Other Changes
+- Merge pull request #53 from kafaat/claude/implement-todo-zrBPj (bc4d7d6)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.7.0...v1.7.1
+
+
+---
+
 ## What's Changed in v1.7.0
 
 ### Features
