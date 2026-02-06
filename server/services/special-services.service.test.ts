@@ -253,7 +253,7 @@ describe("Special Services Service", () => {
       const [newBookingResult] = await db.insert(bookings).values({
         userId: testUserId,
         flightId: testFlightId,
-        bookingReference: "SSTEST2",
+        bookingReference: "SSTS02",
         pnr: "SSTES2",
         status: "confirmed",
         totalAmount: 50000,
