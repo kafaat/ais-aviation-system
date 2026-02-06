@@ -6,7 +6,7 @@ import {
   airports,
   airlines,
 } from "../../drizzle/schema";
-import { eq, and, sql, ne } from "drizzle-orm";
+import { eq, and, sql, ne, inArray } from "drizzle-orm";
 
 /**
  * Report a flight disruption (admin)
@@ -91,8 +91,8 @@ export async function getUserDisruptions(userId: number) {
 
   const flightIds = userBookings.map(b => b.flightId);
 
-  // Get disruptions for those flights
-  const disruptions = await db
+  // Get disruptions for those flights using SQL WHERE IN for better performance
+  const userFlightDisruptions = await db
     .select({
       id: flightDisruptions.id,
       flightId: flightDisruptions.flightId,
@@ -110,13 +110,13 @@ export async function getUserDisruptions(userId: number) {
     })
     .from(flightDisruptions)
     .innerJoin(flights, eq(flightDisruptions.flightId, flights.id))
-    .where(eq(flightDisruptions.status, "active"))
+    .where(
+      and(
+        eq(flightDisruptions.status, "active"),
+        inArray(flightDisruptions.flightId, flightIds)
+      )
+    )
     .orderBy(sql`${flightDisruptions.createdAt} DESC`);
-
-  // Filter only disruptions for user's flights
-  const userFlightDisruptions = disruptions.filter(d =>
-    flightIds.includes(d.flightId)
-  );
 
   // Enrich with booking references
   return userFlightDisruptions.map(d => {

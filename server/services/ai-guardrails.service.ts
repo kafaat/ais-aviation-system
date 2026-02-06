@@ -131,7 +131,7 @@ export function checkContentSafety(text: string): {
   for (const pattern of INAPPROPRIATE_PATTERNS) {
     if (pattern.test(text)) {
       return {
-        safe: true,
+        safe: false,
         reason: "Content may contain sensitive topics",
         severity: "warning",
       };
