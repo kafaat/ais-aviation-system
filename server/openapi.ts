@@ -10,10 +10,15 @@ import { appRouter } from "./routers";
 
 /**
  * OpenAPI Document Configuration
+ * Wrapped in try/catch to prevent server crash if any procedure type
+ * is not supported by trpc-openapi (e.g., procedures without OpenAPI meta)
  */
-export const openApiDocument = generateOpenApiDocument(appRouter, {
-  title: "AIS Aviation System API",
-  description: `
+let openApiDoc: ReturnType<typeof generateOpenApiDocument>;
+
+try {
+  openApiDoc = generateOpenApiDocument(appRouter, {
+    title: "AIS Aviation System API",
+    description: `
 ## Overview
 
 The AIS (Aviation Information System) API provides comprehensive endpoints for flight booking and management operations.
@@ -55,41 +60,59 @@ All responses follow a consistent format:
 Current API version: 1.0.0
 Base path: /api
   `.trim(),
-  version: "1.0.0",
-  baseUrl: process.env.API_BASE_URL || "http://localhost:3000/api",
-  docsUrl: "/api/docs",
-  tags: [
-    "Authentication",
-    "Flights",
-    "Bookings",
-    "Payments",
-    "Refunds",
-    "Loyalty",
-    "User Preferences",
-    "Favorites",
-    "Reviews",
-    "E-Tickets",
-    "Ancillary Services",
-    "Admin",
-    "Analytics",
-    "Health",
-    "Reference Data",
-  ],
-  securitySchemes: {
-    bearerAuth: {
-      type: "http",
-      scheme: "bearer",
-      bearerFormat: "JWT",
-      description: "JWT access token obtained from the login endpoint",
+    version: "1.0.0",
+    baseUrl: process.env.API_BASE_URL || "http://localhost:3000/api",
+    docsUrl: "/api/docs",
+    tags: [
+      "Authentication",
+      "Flights",
+      "Bookings",
+      "Payments",
+      "Refunds",
+      "Loyalty",
+      "User Preferences",
+      "Favorites",
+      "Reviews",
+      "E-Tickets",
+      "Ancillary Services",
+      "Admin",
+      "Analytics",
+      "Health",
+      "Reference Data",
+    ],
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+        description: "JWT access token obtained from the login endpoint",
+      },
+      cookieAuth: {
+        type: "apiKey",
+        in: "cookie",
+        name: "ais_session",
+        description: "Session cookie for web clients",
+      },
     },
-    cookieAuth: {
-      type: "apiKey",
-      in: "cookie",
-      name: "ais_session",
-      description: "Session cookie for web clients",
+  });
+} catch (error) {
+  console.warn(
+    "[OpenAPI] Failed to generate OpenAPI document:",
+    error instanceof Error ? error.message : error
+  );
+  // Provide a minimal fallback document so the server can still start
+  openApiDoc = {
+    openapi: "3.0.0",
+    info: {
+      title: "AIS Aviation System API",
+      version: "1.0.0",
+      description: "OpenAPI documentation temporarily unavailable.",
     },
-  },
-});
+    paths: {},
+  } as ReturnType<typeof generateOpenApiDocument>;
+}
+
+export const openApiDocument = openApiDoc;
 
 /**
  * OpenAPI specification as JSON string
