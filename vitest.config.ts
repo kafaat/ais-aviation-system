@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) => {
           env.DATABASE_URL ||
           "mysql://test:test@localhost:3306/ais_aviation_test",
         JWT_SECRET: env.JWT_SECRET || "test-jwt-secret-key",
-        OAUTH_SERVER_URL: env.OAUTH_SERVER_URL || "https://oauth.manus.space",
+        OAUTH_SERVER_URL: env.OAUTH_SERVER_URL || "http://localhost:3000",
         OWNER_OPEN_ID: env.OWNER_OPEN_ID || "test-owner-open-id",
         BUILT_IN_FORGE_API_URL:
           env.BUILT_IN_FORGE_API_URL || "https://api.manus.space",
