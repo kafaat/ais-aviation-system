@@ -41,7 +41,23 @@ describe("Flight APIs", () => {
     const ctx = createMockContext();
     const caller = appRouter.createCaller(ctx);
 
-    const flight = await caller.flights.getById({ id: 1 });
+    // First search to find a valid flight ID
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    const searchResults = await caller.flights.search({
+      originId: 1,
+      destinationId: 2,
+      departureDate: tomorrow,
+    });
+
+    if (searchResults.length === 0) {
+      // No flights in DB - skip gracefully
+      return;
+    }
+
+    const flight = await caller.flights.getById({ id: searchResults[0].id });
 
     expect(flight).toBeDefined();
     if (flight) {

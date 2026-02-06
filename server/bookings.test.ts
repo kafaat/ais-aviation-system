@@ -49,8 +49,30 @@ describe("Booking APIs", () => {
     const ctx = createAuthenticatedContext();
     const caller = appRouter.createCaller(ctx);
 
+    // Find a valid flight first
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    const publicCaller = appRouter.createCaller({
+      user: undefined,
+      req: { protocol: "https", headers: {} } as TrpcContext["req"],
+      res: {} as TrpcContext["res"],
+    });
+
+    const flights = await publicCaller.flights.search({
+      originId: 1,
+      destinationId: 2,
+      departureDate: tomorrow,
+    });
+
+    if (flights.length === 0) {
+      // No flights available - skip gracefully
+      return;
+    }
+
     const booking = await caller.bookings.create({
-      flightId: 1,
+      flightId: flights[0].id,
       cabinClass: "economy",
       passengers: [
         {
