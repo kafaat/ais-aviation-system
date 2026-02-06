@@ -644,6 +644,9 @@ export const userPreferences = mysqlTable(
     emailNotifications: boolean("emailNotifications").default(true),
     smsNotifications: boolean("smsNotifications").default(false),
 
+    // Auto check-in preference
+    autoCheckIn: boolean("autoCheckIn").default(false),
+
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },

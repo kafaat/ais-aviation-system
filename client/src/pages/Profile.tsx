@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ProfileSkeleton } from "@/components/skeletons";
+import { AutoCheckInToggle } from "@/components/AutoCheckInToggle";
 import { toast } from "sonner";
 import {
   User,
@@ -717,6 +718,9 @@ export default function Profile() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Auto Check-In */}
+            <AutoCheckInToggle className="mt-4" />
           </TabsContent>
         </Tabs>
 

@@ -44,6 +44,7 @@ import { familyPoolRouter } from "./routers/family-pool";
 import { walletRouter } from "./routers/wallet";
 import { disruptionsRouter } from "./routers/disruptions";
 import { rebookingRouter } from "./routers/rebooking";
+import { travelScenariosRouter } from "./routers/travel-scenarios";
 
 /**
  * Main Application Router
@@ -108,6 +109,7 @@ export const appRouter = router({
   wallet: walletRouter,
   disruptions: disruptionsRouter,
   rebooking: rebookingRouter,
+  travelScenarios: travelScenariosRouter,
 });
 
 export type AppRouter = typeof appRouter;

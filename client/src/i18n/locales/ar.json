@@ -1746,5 +1746,36 @@
     "seatsLeft": "باقي {{count}} مقاعد فقط",
     "prefilledBanner": "تم تعبئة بيانات المسافرين من الحجز السابق",
     "prefilledBannerDesc": "تم تحميل البيانات من الحجز {{ref}}. يمكنك تعديل التفاصيل أدناه قبل التأكيد."
+  },
+  "carbon": {
+    "title": "البصمة الكربونية",
+    "co2": "انبعاثات CO₂",
+    "distance": "مسافة الرحلة",
+    "treesEquivalent": "يعادل امتصاص {{count}} شجرة للكربون لمدة سنة",
+    "offsetCost": "تكلفة التعويض: {{cost}} ر.س"
+  },
+  "travelDocs": {
+    "title": "متطلبات السفر",
+    "visaRequired": "تأشيرة مطلوبة",
+    "visaOnArrival": "تأشيرة عند الوصول",
+    "visaFree": "دخول بدون تأشيرة",
+    "passportValidity": "يجب أن يكون جواز السفر صالحاً لمدة {{months}} أشهر على الأقل بعد تاريخ السفر"
+  },
+  "autoCheckIn": {
+    "title": "تسجيل الوصول التلقائي",
+    "description": "تسجيل الوصول تلقائياً قبل 24 ساعة من موعد رحلتك",
+    "enabled": "تم تفعيل تسجيل الوصول التلقائي",
+    "disabled": "تم تعطيل تسجيل الوصول التلقائي"
+  },
+  "itineraryShare": {
+    "title": "مشاركة خط الرحلة",
+    "share": "مشاركة",
+    "copy": "نسخ",
+    "copied": "تم نسخ خط الرحلة"
+  },
+  "passengerPricing": {
+    "adultFare": "سعر البالغ",
+    "childDiscount": "طفل (75%)",
+    "infantDiscount": "رضيع (10%)"
   }
 }

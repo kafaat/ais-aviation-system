@@ -58,6 +58,8 @@ import {
 import SplitPaymentForm from "@/components/SplitPaymentForm";
 import { VoucherInput } from "@/components/VoucherInput";
 import { CreditBalance } from "@/components/CreditBalance";
+import { CarbonOffset } from "@/components/CarbonOffset";
+import { TravelRequirements } from "@/components/TravelRequirements";
 
 type Passenger = {
   type: "adult" | "child" | "infant";
@@ -810,6 +812,12 @@ export default function BookingPage() {
               numberOfPassengers={passengers.length}
               onSelectionChange={handleAncillariesChange}
             />
+
+            {/* Travel Requirements & Carbon Offset */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TravelRequirements flightId={flightId} />
+              <CarbonOffset flightId={flightId} cabinClass={cabinClass} />
+            </div>
           </div>
 
           {/* Booking Summary */}

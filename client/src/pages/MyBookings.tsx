@@ -53,6 +53,7 @@ import { ModifyBookingDialog } from "@/components/ModifyBookingDialog";
 import { BookingAncillariesDisplay } from "@/components/BookingAncillariesDisplay";
 import { ManageAncillariesDialog } from "@/components/ManageAncillariesDialog";
 import { ReviewForm } from "@/components/ReviewForm";
+import { ItineraryShare } from "@/components/ItineraryShare";
 import {
   Dialog,
   DialogContent,
@@ -775,9 +776,10 @@ export default function MyBookings() {
                                 </div>
                               </div>
 
-                              {/* Add to Calendar */}
+                              {/* Add to Calendar & Share Itinerary */}
                               {booking.paymentStatus === "paid" && (
-                                <div className="flex justify-end">
+                                <div className="flex justify-end gap-2">
+                                  <ItineraryShare bookingId={booking.id} />
                                   <AddToCalendarButton bookingId={booking.id} />
                                 </div>
                               )}

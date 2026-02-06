@@ -42,6 +42,10 @@ export const bookingsRouter = router({
               lastName: z.string().describe("Last name"),
               dateOfBirth: z.date().optional().describe("Date of birth"),
               passportNumber: z.string().optional().describe("Passport number"),
+              passportExpiry: z
+                .date()
+                .optional()
+                .describe("Passport expiry date"),
               nationality: z.string().optional().describe("Nationality code"),
             })
           )
