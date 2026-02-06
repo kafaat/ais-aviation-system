@@ -16,12 +16,9 @@ import {
 } from "./db-optimizer.service";
 import { gt, lt } from "drizzle-orm";
 
-// Mock the database module
-vi.mock("../db", () => ({
-  getDb: vi.fn().mockResolvedValue(null),
-  getPool: vi.fn().mockReturnValue(null),
-  getPoolStats: vi.fn().mockResolvedValue(null),
-}));
+// Note: We don't mock ../db here because these tests only test utility functions
+// that don't require database access. The actual db-dependent functions would
+// need integration tests with a real database.
 
 // Mock the logger
 vi.mock("../_core/logger", () => ({
