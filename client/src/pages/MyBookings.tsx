@@ -41,6 +41,7 @@ import {
   Users,
   X,
   Star,
+  RefreshCw,
 } from "lucide-react";
 import { CancelBookingDialog } from "@/components/CancelBookingDialog";
 import {
@@ -799,6 +800,23 @@ export default function MyBookings() {
                                   >
                                     <Star className="mr-2 h-4 w-4 fill-amber-400 text-amber-400" />
                                     {t("reviews.leaveReview")}
+                                  </Button>
+                                </div>
+                              )}
+
+                              {/* Book Again Button for Completed/Cancelled Bookings */}
+                              {(booking.status === "completed" ||
+                                booking.status === "cancelled") && (
+                                <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+                                  <Button
+                                    asChild
+                                    variant="outline"
+                                    className="w-full rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 hover:border-blue-400 text-blue-700 hover:text-blue-800 dark:from-blue-900/20 dark:to-indigo-900/20 dark:border-blue-800 dark:text-blue-400"
+                                  >
+                                    <Link href={`/rebook/${booking.id}`}>
+                                      <RefreshCw className="mr-2 h-4 w-4" />
+                                      {t("rebook.bookAgain")}
+                                    </Link>
                                   </Button>
                                 </div>
                               )}

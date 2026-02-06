@@ -1726,5 +1726,25 @@
       "creditExpires": "ينتهي",
       "creditCreated": "تاريخ الإنشاء"
     }
+  },
+  "rebook": {
+    "title": "إعادة حجز رحلة",
+    "subtitle": "احجز رحلة جديدة بناءً على حجزك السابق",
+    "bookAgain": "احجز مرة أخرى",
+    "previousBooking": "الحجز السابق",
+    "ref": "المرجع",
+    "route": "المسار",
+    "passengers": "المسافرون",
+    "passengerCount": "{{count}} مسافر(ين)",
+    "cabinClass": "درجة السفر",
+    "availableFlights": "الرحلات المتاحة",
+    "noFlights": "لا توجد رحلات متاحة",
+    "noFlightsDesc": "لا توجد رحلات قادمة على هذا المسار حالياً.",
+    "searchDifferent": "البحث عن مسار آخر",
+    "selectFlight": "اختيار",
+    "perPerson": "للشخص الواحد",
+    "seatsLeft": "باقي {{count}} مقاعد فقط",
+    "prefilledBanner": "تم تعبئة بيانات المسافرين من الحجز السابق",
+    "prefilledBannerDesc": "تم تحميل البيانات من الحجز {{ref}}. يمكنك تعديل التفاصيل أدناه قبل التأكيد."
   }
 }

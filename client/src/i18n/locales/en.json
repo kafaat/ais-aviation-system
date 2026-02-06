@@ -1744,5 +1744,25 @@
       "creditExpires": "Expires",
       "creditCreated": "Created"
     }
+  },
+  "rebook": {
+    "title": "Rebook Flight",
+    "subtitle": "Book a new flight based on your previous booking",
+    "bookAgain": "Book Again",
+    "previousBooking": "Previous Booking",
+    "ref": "Reference",
+    "route": "Route",
+    "passengers": "Passengers",
+    "passengerCount": "{{count}} passenger(s)",
+    "cabinClass": "Cabin Class",
+    "availableFlights": "Available Flights",
+    "noFlights": "No Available Flights",
+    "noFlightsDesc": "There are no upcoming flights on this route right now.",
+    "searchDifferent": "Search Different Route",
+    "selectFlight": "Select",
+    "perPerson": "per person",
+    "seatsLeft": "Only {{count}} seats left",
+    "prefilledBanner": "Passenger details pre-filled from previous booking",
+    "prefilledBannerDesc": "Data loaded from booking {{ref}}. You can modify the details below before confirming."
   }
 }

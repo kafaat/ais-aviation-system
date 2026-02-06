@@ -26,6 +26,7 @@ const Notifications = lazy(() => import("./pages/Notifications"));
 const MyWaitlist = lazy(() => import("./pages/MyWaitlist"));
 const MultiCityResults = lazy(() => import("./pages/MultiCityResults"));
 const LiveFlightTracking = lazy(() => import("./pages/LiveFlightTracking"));
+const RebookPage = lazy(() => import("./pages/RebookPage"));
 
 // Admin pages
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
@@ -208,6 +209,11 @@ function Router() {
           <Route path="/track-flight">
             <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
               <LiveFlightTracking />
+            </Suspense>
+          </Route>
+          <Route path="/rebook/:bookingId">
+            <Suspense fallback={<PageLoadingFallback variant="form" />}>
+              <RebookPage />
             </Suspense>
           </Route>
 
