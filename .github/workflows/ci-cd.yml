@@ -348,35 +348,28 @@ jobs:
           BUILT_IN_FORGE_API_URL: https://api.example.com
           BUILT_IN_FORGE_API_KEY: test-forge-api-key
         run: |
-          echo "## Server Startup Diagnostic" >> $GITHUB_STEP_SUMMARY
-          echo "Node: $(node --version)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Package Check" >> $GITHUB_STEP_SUMMARY
-          for pkg in jsonwebtoken stripe drizzle-orm express mysql2; do
+          # Check packages and output as annotations
+          MISSING=""
+          for pkg in jsonwebtoken stripe drizzle-orm express mysql2 helmet cors; do
             if [ -d "node_modules/$pkg" ]; then
-              echo "- $pkg: FOUND" >> $GITHUB_STEP_SUMMARY
+              echo "::notice::Package $pkg: FOUND"
             else
-              echo "- **$pkg: MISSING**" >> $GITHUB_STEP_SUMMARY
+              echo "::warning::Package $pkg: MISSING"
+              MISSING="$MISSING $pkg"
             fi
           done
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Server Startup" >> $GITHUB_STEP_SUMMARY
+          # Try to start server and capture error
           node dist/index.js > /tmp/server.log 2>&1 &
           SERVER_PID=$!
           sleep 8
           if kill -0 $SERVER_PID 2>/dev/null; then
-            echo "Server started successfully" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            head -20 /tmp/server.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "::notice::Server started successfully"
             kill $SERVER_PID 2>/dev/null || true
             wait $SERVER_PID 2>/dev/null || true
           else
-            echo "**Server FAILED to start!**" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat /tmp/server.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            echo "::error::Server failed to start. See step summary for details."
+            SERVER_ERROR=$(cat /tmp/server.log | head -30 | tr '\n' ' | ')
+            echo "::error::Server crash output: $SERVER_ERROR"
+            echo "::error::Missing packages:$MISSING"
             exit 1
           fi
 
