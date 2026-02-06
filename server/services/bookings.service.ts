@@ -24,6 +24,7 @@ export interface Passenger {
   lastName: string;
   dateOfBirth?: Date;
   passportNumber?: string;
+  passportExpiry?: Date;
   nationality?: string;
 }
 
@@ -50,6 +51,25 @@ export interface CreateBookingInput {
  */
 export async function createBooking(input: CreateBookingInput) {
   try {
+    // Validate passport expiry dates (must be valid at least 6 months after departure)
+    const flightForValidation = await db.getFlightById(input.flightId);
+    if (flightForValidation) {
+      const minExpiry = new Date(flightForValidation.departureTime);
+      minExpiry.setMonth(minExpiry.getMonth() + 6);
+
+      for (const passenger of input.passengers) {
+        if (passenger.passportExpiry) {
+          const expiry = new Date(passenger.passportExpiry);
+          if (expiry < minExpiry) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Passport for ${passenger.firstName} ${passenger.lastName} expires before the required 6-month validity period after travel date`,
+            });
+          }
+        }
+      }
+    }
+
     // Check flight availability
     const { available, flight } = await checkFlightAvailability(
       input.flightId,
@@ -64,11 +84,12 @@ export async function createBooking(input: CreateBookingInput) {
       });
     }
 
-    // Calculate total amount with dynamic pricing
+    // Calculate total amount with dynamic pricing and passenger type discounts
     const pricingResult = await calculateFlightPrice(
       flight!,
       input.cabinClass,
-      input.passengers.length
+      input.passengers.length,
+      input.passengers
     );
     const totalAmount = pricingResult.price;
 

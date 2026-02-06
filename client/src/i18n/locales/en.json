@@ -1744,5 +1744,56 @@
       "creditExpires": "Expires",
       "creditCreated": "Created"
     }
+  },
+  "rebook": {
+    "title": "Rebook Flight",
+    "subtitle": "Book a new flight based on your previous booking",
+    "bookAgain": "Book Again",
+    "previousBooking": "Previous Booking",
+    "ref": "Reference",
+    "route": "Route",
+    "passengers": "Passengers",
+    "passengerCount": "{{count}} passenger(s)",
+    "cabinClass": "Cabin Class",
+    "availableFlights": "Available Flights",
+    "noFlights": "No Available Flights",
+    "noFlightsDesc": "There are no upcoming flights on this route right now.",
+    "searchDifferent": "Search Different Route",
+    "selectFlight": "Select",
+    "perPerson": "per person",
+    "seatsLeft": "Only {{count}} seats left",
+    "prefilledBanner": "Passenger details pre-filled from previous booking",
+    "prefilledBannerDesc": "Data loaded from booking {{ref}}. You can modify the details below before confirming."
+  },
+  "carbon": {
+    "title": "Carbon Footprint",
+    "co2": "CO₂ Emissions",
+    "distance": "Flight Distance",
+    "treesEquivalent": "Equivalent to {{count}} tree(s) absorbing CO₂ for a year",
+    "offsetCost": "Offset cost: {{cost}} SAR"
+  },
+  "travelDocs": {
+    "title": "Travel Requirements",
+    "visaRequired": "Visa Required",
+    "visaOnArrival": "Visa on Arrival",
+    "visaFree": "Visa-Free Entry",
+    "passportValidity": "Passport must be valid for at least {{months}} months after travel"
+  },
+  "autoCheckIn": {
+    "title": "Automatic Check-In",
+    "description": "Automatically check-in 24 hours before your flight departure",
+    "enabled": "Auto check-in enabled",
+    "disabled": "Auto check-in disabled"
+  },
+  "itineraryShare": {
+    "title": "Share Itinerary",
+    "share": "Share",
+    "copy": "Copy",
+    "copied": "Itinerary copied to clipboard"
+  },
+  "passengerPricing": {
+    "adultFare": "Adult fare",
+    "childDiscount": "Child (75%)",
+    "infantDiscount": "Infant (10%)"
   }
 }

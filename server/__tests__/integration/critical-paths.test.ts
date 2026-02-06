@@ -71,13 +71,13 @@ beforeAll(async () => {
   const timestamp = Date.now();
 
   // Create test user with required openId
-  const userResult = await db.insert(users).values({
+  const [userResult] = await db.insert(users).values({
     email: `${TEST_PREFIX}${nanoid(6)}@example.com`,
     name: "Test User",
     role: "user",
     openId: `${TEST_PREFIX}user_${timestamp}`,
   });
-  testUserId = Number(userResult.insertId) || 1;
+  testUserId = Number(userResult.insertId);
 
   // Create test airline
   await db.execute(
@@ -95,7 +95,7 @@ beforeAll(async () => {
   // Create test flight with correct schema
   const tomorrow = new Date(Date.now() + 86400000);
   const arrival = new Date(Date.now() + 90000000);
-  const flightResult = await db.insert(flights).values({
+  const [flightResult] = await db.insert(flights).values({
     flightNumber: `CP${nanoid(4)}`,
     airlineId: TEST_AIRLINE_ID,
     originId: TEST_ORIGIN_ID,
@@ -110,7 +110,7 @@ beforeAll(async () => {
     businessAvailable: 20,
     status: "scheduled",
   });
-  testFlightId = Number(flightResult.insertId) || 1;
+  testFlightId = Number(flightResult.insertId);
 });
 
 afterAll(async () => {
@@ -156,7 +156,7 @@ async function createTestBooking(
   const bookingRef = nanoid(6).toUpperCase();
   const pnr = nanoid(6).toUpperCase();
 
-  const result = await db!.insert(bookings).values({
+  const [result] = await db!.insert(bookings).values({
     userId: testUserId,
     flightId: testFlightId,
     bookingReference: bookingRef,
@@ -177,7 +177,7 @@ async function createTestPayment(
   bookingId: number,
   stripePaymentIntentId: string
 ) {
-  const result = await db!.insert(payments).values({
+  const [result] = await db!.insert(payments).values({
     bookingId,
     stripePaymentIntentId,
     amount: 50000, // Integer in SAR cents

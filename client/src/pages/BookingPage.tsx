@@ -34,6 +34,7 @@ import {
   Users,
   Split,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getLoginUrl } from "@/const";
@@ -57,6 +58,8 @@ import {
 import SplitPaymentForm from "@/components/SplitPaymentForm";
 import { VoucherInput } from "@/components/VoucherInput";
 import { CreditBalance } from "@/components/CreditBalance";
+import { CarbonOffset } from "@/components/CarbonOffset";
+import { TravelRequirements } from "@/components/TravelRequirements";
 
 type Passenger = {
   type: "adult" | "child" | "infant";
@@ -83,10 +86,13 @@ export default function BookingPage() {
   const cabinClass = (searchParams.get("class") || "economy") as
     | "economy"
     | "business";
+  const rebookParam = searchParams.get("rebook");
+  const rebookFromId = rebookParam ? parseInt(rebookParam) : null;
 
   const [passengers, setPassengers] = useState<Passenger[]>([
     { type: "adult", firstName: "", lastName: "" },
   ]);
+  const [rebookLoaded, setRebookLoaded] = useState(false);
   const [selectedAncillaries, setSelectedAncillaries] = useState<
     SelectedAncillary[]
   >([]);
@@ -131,6 +137,31 @@ export default function BookingPage() {
       setSmsNotification(userPrefs.smsNotifications);
     }
   }, [userPrefs]);
+
+  // Rebooking: fetch previous booking data to pre-fill passengers
+  const { data: rebookData } = trpc.rebooking.getRebookData.useQuery(
+    { bookingId: rebookFromId ?? 0 },
+    { enabled: !!rebookFromId && isAuthenticated }
+  );
+
+  // Pre-fill passengers from previous booking
+  useEffect(() => {
+    if (rebookData && !rebookLoaded) {
+      const prefilled: Passenger[] = rebookData.passengers.map(p => ({
+        type: p.type,
+        title: p.title ?? undefined,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : undefined,
+        passportNumber: p.passportNumber ?? undefined,
+        nationality: p.nationality ?? undefined,
+      }));
+      if (prefilled.length > 0) {
+        setPassengers(prefilled);
+      }
+      setRebookLoaded(true);
+    }
+  }, [rebookData, rebookLoaded]);
 
   // Favorites functionality
   const { data: favorites, refetch: refetchFavorites } =
@@ -584,6 +615,23 @@ export default function BookingPage() {
               </Card>
             )}
 
+            {/* Rebook Banner */}
+            {rebookFromId && rebookData && (
+              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-xl">
+                <RefreshCw className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <div>
+                  <p className="font-medium text-blue-900 dark:text-blue-200">
+                    {t("rebook.prefilledBanner")}
+                  </p>
+                  <p className="text-sm text-blue-700 dark:text-blue-400">
+                    {t("rebook.prefilledBannerDesc", {
+                      ref: rebookData.originalBookingRef,
+                    })}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Passenger Details */}
             <Card className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -764,6 +812,12 @@ export default function BookingPage() {
               numberOfPassengers={passengers.length}
               onSelectionChange={handleAncillariesChange}
             />
+
+            {/* Travel Requirements & Carbon Offset */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TravelRequirements flightId={flightId} />
+              <CarbonOffset flightId={flightId} cabinClass={cabinClass} />
+            </div>
           </div>
 
           {/* Booking Summary */}

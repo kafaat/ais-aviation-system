@@ -3,17 +3,20 @@
 ## What's Changed in v1.4.0
 
 ### Features
+
 - feat: integrate interactive seat map into check-in and add calendar export (bb708fb)
 - feat: add price lock, meal pre-order, and family mile pooling features (ad8c5e1)
 - feat: add digital wallet, enhanced price calendar, and disruption hub (8a448ea)
 
 ### Bug Fixes
+
 - fix: improve test mocks to work without database connection (434ba94)
 - fix: add default value of 1 for numberOfPassengers in bookings table (6b282b7)
 - fix: correct stripeEvents column names in critical-paths tests (0e11ca8)
 - fix: use insertId fallback pattern in test beforeAll hooks (dd0e2c4)
 
 ### Other Changes
+
 - style: fix Prettier formatting across 9 files (ed0ed39)
 - Initial plan (972f925)
 - style: fix Prettier formatting in corporate.service.test.ts (a82277f)
@@ -21,9 +24,7 @@
 - Merge pull request #46 from kafaat/claude/implement-todo-zrBPj (1f54cbc)
 - Merge pull request #45 from kafaat/claude/add-claude-documentation-hFQZh (aedd882)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.3.3...v1.4.0
-
 
 ---
 
