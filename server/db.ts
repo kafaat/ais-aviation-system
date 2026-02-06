@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, gte, lte, sql, gt, lt, SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  lte,
+  sql,
+  gt,
+  lt,
+  isNull,
+  SQL,
+} from "drizzle-orm";
 import { drizzle, MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "../drizzle/schema";
@@ -665,7 +677,7 @@ export async function getBookingsByUserId(userId: number) {
     .innerJoin(flights, eq(bookings.flightId, flights.id))
     .innerJoin(airports, eq(flights.originId, airports.id))
     .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
-    .where(eq(bookings.userId, userId))
+    .where(and(eq(bookings.userId, userId), isNull(bookings.deletedAt)))
     .orderBy(desc(bookings.createdAt));
 
   // Fetch passengers for each booking
