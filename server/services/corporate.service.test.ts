@@ -446,8 +446,7 @@ describe("Corporate Service", () => {
         numberOfPassengers: 1,
       });
       testBookingId =
-        (bookingResult as any).insertId ||
-        (bookingResult as any)[0]?.insertId;
+        (bookingResult as any).insertId || (bookingResult as any)[0]?.insertId;
     });
 
     it("should create a corporate booking", async () => {
@@ -546,8 +545,7 @@ describe("Corporate Service", () => {
         numberOfPassengers: 1,
       });
       rejectTestBookingId =
-        (bookingResult as any).insertId ||
-        (bookingResult as any)[0]?.insertId;
+        (bookingResult as any).insertId || (bookingResult as any)[0]?.insertId;
 
       const corpBooking = await createCorporateBooking({
         corporateAccountId: testCorporateAccountId,
