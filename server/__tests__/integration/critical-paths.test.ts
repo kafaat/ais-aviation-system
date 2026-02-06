@@ -128,7 +128,7 @@ afterAll(async () => {
       .where(
         sql`booking_id IN (SELECT id FROM bookings WHERE user_id = ${testUserId})`
       );
-    await db.delete(stripeEvents).where(sql`event_id LIKE 'test_critical_%'`);
+    await db.delete(stripeEvents).where(sql`id LIKE 'test_critical_%'`);
     await db
       .delete(idempotencyRequests)
       .where(sql`idempotency_key LIKE 'test_critical_%'`);
@@ -235,9 +235,9 @@ describe("Critical Path 1: Complete Booking Flow", () => {
 
     // Store webhook event
     await db!.insert(stripeEvents).values({
-      eventId,
-      eventType: "payment_intent.succeeded",
-      payload: JSON.stringify({ id: paymentIntentId, amount: 50000 }),
+      id: eventId,
+      type: "payment_intent.succeeded",
+      data: JSON.stringify({ id: paymentIntentId, amount: 50000 }),
       processed: false,
     });
 
@@ -283,7 +283,7 @@ describe("Critical Path 1: Complete Booking Flow", () => {
           processed: true,
           processedAt: new Date(),
         })
-        .where(eq(stripeEvents.eventId, eventId));
+        .where(eq(stripeEvents.id, eventId));
     });
 
     // Verify final state
@@ -368,9 +368,9 @@ describe("Critical Path 3: Webhook Deduplication", () => {
 
     // First webhook - process and mark as completed
     await db!.insert(stripeEvents).values({
-      eventId,
-      eventType: "payment_intent.succeeded",
-      payload: JSON.stringify({ id: paymentIntentId }),
+      id: eventId,
+      type: "payment_intent.succeeded",
+      data: JSON.stringify({ id: paymentIntentId }),
       processed: true,
       processedAt: new Date(),
     });
@@ -394,7 +394,7 @@ describe("Critical Path 3: Webhook Deduplication", () => {
       .select()
       .from(stripeEvents)
       .where(
-        and(eq(stripeEvents.eventId, eventId), eq(stripeEvents.processed, true))
+        and(eq(stripeEvents.id, eventId), eq(stripeEvents.processed, true))
       );
 
     // De-dup should block
@@ -420,9 +420,9 @@ describe("Critical Path 3: Webhook Deduplication", () => {
 
     // Store event with processed=false (failed first attempt)
     await db!.insert(stripeEvents).values({
-      eventId,
-      eventType: "payment_intent.succeeded",
-      payload: JSON.stringify({ id: "pi_retry" }),
+      id: eventId,
+      type: "payment_intent.succeeded",
+      data: JSON.stringify({ id: "pi_retry" }),
       processed: false,
       error: "Temporary error",
     });
@@ -432,7 +432,7 @@ describe("Critical Path 3: Webhook Deduplication", () => {
       .select()
       .from(stripeEvents)
       .where(
-        and(eq(stripeEvents.eventId, eventId), eq(stripeEvents.processed, true))
+        and(eq(stripeEvents.id, eventId), eq(stripeEvents.processed, true))
       );
 
     // No processed=true event, so retry is allowed
