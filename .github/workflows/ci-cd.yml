@@ -348,27 +348,35 @@ jobs:
           BUILT_IN_FORGE_API_URL: https://api.example.com
           BUILT_IN_FORGE_API_KEY: test-forge-api-key
         run: |
-          echo "=== Testing server startup ==="
-          echo "=== Node version ==="
-          node --version
-          echo "=== Checking key packages ==="
-          ls node_modules/jsonwebtoken/index.js 2>&1 || echo "jsonwebtoken NOT FOUND"
-          ls node_modules/stripe/cjs/stripe.cjs.node.js 2>&1 || echo "stripe NOT FOUND"
-          ls node_modules/drizzle-orm/index.js 2>&1 || echo "drizzle-orm NOT FOUND"
-          echo "=== Starting server (capturing output) ==="
+          echo "## Server Startup Diagnostic" >> $GITHUB_STEP_SUMMARY
+          echo "Node: $(node --version)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Package Check" >> $GITHUB_STEP_SUMMARY
+          for pkg in jsonwebtoken stripe drizzle-orm express mysql2; do
+            if [ -d "node_modules/$pkg" ]; then
+              echo "- $pkg: FOUND" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- **$pkg: MISSING**" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Server Startup" >> $GITHUB_STEP_SUMMARY
           node dist/index.js > /tmp/server.log 2>&1 &
           SERVER_PID=$!
           sleep 8
           if kill -0 $SERVER_PID 2>/dev/null; then
-            echo "=== Server started successfully ==="
-            cat /tmp/server.log
+            echo "Server started successfully" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            head -20 /tmp/server.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
             kill $SERVER_PID 2>/dev/null || true
             wait $SERVER_PID 2>/dev/null || true
           else
-            echo "=== Server FAILED to start ==="
-            echo "=== Server output: ==="
-            cat /tmp/server.log
-            echo "=== End of server output ==="
+            echo "**Server FAILED to start!**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat /tmp/server.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "::error::Server failed to start. See step summary for details."
             exit 1
           fi
 
