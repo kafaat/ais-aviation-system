@@ -61,7 +61,8 @@ describe("Corporate Service", () => {
       role: "user",
       openId: `test-corporate-user-${timestamp}`,
     });
-    testUserId = (userResult as any).insertId;
+    testUserId =
+      (userResult as any).insertId || (userResult as any)[0]?.insertId;
 
     const adminUserResult = await db.insert(users).values({
       email: `corporate-admin-${timestamp}@example.com`,
@@ -69,7 +70,9 @@ describe("Corporate Service", () => {
       role: "admin",
       openId: `test-corporate-admin-${timestamp}`,
     });
-    testAdminUserId = (adminUserResult as any).insertId;
+    testAdminUserId =
+      (adminUserResult as any).insertId ||
+      (adminUserResult as any)[0]?.insertId;
 
     // Create test airline
     await db.insert(airlines).values({
@@ -115,7 +118,8 @@ describe("Corporate Service", () => {
       businessAvailable: 30,
       status: "scheduled",
     });
-    testFlightId = (flightResult as any).insertId;
+    testFlightId =
+      (flightResult as any).insertId || (flightResult as any)[0]?.insertId;
   });
 
   afterAll(async () => {
@@ -441,7 +445,9 @@ describe("Corporate Service", () => {
         cabinClass: "economy",
         numberOfPassengers: 1,
       });
-      testBookingId = (bookingResult as any).insertId;
+      testBookingId =
+        (bookingResult as any).insertId ||
+        (bookingResult as any)[0]?.insertId;
     });
 
     it("should create a corporate booking", async () => {
@@ -539,7 +545,9 @@ describe("Corporate Service", () => {
         cabinClass: "economy",
         numberOfPassengers: 1,
       });
-      rejectTestBookingId = (bookingResult as any).insertId;
+      rejectTestBookingId =
+        (bookingResult as any).insertId ||
+        (bookingResult as any)[0]?.insertId;
 
       const corpBooking = await createCorporateBooking({
         corporateAccountId: testCorporateAccountId,
