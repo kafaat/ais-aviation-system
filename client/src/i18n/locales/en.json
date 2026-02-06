@@ -41,7 +41,10 @@
     "create": "Create",
     "actions": "Actions",
     "dismiss": "Dismiss",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "share": "Share",
+    "copied": "Copied",
+    "loginRequired": "Please login first"
   },
   "nav": {
     "home": "Home",

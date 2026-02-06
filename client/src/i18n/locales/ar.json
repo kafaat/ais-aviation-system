@@ -104,6 +104,10 @@
     "business": "درجة الأعمال",
     "seatsAvailable": "{{count}} مقعد متاح",
     "bookNow": "احجز الآن",
+    "comparing": "مقارنة الرحلات",
+    "selectFlight": "اختيار الرحلة",
+    "available": "متاح",
+    "full": "مكتمل",
     "total": "الإجمالي",
     "noMatchingFlights": "لا توجد رحلات مطابقة للفلاتر",
     "tryChangingFilters": "جرب تغيير خيارات الفلتر للعثور على رحلات"
@@ -338,6 +342,23 @@
     "seatAssignments": "توزيع المقاعد",
     "autoAssign": "تعيين تلقائي",
     "addToCalendar": "إضافة إلى التقويم"
+  },
+  "analytics": {
+    "title": "لوحة التحليلات",
+    "subtitle": "عرض الإحصائيات التفصيلية ومقاييس الأداء",
+    "totalRevenue": "إجمالي الإيرادات",
+    "totalBookings": "إجمالي الحجوزات",
+    "todayBookings": "حجوزات اليوم",
+    "avgBookingValue": "متوسط قيمة الحجز",
+    "allTime": "كل الأوقات",
+    "today": "اليوم",
+    "perBooking": "لكل حجز",
+    "dailyBookings": "الحجوزات اليومية (آخر 30 يوم)",
+    "dailyRevenue": "الإيرادات اليومية (آخر 30 يوم)",
+    "topDestinations": "أفضل الوجهات",
+    "airlinePerformance": "أداء شركات الطيران",
+    "bookings": "الحجوزات",
+    "revenue": "الإيرادات (ر.س)"
   },
   "admin": {
     "title": "لوحة التحكم الإدارية",

@@ -3,9 +3,11 @@
 ## What's Changed in v1.7.0
 
 ### Features
+
 - feat: Phase 5 - AI guardrails, chat UX, and production enhancements (5cda54a)
 
 ### Bug Fixes
+
 - fix: add shamefully-hoist for pnpm to fix E2E server startup (4d4bdf2)
 - fix: add server startup diagnostic and show E2E server output in CI (91da29c)
 - fix: capture server startup error output in E2E diagnostic step (efcb653)
@@ -17,14 +19,14 @@
 - fix: use dynamic imports for trpc-openapi to prevent server crash at startup (4ead878)
 
 ### Maintenance
+
 - chore: fix CHANGELOG.md formatting after rebase (69268c7)
 
 ### Other Changes
+
 - Merge pull request #52 from kafaat/claude/implement-todo-zrBPj (244bafc)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.6.0...v1.7.0
-
 
 ---
 

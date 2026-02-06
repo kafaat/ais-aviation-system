@@ -184,7 +184,7 @@
     "overrides": {
       "tailwindcss>nanoid": "3.3.7"
     },
-    "allowNonAppliedPatches": true
+    "allowUnusedPatches": true
   },
   "size-limit": [
     {
