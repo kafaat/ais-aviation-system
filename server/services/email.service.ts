@@ -592,6 +592,57 @@ ${nextTierText}
 }
 
 /**
+ * Send a generic notification email
+ * Used by the notification service to email users for important events
+ */
+export async function sendNotificationEmail(
+  to: string,
+  subject: string,
+  message: string
+): Promise<boolean> {
+  try {
+    const template: EmailTemplate = {
+      to,
+      subject,
+      text: message,
+      html: `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
+    .content { background: #f9fafb; padding: 20px; margin: 20px 0; }
+    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${subject}</h1>
+    </div>
+    <div class="content">
+      <p>${message}</p>
+    </div>
+    <div class="footer">
+      <p>نظام الطيران المتكامل</p>
+    </div>
+  </div>
+</body>
+</html>
+      `.trim(),
+    };
+
+    return await sendEmail(template);
+  } catch (error) {
+    console.error("[Email Service] Error sending notification email:", error);
+    return false;
+  }
+}
+
+/**
  * Send split payment request email
  */
 export async function sendSplitPaymentRequest(

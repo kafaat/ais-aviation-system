@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { notifications } from "../../drizzle/schema";
+import { notifications, users } from "../../drizzle/schema";
 import { eq, desc, and, sql, count } from "drizzle-orm";
+import { sendNotificationEmail } from "./email.service";
 
 /**
  * Notification Service
@@ -70,6 +71,35 @@ export async function createNotification(
     console.info(
       `[Notification] Created notification ${insertId} for user ${userId}: ${type}`
     );
+
+    // Send email for important notification types
+    const emailNotificationTypes: NotificationType[] = [
+      "booking",
+      "flight",
+      "promo",
+    ];
+    if (emailNotificationTypes.includes(type)) {
+      try {
+        const [user] = await database
+          .select({ email: users.email, name: users.name })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+
+        if (user?.email) {
+          await sendNotificationEmail(user.email, title, message);
+          console.info(
+            `[Notification] Email sent to ${user.email} for notification ${insertId}`
+          );
+        }
+      } catch (emailError) {
+        // Email failure should not break notification creation
+        console.error(
+          `[Notification] Failed to send email for notification ${insertId}:`,
+          emailError
+        );
+      }
+    }
 
     return { id: insertId };
   } catch (error) {

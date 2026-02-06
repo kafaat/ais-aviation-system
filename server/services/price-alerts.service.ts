@@ -7,6 +7,7 @@ import {
   airports,
   type InsertPriceAlert,
 } from "../../drizzle/schema";
+import { createNotification } from "./notification.service";
 
 /**
  * Create a new price alert
@@ -369,6 +370,44 @@ export async function checkAlerts() {
             .set({ notifiedAt: new Date() })
             .where(eq(priceAlerts.id, alert.id));
         }
+      }
+    }
+
+    // Send notifications for each triggered alert
+    for (const triggered of alertsTriggered) {
+      try {
+        // Look up airport names for the notification message
+        const [origin] = await db
+          .select({ code: airports.code, city: airports.city })
+          .from(airports)
+          .where(eq(airports.id, triggered.originId))
+          .limit(1);
+
+        const [dest] = await db
+          .select({ code: airports.code, city: airports.city })
+          .from(airports)
+          .where(eq(airports.id, triggered.destinationId))
+          .limit(1);
+
+        const routeStr = `${origin?.city || origin?.code || "Unknown"} → ${dest?.city || dest?.code || "Unknown"}`;
+        const oldPriceStr = triggered.previousPrice
+          ? `${(triggered.previousPrice / 100).toFixed(2)} SAR`
+          : "N/A";
+        const newPriceStr = `${(triggered.currentPrice / 100).toFixed(2)} SAR`;
+        const targetPriceStr = `${(triggered.targetPrice / 100).toFixed(2)} SAR`;
+
+        await createNotification(
+          triggered.userId,
+          "promo",
+          "Price Drop Alert",
+          `Great news! The price for ${routeStr} dropped from ${oldPriceStr} to ${newPriceStr}, reaching your target of ${targetPriceStr}. Book now to lock in this price!`,
+          { link: "/price-alerts" }
+        );
+      } catch (notifyError) {
+        console.error(
+          `[Price Alerts Service] Failed to send notification for alert ${triggered.alertId}:`,
+          notifyError
+        );
       }
     }
 

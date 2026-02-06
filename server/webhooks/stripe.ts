@@ -25,8 +25,9 @@ import {
   stripeEvents,
   financialLedger,
   bookingStatusHistory,
+  inventoryLocks,
 } from "../../drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { sendBookingConfirmation } from "../services/email.service";
 import { awardMilesForBooking } from "../services/loyalty.service";
 import { generateETicketForPassenger } from "../services/eticket.service";
@@ -417,6 +418,51 @@ async function handleCheckoutSessionCompleted(
       },
       `Deducted ${booking.numberOfPassengers} ${booking.cabinClass} seat(s) from flight ${booking.flightId}`
     );
+
+    // 6b. Convert inventory lock to booking (mark lock as converted)
+    try {
+      const [activeLock] = await tx
+        .select({ id: inventoryLocks.id })
+        .from(inventoryLocks)
+        .where(
+          and(
+            eq(inventoryLocks.flightId, booking.flightId),
+            eq(inventoryLocks.userId, booking.userId),
+            eq(inventoryLocks.cabinClass, booking.cabinClass),
+            eq(inventoryLocks.status, "active")
+          )
+        )
+        .limit(1);
+
+      if (activeLock) {
+        await tx
+          .update(inventoryLocks)
+          .set({
+            status: "converted",
+            releasedAt: new Date(),
+          })
+          .where(eq(inventoryLocks.id, activeLock.id));
+
+        log.info(
+          {
+            event: "inventory_lock_converted",
+            lockId: activeLock.id,
+            bookingId,
+          },
+          `Converted inventory lock ${activeLock.id} for booking ${bookingId}`
+        );
+      }
+    } catch (lockErr) {
+      // Lock conversion failure should not break payment confirmation
+      log.warn(
+        {
+          event: "inventory_lock_conversion_failed",
+          bookingId,
+          error: lockErr,
+        },
+        `Failed to convert inventory lock for booking ${bookingId} - non-critical`
+      );
+    }
   }
 
   log.info(
@@ -523,6 +569,51 @@ async function handlePaymentIntentSucceeded(
       },
       `Booking ${bookingId} confirmed via payment_intent, deducted ${booking.numberOfPassengers} ${booking.cabinClass} seat(s)`
     );
+
+    // Convert inventory lock to booking (mark lock as converted)
+    try {
+      const [activeLock] = await tx
+        .select({ id: inventoryLocks.id })
+        .from(inventoryLocks)
+        .where(
+          and(
+            eq(inventoryLocks.flightId, booking.flightId),
+            eq(inventoryLocks.userId, booking.userId),
+            eq(inventoryLocks.cabinClass, booking.cabinClass),
+            eq(inventoryLocks.status, "active")
+          )
+        )
+        .limit(1);
+
+      if (activeLock) {
+        await tx
+          .update(inventoryLocks)
+          .set({
+            status: "converted",
+            releasedAt: new Date(),
+          })
+          .where(eq(inventoryLocks.id, activeLock.id));
+
+        log.info(
+          {
+            event: "inventory_lock_converted",
+            lockId: activeLock.id,
+            bookingId,
+          },
+          `Converted inventory lock ${activeLock.id} for booking ${bookingId}`
+        );
+      }
+    } catch (lockErr) {
+      // Lock conversion failure should not break payment confirmation
+      log.warn(
+        {
+          event: "inventory_lock_conversion_failed",
+          bookingId,
+          error: lockErr,
+        },
+        `Failed to convert inventory lock for booking ${bookingId} - non-critical`
+      );
+    }
   }
 }
 
