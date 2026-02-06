@@ -334,6 +334,34 @@ jobs:
           VITE_APP_ID: ais-aviation-system-test
         run: pnpm run build
 
+      - name: Verify server can start
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+          VITE_APP_ID: ais-aviation-system-test
+          OAUTH_SERVER_URL: http://localhost:3000
+          OWNER_OPEN_ID: test-owner-open-id
+          BUILT_IN_FORGE_API_URL: https://api.example.com
+          BUILT_IN_FORGE_API_KEY: test-forge-api-key
+        run: |
+          echo "=== Testing server startup ==="
+          timeout 10 node dist/index.js &
+          SERVER_PID=$!
+          sleep 5
+          if kill -0 $SERVER_PID 2>/dev/null; then
+            echo "Server started successfully"
+            kill $SERVER_PID 2>/dev/null || true
+            wait $SERVER_PID 2>/dev/null || true
+          else
+            echo "Server failed to start!"
+            wait $SERVER_PID 2>/dev/null
+            exit 1
+          fi
+
       - name: Run E2E tests
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
