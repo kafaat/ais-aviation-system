@@ -200,7 +200,7 @@ export const bookings = mysqlTable(
     }),
     idempotencyKey: varchar("idempotencyKey", { length: 255 }).unique(), // For preventing duplicate bookings
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-    numberOfPassengers: int("numberOfPassengers").notNull(),
+    numberOfPassengers: int("numberOfPassengers").default(1).notNull(),
     checkedIn: boolean("checkedIn").default(false).notNull(),
     checkInReminderSentAt: timestamp("checkInReminderSentAt"), // When check-in reminder email was sent
     createdAt: timestamp("createdAt").defaultNow().notNull(),
