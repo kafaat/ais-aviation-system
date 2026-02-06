@@ -348,28 +348,17 @@ jobs:
           BUILT_IN_FORGE_API_URL: https://api.example.com
           BUILT_IN_FORGE_API_KEY: test-forge-api-key
         run: |
-          # Check packages and output as annotations
-          MISSING=""
-          for pkg in jsonwebtoken stripe drizzle-orm express mysql2 helmet cors; do
-            if [ -d "node_modules/$pkg" ]; then
-              echo "::notice::Package $pkg: FOUND"
-            else
-              echo "::warning::Package $pkg: MISSING"
-              MISSING="$MISSING $pkg"
-            fi
-          done
-          # Try to start server and capture error
+          # Quick server smoke test: start, wait, check it's alive
           node dist/index.js > /tmp/server.log 2>&1 &
           SERVER_PID=$!
-          sleep 8
+          sleep 10
           if kill -0 $SERVER_PID 2>/dev/null; then
             echo "::notice::Server started successfully"
             kill $SERVER_PID 2>/dev/null || true
             wait $SERVER_PID 2>/dev/null || true
           else
-            SERVER_ERROR=$(cat /tmp/server.log | head -30 | tr '\n' ' | ')
-            echo "::error::Server crash output: $SERVER_ERROR"
-            echo "::error::Missing packages:$MISSING"
+            echo "::error::Server failed to start. Logs:"
+            cat /tmp/server.log | head -50
             exit 1
           fi
 

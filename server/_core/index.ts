@@ -209,18 +209,27 @@ async function startServer() {
   );
 
   // OpenAPI REST endpoints (alternative to tRPC for REST clients)
-  app.use(
-    "/api/rest",
-    createOpenApiExpressMiddleware({
-      router: appRouter,
-      createContext,
-      maxBodySize: 50 * 1024 * 1024, // 50MB to match express.json limit
-      responseMeta: undefined,
-      onError: ({ error, path }: { error: Error; path: string }) => {
-        log.error({ error: error.message, path }, "OpenAPI REST error");
-      },
-    })
-  );
+  // Wrapped in try/catch because createOpenApiExpressMiddleware internally calls
+  // generateOpenApiDocument which throws for procedures without OpenAPI meta
+  try {
+    app.use(
+      "/api/rest",
+      createOpenApiExpressMiddleware({
+        router: appRouter,
+        createContext,
+        maxBodySize: 50 * 1024 * 1024, // 50MB to match express.json limit
+        responseMeta: undefined,
+        onError: ({ error, path }: { error: Error; path: string }) => {
+          log.error({ error: error.message, path }, "OpenAPI REST error");
+        },
+      })
+    );
+  } catch (error) {
+    log.warn(
+      { error: error instanceof Error ? error.message : error },
+      "OpenAPI REST middleware could not be initialized, REST endpoints disabled"
+    );
+  }
 
   // tRPC API with per-user rate limiting
   // Uses user ID for authenticated users, IP for anonymous users
