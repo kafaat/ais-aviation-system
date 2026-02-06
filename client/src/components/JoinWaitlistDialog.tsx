@@ -85,6 +85,8 @@ export function JoinWaitlistDialog({
       flightId,
       passengers: parseInt(passengers),
       cabinClass,
+      notifyByEmail,
+      notifyBySms,
     });
   };
 

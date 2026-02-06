@@ -41,7 +41,9 @@ export async function addToWaitlist(
   userId: number,
   flightId: number,
   passengers: number,
-  cabinClass: "economy" | "business"
+  cabinClass: "economy" | "business",
+  notifyByEmail: boolean = true,
+  notifyBySms: boolean = false
 ): Promise<{
   id: number;
   position: number;
@@ -109,8 +111,8 @@ export async function addToWaitlist(
     seats: passengers,
     priority,
     status: "waiting",
-    notifyByEmail: true,
-    notifyBySms: false,
+    notifyByEmail,
+    notifyBySms,
   });
 
   const insertId = (result as any).insertId;
@@ -210,6 +212,8 @@ export async function processWaitlist(flightId: number): Promise<{
 
   // Process economy waitlist
   if (flight.economyAvailable > 0) {
+    let remainingEconomy = flight.economyAvailable;
+
     const economyWaitlist = await database
       .select()
       .from(waitlist)
@@ -220,12 +224,19 @@ export async function processWaitlist(flightId: number): Promise<{
           eq(waitlist.status, "waiting")
         )
       )
-      .orderBy(asc(waitlist.priority))
-      .limit(flight.economyAvailable);
+      .orderBy(asc(waitlist.priority));
 
     for (const entry of economyWaitlist) {
-      if (entry.seats <= flight.economyAvailable) {
+      if (entry.seats <= remainingEconomy) {
         await offerSeat(entry.id);
+        // Temporarily hold seats by decrementing availability
+        remainingEconomy -= entry.seats;
+        await database
+          .update(flights)
+          .set({
+            economyAvailable: sql`${flights.economyAvailable} - ${entry.seats}`,
+          })
+          .where(eq(flights.id, flightId));
         offeredCount++;
         notifications.push({
           userId: entry.userId,
@@ -238,6 +249,8 @@ export async function processWaitlist(flightId: number): Promise<{
 
   // Process business waitlist
   if (flight.businessAvailable > 0) {
+    let remainingBusiness = flight.businessAvailable;
+
     const businessWaitlist = await database
       .select()
       .from(waitlist)
@@ -248,12 +261,19 @@ export async function processWaitlist(flightId: number): Promise<{
           eq(waitlist.status, "waiting")
         )
       )
-      .orderBy(asc(waitlist.priority))
-      .limit(flight.businessAvailable);
+      .orderBy(asc(waitlist.priority));
 
     for (const entry of businessWaitlist) {
-      if (entry.seats <= flight.businessAvailable) {
+      if (entry.seats <= remainingBusiness) {
         await offerSeat(entry.id);
+        // Temporarily hold seats by decrementing availability
+        remainingBusiness -= entry.seats;
+        await database
+          .update(flights)
+          .set({
+            businessAvailable: sql`${flights.businessAvailable} - ${entry.seats}`,
+          })
+          .where(eq(flights.id, flightId));
         offeredCount++;
         notifications.push({
           userId: entry.userId,

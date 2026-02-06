@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, desc, and, SQL } from "drizzle-orm";
+import { eq, desc, and, sql, SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   groupBookings,
@@ -28,6 +28,7 @@ export interface CreateGroupBookingInput {
   organizerPhone: string;
   groupSize: number;
   flightId: number;
+  cabinClass?: "economy" | "business";
   notes?: string;
 }
 
@@ -105,14 +106,17 @@ export async function createGroupBookingRequest(
     });
   }
 
-  // Check if flight has enough seats available
+  // Check if flight has enough seats available for the requested cabin class
   const flightData = flight[0];
-  const totalAvailable =
-    flightData.economyAvailable + flightData.businessAvailable;
-  if (totalAvailable < data.groupSize) {
+  const cabinClass = data.cabinClass ?? "economy";
+  const availableSeats =
+    cabinClass === "economy"
+      ? flightData.economyAvailable
+      : flightData.businessAvailable;
+  if (availableSeats < data.groupSize) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: `Not enough seats available. Only ${totalAvailable} seats remaining.`,
+      message: `Not enough ${cabinClass} seats available. Only ${availableSeats} seats remaining.`,
     });
   }
 
@@ -125,6 +129,7 @@ export async function createGroupBookingRequest(
     organizerEmail: data.organizerEmail,
     organizerPhone: data.organizerPhone,
     groupSize: data.groupSize,
+    cabinClass,
     flightId: data.flightId,
     notes: data.notes,
     status: "pending",
@@ -243,7 +248,7 @@ export async function approveGroupBooking(
     });
   }
 
-  // Get flight pricing
+  // Get flight pricing and availability
   const flight = await db
     .select()
     .from(flights)
@@ -257,8 +262,28 @@ export async function approveGroupBooking(
     });
   }
 
-  // Calculate total price with discount (using economy price as base)
-  const basePrice = flight[0].economyPrice * booking.groupSize;
+  const flightData = flight[0];
+  const cabinClass = booking.cabinClass ?? "economy";
+
+  // Re-check seat availability before approving
+  const availableSeats =
+    cabinClass === "economy"
+      ? flightData.economyAvailable
+      : flightData.businessAvailable;
+
+  if (availableSeats < booking.groupSize) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Not enough ${cabinClass} seats available. Only ${availableSeats} seats remaining, but ${booking.groupSize} are needed.`,
+    });
+  }
+
+  // Calculate total price with discount using the correct cabin class price
+  const pricePerSeat =
+    cabinClass === "economy"
+      ? flightData.economyPrice
+      : flightData.businessPrice;
+  const basePrice = pricePerSeat * booking.groupSize;
   const discountAmount = Math.round(basePrice * (discountPercent / 100));
   const totalPrice = basePrice - discountAmount;
 
@@ -274,6 +299,23 @@ export async function approveGroupBooking(
       updatedAt: new Date(),
     })
     .where(eq(groupBookings.id, id));
+
+  // Decrement the flight's available seats
+  if (cabinClass === "economy") {
+    await db
+      .update(flights)
+      .set({
+        economyAvailable: sql`${flights.economyAvailable} - ${booking.groupSize}`,
+      })
+      .where(eq(flights.id, booking.flightId));
+  } else {
+    await db
+      .update(flights)
+      .set({
+        businessAvailable: sql`${flights.businessAvailable} - ${booking.groupSize}`,
+      })
+      .where(eq(flights.id, booking.flightId));
+  }
 
   // Return updated booking
   const updated = await getGroupBookingById(id);

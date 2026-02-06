@@ -4,8 +4,12 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { eq } from "drizzle-orm";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import * as splitPaymentService from "../services/split-payment.service";
+import { getDb } from "../db";
+import { bookings, paymentSplits } from "../../drizzle/schema";
 
 // Input schemas
 const splitPayerSchema = z.object({
@@ -44,7 +48,44 @@ export const splitPaymentsRouter = router({
         totalAmount: z.number(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Validate booking exists
+      const [booking] = await db
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+
+      if (!booking) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      }
+
+      // Validate booking belongs to the initiating user
+      if (booking.userId !== ctx.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You can only initiate split payments for your own bookings",
+        });
+      }
+
+      // Validate sum of split amounts equals booking total
+      const totalSplitAmount = input.splits.reduce(
+        (sum, s) => sum + s.amount,
+        0
+      );
+      if (totalSplitAmount !== booking.totalAmount) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Split amounts total (${totalSplitAmount}) must equal booking total (${booking.totalAmount})`,
+        });
+      }
+
       return await splitPaymentService.initiateSplitPayment(input);
     }),
 
@@ -238,6 +279,33 @@ export const splitPaymentsRouter = router({
         .nullable()
     )
     .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Check payment expiration before fetching full details
+      const [split] = await db
+        .select({
+          expiresAt: paymentSplits.expiresAt,
+          status: paymentSplits.status,
+        })
+        .from(paymentSplits)
+        .where(eq(paymentSplits.paymentToken, input.paymentToken))
+        .limit(1);
+
+      if (!split) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Payment not found",
+        });
+      }
+
+      if (split.expiresAt && new Date() > split.expiresAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This payment request has expired",
+        });
+      }
+
       return await splitPaymentService.getPayerPaymentDetails(
         input.paymentToken
       );
@@ -265,6 +333,33 @@ export const splitPaymentsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      // Check payment expiration before creating checkout session
+      const [split] = await db
+        .select({
+          expiresAt: paymentSplits.expiresAt,
+          status: paymentSplits.status,
+        })
+        .from(paymentSplits)
+        .where(eq(paymentSplits.paymentToken, input.paymentToken))
+        .limit(1);
+
+      if (!split) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Payment not found",
+        });
+      }
+
+      if (split.expiresAt && new Date() > split.expiresAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This payment request has expired",
+        });
+      }
+
       return await splitPaymentService.processPayerPayment(input.paymentToken);
     }),
 

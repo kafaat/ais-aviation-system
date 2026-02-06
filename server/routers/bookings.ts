@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import * as bookingsService from "../services/bookings.service";
 import * as db from "../db";
@@ -143,12 +144,15 @@ export const bookingsRouter = router({
     .query(async ({ ctx, input }) => {
       const booking = await db.getBookingByPNR(input.pnr);
       if (!booking) {
-        throw new Error("Booking not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       // Verify ownership
       if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
-        throw new Error("Access denied");
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
 
       return booking;
@@ -174,11 +178,14 @@ export const bookingsRouter = router({
       // First verify booking ownership
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
       if (!booking) {
-        throw new Error("Booking not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
-        throw new Error("Access denied");
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
 
       return await db.getPassengersByBookingId(input.bookingId);
@@ -261,20 +268,30 @@ export const bookingsRouter = router({
       // Verify booking ownership
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
       if (!booking) {
-        throw new Error("Booking not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       if (booking.userId !== ctx.user.id) {
-        throw new Error("Access denied");
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
 
       if (booking.paymentStatus !== "paid") {
-        throw new Error("Payment required before check-in");
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Payment required before check-in",
+        });
       }
 
       // Update seat assignments
       const database = await db.getDb();
-      if (!database) throw new Error("Database not available");
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       const { passengers, bookings } = await import("../../drizzle/schema");
       const { eq } = await import("drizzle-orm");

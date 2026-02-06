@@ -1916,6 +1916,9 @@ export const groupBookings = mysqlTable(
 
     // Group details
     groupSize: int("groupSize").notNull(), // Minimum 10 passengers
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"])
+      .default("economy")
+      .notNull(),
 
     // Flight reference
     flightId: int("flightId").notNull(),

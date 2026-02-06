@@ -37,6 +37,10 @@ export const groupBookingsRouter = router({
           .min(10, "Group size must be at least 10 passengers")
           .describe("Number of passengers in the group"),
         flightId: z.number().describe("ID of the flight to book"),
+        cabinClass: z
+          .enum(["economy", "business"])
+          .optional()
+          .describe("Cabin class for the group booking (defaults to economy)"),
         notes: z
           .string()
           .optional()
