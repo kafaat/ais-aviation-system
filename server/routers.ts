@@ -45,6 +45,9 @@ import { walletRouter } from "./routers/wallet";
 import { disruptionsRouter } from "./routers/disruptions";
 import { rebookingRouter } from "./routers/rebooking";
 import { travelScenariosRouter } from "./routers/travel-scenarios";
+import { dcsRouter } from "./routers/dcs";
+import { inventoryRouter } from "./routers/inventory.router";
+import { pricingRouter } from "./routers/pricing.router";
 
 /**
  * Main Application Router
@@ -110,6 +113,9 @@ export const appRouter = router({
   disruptions: disruptionsRouter,
   rebooking: rebookingRouter,
   travelScenarios: travelScenariosRouter,
+  dcs: dcsRouter,
+  inventory: inventoryRouter,
+  pricing: pricingRouter,
 });
 
 export type AppRouter = typeof appRouter;
