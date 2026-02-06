@@ -1,5 +1,44 @@
 # Changelog
 
+## What's Changed in v1.6.0
+
+### Features
+- feat: add rebooking from previous booking feature (5b73f4b)
+- feat: add 6 travel scenarios - pricing, validation, auto check-in, sharing, carbon, travel docs (86391d0)
+- feat: implement Phase 3 DCS (Departure Control System) (29b11b2)
+- feat: complete Phase 4 - payment history and soft delete for bookings (f9d94b8)
+
+### Bug Fixes
+- fix: resolve 5 pre-existing test failures in CI (5f4079d)
+- fixing pnpm dev error (d085ffc)
+- fixing pnpm dev error (6a18d36)
+- fix: resolve CI failures - vouchers reserved word and idempotency null check (47e7bf3)
+- fix: resolve test failures in CI (dbfcb3e)
+- fix: resolve remaining CI test failures (04130ec)
+- fix: rewrite idempotency to check-first approach for MySQL NULL handling (f4bc165)
+
+### Maintenance
+- chore: add pnpm mirror registry configuration (2548c13)
+- chore: add binary mirrors for blocked packages in .npmrc (ce4735b)
+- chore: remove unnecessary binary mirrors from .npmrc (be4837c)
+- chore(release): v1.5.0 (2243366)
+- chore: change OAuth server URL from manus.space to localhost (475dafc)
+- chore: fix CHANGELOG.md formatting for Prettier (5df7774)
+
+### Other Changes
+- style: format migration meta files (a31a226)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (8c1f92a)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (bcc677f)
+- style: fix Prettier formatting on files from main merge (8852e39)
+- Merge pull request #50 from kafaat/claude/implement-todo-zrBPj (1ebc785)
+- Merge pull request #51 from kafaat/claude/implement-todo-zrBPj (8f05a36)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.4.0...v1.6.0
+
+
+---
+
 ## What's Changed in v1.5.0
 
 ### Features
