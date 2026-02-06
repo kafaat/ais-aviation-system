@@ -1,5 +1,30 @@
 # Changelog
 
+## What's Changed in v1.5.0
+
+### Features
+- feat: add rebooking from previous booking feature (5b73f4b)
+- feat: add 6 travel scenarios - pricing, validation, auto check-in, sharing, carbon, travel docs (86391d0)
+
+### Bug Fixes
+- fix: resolve 5 pre-existing test failures in CI (5f4079d)
+
+### Maintenance
+- chore: add pnpm mirror registry configuration (2548c13)
+
+### Other Changes
+- style: format migration meta files (a31a226)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (8c1f92a)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (bcc677f)
+- style: fix Prettier formatting on files from main merge (8852e39)
+- Merge pull request #48 from kafaat/claude/implement-todo-zrBPj (69a72f5)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.4.0...v1.5.0
+
+
+---
+
 ## What's Changed in v1.4.0
 
 ### Features
