@@ -1,5 +1,33 @@
 # Changelog
 
+## What's Changed in v1.7.0
+
+### Features
+- feat: Phase 5 - AI guardrails, chat UX, and production enhancements (5cda54a)
+
+### Bug Fixes
+- fix: add shamefully-hoist for pnpm to fix E2E server startup (4d4bdf2)
+- fix: add server startup diagnostic and show E2E server output in CI (91da29c)
+- fix: capture server startup error output in E2E diagnostic step (efcb653)
+- fix: write server diagnostic to GITHUB_STEP_SUMMARY for visibility (6ae6e6d)
+- fix: output server crash details as GitHub annotations (2b2b24c)
+- fix: wrap OpenAPI document generation in try/catch to prevent server crash (92bf803)
+- fix: wrap createOpenApiExpressMiddleware in try/catch to prevent server crash (9ffa6ef)
+- fix: make E2E tests non-blocking and wrap OpenAPI middleware in try/catch (474c2ec)
+- fix: use dynamic imports for trpc-openapi to prevent server crash at startup (4ead878)
+
+### Maintenance
+- chore: fix CHANGELOG.md formatting after rebase (69268c7)
+
+### Other Changes
+- Merge pull request #52 from kafaat/claude/implement-todo-zrBPj (244bafc)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.6.0...v1.7.0
+
+
+---
+
 ## What's Changed in v1.6.0
 
 ### Features
