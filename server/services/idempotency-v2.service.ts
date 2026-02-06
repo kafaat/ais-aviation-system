@@ -55,6 +55,12 @@ export interface IdempotencyOptions<T> {
  * Calculate SHA256 hash of request payload
  */
 function calculateRequestHash(request: unknown): string {
+  if (request == null || typeof request !== "object") {
+    return crypto
+      .createHash("sha256")
+      .update(String(request ?? ""))
+      .digest("hex");
+  }
   const normalized = JSON.stringify(
     request,
     Object.keys(request as object).sort()
