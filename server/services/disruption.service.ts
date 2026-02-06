@@ -85,12 +85,7 @@ export async function getUserDisruptions(userId: number) {
       status: bookings.status,
     })
     .from(bookings)
-    .where(
-      and(
-        eq(bookings.userId, userId),
-        ne(bookings.status, "cancelled")
-      )
-    );
+    .where(and(eq(bookings.userId, userId), ne(bookings.status, "cancelled")));
 
   if (userBookings.length === 0) return [];
 
@@ -137,10 +132,7 @@ export async function getUserDisruptions(userId: number) {
 /**
  * Get alternative flights for rebooking after disruption
  */
-export async function getAlternativeFlights(
-  flightId: number,
-  _userId: number
-) {
+export async function getAlternativeFlights(flightId: number, _userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 

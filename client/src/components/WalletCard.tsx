@@ -118,9 +118,7 @@ export function WalletCard() {
         <Button
           onClick={() => handleTopUp(parseInt(customAmount) * 100)}
           disabled={
-            !customAmount ||
-            parseInt(customAmount) < 10 ||
-            topUp.isPending
+            !customAmount || parseInt(customAmount) < 10 || topUp.isPending
           }
           size="sm"
         >
@@ -159,7 +157,9 @@ export function WalletCard() {
                   className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/50"
                 >
                   <div className="flex items-center gap-2">
-                    {tx.type === "top_up" || tx.type === "refund" || tx.type === "bonus" ? (
+                    {tx.type === "top_up" ||
+                    tx.type === "refund" ||
+                    tx.type === "bonus" ? (
                       <ArrowUpCircle className="h-4 w-4 text-green-500" />
                     ) : tx.type === "payment" || tx.type === "withdrawal" ? (
                       <ArrowDownCircle className="h-4 w-4 text-red-500" />

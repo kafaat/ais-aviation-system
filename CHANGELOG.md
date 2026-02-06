@@ -16,8 +16,7 @@
 - style: fix prettier formatting (bdd140a)
 - Merge pull request #44 from kafaat/claude/add-claude-documentation-hFQZh (033032d)
 
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.3.2...v1.3.3
----
+## **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.3.2...v1.3.3
 
 ## What's Changed in v1.3.2
 

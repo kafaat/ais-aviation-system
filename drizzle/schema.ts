@@ -3104,12 +3104,7 @@ export const priceLocks = mysqlTable(
     lockFee: int("lockFee").notNull().default(0),
 
     // Lock status
-    status: mysqlEnum("status", [
-      "active",
-      "used",
-      "expired",
-      "cancelled",
-    ])
+    status: mysqlEnum("status", ["active", "used", "expired", "cancelled"])
       .default("active")
       .notNull(),
 
@@ -3188,9 +3183,7 @@ export const familyGroupMembers = mysqlTable(
     userId: int("userId").notNull(),
 
     // Role
-    role: mysqlEnum("role", ["owner", "member"])
-      .default("member")
-      .notNull(),
+    role: mysqlEnum("role", ["owner", "member"]).default("member").notNull(),
 
     // Contribution tracking
     milesContributed: int("milesContributed").notNull().default(0),

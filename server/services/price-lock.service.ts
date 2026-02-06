@@ -185,7 +185,10 @@ export async function expireOldLocks() {
     .update(priceLocks)
     .set({ status: "expired" })
     .where(
-      and(eq(priceLocks.status, "active"), sql`${priceLocks.expiresAt} < ${now}`)
+      and(
+        eq(priceLocks.status, "active"),
+        sql`${priceLocks.expiresAt} < ${now}`
+      )
     );
 
   return { expired: result[0].affectedRows };

@@ -31,11 +31,7 @@ export const walletRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await topUpWallet(
-          ctx.user.id,
-          input.amount,
-          "Wallet top-up"
-        );
+        return await topUpWallet(ctx.user.id, input.amount, "Wallet top-up");
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",

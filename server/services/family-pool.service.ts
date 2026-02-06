@@ -1,16 +1,9 @@
 import { getDb } from "../db";
-import {
-  familyGroups,
-  familyGroupMembers,
-  users,
-} from "../../drizzle/schema";
+import { familyGroups, familyGroupMembers, users } from "../../drizzle/schema";
 import { loyaltyAccounts } from "../../drizzle/loyalty-schema";
 import { eq, and, sql } from "drizzle-orm";
 
-export async function createFamilyGroup(
-  ownerId: number,
-  name: string
-) {
+export async function createFamilyGroup(ownerId: number, name: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -91,7 +84,8 @@ export async function addFamilyMember(
     )
     .limit(1);
 
-  if (!group) throw new Error("Family group not found or you are not the owner");
+  if (!group)
+    throw new Error("Family group not found or you are not the owner");
 
   // Check member count
   const members = await db
@@ -155,12 +149,11 @@ export async function removeFamilyMember(
   const [group] = await db
     .select()
     .from(familyGroups)
-    .where(
-      and(eq(familyGroups.id, groupId), eq(familyGroups.ownerId, ownerId))
-    )
+    .where(and(eq(familyGroups.id, groupId), eq(familyGroups.ownerId, ownerId)))
     .limit(1);
 
-  if (!group) throw new Error("Family group not found or you are not the owner");
+  if (!group)
+    throw new Error("Family group not found or you are not the owner");
 
   // Cannot remove self (owner)
   if (memberId === ownerId) {
@@ -226,7 +219,10 @@ export async function getMyFamilyGroup(userId: number) {
     })
     .from(familyGroupMembers)
     .innerJoin(users, eq(familyGroupMembers.userId, users.id))
-    .leftJoin(loyaltyAccounts, eq(familyGroupMembers.userId, loyaltyAccounts.userId))
+    .leftJoin(
+      loyaltyAccounts,
+      eq(familyGroupMembers.userId, loyaltyAccounts.userId)
+    )
     .where(
       and(
         eq(familyGroupMembers.groupId, membership.groupId),
@@ -323,12 +319,11 @@ export async function deleteFamilyGroup(ownerId: number, groupId: number) {
   const [group] = await db
     .select()
     .from(familyGroups)
-    .where(
-      and(eq(familyGroups.id, groupId), eq(familyGroups.ownerId, ownerId))
-    )
+    .where(and(eq(familyGroups.id, groupId), eq(familyGroups.ownerId, ownerId)))
     .limit(1);
 
-  if (!group) throw new Error("Family group not found or you are not the owner");
+  if (!group)
+    throw new Error("Family group not found or you are not the owner");
 
   // Remove all members
   await db
