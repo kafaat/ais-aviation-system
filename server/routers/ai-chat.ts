@@ -2,9 +2,11 @@
  * AI Chat Booking Router
  *
  * tRPC endpoints for AI-powered conversational booking (SkyLink-style)
+ * Includes guardrails: PII masking, content filtering, message validation
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import {
   startConversation,
@@ -14,6 +16,12 @@ import {
   selectSuggestion,
   getUserConversations,
 } from "../services/ai-chat-booking.service";
+import {
+  validateMessage,
+  sanitizeResponse,
+  getSuggestedMessages,
+  AI_LIMITS,
+} from "../services/ai-guardrails.service";
 
 export const aiChatRouter = router({
   /**
@@ -47,6 +55,7 @@ export const aiChatRouter = router({
 
   /**
    * Send a message in an existing conversation
+   * Applies guardrails: validation, PII masking, content filtering
    */
   sendMessage: protectedProcedure
     .input(
@@ -56,11 +65,27 @@ export const aiChatRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return sendMessage({
+      // Apply guardrails: validate and sanitize message
+      const validation = validateMessage(input.message);
+      if (!validation.valid) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: validation.error || "Invalid message",
+        });
+      }
+
+      // Send sanitized message (PII masked)
+      const result = await sendMessage({
         conversationId: input.conversationId,
         userId: ctx.user.id,
-        message: input.message,
+        message: validation.sanitized,
       });
+
+      // Sanitize AI response before returning
+      return {
+        ...result,
+        message: sanitizeResponse(result.message),
+      };
     }),
 
   /**
@@ -107,5 +132,44 @@ export const aiChatRouter = router({
    */
   myConversations: protectedProcedure.query(async ({ ctx }) => {
     return getUserConversations(ctx.user.id);
+  }),
+
+  /**
+   * Get suggested quick-reply messages based on conversation context
+   */
+  getQuickReplies: protectedProcedure
+    .input(
+      z
+        .object({
+          context: z
+            .object({
+              originId: z.number().optional(),
+              destinationId: z.number().optional(),
+              departureDate: z.string().optional(),
+              passengers: z.number().optional(),
+            })
+            .optional(),
+        })
+        .optional()
+    )
+    .query(({ input }) => {
+      return {
+        suggestions: getSuggestedMessages(input?.context),
+      };
+    }),
+
+  /**
+   * Get AI chat configuration (limits, features)
+   */
+  getConfig: protectedProcedure.query(() => {
+    return {
+      limits: AI_LIMITS,
+      features: {
+        suggestedMessages: true,
+        stopGeneration: true,
+        piiMasking: true,
+        contentFiltering: true,
+      },
+    };
   }),
 });

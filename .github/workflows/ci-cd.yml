@@ -330,6 +330,8 @@ jobs:
         run: pnpm exec drizzle-kit push --force
 
       - name: Build application
+        env:
+          VITE_APP_ID: ais-aviation-system-test
         run: pnpm run build
 
       - name: Run E2E tests
@@ -340,6 +342,11 @@ jobs:
           JWT_SECRET: test-secret-key-for-ci
           STRIPE_SECRET_KEY: sk_test_mock_key
           STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+          VITE_APP_ID: ais-aviation-system-test
+          OAUTH_SERVER_URL: http://localhost:3000
+          OWNER_OPEN_ID: test-owner-open-id
+          BUILT_IN_FORGE_API_URL: https://api.example.com
+          BUILT_IN_FORGE_API_KEY: test-forge-api-key
           CI: true
           E2E_BASE_URL: http://localhost:3000
         run: pnpm run test:e2e --project=chromium
