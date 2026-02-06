@@ -41,7 +41,8 @@ describe("Booking with Ancillaries Integration", () => {
       role: "user",
       openId: `test-booking-ancillary-${ts}`,
     });
-    testUserId = (userResult as any).insertId;
+    testUserId =
+      (userResult as any).insertId || (userResult as any)[0]?.insertId;
 
     // Create test airline
     await db.insert(airlines).values({
@@ -92,7 +93,8 @@ describe("Booking with Ancillaries Integration", () => {
       businessAvailable: 20,
       status: "scheduled",
     });
-    testFlightId = (flightResult as any).insertId;
+    testFlightId =
+      (flightResult as any).insertId || (flightResult as any)[0]?.insertId;
 
     // Create a test ancillary service
     testServiceId = await createAncillaryService({

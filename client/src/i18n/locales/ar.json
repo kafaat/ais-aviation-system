@@ -159,6 +159,88 @@
     "deselect": "إلغاء اختيار المقعد",
     "removeSeat": "إزالة المقعد"
   },
+  "priceLock": {
+    "lockPrice": "تثبيت السعر",
+    "success": "تم تثبيت السعر لمدة 48 ساعة!",
+    "alreadyLocked": "السعر مثبت بالفعل لهذه الرحلة",
+    "error": "فشل في تثبيت السعر",
+    "locked": "السعر مُثبّت",
+    "expiresIn": "ينتهي خلال {{hours}} ساعة",
+    "fee": "رسوم التثبيت"
+  },
+  "meal": {
+    "title": "اطلب وجبتك مسبقاً",
+    "subtitle": "اختر وجبتك لرحلتك. الوجبات المطلوبة مسبقاً يتم تحضيرها طازجة.",
+    "orderSuccess": "تم طلب الوجبة بنجاح!",
+    "orderError": "فشل في طلب الوجبة",
+    "noOptions": "لا توجد خيارات وجبات متاحة لهذه الرحلة"
+  },
+  "familyPool": {
+    "title": "مجمع أميال العائلة",
+    "subtitle": "شارك الأميال مع أفراد عائلتك",
+    "createGroup": "إنشاء مجموعة عائلية",
+    "groupName": "اسم المجموعة",
+    "addMember": "إضافة عضو",
+    "memberEmail": "البريد الإلكتروني للعضو",
+    "contribute": "المساهمة بالأميال",
+    "miles": "أميال",
+    "pooledMiles": "الأميال المجمعة",
+    "members": "الأعضاء",
+    "owner": "المالك",
+    "member": "عضو",
+    "removeMember": "إزالة",
+    "deleteGroup": "حذف المجموعة",
+    "noGroup": "ليس لديك مجموعة عائلية بعد",
+    "createSuccess": "تم إنشاء المجموعة العائلية!",
+    "addSuccess": "تم إضافة العضو بنجاح!",
+    "contributeSuccess": "تم المساهمة بالأميال في المجمع!",
+    "deleteSuccess": "تم حذف المجموعة العائلية"
+  },
+  "wallet": {
+    "title": "المحفظة الرقمية",
+    "quickTopUp": "شحن سريع",
+    "customAmount": "مبلغ مخصص (ريال)",
+    "topUpSuccess": "تم شحن المحفظة بمبلغ {{amount}} ريال",
+    "history": "سجل المعاملات",
+    "noTransactions": "لا توجد معاملات بعد",
+    "balance": "الرصيد",
+    "topUp": "شحن",
+    "payment": "دفع",
+    "refund": "استرداد"
+  },
+  "priceCalendar": {
+    "cheap": "رخيص",
+    "average": "متوسط",
+    "expensive": "مرتفع",
+    "bestPrice": "أفضل سعر"
+  },
+  "calendar": {
+    "jan": "يناير",
+    "feb": "فبراير",
+    "mar": "مارس",
+    "apr": "أبريل",
+    "may": "مايو",
+    "jun": "يونيو",
+    "jul": "يوليو",
+    "aug": "أغسطس",
+    "sep": "سبتمبر",
+    "oct": "أكتوبر",
+    "nov": "نوفمبر",
+    "dec": "ديسمبر"
+  },
+  "disruptions": {
+    "title": "اضطرابات الرحلات",
+    "noDisruptions": "لا توجد اضطرابات تؤثر على رحلاتك",
+    "findAlternatives": "البحث عن رحلات بديلة",
+    "noAlternatives": "لا توجد رحلات بديلة متاحة",
+    "alternativeFlights": "الرحلات البديلة",
+    "min": "دقيقة",
+    "severity": {
+      "minor": "طفيف",
+      "moderate": "متوسط",
+      "severe": "شديد"
+    }
+  },
   "myBookings": {
     "title": "حجوزاتي",
     "subtitle": "عرض وإدارة جميع حجوزاتك",
@@ -251,7 +333,11 @@
     "gate": "البوابة",
     "class": "الدرجة",
     "boardingPassNote": "يرجى الوصول إلى البوابة قبل 30 دقيقة على الأقل من موعد المغادرة",
-    "printBoardingPass": "طباعة بطاقة الصعود"
+    "printBoardingPass": "طباعة بطاقة الصعود",
+    "selectSeats": "اختر مقاعدك",
+    "seatAssignments": "توزيع المقاعد",
+    "autoAssign": "تعيين تلقائي",
+    "addToCalendar": "إضافة إلى التقويم"
   },
   "admin": {
     "title": "لوحة التحكم الإدارية",

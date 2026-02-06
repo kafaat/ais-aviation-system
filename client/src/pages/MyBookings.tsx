@@ -46,6 +46,7 @@ import { CancelBookingDialog } from "@/components/CancelBookingDialog";
 import {
   DownloadETicketButton,
   DownloadBoardingPassButton,
+  AddToCalendarButton,
 } from "@/components/DownloadTicketButtons";
 import { ModifyBookingDialog } from "@/components/ModifyBookingDialog";
 import { BookingAncillariesDisplay } from "@/components/BookingAncillariesDisplay";
@@ -772,6 +773,13 @@ export default function MyBookings() {
                                   )}
                                 </div>
                               </div>
+
+                              {/* Add to Calendar */}
+                              {booking.paymentStatus === "paid" && (
+                                <div className="flex justify-end">
+                                  <AddToCalendarButton bookingId={booking.id} />
+                                </div>
+                              )}
 
                               {/* Ancillaries Display */}
                               <BookingAncillariesDisplay

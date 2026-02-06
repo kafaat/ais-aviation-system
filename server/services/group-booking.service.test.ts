@@ -78,7 +78,8 @@ describe("Group Booking Service", () => {
       status: "scheduled",
     });
 
-    testFlightId = (flightResult as any).insertId;
+    testFlightId =
+      (flightResult as any).insertId || (flightResult as any)[0]?.insertId;
   });
 
   afterAll(async () => {

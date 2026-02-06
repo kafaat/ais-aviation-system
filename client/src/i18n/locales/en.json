@@ -160,6 +160,88 @@
     "deselect": "Deselect Seat",
     "removeSeat": "Remove seat"
   },
+  "priceLock": {
+    "lockPrice": "Lock Price",
+    "success": "Price locked for 48 hours!",
+    "alreadyLocked": "Price is already locked for this flight",
+    "error": "Failed to lock price",
+    "locked": "Price Locked",
+    "expiresIn": "Expires in {{hours}}h",
+    "fee": "Lock fee"
+  },
+  "meal": {
+    "title": "Pre-Order Your Meal",
+    "subtitle": "Select a meal for your flight. Pre-ordered meals are freshly prepared.",
+    "orderSuccess": "Meal pre-ordered successfully!",
+    "orderError": "Failed to pre-order meal",
+    "noOptions": "No meal options available for this flight"
+  },
+  "familyPool": {
+    "title": "Family Miles Pool",
+    "subtitle": "Share miles with your family members",
+    "createGroup": "Create Family Group",
+    "groupName": "Group Name",
+    "addMember": "Add Member",
+    "memberEmail": "Member Email",
+    "contribute": "Contribute Miles",
+    "miles": "miles",
+    "pooledMiles": "Pooled Miles",
+    "members": "Members",
+    "owner": "Owner",
+    "member": "Member",
+    "removeMember": "Remove",
+    "deleteGroup": "Delete Group",
+    "noGroup": "You don't have a family group yet",
+    "createSuccess": "Family group created!",
+    "addSuccess": "Member added successfully!",
+    "contributeSuccess": "Miles contributed to pool!",
+    "deleteSuccess": "Family group deleted"
+  },
+  "wallet": {
+    "title": "Digital Wallet",
+    "quickTopUp": "Quick top-up",
+    "customAmount": "Custom amount (SAR)",
+    "topUpSuccess": "Wallet topped up with {{amount}} SAR",
+    "history": "Transaction History",
+    "noTransactions": "No transactions yet",
+    "balance": "Balance",
+    "topUp": "Top Up",
+    "payment": "Payment",
+    "refund": "Refund"
+  },
+  "priceCalendar": {
+    "cheap": "Cheap",
+    "average": "Average",
+    "expensive": "Expensive",
+    "bestPrice": "Best price"
+  },
+  "calendar": {
+    "jan": "January",
+    "feb": "February",
+    "mar": "March",
+    "apr": "April",
+    "may": "May",
+    "jun": "June",
+    "jul": "July",
+    "aug": "August",
+    "sep": "September",
+    "oct": "October",
+    "nov": "November",
+    "dec": "December"
+  },
+  "disruptions": {
+    "title": "Flight Disruptions",
+    "noDisruptions": "No disruptions affecting your flights",
+    "findAlternatives": "Find Alternative Flights",
+    "noAlternatives": "No alternative flights available",
+    "alternativeFlights": "Alternative Flights",
+    "min": "min",
+    "severity": {
+      "minor": "Minor",
+      "moderate": "Moderate",
+      "severe": "Severe"
+    }
+  },
   "myBookings": {
     "title": "My Bookings",
     "subtitle": "View and manage all your bookings",
@@ -252,7 +334,11 @@
     "gate": "Gate",
     "class": "Class",
     "boardingPassNote": "Please arrive at the gate at least 30 minutes before departure",
-    "printBoardingPass": "Print Boarding Pass"
+    "printBoardingPass": "Print Boarding Pass",
+    "selectSeats": "Select Your Seats",
+    "seatAssignments": "Seat Assignments",
+    "autoAssign": "Auto-assign",
+    "addToCalendar": "Add to Calendar"
   },
   "analytics": {
     "title": "Analytics Dashboard",
