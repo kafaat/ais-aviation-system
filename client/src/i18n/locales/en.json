@@ -1950,5 +1950,25 @@
     "actions": "Actions",
     "restore": "Restore",
     "noDeleted": "No deleted bookings found"
+  },
+  "aiChat": {
+    "title": "AI Booking Assistant",
+    "subtitle": "Book flights with natural conversation",
+    "loginRequired": "Login Required",
+    "loginDescription": "Please log in to use the AI booking assistant.",
+    "welcomeTitle": "Your Smart Booking Assistant",
+    "welcomeDescription": "Chat naturally to search flights, compare prices, and book tickets. I understand Arabic and English.",
+    "startConversation": "Start Conversation",
+    "quickSuggestion": "Try asking",
+    "assistantName": "AIS Assistant",
+    "typing": "Typing...",
+    "online": "Online",
+    "newChat": "New Chat",
+    "placeholder": "Type your message... (Shift+Enter for new line)",
+    "stopGeneration": "Stop generating",
+    "flightSuggestions": "Flight suggestions for you:",
+    "disclaimer": "AI assistant may make mistakes. Always verify flight details before booking.",
+    "messageBlocked": "Message blocked by content filter",
+    "piiWarning": "Personal information was detected and masked for your safety"
   }
 }

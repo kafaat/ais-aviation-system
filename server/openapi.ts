@@ -1,17 +1,11 @@
 /**
  * OpenAPI Configuration for AIS Aviation System
  *
- * This module configures the OpenAPI (Swagger) documentation
- * for the tRPC API endpoints.
+ * OpenAPI document generation is deferred to avoid crashing the server
+ * at startup when trpc-openapi encounters unsupported procedure types.
  */
 
-import { generateOpenApiDocument } from "trpc-openapi";
-import { appRouter } from "./routers";
-
-/**
- * OpenAPI Document Configuration
- */
-export const openApiDocument = generateOpenApiDocument(appRouter, {
+const OPENAPI_CONFIG = {
   title: "AIS Aviation System API",
   description: `
 ## Overview
@@ -77,30 +71,63 @@ Base path: /api
   ],
   securitySchemes: {
     bearerAuth: {
-      type: "http",
+      type: "http" as const,
       scheme: "bearer",
       bearerFormat: "JWT",
       description: "JWT access token obtained from the login endpoint",
     },
     cookieAuth: {
-      type: "apiKey",
-      in: "cookie",
+      type: "apiKey" as const,
+      in: "cookie" as const,
       name: "ais_session",
       description: "Session cookie for web clients",
     },
   },
-});
+};
+
+const FALLBACK_DOC = {
+  openapi: "3.0.0",
+  info: {
+    title: OPENAPI_CONFIG.title,
+    version: OPENAPI_CONFIG.version,
+    description: "OpenAPI documentation temporarily unavailable.",
+  },
+  paths: {},
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cachedDoc: any = null;
+
+/**
+ * Lazily generate and return the OpenAPI document.
+ * Uses dynamic import() to avoid loading trpc-openapi at module level.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getOpenApiDocument(): Promise<any> {
+  if (cachedDoc) return cachedDoc;
+
+  try {
+    const { generateOpenApiDocument } = await import("trpc-openapi");
+    const { appRouter } = await import("./routers");
+
+    cachedDoc = generateOpenApiDocument(appRouter, OPENAPI_CONFIG);
+  } catch (error) {
+    console.warn(
+      "[OpenAPI] Failed to generate OpenAPI document:",
+      error instanceof Error ? error.message : error
+    );
+    cachedDoc = FALLBACK_DOC;
+  }
+
+  return cachedDoc;
+}
 
 /**
  * OpenAPI specification as JSON string
  */
-export function getOpenApiSpec(): string {
-  return JSON.stringify(openApiDocument, null, 2);
+export async function getOpenApiSpec(): Promise<string> {
+  const doc = await getOpenApiDocument();
+  return JSON.stringify(doc, null, 2);
 }
 
-/**
- * OpenAPI specification object
- */
-export function getOpenApiDocument() {
-  return openApiDocument;
-}
+export { OPENAPI_CONFIG, FALLBACK_DOC };

@@ -28,6 +28,7 @@ const MultiCityResults = lazy(() => import("./pages/MultiCityResults"));
 const LiveFlightTracking = lazy(() => import("./pages/LiveFlightTracking"));
 const RebookPage = lazy(() => import("./pages/RebookPage"));
 const PaymentHistory = lazy(() => import("./pages/PaymentHistory"));
+const AiChat = lazy(() => import("./pages/AiChat"));
 
 // Admin pages
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
@@ -222,6 +223,12 @@ function Router() {
           <Route path="/payment-history">
             <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
               <PaymentHistory />
+            </Suspense>
+          </Route>
+
+          <Route path="/ai-chat">
+            <Suspense fallback={<PageLoadingFallback variant="default" />}>
+              <AiChat />
             </Suspense>
           </Route>
 
