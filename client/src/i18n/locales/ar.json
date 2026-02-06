@@ -196,6 +196,43 @@
     "contributeSuccess": "تم المساهمة بالأميال في المجمع!",
     "deleteSuccess": "تم حذف المجموعة العائلية"
   },
+  "wallet": {
+    "title": "المحفظة الرقمية",
+    "quickTopUp": "شحن سريع",
+    "customAmount": "مبلغ مخصص (ريال)",
+    "topUpSuccess": "تم شحن المحفظة بمبلغ {{amount}} ريال",
+    "history": "سجل المعاملات",
+    "noTransactions": "لا توجد معاملات بعد",
+    "balance": "الرصيد",
+    "topUp": "شحن",
+    "payment": "دفع",
+    "refund": "استرداد"
+  },
+  "priceCalendar": {
+    "cheap": "رخيص",
+    "average": "متوسط",
+    "expensive": "مرتفع",
+    "bestPrice": "أفضل سعر"
+  },
+  "calendar": {
+    "jan": "يناير", "feb": "فبراير", "mar": "مارس",
+    "apr": "أبريل", "may": "مايو", "jun": "يونيو",
+    "jul": "يوليو", "aug": "أغسطس", "sep": "سبتمبر",
+    "oct": "أكتوبر", "nov": "نوفمبر", "dec": "ديسمبر"
+  },
+  "disruptions": {
+    "title": "اضطرابات الرحلات",
+    "noDisruptions": "لا توجد اضطرابات تؤثر على رحلاتك",
+    "findAlternatives": "البحث عن رحلات بديلة",
+    "noAlternatives": "لا توجد رحلات بديلة متاحة",
+    "alternativeFlights": "الرحلات البديلة",
+    "min": "دقيقة",
+    "severity": {
+      "minor": "طفيف",
+      "moderate": "متوسط",
+      "severe": "شديد"
+    }
+  },
   "myBookings": {
     "title": "حجوزاتي",
     "subtitle": "عرض وإدارة جميع حجوزاتك",

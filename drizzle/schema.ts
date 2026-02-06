@@ -3218,3 +3218,141 @@ export const familyGroupMembers = mysqlTable(
 
 export type FamilyGroupMember = typeof familyGroupMembers.$inferSelect;
 export type InsertFamilyGroupMember = typeof familyGroupMembers.$inferInsert;
+
+// ============================================================================
+// Digital Wallet System
+// ============================================================================
+
+/**
+ * Wallets table
+ * Stores user wallet balances for quick payments and refunds
+ */
+export const wallets = mysqlTable(
+  "wallets",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull().unique(),
+
+    // Balance (SAR cents)
+    balance: int("balance").notNull().default(0),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+
+    // Status
+    status: mysqlEnum("status", ["active", "frozen", "closed"])
+      .default("active")
+      .notNull(),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    userIdx: index("wallets_user_idx").on(table.userId),
+    statusIdx: index("wallets_status_idx").on(table.status),
+  })
+);
+
+export type Wallet = typeof wallets.$inferSelect;
+export type InsertWallet = typeof wallets.$inferInsert;
+
+/**
+ * Wallet Transactions table
+ * Tracks all wallet transactions (top-up, payment, refund)
+ */
+export const walletTransactions = mysqlTable(
+  "wallet_transactions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    walletId: int("walletId").notNull(),
+    userId: int("userId").notNull(),
+
+    // Transaction type
+    type: mysqlEnum("type", [
+      "top_up",
+      "payment",
+      "refund",
+      "bonus",
+      "withdrawal",
+    ]).notNull(),
+
+    // Amount (positive for top_up/refund/bonus, negative for payment/withdrawal)
+    amount: int("amount").notNull(),
+    balanceAfter: int("balanceAfter").notNull(),
+
+    // Description
+    description: varchar("description", { length: 500 }).notNull(),
+
+    // Related entities
+    bookingId: int("bookingId"),
+    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+
+    // Status
+    status: mysqlEnum("status", ["completed", "pending", "failed"])
+      .default("completed")
+      .notNull(),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    walletIdx: index("wallet_transactions_wallet_idx").on(table.walletId),
+    userIdx: index("wallet_transactions_user_idx").on(table.userId),
+    typeIdx: index("wallet_transactions_type_idx").on(table.type),
+    bookingIdx: index("wallet_transactions_booking_idx").on(table.bookingId),
+    createdAtIdx: index("wallet_transactions_created_at_idx").on(
+      table.createdAt
+    ),
+  })
+);
+
+export type WalletTransaction = typeof walletTransactions.$inferSelect;
+export type InsertWalletTransaction = typeof walletTransactions.$inferInsert;
+
+// ============================================================================
+// Flight Disruption Management
+// ============================================================================
+
+/**
+ * Flight Disruptions table
+ * Tracks flight disruptions (delays, cancellations) with rebooking options
+ */
+export const flightDisruptions = mysqlTable(
+  "flight_disruptions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+
+    // Disruption type
+    type: mysqlEnum("type", ["delay", "cancellation", "diversion"]).notNull(),
+
+    // Details
+    reason: varchar("reason", { length: 500 }).notNull(),
+    severity: mysqlEnum("severity", ["minor", "moderate", "severe"]).notNull(),
+
+    // Delay info
+    originalDepartureTime: timestamp("originalDepartureTime"),
+    newDepartureTime: timestamp("newDepartureTime"),
+    delayMinutes: int("delayMinutes"),
+
+    // Status
+    status: mysqlEnum("status", ["active", "resolved", "cancelled"])
+      .default("active")
+      .notNull(),
+
+    // Admin
+    createdBy: int("createdBy"),
+    resolvedAt: timestamp("resolvedAt"),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    flightIdx: index("flight_disruptions_flight_idx").on(table.flightId),
+    typeIdx: index("flight_disruptions_type_idx").on(table.type),
+    statusIdx: index("flight_disruptions_status_idx").on(table.status),
+    createdAtIdx: index("flight_disruptions_created_at_idx").on(
+      table.createdAt
+    ),
+  })
+);
+
+export type FlightDisruption = typeof flightDisruptions.$inferSelect;
+export type InsertFlightDisruption = typeof flightDisruptions.$inferInsert;

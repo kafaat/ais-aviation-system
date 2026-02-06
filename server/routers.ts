@@ -41,6 +41,8 @@ import { gatesRouter } from "./routers/gates";
 import { vouchersRouter } from "./routers/vouchers";
 import { priceLockRouter } from "./routers/price-lock";
 import { familyPoolRouter } from "./routers/family-pool";
+import { walletRouter } from "./routers/wallet";
+import { disruptionsRouter } from "./routers/disruptions";
 
 /**
  * Main Application Router
@@ -102,6 +104,8 @@ export const appRouter = router({
   vouchers: vouchersRouter,
   priceLock: priceLockRouter,
   familyPool: familyPoolRouter,
+  wallet: walletRouter,
+  disruptions: disruptionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

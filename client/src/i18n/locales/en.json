@@ -197,6 +197,43 @@
     "contributeSuccess": "Miles contributed to pool!",
     "deleteSuccess": "Family group deleted"
   },
+  "wallet": {
+    "title": "Digital Wallet",
+    "quickTopUp": "Quick top-up",
+    "customAmount": "Custom amount (SAR)",
+    "topUpSuccess": "Wallet topped up with {{amount}} SAR",
+    "history": "Transaction History",
+    "noTransactions": "No transactions yet",
+    "balance": "Balance",
+    "topUp": "Top Up",
+    "payment": "Payment",
+    "refund": "Refund"
+  },
+  "priceCalendar": {
+    "cheap": "Cheap",
+    "average": "Average",
+    "expensive": "Expensive",
+    "bestPrice": "Best price"
+  },
+  "calendar": {
+    "jan": "January", "feb": "February", "mar": "March",
+    "apr": "April", "may": "May", "jun": "June",
+    "jul": "July", "aug": "August", "sep": "September",
+    "oct": "October", "nov": "November", "dec": "December"
+  },
+  "disruptions": {
+    "title": "Flight Disruptions",
+    "noDisruptions": "No disruptions affecting your flights",
+    "findAlternatives": "Find Alternative Flights",
+    "noAlternatives": "No alternative flights available",
+    "alternativeFlights": "Alternative Flights",
+    "min": "min",
+    "severity": {
+      "minor": "Minor",
+      "moderate": "Moderate",
+      "severe": "Severe"
+    }
+  },
   "myBookings": {
     "title": "My Bookings",
     "subtitle": "View and manage all your bookings",
