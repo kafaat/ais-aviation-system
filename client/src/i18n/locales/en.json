@@ -160,6 +160,43 @@
     "deselect": "Deselect Seat",
     "removeSeat": "Remove seat"
   },
+  "priceLock": {
+    "lockPrice": "Lock Price",
+    "success": "Price locked for 48 hours!",
+    "alreadyLocked": "Price is already locked for this flight",
+    "error": "Failed to lock price",
+    "locked": "Price Locked",
+    "expiresIn": "Expires in {{hours}}h",
+    "fee": "Lock fee"
+  },
+  "meal": {
+    "title": "Pre-Order Your Meal",
+    "subtitle": "Select a meal for your flight. Pre-ordered meals are freshly prepared.",
+    "orderSuccess": "Meal pre-ordered successfully!",
+    "orderError": "Failed to pre-order meal",
+    "noOptions": "No meal options available for this flight"
+  },
+  "familyPool": {
+    "title": "Family Miles Pool",
+    "subtitle": "Share miles with your family members",
+    "createGroup": "Create Family Group",
+    "groupName": "Group Name",
+    "addMember": "Add Member",
+    "memberEmail": "Member Email",
+    "contribute": "Contribute Miles",
+    "miles": "miles",
+    "pooledMiles": "Pooled Miles",
+    "members": "Members",
+    "owner": "Owner",
+    "member": "Member",
+    "removeMember": "Remove",
+    "deleteGroup": "Delete Group",
+    "noGroup": "You don't have a family group yet",
+    "createSuccess": "Family group created!",
+    "addSuccess": "Member added successfully!",
+    "contributeSuccess": "Miles contributed to pool!",
+    "deleteSuccess": "Family group deleted"
+  },
   "myBookings": {
     "title": "My Bookings",
     "subtitle": "View and manage all your bookings",

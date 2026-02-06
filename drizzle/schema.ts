@@ -3079,3 +3079,142 @@ export const creditUsage = mysqlTable(
 
 export type CreditUsage = typeof creditUsage.$inferSelect;
 export type InsertCreditUsage = typeof creditUsage.$inferInsert;
+
+// ============================================================================
+// Price Lock System
+// ============================================================================
+
+/**
+ * Price Locks table
+ * Allows users to freeze a flight price for 48 hours before booking
+ */
+export const priceLocks = mysqlTable(
+  "price_locks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    flightId: int("flightId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+
+    // Locked price (SAR cents)
+    lockedPrice: int("lockedPrice").notNull(),
+    originalPrice: int("originalPrice").notNull(),
+
+    // Lock fee (SAR cents) - small fee to lock the price
+    lockFee: int("lockFee").notNull().default(0),
+
+    // Lock status
+    status: mysqlEnum("status", [
+      "active",
+      "used",
+      "expired",
+      "cancelled",
+    ])
+      .default("active")
+      .notNull(),
+
+    // Resulting booking
+    bookingId: int("bookingId"),
+
+    // Expiry
+    expiresAt: timestamp("expiresAt").notNull(),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    userIdx: index("price_locks_user_idx").on(table.userId),
+    flightIdx: index("price_locks_flight_idx").on(table.flightId),
+    statusIdx: index("price_locks_status_idx").on(table.status),
+    expiresAtIdx: index("price_locks_expires_at_idx").on(table.expiresAt),
+    userFlightIdx: index("price_locks_user_flight_idx").on(
+      table.userId,
+      table.flightId,
+      table.cabinClass
+    ),
+  })
+);
+
+export type PriceLock = typeof priceLocks.$inferSelect;
+export type InsertPriceLock = typeof priceLocks.$inferInsert;
+
+// ============================================================================
+// Family Mile Pooling System
+// ============================================================================
+
+/**
+ * Family Groups table
+ * Groups for sharing loyalty miles among family members
+ */
+export const familyGroups = mysqlTable(
+  "family_groups",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    name: varchar("name", { length: 255 }).notNull(),
+    ownerId: int("ownerId").notNull(), // Head of family
+
+    // Pool balance (aggregated from members)
+    pooledMiles: int("pooledMiles").notNull().default(0),
+
+    // Limits
+    maxMembers: int("maxMembers").notNull().default(6),
+
+    // Status
+    status: mysqlEnum("status", ["active", "inactive"])
+      .default("active")
+      .notNull(),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    ownerIdx: index("family_groups_owner_idx").on(table.ownerId),
+    statusIdx: index("family_groups_status_idx").on(table.status),
+  })
+);
+
+export type FamilyGroup = typeof familyGroups.$inferSelect;
+export type InsertFamilyGroup = typeof familyGroups.$inferInsert;
+
+/**
+ * Family Group Members table
+ * Links users to family groups
+ */
+export const familyGroupMembers = mysqlTable(
+  "family_group_members",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    groupId: int("groupId").notNull(),
+    userId: int("userId").notNull(),
+
+    // Role
+    role: mysqlEnum("role", ["owner", "member"])
+      .default("member")
+      .notNull(),
+
+    // Contribution tracking
+    milesContributed: int("milesContributed").notNull().default(0),
+    milesRedeemed: int("milesRedeemed").notNull().default(0),
+
+    // Status
+    status: mysqlEnum("status", ["active", "invited", "removed"])
+      .default("active")
+      .notNull(),
+
+    joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    groupIdx: index("family_group_members_group_idx").on(table.groupId),
+    userIdx: index("family_group_members_user_idx").on(table.userId),
+    statusIdx: index("family_group_members_status_idx").on(table.status),
+    groupUserIdx: index("family_group_members_group_user_idx").on(
+      table.groupId,
+      table.userId
+    ),
+  })
+);
+
+export type FamilyGroupMember = typeof familyGroupMembers.$inferSelect;
+export type InsertFamilyGroupMember = typeof familyGroupMembers.$inferInsert;

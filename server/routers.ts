@@ -39,6 +39,8 @@ import { travelAgentRouter } from "./routers/travel-agent";
 import { smsRouter } from "./routers/sms";
 import { gatesRouter } from "./routers/gates";
 import { vouchersRouter } from "./routers/vouchers";
+import { priceLockRouter } from "./routers/price-lock";
+import { familyPoolRouter } from "./routers/family-pool";
 
 /**
  * Main Application Router
@@ -98,6 +100,8 @@ export const appRouter = router({
   sms: smsRouter,
   gates: gatesRouter,
   vouchers: vouchersRouter,
+  priceLock: priceLockRouter,
+  familyPool: familyPoolRouter,
 });
 
 export type AppRouter = typeof appRouter;
