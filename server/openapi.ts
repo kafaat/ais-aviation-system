@@ -1,24 +1,13 @@
 /**
  * OpenAPI Configuration for AIS Aviation System
  *
- * This module configures the OpenAPI (Swagger) documentation
- * for the tRPC API endpoints.
+ * OpenAPI document generation is deferred to avoid crashing the server
+ * at startup when trpc-openapi encounters unsupported procedure types.
  */
 
-import { generateOpenApiDocument } from "trpc-openapi";
-import { appRouter } from "./routers";
-
-/**
- * OpenAPI Document Configuration
- * Wrapped in try/catch to prevent server crash if any procedure type
- * is not supported by trpc-openapi (e.g., procedures without OpenAPI meta)
- */
-let openApiDoc: ReturnType<typeof generateOpenApiDocument>;
-
-try {
-  openApiDoc = generateOpenApiDocument(appRouter, {
-    title: "AIS Aviation System API",
-    description: `
+const OPENAPI_CONFIG = {
+  title: "AIS Aviation System API",
+  description: `
 ## Overview
 
 The AIS (Aviation Information System) API provides comprehensive endpoints for flight booking and management operations.
@@ -60,70 +49,85 @@ All responses follow a consistent format:
 Current API version: 1.0.0
 Base path: /api
   `.trim(),
-    version: "1.0.0",
-    baseUrl: process.env.API_BASE_URL || "http://localhost:3000/api",
-    docsUrl: "/api/docs",
-    tags: [
-      "Authentication",
-      "Flights",
-      "Bookings",
-      "Payments",
-      "Refunds",
-      "Loyalty",
-      "User Preferences",
-      "Favorites",
-      "Reviews",
-      "E-Tickets",
-      "Ancillary Services",
-      "Admin",
-      "Analytics",
-      "Health",
-      "Reference Data",
-    ],
-    securitySchemes: {
-      bearerAuth: {
-        type: "http",
-        scheme: "bearer",
-        bearerFormat: "JWT",
-        description: "JWT access token obtained from the login endpoint",
-      },
-      cookieAuth: {
-        type: "apiKey",
-        in: "cookie",
-        name: "ais_session",
-        description: "Session cookie for web clients",
-      },
+  version: "1.0.0",
+  baseUrl: process.env.API_BASE_URL || "http://localhost:3000/api",
+  docsUrl: "/api/docs",
+  tags: [
+    "Authentication",
+    "Flights",
+    "Bookings",
+    "Payments",
+    "Refunds",
+    "Loyalty",
+    "User Preferences",
+    "Favorites",
+    "Reviews",
+    "E-Tickets",
+    "Ancillary Services",
+    "Admin",
+    "Analytics",
+    "Health",
+    "Reference Data",
+  ],
+  securitySchemes: {
+    bearerAuth: {
+      type: "http" as const,
+      scheme: "bearer",
+      bearerFormat: "JWT",
+      description: "JWT access token obtained from the login endpoint",
     },
-  });
-} catch (error) {
-  console.warn(
-    "[OpenAPI] Failed to generate OpenAPI document:",
-    error instanceof Error ? error.message : error
-  );
-  // Provide a minimal fallback document so the server can still start
-  openApiDoc = {
-    openapi: "3.0.0",
-    info: {
-      title: "AIS Aviation System API",
-      version: "1.0.0",
-      description: "OpenAPI documentation temporarily unavailable.",
+    cookieAuth: {
+      type: "apiKey" as const,
+      in: "cookie" as const,
+      name: "ais_session",
+      description: "Session cookie for web clients",
     },
-    paths: {},
-  } as ReturnType<typeof generateOpenApiDocument>;
-}
+  },
+};
 
-export const openApiDocument = openApiDoc;
+const FALLBACK_DOC = {
+  openapi: "3.0.0",
+  info: {
+    title: OPENAPI_CONFIG.title,
+    version: OPENAPI_CONFIG.version,
+    description: "OpenAPI documentation temporarily unavailable.",
+  },
+  paths: {},
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let cachedDoc: any = null;
+
+/**
+ * Lazily generate and return the OpenAPI document.
+ * Uses dynamic import() to avoid loading trpc-openapi at module level.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getOpenApiDocument(): Promise<any> {
+  if (cachedDoc) return cachedDoc;
+
+  try {
+    const { generateOpenApiDocument } = await import("trpc-openapi");
+    const { appRouter } = await import("./routers");
+
+    cachedDoc = generateOpenApiDocument(appRouter, OPENAPI_CONFIG);
+  } catch (error) {
+    console.warn(
+      "[OpenAPI] Failed to generate OpenAPI document:",
+      error instanceof Error ? error.message : error
+    );
+    cachedDoc = FALLBACK_DOC;
+  }
+
+  return cachedDoc;
+}
 
 /**
  * OpenAPI specification as JSON string
  */
-export function getOpenApiSpec(): string {
-  return JSON.stringify(openApiDocument, null, 2);
+export async function getOpenApiSpec(): Promise<string> {
+  const doc = await getOpenApiDocument();
+  return JSON.stringify(doc, null, 2);
 }
 
-/**
- * OpenAPI specification object
- */
-export function getOpenApiDocument() {
-  return openApiDocument;
-}
+export { OPENAPI_CONFIG, FALLBACK_DOC };

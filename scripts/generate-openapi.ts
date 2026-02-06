@@ -34,7 +34,7 @@ async function generateOpenApiDocs(): Promise<void> {
 
   try {
     // Generate the OpenAPI specification
-    const openApiSpec = getOpenApiSpec();
+    const openApiSpec = await getOpenApiSpec();
 
     // Parse to validate and get metadata
     const specObject = JSON.parse(openApiSpec);

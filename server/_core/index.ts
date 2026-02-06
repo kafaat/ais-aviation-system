@@ -7,7 +7,6 @@ import { createServer } from "http";
 import net from "net";
 import helmet from "helmet";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { createOpenApiExpressMiddleware } from "trpc-openapi";
 import swaggerUi from "swagger-ui-express";
 import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
@@ -30,7 +29,7 @@ import {
 } from "./middleware/apm.middleware";
 import { getPrometheusMetrics } from "../services/apm.service";
 import { createServiceLogger } from "./logger";
-import { openApiDocument } from "../openapi";
+import { getOpenApiDocument } from "../openapi";
 
 // Create server-specific logger
 const log = createServiceLogger("server");
@@ -175,10 +174,11 @@ async function startServer() {
   // API Documentation (Swagger UI)
   // =========================================================================
 
-  // Serve OpenAPI specification as JSON
-  app.get("/api/openapi.json", (_req, res) => {
+  // Serve OpenAPI specification as JSON (lazy generation)
+  app.get("/api/openapi.json", async (_req, res) => {
+    const doc = await getOpenApiDocument();
     res.setHeader("Content-Type", "application/json");
-    res.send(openApiDocument);
+    res.json(doc);
   });
 
   // Swagger UI options
@@ -190,6 +190,7 @@ async function startServer() {
     customSiteTitle: "AIS Aviation API Documentation",
     customfavIcon: "/favicon.ico",
     swaggerOptions: {
+      url: "/api/openapi.json",
       persistAuthorization: true,
       displayRequestDuration: true,
       filter: true,
@@ -201,35 +202,42 @@ async function startServer() {
     },
   };
 
-  // Serve Swagger UI at /api/docs
+  // Serve Swagger UI at /api/docs (uses url option to fetch spec lazily)
   app.use(
     "/api/docs",
     swaggerUi.serve,
-    swaggerUi.setup(openApiDocument, swaggerUiOptions)
+    swaggerUi.setup(null, swaggerUiOptions)
   );
 
-  // OpenAPI REST endpoints (alternative to tRPC for REST clients)
-  // Wrapped in try/catch because createOpenApiExpressMiddleware internally calls
-  // generateOpenApiDocument which throws for procedures without OpenAPI meta
-  try {
-    app.use(
-      "/api/rest",
-      createOpenApiExpressMiddleware({
-        router: appRouter,
-        createContext,
-        maxBodySize: 50 * 1024 * 1024, // 50MB to match express.json limit
-        responseMeta: undefined,
-        onError: ({ error, path }: { error: Error; path: string }) => {
-          log.error({ error: error.message, path }, "OpenAPI REST error");
-        },
-      })
-    );
-  } catch (error) {
-    log.warn(
-      { error: error instanceof Error ? error.message : error },
-      "OpenAPI REST middleware could not be initialized, REST endpoints disabled"
-    );
-  }
+  // OpenAPI REST endpoints - initialized lazily to avoid startup crash
+  // from trpc-openapi "Unknown procedure type" error
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let restMiddleware: any = null;
+  app.use("/api/rest", async (req, res, next) => {
+    try {
+      if (!restMiddleware) {
+        const { createOpenApiExpressMiddleware } = await import("trpc-openapi");
+        restMiddleware = createOpenApiExpressMiddleware({
+          router: appRouter,
+          createContext,
+          maxBodySize: 50 * 1024 * 1024,
+          responseMeta: undefined,
+          onError: ({ error, path }: { error: Error; path: string }) => {
+            log.error({ error: error.message, path }, "OpenAPI REST error");
+          },
+        });
+      }
+      restMiddleware(req, res, next);
+    } catch (error) {
+      log.warn(
+        { error: error instanceof Error ? error.message : error },
+        "OpenAPI REST endpoint error"
+      );
+      res.status(503).json({
+        error: "REST API temporarily unavailable. Use /api/trpc instead.",
+      });
+    }
+  });
 
   // tRPC API with per-user rate limiting
   // Uses user ID for authenticated users, IP for anonymous users
