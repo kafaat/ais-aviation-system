@@ -34,7 +34,12 @@ function createAuthContext(): { ctx: TrpcContext } {
   return { ctx };
 }
 
-describe("Stripe Payment Integration", () => {
+// Skip Stripe tests if no real API key is configured
+const stripeKey = process.env.STRIPE_SECRET_KEY || "";
+const hasRealStripeKey =
+  stripeKey.startsWith("sk_test_") && stripeKey.length > 20;
+
+describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
   let testBookingId: number;
   // Generate unique 6-character references using timestamp last 3 digits + random
   const uniqueRef = `T${Date.now().toString().slice(-3)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;

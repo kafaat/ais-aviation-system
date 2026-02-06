@@ -8,6 +8,7 @@ import {
   decimal,
   boolean,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 /**
@@ -1167,7 +1168,7 @@ export const idempotencyRequests = mysqlTable(
   },
   table => ({
     // Unique constraint on scope + userId + idempotencyKey
-    scopeUserKeyIdx: index("idempotency_scope_user_key_idx").on(
+    scopeUserKeyIdx: uniqueIndex("idempotency_scope_user_key_idx").on(
       table.scope,
       table.userId,
       table.idempotencyKey
