@@ -19,6 +19,16 @@ import { eq, and, lt, isNull } from "drizzle-orm";
 import { AppError, ErrorCode } from "../_core/errors";
 
 /**
+ * Custom error for idempotency conflicts
+ */
+export class IdempotencyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "IdempotencyError";
+  }
+}
+
+/**
  * Idempotency scopes for different operations
  */
 export enum IdempotencyScope {
@@ -55,6 +65,12 @@ export interface IdempotencyOptions<T> {
  * Calculate SHA256 hash of request payload
  */
 function calculateRequestHash(request: unknown): string {
+  if (request == null || typeof request !== "object") {
+    return crypto
+      .createHash("sha256")
+      .update(String(request ?? ""))
+      .digest("hex");
+  }
   const normalized = JSON.stringify(
     request,
     Object.keys(request as object).sort()
@@ -94,94 +110,48 @@ export async function withIdempotency<T>(
   const requestHash = calculateRequestHash(opts.request);
   const expiresAt = new Date(Date.now() + (opts.ttlSeconds ?? 3600) * 1000);
 
-  // 2. Try to insert idempotency record (atomic)
-  try {
-    await db.insert(idempotencyRequests).values({
-      scope: opts.scope,
-      idempotencyKey: opts.key,
-      userId: opts.userId,
-      requestHash,
-      status: "STARTED",
-      expiresAt,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  } catch (err: any) {
-    // On conflict (duplicate key), fetch existing record
-    const isConflict =
-      err.code === "ER_DUP_ENTRY" || // MySQL
-      err.code === "23505" || // PostgreSQL
-      err.code === "23000"; // MySQL/TiDB
-
-    if (!isConflict) {
-      throw err; // Unexpected error
-    }
-
-    // Fetch existing record
-    const existingResults = await db
-      .select()
-      .from(idempotencyRequests)
-      .where(
-        and(
-          eq(idempotencyRequests.scope, opts.scope),
-          eq(idempotencyRequests.idempotencyKey, opts.key),
-          opts.userId !== null
-            ? eq(idempotencyRequests.userId, opts.userId)
-            : isNull(idempotencyRequests.userId)
-        )
+  // 2. Check for existing idempotency record first
+  //    (MySQL unique indexes treat NULL as distinct, so we must SELECT first)
+  const existingResults = await db
+    .select()
+    .from(idempotencyRequests)
+    .where(
+      and(
+        eq(idempotencyRequests.scope, opts.scope),
+        eq(idempotencyRequests.idempotencyKey, opts.key),
+        opts.userId !== null
+          ? eq(idempotencyRequests.userId, opts.userId)
+          : isNull(idempotencyRequests.userId)
       )
-      .limit(1);
+    )
+    .limit(1);
 
-    const existing = existingResults[0];
+  const existing = existingResults[0];
 
-    if (!existing) {
-      // Race condition - record was deleted between insert and select
-      // Retry by re-throwing to trigger retry logic
-      throw new AppError(
-        ErrorCode.INTERNAL_ERROR,
-        "Idempotency record not found after conflict"
-      );
-    }
-
+  if (existing) {
     // Payload mismatch protection
     if (existing.requestHash !== requestHash) {
-      throw new AppError(
-        ErrorCode.IDEMPOTENCY_CONFLICT,
-        "Idempotency key reused with different payload",
-        { existingHash: existing.requestHash, newHash: requestHash }
+      throw new IdempotencyError(
+        "Idempotency key reused with different payload"
       );
     }
 
     // Return cached response if completed
     if (existing.status === "COMPLETED" && existing.responseJson) {
-      console.log(
-        `[Idempotency] Returning cached response for ${opts.scope}:${opts.key}`
-      );
       try {
         return JSON.parse(existing.responseJson) as T;
       } catch {
-        // If JSON parse fails, re-execute
-        console.warn(
-          `[Idempotency] Failed to parse cached response, re-executing`
-        );
+        // If JSON parse fails, re-execute below
       }
     }
 
     // Operation in progress
     if (existing.status === "STARTED") {
-      // Check if it's stale (older than TTL)
       if (existing.expiresAt && existing.expiresAt < new Date()) {
-        console.log(
-          `[Idempotency] Stale STARTED record found, allowing retry for ${opts.scope}:${opts.key}`
-        );
-        // Update to allow retry
+        // Stale - allow retry
         await db
           .update(idempotencyRequests)
-          .set({
-            status: "STARTED",
-            expiresAt,
-            updatedAt: new Date(),
-          })
+          .set({ status: "STARTED", expiresAt, updatedAt: new Date() })
           .where(eq(idempotencyRequests.id, existing.id));
       } else {
         throw new AppError(
@@ -192,12 +162,8 @@ export async function withIdempotency<T>(
       }
     }
 
-    // Failed - allow retry by continuing
+    // Failed - allow retry
     if (existing.status === "FAILED") {
-      console.log(
-        `[Idempotency] Previous attempt failed, allowing retry for ${opts.scope}:${opts.key}`
-      );
-      // Update to STARTED for retry
       await db
         .update(idempotencyRequests)
         .set({
@@ -208,6 +174,18 @@ export async function withIdempotency<T>(
         })
         .where(eq(idempotencyRequests.id, existing.id));
     }
+  } else {
+    // 3. Insert new idempotency record
+    await db.insert(idempotencyRequests).values({
+      scope: opts.scope,
+      idempotencyKey: opts.key,
+      userId: opts.userId,
+      requestHash,
+      status: "STARTED",
+      expiresAt,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
   }
 
   // 3. Execute operation

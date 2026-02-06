@@ -51,7 +51,7 @@ export const vouchersRouter = router({
   /**
    * Apply a voucher to a booking
    */
-  apply: protectedProcedure
+  applyVoucher: protectedProcedure
     .meta({
       openapi: {
         method: "POST",

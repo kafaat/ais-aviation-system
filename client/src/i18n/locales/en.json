@@ -1909,5 +1909,46 @@
       "save": "Save",
       "empty": "No aircraft types configured"
     }
+  },
+  "paymentHistory": {
+    "title": "Payment History",
+    "subtitle": "View all your payment transactions",
+    "totalPayments": "Total Payments",
+    "completed": "Completed",
+    "refunded": "Refunded",
+    "pending": "Pending",
+    "failed": "Failed",
+    "filters": "Filters",
+    "allStatuses": "All Statuses",
+    "allMethods": "All Methods",
+    "card": "Card",
+    "wallet": "Wallet",
+    "bankTransfer": "Bank Transfer",
+    "flight": "Flight",
+    "booking": "Booking",
+    "amount": "Amount",
+    "method": "Method",
+    "status": "Status",
+    "date": "Date",
+    "noPayments": "No payments found"
+  },
+  "deletedBookings": {
+    "title": "Deleted Bookings",
+    "subtitle": "Manage soft-deleted bookings and data recovery",
+    "deleted": "deleted",
+    "purgeTitle": "Permanent Deletion",
+    "purgeDescription": "Permanently remove bookings that have been in the trash for longer than the retention period. This action cannot be undone.",
+    "retentionDays": "Retention (days)",
+    "purgeButton": "Purge Old Bookings",
+    "purgeConfirm": "Are you sure? This will permanently delete old bookings.",
+    "purgeSuccess": "Bookings permanently deleted",
+    "booking": "Booking",
+    "flight": "Flight",
+    "amount": "Amount",
+    "status": "Status",
+    "deletedOn": "Deleted On",
+    "actions": "Actions",
+    "restore": "Restore",
+    "noDeleted": "No deleted bookings found"
   }
 }

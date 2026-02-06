@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { protectedProcedure, router } from "../_core/trpc";
+import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { stripe } from "../stripe";
 import * as db from "../db";
 import { getDb } from "../db";
 import { bookings } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { auditPayment } from "../services/audit.service";
+import * as paymentHistoryService from "../services/payment-history.service";
 
 /**
  * Payments Router
@@ -232,4 +233,68 @@ export const paymentsRouter = router({
         status: "completed",
       };
     }),
+
+  /**
+   * Get user's payment history
+   */
+  getHistory: protectedProcedure
+    .input(
+      z.object({
+        status: z.string().optional(),
+        method: z.string().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().min(0).optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      return await paymentHistoryService.getUserPaymentHistory(ctx.user.id, {
+        status: input.status,
+        method: input.method,
+        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        limit: input.limit,
+        offset: input.offset,
+      });
+    }),
+
+  /**
+   * Get user's payment statistics
+   */
+  getStats: protectedProcedure.query(async ({ ctx }) => {
+    return await paymentHistoryService.getUserPaymentStats(ctx.user.id);
+  }),
+
+  /**
+   * Admin: Get all payment history
+   */
+  adminGetHistory: adminProcedure
+    .input(
+      z.object({
+        status: z.string().optional(),
+        method: z.string().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().min(0).optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      return await paymentHistoryService.getAdminPaymentHistory({
+        status: input.status,
+        method: input.method,
+        dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
+        dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
+        limit: input.limit,
+        offset: input.offset,
+      });
+    }),
+
+  /**
+   * Admin: Get payment statistics
+   */
+  adminGetStats: adminProcedure.query(async () => {
+    return await paymentHistoryService.getAdminPaymentStats();
+  }),
 });

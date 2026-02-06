@@ -37,6 +37,7 @@ import { nanoid } from "nanoid";
 import {
   withIdempotency,
   IdempotencyError,
+  IdempotencyScope,
 } from "../../services/idempotency-v2.service";
 import {
   runStripeReconciliation,
@@ -582,27 +583,29 @@ describe("Critical Path 6: Idempotency", () => {
     const { bookingId } = await createTestBooking();
 
     // First request
-    const firstResult = await withIdempotency(
-      "booking",
-      idempotencyKey,
-      JSON.stringify({ bookingId }),
-      async () => {
+    const firstResult = await withIdempotency({
+      scope: IdempotencyScope.BOOKING_CREATE,
+      key: idempotencyKey,
+      userId: null,
+      request: { bookingId },
+      run: async () => {
         return { success: true, bookingId, timestamp: Date.now() };
-      }
-    );
+      },
+    });
 
     expect(firstResult.success).toBe(true);
 
     // Second request with same key - should return cached result
-    const secondResult = await withIdempotency(
-      "booking",
-      idempotencyKey,
-      JSON.stringify({ bookingId }),
-      async () => {
+    const secondResult = await withIdempotency({
+      scope: IdempotencyScope.BOOKING_CREATE,
+      key: idempotencyKey,
+      userId: null,
+      request: { bookingId },
+      run: async () => {
         // This should NOT be called
         return { success: true, bookingId, timestamp: Date.now() + 1000 };
-      }
-    );
+      },
+    });
 
     // Should be the same result (cached)
     expect(secondResult.bookingId).toBe(firstResult.bookingId);
@@ -613,21 +616,23 @@ describe("Critical Path 6: Idempotency", () => {
     const idempotencyKey = `${TEST_PREFIX}conflict_${nanoid(10)}`;
 
     // First request
-    await withIdempotency(
-      "booking",
-      idempotencyKey,
-      JSON.stringify({ amount: 100 }),
-      async () => ({ success: true })
-    );
+    await withIdempotency({
+      scope: IdempotencyScope.BOOKING_CREATE,
+      key: idempotencyKey,
+      userId: null,
+      request: { amount: 100 },
+      run: async () => ({ success: true }),
+    });
 
     // Second request with different payload
     await expect(
-      withIdempotency(
-        "booking",
-        idempotencyKey,
-        JSON.stringify({ amount: 200 }), // Different payload
-        async () => ({ success: true })
-      )
+      withIdempotency({
+        scope: IdempotencyScope.BOOKING_CREATE,
+        key: idempotencyKey,
+        userId: null,
+        request: { amount: 200 }, // Different payload
+        run: async () => ({ success: true }),
+      })
     ).rejects.toThrow(IdempotencyError);
   });
 });

@@ -8,6 +8,7 @@ import {
   decimal,
   boolean,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 /**
@@ -203,6 +204,7 @@ export const bookings = mysqlTable(
     numberOfPassengers: int("numberOfPassengers").default(1).notNull(),
     checkedIn: boolean("checkedIn").default(false).notNull(),
     checkInReminderSentAt: timestamp("checkInReminderSentAt"), // When check-in reminder email was sent
+    deletedAt: timestamp("deletedAt"), // Soft delete timestamp
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -250,6 +252,8 @@ export const bookings = mysqlTable(
       table.checkedIn,
       table.checkInReminderSentAt
     ),
+    // Index for soft delete queries
+    deletedAtIdx: index("bookings_deleted_at_idx").on(table.deletedAt),
   })
 );
 
@@ -1164,7 +1168,7 @@ export const idempotencyRequests = mysqlTable(
   },
   table => ({
     // Unique constraint on scope + userId + idempotencyKey
-    scopeUserKeyIdx: index("idempotency_scope_user_key_idx").on(
+    scopeUserKeyIdx: uniqueIndex("idempotency_scope_user_key_idx").on(
       table.scope,
       table.userId,
       table.idempotencyKey
