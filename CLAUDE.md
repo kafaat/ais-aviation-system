@@ -17,7 +17,7 @@ AIS (Aviation Information System) is a full-stack flight booking and management 
 # Development
 pnpm install          # Install dependencies
 pnpm dev              # Start development server (http://localhost:3000)
-pnpm build            # Build for production
+pnpm build            # Build for production (dist/index.js + dist/worker.js)
 pnpm start            # Start production server
 
 # Code Quality
@@ -73,11 +73,12 @@ ais-aviation-system/
 │   │   └── middleware/       # Express middlewares
 │   ├── routers/              # tRPC API routers (organized by domain)
 │   ├── services/             # Business logic layer
-│   ├── webhooks/             # Stripe webhook handlers
+│   ├── webhooks/             # Stripe and external webhook handlers
 │   ├── jobs/                 # Background jobs
 │   ├── queue/                # Job queue workers (BullMQ)
 │   ├── db.ts                 # Database client and helper functions
 │   ├── routers.ts            # Main router combining all domain routers
+│   ├── worker.ts             # Background job worker entry point (→ dist/worker.js)
 │   └── __tests__/            # Server tests
 │
 ├── drizzle/                   # Database schema and migrations
@@ -494,13 +495,44 @@ trpc.priceCalendar.getCalendar.useQuery({
 
 ### Other Phase 2 Features
 
-| Feature        | Route            | Description                    |
-| -------------- | ---------------- | ------------------------------ |
-| Waitlist       | `/waitlist`      | Join waitlist for full flights |
-| Corporate      | `/corporate`     | Business travel management     |
-| Travel Agent   | `/agent`         | Agent booking portal           |
-| Group Bookings | `/group-booking` | Request group discounts        |
-| Price Alerts   | `/price-alerts`  | Get notified on price drops    |
+| Feature          | Route                | Description                              |
+| ---------------- | -------------------- | ---------------------------------------- |
+| Waitlist         | `/waitlist`          | Join waitlist for full flights           |
+| Corporate        | `/corporate`         | Business travel management               |
+| Travel Agent     | `/agent`             | Agent booking portal                     |
+| Group Bookings   | `/group-booking`     | Request group discounts                  |
+| Price Alerts     | `/price-alerts`      | Get notified on price drops              |
+| DCS              | `/admin/dcs`         | Departure control system                 |
+| Disruptions      | -                    | Automated flight disruption handling     |
+| Rebooking        | `/rebook/:bookingId` | Flight rebooking from previous booking   |
+| Travel Scenarios | -                    | Carbon offset and travel document checks |
+| AI Chat          | `/ai-chat`           | AI-powered booking assistant             |
+
+## Phase 3 Features
+
+| Feature            | Route                | Description                   |
+| ------------------ | -------------------- | ----------------------------- |
+| DCS Dashboard      | `/admin/dcs`         | Departure control system      |
+| AI Chat            | `/ai-chat`           | AI-powered booking assistant  |
+| Flight Disruptions | -                    | Automated disruption handling |
+| Rebooking          | `/rebook/:bookingId` | Flight rebooking              |
+| Travel Scenarios   | -                    | Carbon offset calculations    |
+
+## Docker Deployment
+
+```bash
+# Development (MySQL + Redis + phpMyAdmin)
+docker-compose up
+
+# Production lite
+docker-compose -f docker-compose.prod.yml up
+
+# Full production
+docker-compose -f docker-compose.production.yml up
+```
+
+- **Worker**: Background jobs process emails, notifications, and queue jobs via `dist/worker.js`
+- **SSL**: Place `cert.pem` and `key.pem` in the `./ssl/` directory for HTTPS
 
 ## Additional Resources
 

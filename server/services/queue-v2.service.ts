@@ -287,12 +287,23 @@ export function startEmailWorker(): Worker {
             }
             break;
 
-          case "booking-cancelled":
-            // TODO: Implement sendBookingCancellation if needed
+          case "booking-cancelled": {
+            // Create in-app notification + email via notification service
+            const { createNotification } =
+              await import("./notification.service");
+            if (userId) {
+              await createNotification(
+                userId,
+                "booking",
+                "Booking Cancelled",
+                `Your booking has been cancelled.${bookingId ? ` (Booking ID: ${bookingId})` : ""}`
+              );
+            }
             console.log(
-              `[Worker] Booking cancellation email not implemented yet for booking ${bookingId}`
+              `[Worker] Booking cancellation notification sent for booking ${bookingId}`
             );
             break;
+          }
 
           default:
             console.log(`[Worker] Unknown email type: ${type}`);

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import {
   Dialog,
@@ -32,6 +33,7 @@ export function CancelBookingDialog({
   onOpenChange,
   onSuccess,
 }: CancelBookingDialogProps) {
+  const { t } = useTranslation();
   const [reason, setReason] = useState<string>("requested_by_customer");
   const [notes, setNotes] = useState("");
 
@@ -51,19 +53,19 @@ export function CancelBookingDialog({
   // Create refund mutation
   const createRefund = trpc.refunds.create.useMutation({
     onSuccess: () => {
-      toast.success("تم إلغاء الحجز واسترداد المبلغ بنجاح");
+      toast.success(t("cancelBooking.successMessage"));
       utils.bookings.myBookings.invalidate();
       onSuccess();
       onOpenChange(false);
     },
     onError: error => {
-      toast.error(error.message || "حدث خطأ أثناء إلغاء الحجز");
+      toast.error(error.message || t("cancelBooking.errorMessage"));
     },
   });
 
   const handleCancel = () => {
     if (!refundCheck?.refundable) {
-      toast.error("لا يمكن إلغاء هذا الحجز");
+      toast.error(t("cancelBooking.notCancellable"));
       return;
     }
 
@@ -77,8 +79,10 @@ export function CancelBookingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>إلغاء الحجز واسترداد المبلغ</DialogTitle>
-          <DialogDescription>رقم الحجز: {bookingReference}</DialogDescription>
+          <DialogTitle>{t("cancelBooking.title")}</DialogTitle>
+          <DialogDescription>
+            {t("cancelBooking.bookingRef", { ref: bookingReference })}
+          </DialogDescription>
         </DialogHeader>
 
         {checkingRefundable ? (
@@ -91,10 +95,11 @@ export function CancelBookingDialog({
               <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
               <div>
                 <p className="font-medium text-destructive mb-1">
-                  لا يمكن إلغاء هذا الحجز
+                  {t("cancelBooking.notCancellable")}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {refundCheck?.reason || "الحجز غير قابل للإلغاء"}
+                  {refundCheck?.reason ||
+                    t("cancelBooking.notCancellableDefault")}
                 </p>
               </div>
             </div>
@@ -112,59 +117,66 @@ export function CancelBookingDialog({
               >
                 <p className="text-sm font-semibold mb-3">
                   {cancellationFee.tier === "full"
-                    ? "استرداد كامل (100%)"
-                    : `استرداد ${cancellationFee.refundPercentage}%`}
+                    ? t("cancelBooking.fullRefund")
+                    : t("cancelBooking.partialRefund", {
+                        percentage: cancellationFee.refundPercentage,
+                      })}
                 </p>
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
-                      المبلغ الأصلي:
+                      {t("cancelBooking.originalAmount")}
                     </span>
                     <span className="font-medium">
-                      {(cancellationFee.totalAmount / 100).toFixed(2)} ر.س
+                      {(cancellationFee.totalAmount / 100).toFixed(2)}{" "}
+                      {t("common.sar")}
                     </span>
                   </div>
 
                   {cancellationFee.cancellationFee > 0 && (
                     <div className="flex justify-between text-orange-700">
                       <span>
-                        رسوم الإلغاء ({100 - cancellationFee.refundPercentage}
-                        %):
+                        {t("cancelBooking.cancellationFee", {
+                          percentage: 100 - cancellationFee.refundPercentage,
+                        })}
                       </span>
                       <span className="font-medium">
                         -{(cancellationFee.cancellationFee / 100).toFixed(2)}{" "}
-                        ر.س
+                        {t("common.sar")}
                       </span>
                     </div>
                   )}
 
                   <div className="flex justify-between pt-2 border-t">
-                    <span className="font-semibold">المبلغ المسترد:</span>
+                    <span className="font-semibold">
+                      {t("cancelBooking.refundAmount")}
+                    </span>
                     <span className="text-2xl font-bold text-green-600">
-                      {(cancellationFee.refundAmount / 100).toFixed(2)} ر.س
+                      {(cancellationFee.refundAmount / 100).toFixed(2)}{" "}
+                      {t("common.sar")}
                     </span>
                   </div>
                 </div>
 
                 <p className="text-xs text-muted-foreground mt-3">
-                  سيتم استرداد المبلغ إلى طريقة الدفع الأصلية خلال 5-10 أيام عمل
+                  {t("cancelBooking.refundProcessing")}
                 </p>
               </div>
             ) : (
               <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">
-                  المبلغ المسترد
+                  {t("cancelBooking.refundAmountTitle")}
                 </p>
                 <p className="text-2xl font-bold text-primary">
-                  {(totalAmount / 100).toFixed(2)} ر.س
+                  {(totalAmount / 100).toFixed(2)} {t("common.sar")}
                 </p>
               </div>
             )}
 
             {/* Cancellation Reason */}
             <div className="space-y-2">
-              <Label>سبب الإلغاء</Label>
+              <Label>{t("cancelBooking.reasonLabel")}</Label>
               <RadioGroup value={reason} onValueChange={setReason}>
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="requested_by_customer" id="customer" />
@@ -172,7 +184,7 @@ export function CancelBookingDialog({
                     htmlFor="customer"
                     className="font-normal cursor-pointer"
                   >
-                    تغيير في الخطط
+                    {t("cancelBooking.reasonChangeOfPlans")}
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2 space-x-reverse">
@@ -181,13 +193,13 @@ export function CancelBookingDialog({
                     htmlFor="duplicate"
                     className="font-normal cursor-pointer"
                   >
-                    حجز مكرر
+                    {t("cancelBooking.reasonDuplicate")}
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2 space-x-reverse">
                   <RadioGroupItem value="other" id="other" />
                   <Label htmlFor="other" className="font-normal cursor-pointer">
-                    أخرى
+                    {t("cancelBooking.reasonOther")}
                   </Label>
                 </div>
               </RadioGroup>
@@ -195,10 +207,12 @@ export function CancelBookingDialog({
 
             {/* Additional Notes */}
             <div className="space-y-2">
-              <Label htmlFor="notes">ملاحظات إضافية (اختياري)</Label>
+              <Label htmlFor="notes">
+                {t("cancelBooking.additionalNotes")}
+              </Label>
               <Textarea
                 id="notes"
-                placeholder="أضف أي ملاحظات إضافية..."
+                placeholder={t("cancelBooking.notesPlaceholder")}
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 rows={3}
@@ -209,8 +223,7 @@ export function CancelBookingDialog({
             <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
               <p className="text-xs text-amber-800">
-                بمجرد إلغاء الحجز، لن تتمكن من التراجع عن هذا الإجراء. سيتم
-                استرداد المبلغ تلقائياً.
+                {t("cancelBooking.warningMessage")}
               </p>
             </div>
           </div>
@@ -222,7 +235,7 @@ export function CancelBookingDialog({
             onClick={() => onOpenChange(false)}
             disabled={createRefund.isPending}
           >
-            إلغاء
+            {t("common.cancel")}
           </Button>
           {refundCheck?.refundable && (
             <Button
@@ -233,10 +246,10 @@ export function CancelBookingDialog({
               {createRefund.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  جاري الإلغاء...
+                  {t("cancelBooking.processing")}
                 </>
               ) : (
-                "تأكيد الإلغاء"
+                t("cancelBooking.confirmCancel")
               )}
             </Button>
           )}

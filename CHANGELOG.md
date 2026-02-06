@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.8.0] - 2026-02-06
+
+### Added
+
+- Background job worker (`server/worker.ts` → `dist/worker.js`)
+- Inventory lock conversion after payment confirmation
+- Price alerts notification delivery (in-app + email)
+- Docker `.dockerignore` for optimized builds
+- `.env.prod.example` with Docker-specific URLs
+- HEALTHCHECK in Dockerfile.prod
+- Redis service in docker-compose.prod.yml
+- Admin sidebar links for Baggage, Corporate, Travel Agents
+- Routes for /baggage, /admin/baggage, /admin/corporate, /admin/travel-agents, /corporate, /corporate/bookings
+- Arabic analytics section translations (20 keys)
+
+### Fixed
+
+- Critical: Seats now deducted from flight availability after payment
+- Critical: AccessibilityProvider missing in App.tsx (Home page crash)
+- Critical: Vite dev server config not resolving (defineConfig function spread)
+- Fix: throw new Error() → TRPCError in bookings router
+- Fix: Currency default USD → SAR in payment service
+- Fix: E-ticket generation for cancelled/pending bookings blocked
+- Fix: Group bookings always using economy price
+- Fix: Corporate credit calculation Math.abs bug
+- Fix: Waitlist seat deduction on offer
+- Fix: Travel agent monthly limit enforcement
+- Fix: Split payment server-side amount validation
+- Fix: AI chat date comparison (eq → lt) for archiving
+- Fix: AI guardrails returning safe for warnings
+- Fix: Rebooking status eligibility check
+- Fix: Stripe webhook path mismatch in nginx.conf
+- Fix: Disruption queries using SQL WHERE IN
+- Fix: BaggageStatus.tsx wrong useAuth import
+
+### Changed
+
+- Build script now produces both dist/index.js and dist/worker.js
+- Deprecated allowNonAppliedPatches → allowUnusedPatches in pnpm config
+- CI pipeline: build job no longer depends on E2E tests
+
+### Removed
+
+- 4 duplicate schema files (loyalty, flight-status-history, inventory-locks, modification)
+
+---
+
 ## What's Changed in v1.7.0
 
 ### Features
