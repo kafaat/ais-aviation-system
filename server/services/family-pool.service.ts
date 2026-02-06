@@ -1,6 +1,10 @@
 import { getDb } from "../db";
-import { familyGroups, familyGroupMembers, users } from "../../drizzle/schema";
-import { loyaltyAccounts } from "../../drizzle/loyalty-schema";
+import {
+  familyGroups,
+  familyGroupMembers,
+  users,
+  loyaltyAccounts,
+} from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 export async function createFamilyGroup(ownerId: number, name: string) {
