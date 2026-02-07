@@ -1,5 +1,23 @@
 # Changelog
 
+## What's Changed in v1.8.1
+
+### Bug Fixes
+- fix: mock loyalty tests and add missing env vars documentation (ad11c89)
+- fix: prevent Sentry crash with invalid/placeholder DSN values (2de0629)
+
+### Other Changes
+- Fix Prettier formatting in sentry files (8fc1113)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (183d86f)
+- Fix CHANGELOG.md Prettier formatting after merge from main (4f1a152)
+- Merge pull request #56 from kafaat/claude/implement-todo-zrBPj (662b4d5)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.0...v1.8.1
+
+
+---
+
 ## What's Changed in v1.8.0
 
 ### Features
