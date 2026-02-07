@@ -13,6 +13,7 @@ import { InstallPrompt } from "./components/InstallPrompt";
 // Lazy load pages for better performance and code splitting
 // User-facing pages
 const Home = lazy(() => import("./pages/Home"));
+const Login = lazy(() => import("./pages/Login"));
 const SearchResults = lazy(() => import("./pages/SearchResults"));
 const BookingPage = lazy(() => import("./pages/BookingPage"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
@@ -161,6 +162,11 @@ function Router() {
         <Switch>
           {/* User-facing pages */}
           <Route path="/" component={Home} />
+          <Route path="/login">
+            <Suspense fallback={<PageLoadingFallback variant="default" />}>
+              <Login />
+            </Suspense>
+          </Route>
           <Route path="/search">
             <Suspense fallback={<PageLoadingFallback variant="search" />}>
               <SearchResults />

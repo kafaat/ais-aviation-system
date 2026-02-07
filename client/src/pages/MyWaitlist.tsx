@@ -49,7 +49,6 @@ import {
 import { format, formatDistanceToNow } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { toast } from "sonner";
-import { getLoginUrl } from "@/const";
 
 type WaitlistStatus =
   | "waiting"
@@ -184,7 +183,7 @@ export default function MyWaitlist() {
             asChild
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md"
           >
-            <a href={getLoginUrl()}>{t("common.login")}</a>
+            <a href="/login">{t("common.login")}</a>
           </Button>
         </Card>
       </div>

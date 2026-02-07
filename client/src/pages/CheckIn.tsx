@@ -25,7 +25,6 @@ import {
   Armchair,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getLoginUrl } from "@/const";
 import { SeatMap } from "@/components/SeatMap";
 
 interface Passenger {
@@ -377,7 +376,7 @@ export default function CheckIn() {
             asChild
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
           >
-            <a href={getLoginUrl()}>{t("common.login")}</a>
+            <a href="/login">{t("common.login")}</a>
           </Button>
         </Card>
       </div>

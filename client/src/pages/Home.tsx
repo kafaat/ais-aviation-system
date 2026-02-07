@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-import { APP_LOGO, getLoginUrl } from "@/const";
+import { APP_LOGO } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 
@@ -229,9 +229,9 @@ export default function Home() {
                   </span>
                 </div>
               ) : (
-                <Button asChild size="sm">
-                  <a href={getLoginUrl()}>{t("common.login")}</a>
-                </Button>
+                <Link href="/login">
+                  <Button size="sm">{t("common.login")}</Button>
+                </Link>
               )}
             </div>
           </div>
