@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { APP_LOGO, APP_TITLE } from "@/const";
@@ -27,6 +28,7 @@ export function ManusDialog({
   onOpenChange,
   onClose,
 }: ManusDialogProps) {
+  const { t } = useTranslation();
   const [internalOpen, setInternalOpen] = useState(open);
 
   useEffect(() => {
@@ -63,7 +65,7 @@ export function ManusDialog({
             {title}
           </DialogTitle>
           <DialogDescription className="text-sm text-[#858481] leading-5 tracking-[-0.154px]">
-            Please login with Manus to continue
+            {t("manus.loginDescription")}
           </DialogDescription>
         </div>
 
@@ -73,7 +75,7 @@ export function ManusDialog({
             onClick={onLogin}
             className="w-full h-10 bg-[#1a1a19] hover:bg-[#1a1a19]/90 text-white rounded-[10px] text-sm font-medium leading-5 tracking-[-0.154px]"
           >
-            Login with Manus
+            {t("manus.loginButton")}
           </Button>
         </DialogFooter>
       </DialogContent>

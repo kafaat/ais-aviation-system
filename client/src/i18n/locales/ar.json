@@ -807,7 +807,33 @@
     "contactSupport": "تواصل مع فريق الدعم",
     "technicalDetails": "التفاصيل التقنية",
     "errorApology": "نعتذر عن الإزعاج. حدث خطأ غير متوقع.",
-    "persistentError": "إذا استمرت هذه المشكلة، يرجى التواصل مع فريق الدعم."
+    "persistentError": "إذا استمرت هذه المشكلة، يرجى التواصل مع فريق الدعم.",
+    "reportConfirmation": "شكراً لإبلاغك عن هذا الخطأ. تم إخطار فريقنا وسيتم مراجعته."
+  },
+  "manus": {
+    "loginDescription": "يرجى تسجيل الدخول عبر Manus للمتابعة",
+    "loginButton": "تسجيل الدخول عبر Manus"
+  },
+  "eticket": {
+    "noPassenger": "لا يوجد راكب مرتبط بهذا الحجز",
+    "downloadSuccess": "تم تحميل التذكرة الإلكترونية بنجاح",
+    "downloadError": "فشل تحميل التذكرة الإلكترونية",
+    "boardingPassSuccess": "تم تحميل بطاقة الصعود بنجاح",
+    "boardingPassError": "فشل تحميل بطاقة الصعود",
+    "calendarSuccess": "تم تحميل حدث التقويم",
+    "calendarError": "فشل إنشاء حدث التقويم"
+  },
+  "manageAncillaries": {
+    "title": "إدارة الخدمات الإضافية",
+    "description": "أضف أو احذف خدمات إضافية لحجزك",
+    "currentServices": "الخدمات الحالية",
+    "availableServices": "الخدمات المتاحة",
+    "noServices": "لا توجد خدمات إضافية حالياً",
+    "addSuccess": "تمت إضافة الخدمة بنجاح",
+    "addError": "فشل في إضافة الخدمة",
+    "removeSuccess": "تم حذف الخدمة بنجاح",
+    "removeError": "فشل في حذف الخدمة",
+    "quantity": "الكمية"
   },
   "flightStatus": {
     "live": "مباشر",

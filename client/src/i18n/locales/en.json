@@ -807,7 +807,33 @@
     "contactSupport": "Contact our support team",
     "technicalDetails": "Technical Details",
     "errorApology": "We apologize for the inconvenience. An unexpected error has occurred.",
-    "persistentError": "If this problem persists, please contact our support team."
+    "persistentError": "If this problem persists, please contact our support team.",
+    "reportConfirmation": "Thank you for reporting this error. Our team has been notified and will look into it."
+  },
+  "manus": {
+    "loginDescription": "Please login with Manus to continue",
+    "loginButton": "Login with Manus"
+  },
+  "eticket": {
+    "noPassenger": "No passenger associated with this booking",
+    "downloadSuccess": "E-ticket downloaded successfully",
+    "downloadError": "Failed to download e-ticket",
+    "boardingPassSuccess": "Boarding pass downloaded successfully",
+    "boardingPassError": "Failed to download boarding pass",
+    "calendarSuccess": "Calendar event downloaded",
+    "calendarError": "Failed to generate calendar"
+  },
+  "manageAncillaries": {
+    "title": "Manage Additional Services",
+    "description": "Add or remove additional services for your booking",
+    "currentServices": "Current Services",
+    "availableServices": "Available Services",
+    "noServices": "No additional services currently",
+    "addSuccess": "Service added successfully",
+    "addError": "Failed to add service",
+    "removeSuccess": "Service removed successfully",
+    "removeError": "Failed to remove service",
+    "quantity": "Quantity"
   },
   "flightStatus": {
     "live": "Live",
