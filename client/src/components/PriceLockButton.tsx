@@ -15,7 +15,7 @@ interface PriceLockButtonProps {
 export function PriceLockButton({
   flightId,
   cabinClass,
-  currentPrice,
+  currentPrice: _currentPrice,
 }: PriceLockButtonProps) {
   const { t } = useTranslation();
   const [isLocked, setIsLocked] = useState(false);
