@@ -21,13 +21,16 @@ interface SentryClientConfig {
 export function initSentry(): void {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
 
-  if (!dsn) {
-    console.warn(
-      "[Sentry] VITE_SENTRY_DSN not configured. Error tracking is disabled."
-    );
+  if (!dsn || dsn.includes("your-key") || dsn.includes("your-project")) {
+    if (dsn) {
+      console.warn(
+        "[Sentry] VITE_SENTRY_DSN contains a placeholder value. Error tracking is disabled."
+      );
+    }
     return;
   }
 
+  try {
   const config: SentryClientConfig = {
     dsn,
     environment: import.meta.env.MODE || "development",
@@ -117,6 +120,9 @@ export function initSentry(): void {
   });
 
   console.info(`[Sentry] Initialized for environment: ${config.environment}`);
+  } catch (error) {
+    console.warn("[Sentry] Failed to initialize:", error);
+  }
 }
 
 /**

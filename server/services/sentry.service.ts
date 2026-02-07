@@ -21,13 +21,16 @@ interface SentryConfig {
 export function initSentry(app?: Express): void {
   const dsn = process.env.SENTRY_DSN;
 
-  if (!dsn) {
-    console.warn(
-      "[Sentry] SENTRY_DSN not configured. Error tracking is disabled."
-    );
+  if (!dsn || dsn.includes("your-key") || dsn.includes("your-project")) {
+    if (dsn) {
+      console.warn(
+        "[Sentry] SENTRY_DSN contains a placeholder value. Error tracking is disabled."
+      );
+    }
     return;
   }
 
+  try {
   const config: SentryConfig = {
     dsn,
     environment: process.env.NODE_ENV || "development",
@@ -84,6 +87,9 @@ export function initSentry(app?: Express): void {
   });
 
   console.info(`[Sentry] Initialized for environment: ${config.environment}`);
+  } catch (error) {
+    console.warn("[Sentry] Failed to initialize:", error);
+  }
 }
 
 /**
