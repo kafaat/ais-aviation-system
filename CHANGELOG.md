@@ -3,18 +3,19 @@
 ## What's Changed in v1.8.0
 
 ### Features
+
 - feat: comprehensive admin, notifications, email, error handling, and security improvements (c039ce9)
 
 ### Bug Fixes
+
 - fix: merge main and fix CHANGELOG.md prettier formatting (3faab9b)
 
 ### Other Changes
+
 - Merge remote-tracking branch 'origin/main' into claude/fix-ci-pipeline-zrBPj (25c296d)
 - Merge pull request #55 from kafaat/claude/implement-todo-zrBPj (0c13d2d)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.7.2...v1.8.0
-
 
 ---
 
