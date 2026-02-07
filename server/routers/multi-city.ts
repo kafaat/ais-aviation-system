@@ -204,9 +204,10 @@ export const multiCityRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const isMultiCity = await multiCityService.isMultiCityBooking(
-        input.bookingId
+        input.bookingId,
+        ctx.user.id
       );
       return { isMultiCity };
     }),

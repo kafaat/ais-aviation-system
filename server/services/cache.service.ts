@@ -523,12 +523,9 @@ class CacheService {
 
     try {
       const rateLimitKey = `${CACHE_PREFIX}:ratelimit:${key}`;
-      const current = await this.client!.incr(rateLimitKey);
 
-      if (current === 1) {
-        // First request in window, set expiry
-        await this.client!.expire(rateLimitKey, windowSeconds);
-      }
+      await this.client!.set(rateLimitKey, 0, "EX", windowSeconds, "NX");
+      const current = await this.client!.incr(rateLimitKey);
 
       const allowed = current <= limit;
       const remaining = Math.max(0, limit - current);
@@ -536,7 +533,6 @@ class CacheService {
       return { allowed, remaining };
     } catch (error) {
       logger.error({ key, error }, "Rate limit check error");
-      // On error, allow the request
       return { allowed: true, remaining: limit };
     }
   }

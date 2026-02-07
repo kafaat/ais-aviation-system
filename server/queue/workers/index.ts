@@ -54,14 +54,31 @@ export function getWorkersStatus(): Record<
   string,
   { running: boolean; paused: boolean }
 > {
-  return {
-    reconciliation: {
-      running: reconciliationWorker.isRunning(),
-      paused: reconciliationWorker.isPaused(),
-    },
-    email: {
-      running: emailWorker.instance.isRunning(),
-      paused: emailWorker.instance.isPaused(),
-    },
+  const status: Record<string, { running: boolean; paused: boolean }> = {
+    reconciliation: { running: false, paused: false },
+    email: { running: false, paused: false },
   };
+
+  try {
+    if (reconciliationWorker) {
+      status.reconciliation = {
+        running: reconciliationWorker.isRunning(),
+        paused: reconciliationWorker.isPaused(),
+      };
+    }
+  } catch {
+    // Worker not available
+  }
+
+  try {
+    const worker = emailWorker.instance;
+    status.email = {
+      running: worker.isRunning(),
+      paused: worker.isPaused(),
+    };
+  } catch {
+    // Worker not available
+  }
+
+  return status;
 }

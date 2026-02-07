@@ -106,7 +106,7 @@ const PRICE_VALIDITY_MINUTES = 15;
 const MIN_MULTIPLIER = 0.7; // Maximum 30% discount
 const MAX_MULTIPLIER = 2.5; // Maximum 150% increase
 const TAX_RATE = 0.15; // 15% VAT
-const BOOKING_FEE = 50; // 50 SAR booking fee
+const BOOKING_FEE = 5000; // 50 SAR booking fee (in cents, 100 = 1 SAR)
 
 // Default multipliers when no rules match
 const DEFAULT_MULTIPLIERS = {
@@ -188,7 +188,7 @@ export async function calculateDynamicPrice(
   const priceAfterDiscount = adjustedPrice - promoDiscount;
   const taxes = Math.round(priceAfterDiscount * TAX_RATE);
   const fees = BOOKING_FEE * requestedSeats;
-  const totalPrice = (priceAfterDiscount + taxes + fees) * requestedSeats;
+  const totalPrice = (priceAfterDiscount + taxes) * requestedSeats + fees;
 
   // 9. Generate price ID and validity
   const priceId = generatePriceId(flightId, cabinClass, totalPrice);
@@ -341,7 +341,10 @@ function calculateOccupancyMultiplier(
       ? flight.economyAvailable
       : flight.businessAvailable;
 
-  // Check if enough seats available
+  if (totalSeats <= 0) {
+    throw new Error(`No ${cabinClass} seats configured for this flight`);
+  }
+
   if (availableSeats < requestedSeats) {
     throw new Error(`Not enough ${cabinClass} seats available`);
   }

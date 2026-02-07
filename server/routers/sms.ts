@@ -170,8 +170,9 @@ export const smsRouter = router({
       z.object({
         phoneNumber: z
           .string()
-          .min(10)
+          .min(7)
           .max(20)
+          .regex(/^\+?[\d\s\-()]+$/, "Invalid phone number format")
           .describe("Phone number to send test SMS to"),
         message: z
           .string()
@@ -243,7 +244,12 @@ export const smsRouter = router({
           .array(
             z.object({
               userId: z.number().describe("User ID"),
-              phoneNumber: z.string().min(10).max(20).describe("Phone number"),
+              phoneNumber: z
+                .string()
+                .min(7)
+                .max(20)
+                .regex(/^\+?[\d\s\-()]+$/, "Invalid phone number format")
+                .describe("Phone number"),
               body: z.string().min(1).max(160).describe("Message content"),
               bookingId: z.number().optional().describe("Related booking ID"),
             })
@@ -321,7 +327,12 @@ export const smsRouter = router({
     .input(
       z.object({
         userId: z.number().describe("User ID to send SMS to"),
-        phoneNumber: z.string().min(10).max(20).describe("Phone number"),
+        phoneNumber: z
+          .string()
+          .min(7)
+          .max(20)
+          .regex(/^\+?[\d\s\-()]+$/, "Invalid phone number format")
+          .describe("Phone number"),
         templateId: z
           .enum([
             "booking_confirmation",

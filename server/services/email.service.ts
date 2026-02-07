@@ -100,6 +100,27 @@ export interface SplitPaymentRequestData {
   expiresAt?: Date;
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return url;
+    }
+  } catch {
+    // invalid URL
+  }
+  return "#";
+}
+
 /**
  * Mock email sending function
  * In production, replace with actual email service API call
@@ -241,7 +262,7 @@ export async function sendBookingConfirmation(
           <tr>
             <td style="padding: 24px 40px 0;" class="mobile-padding">
               <p style="margin: 0; font-size: 16px; color: #1e293b; line-height: 1.6;">
-                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${data.passengerName}</strong>,
+                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${escapeHtml(data.passengerName)}</strong>,
               </p>
               <p style="margin: 8px 0 0; font-size: 15px; color: #475569; line-height: 1.6;">
                 &#x064A;&#x0633;&#x0639;&#x062F;&#x0646;&#x0627; &#x0625;&#x0628;&#x0644;&#x0627;&#x063A;&#x0643; &#x0628;&#x0623;&#x0646; &#x062D;&#x062C;&#x0632;&#x0643; &#x0642;&#x062F; &#x062A;&#x0645; &#x062A;&#x0623;&#x0643;&#x064A;&#x062F;&#x0647; &#x0628;&#x0646;&#x062C;&#x0627;&#x062D;. &#x064A;&#x0631;&#x062C;&#x0649; &#x0645;&#x0631;&#x0627;&#x062C;&#x0639;&#x0629; &#x062A;&#x0641;&#x0627;&#x0635;&#x064A;&#x0644; &#x0631;&#x062D;&#x0644;&#x062A;&#x0643; &#x0623;&#x062F;&#x0646;&#x0627;&#x0647;.
@@ -535,7 +556,7 @@ export async function sendFlightStatusChange(
           <tr>
             <td style="padding: 28px 40px 0;" class="mobile-padding">
               <p style="margin: 0; font-size: 16px; color: #1e293b; line-height: 1.6;">
-                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${data.passengerName}</strong>,
+                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${escapeHtml(data.passengerName)}</strong>,
               </p>
               <p style="margin: 8px 0 0; font-size: 15px; color: #475569; line-height: 1.6;">
                 &#x0646;&#x0648;&#x062F; &#x0625;&#x0639;&#x0644;&#x0627;&#x0645;&#x0643; &#x0628;&#x062A;&#x062D;&#x062F;&#x064A;&#x062B; &#x062D;&#x0627;&#x0644;&#x0629; &#x0631;&#x062D;&#x0644;&#x062A;&#x0643;.
@@ -556,7 +577,7 @@ export async function sendFlightStatusChange(
                     <p style="margin: 0; font-size: 28px; font-weight: 800; color: ${colors.text};">${statusText}</p>
                     <p style="margin: 4px 0 0; font-size: 14px; font-weight: 600; color: ${colors.text};">${colors.labelEn}</p>
                     ${data.delayMinutes ? `<p style="margin: 12px 0 0; font-size: 15px; color: ${colors.text}; font-weight: 600;">&#x0645;&#x062F;&#x0629; &#x0627;&#x0644;&#x062A;&#x0623;&#x062E;&#x064A;&#x0631;: ${data.delayMinutes} &#x062F;&#x0642;&#x064A;&#x0642;&#x0629; | Delay: ${data.delayMinutes} minutes</p>` : ""}
-                    ${data.reason ? `<p style="margin: 8px 0 0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0633;&#x0628;&#x0628; | Reason: ${data.reason}</p>` : ""}
+                    ${data.reason ? `<p style="margin: 8px 0 0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0633;&#x0628;&#x0628; | Reason: ${escapeHtml(data.reason)}</p>` : ""}
                   </td>
                 </tr>
               </table>
@@ -744,7 +765,7 @@ ${data.refundReason ? `- السبب: ${data.refundReason}` : ""}
           <tr>
             <td style="padding: 28px 40px 0;" class="mobile-padding">
               <p style="margin: 0; font-size: 16px; color: #1e293b; line-height: 1.6;">
-                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${data.passengerName}</strong>,
+                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${escapeHtml(data.passengerName)}</strong>,
               </p>
               <p style="margin: 8px 0 0; font-size: 15px; color: #475569; line-height: 1.6;">
                 &#x062A;&#x0645; &#x0645;&#x0639;&#x0627;&#x0644;&#x062C;&#x0629; &#x0637;&#x0644;&#x0628; &#x0627;&#x0633;&#x062A;&#x0631;&#x062F;&#x0627;&#x062F; &#x0627;&#x0644;&#x0645;&#x0628;&#x0644;&#x063A; &#x0627;&#x0644;&#x062E;&#x0627;&#x0635; &#x0628;&#x0643; &#x0628;&#x0646;&#x062C;&#x0627;&#x062D;.
@@ -792,7 +813,7 @@ ${data.refundReason ? `- السبب: ${data.refundReason}` : ""}
                     ? `
                 <tr>
                   <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0633;&#x0628;&#x0628; | Reason</td>
-                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #1e293b;">${data.refundReason}</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #1e293b;">${escapeHtml(data.refundReason)}</td>
                 </tr>
                 `
                     : ""
@@ -939,7 +960,7 @@ ${data.checkInUrl}
       <p>رحلتك ستقلع خلال 24 ساعة!</p>
     </div>
     <div class="content">
-      <p>مرحباً ${data.passengerName},</p>
+      <p>مرحباً ${escapeHtml(data.passengerName)},</p>
 
       <div class="detail"><span class="label">رقم الحجز:</span> ${data.bookingReference}</div>
       <div class="detail"><span class="label">رقم PNR:</span> ${data.pnr}</div>
@@ -949,7 +970,7 @@ ${data.checkInUrl}
       <div class="detail"><span class="label">موعد المغادرة:</span> ${data.departureTime.toLocaleString("ar-SA")}</div>
 
       <div style="text-align: center;">
-        <a href="${data.checkInUrl}" class="cta-button">سجل الوصول الآن ✈️</a>
+        <a href="${sanitizeUrl(data.checkInUrl)}" class="cta-button">سجل الوصول الآن ✈️</a>
       </div>
 
       <div class="tips">
@@ -1056,7 +1077,7 @@ ${nextTierText}
       <div class="miles-badge">+${data.milesEarned.toLocaleString("ar-SA")} ميل</div>
     </div>
     <div class="content">
-      <p>مرحباً ${data.passengerName},</p>
+      <p>مرحباً ${escapeHtml(data.passengerName)},</p>
 
       <div class="stats">
         <div class="stat">
@@ -1121,7 +1142,7 @@ export async function sendNotificationEmail(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>${subject}</title>
+  <title>${escapeHtml(subject)}</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -1142,7 +1163,7 @@ export async function sendNotificationEmail(
 
   <!-- Preheader -->
   <div style="display: none; max-height: 0; overflow: hidden; font-size: 1px; line-height: 1px; color: #f4f6f9;">
-    ${subject} - &#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644; | AIS Aviation
+    ${escapeHtml(subject)} - &#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644; | AIS Aviation
   </div>
 
   <!-- Email wrapper -->
@@ -1162,14 +1183,14 @@ export async function sendNotificationEmail(
           <!-- Subject Banner -->
           <tr>
             <td style="background-color: #1e40af; padding: 16px 40px; text-align: center; border-top: 1px solid #2563eb;">
-              <p style="margin: 0; font-size: 18px; font-weight: 700; color: #ffffff;">${subject}</p>
+              <p style="margin: 0; font-size: 18px; font-weight: 700; color: #ffffff;">${escapeHtml(subject)}</p>
             </td>
           </tr>
 
           <!-- Content -->
           <tr>
             <td style="padding: 32px 40px;" class="mobile-padding">
-              <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.8; white-space: pre-line;">${message}</p>
+              <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.8; white-space: pre-line;">${escapeHtml(message)}</p>
             </td>
           </tr>
 
@@ -1294,7 +1315,7 @@ ${data.paymentUrl}
       <p>تمت دعوتك للمشاركة في دفع حجز رحلة</p>
     </div>
     <div class="content">
-      <p>مرحباً ${data.payerName},</p>
+      <p>مرحباً ${escapeHtml(data.payerName)},</p>
       <p>تمت دعوتك للمشاركة في دفع حجز رحلة طيران. يرجى مراجعة التفاصيل أدناه وإتمام الدفع.</p>
 
       <div class="amount-box">
@@ -1308,7 +1329,7 @@ ${data.paymentUrl}
       <div class="detail"><span class="label">تاريخ المغادرة:</span> ${data.departureTime.toLocaleString("ar-SA")}</div>
 
       <div style="text-align: center;">
-        <a href="${data.paymentUrl}" class="cta-button">ادفع الآن</a>
+        <a href="${sanitizeUrl(data.paymentUrl)}" class="cta-button">ادفع الآن</a>
       </div>
 
       ${

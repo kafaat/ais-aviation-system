@@ -70,7 +70,7 @@ function getRedisClient(): Redis | null {
       console.error("[Cache] Failed to connect to Redis:", err.message);
     });
 
-    return redisClient;
+    return isConnected ? redisClient : null;
   } catch (err) {
     console.error("[Cache] Failed to create Redis client:", err);
     return null;
@@ -85,10 +85,11 @@ function getRedisClient(): Redis | null {
  * Generate MD5 hash for cache key
  */
 function hashParams(params: unknown): string {
-  const normalized = JSON.stringify(
-    params,
-    Object.keys(params as object).sort()
-  );
+  const replacer =
+    params && typeof params === "object" && !Array.isArray(params)
+      ? Object.keys(params).sort()
+      : undefined;
+  const normalized = JSON.stringify(params, replacer);
   return crypto.createHash("md5").update(normalized).digest("hex");
 }
 

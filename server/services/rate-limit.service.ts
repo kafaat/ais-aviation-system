@@ -247,44 +247,26 @@ class RateLimitService {
     windowStart: number;
     ttl: number;
   }> {
-    const rateLimitKey = key;
-    const windowKey = `${key}:window`;
-
     try {
-      // Use Redis pipeline for atomic operations
       const now = Date.now();
       const windowSeconds = Math.ceil(windowMs / 1000);
 
-      // Increment counter
-      const count = await cacheService.get<number>(rateLimitKey);
-      const windowStart = await cacheService.get<number>(windowKey);
+      const strippedKey = key.startsWith(`${RATE_LIMIT_PREFIX}:ratelimit:`)
+        ? key.substring(`${RATE_LIMIT_PREFIX}:ratelimit:`.length)
+        : key;
 
-      if (count === null || windowStart === null) {
-        // First request in window
-        await cacheService.set(rateLimitKey, 1, windowSeconds);
-        await cacheService.set(windowKey, now, windowSeconds);
-        return { count: 1, windowStart: now, ttl: windowSeconds * 1000 };
-      }
+      const result = await cacheService.checkRateLimit(
+        strippedKey,
+        limit,
+        windowSeconds
+      );
 
-      // Check if window has expired
-      if (now - windowStart >= windowMs) {
-        // Reset window
-        await cacheService.set(rateLimitKey, 1, windowSeconds);
-        await cacheService.set(windowKey, now, windowSeconds);
-        return { count: 1, windowStart: now, ttl: windowSeconds * 1000 };
-      }
-
-      // Increment count
-      const newCount = count + 1;
-      const remainingTtl = windowMs - (now - windowStart);
-      const remainingSeconds = Math.max(1, Math.ceil(remainingTtl / 1000));
-
-      await cacheService.set(rateLimitKey, newCount, remainingSeconds);
+      const count = limit - result.remaining;
 
       return {
-        count: newCount,
-        windowStart,
-        ttl: remainingTtl,
+        count,
+        windowStart: now,
+        ttl: windowMs,
       };
     } catch (error) {
       logger.error({ key, error }, "Redis rate limit check failed");

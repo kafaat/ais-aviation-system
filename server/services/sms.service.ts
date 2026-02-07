@@ -228,20 +228,26 @@ export function formatPhoneNumber(
   phone: string,
   countryCode: string = "+966"
 ): string {
-  // Remove all non-digit characters
   let cleaned = phone.replace(/\D/g, "");
 
-  // If starts with 0, remove it
   if (cleaned.startsWith("0")) {
     cleaned = cleaned.slice(1);
   }
 
-  // If doesn't start with country code, add it
   if (!cleaned.startsWith(countryCode.replace("+", ""))) {
     cleaned = countryCode.replace("+", "") + cleaned;
   }
 
-  return "+" + cleaned;
+  const formatted = "+" + cleaned;
+
+  if (!/^\+[1-9]\d{6,14}$/.test(formatted)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid phone number format",
+    });
+  }
+
+  return formatted;
 }
 
 /**
@@ -505,22 +511,29 @@ export async function sendBulkSMS(
   let failed = 0;
 
   for (const msg of messages) {
-    const result = await sendSMS(
-      msg.userId,
-      msg.phoneNumber,
-      msg.body,
-      "system",
-      undefined,
-      msg.bookingId
-    );
-    results.push(result);
-    if (result.success) {
-      sent++;
-    } else {
+    try {
+      const result = await sendSMS(
+        msg.userId,
+        msg.phoneNumber,
+        msg.body,
+        "system",
+        undefined,
+        msg.bookingId
+      );
+      results.push(result);
+      if (result.success) {
+        sent++;
+      } else {
+        failed++;
+      }
+    } catch (error) {
       failed++;
+      results.push({
+        success: false,
+        error: error instanceof Error ? error.message : "Send failed",
+      });
     }
 
-    // Rate limiting: wait 100ms between messages
     await new Promise(resolve => setTimeout(resolve, 100));
   }
 

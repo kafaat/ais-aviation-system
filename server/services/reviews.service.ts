@@ -8,6 +8,10 @@ import {
   type InsertFlightReview,
 } from "../../drizzle/schema";
 
+function stripHtmlTags(str: string): string {
+  return str.replace(/<[^>]*>/g, "");
+}
+
 /**
  * Create a new flight review
  */
@@ -86,8 +90,8 @@ export async function createReview(params: {
       comfortRating: params.comfortRating,
       serviceRating: params.serviceRating,
       valueRating: params.valueRating,
-      title: params.title,
-      comment: params.comment,
+      title: params.title ? stripHtmlTags(params.title) : params.title,
+      comment: params.comment ? stripHtmlTags(params.comment) : params.comment,
       isVerified,
       status: "approved", // Auto-approve for now, can add moderation later
     };
@@ -293,8 +297,10 @@ export async function updateReview(params: {
       updateData.serviceRating = params.serviceRating;
     if (params.valueRating !== undefined)
       updateData.valueRating = params.valueRating;
-    if (params.title !== undefined) updateData.title = params.title;
-    if (params.comment !== undefined) updateData.comment = params.comment;
+    if (params.title !== undefined)
+      updateData.title = stripHtmlTags(params.title);
+    if (params.comment !== undefined)
+      updateData.comment = stripHtmlTags(params.comment);
 
     await db
       .update(flightReviews)

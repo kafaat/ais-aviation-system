@@ -384,6 +384,13 @@ export function startWebhookRetryWorker(): Worker {
 
       // Retry processing
       try {
+        if (!event.data) {
+          console.error(
+            `[Worker] Event ${eventId} has no data payload, skipping`
+          );
+          return;
+        }
+
         const { stripeWebhookServiceV2 } =
           await import("./stripe-webhook-v2.service");
 
@@ -571,13 +578,19 @@ export async function stopAllWorkers(): Promise<void> {
 
   const workers = [emailWorker, webhookRetryWorker, scheduledWorker];
 
-  await Promise.all(
+  const results = await Promise.allSettled(
     workers.map(async worker => {
       if (worker) {
         await worker.close();
       }
     })
   );
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error(`[Queue] Failed to stop a worker:`, result.reason);
+    }
+  }
 
   emailWorker = null;
   webhookRetryWorker = null;
@@ -592,11 +605,17 @@ export async function stopAllWorkers(): Promise<void> {
 export async function closeAllQueues(): Promise<void> {
   console.log(`[Queue] Closing all queues...`);
 
-  await Promise.all([
+  const results = await Promise.allSettled([
     emailQueue.close(),
     webhookRetryQueue.close(),
     scheduledQueue.close(),
   ]);
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error(`[Queue] Failed to close a queue:`, result.reason);
+    }
+  }
 
   console.log(`[Queue] All queues closed`);
 }

@@ -116,6 +116,9 @@ export async function calculateOccupancyRate(
     );
 
   const bookedSeats = result?.totalPassengers || 0;
+
+  if (totalSeats <= 0) return 0;
+
   const occupancyRate = Math.round((bookedSeats / totalSeats) * 100);
 
   return Math.min(occupancyRate, 100); // Cap at 100%

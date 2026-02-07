@@ -65,26 +65,31 @@ export async function findBookingsForReminder(): Promise<
       )
     );
 
-  // Get airport information for each result
-  const enrichedResults = await Promise.all(
-    results.map(async result => {
-      const [origin] = await db
-        .select()
-        .from(airports)
-        .where(eq(airports.id, result.flight.originId));
+  const enrichedResults = (
+    await Promise.all(
+      results.map(async result => {
+        const [origin] = await db
+          .select()
+          .from(airports)
+          .where(eq(airports.id, result.flight.originId));
 
-      const [destination] = await db
-        .select()
-        .from(airports)
-        .where(eq(airports.id, result.flight.destinationId));
+        const [destination] = await db
+          .select()
+          .from(airports)
+          .where(eq(airports.id, result.flight.destinationId));
 
-      return {
-        ...result,
-        origin,
-        destination,
-      };
-    })
-  );
+        if (!origin || !destination) {
+          return null;
+        }
+
+        return {
+          ...result,
+          origin,
+          destination,
+        };
+      })
+    )
+  ).filter((r): r is NonNullable<typeof r> => r !== null);
 
   return enrichedResults;
 }
@@ -150,12 +155,8 @@ export async function runCheckInReminderJob(): Promise<ReminderResult> {
 
         if (emailSent) {
           result.emailsSent++;
+          await markReminderSent(item.booking.id);
         }
-
-        // Note: SMS reminders can be added when user preferences with phone numbers are available
-
-        // Mark reminder as sent
-        await markReminderSent(item.booking.id);
 
         console.info(
           `[Check-In Reminder Job] Sent reminder for booking ${item.booking.bookingReference}`

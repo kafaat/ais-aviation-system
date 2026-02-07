@@ -144,10 +144,17 @@ export async function getUserNotifications(
       .offset(offset);
 
     // Parse JSON data field
-    return results.map(notification => ({
-      ...notification,
-      data: notification.data ? JSON.parse(notification.data) : null,
-    }));
+    return results.map(notification => {
+      let parsedData = null;
+      if (notification.data) {
+        try {
+          parsedData = JSON.parse(notification.data);
+        } catch {
+          parsedData = null;
+        }
+      }
+      return { ...notification, data: parsedData };
+    });
   } catch (error) {
     console.error("Error getting user notifications:", error);
     throw new TRPCError({
