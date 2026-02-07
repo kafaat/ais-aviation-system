@@ -76,7 +76,6 @@ import {
 } from "@/components/ui/collapsible";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-import { getLoginUrl } from "@/const";
 
 type BookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
 type PaymentStatus = "pending" | "paid" | "refunded" | "failed";
@@ -279,7 +278,7 @@ export default function MyBookings() {
             asChild
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md"
           >
-            <a href={getLoginUrl()}>{t("common.login")}</a>
+            <a href="/login">{t("common.login")}</a>
           </Button>
         </Card>
       </div>

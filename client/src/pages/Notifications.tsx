@@ -50,7 +50,6 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-import { getLoginUrl } from "@/const";
 
 type NotificationType = "booking" | "flight" | "payment" | "promo" | "system";
 
@@ -253,7 +252,7 @@ export default function Notifications() {
             asChild
             className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md"
           >
-            <a href={getLoginUrl()}>{t("common.login")}</a>
+            <a href="/login">{t("common.login")}</a>
           </Button>
         </Card>
       </div>

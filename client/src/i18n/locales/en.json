@@ -16,6 +16,10 @@
     "apply": "Apply Filters",
     "reset": "Reset"
   },
+  "login": {
+    "notConfigured": "Login is not configured. Please contact the administrator to set up authentication.",
+    "backToHome": "Back to Home"
+  },
   "common": {
     "appName": "Aviation Integrated System",
     "search": "Search",

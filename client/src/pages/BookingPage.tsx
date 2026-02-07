@@ -37,7 +37,6 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getLoginUrl } from "@/const";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import AncillarySelection, {
@@ -257,7 +256,7 @@ export default function BookingPage() {
 
   const handleSubmit = async () => {
     if (!isAuthenticated) {
-      window.location.href = getLoginUrl();
+      window.location.href = "/login";
       return;
     }
 
@@ -317,7 +316,7 @@ export default function BookingPage() {
 
   const handleSplitPayment = async () => {
     if (!isAuthenticated) {
-      window.location.href = getLoginUrl();
+      window.location.href = "/login";
       return;
     }
 

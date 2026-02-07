@@ -28,7 +28,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Clock, Users, Loader2, Bell, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { getLoginUrl } from "@/const";
 
 interface JoinWaitlistDialogProps {
   flightId: number;
@@ -77,7 +76,7 @@ export function JoinWaitlistDialog({
 
   const handleJoin = () => {
     if (!isAuthenticated) {
-      window.location.href = getLoginUrl();
+      window.location.href = "/login";
       return;
     }
 

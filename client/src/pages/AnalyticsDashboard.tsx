@@ -14,7 +14,6 @@ import {
   Package,
   ShoppingBag,
 } from "lucide-react";
-import { getLoginUrl } from "@/const";
 import {
   BarChart,
   Bar,
@@ -75,7 +74,7 @@ export default function AnalyticsDashboard() {
         <Card className="p-8 text-center max-w-md">
           <h2 className="text-2xl font-bold mb-4">يرجى تسجيل الدخول</h2>
           <Button asChild className="w-full">
-            <a href={getLoginUrl()}>تسجيل الدخول</a>
+            <a href="/login">تسجيل الدخول</a>
           </Button>
         </Card>
       </div>

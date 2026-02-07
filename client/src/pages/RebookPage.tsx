@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-import { getLoginUrl } from "@/const";
 
 export default function RebookPage() {
   const { t, i18n } = useTranslation();
@@ -112,7 +111,7 @@ export default function RebookPage() {
             {t("myBookings.loginRequiredDesc")}
           </p>
           <Button asChild className="w-full">
-            <a href={getLoginUrl()}>{t("common.login")}</a>
+            <a href="/login">{t("common.login")}</a>
           </Button>
         </Card>
       </div>

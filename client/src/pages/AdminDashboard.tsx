@@ -29,7 +29,6 @@ import {
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { getLoginUrl } from "@/const";
 
 export default function AdminDashboard() {
   const { t } = useTranslation();
@@ -100,7 +99,7 @@ export default function AdminDashboard() {
             {t("common.loginRequired")}
           </h2>
           <Button asChild className="w-full">
-            <a href={getLoginUrl()}>{t("common.login")}</a>
+            <a href="/login">{t("common.login")}</a>
           </Button>
         </Card>
       </div>

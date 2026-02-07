@@ -3,18 +3,19 @@
 ## What's Changed in v1.8.2
 
 ### Bug Fixes
+
 - fix: prevent crash when VITE_OAUTH_PORTAL_URL is not configured (4244894)
 
 ### Documentation
+
 - docs: comprehensive documentation update for all sessions and phases (27b16ac)
 
 ### Other Changes
+
 - Resolve CHANGELOG.md merge conflict with main (5cbfd8f)
 - Merge pull request #57 from kafaat/claude/implement-todo-zrBPj (464b432)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.1...v1.8.2
-
 
 ---
 
