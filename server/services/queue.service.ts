@@ -21,9 +21,11 @@ import {
   bookings,
   financialLedger,
   refreshTokens,
+  users,
 } from "../../drizzle/schema";
 import { eq, lt, and, isNull, sql } from "drizzle-orm";
 import { sendBookingConfirmation } from "./email.service";
+import { createNotification } from "./notification.service";
 import { stripe } from "../stripe";
 
 /**
@@ -317,15 +319,52 @@ class QueueService {
           await sendBookingConfirmation(data);
           break;
 
-        case EmailJobType.CANCELLATION_NOTICE:
-          // TODO: Implement sendCancellationNotice
-          logger.info({ type, data }, "Cancellation notice email placeholder");
-          break;
+        case EmailJobType.CANCELLATION_NOTICE: {
+          // Look up user by email to create in-app notification + email
+          const cancellationDb = await getDb();
+          if (cancellationDb && data.passengerEmail) {
+            const [user] = await cancellationDb
+              .select({ id: users.id })
+              .from(users)
+              .where(eq(users.email, data.passengerEmail))
+              .limit(1);
 
-        case EmailJobType.REFUND_NOTICE:
-          // TODO: Implement sendRefundNotice
-          logger.info({ type, data }, "Refund notice email placeholder");
+            if (user) {
+              const reason = data.reason ? ` Reason: ${data.reason}` : "";
+              await createNotification(
+                user.id,
+                "booking",
+                "Booking Cancelled",
+                `Your booking ${data.bookingReference} has been cancelled.${reason}`
+              );
+            }
+          }
+          logger.info({ type, data }, "Cancellation notice sent");
           break;
+        }
+
+        case EmailJobType.REFUND_NOTICE: {
+          // Look up user by email to create in-app notification + email
+          const refundDb = await getDb();
+          if (refundDb && data.passengerEmail) {
+            const [user] = await refundDb
+              .select({ id: users.id })
+              .from(users)
+              .where(eq(users.email, data.passengerEmail))
+              .limit(1);
+
+            if (user) {
+              await createNotification(
+                user.id,
+                "booking",
+                "Refund Processed",
+                `Your refund of ${data.refundAmount} ${data.currency || "SAR"} for booking ${data.bookingReference} has been processed.`
+              );
+            }
+          }
+          logger.info({ type, data }, "Refund notice sent");
+          break;
+        }
 
         case EmailJobType.PAYMENT_RECEIPT:
           // Use booking confirmation for now
@@ -745,8 +784,15 @@ class QueueService {
     );
 
     try {
-      // TODO: Implement push notifications when needed
-      // For now, log the notification
+      // Create in-app notification which also handles email delivery
+      await createNotification(
+        userId,
+        type || "system",
+        message || "Notification",
+        message || "",
+        metadata
+      );
+
       logger.info(
         {
           jobId: job.id,

@@ -17,6 +17,7 @@ import {
   sendBookingConfirmation,
   sendFlightStatusChange,
   sendRefundConfirmation,
+  sendNotificationEmail,
   type BookingConfirmationData,
   type FlightStatusChangeData,
   type RefundConfirmationData,
@@ -167,21 +168,71 @@ async function processEmailJob(
         break;
       }
 
-      case "flight_reminder":
-      case "payment_receipt":
+      case "flight_reminder": {
+        const reminderData: BookingConfirmationData = {
+          passengerName: templateData.passengerName as string,
+          passengerEmail: to,
+          bookingReference: (templateData.bookingReference as string) || "",
+          pnr: (templateData.pnr as string) || "",
+          flightNumber: templateData.flightNumber as string,
+          origin: templateData.origin as string,
+          destination: templateData.destination as string,
+          departureTime: new Date(templateData.departureTime as string),
+          arrivalTime: new Date(
+            (templateData.arrivalTime as string) ||
+              (templateData.departureTime as string)
+          ),
+          cabinClass: (templateData.cabinClass as string) || "economy",
+          numberOfPassengers: (templateData.numberOfPassengers as number) || 1,
+          totalAmount: (templateData.totalAmount as number) || 0,
+        };
+        success = await sendBookingConfirmation(reminderData);
+        break;
+      }
+
+      case "payment_receipt": {
+        const receiptData: BookingConfirmationData = {
+          passengerName: templateData.passengerName as string,
+          passengerEmail: to,
+          bookingReference: (templateData.bookingReference as string) || "",
+          pnr:
+            (templateData.pnr as string) ||
+            (templateData.bookingReference as string) ||
+            "",
+          flightNumber: (templateData.flightNumber as string) || "",
+          origin: (templateData.origin as string) || "",
+          destination: (templateData.destination as string) || "",
+          departureTime: new Date(
+            (templateData.departureTime as string) || new Date()
+          ),
+          arrivalTime: new Date(
+            (templateData.arrivalTime as string) ||
+              (templateData.departureTime as string) ||
+              new Date()
+          ),
+          cabinClass: (templateData.cabinClass as string) || "economy",
+          numberOfPassengers: (templateData.numberOfPassengers as number) || 1,
+          totalAmount: (templateData.totalAmount as number) || 0,
+        };
+        success = await sendBookingConfirmation(receiptData);
+        break;
+      }
+
       case "password_reset":
       case "welcome":
       default: {
-        // For other types, use generic email sending
-        // TODO: Implement specific templates for these types
-        log("warn", `Using generic template for email type: ${type}`, {
+        // Generic email types handled via sendNotificationEmail.
+        // password_reset and welcome will use the generic notification template;
+        // dedicated templates require SMTP/provider integration beyond current scope.
+        log("info", `Sending generic notification email for type: ${type}`, {
           jobId: job.id,
           type,
         });
-
-        // Simulate sending for now
-        await new Promise(resolve => setTimeout(resolve, 100));
-        success = true;
+        const message =
+          (templateData.message as string) ||
+          (templateData.body as string) ||
+          job.data.subject;
+        success = await sendNotificationEmail(to, job.data.subject, message);
         break;
       }
     }

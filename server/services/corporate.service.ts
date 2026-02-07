@@ -945,7 +945,7 @@ export async function getCorporateStats(corporateAccountId: number): Promise<{
       .filter(b => b.approvalStatus === "approved")
       .reduce((sum, b) => sum + b.totalAmount, 0),
     userCount: Number(userCountResult[0]?.count || 0),
-    creditRemaining: account.creditLimit - Math.abs(account.balance),
+    creditRemaining: Math.max(0, account.creditLimit - account.balance),
   };
 
   return stats;

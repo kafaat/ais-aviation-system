@@ -44,6 +44,7 @@ export const eticketRouter = router({
           userId: bookings.userId,
           cabinClass: bookings.cabinClass,
           totalAmount: bookings.totalAmount,
+          status: bookings.status,
           flightNumber: flights.flightNumber,
           airlineId: flights.airlineId,
           departureTime: flights.departureTime,
@@ -60,6 +61,14 @@ export const eticketRouter = router({
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",
+        });
+      }
+
+      // Check if booking is confirmed
+      if (booking.status !== "confirmed" && booking.status !== "completed") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Booking must be confirmed before generating an e-ticket",
         });
       }
 

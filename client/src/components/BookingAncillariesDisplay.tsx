@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,7 @@ const categoryIcons: Record<string, any> = {
 export function BookingAncillariesDisplay({
   bookingId,
 }: BookingAncillariesDisplayProps) {
+  const { t } = useTranslation();
   const { data: ancillaries, isLoading } =
     trpc.ancillary.getBookingAncillaries.useQuery({ bookingId });
 
@@ -44,10 +46,10 @@ export function BookingAncillariesDisplay({
     <Card className="p-4 bg-blue-50 border-blue-200">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-sm font-semibold text-blue-900">
-          الخدمات الإضافية
+          {t("bookingAncillaries.title")}
         </h4>
         <Badge variant="secondary" className="bg-blue-100 text-blue-900">
-          {ancillaries.length} خدمة
+          {t("bookingAncillaries.serviceCount", { count: ancillaries.length })}
         </Badge>
       </div>
 
@@ -73,16 +75,16 @@ export function BookingAncillariesDisplay({
                 </span>
               </div>
               <span className="font-medium text-gray-900">
-                {(ancillary.totalPrice / 100).toFixed(2)} ر.س
+                {(ancillary.totalPrice / 100).toFixed(2)} {t("common.sar")}
               </span>
             </div>
           );
         })}
 
         <div className="flex items-center justify-between text-sm font-semibold pt-2 border-t border-blue-200">
-          <span className="text-blue-900">المجموع</span>
+          <span className="text-blue-900">{t("bookingAncillaries.total")}</span>
           <span className="text-blue-900">
-            {(totalCost / 100).toFixed(2)} ر.س
+            {(totalCost / 100).toFixed(2)} {t("common.sar")}
           </span>
         </div>
       </div>

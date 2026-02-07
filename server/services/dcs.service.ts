@@ -83,6 +83,14 @@ export async function createAircraftType(data: {
   forwardCgLimit?: string;
   aftCgLimit?: string;
 }) {
+  // Validate that totalSeats can accommodate economy + business seats
+  if (data.totalSeats < data.economySeats + data.businessSeats) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Total seats (${data.totalSeats}) must be greater than or equal to the sum of economy seats (${data.economySeats}) and business seats (${data.businessSeats})`,
+    });
+  }
+
   const db = await getDb();
   if (!db)
     throw new TRPCError({

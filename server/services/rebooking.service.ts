@@ -73,6 +73,7 @@ export async function getRebookData(
       userId: bookings.userId,
       flightId: bookings.flightId,
       cabinClass: bookings.cabinClass,
+      status: bookings.status,
     })
     .from(bookings)
     .where(eq(bookings.id, bookingId))
@@ -91,6 +92,15 @@ export async function getRebookData(
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Access denied",
+    });
+  }
+
+  // Only confirmed and pending bookings are eligible for rebooking
+  const rebookableStatuses = ["confirmed", "pending"];
+  if (!rebookableStatuses.includes(booking.status)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: `Booking cannot be rebooked because it is ${booking.status}. Only confirmed or pending bookings are eligible for rebooking.`,
     });
   }
 

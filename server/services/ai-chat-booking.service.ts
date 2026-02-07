@@ -5,7 +5,7 @@
  * Supports natural language flight search, recommendations, and booking
  */
 
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, lt } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -214,24 +214,33 @@ export async function sendMessage(
 
   // Call LLM
   const startTime = Date.now();
-  const llmResponse = await invokeLLM({
-    messages: llmMessages,
-    maxTokens: 1024,
-  });
-  const processingTime = Date.now() - startTime;
+  let responseContent =
+    "عذراً، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.\n\nSorry, an error occurred while processing your request. Please try again.";
+  let processingTime = 0;
 
-  // Extract response content from LLM result
-  let responseContent = "عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.";
-  if (llmResponse.choices && llmResponse.choices.length > 0) {
-    const choice = llmResponse.choices[0];
-    if (typeof choice.message.content === "string") {
-      responseContent = choice.message.content;
-    } else if (Array.isArray(choice.message.content)) {
-      const textContent = choice.message.content.find(c => c.type === "text");
-      if (textContent && "text" in textContent) {
-        responseContent = textContent.text;
+  try {
+    const llmResponse = await invokeLLM({
+      messages: llmMessages,
+      maxTokens: 1024,
+    });
+    processingTime = Date.now() - startTime;
+
+    // Extract response content from LLM result
+    if (llmResponse.choices && llmResponse.choices.length > 0) {
+      const choice = llmResponse.choices[0];
+      if (typeof choice.message.content === "string") {
+        responseContent = choice.message.content;
+      } else if (Array.isArray(choice.message.content)) {
+        const textContent = choice.message.content.find(c => c.type === "text");
+        if (textContent && "text" in textContent) {
+          responseContent = textContent.text;
+        }
       }
     }
+  } catch (error) {
+    processingTime = Date.now() - startTime;
+    console.error("LLM invocation failed:", error);
+    // responseContent already set to the friendly error message above
   }
 
   // Parse intent and search if needed
@@ -639,7 +648,7 @@ export async function archiveOldConversations(
     .where(
       and(
         eq(chatConversations.status, "active"),
-        eq(chatConversations.lastMessageAt, cutoffDate)
+        lt(chatConversations.lastMessageAt, cutoffDate)
       )
     );
 
@@ -651,7 +660,7 @@ export async function archiveOldConversations(
     .where(
       and(
         eq(chatConversations.status, "active"),
-        eq(chatConversations.lastMessageAt, cutoffDate)
+        lt(chatConversations.lastMessageAt, cutoffDate)
       )
     );
 

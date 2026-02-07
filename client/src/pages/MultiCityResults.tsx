@@ -75,6 +75,7 @@ export default function MultiCityResults() {
   const [cabinClass, setCabinClass] = useState<"economy" | "business">(
     "economy"
   );
+  const [passengerCount, setPassengerCount] = useState(1);
 
   const currentLocale = i18n.language === "ar" ? ar : enUS;
 
@@ -108,6 +109,14 @@ export default function MultiCityResults() {
     if (classParam === "business") {
       setCabinClass("business");
     }
+
+    const passengersParam = searchParams.get("passengers");
+    if (passengersParam) {
+      const parsed = parseInt(passengersParam);
+      if (!isNaN(parsed) && parsed >= 1) {
+        setPassengerCount(parsed);
+      }
+    }
   }, [location]);
 
   // Search mutation for multi-city flights
@@ -124,7 +133,7 @@ export default function MultiCityResults() {
         flightId: sf.flightId,
         cabinClass,
       })),
-      passengerCount: 1, // TODO: Get from URL params
+      passengerCount,
     },
     {
       enabled:

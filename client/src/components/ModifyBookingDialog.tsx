@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import {
   Dialog,
@@ -41,6 +42,7 @@ export function ModifyBookingDialog({
   onOpenChange,
   booking,
 }: ModifyBookingDialogProps) {
+  const { t } = useTranslation();
   const [selectedTab, setSelectedTab] = useState<"date" | "upgrade">("date");
   const [selectedFlightId, _setSelectedFlightId] = useState<number | null>(
     null
@@ -66,44 +68,44 @@ export function ModifyBookingDialog({
     trpc.modifications.requestChangeDate.useMutation({
       onSuccess: async data => {
         if (data.requiresPayment && data.totalCost > 0) {
-          toast.success(
-            "Modification request created! Redirecting to payment..."
-          );
+          toast.success(t("modifyBooking.dateChangePaymentRedirect"));
           // TODO: Create Stripe payment intent for the difference
         } else if (data.totalCost < 0) {
           toast.success(
-            `Modification approved! You'll receive a refund of ${Math.abs(data.totalCost / 100)} SAR`
+            t("modifyBooking.dateChangeRefund", {
+              amount: Math.abs(data.totalCost / 100),
+            })
           );
         } else {
-          toast.success("Modification request submitted successfully!");
+          toast.success(t("modifyBooking.dateChangeSuccess"));
         }
         await utils.bookings.myBookings.invalidate();
         onOpenChange(false);
         setIsProcessing(false);
       },
       onError: error => {
-        toast.error(error.message || "Failed to request modification");
+        toast.error(error.message || t("modifyBooking.dateChangeError"));
         setIsProcessing(false);
       },
     });
 
   const requestUpgradeMutation = trpc.modifications.requestUpgrade.useMutation({
     onSuccess: async _data => {
-      toast.success("Upgrade request created! Redirecting to payment...");
+      toast.success(t("modifyBooking.upgradePaymentRedirect"));
       // TODO: Create Stripe payment intent for upgrade
       await utils.bookings.myBookings.invalidate();
       onOpenChange(false);
       setIsProcessing(false);
     },
     onError: error => {
-      toast.error(error.message || "Failed to request upgrade");
+      toast.error(error.message || t("modifyBooking.upgradeError"));
       setIsProcessing(false);
     },
   });
 
   const _handleChangeDate = () => {
     if (!selectedFlightId) {
-      toast.error("Please select a new flight");
+      toast.error(t("modifyBooking.selectFlightError"));
       return;
     }
 
@@ -128,12 +130,15 @@ export function ModifyBookingDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            تعديل الحجز
+            {t("modifyBooking.title")}
             <Badge variant="outline">{booking.bookingReference}</Badge>
           </DialogTitle>
           <DialogDescription>
-            رحلة {booking.flightNumber} • {booking.originName} →{" "}
-            {booking.destinationName}
+            {t("modifyBooking.flightInfo", {
+              flightNumber: booking.flightNumber,
+              origin: booking.originName,
+              destination: booking.destinationName,
+            })}
           </DialogDescription>
         </DialogHeader>
 
@@ -144,7 +149,7 @@ export function ModifyBookingDialog({
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="date" className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
-              تغيير التاريخ
+              {t("modifyBooking.changeDateTab")}
             </TabsTrigger>
             <TabsTrigger
               value="upgrade"
@@ -152,7 +157,7 @@ export function ModifyBookingDialog({
               disabled={booking.cabinClass === "business"}
             >
               <ArrowUpCircle className="h-4 w-4" />
-              ترقية الدرجة
+              {t("modifyBooking.upgradeTab")}
             </TabsTrigger>
           </TabsList>
 
@@ -161,12 +166,14 @@ export function ModifyBookingDialog({
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5" />
                 <div className="text-sm">
-                  <p className="font-medium mb-1">سياسة تغيير التاريخ</p>
+                  <p className="font-medium mb-1">
+                    {t("modifyBooking.dateChangePolicy")}
+                  </p>
                   <ul className="space-y-1 text-muted-foreground">
-                    <li>• أكثر من 7 أيام: بدون رسوم</li>
-                    <li>• 3-7 أيام: رسوم 5%</li>
-                    <li>• 1-3 أيام: رسوم 10%</li>
-                    <li>• أقل من 24 ساعة: رسوم 15%</li>
+                    <li>{t("modifyBooking.policyMoreThan7Days")}</li>
+                    <li>{t("modifyBooking.policy3to7Days")}</li>
+                    <li>{t("modifyBooking.policy1to3Days")}</li>
+                    <li>{t("modifyBooking.policyLessThan24Hours")}</li>
                   </ul>
                 </div>
               </div>
@@ -179,10 +186,10 @@ export function ModifyBookingDialog({
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground">
-                  يرجى التواصل مع خدمة العملاء لتغيير تاريخ الرحلة
+                  {t("modifyBooking.contactCustomerService")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  سيتم إضافة خاصية البحث عن رحلات بديلة قريباً
+                  {t("modifyBooking.alternativeFlightsComingSoon")}
                 </p>
               </div>
             )}
@@ -193,9 +200,11 @@ export function ModifyBookingDialog({
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5" />
                 <div className="text-sm">
-                  <p className="font-medium mb-1">ترقية إلى درجة الأعمال</p>
+                  <p className="font-medium mb-1">
+                    {t("modifyBooking.upgradeTitle")}
+                  </p>
                   <p className="text-muted-foreground">
-                    استمتع بمقاعد أوسع، خدمة مميزة، وأولوية في الصعود
+                    {t("modifyBooking.upgradeDescription")}
                   </p>
                 </div>
               </div>
@@ -204,24 +213,27 @@ export function ModifyBookingDialog({
             <div className="space-y-3">
               <div className="flex justify-between items-center py-2 border-b">
                 <span className="text-sm text-muted-foreground">
-                  السعر الحالي (درجة الاقتصاد)
+                  {t("modifyBooking.currentPrice")}
                 </span>
                 <span className="font-medium">
-                  {(booking.totalAmount / 100).toFixed(2)} ر.س
+                  {(booking.totalAmount / 100).toFixed(2)} {t("common.sar")}
                 </span>
               </div>
               <div className="flex justify-between items-center py-2 border-b">
                 <span className="text-sm text-muted-foreground">
-                  السعر بعد الترقية (تقديري)
+                  {t("modifyBooking.upgradePrice")}
                 </span>
                 <span className="font-medium">
-                  {((booking.totalAmount * 2) / 100).toFixed(2)} ر.س
+                  {((booking.totalAmount * 2) / 100).toFixed(2)}{" "}
+                  {t("common.sar")}
                 </span>
               </div>
               <div className="flex justify-between items-center py-2">
-                <span className="text-sm font-medium">الفرق المطلوب دفعه</span>
+                <span className="text-sm font-medium">
+                  {t("modifyBooking.priceDifference")}
+                </span>
                 <span className="font-bold text-lg text-primary">
-                  {(booking.totalAmount / 100).toFixed(2)} ر.س
+                  {(booking.totalAmount / 100).toFixed(2)} {t("common.sar")}
                 </span>
               </div>
             </div>
@@ -231,13 +243,13 @@ export function ModifyBookingDialog({
                 <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
                 <div className="text-sm">
                   <p className="font-medium text-green-900 dark:text-green-100 mb-1">
-                    مزايا درجة الأعمال
+                    {t("modifyBooking.businessBenefits")}
                   </p>
                   <ul className="space-y-1 text-green-700 dark:text-green-200">
-                    <li>• مقاعد قابلة للإمالة بالكامل</li>
-                    <li>• وجبات فاخرة ومشروبات مجانية</li>
-                    <li>• أولوية في تسجيل الوصول والصعود</li>
-                    <li>• حقيبة إضافية مجاناً</li>
+                    <li>{t("modifyBooking.benefitFullyReclining")}</li>
+                    <li>{t("modifyBooking.benefitGourmetMeals")}</li>
+                    <li>{t("modifyBooking.benefitPriorityBoarding")}</li>
+                    <li>{t("modifyBooking.benefitExtraBag")}</li>
                   </ul>
                 </div>
               </div>
@@ -251,17 +263,17 @@ export function ModifyBookingDialog({
             onClick={() => onOpenChange(false)}
             disabled={isProcessing}
           >
-            إلغاء
+            {t("common.cancel")}
           </Button>
           {selectedTab === "upgrade" && booking.cabinClass !== "business" && (
             <Button onClick={handleUpgrade} disabled={isProcessing}>
               {isProcessing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  جاري المعالجة...
+                  {t("modifyBooking.processing")}
                 </>
               ) : (
-                "تأكيد الترقية"
+                t("modifyBooking.confirmUpgrade")
               )}
             </Button>
           )}

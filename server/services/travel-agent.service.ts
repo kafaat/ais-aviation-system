@@ -446,6 +446,28 @@ export async function createAgentBooking(
     });
   }
 
+  // Check monthly booking limit
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const monthlyBookings = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(agentBookings)
+    .where(
+      and(
+        eq(agentBookings.agentId, agentId),
+        gte(agentBookings.createdAt, monthStart)
+      )
+    );
+
+  if ((monthlyBookings[0]?.count ?? 0) >= agent.monthlyBookingLimit) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Monthly booking limit exceeded",
+    });
+  }
+
   // Get flight details
   const [flight] = await db
     .select()

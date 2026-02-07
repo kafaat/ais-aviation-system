@@ -29,6 +29,16 @@ export const waitlistRouter = router({
         cabinClass: z
           .enum(["economy", "business"])
           .describe("Cabin class preference"),
+        notifyByEmail: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe("Receive email notifications"),
+        notifyBySms: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe("Receive SMS notifications"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -36,7 +46,9 @@ export const waitlistRouter = router({
         ctx.user.id,
         input.flightId,
         input.passengers,
-        input.cabinClass
+        input.cabinClass,
+        input.notifyByEmail,
+        input.notifyBySms
       );
     }),
 

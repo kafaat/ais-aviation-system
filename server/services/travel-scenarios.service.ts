@@ -7,7 +7,9 @@ import {
   passengers,
   userPreferences,
 } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
+import type { MySql2Database } from "drizzle-orm/mysql2";
+import type * as schema from "../../drizzle/schema";
 
 /**
  * Travel Scenarios Service
@@ -255,6 +257,30 @@ function haversineDistance(
 }
 
 /**
+ * Look up coordinates for an airport by querying the DB for other airports
+ * in the same country and checking if any of them exist in the coordinates map.
+ * This provides a reasonable proxy when the exact airport is not in the hardcoded map.
+ */
+async function findCoordsByCountryFromDb(
+  database: MySql2Database<typeof schema>,
+  country: string,
+  excludeCode: string
+): Promise<{ lat: number; lon: number } | undefined> {
+  const sameCountryAirports = await database
+    .select({ code: airports.code })
+    .from(airports)
+    .where(and(eq(airports.country, country), ne(airports.code, excludeCode)));
+
+  for (const apt of sameCountryAirports) {
+    const coords = AIRPORT_COORDINATES[apt.code];
+    if (coords) {
+      return coords;
+    }
+  }
+  return undefined;
+}
+
+/**
  * CO2 emission factors (kg CO2 per passenger per km)
  * Based on ICAO Carbon Emissions Calculator methodology
  */
@@ -294,14 +320,23 @@ export async function calculateCarbonOffset(flightId: number): Promise<{
     throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
   }
 
+  // Fetch airport data including city and country from the database
   const originResult = await database
-    .select({ code: airports.code })
+    .select({
+      code: airports.code,
+      city: airports.city,
+      country: airports.country,
+    })
     .from(airports)
     .where(eq(airports.id, flightResult[0].originId))
     .limit(1);
 
   const destResult = await database
-    .select({ code: airports.code })
+    .select({
+      code: airports.code,
+      city: airports.city,
+      country: airports.country,
+    })
     .from(airports)
     .where(eq(airports.id, flightResult[0].destinationId))
     .limit(1);
@@ -309,13 +344,38 @@ export async function calculateCarbonOffset(flightId: number): Promise<{
   const originCode = originResult[0]?.code ?? "";
   const destCode = destResult[0]?.code ?? "";
 
-  const origin = AIRPORT_COORDINATES[originCode];
-  const dest = AIRPORT_COORDINATES[destCode];
+  // Try the hardcoded coordinates map first
+  let originCoords: { lat: number; lon: number } | undefined =
+    AIRPORT_COORDINATES[originCode];
+  let destCoords: { lat: number; lon: number } | undefined =
+    AIRPORT_COORDINATES[destCode];
 
-  // Default distance if coordinates not found (estimate 1500km)
+  // If not found in the coordinates map, use DB airport data to find a
+  // nearby airport in the same country as a proxy for distance estimation
+  if (!originCoords && originResult[0]) {
+    originCoords = await findCoordsByCountryFromDb(
+      database,
+      originResult[0].country,
+      originResult[0].code
+    );
+  }
+  if (!destCoords && destResult[0]) {
+    destCoords = await findCoordsByCountryFromDb(
+      database,
+      destResult[0].country,
+      destResult[0].code
+    );
+  }
+
+  // Fall back to default distance of 1500km only if coordinates still unavailable
   const distanceKm =
-    origin && dest
-      ? haversineDistance(origin.lat, origin.lon, dest.lat, dest.lon)
+    originCoords && destCoords
+      ? haversineDistance(
+          originCoords.lat,
+          originCoords.lon,
+          destCoords.lat,
+          destCoords.lon
+        )
       : 1500;
 
   const co2Economy = Math.round(distanceKm * CO2_FACTORS.economy);

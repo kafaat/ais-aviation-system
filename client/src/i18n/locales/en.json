@@ -59,7 +59,10 @@
     "analytics": "Analytics",
     "reports": "Reports",
     "refunds": "Refunds",
-    "groupBookings": "Group Bookings"
+    "groupBookings": "Group Bookings",
+    "baggage": "Baggage Management",
+    "corporate": "Corporate Accounts",
+    "travelAgents": "Travel Agents"
   },
   "home": {
     "hero": {
@@ -804,7 +807,33 @@
     "contactSupport": "Contact our support team",
     "technicalDetails": "Technical Details",
     "errorApology": "We apologize for the inconvenience. An unexpected error has occurred.",
-    "persistentError": "If this problem persists, please contact our support team."
+    "persistentError": "If this problem persists, please contact our support team.",
+    "reportConfirmation": "Thank you for reporting this error. Our team has been notified and will look into it."
+  },
+  "manus": {
+    "loginDescription": "Please login with Manus to continue",
+    "loginButton": "Login with Manus"
+  },
+  "eticket": {
+    "noPassenger": "No passenger associated with this booking",
+    "downloadSuccess": "E-ticket downloaded successfully",
+    "downloadError": "Failed to download e-ticket",
+    "boardingPassSuccess": "Boarding pass downloaded successfully",
+    "boardingPassError": "Failed to download boarding pass",
+    "calendarSuccess": "Calendar event downloaded",
+    "calendarError": "Failed to generate calendar"
+  },
+  "manageAncillaries": {
+    "title": "Manage Additional Services",
+    "description": "Add or remove additional services for your booking",
+    "currentServices": "Current Services",
+    "availableServices": "Available Services",
+    "noServices": "No additional services currently",
+    "addSuccess": "Service added successfully",
+    "addError": "Failed to add service",
+    "removeSuccess": "Service removed successfully",
+    "removeError": "Failed to remove service",
+    "quantity": "Quantity"
   },
   "flightStatus": {
     "live": "Live",
@@ -1973,5 +2002,66 @@
     "disclaimer": "AI assistant may make mistakes. Always verify flight details before booking.",
     "messageBlocked": "Message blocked by content filter",
     "piiWarning": "Personal information was detected and masked for your safety"
+  },
+  "cancelBooking": {
+    "title": "Cancel Booking & Refund",
+    "bookingRef": "Booking Reference: {{ref}}",
+    "successMessage": "Booking cancelled and refund processed successfully",
+    "errorMessage": "An error occurred while cancelling the booking",
+    "notCancellable": "This booking cannot be cancelled",
+    "notCancellableDefault": "Booking is not eligible for cancellation",
+    "fullRefund": "Full Refund (100%)",
+    "partialRefund": "{{percentage}}% Refund",
+    "originalAmount": "Original Amount:",
+    "cancellationFee": "Cancellation Fee ({{percentage}}%):",
+    "refundAmount": "Refund Amount:",
+    "refundAmountTitle": "Refund Amount",
+    "refundProcessing": "Refund will be processed to the original payment method within 5-10 business days",
+    "reasonLabel": "Cancellation Reason",
+    "reasonChangeOfPlans": "Change of plans",
+    "reasonDuplicate": "Duplicate booking",
+    "reasonOther": "Other",
+    "additionalNotes": "Additional Notes (Optional)",
+    "notesPlaceholder": "Add any additional notes...",
+    "warningMessage": "Once the booking is cancelled, this action cannot be undone. The refund will be processed automatically.",
+    "processing": "Cancelling...",
+    "confirmCancel": "Confirm Cancellation"
+  },
+  "modifyBooking": {
+    "title": "Modify Booking",
+    "flightInfo": "Flight {{flightNumber}} - {{origin}} to {{destination}}",
+    "changeDateTab": "Change Date",
+    "upgradeTab": "Upgrade Class",
+    "dateChangePolicy": "Date Change Policy",
+    "policyMoreThan7Days": "More than 7 days: No fee",
+    "policy3to7Days": "3-7 days: 5% fee",
+    "policy1to3Days": "1-3 days: 10% fee",
+    "policyLessThan24Hours": "Less than 24 hours: 15% fee",
+    "contactCustomerService": "Please contact customer service to change your flight date",
+    "alternativeFlightsComingSoon": "Alternative flight search will be available soon",
+    "upgradeTitle": "Upgrade to Business Class",
+    "upgradeDescription": "Enjoy wider seats, premium service, and priority boarding",
+    "currentPrice": "Current Price (Economy)",
+    "upgradePrice": "Price After Upgrade (Estimated)",
+    "priceDifference": "Amount to Pay",
+    "businessBenefits": "Business Class Benefits",
+    "benefitFullyReclining": "Fully reclining seats",
+    "benefitGourmetMeals": "Gourmet meals and complimentary drinks",
+    "benefitPriorityBoarding": "Priority check-in and boarding",
+    "benefitExtraBag": "Free extra baggage",
+    "processing": "Processing...",
+    "confirmUpgrade": "Confirm Upgrade",
+    "dateChangePaymentRedirect": "Modification request created! Redirecting to payment...",
+    "dateChangeRefund": "Modification approved! You'll receive a refund of {{amount}} SAR",
+    "dateChangeSuccess": "Modification request submitted successfully!",
+    "dateChangeError": "Failed to request modification",
+    "upgradePaymentRedirect": "Upgrade request created! Redirecting to payment...",
+    "upgradeError": "Failed to request upgrade",
+    "selectFlightError": "Please select a new flight"
+  },
+  "bookingAncillaries": {
+    "title": "Additional Services",
+    "serviceCount": "{{count}} service(s)",
+    "total": "Total"
   }
 }

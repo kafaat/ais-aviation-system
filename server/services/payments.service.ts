@@ -81,7 +81,7 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       line_items: [
         {
           price_data: {
-            currency: input.currency || "usd",
+            currency: input.currency || "sar",
             product_data: {
               name: `Flight Booking - ${booking.bookingReference}`,
               description: `PNR: ${booking.pnr}`,

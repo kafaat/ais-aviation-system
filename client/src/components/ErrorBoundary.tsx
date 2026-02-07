@@ -7,6 +7,7 @@ import {
 } from "@/lib/sentry";
 import { AlertTriangle, RotateCcw, Bug, Home, ChevronDown } from "lucide-react";
 import React, { Component, ReactNode } from "react";
+import i18n from "i18next";
 
 interface Props {
   children: ReactNode;
@@ -95,9 +96,7 @@ class ErrorBoundary extends Component<Props, State> {
     console.info("Error Report:", errorReport);
 
     // Show confirmation to user
-    alert(
-      "Thank you for reporting this error. Our team has been notified and will look into it."
-    );
+    alert(i18n.t("errors.reportConfirmation"));
   };
 
   handleGoHome = () => {
@@ -131,11 +130,10 @@ class ErrorBoundary extends Component<Props, State> {
               {/* Content */}
               <div className="p-6 text-center">
                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-                  Something went wrong
+                  {i18n.t("errors.somethingWentWrong")}
                 </h2>
                 <p className="text-slate-600 dark:text-slate-400 mb-6">
-                  We apologize for the inconvenience. An unexpected error has
-                  occurred.
+                  {i18n.t("errors.errorApology")}
                 </p>
 
                 {/* Action Buttons */}
@@ -150,7 +148,7 @@ class ErrorBoundary extends Component<Props, State> {
                     )}
                   >
                     <RotateCcw className="h-5 w-5" />
-                    Try Again
+                    {i18n.t("errors.tryAgain")}
                   </button>
 
                   <button
@@ -163,7 +161,7 @@ class ErrorBoundary extends Component<Props, State> {
                     )}
                   >
                     <Home className="h-5 w-5" />
-                    Go Home
+                    {i18n.t("errors.goHome")}
                   </button>
                 </div>
 
@@ -178,7 +176,7 @@ class ErrorBoundary extends Component<Props, State> {
                   )}
                 >
                   <Bug className="h-5 w-5" />
-                  Report this Error
+                  {i18n.t("errors.reportError")}
                 </button>
               </div>
 
@@ -193,7 +191,7 @@ class ErrorBoundary extends Component<Props, State> {
                     "cursor-pointer"
                   )}
                 >
-                  <span>Technical Details</span>
+                  <span>{i18n.t("errors.technicalDetails")}</span>
                   <ChevronDown
                     className={cn(
                       "h-4 w-4 transition-transform duration-200",
@@ -224,7 +222,7 @@ class ErrorBoundary extends Component<Props, State> {
 
             {/* Help text */}
             <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-4">
-              If this problem persists, please contact our support team.
+              {i18n.t("errors.persistentError")}
             </p>
           </div>
         </div>

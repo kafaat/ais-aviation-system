@@ -20,6 +20,7 @@ export interface FlightStatusUpdate {
   status: "scheduled" | "delayed" | "cancelled" | "completed";
   delayMinutes?: number;
   reason?: string;
+  adminUserId?: number;
 }
 
 /**
@@ -32,7 +33,7 @@ export async function updateFlightStatus(
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
-    const { flightId, status, delayMinutes, reason } = update;
+    const { flightId, status, delayMinutes, reason, adminUserId } = update;
 
     // Get flight details first
     const [flight] = await database
@@ -61,7 +62,7 @@ export async function updateFlightStatus(
       newStatus: status,
       delayMinutes,
       reason,
-      changedBy: null, // TODO: Add admin user ID when available
+      changedBy: adminUserId ?? null,
     });
 
     // Get all bookings for this flight with flight and airport details

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import {
   Dialog,
@@ -39,13 +40,13 @@ const categoryIcons: Record<string, any> = {
   priority_boarding: Zap,
 };
 
-const categoryNames: Record<string, string> = {
-  baggage: "الحقائب",
-  meal: "الوجبات",
-  seat: "المقاعد",
-  insurance: "التأمين",
-  lounge: "صالة الانتظار",
-  priority_boarding: "الصعود الأولوي",
+const categoryNameKeys: Record<string, string> = {
+  baggage: "ancillary.categories.baggage",
+  meal: "ancillary.categories.meal",
+  seat: "ancillary.categories.seat",
+  insurance: "ancillary.categories.insurance",
+  lounge: "ancillary.categories.lounge",
+  priority_boarding: "ancillary.categories.priority_boarding",
 };
 
 export function ManageAncillariesDialog({
@@ -55,6 +56,7 @@ export function ManageAncillariesDialog({
   cabinClass: _cabinClass,
   numberOfPassengers,
 }: ManageAncillariesDialogProps) {
+  const { t } = useTranslation();
   const utils = trpc.useUtils();
   const [selectedServices, setSelectedServices] = useState<
     Record<number, number>
@@ -73,10 +75,10 @@ export function ManageAncillariesDialog({
     onSuccess: () => {
       utils.ancillary.getBookingAncillaries.invalidate({ bookingId });
       utils.bookings.myBookings.invalidate();
-      toast.success("تمت إضافة الخدمة بنجاح");
+      toast.success(t("manageAncillaries.addSuccess"));
     },
     onError: error => {
-      toast.error(error.message || "فشل في إضافة الخدمة");
+      toast.error(error.message || t("manageAncillaries.addError"));
     },
   });
 
@@ -84,10 +86,10 @@ export function ManageAncillariesDialog({
     onSuccess: () => {
       utils.ancillary.getBookingAncillaries.invalidate({ bookingId });
       utils.bookings.myBookings.invalidate();
-      toast.success("تم حذف الخدمة بنجاح");
+      toast.success(t("manageAncillaries.removeSuccess"));
     },
     onError: error => {
-      toast.error(error.message || "فشل في حذف الخدمة");
+      toast.error(error.message || t("manageAncillaries.removeError"));
     },
   });
 
@@ -136,8 +138,10 @@ export function ManageAncillariesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>إدارة الخدمات الإضافية</DialogTitle>
-          <DialogDescription>أضف أو احذف خدمات إضافية لحجزك</DialogDescription>
+          <DialogTitle>{t("manageAncillaries.title")}</DialogTitle>
+          <DialogDescription>
+            {t("manageAncillaries.description")}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
@@ -146,7 +150,9 @@ export function ManageAncillariesDialog({
             <Skeleton className="h-32 w-full" />
           ) : currentAncillaries && currentAncillaries.length > 0 ? (
             <div>
-              <h3 className="text-sm font-semibold mb-3">الخدمات الحالية</h3>
+              <h3 className="text-sm font-semibold mb-3">
+                {t("manageAncillaries.currentServices")}
+              </h3>
               <div className="space-y-2">
                 {currentAncillaries.map(ancillary => {
                   if (!ancillary.service) return null;
@@ -164,8 +170,10 @@ export function ManageAncillariesDialog({
                             {ancillary.service.name}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            الكمية: {ancillary.quantity} •{" "}
-                            {(ancillary.totalPrice / 100).toFixed(2)} ر.س
+                            {t("manageAncillaries.quantity")}:{" "}
+                            {ancillary.quantity} •{" "}
+                            {(ancillary.totalPrice / 100).toFixed(2)}{" "}
+                            {t("common.sar")}
                           </p>
                         </div>
                       </div>
@@ -184,7 +192,7 @@ export function ManageAncillariesDialog({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
-              لا توجد خدمات إضافية حالياً
+              {t("manageAncillaries.noServices")}
             </p>
           )}
 
@@ -193,7 +201,9 @@ export function ManageAncillariesDialog({
             <Skeleton className="h-64 w-full" />
           ) : (
             <div>
-              <h3 className="text-sm font-semibold mb-3">الخدمات المتاحة</h3>
+              <h3 className="text-sm font-semibold mb-3">
+                {t("manageAncillaries.availableServices")}
+              </h3>
               <div className="space-y-4">
                 {groupedServices &&
                   Object.entries(groupedServices).map(
@@ -204,7 +214,7 @@ export function ManageAncillariesDialog({
                           <div className="flex items-center gap-2 mb-2">
                             <Icon className="h-4 w-4 text-primary" />
                             <h4 className="text-sm font-medium">
-                              {categoryNames[category]}
+                              {t(categoryNameKeys[category] || category)}
                             </h4>
                           </div>
                           <div className="space-y-2">
@@ -221,7 +231,8 @@ export function ManageAncillariesDialog({
                                     {service.description}
                                   </p>
                                   <p className="text-sm font-semibold text-primary mt-1">
-                                    {(service.price / 100).toFixed(2)} ر.س
+                                    {(service.price / 100).toFixed(2)}{" "}
+                                    {t("common.sar")}
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -262,7 +273,7 @@ export function ManageAncillariesDialog({
                                       addAncillary.isPending
                                     }
                                   >
-                                    إضافة
+                                    {t("common.add")}
                                   </Button>
                                 </div>
                               </div>

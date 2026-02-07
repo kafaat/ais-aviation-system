@@ -25,7 +25,7 @@ import {
   Luggage,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function BaggageStatus() {
   const { t } = useTranslation();

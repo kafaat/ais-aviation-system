@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { downloadPDFFromBase64 } from "@/lib/downloadPDF";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 function downloadFileFromBase64(
   base64: string,
@@ -36,12 +37,13 @@ export function DownloadETicketButton({
   bookingId,
   passengerId,
 }: DownloadETicketButtonProps) {
+  const { t } = useTranslation();
   const [isDownloading, setIsDownloading] = useState(false);
   const generateETicket = trpc.eticket.generateETicket.useMutation();
 
   const handleDownload = async () => {
     if (!passengerId) {
-      toast.error("لا يوجد راكب مرتبط بهذا الحجز");
+      toast.error(t("eticket.noPassenger"));
       return;
     }
 
@@ -53,10 +55,10 @@ export function DownloadETicketButton({
       });
 
       downloadPDFFromBase64(result.pdf, result.filename);
-      toast.success("تم تحميل التذكرة الإلكترونية بنجاح");
+      toast.success(t("eticket.downloadSuccess"));
     } catch (error: any) {
       console.error("Error downloading e-ticket:", error);
-      toast.error(error.message || "فشل تحميل التذكرة الإلكترونية");
+      toast.error(error.message || t("eticket.downloadError"));
     } finally {
       setIsDownloading(false);
     }
@@ -83,12 +85,13 @@ export function DownloadBoardingPassButton({
   bookingId,
   passengerId,
 }: DownloadBoardingPassButtonProps) {
+  const { t } = useTranslation();
   const [isDownloading, setIsDownloading] = useState(false);
   const generateBoardingPass = trpc.eticket.generateBoardingPass.useMutation();
 
   const handleDownload = async () => {
     if (!passengerId) {
-      toast.error("لا يوجد راكب مرتبط بهذا الحجز");
+      toast.error(t("eticket.noPassenger"));
       return;
     }
 
@@ -100,10 +103,10 @@ export function DownloadBoardingPassButton({
       });
 
       downloadPDFFromBase64(result.pdf, result.filename);
-      toast.success("تم تحميل بطاقة الصعود بنجاح");
+      toast.success(t("eticket.boardingPassSuccess"));
     } catch (error: any) {
       console.error("Error downloading boarding pass:", error);
-      toast.error(error.message || "فشل تحميل بطاقة الصعود");
+      toast.error(error.message || t("eticket.boardingPassError"));
     } finally {
       setIsDownloading(false);
     }
@@ -126,6 +129,7 @@ interface AddToCalendarButtonProps {
 }
 
 export function AddToCalendarButton({ bookingId }: AddToCalendarButtonProps) {
+  const { t } = useTranslation();
   const [isDownloading, setIsDownloading] = useState(false);
   const generateCalendar = trpc.eticket.generateCalendarEvent.useMutation();
 
@@ -134,10 +138,10 @@ export function AddToCalendarButton({ bookingId }: AddToCalendarButtonProps) {
     try {
       const result = await generateCalendar.mutateAsync({ bookingId });
       downloadFileFromBase64(result.ics, result.filename, "text/calendar");
-      toast.success("Calendar event downloaded");
+      toast.success(t("eticket.calendarSuccess"));
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : "Failed to generate calendar";
+        error instanceof Error ? error.message : t("eticket.calendarError");
       console.error("Error generating calendar event:", error);
       toast.error(message);
     } finally {
