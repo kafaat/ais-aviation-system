@@ -338,7 +338,7 @@ export default function MyWaitlist() {
                             </p>
                           </div>
                           {entry.status === "waiting" && (
-                            <div className="text-right">
+                            <div className="text-end">
                               <p className="text-xs text-muted-foreground">
                                 {t("waitlist.position")}
                               </p>
@@ -424,7 +424,7 @@ export default function MyWaitlist() {
 
                       {/* Actions */}
                       <div className="lg:col-span-4 flex flex-col justify-between">
-                        <div className="text-center lg:text-right mb-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl">
+                        <div className="text-center lg:text-end mb-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl">
                           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
                             {t("waitlist.joinedOn")}
                           </p>

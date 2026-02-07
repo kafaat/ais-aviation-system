@@ -13,12 +13,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import {
-  Luggage,
-  Utensils,
+  Package,
+  UtensilsCrossed,
   Armchair,
   Shield,
   Coffee,
-  PlaneIcon,
+  Zap,
   Plus,
   Minus,
 } from "lucide-react";
@@ -41,12 +41,12 @@ export interface SelectedAncillary {
 }
 
 const categoryIcons: Record<string, any> = {
-  baggage: Luggage,
-  meal: Utensils,
+  baggage: Package,
+  meal: UtensilsCrossed,
   seat: Armchair,
   insurance: Shield,
   lounge: Coffee,
-  priority_boarding: PlaneIcon,
+  priority_boarding: Zap,
 };
 
 export default function AncillarySelection({
@@ -159,7 +159,7 @@ export default function AncillarySelection({
       </CardHeader>
       <CardContent className="space-y-6">
         {Object.entries(groupedAncillaries).map(([category, services]) => {
-          const Icon = categoryIcons[category] || Luggage;
+          const Icon = categoryIcons[category] || Package;
           return (
             <div key={category} className="space-y-3">
               <div className="flex items-center gap-2">
@@ -205,7 +205,7 @@ export default function AncillarySelection({
                             )}
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-end">
                           <p className="font-semibold text-lg">
                             {(service.price / 100).toFixed(2)}{" "}
                             {t("common.currency")}
@@ -248,7 +248,7 @@ export default function AncillarySelection({
                               <Plus className="h-3 w-3" />
                             </Button>
                           </div>
-                          <div className="text-right">
+                          <div className="text-end">
                             <p className="text-sm text-muted-foreground">
                               {t("ancillary.subtotal")}
                             </p>

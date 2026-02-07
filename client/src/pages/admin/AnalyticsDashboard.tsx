@@ -344,13 +344,13 @@ export default function AnalyticsDashboard() {
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-background">
                     <tr className="border-b">
-                      <th className="text-right p-2">
+                      <th className="text-end p-2">
                         {t("admin.analytics.flightNumber")}
                       </th>
-                      <th className="text-right p-2">
+                      <th className="text-end p-2">
                         {t("admin.analytics.occupancy")}
                       </th>
-                      <th className="text-right p-2">
+                      <th className="text-end p-2">
                         {t("admin.analytics.seats")}
                       </th>
                     </tr>

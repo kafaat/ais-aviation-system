@@ -556,19 +556,19 @@ export default function Home() {
               <h4 className="font-semibold mb-4">{t("footer.quickLinks")}</h4>
               <ul className="space-y-2 text-sm text-gray-400">
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link href="/" className="hover:text-white transition-colors">
                     {t("footer.about")}
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link href="/" className="hover:text-white transition-colors">
                     {t("footer.contact")}
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link href="/" className="hover:text-white transition-colors">
                     {t("footer.terms")}
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -577,19 +577,28 @@ export default function Home() {
               <h4 className="font-semibold mb-4">{t("footer.services")}</h4>
               <ul className="space-y-2 text-sm text-gray-400">
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link
+                    href="/search"
+                    className="hover:text-white transition-colors"
+                  >
                     {t("footer.bookTickets")}
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link
+                    href="/my-bookings"
+                    className="hover:text-white transition-colors"
+                  >
                     {t("footer.manageBookings")}
-                  </a>
+                  </Link>
                 </li>
                 <li>
-                  <a href="#" className="hover:text-white transition-colors">
+                  <Link
+                    href="/check-in"
+                    className="hover:text-white transition-colors"
+                  >
                     {t("footer.checkIn")}
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
@@ -604,7 +613,7 @@ export default function Home() {
           </div>
 
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
-            © 2025 AIS - {t("footer.rights")}
+            © 2026 AIS - {t("footer.rights")}
           </div>
         </div>
       </footer>

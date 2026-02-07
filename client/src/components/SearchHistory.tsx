@@ -321,6 +321,7 @@ export function SearchHistory({
                   size="icon"
                   className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                   onClick={() => handleRemove(entry.id)}
+                  aria-label={t("common.delete")}
                 >
                   <X className="h-4 w-4" />
                 </Button>

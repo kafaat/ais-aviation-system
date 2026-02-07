@@ -171,7 +171,7 @@ export function GateDisplay({
         </div>
 
         {showBoardingTimes && gateInfo.boardingStartTime && (
-          <div className="text-right">
+          <div className="text-end">
             <p className="text-xs text-muted-foreground">
               {t("gates.boardingStarts")}
             </p>

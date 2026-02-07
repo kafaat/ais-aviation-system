@@ -131,7 +131,7 @@ export function InstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm">
+    <div className="fixed bottom-4 inset-x-4 z-50 md:start-auto md:end-4 md:max-w-sm">
       {/* Install Prompt */}
       {showInstallPrompt && deferredPrompt && (
         <Card className="shadow-lg border-primary/20">
@@ -144,7 +144,7 @@ export function InstallPrompt() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 -mt-1 -mr-1"
+                className="h-6 w-6 -mt-1 -me-1"
                 onClick={handleDismiss}
                 aria-label={t("common.cancel")}
               >
@@ -188,7 +188,7 @@ export function InstallPrompt() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 -mt-1 -mr-1"
+                className="h-6 w-6 -mt-1 -me-1"
                 onClick={handleUpdateDismiss}
                 aria-label={t("common.cancel")}
               >
