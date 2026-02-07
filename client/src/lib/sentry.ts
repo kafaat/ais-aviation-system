@@ -31,95 +31,95 @@ export function initSentry(): void {
   }
 
   try {
-  const config: SentryClientConfig = {
-    dsn,
-    environment: import.meta.env.MODE || "development",
-    release:
-      import.meta.env.VITE_SENTRY_RELEASE ||
-      `ais-aviation-system@${import.meta.env.VITE_APP_VERSION || "1.0.0"}`,
-    tracesSampleRate: parseFloat(
-      import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE || "0.1"
-    ),
-    replaysSessionSampleRate: parseFloat(
-      import.meta.env.VITE_SENTRY_REPLAYS_SESSION_SAMPLE_RATE || "0.1"
-    ),
-    replaysOnErrorSampleRate: parseFloat(
-      import.meta.env.VITE_SENTRY_REPLAYS_ERROR_SAMPLE_RATE || "1.0"
-    ),
-  };
+    const config: SentryClientConfig = {
+      dsn,
+      environment: import.meta.env.MODE || "development",
+      release:
+        import.meta.env.VITE_SENTRY_RELEASE ||
+        `ais-aviation-system@${import.meta.env.VITE_APP_VERSION || "1.0.0"}`,
+      tracesSampleRate: parseFloat(
+        import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE || "0.1"
+      ),
+      replaysSessionSampleRate: parseFloat(
+        import.meta.env.VITE_SENTRY_REPLAYS_SESSION_SAMPLE_RATE || "0.1"
+      ),
+      replaysOnErrorSampleRate: parseFloat(
+        import.meta.env.VITE_SENTRY_REPLAYS_ERROR_SAMPLE_RATE || "1.0"
+      ),
+    };
 
-  Sentry.init({
-    dsn: config.dsn,
-    environment: config.environment,
-    release: config.release,
+    Sentry.init({
+      dsn: config.dsn,
+      environment: config.environment,
+      release: config.release,
 
-    // Performance Monitoring
-    tracesSampleRate: config.tracesSampleRate,
+      // Performance Monitoring
+      tracesSampleRate: config.tracesSampleRate,
 
-    // Session Replay
-    replaysSessionSampleRate: config.replaysSessionSampleRate,
-    replaysOnErrorSampleRate: config.replaysOnErrorSampleRate,
+      // Session Replay
+      replaysSessionSampleRate: config.replaysSessionSampleRate,
+      replaysOnErrorSampleRate: config.replaysOnErrorSampleRate,
 
-    integrations: [
-      // Browser tracing for performance monitoring
-      Sentry.browserTracingIntegration({
-        // Set up automatic instrumentation for common scenarios
-        enableInp: true,
-      }),
+      integrations: [
+        // Browser tracing for performance monitoring
+        Sentry.browserTracingIntegration({
+          // Set up automatic instrumentation for common scenarios
+          enableInp: true,
+        }),
 
-      // Session replay for debugging
-      Sentry.replayIntegration({
-        // Mask all text content by default for privacy
-        maskAllText: false,
-        // Block all media for privacy
-        blockAllMedia: false,
-      }),
-    ],
+        // Session replay for debugging
+        Sentry.replayIntegration({
+          // Mask all text content by default for privacy
+          maskAllText: false,
+          // Block all media for privacy
+          blockAllMedia: false,
+        }),
+      ],
 
-    // Filter out certain errors
-    beforeSend(event, hint) {
-      const error = hint.originalException;
+      // Filter out certain errors
+      beforeSend(event, hint) {
+        const error = hint.originalException;
 
-      // Don't send certain types of errors
-      if (error instanceof Error) {
-        // Filter out common browser/network errors
-        const ignoredMessages = [
-          "ResizeObserver loop",
-          "Network Error",
-          "Failed to fetch",
-          "Load failed",
-          "ChunkLoadError",
-        ];
+        // Don't send certain types of errors
+        if (error instanceof Error) {
+          // Filter out common browser/network errors
+          const ignoredMessages = [
+            "ResizeObserver loop",
+            "Network Error",
+            "Failed to fetch",
+            "Load failed",
+            "ChunkLoadError",
+          ];
 
-        if (ignoredMessages.some(msg => error.message.includes(msg))) {
-          return null;
+          if (ignoredMessages.some(msg => error.message.includes(msg))) {
+            return null;
+          }
+
+          // Don't send 401/403 errors (expected authentication issues)
+          if (
+            error.message.includes("UNAUTHORIZED") ||
+            error.message.includes("FORBIDDEN")
+          ) {
+            return null;
+          }
         }
 
-        // Don't send 401/403 errors (expected authentication issues)
-        if (
-          error.message.includes("UNAUTHORIZED") ||
-          error.message.includes("FORBIDDEN")
-        ) {
-          return null;
-        }
-      }
-
-      return event;
-    },
-
-    // Add custom tags to all events
-    initialScope: {
-      tags: {
-        app: "ais-aviation-system",
-        platform: "web",
+        return event;
       },
-    },
 
-    // Don't send PII in URLs
-    sendDefaultPii: false,
-  });
+      // Add custom tags to all events
+      initialScope: {
+        tags: {
+          app: "ais-aviation-system",
+          platform: "web",
+        },
+      },
 
-  console.info(`[Sentry] Initialized for environment: ${config.environment}`);
+      // Don't send PII in URLs
+      sendDefaultPii: false,
+    });
+
+    console.info(`[Sentry] Initialized for environment: ${config.environment}`);
   } catch (error) {
     console.warn("[Sentry] Failed to initialize:", error);
   }
