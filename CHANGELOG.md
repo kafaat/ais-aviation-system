@@ -1,5 +1,30 @@
 # Changelog
 
+## What's Changed in v1.7.2
+
+### Bug Fixes
+- fix: critical frontend issues - missing providers, routes, and navigation (1f2e14e)
+- fix: critical Phase 1 & 2 bugs - seat deduction, pricing, validation (a01b959)
+- fix: consolidate schema imports and fix demo code router name (7659fdd)
+- fix: Phase 3 bugs + Docker configuration fixes (d348b22)
+- fix: worker entry point, inventory locks, price alerts, and prettier (93b7789)
+- fix: complete all remaining issues with i18n, todos, and documentation (9a49d52)
+- fix: rewrite CHANGELOG.md to fix recurring prettier formatting issues (f859f89)
+- fix: replace hardcoded strings with i18n, fix TODOs in MultiCity and email worker (3ff81ff)
+
+### Code Refactoring
+- refactor: remove duplicate schema files in favor of main schema.ts (279f443)
+
+### Other Changes
+- merge: resolve CHANGELOG.md conflict with main (v1.7.1) (155ba65)
+- Merge pull request #54 from kafaat/claude/implement-todo-zrBPj (741b96b)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.7.1...v1.7.2
+
+
+---
+
 All notable changes to the AIS Aviation System are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 adhering to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
