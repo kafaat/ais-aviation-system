@@ -1,19 +1,20 @@
 # Changelog
 
-## [Unreleased]
+## What's Changed in v1.8.1
 
-### Fixed
+### Bug Fixes
 
-- Sentry initialization crash when DSN contains placeholder values (`your-key`, `your-project`)
-- Sentry client and server now validate DSN before initialization with graceful fallback
-- Loyalty service tests refactored to use mock database (no longer require live MySQL)
-- Prettier formatting issues in `client/src/lib/sentry.ts` and `server/services/sentry.service.ts`
+- fix: mock loyalty tests and add missing env vars documentation (ad11c89)
+- fix: prevent Sentry crash with invalid/placeholder DSN values (2de0629)
 
-### Changed
+### Other Changes
 
-- Environment variable documentation expanded: 60+ new optional variables documented in `.env.example` and `.env.prod.example`
-- Added database pool, Redis, analytics, logging, and authentication configuration docs
-- Sentry DSN placeholders now commented out by default in `.env.example` files
+- Fix Prettier formatting in sentry files (8fc1113)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (183d86f)
+- Fix CHANGELOG.md Prettier formatting after merge from main (4f1a152)
+- Merge pull request #56 from kafaat/claude/implement-todo-zrBPj (662b4d5)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.0...v1.8.1
 
 ---
 
@@ -59,29 +60,6 @@
 - Merge pull request #54 from kafaat/claude/implement-todo-zrBPj (741b96b)
 
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.7.1...v1.7.2
-
----
-
-All notable changes to the AIS Aviation System are documented in this file.
-Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-adhering to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
----
-
-## [Unreleased]
-
-### Fixed
-
-- Sentry initialization crash with invalid/placeholder DSN values (client + server)
-- Loyalty service tests now use mock database instead of requiring live MySQL connection
-- Prettier formatting issues in Sentry integration files
-- CHANGELOG.md formatting after merge from main
-
-### Changed
-
-- `.env.example` and `.env.prod.example` expanded with 60+ documented environment variables
-- New config sections: DB connection pool, Redis, analytics (Umami), logging, auth tokens
-- Sentry DSN placeholders commented out by default to prevent startup crashes
 
 ---
 
