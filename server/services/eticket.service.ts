@@ -359,7 +359,11 @@ export async function generateETicketForPassenger(
   const { eq } = await import("drizzle-orm");
 
   const database = await getDb();
-  if (!database) throw new Error("Database not available");
+  if (!database)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get booking details
   const [booking] = await database
@@ -381,7 +385,7 @@ export async function generateETicketForPassenger(
     .limit(1);
 
   if (!booking) {
-    throw new Error("Booking not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
 
   // Get passenger details
@@ -392,7 +396,7 @@ export async function generateETicketForPassenger(
     .limit(1);
 
   if (!passenger || passenger.bookingId !== bookingId) {
-    throw new Error("Passenger not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Passenger not found" });
   }
 
   // Get airport details
@@ -409,7 +413,7 @@ export async function generateETicketForPassenger(
     .limit(1);
 
   if (!origin || !destination) {
-    throw new Error("Airport not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Airport not found" });
   }
 
   // Get airline details

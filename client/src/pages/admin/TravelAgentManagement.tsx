@@ -326,7 +326,7 @@ export default function TravelAgentManagement() {
             <TrendingUp className="h-4 w-4 text-green-600" />
           </div>
           <p className="text-3xl font-bold text-green-600">
-            {(totalRevenue / 100).toLocaleString()} SAR
+            {(totalRevenue / 100).toLocaleString()} {t("common.sar")}
           </p>
           <p className="text-xs text-muted-foreground mt-2">
             {t("travelAgent.admin.fromAgentBookings") || "From agent bookings"}
@@ -341,7 +341,7 @@ export default function TravelAgentManagement() {
             <DollarSign className="h-4 w-4 text-blue-600" />
           </div>
           <p className="text-3xl font-bold text-blue-600">
-            {(totalCommission / 100).toLocaleString()} SAR
+            {(totalCommission / 100).toLocaleString()} {t("common.sar")}
           </p>
           <p className="text-xs text-muted-foreground mt-2">
             {t("travelAgent.admin.payable") || "Payable to agents"}
@@ -461,7 +461,8 @@ export default function TravelAgentManagement() {
                           <div className="flex flex-col">
                             <span>{agent.totalBookings}</span>
                             <span className="text-xs text-muted-foreground">
-                              {(agent.totalRevenue / 100).toLocaleString()} SAR
+                              {(agent.totalRevenue / 100).toLocaleString()}{" "}
+                              {t("common.sar")}
                             </span>
                           </div>
                         </TableCell>
@@ -598,12 +599,13 @@ export default function TravelAgentManagement() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {(commission.bookingAmount / 100).toLocaleString()} SAR
+                        {(commission.bookingAmount / 100).toLocaleString()}{" "}
+                        {t("common.sar")}
                       </TableCell>
                       <TableCell>{commission.commissionRate}%</TableCell>
                       <TableCell className="font-semibold text-green-600">
                         {(commission.commissionAmount / 100).toLocaleString()}{" "}
-                        SAR
+                        {t("common.sar")}
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {format(new Date(commission.createdAt), "PPp", {
@@ -928,7 +930,8 @@ export default function TravelAgentManagement() {
                   {t("travelAgent.admin.totalRevenue") || "Total Revenue"}
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  {(agentStats.totalRevenue / 100).toLocaleString()} SAR
+                  {(agentStats.totalRevenue / 100).toLocaleString()}{" "}
+                  {t("common.sar")}
                 </p>
               </Card>
               <Card className="p-4">
@@ -937,7 +940,8 @@ export default function TravelAgentManagement() {
                     "This Month Revenue"}
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  {(agentStats.revenueThisMonth / 100).toLocaleString()} SAR
+                  {(agentStats.revenueThisMonth / 100).toLocaleString()}{" "}
+                  {t("common.sar")}
                 </p>
               </Card>
               <Card className="p-4">
@@ -946,7 +950,8 @@ export default function TravelAgentManagement() {
                     "Pending Commission"}
                 </p>
                 <p className="text-2xl font-bold text-yellow-600">
-                  {(agentStats.pendingCommission / 100).toLocaleString()} SAR
+                  {(agentStats.pendingCommission / 100).toLocaleString()}{" "}
+                  {t("common.sar")}
                 </p>
               </Card>
               <Card className="p-4">
@@ -954,7 +959,8 @@ export default function TravelAgentManagement() {
                   {t("travelAgent.admin.paidCommission") || "Paid Commission"}
                 </p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {(agentStats.paidCommission / 100).toLocaleString()} SAR
+                  {(agentStats.paidCommission / 100).toLocaleString()}{" "}
+                  {t("common.sar")}
                 </p>
               </Card>
             </div>

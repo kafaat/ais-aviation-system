@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { bookings, flights, airports, passengers } from "../../drizzle/schema";
 import { eq, desc, and, isNotNull, sql, count } from "drizzle-orm";
@@ -11,7 +12,11 @@ export async function softDeleteBooking(
   isAdmin: boolean
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [booking] = await db
     .select()
@@ -20,16 +25,19 @@ export async function softDeleteBooking(
     .limit(1);
 
   if (!booking) {
-    throw new Error("Booking not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
 
   if (!isAdmin && booking.userId !== userId) {
-    throw new Error("Access denied");
+    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
   }
 
   // Only allow soft delete for cancelled bookings (users) or any status (admin)
   if (!isAdmin && booking.status !== "cancelled") {
-    throw new Error("Only cancelled bookings can be deleted");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Only cancelled bookings can be deleted",
+    });
   }
 
   await db
@@ -45,7 +53,11 @@ export async function softDeleteBooking(
  */
 export async function restoreBooking(bookingId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [booking] = await db
     .select()
@@ -54,11 +66,14 @@ export async function restoreBooking(bookingId: number) {
     .limit(1);
 
   if (!booking) {
-    throw new Error("Booking not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
 
   if (!booking.deletedAt) {
-    throw new Error("Booking is not deleted");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Booking is not deleted",
+    });
   }
 
   await db
@@ -79,7 +94,11 @@ export async function getDeletedBookings(
   } = {}
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const result = await db
     .select({
@@ -116,7 +135,11 @@ export async function getDeletedBookings(
  */
 export async function getDeletedBookingsCount() {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [result] = await db
     .select({ count: count() })
@@ -132,7 +155,11 @@ export async function getDeletedBookingsCount() {
  */
 export async function purgeDeletedBookings(retentionDays: number = 90) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - retentionDays);

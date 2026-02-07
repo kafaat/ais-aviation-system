@@ -3,6 +3,7 @@
 ## What's Changed in v1.7.2
 
 ### Bug Fixes
+
 - fix: critical frontend issues - missing providers, routes, and navigation (1f2e14e)
 - fix: critical Phase 1 & 2 bugs - seat deduction, pricing, validation (a01b959)
 - fix: consolidate schema imports and fix demo code router name (7659fdd)
@@ -13,15 +14,15 @@
 - fix: replace hardcoded strings with i18n, fix TODOs in MultiCity and email worker (3ff81ff)
 
 ### Code Refactoring
+
 - refactor: remove duplicate schema files in favor of main schema.ts (279f443)
 
 ### Other Changes
+
 - merge: resolve CHANGELOG.md conflict with main (v1.7.1) (155ba65)
 - Merge pull request #54 from kafaat/claude/implement-todo-zrBPj (741b96b)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.7.1...v1.7.2
-
 
 ---
 

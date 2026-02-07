@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import { ar } from "date-fns/locale";
 import { getLoginUrl } from "@/const";
 
 export default function AdminDashboard() {
+  const { t } = useTranslation();
   const { user, isAuthenticated } = useAuth();
   const [showAddFlight, setShowAddFlight] = useState(false);
 
@@ -51,7 +53,7 @@ export default function AdminDashboard() {
 
   const createFlightMutation = trpc.admin.createFlight.useMutation({
     onSuccess: () => {
-      toast.success("تم إضافة الرحلة بنجاح!");
+      toast.success(t("admin.dashboard.flightAddedSuccess"));
       setShowAddFlight(false);
       // Reset form
       setFlightNumber("");
@@ -66,13 +68,13 @@ export default function AdminDashboard() {
       setBusinessPrice("");
     },
     onError: error => {
-      toast.error(error.message || "حدث خطأ أثناء إضافة الرحلة");
+      toast.error(error.message || t("admin.dashboard.flightAddError"));
     },
   });
 
   const handleSubmit = async () => {
     if (!departureTime || !arrivalTime) {
-      toast.error("يرجى تحديد أوقات الرحلة");
+      toast.error(t("admin.dashboard.selectFlightTimes"));
       return;
     }
 
@@ -94,9 +96,11 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="p-8 text-center max-w-md">
-          <h2 className="text-2xl font-bold mb-4">يرجى تسجيل الدخول</h2>
+          <h2 className="text-2xl font-bold mb-4">
+            {t("common.loginRequired")}
+          </h2>
           <Button asChild className="w-full">
-            <a href={getLoginUrl()}>تسجيل الدخول</a>
+            <a href={getLoginUrl()}>{t("common.login")}</a>
           </Button>
         </Card>
       </div>
@@ -107,13 +111,15 @@ export default function AdminDashboard() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="p-8 text-center max-w-md">
-          <h2 className="text-2xl font-bold mb-4">غير مصرح</h2>
+          <h2 className="text-2xl font-bold mb-4">
+            {t("admin.dashboard.unauthorized")}
+          </h2>
           <p className="text-muted-foreground mb-6">
-            ليس لديك صلاحيات الوصول لهذه الصفحة
+            {t("admin.dashboard.noAccess")}
           </p>
           <Button asChild>
             <Link href="/">
-              <a>العودة للرئيسية</a>
+              <a>{t("admin.dashboard.backToHome")}</a>
             </Link>
           </Button>
         </Card>
@@ -134,15 +140,17 @@ export default function AdminDashboard() {
                 </Button>
               </Link>
               <div>
-                <h1 className="text-xl font-bold">لوحة التحكم الإدارية</h1>
+                <h1 className="text-xl font-bold">
+                  {t("admin.dashboard.title")}
+                </h1>
                 <p className="text-sm text-muted-foreground">
-                  إدارة الرحلات والحجوزات
+                  {t("admin.dashboard.subtitle")}
                 </p>
               </div>
             </div>
             <Button onClick={() => setShowAddFlight(!showAddFlight)}>
               <Plus className="h-4 w-4 ml-2" />
-              إضافة رحلة جديدة
+              {t("admin.dashboard.addFlight")}
             </Button>
           </div>
         </div>
@@ -152,23 +160,27 @@ export default function AdminDashboard() {
         {/* Add Flight Form */}
         {showAddFlight && (
           <Card className="p-6 mb-8">
-            <h2 className="text-xl font-semibold mb-6">إضافة رحلة جديدة</h2>
+            <h2 className="text-xl font-semibold mb-6">
+              {t("admin.dashboard.addFlight")}
+            </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label>رقم الرحلة</Label>
+                <Label>{t("admin.dashboard.flightNumber")}</Label>
                 <Input
                   value={flightNumber}
                   onChange={e => setFlightNumber(e.target.value)}
-                  placeholder="مثال: SV123"
+                  placeholder={t("admin.dashboard.flightNumberPlaceholder")}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>شركة الطيران</Label>
+                <Label>{t("admin.dashboard.airline")}</Label>
                 <Select value={airlineId} onValueChange={setAirlineId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر شركة الطيران" />
+                    <SelectValue
+                      placeholder={t("admin.dashboard.selectAirline")}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {airlines?.map(airline => (
@@ -184,10 +196,12 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label>مطار المغادرة</Label>
+                <Label>{t("admin.dashboard.departureAirport")}</Label>
                 <Select value={originId} onValueChange={setOriginId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر المطار" />
+                    <SelectValue
+                      placeholder={t("admin.dashboard.selectAirport")}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {airports?.map(airport => (
@@ -203,10 +217,12 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label>مطار الوصول</Label>
+                <Label>{t("admin.dashboard.arrivalAirport")}</Label>
                 <Select value={destinationId} onValueChange={setDestinationId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="اختر المطار" />
+                    <SelectValue
+                      placeholder={t("admin.dashboard.selectAirport")}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {airports?.map(airport => (
@@ -222,13 +238,13 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label>وقت المغادرة</Label>
+                <Label>{t("admin.dashboard.departureTime")}</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start">
                       {departureTime
                         ? format(departureTime, "PPP HH:mm", { locale: ar })
-                        : "اختر الوقت"}
+                        : t("admin.dashboard.selectTime")}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -243,13 +259,13 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label>وقت الوصول</Label>
+                <Label>{t("admin.dashboard.arrivalTime")}</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button variant="outline" className="w-full justify-start">
                       {arrivalTime
                         ? format(arrivalTime, "PPP HH:mm", { locale: ar })
-                        : "اختر الوقت"}
+                        : t("admin.dashboard.selectTime")}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
@@ -264,7 +280,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label>عدد مقاعد الدرجة السياحية</Label>
+                <Label>{t("admin.dashboard.economySeats")}</Label>
                 <Input
                   type="number"
                   value={economySeats}
@@ -274,7 +290,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label>عدد مقاعد درجة الأعمال</Label>
+                <Label>{t("admin.dashboard.businessSeats")}</Label>
                 <Input
                   type="number"
                   value={businessSeats}
@@ -284,7 +300,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label>سعر الدرجة السياحية (ر.س)</Label>
+                <Label>{t("admin.dashboard.economyPrice")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -295,7 +311,7 @@ export default function AdminDashboard() {
               </div>
 
               <div className="space-y-2">
-                <Label>سعر درجة الأعمال (ر.س)</Label>
+                <Label>{t("admin.dashboard.businessPrice")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -312,11 +328,11 @@ export default function AdminDashboard() {
                 disabled={createFlightMutation.isPending}
               >
                 {createFlightMutation.isPending
-                  ? "جاري الإضافة..."
-                  : "إضافة الرحلة"}
+                  ? t("admin.dashboard.adding")
+                  : t("admin.dashboard.addFlightBtn")}
               </Button>
               <Button variant="outline" onClick={() => setShowAddFlight(false)}>
-                إلغاء
+                {t("common.cancel")}
               </Button>
             </div>
           </Card>
@@ -327,7 +343,9 @@ export default function AdminDashboard() {
           <Card className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">إجمالي الرحلات</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("admin.dashboard.totalFlights")}
+                </p>
                 <p className="text-3xl font-bold mt-2">--</p>
               </div>
               <Plane className="h-12 w-12 text-primary/20" />
@@ -337,7 +355,9 @@ export default function AdminDashboard() {
           <Card className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">الحجوزات اليوم</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("admin.dashboard.todayBookings")}
+                </p>
                 <p className="text-3xl font-bold mt-2">--</p>
               </div>
               <CalendarIcon className="h-12 w-12 text-primary/20" />
@@ -347,8 +367,10 @@ export default function AdminDashboard() {
           <Card className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">الإيرادات</p>
-                <p className="text-3xl font-bold mt-2">-- ر.س</p>
+                <p className="text-sm text-muted-foreground">
+                  {t("admin.dashboard.revenue")}
+                </p>
+                <p className="text-3xl font-bold mt-2">-- {t("common.sar")}</p>
               </div>
               <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                 <span className="text-2xl">💰</span>

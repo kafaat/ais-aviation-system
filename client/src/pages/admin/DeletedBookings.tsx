@@ -195,7 +195,8 @@ export default function DeletedBookings() {
                       </td>
                       <td className="p-4">
                         <div className="font-semibold text-sm">
-                          {(booking.totalAmount / 100).toFixed(2)} SAR
+                          {(booking.totalAmount / 100).toFixed(2)}{" "}
+                          {t("common.sar")}
                         </div>
                         <div className="text-xs text-muted-foreground capitalize">
                           {booking.cabinClass} &middot;{" "}

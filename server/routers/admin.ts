@@ -108,7 +108,11 @@ export const adminRouter = router({
    */
   getAllBookings: adminProcedure.query(async () => {
     const database = await db.getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const { bookings, flights, airports, users } =
       await import("../../drizzle/schema");
@@ -176,7 +180,11 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Get flight details before update for audit
       const database = await db.getDb();
-      if (!database) throw new Error("Database not available");
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       const { flights } = await import("../../drizzle/schema");
       const { eq } = await import("drizzle-orm");
@@ -224,7 +232,11 @@ export const adminRouter = router({
     .mutation(async ({ ctx, input }) => {
       // Get flight details for audit
       const database = await db.getDb();
-      if (!database) throw new Error("Database not available");
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       const { flights } = await import("../../drizzle/schema");
       const { eq } = await import("drizzle-orm");

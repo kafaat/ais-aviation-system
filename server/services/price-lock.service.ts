@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { priceLocks, flights } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -11,7 +12,11 @@ export async function createPriceLock(
   cabinClass: "economy" | "business"
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Check for existing active lock
   const [existing] = await db
@@ -43,7 +48,7 @@ export async function createPriceLock(
     .limit(1);
 
   if (!flight) {
-    throw new Error("Flight not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
   }
 
   // Cannot lock if flight departs within 24 hours
@@ -51,7 +56,10 @@ export async function createPriceLock(
   const hoursUntilDeparture =
     (flight.departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
   if (hoursUntilDeparture < 24) {
-    throw new Error("Cannot lock price for flights departing within 24 hours");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Cannot lock price for flights departing within 24 hours",
+    });
   }
 
   const price =
@@ -83,7 +91,11 @@ export async function createPriceLock(
 
 export async function getUserPriceLocks(userId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select({
@@ -109,7 +121,11 @@ export async function getUserPriceLocks(userId: number) {
 
 export async function cancelPriceLock(userId: number, lockId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [lock] = await db
     .select()
@@ -117,8 +133,13 @@ export async function cancelPriceLock(userId: number, lockId: number) {
     .where(and(eq(priceLocks.id, lockId), eq(priceLocks.userId, userId)))
     .limit(1);
 
-  if (!lock) throw new Error("Price lock not found");
-  if (lock.status !== "active") throw new Error("Price lock is not active");
+  if (!lock)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Price lock not found" });
+  if (lock.status !== "active")
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Price lock is not active",
+    });
 
   await db
     .update(priceLocks)
@@ -130,7 +151,11 @@ export async function cancelPriceLock(userId: number, lockId: number) {
 
 export async function usePriceLock(lockId: number, bookingId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   await db
     .update(priceLocks)
@@ -144,7 +169,11 @@ export async function getActiveLockForFlight(
   cabinClass: "economy" | "business"
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const now = new Date();
 
@@ -177,7 +206,11 @@ export async function getActiveLockForFlight(
 
 export async function expireOldLocks() {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const now = new Date();
 

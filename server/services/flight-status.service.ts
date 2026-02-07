@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   flights,
@@ -9,6 +10,7 @@ import {
 import { eq, and, desc } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { sendFlightStatusChange } from "./email.service";
+import { notifyFlightStatusUpdate } from "./notification.service";
 
 /**
  * Flight Status Update Service
@@ -31,7 +33,11 @@ export async function updateFlightStatus(
 ): Promise<{ success: boolean; affectedBookings: number }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const { flightId, status, delayMinutes, reason, adminUserId } = update;
 
@@ -43,7 +49,7 @@ export async function updateFlightStatus(
       .limit(1);
 
     if (!flight) {
-      throw new Error("Flight not found");
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
     }
 
     // Get current status before updating
@@ -105,8 +111,25 @@ export async function updateFlightStatus(
         content: `الرحلة ${flight.flightNumber} ${statusText}${delayText}.\nعدد الحجوزات المتأثرة: ${affectedBookings.length}${reasonText}`,
       });
 
-      // Send email notifications to all affected passengers
+      // Send email and in-app notifications to all affected passengers
       for (const booking of affectedBookings) {
+        // Send in-app notification
+        try {
+          await notifyFlightStatusUpdate(
+            booking.userId,
+            flight.flightNumber,
+            status,
+            flightId,
+            delayMinutes
+          );
+        } catch (notifError) {
+          console.error(
+            `[Flight Status] Error sending in-app notification to user ${booking.userId}:`,
+            notifError
+          );
+        }
+
+        // Send email notification
         if (booking.userEmail) {
           try {
             await sendFlightStatusChange({
@@ -153,7 +176,11 @@ export async function updateFlightStatus(
 export async function getFlightStatusHistory(flightId: number) {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [flight] = await database
       .select()
@@ -162,7 +189,7 @@ export async function getFlightStatusHistory(flightId: number) {
       .limit(1);
 
     if (!flight) {
-      throw new Error("Flight not found");
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
     }
 
     // Get all status changes
@@ -193,7 +220,11 @@ export async function cancelFlightAndRefund(params: {
 }): Promise<{ success: boolean; refundedBookings: number }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const { flightId, reason } = params;
 
@@ -205,7 +236,7 @@ export async function cancelFlightAndRefund(params: {
       .limit(1);
 
     if (!flight) {
-      throw new Error("Flight not found");
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
     }
 
     // Update flight status to cancelled (this will send status change emails)

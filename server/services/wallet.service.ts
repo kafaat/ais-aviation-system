@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { wallets, walletTransactions } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
@@ -7,7 +8,11 @@ import { eq, sql } from "drizzle-orm";
  */
 export async function getOrCreateWallet(userId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [existing] = await db
     .select()
@@ -55,15 +60,26 @@ export async function topUpWallet(
   description: string,
   stripePaymentIntentId?: string
 ) {
-  if (amount <= 0) throw new Error("Amount must be positive");
+  if (amount <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Amount must be positive",
+    });
 
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const wallet = await getOrCreateWallet(userId);
 
   if (wallet.status !== "active") {
-    throw new Error("Wallet is not active");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Wallet is not active",
+    });
   }
 
   const newBalance = wallet.balance + amount;
@@ -98,19 +114,33 @@ export async function payFromWallet(
   description: string,
   bookingId?: number
 ) {
-  if (amount <= 0) throw new Error("Amount must be positive");
+  if (amount <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Amount must be positive",
+    });
 
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const wallet = await getOrCreateWallet(userId);
 
   if (wallet.status !== "active") {
-    throw new Error("Wallet is not active");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Wallet is not active",
+    });
   }
 
   if (wallet.balance < amount) {
-    throw new Error("Insufficient wallet balance");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Insufficient wallet balance",
+    });
   }
 
   const newBalance = wallet.balance - amount;
@@ -143,10 +173,18 @@ export async function refundToWallet(
   description: string,
   bookingId?: number
 ) {
-  if (amount <= 0) throw new Error("Amount must be positive");
+  if (amount <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Amount must be positive",
+    });
 
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const wallet = await getOrCreateWallet(userId);
 
@@ -180,7 +218,11 @@ export async function getWalletTransactions(
   offset = 0
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const wallet = await getOrCreateWallet(userId);
 

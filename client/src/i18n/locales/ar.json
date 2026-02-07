@@ -39,6 +39,9 @@
     "share": "مشاركة",
     "copied": "تم النسخ",
     "loginRequired": "يرجى تسجيل الدخول أولاً",
+    "close": "إغلاق",
+    "fillAllFields": "يرجى ملء جميع الحقول المطلوبة",
+    "to": "إلى",
     "sar": "ر.س",
     "validating": "جاري التحقق...",
     "create": "إنشاء",
@@ -142,7 +145,8 @@
     "completeBooking": "إتمام الحجز والدفع",
     "processing": "جاري المعالجة...",
     "termsAgree": "بالضغط على \"إتمام الحجز\" فإنك توافق على الشروط والأحكام",
-    "selectSeats": "اختر {{count}} مقعد"
+    "selectSeats": "اختر {{count}} مقعد",
+    "addToCalendar": "إضافة إلى التقويم"
   },
   "seatMap": {
     "available": "متاح",
@@ -214,12 +218,6 @@
     "topUp": "شحن",
     "payment": "دفع",
     "refund": "استرداد"
-  },
-  "priceCalendar": {
-    "cheap": "رخيص",
-    "average": "متوسط",
-    "expensive": "مرتفع",
-    "bestPrice": "أفضل سعر"
   },
   "calendar": {
     "jan": "يناير",
@@ -362,30 +360,6 @@
     "airlinePerformance": "أداء شركات الطيران",
     "bookings": "الحجوزات",
     "revenue": "الإيرادات (ر.س)"
-  },
-  "admin": {
-    "title": "لوحة التحكم الإدارية",
-    "subtitle": "إدارة الرحلات والحجوزات",
-    "addFlight": "إضافة رحلة جديدة",
-    "totalFlights": "إجمالي الرحلات",
-    "todayBookings": "الحجوزات اليوم",
-    "revenue": "الإيرادات",
-    "flightForm": {
-      "title": "إضافة رحلة جديدة",
-      "flightNumber": "رقم الرحلة",
-      "airline": "شركة الطيران",
-      "origin": "مطار المغادرة",
-      "destination": "مطار الوصول",
-      "departureTime": "وقت المغادرة",
-      "arrivalTime": "وقت الوصول",
-      "economySeats": "عدد مقاعد الدرجة السياحية",
-      "businessSeats": "عدد مقاعد درجة الأعمال",
-      "economyPrice": "سعر الدرجة السياحية (ر.س)",
-      "businessPrice": "سعر درجة الأعمال (ر.س)",
-      "submit": "إضافة الرحلة",
-      "submitting": "جاري الإضافة...",
-      "cancel": "إلغاء"
-    }
   },
   "footer": {
     "description": "نظام الطيران المتكامل لحجز التذاكر وإدارة الرحلات",
@@ -577,6 +551,14 @@
   "theme": {
     "darkMode": "الوضع الداكن",
     "lightMode": "الوضع الفاتح"
+  },
+  "flights": {
+    "available": "متاح",
+    "full": "مكتمل",
+    "economy": "الدرجة السياحية",
+    "business": "درجة الأعمال",
+    "comparing": "مقارنة الرحلات",
+    "selectFlight": "اختيار الرحلة"
   },
   "cabin": {
     "economy": "اقتصادي",
@@ -774,7 +756,11 @@
     "high": "مرتفع",
     "perPerson": "للشخص الواحد",
     "available": "متاح",
-    "best": "الأفضل"
+    "best": "الأفضل",
+    "cheap": "رخيص",
+    "average": "متوسط",
+    "expensive": "مرتفع",
+    "bestPrice": "أفضل سعر"
   },
   "flexibleDates": {
     "title": "تواريخ مرنة",
@@ -809,6 +795,11 @@
     "errorApology": "نعتذر عن الإزعاج. حدث خطأ غير متوقع.",
     "persistentError": "إذا استمرت هذه المشكلة، يرجى التواصل مع فريق الدعم.",
     "reportConfirmation": "شكراً لإبلاغك عن هذا الخطأ. تم إخطار فريقنا وسيتم مراجعته."
+  },
+  "sms": {
+    "receiveNotifications": "تلقي إشعارات عبر الرسائل النصية",
+    "notificationDescription": "احصل على تحديثات الحجز والتنبيهات عبر الرسائل النصية",
+    "phoneNumberPlaceholder": "أدخل رقم هاتفك"
   },
   "manus": {
     "loginDescription": "يرجى تسجيل الدخول عبر Manus للمتابعة",
@@ -1775,6 +1766,86 @@
       "creditSource": "المصدر",
       "creditExpires": "ينتهي",
       "creditCreated": "تاريخ الإنشاء"
+    },
+    "dashboard": {
+      "title": "لوحة التحكم الإدارية",
+      "subtitle": "إدارة الرحلات والحجوزات",
+      "addFlight": "إضافة رحلة جديدة",
+      "addFlightBtn": "إضافة الرحلة",
+      "adding": "جاري الإضافة...",
+      "flightAddedSuccess": "تم إضافة الرحلة بنجاح!",
+      "flightAddError": "حدث خطأ أثناء إضافة الرحلة",
+      "selectFlightTimes": "يرجى تحديد أوقات الرحلة",
+      "unauthorized": "غير مصرح",
+      "noAccess": "ليس لديك صلاحيات الوصول لهذه الصفحة",
+      "backToHome": "العودة للرئيسية",
+      "flightNumber": "رقم الرحلة",
+      "flightNumberPlaceholder": "مثال: SV123",
+      "airline": "شركة الطيران",
+      "selectAirline": "اختر شركة الطيران",
+      "departureAirport": "مطار المغادرة",
+      "arrivalAirport": "مطار الوصول",
+      "selectAirport": "اختر المطار",
+      "departureTime": "وقت المغادرة",
+      "arrivalTime": "وقت الوصول",
+      "selectTime": "اختر الوقت",
+      "economySeats": "عدد مقاعد الدرجة السياحية",
+      "businessSeats": "عدد مقاعد درجة الأعمال",
+      "economyPrice": "سعر الدرجة السياحية (ر.س)",
+      "businessPrice": "سعر درجة الأعمال (ر.س)",
+      "totalFlights": "إجمالي الرحلات",
+      "todayBookings": "الحجوزات اليوم",
+      "revenue": "الإيرادات"
+    },
+    "refunds": {
+      "title": "إدارة الاستردادات",
+      "subtitle": "عرض وإدارة جميع عمليات استرداد الأموال",
+      "totalRefunds": "إجمالي الاستردادات",
+      "allRefunds": "جميع عمليات الاسترداد",
+      "refundedAmount": "المبلغ المسترد",
+      "completedRefunds": "الاستردادات المكتملة",
+      "refundedSuccessfully": "تم الاسترداد بنجاح",
+      "refundRate": "معدل الاسترداد",
+      "ofTotalBookings": "من إجمالي الحجوزات",
+      "trendsTitle": "اتجاهات الاسترداد (آخر 30 يوم)",
+      "refund": "استرداد",
+      "history": "سجل الاستردادات",
+      "noRefunds": "لا توجد عمليات استرداد",
+      "bookingRef": "رقم الحجز",
+      "userId": "معرف المستخدم",
+      "amount": "المبلغ",
+      "status": "الحالة",
+      "refundDate": "تاريخ الاسترداد",
+      "statusRefunded": "مسترد"
+    },
+    "analytics": {
+      "title": "لوحة التحليلات",
+      "subtitle": "نظرة شاملة على أداء النظام",
+      "totalBookings": "إجمالي الحجوزات",
+      "passenger": "راكب",
+      "totalRevenue": "إجمالي الإيرادات",
+      "average": "متوسط",
+      "occupancyRate": "معدل الإشغال",
+      "excellentPerformance": "أداء ممتاز",
+      "canImprove": "يمكن التحسين",
+      "cancellationRate": "معدل الإلغاء",
+      "low": "منخفض",
+      "high": "مرتفع",
+      "totalPassengers": "إجمالي الركاب",
+      "passengerPerBooking": "راكب/حجز",
+      "dailyRevenue": "الإيرادات اليومية",
+      "last30Days": "آخر 30 يوم",
+      "revenueLabel": "الإيرادات (ر.س)",
+      "bookingTrends": "اتجاهات الحجوزات",
+      "bookings": "الحجوزات",
+      "passengers": "الركاب",
+      "popularDestinations": "أكثر الوجهات طلباً",
+      "top10Destinations": "أعلى 10 وجهات",
+      "flightOccupancy": "معدل إشغال الرحلات",
+      "top20Flights": "أعلى 20 رحلة",
+      "flightNumber": "رقم الرحلة",
+      "occupancy": "الإشغال",
+      "seats": "المقاعد"
     }
   },
   "rebook": {

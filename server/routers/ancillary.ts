@@ -86,7 +86,11 @@ export const ancillaryRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       const [booking] = await db
         .select({ userId: bookings.userId })
@@ -118,7 +122,11 @@ export const ancillaryRouter = router({
     .input(z.object({ bookingId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       const [booking] = await db
         .select({ userId: bookings.userId })
@@ -150,7 +158,11 @@ export const ancillaryRouter = router({
     .input(z.object({ ancillaryId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       const [ancillary] = await db
         .select({ bookingId: bookingAncillaries.bookingId })

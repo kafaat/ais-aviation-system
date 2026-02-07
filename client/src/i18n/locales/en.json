@@ -44,7 +44,10 @@
     "refresh": "Refresh",
     "share": "Share",
     "copied": "Copied",
-    "loginRequired": "Please login first"
+    "loginRequired": "Please login first",
+    "close": "Close",
+    "fillAllFields": "Please fill all required fields",
+    "to": "to"
   },
   "nav": {
     "home": "Home",
@@ -142,7 +145,8 @@
     "completeBooking": "Complete Booking & Payment",
     "processing": "Processing...",
     "termsAgree": "By clicking \"Complete Booking\" you agree to the terms and conditions",
-    "selectSeats": "Select {{count}} seat(s)"
+    "selectSeats": "Select {{count}} seat(s)",
+    "addToCalendar": "Add to Calendar"
   },
   "seatMap": {
     "available": "Available",
@@ -214,12 +218,6 @@
     "topUp": "Top Up",
     "payment": "Payment",
     "refund": "Refund"
-  },
-  "priceCalendar": {
-    "cheap": "Cheap",
-    "average": "Average",
-    "expensive": "Expensive",
-    "bestPrice": "Best price"
   },
   "calendar": {
     "jan": "January",
@@ -362,30 +360,6 @@
     "airlinePerformance": "Airline Performance",
     "bookings": "Bookings",
     "revenue": "Revenue (SAR)"
-  },
-  "admin": {
-    "title": "Admin Dashboard",
-    "subtitle": "Manage flights and bookings",
-    "addFlight": "Add New Flight",
-    "totalFlights": "Total Flights",
-    "todayBookings": "Today's Bookings",
-    "revenue": "Revenue",
-    "flightForm": {
-      "title": "Add New Flight",
-      "flightNumber": "Flight Number",
-      "airline": "Airline",
-      "origin": "Origin Airport",
-      "destination": "Destination Airport",
-      "departureTime": "Departure Time",
-      "arrivalTime": "Arrival Time",
-      "economySeats": "Economy Seats",
-      "businessSeats": "Business Seats",
-      "economyPrice": "Economy Price (SAR)",
-      "businessPrice": "Business Price (SAR)",
-      "submit": "Add Flight",
-      "submitting": "Adding...",
-      "cancel": "Cancel"
-    }
   },
   "footer": {
     "description": "Aviation Integrated System for ticket booking and flight management",
@@ -577,6 +551,14 @@
   "theme": {
     "darkMode": "Dark Mode",
     "lightMode": "Light Mode"
+  },
+  "flights": {
+    "available": "available",
+    "full": "Full",
+    "economy": "Economy",
+    "business": "Business",
+    "comparing": "Comparing Flights",
+    "selectFlight": "Select Flight"
   },
   "cabin": {
     "economy": "Economy",
@@ -774,7 +756,11 @@
     "high": "High",
     "perPerson": "per person",
     "available": "available",
-    "best": "Best"
+    "best": "Best",
+    "cheap": "Cheap",
+    "average": "Average",
+    "expensive": "Expensive",
+    "bestPrice": "Best price"
   },
   "flexibleDates": {
     "title": "Flexible Dates",
@@ -809,6 +795,11 @@
     "errorApology": "We apologize for the inconvenience. An unexpected error has occurred.",
     "persistentError": "If this problem persists, please contact our support team.",
     "reportConfirmation": "Thank you for reporting this error. Our team has been notified and will look into it."
+  },
+  "sms": {
+    "receiveNotifications": "Receive SMS notifications",
+    "notificationDescription": "Get booking updates and alerts via SMS",
+    "phoneNumberPlaceholder": "Enter your phone number"
   },
   "manus": {
     "loginDescription": "Please login with Manus to continue",
@@ -1775,6 +1766,86 @@
       "creditSource": "Source",
       "creditExpires": "Expires",
       "creditCreated": "Created"
+    },
+    "dashboard": {
+      "title": "Admin Dashboard",
+      "subtitle": "Manage flights and bookings",
+      "addFlight": "Add New Flight",
+      "addFlightBtn": "Add Flight",
+      "adding": "Adding...",
+      "flightAddedSuccess": "Flight added successfully!",
+      "flightAddError": "An error occurred while adding the flight",
+      "selectFlightTimes": "Please select flight times",
+      "unauthorized": "Unauthorized",
+      "noAccess": "You do not have permission to access this page",
+      "backToHome": "Back to Home",
+      "flightNumber": "Flight Number",
+      "flightNumberPlaceholder": "e.g. SV123",
+      "airline": "Airline",
+      "selectAirline": "Select airline",
+      "departureAirport": "Departure Airport",
+      "arrivalAirport": "Arrival Airport",
+      "selectAirport": "Select airport",
+      "departureTime": "Departure Time",
+      "arrivalTime": "Arrival Time",
+      "selectTime": "Select time",
+      "economySeats": "Economy Class Seats",
+      "businessSeats": "Business Class Seats",
+      "economyPrice": "Economy Class Price (SAR)",
+      "businessPrice": "Business Class Price (SAR)",
+      "totalFlights": "Total Flights",
+      "todayBookings": "Today's Bookings",
+      "revenue": "Revenue"
+    },
+    "refunds": {
+      "title": "Refunds Management",
+      "subtitle": "View and manage all refund operations",
+      "totalRefunds": "Total Refunds",
+      "allRefunds": "All refund operations",
+      "refundedAmount": "Refunded Amount",
+      "completedRefunds": "Completed Refunds",
+      "refundedSuccessfully": "Refunded successfully",
+      "refundRate": "Refund Rate",
+      "ofTotalBookings": "Of total bookings",
+      "trendsTitle": "Refund Trends (Last 30 Days)",
+      "refund": "refund(s)",
+      "history": "Refund History",
+      "noRefunds": "No refund operations found",
+      "bookingRef": "Booking Reference",
+      "userId": "User ID",
+      "amount": "Amount",
+      "status": "Status",
+      "refundDate": "Refund Date",
+      "statusRefunded": "Refunded"
+    },
+    "analytics": {
+      "title": "Analytics Dashboard",
+      "subtitle": "Comprehensive overview of system performance",
+      "totalBookings": "Total Bookings",
+      "passenger": "passenger(s)",
+      "totalRevenue": "Total Revenue",
+      "average": "Average",
+      "occupancyRate": "Occupancy Rate",
+      "excellentPerformance": "Excellent performance",
+      "canImprove": "Can be improved",
+      "cancellationRate": "Cancellation Rate",
+      "low": "Low",
+      "high": "High",
+      "totalPassengers": "Total Passengers",
+      "passengerPerBooking": "passenger/booking",
+      "dailyRevenue": "Daily Revenue",
+      "last30Days": "Last 30 days",
+      "revenueLabel": "Revenue (SAR)",
+      "bookingTrends": "Booking Trends",
+      "bookings": "Bookings",
+      "passengers": "Passengers",
+      "popularDestinations": "Most Popular Destinations",
+      "top10Destinations": "Top 10 destinations",
+      "flightOccupancy": "Flight Occupancy Rate",
+      "top20Flights": "Top 20 flights",
+      "flightNumber": "Flight Number",
+      "occupancy": "Occupancy",
+      "seats": "Seats"
     }
   },
   "rebook": {

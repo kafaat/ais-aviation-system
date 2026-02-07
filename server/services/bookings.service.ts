@@ -11,6 +11,7 @@ import {
   verifyLock,
 } from "./inventory-lock.service";
 import { trackBookingStarted, trackBookingCancelled } from "./metrics.service";
+import { createNotification } from "./notification.service";
 
 /**
  * Bookings Service
@@ -164,6 +165,28 @@ export async function createBooking(input: CreateBookingInput) {
       passengerCount: input.passengers.length,
       totalAmount,
     });
+
+    // Send in-app notification for booking creation
+    try {
+      await createNotification(
+        input.userId,
+        "booking",
+        "Booking Created",
+        `Your booking ${bookingReference} has been created and is awaiting payment. Please complete your payment to confirm your reservation.`,
+        {
+          bookingId,
+          bookingReference,
+          flightId: input.flightId,
+          link: `/my-bookings`,
+        }
+      );
+    } catch (notifError) {
+      console.error(
+        "[Booking] Error sending booking creation notification:",
+        notifError
+      );
+      // Don't fail the booking if notification fails
+    }
 
     return {
       bookingId,

@@ -50,7 +50,11 @@ export const splitPaymentsRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       // Validate booking exists
       const [booking] = await db
@@ -280,7 +284,11 @@ export const splitPaymentsRouter = router({
     )
     .query(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       // Check payment expiration before fetching full details
       const [split] = await db
@@ -334,7 +342,11 @@ export const splitPaymentsRouter = router({
     )
     .mutation(async ({ input }) => {
       const db = await getDb();
-      if (!db) throw new Error("Database not available");
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       // Check payment expiration before creating checkout session
       const [split] = await db

@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   familyGroups,
@@ -9,7 +10,11 @@ import { eq, and, sql } from "drizzle-orm";
 
 export async function createFamilyGroup(ownerId: number, name: string) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Check if user already owns a group
   const [existingGroup] = await db
@@ -21,7 +26,10 @@ export async function createFamilyGroup(ownerId: number, name: string) {
     .limit(1);
 
   if (existingGroup) {
-    throw new Error("You already have an active family group");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "You already have an active family group",
+    });
   }
 
   // Check if user is already a member of another group
@@ -37,7 +45,10 @@ export async function createFamilyGroup(ownerId: number, name: string) {
     .limit(1);
 
   if (existingMembership) {
-    throw new Error("You are already a member of a family group");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "You are already a member of a family group",
+    });
   }
 
   const [result] = await db.insert(familyGroups).values({
@@ -73,7 +84,11 @@ export async function addFamilyMember(
   memberEmail: string
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Verify ownership
   const [group] = await db
@@ -89,7 +104,10 @@ export async function addFamilyMember(
     .limit(1);
 
   if (!group)
-    throw new Error("Family group not found or you are not the owner");
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Family group not found or you are not the owner",
+    });
 
   // Check member count
   const members = await db
@@ -103,7 +121,10 @@ export async function addFamilyMember(
     );
 
   if (members.length >= group.maxMembers) {
-    throw new Error(`Maximum ${group.maxMembers} members allowed`);
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Maximum ${group.maxMembers} members allowed`,
+    });
   }
 
   // Find user by email
@@ -113,7 +134,11 @@ export async function addFamilyMember(
     .where(eq(users.email, memberEmail))
     .limit(1);
 
-  if (!memberUser) throw new Error("User not found with this email");
+  if (!memberUser)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "User not found with this email",
+    });
 
   // Check if already a member of any group
   const [existingMembership] = await db
@@ -128,7 +153,10 @@ export async function addFamilyMember(
     .limit(1);
 
   if (existingMembership) {
-    throw new Error("This user is already in a family group");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This user is already in a family group",
+    });
   }
 
   await db.insert(familyGroupMembers).values({
@@ -147,7 +175,11 @@ export async function removeFamilyMember(
   memberId: number
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Verify ownership
   const [group] = await db
@@ -157,11 +189,17 @@ export async function removeFamilyMember(
     .limit(1);
 
   if (!group)
-    throw new Error("Family group not found or you are not the owner");
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Family group not found or you are not the owner",
+    });
 
   // Cannot remove self (owner)
   if (memberId === ownerId) {
-    throw new Error("Owner cannot be removed. Delete the group instead.");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Owner cannot be removed. Delete the group instead.",
+    });
   }
 
   await db
@@ -179,7 +217,11 @@ export async function removeFamilyMember(
 
 export async function getMyFamilyGroup(userId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Find user's active membership
   const [membership] = await db
@@ -254,9 +296,17 @@ export async function contributeMilesToPool(
   miles: number
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
-  if (miles <= 0) throw new Error("Miles must be positive");
+  if (miles <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Miles must be positive",
+    });
 
   // Verify membership
   const [membership] = await db
@@ -271,7 +321,11 @@ export async function contributeMilesToPool(
     )
     .limit(1);
 
-  if (!membership) throw new Error("You are not a member of this group");
+  if (!membership)
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You are not a member of this group",
+    });
 
   // Check user has enough miles
   const [account] = await db
@@ -281,7 +335,10 @@ export async function contributeMilesToPool(
     .limit(1);
 
   if (!account || account.currentMilesBalance < miles) {
-    throw new Error("Insufficient miles balance");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Insufficient miles balance",
+    });
   }
 
   // Deduct from user's account
@@ -318,7 +375,11 @@ export async function contributeMilesToPool(
 
 export async function deleteFamilyGroup(ownerId: number, groupId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [group] = await db
     .select()
@@ -327,7 +388,10 @@ export async function deleteFamilyGroup(ownerId: number, groupId: number) {
     .limit(1);
 
   if (!group)
-    throw new Error("Family group not found or you are not the owner");
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Family group not found or you are not the owner",
+    });
 
   // Remove all members
   await db

@@ -8,6 +8,7 @@ import {
   airlines,
 } from "../../drizzle/schema";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { createNotification } from "./notification.service";
 
 /**
  * Waitlist Service
@@ -329,6 +330,33 @@ export async function offerSeat(waitlistId: number): Promise<{
       offerExpiresAt: expiresAt,
     })
     .where(eq(waitlist.id, waitlistId));
+
+  // Get flight info for notification
+  try {
+    const [flight] = await database
+      .select({ flightNumber: flights.flightNumber })
+      .from(flights)
+      .where(eq(flights.id, entry.flightId))
+      .limit(1);
+
+    const flightNumber = flight?.flightNumber || `#${entry.flightId}`;
+    await createNotification(
+      entry.userId,
+      "booking",
+      "Waitlist Seat Available",
+      `A seat is now available for flight ${flightNumber} (${entry.cabinClass} class). You have 24 hours to accept this offer before it expires.`,
+      {
+        flightId: entry.flightId,
+        flightNumber,
+        link: `/waitlist`,
+      }
+    );
+  } catch (notifError) {
+    console.error(
+      `[Waitlist] Failed to send offer notification for waitlist ${waitlistId}:`,
+      notifError
+    );
+  }
 
   return { success: true, expiresAt };
 }

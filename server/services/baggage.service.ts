@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { eq, and, desc } from "drizzle-orm";
 import { getDb } from "../db";
 import {
@@ -85,7 +86,11 @@ export async function registerBaggage(data: {
   specialHandling?: string;
 }): Promise<BaggageItem> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Validate booking exists
   const booking = await db
@@ -95,7 +100,7 @@ export async function registerBaggage(data: {
     .limit(1);
 
   if (booking.length === 0) {
-    throw new Error("Booking not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
 
   // Validate passenger belongs to booking
@@ -111,16 +116,25 @@ export async function registerBaggage(data: {
     .limit(1);
 
   if (passenger.length === 0) {
-    throw new Error("Passenger not found or does not belong to this booking");
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Passenger not found or does not belong to this booking",
+    });
   }
 
   // Validate weight (max 32kg for regular, warn if over 23kg)
   if (data.weight <= 0) {
-    throw new Error("Weight must be greater than 0");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Weight must be greater than 0",
+    });
   }
 
   if (data.weight > 32) {
-    throw new Error("Baggage weight exceeds maximum limit of 32kg");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Baggage weight exceeds maximum limit of 32kg",
+    });
   }
 
   // Generate unique tag number
@@ -142,7 +156,10 @@ export async function registerBaggage(data: {
   }
 
   if (attempts >= maxAttempts) {
-    throw new Error("Failed to generate unique baggage tag");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to generate unique baggage tag",
+    });
   }
 
   // Create baggage item
@@ -187,7 +204,11 @@ export async function updateBaggageStatus(data: {
   notes?: string;
 }): Promise<{ success: boolean; baggage: BaggageItem }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Find baggage by tag number
   const [baggage] = await db
@@ -197,7 +218,10 @@ export async function updateBaggageStatus(data: {
     .limit(1);
 
   if (!baggage) {
-    throw new Error("Baggage not found with tag number: " + data.tagNumber);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Baggage not found with tag number: " + data.tagNumber,
+    });
   }
 
   // Validate status transition
@@ -205,9 +229,10 @@ export async function updateBaggageStatus(data: {
   const validTransitions = VALID_STATUS_TRANSITIONS[currentStatus];
 
   if (!validTransitions.includes(data.status)) {
-    throw new Error(
-      `Invalid status transition from '${currentStatus}' to '${data.status}'`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Invalid status transition from '${currentStatus}' to '${data.status}'`,
+    });
   }
 
   // Update baggage item
@@ -248,7 +273,11 @@ export async function trackBaggage(
   tagNumber: string
 ): Promise<{ baggage: BaggageItem; tracking: BaggageTracking[] }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Find baggage by tag number
   const [baggage] = await db
@@ -258,7 +287,10 @@ export async function trackBaggage(
     .limit(1);
 
   if (!baggage) {
-    throw new Error("Baggage not found with tag number: " + tagNumber);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Baggage not found with tag number: " + tagNumber,
+    });
   }
 
   // Get tracking history ordered by scanned time (newest first)
@@ -278,7 +310,11 @@ export async function getPassengerBaggage(
   passengerId: number
 ): Promise<BaggageItem[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select()
@@ -294,7 +330,11 @@ export async function getBookingBaggage(
   bookingId: number
 ): Promise<Array<BaggageItem & { passengerName?: string }>> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const items = await db
     .select({
@@ -350,7 +390,11 @@ export async function reportLostBaggage(data: {
   contactPhone?: string;
 }): Promise<{ success: boolean; baggage: BaggageItem }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Find baggage by tag number
   const [baggage] = await db
@@ -360,17 +404,26 @@ export async function reportLostBaggage(data: {
     .limit(1);
 
   if (!baggage) {
-    throw new Error("Baggage not found with tag number: " + data.tagNumber);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Baggage not found with tag number: " + data.tagNumber,
+    });
   }
 
   // Cannot report if already claimed
   if (baggage.status === "claimed") {
-    throw new Error("Cannot report lost baggage that has already been claimed");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Cannot report lost baggage that has already been claimed",
+    });
   }
 
   // Cannot report if already lost
   if (baggage.status === "lost") {
-    throw new Error("Baggage has already been reported as lost");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Baggage has already been reported as lost",
+    });
   }
 
   // Build lost description with contact info
@@ -416,7 +469,11 @@ export async function reportLostBaggage(data: {
  */
 export async function getBaggageById(id: number): Promise<BaggageItem | null> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [baggage] = await db
     .select()
@@ -434,7 +491,11 @@ export async function getBaggageByTag(
   tagNumber: string
 ): Promise<BaggageItem | null> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [baggage] = await db
     .select()
@@ -450,7 +511,11 @@ export async function getBaggageByTag(
  */
 export async function getLostBaggage(): Promise<BaggageItem[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select()
@@ -466,7 +531,11 @@ export async function getBaggageByStatus(
   status: BaggageStatus
 ): Promise<BaggageItem[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select()
@@ -487,7 +556,11 @@ export async function getBaggageStats(): Promise<{
   damaged: number;
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const allBaggage = await db.select().from(baggageItems);
 
@@ -538,7 +611,11 @@ export async function markBaggageFound(data: {
   notes?: string;
 }): Promise<{ success: boolean; baggage: BaggageItem }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Find baggage by tag number
   const [baggage] = await db
@@ -548,11 +625,17 @@ export async function markBaggageFound(data: {
     .limit(1);
 
   if (!baggage) {
-    throw new Error("Baggage not found with tag number: " + data.tagNumber);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Baggage not found with tag number: " + data.tagNumber,
+    });
   }
 
   if (baggage.status !== "lost") {
-    throw new Error("Only lost baggage can be marked as found");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Only lost baggage can be marked as found",
+    });
   }
 
   // Update baggage status
@@ -592,7 +675,11 @@ export async function getAllBaggage(filters?: {
   bookingId?: number;
 }): Promise<Array<BaggageItem & { passengerName?: string }>> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   let query = db
     .select({
