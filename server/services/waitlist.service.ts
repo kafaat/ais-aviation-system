@@ -190,102 +190,129 @@ export async function processWaitlist(flightId: number): Promise<{
   const database = await getDb();
   if (!database) throw new Error("Database not available");
 
-  // Get flight details
-  const [flight] = await database
-    .select()
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (!flight) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Flight not found",
-    });
-  }
-
-  const notifications: Array<{
-    userId: number;
-    email: boolean;
-    sms: boolean;
-  }> = [];
-  let offeredCount = 0;
-
-  // Process economy waitlist
-  if (flight.economyAvailable > 0) {
-    let remainingEconomy = flight.economyAvailable;
-
-    const economyWaitlist = await database
+  // Use a transaction to prevent race conditions on seat offers
+  return await database.transaction(async tx => {
+    // Get flight details inside transaction for consistency
+    const [flight] = await tx
       .select()
-      .from(waitlist)
-      .where(
-        and(
-          eq(waitlist.flightId, flightId),
-          eq(waitlist.cabinClass, "economy"),
-          eq(waitlist.status, "waiting")
-        )
-      )
-      .orderBy(asc(waitlist.priority));
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .limit(1);
 
-    for (const entry of economyWaitlist) {
-      if (entry.seats <= remainingEconomy) {
-        await offerSeat(entry.id);
-        // Temporarily hold seats by decrementing availability
-        remainingEconomy -= entry.seats;
-        await database
-          .update(flights)
-          .set({
-            economyAvailable: sql`${flights.economyAvailable} - ${entry.seats}`,
-          })
-          .where(eq(flights.id, flightId));
-        offeredCount++;
-        notifications.push({
-          userId: entry.userId,
-          email: entry.notifyByEmail,
-          sms: entry.notifyBySms,
-        });
+    if (!flight) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Flight not found",
+      });
+    }
+
+    const notifications: Array<{
+      userId: number;
+      email: boolean;
+      sms: boolean;
+    }> = [];
+    let offeredCount = 0;
+
+    // Process economy waitlist
+    if (flight.economyAvailable > 0) {
+      let remainingEconomy = flight.economyAvailable;
+
+      const economyWaitlist = await tx
+        .select()
+        .from(waitlist)
+        .where(
+          and(
+            eq(waitlist.flightId, flightId),
+            eq(waitlist.cabinClass, "economy"),
+            eq(waitlist.status, "waiting")
+          )
+        )
+        .orderBy(asc(waitlist.priority));
+
+      for (const entry of economyWaitlist) {
+        if (entry.seats <= remainingEconomy) {
+          // Update status directly within the transaction
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + 24);
+
+          await tx
+            .update(waitlist)
+            .set({
+              status: "offered",
+              offeredAt: new Date(),
+              offerExpiresAt: expiresAt,
+            })
+            .where(eq(waitlist.id, entry.id));
+
+          // Temporarily hold seats by decrementing availability
+          remainingEconomy -= entry.seats;
+          await tx
+            .update(flights)
+            .set({
+              economyAvailable: sql`${flights.economyAvailable} - ${entry.seats}`,
+            })
+            .where(eq(flights.id, flightId));
+          offeredCount++;
+          notifications.push({
+            userId: entry.userId,
+            email: entry.notifyByEmail,
+            sms: entry.notifyBySms,
+          });
+        }
       }
     }
-  }
 
-  // Process business waitlist
-  if (flight.businessAvailable > 0) {
-    let remainingBusiness = flight.businessAvailable;
+    // Process business waitlist
+    if (flight.businessAvailable > 0) {
+      let remainingBusiness = flight.businessAvailable;
 
-    const businessWaitlist = await database
-      .select()
-      .from(waitlist)
-      .where(
-        and(
-          eq(waitlist.flightId, flightId),
-          eq(waitlist.cabinClass, "business"),
-          eq(waitlist.status, "waiting")
+      const businessWaitlist = await tx
+        .select()
+        .from(waitlist)
+        .where(
+          and(
+            eq(waitlist.flightId, flightId),
+            eq(waitlist.cabinClass, "business"),
+            eq(waitlist.status, "waiting")
+          )
         )
-      )
-      .orderBy(asc(waitlist.priority));
+        .orderBy(asc(waitlist.priority));
 
-    for (const entry of businessWaitlist) {
-      if (entry.seats <= remainingBusiness) {
-        await offerSeat(entry.id);
-        // Temporarily hold seats by decrementing availability
-        remainingBusiness -= entry.seats;
-        await database
-          .update(flights)
-          .set({
-            businessAvailable: sql`${flights.businessAvailable} - ${entry.seats}`,
-          })
-          .where(eq(flights.id, flightId));
-        offeredCount++;
-        notifications.push({
-          userId: entry.userId,
-          email: entry.notifyByEmail,
-          sms: entry.notifyBySms,
-        });
+      for (const entry of businessWaitlist) {
+        if (entry.seats <= remainingBusiness) {
+          // Update status directly within the transaction
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + 24);
+
+          await tx
+            .update(waitlist)
+            .set({
+              status: "offered",
+              offeredAt: new Date(),
+              offerExpiresAt: expiresAt,
+            })
+            .where(eq(waitlist.id, entry.id));
+
+          // Temporarily hold seats by decrementing availability
+          remainingBusiness -= entry.seats;
+          await tx
+            .update(flights)
+            .set({
+              businessAvailable: sql`${flights.businessAvailable} - ${entry.seats}`,
+            })
+            .where(eq(flights.id, flightId));
+          offeredCount++;
+          notifications.push({
+            userId: entry.userId,
+            email: entry.notifyByEmail,
+            sms: entry.notifyBySms,
+          });
+        }
       }
     }
-  }
 
-  return { offeredCount, notifications };
+    return { offeredCount, notifications };
+  });
 }
 
 /**

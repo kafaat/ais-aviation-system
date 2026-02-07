@@ -883,7 +883,7 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
       .limit(1);
 
     // Generate e-tickets
-    let eticketAttachments: Array<{
+    const eticketAttachments: Array<{
       filename: string;
       content: string;
       contentType?: string;
@@ -896,7 +896,7 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
         .where(eq(passengers.bookingId, bookingId));
 
       if (bookingPassengers.length > 0) {
-        eticketAttachments = await Promise.all(
+        const results = await Promise.allSettled(
           bookingPassengers.map(async passenger => {
             const pdf = await generateETicketForPassenger(
               bookingId,
@@ -909,6 +909,23 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
             };
           })
         );
+        for (const r of results) {
+          if (r.status === "fulfilled") {
+            eticketAttachments.push(r.value);
+          }
+        }
+        const failures = results.filter(r => r.status === "rejected");
+        if (failures.length > 0) {
+          log.warn(
+            {
+              event: "eticket_partial_failure",
+              bookingId,
+              failed: failures.length,
+              succeeded: eticketAttachments.length,
+            },
+            `Failed to generate ${failures.length}/${results.length} e-tickets`
+          );
+        }
         log.info(
           {
             event: "etickets_generated",

@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import {
   getPrometheusMetrics,
   getMetricsJson,
@@ -119,7 +119,7 @@ export const metricsRouter = router({
    * Reset all metrics
    * WARNING: This clears all collected metrics data
    */
-  reset: publicProcedure.mutation(async () => {
+  reset: adminProcedure.mutation(async () => {
     registry.reset();
     return { success: true, message: "All metrics have been reset" };
   }),

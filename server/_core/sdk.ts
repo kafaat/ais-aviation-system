@@ -40,6 +40,20 @@ class OAuthService {
 
   private decodeState(state: string): string {
     const redirectUri = atob(state);
+
+    // Validate the decoded redirect URI to prevent open redirect attacks
+    try {
+      const url = new URL(redirectUri);
+      if (
+        !["http:", "https:"].includes(url.protocol) ||
+        !url.pathname.endsWith("/api/oauth/callback")
+      ) {
+        throw new Error("Invalid redirect URI in OAuth state");
+      }
+    } catch {
+      throw new Error("Invalid redirect URI in OAuth state");
+    }
+
     return redirectUri;
   }
 

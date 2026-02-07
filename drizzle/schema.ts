@@ -1507,6 +1507,7 @@ export const waitlist = mysqlTable(
     flightIdx: index("waitlist_flight_idx").on(table.flightId),
     userIdx: index("waitlist_user_idx").on(table.userId),
     statusIdx: index("waitlist_status_idx").on(table.status),
+    bookingIdIdx: index("waitlist_booking_id_idx").on(table.bookingId),
     priorityIdx: index("waitlist_priority_idx").on(
       table.flightId,
       table.cabinClass,
