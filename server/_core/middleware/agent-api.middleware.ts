@@ -206,38 +206,32 @@ export function createAgentApiAuthMiddleware(options?: {
       // Rate limiting
       if (enableRateLimit) {
         const rateLimitKey = `agent_api_rate:${agent.id}`;
-        const currentCount = await cacheService.get<number>(rateLimitKey);
-        const count = (currentCount ?? 0) + 1;
+        const windowSeconds = Math.ceil(rateLimit.windowMs / 1000);
+        const { allowed, remaining } = await cacheService.checkRateLimit(
+          rateLimitKey,
+          rateLimit.maxRequests,
+          windowSeconds
+        );
 
-        if (count > rateLimit.maxRequests) {
-          const retryAfter = Math.ceil(rateLimit.windowMs / 1000);
+        // Set rate limit headers
+        res.setHeader("X-RateLimit-Limit", rateLimit.maxRequests);
+        res.setHeader("X-RateLimit-Remaining", remaining);
+
+        if (!allowed) {
+          res.setHeader("Retry-After", windowSeconds);
 
           log.warn(
-            { agentId: agent.id, count, limit: rateLimit.maxRequests },
+            { agentId: agent.id, limit: rateLimit.maxRequests },
             "Agent API rate limit exceeded"
           );
-
-          res.setHeader("X-RateLimit-Limit", rateLimit.maxRequests);
-          res.setHeader("X-RateLimit-Remaining", 0);
-          res.setHeader("Retry-After", retryAfter);
 
           res.status(429).json({
             error: "TOO_MANY_REQUESTS",
             message: "API rate limit exceeded",
-            retryAfter,
+            retryAfter: windowSeconds,
           });
           return;
         }
-
-        // Update rate limit counter
-        await cacheService.set(rateLimitKey, count, rateLimit.windowMs / 1000);
-
-        // Set rate limit headers
-        res.setHeader("X-RateLimit-Limit", rateLimit.maxRequests);
-        res.setHeader(
-          "X-RateLimit-Remaining",
-          Math.max(0, rateLimit.maxRequests - count)
-        );
       }
 
       // Attach agent to request
@@ -338,13 +332,19 @@ export async function incrementBookingCounters(agentId: number): Promise<void> {
   const todayKey = `agent_daily_bookings:${agentId}:${new Date().toISOString().split("T")[0]}`;
   const monthKey = `agent_monthly_bookings:${agentId}:${new Date().toISOString().slice(0, 7)}`;
 
-  // Increment daily counter (expires at midnight)
-  const dailyCount = (await cacheService.get<number>(todayKey)) ?? 0;
-  await cacheService.set(todayKey, dailyCount + 1, 24 * 60 * 60); // 24 hours
+  // Atomic increment for daily counter (24 hours TTL)
+  await cacheService.checkRateLimit(
+    todayKey,
+    Number.MAX_SAFE_INTEGER,
+    24 * 60 * 60
+  );
 
-  // Increment monthly counter (expires at end of month)
-  const monthlyCount = (await cacheService.get<number>(monthKey)) ?? 0;
-  await cacheService.set(monthKey, monthlyCount + 1, 31 * 24 * 60 * 60); // 31 days
+  // Atomic increment for monthly counter (31 days TTL)
+  await cacheService.checkRateLimit(
+    monthKey,
+    Number.MAX_SAFE_INTEGER,
+    31 * 24 * 60 * 60
+  );
 }
 
 export { getClientIp };

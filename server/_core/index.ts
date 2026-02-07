@@ -239,6 +239,15 @@ async function startServer() {
     }
   });
 
+  // Auth endpoints get stricter rate limiting
+  app.use("/api/trpc/auth", createStrictRateLimitMiddleware("auth"));
+
+  // Payment endpoints get stricter rate limiting
+  app.use("/api/trpc/payments", createStrictRateLimitMiddleware("payment"));
+
+  // Booking creation gets stricter rate limiting
+  app.use("/api/trpc/bookings", createStrictRateLimitMiddleware("booking"));
+
   // tRPC API with per-user rate limiting
   // Uses user ID for authenticated users, IP for anonymous users
   // Different limits based on loyalty tier (bronze, silver, gold, platinum)
@@ -255,15 +264,6 @@ async function startServer() {
       createContext,
     })
   );
-
-  // Auth endpoints get stricter rate limiting
-  app.use("/api/trpc/auth", createStrictRateLimitMiddleware("auth"));
-
-  // Payment endpoints get stricter rate limiting
-  app.use("/api/trpc/payments", createStrictRateLimitMiddleware("payment"));
-
-  // Booking creation gets stricter rate limiting
-  app.use("/api/trpc/bookings", createStrictRateLimitMiddleware("booking"));
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

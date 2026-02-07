@@ -15,6 +15,14 @@ declare global {
   }
 }
 
+/**
+ * Validate external request ID
+ * Only allow safe characters and reasonable length
+ */
+function isValidRequestId(id: string): boolean {
+  return id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(id);
+}
+
 export function requestIdMiddleware(
   req: Request,
   res: Response,
@@ -23,8 +31,9 @@ export function requestIdMiddleware(
   // Check if request already has an ID (from load balancer or proxy)
   const existingId = req.headers["x-request-id"] as string;
 
-  // Generate new ID if not present
-  const requestId = existingId || nanoid(16);
+  // Generate new ID if not present or invalid
+  const requestId =
+    existingId && isValidRequestId(existingId) ? existingId : nanoid(16);
 
   // Attach to request object
   req.id = requestId;
