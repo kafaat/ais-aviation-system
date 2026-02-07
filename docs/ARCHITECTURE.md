@@ -1,7 +1,7 @@
 # AIS Aviation System - Architecture Documentation
 
-**Version:** 2.0  
-**Last Updated:** January 2026
+**Version:** 3.0
+**Last Updated:** February 2026
 
 ---
 
@@ -41,7 +41,7 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Data Persistence Layer                    │
-│              MySQL/TiDB + Redis (future cache)              │
+│              MySQL/TiDB + Redis (cache + queues)            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -49,11 +49,17 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
 
 1. **Flight Management** - Search, browse, and manage flight schedules
 2. **Booking System** - Complete booking flow with inventory management
-3. **Payment Processing** - Secure payment via Stripe with webhooks
+3. **Payment Processing** - Secure payment via Stripe with split payments
 4. **E-Ticketing** - PDF generation for tickets and boarding passes
 5. **User Management** - Authentication, profiles, and preferences
-6. **Loyalty Program** - Miles earning and redemption system
+6. **Loyalty Program** - Miles earning, redemption, and family pooling
 7. **Admin Dashboard** - Analytics, reports, and system management
+8. **Gate Management** - Airport gate assignments and change tracking
+9. **Vouchers & Credits** - Promotional codes and user credit system
+10. **Background Jobs** - BullMQ worker for emails, notifications, and queue processing
+11. **DCS** - Departure Control System for boarding management
+12. **AI Chat** - AI-powered booking assistant
+13. **Disruption Handling** - Automated flight disruption management and rebooking
 
 ---
 
@@ -83,11 +89,14 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
 
 The codebase is organized by business domains:
 
-- **Flights Domain** - Flight search, scheduling, status
-- **Bookings Domain** - Reservations, modifications, cancellations
-- **Payments Domain** - Checkout, refunds, payment history
-- **Loyalty Domain** - Miles, tiers, rewards
-- **Admin Domain** - Analytics, management, reports
+- **Flights Domain** - Flight search, scheduling, status, price calendar
+- **Bookings Domain** - Reservations, modifications, cancellations, group bookings
+- **Payments Domain** - Checkout, refunds, split payments, vouchers, credits
+- **Loyalty Domain** - Miles, tiers, rewards, family pooling, wallet
+- **Admin Domain** - Analytics, management, reports, DCS
+- **Operations Domain** - Gate management, disruptions, rebooking, baggage
+- **Commercial Domain** - Corporate accounts, travel agents, price alerts
+- **Communication Domain** - Notifications, SMS, email, AI chat
 
 ### 3. Type-Safe End-to-End
 
@@ -284,14 +293,43 @@ CREATE TABLE payments (
 
 ### Advanced Features Tables
 
+The database contains **71 tables** total. Key additional tables:
+
 #### Loyalty Program
 
-- **loyalty_accounts** - User loyalty account info
+- **loyalty_accounts** - User loyalty account info (tier, miles, points)
 - **miles_transactions** - Miles earning/spending history
+- **family_pools** - Family mile pooling groups
 
-#### Inventory Management
+#### Inventory & Pricing
 
 - **inventory_locks** - Temporary seat holds during booking
+- **price_locks** - Locked prices for users
+- **price_alerts** - User price drop alerts
+
+#### Gate Management
+
+- **airport_gates** - Airport gate definitions with terminal info
+- **gate_assignments** - Flight-to-gate assignments with change tracking
+
+#### Vouchers & Credits
+
+- **vouchers** - Promotional/discount codes
+- **voucher_usage** - Voucher redemption history
+- **user_credits** - User credit balances from refunds/promos
+- **credit_usage** - Credit usage tracking
+
+#### Commercial
+
+- **corporate_accounts** - Business travel accounts
+- **travel_agents** - Travel agent profiles and commissions
+- **waitlist** - Flight waitlist entries
+
+#### Operations
+
+- **split_payments** - Split payment shares between users
+- **notifications** - User notification records
+- **group_booking_requests** - Group discount requests
 
 #### Service Management
 
@@ -301,6 +339,7 @@ CREATE TABLE payments (
 #### User Preferences
 
 - **user_preferences** - Seat preferences, meal choices, etc.
+- **saved_passengers** - Stored passenger profiles for quick booking
 
 ---
 
@@ -308,26 +347,67 @@ CREATE TABLE payments (
 
 ### tRPC Router Structure
 
+The system has **48 registered domain routers** organized by function:
+
 ```typescript
 export const appRouter = router({
-  // Public APIs
-  flights: flightsRouter, // Search, list, details
-  airlines: airlinesRouter, // Airline information
-  airports: airportsRouter, // Airport data
+  // Core APIs
+  auth,
+  flights,
+  bookings,
+  payments,
+  refunds,
+  eticket,
 
-  // Protected APIs (require authentication)
-  bookings: bookingsRouter, // User bookings
-  payments: paymentsRouter, // Payment processing
-  loyalty: loyaltyRouter, // Loyalty program
-  profile: profileRouter, // User profile
+  // User Features
+  loyalty,
+  userPreferences,
+  favorites,
+  savedPassengers,
+  ancillary,
+  notifications,
+  priceAlerts,
+  reviews,
 
-  // Admin APIs (require admin role)
-  admin: adminRouter, // System management
-  analytics: analyticsRouter, // Reports & analytics
+  // Phase 2: Advanced Features
+  gates,
+  vouchers,
+  splitPayments,
+  priceCalendar,
+  waitlist,
+  corporate,
+  travelAgent,
+  groupBookings,
+  priceLock,
+  familyPool,
+  wallet,
+  multiCity,
+  baggage,
 
-  // System APIs
-  health: healthRouter, // Health checks
-  system: systemRouter, // System info
+  // Phase 3: Operations
+  dcs,
+  disruptions,
+  rebooking,
+  travelScenarios,
+  aiChat,
+  inventory,
+  pricing,
+  softDelete,
+  sms,
+
+  // Admin & System
+  admin,
+  analytics,
+  reports,
+  reference,
+  modifications,
+  health,
+  system,
+  gdpr,
+  rateLimit,
+  metrics,
+  cache,
+  specialServices,
 });
 ```
 
@@ -569,7 +649,13 @@ if (existing) {
                            │
                     ┌──────────────┐
                     │ Redis Cache  │
-                    │  (future)    │
+                    │  + BullMQ    │
+                    └──────────────┘
+                           │
+                    ┌──────────────┐
+                    │   Worker     │
+                    │ (dist/worker │
+                    │    .js)      │
                     └──────────────┘
 ```
 
@@ -611,7 +697,8 @@ CMD ["pnpm", "start"]
    - Read replicas for analytics queries
 
 2. **API:**
-   - Response caching (Redis - future)
+   - Response caching (Redis)
+   - Background job processing (BullMQ + Redis)
    - Pagination for large datasets
    - Lazy loading for related data
 
@@ -630,7 +717,13 @@ CMD ["pnpm", "start"]
 
 ### Monitoring
 
-Recommended tools:
+Integrated tools:
+
+- **Error Tracking:** Sentry (client + server)
+- **Logging:** Pino (structured JSON logging)
+- **Analytics:** Umami (optional)
+
+Recommended additional tools:
 
 - **Application:** New Relic, DataDog
 - **Database:** Percona Monitoring
@@ -663,6 +756,6 @@ Recommended tools:
 
 ---
 
-**Document Version:** 2.0  
-**Last Review:** January 2026  
-**Next Review:** July 2026
+**Document Version:** 3.0
+**Last Review:** February 2026
+**Next Review:** August 2026

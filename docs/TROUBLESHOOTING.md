@@ -1,7 +1,7 @@
 # AIS Aviation System - Troubleshooting Guide
 
-**Version:** 2.0  
-**Last Updated:** January 2026
+**Version:** 3.0
+**Last Updated:** February 2026
 
 ---
 
@@ -917,6 +917,140 @@ htop  # if installed
 
 ---
 
+## Sentry & Error Tracking
+
+### Problem: Server crashes on startup with Sentry DSN error
+
+**Symptoms:**
+
+```
+Error: Invalid Sentry Dsn: your-key@sentry.io
+```
+
+**Solutions:**
+
+1. **Comment out placeholder DSN values:**
+
+```bash
+# In .env - leave commented or use a real DSN
+# SENTRY_DSN=https://your-actual-key@sentry.io/your-project-id
+# VITE_SENTRY_DSN=https://your-actual-key@sentry.io/your-project-id
+```
+
+2. **Use a valid Sentry DSN or remove it entirely:**
+
+```bash
+# Either use a real DSN from sentry.io
+SENTRY_DSN=https://abc123@o123456.ingest.sentry.io/789
+
+# Or remove the variable entirely (Sentry will be disabled)
+```
+
+The system gracefully handles missing or placeholder DSN values and will log a warning instead of crashing.
+
+---
+
+## Background Worker Issues
+
+### Problem: Worker not processing jobs
+
+**Symptoms:**
+
+- Emails not being sent
+- Notifications not delivered
+- Queue jobs accumulating
+
+**Solutions:**
+
+1. **Ensure Redis is running:**
+
+```bash
+# Check Redis
+redis-cli ping  # Should return PONG
+
+# Or use Docker
+docker-compose up redis
+```
+
+2. **Start the worker:**
+
+```bash
+# Build first
+pnpm build
+
+# Start worker
+node dist/worker.js
+```
+
+3. **Check REDIS_URL in .env:**
+
+```bash
+REDIS_URL=redis://localhost:6379
+```
+
+---
+
+## E2E Test Issues
+
+### Problem: E2E tests timeout in CI
+
+**Symptoms:**
+
+- Tests run for 30+ minutes
+- CI job shows "cancelled" status
+
+**Solutions:**
+
+1. **E2E tests are non-blocking** - CI pipeline is configured so the build job does not depend on E2E tests
+2. **Run E2E locally:**
+
+```bash
+# Start the server first
+pnpm dev &
+
+# Run E2E tests
+pnpm test:e2e
+```
+
+3. **Check Playwright configuration** in `playwright.config.ts` for timeout settings
+
+---
+
+## CI/CD Issues
+
+### Problem: Prettier check fails in CI but passes locally
+
+**Cause:** CI may run on a merge commit that combines your branch with main, producing files with formatting issues from the base branch.
+
+**Solutions:**
+
+1. **Merge main into your branch:**
+
+```bash
+git fetch origin main
+git merge origin/main
+pnpm format
+git add -A && git commit -m "fix: format after merge"
+```
+
+2. **Always run `pnpm format` before committing**
+
+### Problem: Build fails with trpc-openapi import error
+
+**Cause:** Static imports of trpc-openapi cause esbuild bundle crashes.
+
+**Solution:** Use dynamic `await import()` instead of static imports:
+
+```typescript
+// Wrong
+import { createOpenApiExpressMiddleware } from "trpc-openapi";
+
+// Correct
+const { createOpenApiExpressMiddleware } = await import("trpc-openapi");
+```
+
+---
+
 **Remember:** Most issues can be solved by:
 
 1. Reading error messages carefully
@@ -925,4 +1059,4 @@ htop  # if installed
 4. Clearing caches
 5. Reading the documentation
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026

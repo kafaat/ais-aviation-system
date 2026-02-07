@@ -1,7 +1,7 @@
 # AIS Aviation System - Developer Guide
 
-**Version:** 2.0  
-**Last Updated:** January 2026  
+**Version:** 3.0
+**Last Updated:** February 2026
 **Author:** Manus AI
 
 ---
@@ -140,22 +140,32 @@ ais-aviation-system/
 │   │   ├── logger.ts       # Logging service
 │   │   └── index.ts        # Server entry point
 │   │
-│   ├── routers/             # tRPC API routers
+│   ├── routers/             # tRPC API routers (49 files)
 │   │   ├── flights.ts      # Flight operations
 │   │   ├── bookings.ts     # Booking management
 │   │   ├── payments.ts     # Payment processing
 │   │   ├── admin.ts        # Admin operations
-│   │   └── analytics.ts    # Analytics & reports
+│   │   ├── analytics.ts    # Analytics & reports
+│   │   ├── gates.ts        # Gate management
+│   │   ├── vouchers.ts     # Vouchers & credits
+│   │   ├── dcs.ts          # Departure Control System
+│   │   ├── disruptions.ts  # Flight disruptions
+│   │   └── ...             # 40+ more domain routers
 │   │
-│   ├── services/            # Business logic services
+│   ├── services/            # Business logic (100 files)
 │   │   ├── flights.service.ts
 │   │   ├── bookings.service.ts
 │   │   ├── payments.service.ts
 │   │   ├── loyalty.service.ts
-│   │   └── email.service.ts
+│   │   ├── email.service.ts
+│   │   ├── sentry.service.ts
+│   │   └── ...             # 94+ more services
 │   │
 │   ├── db.ts               # Database client & queries
 │   ├── stripe.ts           # Stripe configuration
+│   ├── worker.ts           # Background job worker entry
+│   ├── queue/              # BullMQ job queue workers
+│   ├── jobs/               # Background job definitions
 │   └── webhooks/           # Webhook handlers
 │
 ├── drizzle/                 # Database schema & migrations
@@ -287,6 +297,26 @@ This creates:
 - 15 airports
 - 50+ flights
 - Admin user
+
+### Background Worker
+
+The system includes a background job worker for processing tasks asynchronously:
+
+```bash
+# Build the worker
+pnpm build   # Produces dist/index.js (server) and dist/worker.js (worker)
+
+# Start the worker (requires Redis)
+node dist/worker.js
+```
+
+The worker handles:
+
+- Email notifications (booking confirmation, cancellation)
+- Cancellation and refund processing
+- Push notification delivery
+- Price alert checking and notification
+- Inventory lock cleanup
 
 ---
 
@@ -588,6 +618,52 @@ DEBUG=true
 2. Review test files for examples
 3. Search GitHub issues
 4. Contact the team via email
+
+---
+
+## Docker Development
+
+### Development Environment
+
+```bash
+# Start MySQL + Redis + phpMyAdmin
+docker-compose up
+
+# Access phpMyAdmin at http://localhost:8080
+```
+
+### Production Environment
+
+```bash
+# Production lite
+docker-compose -f docker-compose.prod.yml up
+
+# Full production (with worker, Redis, SSL)
+docker-compose -f docker-compose.production.yml up
+```
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+**Required:**
+
+- `DATABASE_URL` - MySQL connection string
+- `JWT_SECRET` - Secret for JWT token signing
+
+**Payment (required for booking flow):**
+
+- `STRIPE_SECRET_KEY` - Stripe API key
+- `STRIPE_WEBHOOK_SECRET` - Stripe webhook verification secret
+
+**Optional (with defaults):**
+
+- `REDIS_URL` - Redis connection (default: `redis://localhost:6379`)
+- `LOG_LEVEL` - Logging level (default: `info`)
+- `SENTRY_DSN` / `VITE_SENTRY_DSN` - Sentry error tracking
+- `DB_POOL_SIZE` - Database connection pool size
+
+See `.env.example` for the full list of 60+ configurable variables.
 
 ---
 

@@ -1,7 +1,7 @@
 # AIS Aviation System - Security Guide
 
-**Version:** 2.0  
-**Last Updated:** January 2026
+**Version:** 3.0
+**Last Updated:** February 2026
 
 ---
 
@@ -562,6 +562,22 @@ pnpm update
 7. Implement preventive measures
 ```
 
+### Error Tracking with Sentry
+
+The system integrates Sentry for real-time error tracking on both client and server:
+
+```typescript
+// Client: client/src/lib/sentry.ts
+// Server: server/services/sentry.service.ts
+```
+
+**Security considerations:**
+
+- DSN values validated before initialization (placeholder values are rejected)
+- Invalid DSN causes graceful fallback, not a crash
+- PII is scrubbed from error reports by default
+- Sentry DSN should be kept in environment variables, never hardcoded
+
 ### Security Monitoring
 
 **Key Metrics:**
@@ -572,6 +588,7 @@ pnpm update
 - Admin action logs
 - Database access patterns
 - API error rates
+- Sentry error rates and trends
 
 **Alerting Thresholds:**
 
@@ -672,4 +689,4 @@ export async function deleteUserData(userId: number) {
 
 **Remember:** Security is everyone's responsibility. When in doubt, ask the security team!
 
-**Last Updated:** January 2026
+**Last Updated:** February 2026
