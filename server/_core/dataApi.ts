@@ -6,6 +6,9 @@
  */
 import { ENV } from "./env";
 
+/** Timeout for Data API calls */
+const DATA_API_TIMEOUT_MS = 30_000;
+
 export type DataApiCallOptions = {
   query?: Record<string, unknown>;
   body?: Record<string, unknown>;
@@ -22,6 +25,10 @@ export async function callDataApi(
   }
   if (!ENV.forgeApiKey) {
     throw new Error("BUILT_IN_FORGE_API_KEY is not configured");
+  }
+
+  if (!apiId || apiId.trim().length === 0) {
+    throw new Error("callDataApi requires a non-empty apiId");
   }
 
   // Build the full URL by appending the service path to the base URL
@@ -48,12 +55,13 @@ export async function callDataApi(
       path_params: options.pathParams,
       multipart_form_data: options.formData,
     }),
+    signal: AbortSignal.timeout(DATA_API_TIMEOUT_MS),
   });
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => "");
+    const _detail = await response.text().catch(() => "");
     throw new Error(
-      `Data API request failed (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
+      `Data API request failed (${response.status} ${response.statusText})`
     );
   }
 

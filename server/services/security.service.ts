@@ -2,12 +2,22 @@ import helmet from "helmet";
 import { doubleCsrf } from "csrf-csrf";
 import type { Express, Request, Response, NextFunction } from "express";
 import { logger } from "../_core/logger";
+import crypto from "crypto";
+
+// Generate a random CSRF secret if none is provided.
+// In production, CSRF_SECRET must be explicitly set (validated by validateSecurityConfiguration).
+const CSRF_FALLBACK_SECRET = crypto.randomBytes(32).toString("hex");
+if (!process.env.CSRF_SECRET) {
+  logger.warn(
+    {},
+    "CSRF_SECRET is not set. Using a random secret (sessions will not survive server restarts)."
+  );
+}
 
 // CSRF Protection configuration
 const { invalidCsrfTokenError, generateCsrfToken, doubleCsrfProtection } =
   doubleCsrf({
-    getSecret: () =>
-      process.env.CSRF_SECRET || "default-csrf-secret-change-in-production",
+    getSecret: () => process.env.CSRF_SECRET || CSRF_FALLBACK_SECRET,
     getSessionIdentifier: req => {
       // Use authentication cookie or a fallback for unauthenticated requests
       return req.cookies?.["manus-access-token"] || req.ip || "anonymous";

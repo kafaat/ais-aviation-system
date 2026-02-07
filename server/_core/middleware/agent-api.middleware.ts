@@ -294,8 +294,12 @@ export function checkAgentLimits(): RequestHandler {
     }
 
     // Check daily booking limit
+    // Build the full Redis key to match what checkRateLimit writes internally:
+    // checkRateLimit prefixes keys as `${CACHE_PREFIX}:ratelimit:${key}`
+    const cachePrefix = process.env.CACHE_PREFIX || "ais";
     const todayKey = `agent_daily_bookings:${agent.id}:${new Date().toISOString().split("T")[0]}`;
-    const dailyBookings = (await cacheService.get<number>(todayKey)) ?? 0;
+    const dailyRedisKey = `${cachePrefix}:ratelimit:${todayKey}`;
+    const dailyBookings = (await cacheService.get<number>(dailyRedisKey)) ?? 0;
 
     if (dailyBookings >= agent.dailyBookingLimit) {
       res.status(429).json({
@@ -309,7 +313,9 @@ export function checkAgentLimits(): RequestHandler {
 
     // Check monthly booking limit
     const monthKey = `agent_monthly_bookings:${agent.id}:${new Date().toISOString().slice(0, 7)}`;
-    const monthlyBookings = (await cacheService.get<number>(monthKey)) ?? 0;
+    const monthlyRedisKey = `${cachePrefix}:ratelimit:${monthKey}`;
+    const monthlyBookings =
+      (await cacheService.get<number>(monthlyRedisKey)) ?? 0;
 
     if (monthlyBookings >= agent.monthlyBookingLimit) {
       res.status(429).json({

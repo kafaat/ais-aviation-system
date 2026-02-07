@@ -540,6 +540,17 @@ jobs:
             VCS_REF=${{ github.sha }}
             VERSION=${{ needs.build.outputs.version }}
 
+      - name: Build and push migrator image (for database migrations)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.prod
+          target: migrator
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
@@ -615,13 +626,13 @@ jobs:
         run: |
           kubectl run db-migrate-${{ github.run_id }} \
             --namespace=ais-staging \
-            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }} \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }} \
             --restart=Never \
             --rm \
             --wait \
             --timeout=300s \
             --env="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" \
-            --command -- pnpm run db:migrate
+            --command -- npx drizzle-kit migrate
 
       - name: Deploy to Kubernetes
         run: |
@@ -763,13 +774,13 @@ jobs:
         run: |
           kubectl run db-migrate-${{ github.run_id }} \
             --namespace=ais-production \
-            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }} \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }} \
             --restart=Never \
             --rm \
             --wait \
             --timeout=300s \
             --env="DATABASE_URL=${{ secrets.PRODUCTION_DATABASE_URL }}" \
-            --command -- pnpm run db:migrate
+            --command -- npx drizzle-kit migrate
 
       - name: Save current deployment for rollback
         id: save-current

@@ -58,16 +58,27 @@ export function serveStatic(app: Express) {
     process.env.NODE_ENV === "development"
       ? path.resolve(import.meta.dirname, "../..", "dist", "public")
       : path.resolve(import.meta.dirname, "public");
+
   if (!fs.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
     );
+    // Without the build directory, express.static serves nothing and the
+    // catch-all sendFile throws on every request.  Return a clear 503 instead.
+    app.use("*", (_req, res) => {
+      res.status(503).json({
+        error:
+          "Frontend assets not found. The application has not been built yet.",
+      });
+    });
+    return;
   }
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
+  // fall through to index.html if the file doesn't exist (SPA routing)
+  const indexPath = path.resolve(distPath, "index.html");
   app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    res.sendFile(indexPath);
   });
 }

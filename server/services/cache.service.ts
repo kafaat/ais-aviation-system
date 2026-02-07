@@ -527,6 +527,14 @@ class CacheService {
       await this.client!.set(rateLimitKey, 0, "EX", windowSeconds, "NX");
       const current = await this.client!.incr(rateLimitKey);
 
+      // Safety: if the key expired between SET NX and INCR, the INCR creates
+      // a new key with no TTL. Ensure the key always has an expiry to prevent
+      // a permanently stuck rate limit counter.
+      const ttl = await this.client!.ttl(rateLimitKey);
+      if (ttl === -1) {
+        await this.client!.expire(rateLimitKey, windowSeconds);
+      }
+
       const allowed = current <= limit;
       const remaining = Math.max(0, limit - current);
 

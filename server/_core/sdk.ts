@@ -39,10 +39,11 @@ class OAuthService {
   }
 
   private decodeState(state: string): string {
-    const redirectUri = atob(state);
-
-    // Validate the decoded redirect URI to prevent open redirect attacks
+    // Both atob (base64 decode) and URL parsing can throw on malformed input,
+    // so wrap everything in a single try-catch for a clean error message.
+    let redirectUri: string;
     try {
+      redirectUri = atob(state);
       const url = new URL(redirectUri);
       if (
         !["http:", "https:"].includes(url.protocol) ||
@@ -229,7 +230,7 @@ class SDKServer {
       if (
         !isNonEmptyString(openId) ||
         !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
+        typeof name !== "string"
       ) {
         console.warn("[Auth] Session payload missing required fields");
         return null;

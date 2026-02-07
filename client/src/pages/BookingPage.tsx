@@ -710,7 +710,7 @@ export default function BookingPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>{t("booking.title")}</Label>
+                        <Label>{t("booking.honorific")}</Label>
                         <Select
                           value={passenger.title || ""}
                           onValueChange={value =>

@@ -241,21 +241,9 @@ export async function initializeQueues(): Promise<void> {
       );
     }
 
-    // Schedule hourly cleanup
-    if (cleanupQueue) {
-      await cleanupQueue.add(
-        "hourly-cleanup",
-        {},
-        {
-          repeat: { pattern: "0 * * * *" },
-          jobId: "hourly-cleanup",
-        }
-      );
-      log.info(
-        { event: "job_scheduled", jobName: "hourly-cleanup" },
-        "Scheduled hourly cleanup job"
-      );
-    }
+    // Note: Cleanup jobs are scheduled by queue-v2.service (ais:scheduled queue)
+    // which has its own worker. Do NOT schedule here - the "cleanup" queue from
+    // queues.ts has no worker, so jobs would pile up unconsumed.
 
     log.info(
       { event: "queues_initialized" },

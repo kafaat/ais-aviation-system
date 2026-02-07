@@ -24,6 +24,18 @@ import {
 } from "../../services/email.service";
 
 // ============================================================================
+// PII Helpers
+// ============================================================================
+
+/** Redact an email address for safe logging: "user@example.com" -> "u***@example.com" */
+function redactEmail(email: string): string {
+  if (email.includes("@")) {
+    return email[0] + "***@" + email.split("@")[1];
+  }
+  return "[REDACTED]";
+}
+
+// ============================================================================
 // Worker Configuration
 // ============================================================================
 
@@ -95,10 +107,13 @@ async function processEmailJob(
 ): Promise<{ success: boolean; sentAt: string }> {
   const { type, to, templateData, correlationId } = job.data;
 
+  // Redact email address in logs to protect PII
+  const redactedTo = redactEmail(to);
+
   log("info", `Processing email job`, {
     jobId: job.id,
     type,
-    to,
+    to: redactedTo,
     correlationId,
   });
 
@@ -244,7 +259,7 @@ async function processEmailJob(
     log("info", `Email sent successfully`, {
       jobId: job.id,
       type,
-      to,
+      to: redactedTo,
     });
 
     return { success: true, sentAt: new Date().toISOString() };
@@ -254,7 +269,7 @@ async function processEmailJob(
     log("error", `Failed to send email`, {
       jobId: job.id,
       type,
-      to,
+      to: redactedTo,
       error: errorMessage,
     });
 
@@ -342,7 +357,9 @@ export async function queueBookingConfirmationEmail(data: {
 }): Promise<string | null> {
   const queue = emailQueue;
   if (!queue) {
-    log("warn", "Email queue not available, skipping email", { to: data.to });
+    log("warn", "Email queue not available, skipping email", {
+      to: redactEmail(data.to),
+    });
     return null;
   }
 
@@ -366,7 +383,7 @@ export async function queueBookingConfirmationEmail(data: {
 
   log("info", "Queued booking confirmation email", {
     jobId: job.id,
-    to: data.to,
+    to: redactEmail(data.to),
     bookingReference: data.bookingReference,
   });
 
@@ -390,7 +407,9 @@ export async function queueBookingCancellationEmail(data: {
 }): Promise<string | null> {
   const queue = emailQueue;
   if (!queue) {
-    log("warn", "Email queue not available, skipping email", { to: data.to });
+    log("warn", "Email queue not available, skipping email", {
+      to: redactEmail(data.to),
+    });
     return null;
   }
 
@@ -417,7 +436,7 @@ export async function queueBookingCancellationEmail(data: {
 
   log("info", "Queued booking cancellation email", {
     jobId: job.id,
-    to: data.to,
+    to: redactEmail(data.to),
     bookingReference: data.bookingReference,
   });
 
@@ -443,7 +462,9 @@ export async function queueFlightStatusChangeEmail(data: {
 }): Promise<string | null> {
   const queue = emailQueue;
   if (!queue) {
-    log("warn", "Email queue not available, skipping email", { to: data.to });
+    log("warn", "Email queue not available, skipping email", {
+      to: redactEmail(data.to),
+    });
     return null;
   }
 
@@ -465,7 +486,7 @@ export async function queueFlightStatusChangeEmail(data: {
 
   log("info", "Queued flight status change email", {
     jobId: job.id,
-    to: data.to,
+    to: redactEmail(data.to),
     flightNumber: data.flightNumber,
     newStatus: data.newStatus,
   });
@@ -487,7 +508,9 @@ export async function queueFlightReminderEmail(data: {
 }): Promise<string | null> {
   const queue = emailQueue;
   if (!queue) {
-    log("warn", "Email queue not available, skipping email", { to: data.to });
+    log("warn", "Email queue not available, skipping email", {
+      to: redactEmail(data.to),
+    });
     return null;
   }
 
@@ -509,7 +532,7 @@ export async function queueFlightReminderEmail(data: {
 
   log("info", "Queued flight reminder email", {
     jobId: job.id,
-    to: data.to,
+    to: redactEmail(data.to),
     flightNumber: data.flightNumber,
   });
 

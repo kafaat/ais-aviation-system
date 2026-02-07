@@ -337,11 +337,11 @@ export const vouchersRouter = router({
     })
     .input(
       z.object({
-        voucherId: z.number().describe("Voucher ID"),
+        id: z.number().describe("Voucher ID"),
       })
     )
     .query(async ({ input }) => {
-      return await voucherService.getVoucherUsageHistory(input.voucherId);
+      return await voucherService.getVoucherUsageHistory(input.id);
     }),
 
   /**

@@ -130,7 +130,7 @@ export async function runCheckInReminderJob(): Promise<ReminderResult> {
       try {
         result.processed++;
 
-        const checkInUrl = `${process.env.APP_URL || "https://ais-aviation.com"}/check-in?booking=${item.booking.bookingReference}`;
+        const checkInUrl = `${process.env.FRONTEND_URL || "http://localhost:3000"}/check-in?booking=${item.booking.bookingReference}`;
 
         // Skip if user has no email
         if (!item.user.email) {

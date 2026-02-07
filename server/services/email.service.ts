@@ -126,12 +126,13 @@ function sanitizeUrl(url: string): string {
  * In production, replace with actual email service API call
  */
 async function sendEmail(template: EmailTemplate): Promise<boolean> {
+  // Redact the recipient email to avoid PII in logs
+  const redactedTo = template.to.includes("@")
+    ? template.to[0] + "***@" + template.to.split("@")[1]
+    : "[REDACTED]";
   console.log("[Email Service] Sending email:");
-  console.log(`  To: ${template.to}`);
+  console.log(`  To: ${redactedTo}`);
   console.log(`  Subject: ${template.subject}`);
-  console.log(
-    `  Content: ${template.text || template.html.substring(0, 100)}...`
-  );
 
   // Simulate email sending delay
   await new Promise(resolve => setTimeout(resolve, 100));

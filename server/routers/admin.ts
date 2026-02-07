@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "../_core/trpc";
+import { adminProcedure, router } from "../_core/trpc";
 import * as db from "../db";
 import * as flightStatusService from "../services/flight-status.service";
 import * as metricsService from "../services/metrics.service";
@@ -17,20 +17,6 @@ import {
   type AuditOutcome,
   type AuditSeverity,
 } from "../services/audit.service";
-
-/**
- * Admin-only procedure
- * Ensures only users with admin role can access these routes
- */
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Admin access required",
-    });
-  }
-  return next({ ctx });
-});
 
 /**
  * Admin Router

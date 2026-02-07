@@ -142,17 +142,18 @@ function redactPII(obj: unknown, depth = 0): unknown {
   for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
     const lowerKey = key.toLowerCase();
 
-    // Check if this field should be redacted
+    // Check if this field should be redacted.
+    // Only match if the key exactly equals a PII field name, or if the key
+    // contains a PII field name as a substring (e.g. "userEmail" contains "email").
+    // We intentionally do NOT check if a PII field name contains the key,
+    // because that causes false positives (e.g. key "id" would incorrectly
+    // match PII field "idNumber", redacting harmless identifiers).
     const shouldRedact = PII_FIELDS.some(field => {
       const lowerField = field
         .toLowerCase()
         .replace(/\[\*\]/g, "")
         .replace(/\.\*/g, "");
-      return (
-        lowerKey === lowerField ||
-        lowerKey.includes(lowerField) ||
-        lowerField.includes(lowerKey)
-      );
+      return lowerKey === lowerField || lowerKey.includes(lowerField);
     });
 
     if (shouldRedact && typeof value === "string" && value.length > 0) {
@@ -729,16 +730,16 @@ export function redactFromString(message: string): string {
     match => match[0] + "***@" + match.split("@")[1]
   );
 
-  // Phone pattern (various formats)
+  // Phone pattern (various formats) - preserve last 4 digits for identification
   message = message.replace(
-    /\b(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g,
-    "***-***-$1"
+    /\b(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?(\d{4})\b/g,
+    (_match, _countryCode, last4) => `***-***-${last4}`
   );
 
-  // Card number pattern (16 digits with optional separators)
+  // Card number pattern (16 digits with optional separators) - preserve last 4 digits
   message = message.replace(
-    /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g,
-    "****-****-****-####"
+    /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?(\d{4})\b/g,
+    (_match, last4) => `****-****-****-${last4}`
   );
 
   return message;

@@ -72,7 +72,7 @@ export default function CorporateDashboard() {
     isLoading: usersLoading,
     refetch: refetchUsers,
   } = trpc.corporate.getUsers.useQuery(
-    { corporateAccountId: account?.id || 0 },
+    { accountId: account?.id || 0 },
     { enabled: !!account }
   );
 

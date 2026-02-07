@@ -49,7 +49,7 @@ export const multiCityRouter = router({
   calculatePrice: publicProcedure
     .meta({
       openapi: {
-        method: "POST",
+        method: "GET",
         path: "/multi-city/calculate-price",
         tags: ["Multi-City"],
         summary: "Calculate multi-city booking price",

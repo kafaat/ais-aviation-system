@@ -927,7 +927,17 @@ class RedisCacheService {
       }
 
       const current = results[0][1] as number;
-      const ttl = Math.max(results[1][1] as number, 1);
+      let ttl = results[1][1] as number;
+
+      // Safety: if the key expired between SET NX and INCR, the INCR creates
+      // a new key with no TTL (ttl === -1). Re-apply the expiry to prevent
+      // a permanently stuck rate limit counter.
+      if (ttl === -1) {
+        await this.redisClient!.expire(key, windowSeconds);
+        ttl = windowSeconds;
+      }
+
+      ttl = Math.max(ttl, 1);
 
       const allowed = current <= limit;
       const remaining = Math.max(0, limit - current);

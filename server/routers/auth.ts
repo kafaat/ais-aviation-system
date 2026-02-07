@@ -518,7 +518,7 @@ export const authRouter = router({
   verifyToken: publicProcedure
     .meta({
       openapi: {
-        method: "POST",
+        method: "GET",
         path: "/auth/verify",
         tags: ["Authentication"],
         summary: "Verify access token",

@@ -95,8 +95,8 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.VITE_APP_URL || "http://localhost:3000"}/booking-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.VITE_APP_URL || "http://localhost:3000"}/booking-cancelled`,
+      success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/booking-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/booking-cancelled`,
       metadata: {
         bookingId: input.bookingId.toString(),
         userId: input.userId.toString(),

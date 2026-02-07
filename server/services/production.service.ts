@@ -92,13 +92,16 @@ export async function withCircuitBreaker<T>(
 
     return result;
   } catch (error) {
+    // Reset failure count if last failure was outside monitor window
+    if (
+      state.lastFailureAt > 0 &&
+      now - state.lastFailureAt > opts.monitorWindow
+    ) {
+      state.failures = 0;
+    }
+
     state.failures++;
     state.lastFailureAt = now;
-
-    // Reset failure count if outside monitor window
-    if (now - state.lastFailureAt > opts.monitorWindow) {
-      state.failures = 1;
-    }
 
     // Open circuit if threshold exceeded
     if (state.failures >= opts.failureThreshold) {

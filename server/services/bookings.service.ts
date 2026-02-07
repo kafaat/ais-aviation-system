@@ -1,5 +1,7 @@
 import { TRPCError } from "@trpc/server";
+import { eq, sql } from "drizzle-orm";
 import * as db from "../db";
+import { flights } from "../../drizzle/schema";
 import {
   checkFlightAvailability,
   calculateFlightPrice,
@@ -68,6 +70,17 @@ export async function createBooking(input: CreateBookingInput) {
             });
           }
         }
+      }
+    }
+
+    // Verify inventory lock if provided (prevents double-booking)
+    if (input.lockId) {
+      const lockValid = await verifyLock(input.lockId, input.sessionId);
+      if (!lockValid) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Inventory lock has expired. Please search again and retry.",
+        });
       }
     }
 
@@ -278,6 +291,29 @@ export async function cancelBooking(bookingId: number, userId: number) {
     }
 
     await db.updateBookingStatus(bookingId, "cancelled");
+
+    // If booking was confirmed (seats were deducted on payment), restore them
+    if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
+      const database = await db.getDb();
+      if (database) {
+        const cabinClass = booking.cabinClass as "economy" | "business";
+        if (cabinClass === "business") {
+          await database
+            .update(flights)
+            .set({
+              businessAvailable: sql`${flights.businessAvailable} + ${booking.numberOfPassengers}`,
+            })
+            .where(eq(flights.id, booking.flightId));
+        } else {
+          await database
+            .update(flights)
+            .set({
+              economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
+            })
+            .where(eq(flights.id, booking.flightId));
+        }
+      }
+    }
 
     // Track booking cancellation event for metrics
     trackBookingCancelled({

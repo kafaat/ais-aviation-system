@@ -25,6 +25,15 @@ COPY package.json pnpm-lock.yaml ./
 RUN npm install -g pnpm && \
     pnpm install --frozen-lockfile --prod
 
+# Migration image (includes drizzle-kit for running database migrations)
+# Build with: docker build --target migrator -t app-migrator .
+FROM deps AS migrator
+WORKDIR /app
+COPY drizzle ./drizzle
+COPY drizzle.config.ts ./
+USER ais
+CMD ["npx", "drizzle-kit", "migrate"]
+
 # Production image
 FROM base AS runner
 WORKDIR /app
@@ -33,11 +42,8 @@ WORKDIR /app
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-# Copy built application
+# Copy built application (includes dist/public for serving client assets)
 COPY --from=builder /app/dist ./dist
-
-# Copy public assets for serving
-COPY --from=builder /app/dist/public ./dist/public
 
 # Expose the port
 EXPOSE 3000

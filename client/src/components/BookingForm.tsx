@@ -131,7 +131,7 @@ export function BookingForm({
               {/* Title */}
               <div className="space-y-2">
                 <Label htmlFor={`passenger-title-${index}`}>
-                  {t("booking.title")}
+                  {t("booking.honorific")}
                 </Label>
                 <Select
                   value={passenger.title || ""}
