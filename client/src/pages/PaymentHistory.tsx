@@ -66,7 +66,10 @@ export default function PaymentHistory() {
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Link href="/profile">
-            <button className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-slate-700 transition-colors">
+            <button
+              className="p-2 rounded-lg hover:bg-white/50 dark:hover:bg-slate-700 transition-colors"
+              aria-label={t("common.back")}
+            >
               <ArrowLeft className="w-5 h-5" />
             </button>
           </Link>

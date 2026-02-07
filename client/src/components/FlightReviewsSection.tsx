@@ -104,7 +104,7 @@ export function FlightReviewsSection({
                 onClick={() => setShowReviewForm(true)}
                 className="shrink-0"
               >
-                <PenSquare className="h-4 w-4 mr-2" />
+                <PenSquare className="h-4 w-4 me-2" />
                 {t("reviews.leaveReview")}
               </Button>
             )}
@@ -145,7 +145,7 @@ export function FlightReviewsSection({
             onClick={() => setShowReviewForm(true)}
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
           >
-            <PenSquare className="h-4 w-4 mr-2" />
+            <PenSquare className="h-4 w-4 me-2" />
             {t("reviews.writeReview")}
           </Button>
         )}

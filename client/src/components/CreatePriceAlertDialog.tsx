@@ -100,7 +100,7 @@ export function CreatePriceAlertDialog({
       <DialogTrigger asChild>
         {triggerButton || (
           <Button>
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4 me-2" />
             {t("priceAlerts.createAlert")}
           </Button>
         )}
@@ -221,9 +221,9 @@ export function CreatePriceAlertDialog({
                 value={targetPrice}
                 onChange={e => setTargetPrice(e.target.value)}
                 placeholder={t("priceAlerts.enterTargetPrice")}
-                className="pr-16"
+                className="pe-16"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <span className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 {t("common.currency")}
               </span>
             </div>
@@ -260,9 +260,9 @@ export function CreatePriceAlertDialog({
           </Button>
           <Button onClick={handleCreate} disabled={createAlert.isPending}>
             {createAlert.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <Loader2 className="h-4 w-4 animate-spin me-2" />
             ) : (
-              <Bell className="h-4 w-4 mr-2" />
+              <Bell className="h-4 w-4 me-2" />
             )}
             {t("priceAlerts.createAlert")}
           </Button>

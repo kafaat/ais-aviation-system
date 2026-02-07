@@ -142,21 +142,21 @@ export default function CorporateBookings() {
       case "pending":
         return (
           <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
-            <Clock className="h-3 w-3 mr-1" />
+            <Clock className="h-3 w-3 me-1" />
             {t("corporate.status.pending")}
           </Badge>
         );
       case "approved":
         return (
           <Badge variant="outline" className="bg-green-50 text-green-700">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
+            <CheckCircle2 className="h-3 w-3 me-1" />
             {t("corporate.status.approved")}
           </Badge>
         );
       case "rejected":
         return (
           <Badge variant="outline" className="bg-red-50 text-red-700">
-            <XCircle className="h-3 w-3 mr-1" />
+            <XCircle className="h-3 w-3 me-1" />
             {t("corporate.status.rejected")}
           </Badge>
         );
@@ -186,7 +186,7 @@ export default function CorporateBookings() {
           <p className="text-muted-foreground mb-6">
             {t("corporate.noAccountDescription")}
           </p>
-          <Link href="/corporate/register">
+          <Link href="/corporate">
             <Button>{t("corporate.registerAccount")}</Button>
           </Link>
         </Card>
@@ -208,7 +208,7 @@ export default function CorporateBookings() {
         </div>
         <Link href="/corporate">
           <Button variant="outline">
-            <Building2 className="h-4 w-4 mr-2" />
+            <Building2 className="h-4 w-4 me-2" />
             {t("corporate.backToDashboard")}
           </Button>
         </Link>
@@ -313,7 +313,7 @@ export default function CorporateBookings() {
                   <TableHead>{t("corporate.projectCode")}</TableHead>
                   <TableHead>{t("corporate.amount")}</TableHead>
                   <TableHead>{t("corporate.approvalStatus")}</TableHead>
-                  <TableHead>{t("corporate.actions")}</TableHead>
+                  <TableHead>{t("common.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -339,7 +339,7 @@ export default function CorporateBookings() {
                     <TableCell>
                       {booking.costCenter ? (
                         <Badge variant="outline">
-                          <Briefcase className="h-3 w-3 mr-1" />
+                          <Briefcase className="h-3 w-3 me-1" />
                           {booking.costCenter}
                         </Badge>
                       ) : (
@@ -349,7 +349,7 @@ export default function CorporateBookings() {
                     <TableCell>
                       {booking.projectCode ? (
                         <Badge variant="outline">
-                          <FileText className="h-3 w-3 mr-1" />
+                          <FileText className="h-3 w-3 me-1" />
                           {booking.projectCode}
                         </Badge>
                       ) : (

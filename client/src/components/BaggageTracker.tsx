@@ -119,7 +119,7 @@ export function BaggageTracker({
               />
             </div>
             <Button type="submit" disabled={!tagNumber.trim()}>
-              <Search className="h-4 w-4 mr-2" />
+              <Search className="h-4 w-4 me-2" />
               {t("baggage.track")}
             </Button>
           </form>
@@ -182,7 +182,7 @@ export function BaggageTracker({
               className={getStatusColor(trackingData.baggage.status)}
             >
               {getStatusIcon(trackingData.baggage.status)}
-              <span className="ml-1">
+              <span className="ms-1">
                 {t(`baggage.status.${trackingData.baggage.status}`)}
               </span>
             </Badge>
@@ -269,7 +269,7 @@ export function BaggageTracker({
               onClick={() => refetch()}
               className="w-full"
             >
-              <ArrowRight className="h-4 w-4 mr-2 rotate-180" />
+              <ArrowRight className="h-4 w-4 me-2 rotate-180" />
               {t("baggage.refreshStatus")}
             </Button>
           </div>

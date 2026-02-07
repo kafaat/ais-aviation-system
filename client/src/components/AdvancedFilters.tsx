@@ -90,10 +90,10 @@ export function AdvancedFilters({ onApply, onReset }: AdvancedFiltersProps) {
         onClick={() => setIsOpen(true)}
         className="relative"
       >
-        <Filter className="h-4 w-4 mr-2" />
+        <Filter className="h-4 w-4 me-2" />
         {t("filters.advancedFilters")}
         {activeFiltersCount > 0 && (
-          <Badge className="ml-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
+          <Badge className="ms-2 h-5 w-5 rounded-full p-0 flex items-center justify-center">
             {activeFiltersCount}
           </Badge>
         )}
@@ -220,7 +220,7 @@ export function AdvancedFilters({ onApply, onReset }: AdvancedFiltersProps) {
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
                 >
                   {time.label}
-                  <span className="text-xs text-muted-foreground ml-2">
+                  <span className="text-xs text-muted-foreground ms-2">
                     ({time.time})
                   </span>
                 </label>

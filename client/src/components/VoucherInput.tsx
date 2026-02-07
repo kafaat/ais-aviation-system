@@ -108,7 +108,7 @@ export function VoucherInput({
       </Label>
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Ticket className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Ticket className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="voucher-code"
             type="text"
@@ -116,7 +116,7 @@ export function VoucherInput({
             onChange={e => setCode(e.target.value.toUpperCase())}
             onKeyDown={handleKeyDown}
             placeholder={t("voucher.placeholder")}
-            className="pl-10 uppercase"
+            className="ps-10 uppercase"
             disabled={disabled || isValidating}
             maxLength={50}
           />
@@ -129,7 +129,7 @@ export function VoucherInput({
         >
           {isValidating ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="me-2 h-4 w-4 animate-spin" />
               {t("common.validating")}
             </>
           ) : (

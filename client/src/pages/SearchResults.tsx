@@ -401,7 +401,7 @@ export default function SearchResults() {
               <p className="text-lg font-medium">
                 {t("search.foundFlights", { count: filteredFlights.length })}
                 {filteredFlights.length !== flights.length && (
-                  <span className="text-sm text-muted-foreground ml-2">
+                  <span className="text-sm text-muted-foreground ms-2">
                     ({flights.length} {t("search.total")})
                   </span>
                 )}

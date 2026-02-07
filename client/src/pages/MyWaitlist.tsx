@@ -206,6 +206,7 @@ export default function MyWaitlist() {
                 variant="ghost"
                 size="icon"
                 className="rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label={t("common.back")}
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
@@ -412,7 +413,7 @@ export default function MyWaitlist() {
                                   {entry.seats === 1
                                     ? t("waitlist.passenger")
                                     : t("waitlist.passengers")}
-                                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                                  <span className="text-sm font-normal text-muted-foreground ms-2">
                                     ({t(`cabin.${entry.cabinClass}`)})
                                   </span>
                                 </p>
