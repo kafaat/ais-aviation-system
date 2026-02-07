@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
 import { trackRefundIssued } from "./metrics.service";
+import { notifyRefundProcessed } from "./notification.service";
 
 /**
  * Refunds Service
@@ -203,6 +204,18 @@ export async function createRefund(input: CreateRefundInput) {
     } catch (emailError) {
       console.error("[Refund] Error sending confirmation email:", emailError);
       // Don't fail the refund if email fails
+    }
+
+    // Send in-app refund notification
+    try {
+      await notifyRefundProcessed(
+        booking.userId,
+        refund.amount || booking.totalAmount,
+        booking.bookingReference || `#${input.bookingId}`
+      );
+    } catch (notifError) {
+      console.error("[Refund] Error sending in-app notification:", notifError);
+      // Don't fail the refund if notification fails
     }
 
     return {

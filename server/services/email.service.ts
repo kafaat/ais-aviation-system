@@ -157,44 +157,234 @@ export async function sendBookingConfirmation(
       `.trim(),
       html: `
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html dir="rtl" lang="ar" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
-    .content { background: #f9fafb; padding: 20px; margin: 20px 0; }
-    .detail { margin: 10px 0; }
-    .label { font-weight: bold; color: #1f2937; }
-    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>تأكيد الحجز | Booking Confirmation</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style type="text/css">
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; max-width: 100% !important; }
+      .fluid { max-width: 100% !important; height: auto !important; }
+      .stack-column { display: block !important; width: 100% !important; }
+      .mobile-padding { padding-left: 16px !important; padding-right: 16px !important; }
+    }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>تأكيد الحجز</h1>
-    </div>
-    <div class="content">
-      <p>مرحباً ${data.passengerName},</p>
-      <p>تم تأكيد حجزك بنجاح!</p>
-      
-      <div class="detail"><span class="label">رقم الحجز:</span> ${data.bookingReference}</div>
-      <div class="detail"><span class="label">رقم PNR:</span> ${data.pnr}</div>
-      <div class="detail"><span class="label">رقم الرحلة:</span> ${data.flightNumber}</div>
-      <div class="detail"><span class="label">من:</span> ${data.origin}</div>
-      <div class="detail"><span class="label">إلى:</span> ${data.destination}</div>
-      <div class="detail"><span class="label">تاريخ المغادرة:</span> ${data.departureTime.toLocaleString("ar-SA")}</div>
-      <div class="detail"><span class="label">تاريخ الوصول:</span> ${data.arrivalTime.toLocaleString("ar-SA")}</div>
-      <div class="detail"><span class="label">الدرجة:</span> ${data.cabinClass === "economy" ? "اقتصادية" : "أعمال"}</div>
-      <div class="detail"><span class="label">عدد الركاب:</span> ${data.numberOfPassengers}</div>
-      <div class="detail"><span class="label">المبلغ الإجمالي:</span> ${(data.totalAmount / 100).toFixed(2)} ر.س</div>
-    </div>
-    <div class="footer">
-      <p>شكراً لاختياركم خدماتنا!</p>
-      <p>نظام الطيران المتكامل</p>
-    </div>
+<body style="margin: 0; padding: 0; background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; -webkit-font-smoothing: antialiased; direction: rtl;">
+
+  <!-- Preheader (hidden preview text) -->
+  <div style="display: none; max-height: 0; overflow: hidden; font-size: 1px; line-height: 1px; color: #f4f6f9;">
+    تم تأكيد حجزك بنجاح - رقم الحجز: ${data.bookingReference} | Your booking has been confirmed - Ref: ${data.bookingReference}
   </div>
+
+  <!-- Email wrapper -->
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f6f9;">
+    <tr>
+      <td style="padding: 20px 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" align="center" class="email-container" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); padding: 32px 40px; text-align: center;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: center;">
+                    <p style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff; letter-spacing: 1px;">AIS Aviation</p>
+                    <p style="margin: 4px 0 0; font-size: 14px; color: #bfdbfe; letter-spacing: 0.5px;">&#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644;</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Confirmation Banner -->
+          <tr>
+            <td style="background-color: #059669; padding: 20px 40px; text-align: center;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="text-align: center;">
+                    <p style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff;">&#x2713; &#x062A;&#x0645; &#x062A;&#x0623;&#x0643;&#x064A;&#x062F; &#x0627;&#x0644;&#x062D;&#x062C;&#x0632; &#x0628;&#x0646;&#x062C;&#x0627;&#x062D;</p>
+                    <p style="margin: 6px 0 0; font-size: 14px; color: #d1fae5;">Booking Confirmed Successfully</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- PNR / Reference Highlight -->
+          <tr>
+            <td style="padding: 28px 40px 0;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #eff6ff; border: 2px dashed #1e40af; border-radius: 10px;">
+                <tr>
+                  <td style="padding: 20px; text-align: center;">
+                    <p style="margin: 0 0 4px; font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">&#x0631;&#x0642;&#x0645; &#x0627;&#x0644;&#x062D;&#x062C;&#x0632; | Booking Reference</p>
+                    <p style="margin: 0; font-size: 32px; font-weight: 800; color: #1e40af; letter-spacing: 4px; font-family: 'Courier New', monospace;">${data.bookingReference}</p>
+                    <p style="margin: 8px 0 0; font-size: 13px; color: #64748b;">PNR: <span style="font-weight: 700; color: #1e40af; letter-spacing: 2px;">${data.pnr}</span></p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="padding: 24px 40px 0;" class="mobile-padding">
+              <p style="margin: 0; font-size: 16px; color: #1e293b; line-height: 1.6;">
+                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${data.passengerName}</strong>,
+              </p>
+              <p style="margin: 8px 0 0; font-size: 15px; color: #475569; line-height: 1.6;">
+                &#x064A;&#x0633;&#x0639;&#x062F;&#x0646;&#x0627; &#x0625;&#x0628;&#x0644;&#x0627;&#x063A;&#x0643; &#x0628;&#x0623;&#x0646; &#x062D;&#x062C;&#x0632;&#x0643; &#x0642;&#x062F; &#x062A;&#x0645; &#x062A;&#x0623;&#x0643;&#x064A;&#x062F;&#x0647; &#x0628;&#x0646;&#x062C;&#x0627;&#x062D;. &#x064A;&#x0631;&#x062C;&#x0649; &#x0645;&#x0631;&#x0627;&#x062C;&#x0639;&#x0629; &#x062A;&#x0641;&#x0627;&#x0635;&#x064A;&#x0644; &#x0631;&#x062D;&#x0644;&#x062A;&#x0643; &#x0623;&#x062F;&#x0646;&#x0627;&#x0647;.
+              </p>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #94a3b8; line-height: 1.5;">
+                We are pleased to confirm your booking. Please review your flight details below.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Flight Details Table -->
+          <tr>
+            <td style="padding: 24px 40px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0;">
+                <!-- Table Header -->
+                <tr>
+                  <td colspan="2" style="background-color: #1e40af; padding: 14px 20px;">
+                    <p style="margin: 0; font-size: 15px; font-weight: 700; color: #ffffff;">&#x062A;&#x0641;&#x0627;&#x0635;&#x064A;&#x0644; &#x0627;&#x0644;&#x0631;&#x062D;&#x0644;&#x0629; | Flight Details</p>
+                  </td>
+                </tr>
+                <!-- Flight Number -->
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b; width: 40%;">&#x0631;&#x0642;&#x0645; &#x0627;&#x0644;&#x0631;&#x062D;&#x0644;&#x0629; | Flight</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 700; color: #1e293b;">${data.flightNumber}</td>
+                </tr>
+                <!-- Origin -->
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0645;&#x0646; | From</td>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 600; color: #1e293b;">${data.origin}</td>
+                </tr>
+                <!-- Destination -->
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0625;&#x0644;&#x0649; | To</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 600; color: #1e293b;">${data.destination}</td>
+                </tr>
+                <!-- Departure -->
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0645;&#x063A;&#x0627;&#x062F;&#x0631;&#x0629; | Departure</td>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #1e293b;">${data.departureTime.toLocaleString("ar-SA")}</td>
+                </tr>
+                <!-- Arrival -->
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0648;&#x0635;&#x0648;&#x0644; | Arrival</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #1e293b;">${data.arrivalTime.toLocaleString("ar-SA")}</td>
+                </tr>
+                <!-- Cabin Class -->
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x062F;&#x0631;&#x062C;&#x0629; | Class</td>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #1e293b;">
+                    <span style="display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; ${data.cabinClass === "economy" ? "background-color: #dbeafe; color: #1e40af;" : "background-color: #fef3c7; color: #92400e;"}">
+                      ${data.cabinClass === "economy" ? "&#x0627;&#x0642;&#x062A;&#x0635;&#x0627;&#x062F;&#x064A;&#x0629; | Economy" : "&#x0623;&#x0639;&#x0645;&#x0627;&#x0644; | Business"}
+                    </span>
+                  </td>
+                </tr>
+                <!-- Passengers -->
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0639;&#x062F;&#x062F; &#x0627;&#x0644;&#x0631;&#x0643;&#x0627;&#x0628; | Passengers</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 600; color: #1e293b;">${data.numberOfPassengers}</td>
+                </tr>
+                <!-- Total Amount -->
+                <tr>
+                  <td style="padding: 16px 20px; background-color: #1e3a8a; font-size: 14px; font-weight: 600; color: #bfdbfe;">&#x0627;&#x0644;&#x0645;&#x0628;&#x0644;&#x063A; &#x0627;&#x0644;&#x0625;&#x062C;&#x0645;&#x0627;&#x0644;&#x064A; | Total</td>
+                  <td style="padding: 16px 20px; background-color: #1e3a8a; font-size: 20px; font-weight: 800; color: #ffffff;">${(data.totalAmount / 100).toFixed(2)} &#x0631;.&#x0633; <span style="font-size: 13px; font-weight: 400; color: #bfdbfe;">SAR</span></td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Important Notice -->
+          <tr>
+            <td style="padding: 0 40px 24px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 16px 20px;">
+                    <p style="margin: 0 0 6px; font-size: 14px; font-weight: 700; color: #92400e;">&#x0645;&#x0644;&#x0627;&#x062D;&#x0638;&#x0629; &#x0645;&#x0647;&#x0645;&#x0629; | Important Notice</p>
+                    <p style="margin: 0; font-size: 13px; color: #a16207; line-height: 1.5;">
+                      &#x064A;&#x0631;&#x062C;&#x0649; &#x0627;&#x0644;&#x0627;&#x062D;&#x062A;&#x0641;&#x0627;&#x0638; &#x0628;&#x0631;&#x0642;&#x0645; &#x0627;&#x0644;&#x062D;&#x062C;&#x0632; &#x0644;&#x0644;&#x0631;&#x062C;&#x0648;&#x0639; &#x0625;&#x0644;&#x064A;&#x0647;. &#x064A;&#x0631;&#x062C;&#x0649; &#x0627;&#x0644;&#x0648;&#x0635;&#x0648;&#x0644; &#x0644;&#x0644;&#x0645;&#x0637;&#x0627;&#x0631; &#x0642;&#x0628;&#x0644; 3 &#x0633;&#x0627;&#x0639;&#x0627;&#x062A; &#x0645;&#x0646; &#x0645;&#x0648;&#x0639;&#x062F; &#x0627;&#x0644;&#x0645;&#x063A;&#x0627;&#x062F;&#x0631;&#x0629;.
+                      <br>Please keep your booking reference for future use. Arrive at the airport at least 3 hours before departure.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA Button -->
+          <tr>
+            <td style="padding: 0 40px 32px; text-align: center;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+                <tr>
+                  <td style="background-color: #1e40af; border-radius: 8px;">
+                    <a href="#" style="display: inline-block; padding: 14px 36px; font-size: 15px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 8px;">&#x0625;&#x062F;&#x0627;&#x0631;&#x0629; &#x0627;&#x0644;&#x062D;&#x062C;&#x0632; | Manage Booking</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding: 0 40px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="border-top: 1px solid #e2e8f0; height: 1px; font-size: 0; line-height: 0;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px 16px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1e40af;">&#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644; | AIS Aviation</p>
+              <p style="margin: 8px 0 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+                &#x0634;&#x0643;&#x0631;&#x0627;&#x064B; &#x0644;&#x0627;&#x062E;&#x062A;&#x064A;&#x0627;&#x0631;&#x0643;&#x0645; &#x062E;&#x062F;&#x0645;&#x0627;&#x062A;&#x0646;&#x0627;. &#x0644;&#x0623;&#x064A; &#x0627;&#x0633;&#x062A;&#x0641;&#x0633;&#x0627;&#x0631;&#x0627;&#x062A;&#x060C; &#x064A;&#x0631;&#x062C;&#x0649; &#x0627;&#x0644;&#x062A;&#x0648;&#x0627;&#x0635;&#x0644; &#x0645;&#x0639; &#x0641;&#x0631;&#x064A;&#x0642; &#x0627;&#x0644;&#x062F;&#x0639;&#x0645;.
+                <br>Thank you for choosing our services. For inquiries, please contact our support team.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 12px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                <a href="mailto:support@ais-aviation.com" style="color: #1e40af; text-decoration: underline;">support@ais-aviation.com</a>
+                &nbsp;|&nbsp;
+                <a href="tel:+966112345678" style="color: #1e40af; text-decoration: underline;">+966 11 234 5678</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 24px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 11px; color: #cbd5e1; line-height: 1.5;">
+                &copy; ${new Date().getFullYear()} AIS Aviation. &#x062C;&#x0645;&#x064A;&#x0639; &#x0627;&#x0644;&#x062D;&#x0642;&#x0648;&#x0642; &#x0645;&#x062D;&#x0641;&#x0648;&#x0638;&#x0629; | All rights reserved.
+                <br>
+                <a href="#" style="color: #94a3b8; text-decoration: underline;">&#x0625;&#x0644;&#x063A;&#x0627;&#x0621; &#x0627;&#x0644;&#x0627;&#x0634;&#x062A;&#x0631;&#x0627;&#x0643; | Unsubscribe</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>
       `.trim(),
@@ -227,6 +417,49 @@ export async function sendFlightStatusChange(
       : "";
     const reasonText = data.reason ? `\n\nالسبب: ${data.reason}` : "";
 
+    // Status-dependent colors
+    const statusColors: Record<
+      string,
+      {
+        bg: string;
+        text: string;
+        banner: string;
+        label: string;
+        labelEn: string;
+      }
+    > = {
+      delayed: {
+        bg: "#fff7ed",
+        text: "#c2410c",
+        banner: "#ea580c",
+        label: "&#x0645;&#x062A;&#x0623;&#x062E;&#x0631;&#x0629;",
+        labelEn: "Delayed",
+      },
+      cancelled: {
+        bg: "#fef2f2",
+        text: "#dc2626",
+        banner: "#dc2626",
+        label: "&#x0645;&#x0644;&#x063A;&#x0627;&#x0629;",
+        labelEn: "Cancelled",
+      },
+      completed: {
+        bg: "#f0fdf4",
+        text: "#16a34a",
+        banner: "#16a34a",
+        label: "&#x0645;&#x0643;&#x062A;&#x0645;&#x0644;&#x0629;",
+        labelEn: "Completed",
+      },
+      scheduled: {
+        bg: "#eff6ff",
+        text: "#1e40af",
+        banner: "#1e40af",
+        label:
+          "&#x0641;&#x064A; &#x0627;&#x0644;&#x0645;&#x0648;&#x0639;&#x062F;",
+        labelEn: "On Schedule",
+      },
+    };
+    const colors = statusColors[data.newStatus] || statusColors.scheduled;
+
     const template: EmailTemplate = {
       to: data.passengerEmail,
       subject: `تحديث حالة الرحلة ${data.flightNumber}`,
@@ -247,42 +480,175 @@ export async function sendFlightStatusChange(
       `.trim(),
       html: `
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html dir="rtl" lang="ar" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #dc2626; color: white; padding: 20px; text-align: center; }
-    .content { background: #fef2f2; padding: 20px; margin: 20px 0; border-right: 4px solid #dc2626; }
-    .detail { margin: 10px 0; }
-    .label { font-weight: bold; color: #1f2937; }
-    .status { font-size: 18px; color: #dc2626; font-weight: bold; }
-    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>&#x062A;&#x062D;&#x062F;&#x064A;&#x062B; &#x062D;&#x0627;&#x0644;&#x0629; &#x0627;&#x0644;&#x0631;&#x062D;&#x0644;&#x0629; | Flight Status Update</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style type="text/css">
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; max-width: 100% !important; }
+      .mobile-padding { padding-left: 16px !important; padding-right: 16px !important; }
+    }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>تحديث حالة الرحلة</h1>
-    </div>
-    <div class="content">
-      <p>مرحباً ${data.passengerName},</p>
-      <p>نود إعلامك بتحديث حالة رحلتك.</p>
-      
-      <div class="detail"><span class="label">رقم الحجز:</span> ${data.bookingReference}</div>
-      <div class="detail"><span class="label">رقم الرحلة:</span> ${data.flightNumber}</div>
-      <div class="detail"><span class="label">المسار:</span> ${data.origin} → ${data.destination}</div>
-      
-      <div class="detail status">الحالة الجديدة: ${statusText}${delayText}</div>
-      ${data.reason ? `<div class="detail"><span class="label">السبب:</span> ${data.reason}</div>` : ""}
-      
-      <p>نعتذر عن أي إزعاج قد يسببه هذا التغيير.</p>
-    </div>
-    <div class="footer">
-      <p>نظام الطيران المتكامل</p>
-    </div>
+<body style="margin: 0; padding: 0; background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; -webkit-font-smoothing: antialiased; direction: rtl;">
+
+  <!-- Preheader -->
+  <div style="display: none; max-height: 0; overflow: hidden; font-size: 1px; line-height: 1px; color: #f4f6f9;">
+    &#x062A;&#x062D;&#x062F;&#x064A;&#x062B; &#x0631;&#x062D;&#x0644;&#x0629; ${data.flightNumber}: ${statusText}${delayText} | Flight ${data.flightNumber} status update: ${colors.labelEn}
   </div>
+
+  <!-- Email wrapper -->
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f6f9;">
+    <tr>
+      <td style="padding: 20px 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" align="center" class="email-container" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); padding: 32px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff; letter-spacing: 1px;">AIS Aviation</p>
+              <p style="margin: 4px 0 0; font-size: 14px; color: #bfdbfe;">&#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644;</p>
+            </td>
+          </tr>
+
+          <!-- Status Banner -->
+          <tr>
+            <td style="background-color: ${colors.banner}; padding: 20px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff;">&#x062A;&#x062D;&#x062F;&#x064A;&#x062B; &#x062D;&#x0627;&#x0644;&#x0629; &#x0627;&#x0644;&#x0631;&#x062D;&#x0644;&#x0629;</p>
+              <p style="margin: 6px 0 0; font-size: 14px; color: rgba(255,255,255,0.85);">Flight Status Update</p>
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="padding: 28px 40px 0;" class="mobile-padding">
+              <p style="margin: 0; font-size: 16px; color: #1e293b; line-height: 1.6;">
+                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${data.passengerName}</strong>,
+              </p>
+              <p style="margin: 8px 0 0; font-size: 15px; color: #475569; line-height: 1.6;">
+                &#x0646;&#x0648;&#x062F; &#x0625;&#x0639;&#x0644;&#x0627;&#x0645;&#x0643; &#x0628;&#x062A;&#x062D;&#x062F;&#x064A;&#x062B; &#x062D;&#x0627;&#x0644;&#x0629; &#x0631;&#x062D;&#x0644;&#x062A;&#x0643;.
+              </p>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #94a3b8;">
+                We would like to inform you of an update to your flight status.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Status Highlight Box -->
+          <tr>
+            <td style="padding: 24px 40px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${colors.bg}; border: 2px solid ${colors.text}; border-radius: 10px;">
+                <tr>
+                  <td style="padding: 24px; text-align: center;">
+                    <p style="margin: 0 0 4px; font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">&#x0627;&#x0644;&#x062D;&#x0627;&#x0644;&#x0629; &#x0627;&#x0644;&#x062C;&#x062F;&#x064A;&#x062F;&#x0629; | New Status</p>
+                    <p style="margin: 0; font-size: 28px; font-weight: 800; color: ${colors.text};">${statusText}</p>
+                    <p style="margin: 4px 0 0; font-size: 14px; font-weight: 600; color: ${colors.text};">${colors.labelEn}</p>
+                    ${data.delayMinutes ? `<p style="margin: 12px 0 0; font-size: 15px; color: ${colors.text}; font-weight: 600;">&#x0645;&#x062F;&#x0629; &#x0627;&#x0644;&#x062A;&#x0623;&#x062E;&#x064A;&#x0631;: ${data.delayMinutes} &#x062F;&#x0642;&#x064A;&#x0642;&#x0629; | Delay: ${data.delayMinutes} minutes</p>` : ""}
+                    ${data.reason ? `<p style="margin: 8px 0 0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0633;&#x0628;&#x0628; | Reason: ${data.reason}</p>` : ""}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Flight Details -->
+          <tr>
+            <td style="padding: 0 40px 24px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0;">
+                <tr>
+                  <td colspan="2" style="background-color: #1e40af; padding: 14px 20px;">
+                    <p style="margin: 0; font-size: 15px; font-weight: 700; color: #ffffff;">&#x062A;&#x0641;&#x0627;&#x0635;&#x064A;&#x0644; &#x0627;&#x0644;&#x0631;&#x062D;&#x0644;&#x0629; | Flight Details</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b; width: 40%;">&#x0631;&#x0642;&#x0645; &#x0627;&#x0644;&#x062D;&#x062C;&#x0632; | Ref</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 700; color: #1e40af; letter-spacing: 2px;">${data.bookingReference}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0631;&#x0642;&#x0645; &#x0627;&#x0644;&#x0631;&#x062D;&#x0644;&#x0629; | Flight</td>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 700; color: #1e293b;">${data.flightNumber}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0645;&#x0633;&#x0627;&#x0631; | Route</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 600; color: #1e293b;">${data.origin} &#x2192; ${data.destination}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #ffffff; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0645;&#x063A;&#x0627;&#x062F;&#x0631;&#x0629; | Departure</td>
+                  <td style="padding: 12px 20px; background-color: #ffffff; font-size: 15px; color: #1e293b;">${data.departureTime.toLocaleString("ar-SA")}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Apology / Note -->
+          <tr>
+            <td style="padding: 0 40px 28px;" class="mobile-padding">
+              <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.6;">
+                &#x0646;&#x0639;&#x062A;&#x0630;&#x0631; &#x0639;&#x0646; &#x0623;&#x064A; &#x0625;&#x0632;&#x0639;&#x0627;&#x062C; &#x0642;&#x062F; &#x064A;&#x0633;&#x0628;&#x0628;&#x0647; &#x0647;&#x0630;&#x0627; &#x0627;&#x0644;&#x062A;&#x063A;&#x064A;&#x064A;&#x0631;. &#x0644;&#x0644;&#x0645;&#x0632;&#x064A;&#x062F; &#x0645;&#x0646; &#x0627;&#x0644;&#x0645;&#x0639;&#x0644;&#x0648;&#x0645;&#x0627;&#x062A;&#x060C; &#x064A;&#x0631;&#x062C;&#x0649; &#x0627;&#x0644;&#x062A;&#x0648;&#x0627;&#x0635;&#x0644; &#x0645;&#x0639; &#x0641;&#x0631;&#x064A;&#x0642; &#x0627;&#x0644;&#x062F;&#x0639;&#x0645;.
+              </p>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #94a3b8;">
+                We apologize for any inconvenience. For further information, please contact our support team.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding: 0 40px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="border-top: 1px solid #e2e8f0; height: 1px; font-size: 0; line-height: 0;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px 16px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1e40af;">&#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644; | AIS Aviation</p>
+              <p style="margin: 8px 0 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+                &#x0644;&#x0623;&#x064A; &#x0627;&#x0633;&#x062A;&#x0641;&#x0633;&#x0627;&#x0631;&#x0627;&#x062A;&#x060C; &#x064A;&#x0631;&#x062C;&#x0649; &#x0627;&#x0644;&#x062A;&#x0648;&#x0627;&#x0635;&#x0644; &#x0645;&#x0639; &#x0641;&#x0631;&#x064A;&#x0642; &#x0627;&#x0644;&#x062F;&#x0639;&#x0645;.
+                <br>For inquiries, please contact our support team.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 12px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                <a href="mailto:support@ais-aviation.com" style="color: #1e40af; text-decoration: underline;">support@ais-aviation.com</a>
+                &nbsp;|&nbsp;
+                <a href="tel:+966112345678" style="color: #1e40af; text-decoration: underline;">+966 11 234 5678</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 24px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 11px; color: #cbd5e1; line-height: 1.5;">
+                &copy; ${new Date().getFullYear()} AIS Aviation. &#x062C;&#x0645;&#x064A;&#x0639; &#x0627;&#x0644;&#x062D;&#x0642;&#x0648;&#x0642; &#x0645;&#x062D;&#x0641;&#x0648;&#x0638;&#x0629; | All rights reserved.
+                <br>
+                <a href="#" style="color: #94a3b8; text-decoration: underline;">&#x0625;&#x0644;&#x063A;&#x0627;&#x0621; &#x0627;&#x0644;&#x0627;&#x0634;&#x062A;&#x0631;&#x0627;&#x0643; | Unsubscribe</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>
       `.trim(),
@@ -323,41 +689,184 @@ ${data.refundReason ? `- السبب: ${data.refundReason}` : ""}
       `.trim(),
       html: `
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html dir="rtl" lang="ar" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #059669; color: white; padding: 20px; text-align: center; }
-    .content { background: #f0fdf4; padding: 20px; margin: 20px 0; border-right: 4px solid #059669; }
-    .detail { margin: 10px 0; }
-    .label { font-weight: bold; color: #1f2937; }
-    .amount { font-size: 24px; color: #059669; font-weight: bold; }
-    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>&#x062A;&#x0623;&#x0643;&#x064A;&#x062F; &#x0627;&#x0633;&#x062A;&#x0631;&#x062F;&#x0627;&#x062F; | Refund Confirmation</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style type="text/css">
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; max-width: 100% !important; }
+      .mobile-padding { padding-left: 16px !important; padding-right: 16px !important; }
+    }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>تأكيد استرداد المبلغ</h1>
-    </div>
-    <div class="content">
-      <p>مرحباً ${data.passengerName},</p>
-      <p>تم معالجة طلب استرداد المبلغ الخاص بك بنجاح.</p>
-      
-      <div class="detail"><span class="label">رقم الحجز:</span> ${data.bookingReference}</div>
-      <div class="detail"><span class="label">رقم الرحلة:</span> ${data.flightNumber}</div>
-      <div class="detail amount">المبلغ المسترد: ${(data.refundAmount / 100).toFixed(2)} ر.س</div>
-      ${data.refundReason ? `<div class="detail"><span class="label">السبب:</span> ${data.refundReason}</div>` : ""}
-      
-      <p>سيتم إرجاع المبلغ إلى طريقة الدفع الأصلية خلال <strong>${data.processingDays} أيام عمل</strong>.</p>
-    </div>
-    <div class="footer">
-      <p>شكراً لتفهمكم</p>
-      <p>نظام الطيران المتكامل</p>
-    </div>
+<body style="margin: 0; padding: 0; background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; -webkit-font-smoothing: antialiased; direction: rtl;">
+
+  <!-- Preheader -->
+  <div style="display: none; max-height: 0; overflow: hidden; font-size: 1px; line-height: 1px; color: #f4f6f9;">
+    &#x062A;&#x0645; &#x0627;&#x0633;&#x062A;&#x0631;&#x062F;&#x0627;&#x062F; ${(data.refundAmount / 100).toFixed(2)} &#x0631;.&#x0633; - &#x062D;&#x062C;&#x0632; ${data.bookingReference} | Refund of ${(data.refundAmount / 100).toFixed(2)} SAR processed - Ref: ${data.bookingReference}
   </div>
+
+  <!-- Email wrapper -->
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f6f9;">
+    <tr>
+      <td style="padding: 20px 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" align="center" class="email-container" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); padding: 32px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff; letter-spacing: 1px;">AIS Aviation</p>
+              <p style="margin: 4px 0 0; font-size: 14px; color: #bfdbfe;">&#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644;</p>
+            </td>
+          </tr>
+
+          <!-- Refund Confirmed Banner -->
+          <tr>
+            <td style="background-color: #059669; padding: 20px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 20px; font-weight: 700; color: #ffffff;">&#x2713; &#x062A;&#x0645; &#x062A;&#x0623;&#x0643;&#x064A;&#x062F; &#x0627;&#x0644;&#x0627;&#x0633;&#x062A;&#x0631;&#x062F;&#x0627;&#x062F;</p>
+              <p style="margin: 6px 0 0; font-size: 14px; color: #d1fae5;">Refund Confirmed</p>
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="padding: 28px 40px 0;" class="mobile-padding">
+              <p style="margin: 0; font-size: 16px; color: #1e293b; line-height: 1.6;">
+                &#x0645;&#x0631;&#x062D;&#x0628;&#x0627;&#x064B; <strong>${data.passengerName}</strong>,
+              </p>
+              <p style="margin: 8px 0 0; font-size: 15px; color: #475569; line-height: 1.6;">
+                &#x062A;&#x0645; &#x0645;&#x0639;&#x0627;&#x0644;&#x062C;&#x0629; &#x0637;&#x0644;&#x0628; &#x0627;&#x0633;&#x062A;&#x0631;&#x062F;&#x0627;&#x062F; &#x0627;&#x0644;&#x0645;&#x0628;&#x0644;&#x063A; &#x0627;&#x0644;&#x062E;&#x0627;&#x0635; &#x0628;&#x0643; &#x0628;&#x0646;&#x062C;&#x0627;&#x062D;.
+              </p>
+              <p style="margin: 4px 0 0; font-size: 13px; color: #94a3b8;">
+                Your refund request has been processed successfully.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Refund Amount Highlight -->
+          <tr>
+            <td style="padding: 24px 40px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f0fdf4; border: 2px solid #059669; border-radius: 10px;">
+                <tr>
+                  <td style="padding: 28px; text-align: center;">
+                    <p style="margin: 0 0 4px; font-size: 13px; color: #64748b; text-transform: uppercase; letter-spacing: 1px;">&#x0627;&#x0644;&#x0645;&#x0628;&#x0644;&#x063A; &#x0627;&#x0644;&#x0645;&#x0633;&#x062A;&#x0631;&#x062F; | Refund Amount</p>
+                    <p style="margin: 0; font-size: 36px; font-weight: 800; color: #059669;">${(data.refundAmount / 100).toFixed(2)} <span style="font-size: 18px;">&#x0631;.&#x0633;</span></p>
+                    <p style="margin: 4px 0 0; font-size: 14px; color: #059669; font-weight: 600;">SAR</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Refund Details Table -->
+          <tr>
+            <td style="padding: 0 40px 24px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0;">
+                <tr>
+                  <td colspan="2" style="background-color: #1e40af; padding: 14px 20px;">
+                    <p style="margin: 0; font-size: 15px; font-weight: 700; color: #ffffff;">&#x062A;&#x0641;&#x0627;&#x0635;&#x064A;&#x0644; &#x0627;&#x0644;&#x0627;&#x0633;&#x062A;&#x0631;&#x062F;&#x0627;&#x062F; | Refund Details</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b; width: 40%;">&#x0631;&#x0642;&#x0645; &#x0627;&#x0644;&#x062D;&#x062C;&#x0632; | Ref</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 700; color: #1e40af; letter-spacing: 2px;">${data.bookingReference}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0631;&#x0642;&#x0645; &#x0627;&#x0644;&#x0631;&#x062D;&#x0644;&#x0629; | Flight</td>
+                  <td style="padding: 12px 20px; background-color: #ffffff; border-bottom: 1px solid #e2e8f0; font-size: 15px; font-weight: 700; color: #1e293b;">${data.flightNumber}</td>
+                </tr>
+                ${
+                  data.refundReason
+                    ? `
+                <tr>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #64748b;">&#x0627;&#x0644;&#x0633;&#x0628;&#x0628; | Reason</td>
+                  <td style="padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; font-size: 15px; color: #1e293b;">${data.refundReason}</td>
+                </tr>
+                `
+                    : ""
+                }
+                <tr>
+                  <td style="padding: 12px 20px; background-color: ${data.refundReason ? "#ffffff" : "#f8fafc"}; font-size: 14px; color: #64748b;">&#x0645;&#x062F;&#x0629; &#x0627;&#x0644;&#x0645;&#x0639;&#x0627;&#x0644;&#x062C;&#x0629; | Processing</td>
+                  <td style="padding: 12px 20px; background-color: ${data.refundReason ? "#ffffff" : "#f8fafc"}; font-size: 15px; font-weight: 600; color: #1e293b;">${data.processingDays} &#x0623;&#x064A;&#x0627;&#x0645; &#x0639;&#x0645;&#x0644; | ${data.processingDays} business days</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Processing Info -->
+          <tr>
+            <td style="padding: 0 40px 28px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 16px 20px;">
+                    <p style="margin: 0 0 6px; font-size: 14px; font-weight: 700; color: #1e40af;">&#x0645;&#x0639;&#x0644;&#x0648;&#x0645;&#x0627;&#x062A; &#x0627;&#x0644;&#x0645;&#x0639;&#x0627;&#x0644;&#x062C;&#x0629; | Processing Information</p>
+                    <p style="margin: 0; font-size: 13px; color: #1e40af; line-height: 1.6;">
+                      &#x0633;&#x064A;&#x062A;&#x0645; &#x0625;&#x0631;&#x062C;&#x0627;&#x0639; &#x0627;&#x0644;&#x0645;&#x0628;&#x0644;&#x063A; &#x0625;&#x0644;&#x0649; &#x0637;&#x0631;&#x064A;&#x0642;&#x0629; &#x0627;&#x0644;&#x062F;&#x0641;&#x0639; &#x0627;&#x0644;&#x0623;&#x0635;&#x0644;&#x064A;&#x0629; &#x062E;&#x0644;&#x0627;&#x0644; <strong>${data.processingDays} &#x0623;&#x064A;&#x0627;&#x0645; &#x0639;&#x0645;&#x0644;</strong>.
+                      <br>The refund will be credited to your original payment method within <strong>${data.processingDays} business days</strong>.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding: 0 40px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="border-top: 1px solid #e2e8f0; height: 1px; font-size: 0; line-height: 0;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px 16px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1e40af;">&#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644; | AIS Aviation</p>
+              <p style="margin: 8px 0 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+                &#x0634;&#x0643;&#x0631;&#x0627;&#x064B; &#x0644;&#x062A;&#x0641;&#x0647;&#x0645;&#x0643;&#x0645;. &#x0644;&#x0623;&#x064A; &#x0627;&#x0633;&#x062A;&#x0641;&#x0633;&#x0627;&#x0631;&#x0627;&#x062A;&#x060C; &#x064A;&#x0631;&#x062C;&#x0649; &#x0627;&#x0644;&#x062A;&#x0648;&#x0627;&#x0635;&#x0644; &#x0645;&#x0639; &#x0641;&#x0631;&#x064A;&#x0642; &#x0627;&#x0644;&#x062F;&#x0639;&#x0645;.
+                <br>Thank you for your understanding. For inquiries, please contact our support team.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 12px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                <a href="mailto:support@ais-aviation.com" style="color: #1e40af; text-decoration: underline;">support@ais-aviation.com</a>
+                &nbsp;|&nbsp;
+                <a href="tel:+966112345678" style="color: #1e40af; text-decoration: underline;">+966 11 234 5678</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 24px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 11px; color: #cbd5e1; line-height: 1.5;">
+                &copy; ${new Date().getFullYear()} AIS Aviation. &#x062C;&#x0645;&#x064A;&#x0639; &#x0627;&#x0644;&#x062D;&#x0642;&#x0648;&#x0642; &#x0645;&#x062D;&#x0641;&#x0648;&#x0638;&#x0629; | All rights reserved.
+                <br>
+                <a href="#" style="color: #94a3b8; text-decoration: underline;">&#x0625;&#x0644;&#x063A;&#x0627;&#x0621; &#x0627;&#x0644;&#x0627;&#x0634;&#x062A;&#x0631;&#x0627;&#x0643; | Unsubscribe</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>
       `.trim(),
@@ -607,29 +1116,108 @@ export async function sendNotificationEmail(
       text: message,
       html: `
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html dir="rtl" lang="ar" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
-  <style>
-    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
-    .content { background: #f9fafb; padding: 20px; margin: 20px 0; }
-    .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${subject}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style type="text/css">
+    @media only screen and (max-width: 620px) {
+      .email-container { width: 100% !important; max-width: 100% !important; }
+      .mobile-padding { padding-left: 16px !important; padding-right: 16px !important; }
+    }
   </style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>${subject}</h1>
-    </div>
-    <div class="content">
-      <p>${message}</p>
-    </div>
-    <div class="footer">
-      <p>نظام الطيران المتكامل</p>
-    </div>
+<body style="margin: 0; padding: 0; background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Arial, sans-serif; -webkit-font-smoothing: antialiased; direction: rtl;">
+
+  <!-- Preheader -->
+  <div style="display: none; max-height: 0; overflow: hidden; font-size: 1px; line-height: 1px; color: #f4f6f9;">
+    ${subject} - &#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644; | AIS Aviation
   </div>
+
+  <!-- Email wrapper -->
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f6f9;">
+    <tr>
+      <td style="padding: 20px 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" align="center" class="email-container" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); padding: 32px 40px; text-align: center;">
+              <p style="margin: 0; font-size: 24px; font-weight: 700; color: #ffffff; letter-spacing: 1px;">AIS Aviation</p>
+              <p style="margin: 4px 0 0; font-size: 14px; color: #bfdbfe;">&#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644;</p>
+            </td>
+          </tr>
+
+          <!-- Subject Banner -->
+          <tr>
+            <td style="background-color: #1e40af; padding: 16px 40px; text-align: center; border-top: 1px solid #2563eb;">
+              <p style="margin: 0; font-size: 18px; font-weight: 700; color: #ffffff;">${subject}</p>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 32px 40px;" class="mobile-padding">
+              <p style="margin: 0; font-size: 15px; color: #1e293b; line-height: 1.8; white-space: pre-line;">${message}</p>
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding: 0 40px;" class="mobile-padding">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                  <td style="border-top: 1px solid #e2e8f0; height: 1px; font-size: 0; line-height: 0;">&nbsp;</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px 16px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 14px; font-weight: 600; color: #1e40af;">&#x0646;&#x0638;&#x0627;&#x0645; &#x0627;&#x0644;&#x0637;&#x064A;&#x0631;&#x0627;&#x0646; &#x0627;&#x0644;&#x0645;&#x062A;&#x0643;&#x0627;&#x0645;&#x0644; | AIS Aviation</p>
+              <p style="margin: 8px 0 0; font-size: 12px; color: #94a3b8; line-height: 1.6;">
+                &#x0644;&#x0623;&#x064A; &#x0627;&#x0633;&#x062A;&#x0641;&#x0633;&#x0627;&#x0631;&#x0627;&#x062A;&#x060C; &#x064A;&#x0631;&#x062C;&#x0649; &#x0627;&#x0644;&#x062A;&#x0648;&#x0627;&#x0635;&#x0644; &#x0645;&#x0639; &#x0641;&#x0631;&#x064A;&#x0642; &#x0627;&#x0644;&#x062F;&#x0639;&#x0645;.
+                <br>For inquiries, please contact our support team.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 12px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 12px; color: #94a3b8;">
+                <a href="mailto:support@ais-aviation.com" style="color: #1e40af; text-decoration: underline;">support@ais-aviation.com</a>
+                &nbsp;|&nbsp;
+                <a href="tel:+966112345678" style="color: #1e40af; text-decoration: underline;">+966 11 234 5678</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 24px; text-align: center;" class="mobile-padding">
+              <p style="margin: 0; font-size: 11px; color: #cbd5e1; line-height: 1.5;">
+                &copy; ${new Date().getFullYear()} AIS Aviation. &#x062C;&#x0645;&#x064A;&#x0639; &#x0627;&#x0644;&#x062D;&#x0642;&#x0648;&#x0642; &#x0645;&#x062D;&#x0641;&#x0648;&#x0638;&#x0629; | All rights reserved.
+                <br>
+                <a href="#" style="color: #94a3b8; text-decoration: underline;">&#x0625;&#x0644;&#x063A;&#x0627;&#x0621; &#x0627;&#x0644;&#x0627;&#x0634;&#x062A;&#x0631;&#x0627;&#x0643; | Unsubscribe</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
 </body>
 </html>
       `.trim(),

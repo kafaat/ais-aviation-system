@@ -352,7 +352,8 @@ export default function CorporateManagement() {
                     <TableCell>
                       <span className="flex items-center gap-1 font-semibold">
                         <DollarSign className="h-3 w-3" />
-                        {(account.creditLimit / 100).toFixed(2)} SAR
+                        {(account.creditLimit / 100).toFixed(2)}{" "}
+                        {t("common.sar")}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -483,7 +484,8 @@ export default function CorporateManagement() {
                     {t("corporate.admin.creditLimit")}
                   </p>
                   <p className="font-semibold">
-                    {(selectedAccount.creditLimit / 100).toFixed(2)} SAR
+                    {(selectedAccount.creditLimit / 100).toFixed(2)}{" "}
+                    {t("common.sar")}
                   </p>
                 </div>
                 <div>
@@ -532,7 +534,8 @@ export default function CorporateManagement() {
                         {t("corporate.admin.totalSpent")}:
                       </span>
                       <span className="font-semibold">
-                        {(accountStats.totalSpent / 100).toFixed(2)} SAR
+                        {(accountStats.totalSpent / 100).toFixed(2)}{" "}
+                        {t("common.sar")}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -583,7 +586,7 @@ export default function CorporateManagement() {
               </div>
               <div>
                 <Label htmlFor="creditLimit">
-                  {t("corporate.admin.creditLimit")} (SAR)
+                  {t("corporate.admin.creditLimit")} ({t("common.sar")})
                 </Label>
                 <Input
                   id="creditLimit"

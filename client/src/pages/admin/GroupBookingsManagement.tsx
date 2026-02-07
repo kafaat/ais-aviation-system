@@ -411,7 +411,8 @@ export default function GroupBookingsManagement() {
                       {booking.status === "confirmed" && booking.totalPrice && (
                         <span className="text-sm font-semibold flex items-center gap-1">
                           <DollarSign className="h-3 w-3" />
-                          {(booking.totalPrice / 100).toFixed(2)} SAR
+                          {(booking.totalPrice / 100).toFixed(2)}{" "}
+                          {t("common.sar")}
                         </span>
                       )}
                     </TableCell>

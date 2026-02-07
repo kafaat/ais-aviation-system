@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { stripe } from "../stripe";
 import * as db from "../db";
@@ -39,7 +40,11 @@ export const paymentsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
-      if (!database) throw new Error("Database not available");
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       // Get booking details
       const bookingResult = await database
@@ -50,17 +55,23 @@ export const paymentsRouter = router({
 
       const bookingData = bookingResult[0];
       if (!bookingData) {
-        throw new Error("Booking not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       // Verify ownership
       if (bookingData.userId !== ctx.user.id) {
-        throw new Error("Access denied");
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
 
       // Check if already paid
       if (bookingData.paymentStatus === "paid") {
-        throw new Error("Booking is already paid");
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Booking is already paid",
+        });
       }
 
       // Create Stripe checkout session

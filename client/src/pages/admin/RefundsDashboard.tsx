@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +23,7 @@ import { ar } from "date-fns/locale";
 import { ExportReportButton } from "@/components/ExportReportButton";
 
 export default function RefundsDashboard() {
+  const { t } = useTranslation();
   const { data: stats, isLoading: statsLoading } =
     trpc.refunds.getStats.useQuery();
   const { data: history, isLoading: historyLoading } =
@@ -54,10 +56,8 @@ export default function RefundsDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">إدارة الاستردادات</h1>
-          <p className="text-muted-foreground">
-            عرض وإدارة جميع عمليات استرداد الأموال
-          </p>
+          <h1 className="text-3xl font-bold">{t("admin.refunds.title")}</h1>
+          <p className="text-muted-foreground">{t("admin.refunds.subtitle")}</p>
         </div>
         <ExportReportButton reportType="refunds" filters={exportFilters} />
       </div>
@@ -67,46 +67,48 @@ export default function RefundsDashboard() {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-muted-foreground">
-              إجمالي الاستردادات
+              {t("admin.refunds.totalRefunds")}
             </p>
             <RefreshCw className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-3xl font-bold">{stats?.totalRefunds || 0}</p>
           <p className="text-xs text-muted-foreground mt-2">
-            جميع عمليات الاسترداد
+            {t("admin.refunds.allRefunds")}
           </p>
         </Card>
 
         <Card className="p-6">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-muted-foreground">
-              المبلغ المسترد
+              {t("admin.refunds.refundedAmount")}
             </p>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-3xl font-bold">
             {((stats?.totalRefundedAmount || 0) / 100).toFixed(2)}
           </p>
-          <p className="text-xs text-muted-foreground mt-2">ريال سعودي</p>
-        </Card>
-
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              الاستردادات المكتملة
-            </p>
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-          </div>
-          <p className="text-3xl font-bold">{stats?.completedRefunds || 0}</p>
           <p className="text-xs text-muted-foreground mt-2">
-            تم الاسترداد بنجاح
+            {t("common.sar")}
           </p>
         </Card>
 
         <Card className="p-6">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-muted-foreground">
-              معدل الاسترداد
+              {t("admin.refunds.completedRefunds")}
+            </p>
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          </div>
+          <p className="text-3xl font-bold">{stats?.completedRefunds || 0}</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            {t("admin.refunds.refundedSuccessfully")}
+          </p>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-muted-foreground">
+              {t("admin.refunds.refundRate")}
             </p>
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </div>
@@ -114,7 +116,7 @@ export default function RefundsDashboard() {
             {(stats?.refundRate || 0).toFixed(1)}%
           </p>
           <p className="text-xs text-muted-foreground mt-2">
-            من إجمالي الحجوزات
+            {t("admin.refunds.ofTotalBookings")}
           </p>
         </Card>
       </div>
@@ -123,7 +125,7 @@ export default function RefundsDashboard() {
       {trends && trends.length > 0 && (
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">
-            اتجاهات الاسترداد (آخر 30 يوم)
+            {t("admin.refunds.trendsTitle")}
           </h2>
           <div className="space-y-2">
             {trends.slice(-10).map((trend, index) => (
@@ -137,10 +139,12 @@ export default function RefundsDashboard() {
                       locale: ar,
                     })}
                   </div>
-                  <Badge variant="secondary">{trend.count} استرداد</Badge>
+                  <Badge variant="secondary">
+                    {trend.count} {t("admin.refunds.refund")}
+                  </Badge>
                 </div>
                 <div className="text-sm font-semibold">
-                  {(trend.amount / 100).toFixed(2)} ر.س
+                  {(trend.amount / 100).toFixed(2)} {t("common.sar")}
                 </div>
               </div>
             ))}
@@ -150,7 +154,9 @@ export default function RefundsDashboard() {
 
       {/* Refund History Table */}
       <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">سجل الاستردادات</h2>
+        <h2 className="text-xl font-semibold mb-4">
+          {t("admin.refunds.history")}
+        </h2>
         {historyLoading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map(i => (
@@ -160,19 +166,21 @@ export default function RefundsDashboard() {
         ) : !history || history.length === 0 ? (
           <div className="text-center py-12">
             <RefreshCw className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">لا توجد عمليات استرداد</p>
+            <p className="text-muted-foreground">
+              {t("admin.refunds.noRefunds")}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>رقم الحجز</TableHead>
+                  <TableHead>{t("admin.refunds.bookingRef")}</TableHead>
                   <TableHead>PNR</TableHead>
-                  <TableHead>معرف المستخدم</TableHead>
-                  <TableHead>المبلغ</TableHead>
-                  <TableHead>الحالة</TableHead>
-                  <TableHead>تاريخ الاسترداد</TableHead>
+                  <TableHead>{t("admin.refunds.userId")}</TableHead>
+                  <TableHead>{t("admin.refunds.amount")}</TableHead>
+                  <TableHead>{t("admin.refunds.status")}</TableHead>
+                  <TableHead>{t("admin.refunds.refundDate")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -184,11 +192,13 @@ export default function RefundsDashboard() {
                     <TableCell>{refund.pnr}</TableCell>
                     <TableCell>{refund.userId}</TableCell>
                     <TableCell className="font-semibold">
-                      {(refund.amount / 100).toFixed(2)} ر.س
+                      {(refund.amount / 100).toFixed(2)} {t("common.sar")}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {refund.status === "refunded" ? "مسترد" : refund.status}
+                        {refund.status === "refunded"
+                          ? t("admin.refunds.statusRefunded")
+                          : refund.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">

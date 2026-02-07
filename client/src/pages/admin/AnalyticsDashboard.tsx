@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import {
   Card,
@@ -37,6 +38,7 @@ const COLORS = [
 ];
 
 export default function AnalyticsDashboard() {
+  const { t } = useTranslation();
   const { data: kpis, isLoading: kpisLoading } =
     trpc.analytics.getKPIs.useQuery();
   const { data: revenueData, isLoading: revenueLoading } =
@@ -58,8 +60,10 @@ export default function AnalyticsDashboard() {
     <div className="container py-8">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">لوحة التحليلات</h1>
-          <p className="text-muted-foreground">نظرة شاملة على أداء النظام</p>
+          <h1 className="text-3xl font-bold">{t("admin.analytics.title")}</h1>
+          <p className="text-muted-foreground">
+            {t("admin.analytics.subtitle")}
+          </p>
         </div>
         <div className="flex gap-2">
           <ExportReportButton
@@ -80,7 +84,7 @@ export default function AnalyticsDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              إجمالي الحجوزات
+              {t("admin.analytics.totalBookings")}
             </CardTitle>
             <Plane className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -93,7 +97,8 @@ export default function AnalyticsDashboard() {
                   {kpis?.totalBookings.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {kpis?.totalPassengers.toLocaleString()} راكب
+                  {kpis?.totalPassengers.toLocaleString()}{" "}
+                  {t("admin.analytics.passenger")}
                 </p>
               </>
             )}
@@ -103,7 +108,7 @@ export default function AnalyticsDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              إجمالي الإيرادات
+              {t("admin.analytics.totalRevenue")}
             </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -113,14 +118,15 @@ export default function AnalyticsDashboard() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {((kpis?.totalRevenue || 0) / 100).toLocaleString()} ر.س
+                  {((kpis?.totalRevenue || 0) / 100).toLocaleString()}{" "}
+                  {t("common.sar")}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  متوسط:{" "}
+                  {t("admin.analytics.average")}:{" "}
                   {kpis?.totalBookings
                     ? Math.round(kpis.totalRevenue / kpis.totalBookings / 100)
                     : 0}{" "}
-                  ر.س
+                  {t("common.sar")}
                 </p>
               </>
             )}
@@ -129,7 +135,9 @@ export default function AnalyticsDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">معدل الإشغال</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {t("admin.analytics.occupancyRate")}
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -142,8 +150,8 @@ export default function AnalyticsDashboard() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {kpis && kpis.averageOccupancyRate > 70
-                    ? "أداء ممتاز"
-                    : "يمكن التحسين"}
+                    ? t("admin.analytics.excellentPerformance")
+                    : t("admin.analytics.canImprove")}
                 </p>
               </>
             )}
@@ -152,7 +160,9 @@ export default function AnalyticsDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">معدل الإلغاء</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {t("admin.analytics.cancellationRate")}
+            </CardTitle>
             <XCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -164,7 +174,9 @@ export default function AnalyticsDashboard() {
                   {kpis?.cancellationRate}%
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {kpis && kpis.cancellationRate < 10 ? "منخفض" : "مرتفع"}
+                  {kpis && kpis.cancellationRate < 10
+                    ? t("admin.analytics.low")
+                    : t("admin.analytics.high")}
                 </p>
               </>
             )}
@@ -173,7 +185,9 @@ export default function AnalyticsDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">إجمالي الركاب</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {t("admin.analytics.totalPassengers")}
+            </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -185,13 +199,13 @@ export default function AnalyticsDashboard() {
                   {kpis?.totalPassengers.toLocaleString()}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  متوسط:{" "}
+                  {t("admin.analytics.average")}:{" "}
                   {kpis?.totalBookings
                     ? Math.round(
                         (kpis.totalPassengers / kpis.totalBookings) * 10
                       ) / 10
                     : 0}{" "}
-                  راكب/حجز
+                  {t("admin.analytics.passengerPerBooking")}
                 </p>
               </>
             )}
@@ -204,8 +218,8 @@ export default function AnalyticsDashboard() {
         {/* Revenue Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>الإيرادات اليومية</CardTitle>
-            <CardDescription>آخر 30 يوم</CardDescription>
+            <CardTitle>{t("admin.analytics.dailyRevenue")}</CardTitle>
+            <CardDescription>{t("admin.analytics.last30Days")}</CardDescription>
           </CardHeader>
           <CardContent>
             {revenueLoading ? (
@@ -223,7 +237,7 @@ export default function AnalyticsDashboard() {
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip
                     formatter={(value: number) =>
-                      `${value.toLocaleString()} ر.س`
+                      `${value.toLocaleString()} ${t("common.sar")}`
                     }
                   />
                   <Legend />
@@ -231,7 +245,7 @@ export default function AnalyticsDashboard() {
                     type="monotone"
                     dataKey="revenue"
                     stroke="#3b82f6"
-                    name="الإيرادات (ر.س)"
+                    name={t("admin.analytics.revenueLabel")}
                     strokeWidth={2}
                   />
                 </LineChart>
@@ -243,8 +257,8 @@ export default function AnalyticsDashboard() {
         {/* Booking Trends Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>اتجاهات الحجوزات</CardTitle>
-            <CardDescription>آخر 30 يوم</CardDescription>
+            <CardTitle>{t("admin.analytics.bookingTrends")}</CardTitle>
+            <CardDescription>{t("admin.analytics.last30Days")}</CardDescription>
           </CardHeader>
           <CardContent>
             {trendsLoading ? (
@@ -257,8 +271,16 @@ export default function AnalyticsDashboard() {
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="bookings" fill="#10b981" name="الحجوزات" />
-                  <Bar dataKey="passengers" fill="#3b82f6" name="الركاب" />
+                  <Bar
+                    dataKey="bookings"
+                    fill="#10b981"
+                    name={t("admin.analytics.bookings")}
+                  />
+                  <Bar
+                    dataKey="passengers"
+                    fill="#3b82f6"
+                    name={t("admin.analytics.passengers")}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -271,8 +293,10 @@ export default function AnalyticsDashboard() {
         {/* Popular Destinations */}
         <Card>
           <CardHeader>
-            <CardTitle>أكثر الوجهات طلباً</CardTitle>
-            <CardDescription>أعلى 10 وجهات</CardDescription>
+            <CardTitle>{t("admin.analytics.popularDestinations")}</CardTitle>
+            <CardDescription>
+              {t("admin.analytics.top10Destinations")}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {destinationsLoading ? (
@@ -307,8 +331,10 @@ export default function AnalyticsDashboard() {
         {/* Flight Occupancy Table */}
         <Card>
           <CardHeader>
-            <CardTitle>معدل إشغال الرحلات</CardTitle>
-            <CardDescription>أعلى 20 رحلة</CardDescription>
+            <CardTitle>{t("admin.analytics.flightOccupancy")}</CardTitle>
+            <CardDescription>
+              {t("admin.analytics.top20Flights")}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {occupancyLoading ? (
@@ -318,9 +344,15 @@ export default function AnalyticsDashboard() {
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-background">
                     <tr className="border-b">
-                      <th className="text-right p-2">رقم الرحلة</th>
-                      <th className="text-right p-2">الإشغال</th>
-                      <th className="text-right p-2">المقاعد</th>
+                      <th className="text-right p-2">
+                        {t("admin.analytics.flightNumber")}
+                      </th>
+                      <th className="text-right p-2">
+                        {t("admin.analytics.occupancy")}
+                      </th>
+                      <th className="text-right p-2">
+                        {t("admin.analytics.seats")}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>

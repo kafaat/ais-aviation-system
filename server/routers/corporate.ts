@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import {
   publicProcedure,
   protectedProcedure,
@@ -111,7 +112,10 @@ export const corporateRouter = router({
     .query(async ({ input }) => {
       const account = await corporateService.getCorporateAccountById(input.id);
       if (!account) {
-        throw new Error("Corporate account not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Corporate account not found",
+        });
       }
       return account;
     }),
@@ -297,9 +301,10 @@ export const corporateRouter = router({
         userAccount?.role === "admin";
 
       if (!isSystemAdmin && !isCorporateAdmin) {
-        throw new Error(
-          "You do not have permission to add users to this account"
-        );
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not have permission to add users to this account",
+        });
       }
 
       const corporateUser = await corporateService.addUserToCorporate(input);
@@ -338,7 +343,10 @@ export const corporateRouter = router({
       const isCorporateMember = userAccount?.id === input.corporateAccountId;
 
       if (!isSystemAdmin && !isCorporateMember) {
-        throw new Error("You do not have access to this corporate account");
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You do not have access to this corporate account",
+        });
       }
 
       return await corporateService.getCorporateUsers(input.corporateAccountId);
@@ -461,7 +469,10 @@ export const corporateRouter = router({
         ctx.user.id
       );
       if (!userAccount) {
-        throw new Error("You are not a member of a corporate account");
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You are not a member of a corporate account",
+        });
       }
 
       const corporateBooking = await corporateService.createCorporateBooking({
@@ -618,7 +629,10 @@ export const corporateRouter = router({
         ctx.user.id
       );
       if (!userAccount) {
-        throw new Error("You are not a member of a corporate account");
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You are not a member of a corporate account",
+        });
       }
 
       return await corporateService.getCorporateStats(userAccount.id);

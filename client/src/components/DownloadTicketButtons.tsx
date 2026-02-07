@@ -155,7 +155,7 @@ export function AddToCalendarButton({ bookingId }: AddToCalendarButtonProps) {
       size="sm"
       onClick={handleDownload}
       disabled={isDownloading}
-      title="Add to Calendar"
+      title={t("booking.addToCalendar")}
     >
       <CalendarPlus className="h-3 w-3" />
     </Button>

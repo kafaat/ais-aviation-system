@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import * as bookingsService from "../services/bookings.service";
 import * as db from "../db";
 import { auditBookingChange } from "../services/audit.service";
+import { createNotification } from "../services/notification.service";
 
 /**
  * Bookings Router
@@ -230,6 +231,27 @@ export const bookingsRouter = router({
           ctx.req.ip,
           ctx.req.headers["x-request-id"] as string
         );
+
+        // Send in-app notification for booking cancellation
+        try {
+          await createNotification(
+            ctx.user.id,
+            "booking",
+            "Booking Cancelled",
+            `Your booking ${booking.bookingReference} has been cancelled. If you are eligible for a refund, it will be processed shortly.`,
+            {
+              bookingId: input.bookingId,
+              bookingReference: booking.bookingReference,
+              link: `/my-bookings`,
+            }
+          );
+        } catch (_notifError) {
+          // Don't fail the cancellation if notification fails
+          console.error(
+            "[Booking] Error sending cancellation notification:",
+            _notifError
+          );
+        }
       }
 
       return result;

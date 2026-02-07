@@ -33,7 +33,11 @@ export const eticketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
-      if (!database) throw new Error("Database not available");
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       // Get booking details
       const [booking] = await database
@@ -170,7 +174,11 @@ export const eticketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
-      if (!database) throw new Error("Database not available");
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       // Get booking details
       const [booking] = await database
@@ -301,7 +309,11 @@ export const eticketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
-      if (!database) throw new Error("Database not available");
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
       // Get booking with flight details
       const [booking] = await database

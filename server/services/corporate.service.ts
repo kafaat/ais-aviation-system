@@ -12,6 +12,7 @@ import {
   type CorporateUser,
   type CorporateBooking,
 } from "../../drizzle/schema";
+import { createNotification } from "./notification.service";
 
 /**
  * Corporate Travel Service
@@ -692,6 +693,25 @@ export async function approveCorporateBooking(
     })
     .where(eq(corporateBookings.id, bookingId));
 
+  // Send in-app notification to the booker
+  try {
+    await createNotification(
+      corporateBooking[0].bookedByUserId,
+      "booking",
+      "Corporate Booking Approved",
+      `Your corporate booking request #${bookingId} has been approved.`,
+      {
+        bookingId: corporateBooking[0].bookingId,
+        link: `/corporate`,
+      }
+    );
+  } catch (notifError) {
+    console.error(
+      "[Corporate] Error sending approval notification:",
+      notifError
+    );
+  }
+
   const updated = await db
     .select()
     .from(corporateBookings)
@@ -775,6 +795,25 @@ export async function rejectCorporateBooking(
       updatedAt: new Date(),
     })
     .where(eq(corporateBookings.id, bookingId));
+
+  // Send in-app notification to the booker about rejection
+  try {
+    await createNotification(
+      corporateBooking[0].bookedByUserId,
+      "booking",
+      "Corporate Booking Rejected",
+      `Your corporate booking request #${bookingId} has been rejected. Reason: ${reason}`,
+      {
+        bookingId: corporateBooking[0].bookingId,
+        link: `/corporate`,
+      }
+    );
+  } catch (notifError) {
+    console.error(
+      "[Corporate] Error sending rejection notification:",
+      notifError
+    );
+  }
 
   const updated = await db
     .select()

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as groupBookingService from "../services/group-booking.service";
 
@@ -186,7 +187,10 @@ export const groupBookingsRouter = router({
     .query(async ({ input }) => {
       const booking = await groupBookingService.getGroupBookingById(input.id);
       if (!booking) {
-        throw new Error("Group booking not found");
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Group booking not found",
+        });
       }
       return booking;
     }),

@@ -32,6 +32,12 @@ import { sendBookingConfirmation } from "../services/email.service";
 import { awardMilesForBooking } from "../services/loyalty.service";
 import { generateETicketForPassenger } from "../services/eticket.service";
 import { createServiceLogger } from "../_core/logger";
+import {
+  notifyBookingConfirmed,
+  notifyPaymentReceived,
+  notifyRefundProcessed,
+  createNotification,
+} from "../services/notification.service";
 
 // Create service-specific logger
 const log = createServiceLogger("webhook:stripe");
@@ -683,6 +689,30 @@ async function handlePaymentFailed(
       { event: "booking_payment_failed", bookingId: booking.id },
       `Booking ${booking.id} marked as payment failed`
     );
+
+    // Send in-app notification about payment failure
+    try {
+      await createNotification(
+        booking.userId,
+        "payment",
+        "Payment Failed",
+        `Your payment for booking ${booking.bookingReference || `#${booking.id}`} has failed. Please try again or use a different payment method.`,
+        {
+          bookingId: booking.id,
+          bookingReference: booking.bookingReference,
+          link: `/my-bookings`,
+        }
+      );
+    } catch (notifError) {
+      log.error(
+        {
+          event: "notification_failed",
+          bookingId: booking.id,
+          error: notifError,
+        },
+        "Failed to send payment failure notification"
+      );
+    }
   }
 }
 
@@ -788,6 +818,20 @@ async function handleChargeRefunded(
     { event: "booking_refunded", bookingId, status: newStatus, refundAmount },
     `Booking ${bookingId} ${newStatus}`
   );
+
+  // Send in-app refund notification (outside transaction scope via own connection)
+  try {
+    await notifyRefundProcessed(
+      booking.userId,
+      refundAmount * 100, // notifyRefundProcessed expects cents
+      booking.bookingReference || `#${bookingId}`
+    );
+  } catch (notifError) {
+    log.error(
+      { event: "notification_failed", bookingId, error: notifError },
+      "Failed to send refund notification"
+    );
+  }
 }
 
 /**
@@ -903,6 +947,26 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
       { event: "confirmation_sent", bookingId, email: booking.userEmail },
       `Sent booking confirmation to ${booking.userEmail}`
     );
+
+    // Send in-app notifications
+    try {
+      await notifyBookingConfirmed(
+        booking.userId,
+        booking.bookingReference,
+        booking.flightNumber,
+        bookingId
+      );
+      await notifyPaymentReceived(
+        booking.userId,
+        booking.totalAmount,
+        booking.bookingReference
+      );
+    } catch (notifError) {
+      log.error(
+        { event: "notification_failed", bookingId, error: notifError },
+        "Failed to send in-app notifications"
+      );
+    }
 
     // Award loyalty miles
     const result = await awardMilesForBooking(

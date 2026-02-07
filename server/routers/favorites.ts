@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import * as favoritesService from "../services/favorites.service";
 
@@ -189,7 +190,7 @@ export const favoritesRouter = router({
   checkPriceAlerts: protectedProcedure.mutation(async ({ ctx }) => {
     // Only allow admins to trigger this
     if (ctx.user?.role !== "admin") {
-      throw new Error("Unauthorized");
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Unauthorized" });
     }
     return await favoritesService.checkPriceAlertsAndNotify();
   }),

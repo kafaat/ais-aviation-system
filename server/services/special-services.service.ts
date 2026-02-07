@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { eq, and, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
@@ -132,7 +133,11 @@ export async function requestService(data: {
   details?: Record<string, unknown>;
 }): Promise<SpecialService> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Validate booking exists
   const booking = await db
@@ -142,7 +147,7 @@ export async function requestService(data: {
     .limit(1);
 
   if (booking.length === 0) {
-    throw new Error("Booking not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
 
   // Validate passenger belongs to booking
@@ -158,7 +163,10 @@ export async function requestService(data: {
     .limit(1);
 
   if (passenger.length === 0) {
-    throw new Error("Passenger not found or does not belong to this booking");
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Passenger not found or does not belong to this booking",
+    });
   }
 
   // Validate service code is valid for the service type
@@ -166,9 +174,10 @@ export async function requestService(data: {
   const isValidCode = validServices?.some(s => s.code === data.serviceCode);
 
   if (!isValidCode) {
-    throw new Error(
-      `Invalid service code '${data.serviceCode}' for service type '${data.serviceType}'`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Invalid service code '${data.serviceCode}' for service type '${data.serviceType}'`,
+    });
   }
 
   // Check if same service type already exists for this passenger
@@ -186,9 +195,10 @@ export async function requestService(data: {
     .limit(1);
 
   if (existingService.length > 0) {
-    throw new Error(
-      `A ${data.serviceType} service request already exists for this passenger`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `A ${data.serviceType} service request already exists for this passenger`,
+    });
   }
 
   // Create the service request
@@ -221,7 +231,11 @@ export async function getBookingServices(
   bookingId: number
 ): Promise<Array<SpecialService & { passengerName?: string }>> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const services = await db
     .select({
@@ -267,7 +281,11 @@ export async function getServiceById(
   serviceId: number
 ): Promise<SpecialService | null> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const results = await db
     .select()
@@ -286,17 +304,27 @@ export async function cancelService(
   userId: number
 ): Promise<{ success: boolean; message: string }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get the service
   const service = await getServiceById(serviceId);
   if (!service) {
-    throw new Error("Special service request not found");
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Special service request not found",
+    });
   }
 
   // Check if the service is in a cancellable state
   if (service.status === "cancelled") {
-    throw new Error("Service request is already cancelled");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Service request is already cancelled",
+    });
   }
 
   // Get the booking to verify ownership
@@ -307,11 +335,14 @@ export async function cancelService(
     .limit(1);
 
   if (booking.length === 0) {
-    throw new Error("Booking not found");
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
   }
 
   if (booking[0].userId !== userId) {
-    throw new Error("You are not authorized to cancel this service request");
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "You are not authorized to cancel this service request",
+    });
   }
 
   // Update the service status to cancelled
@@ -335,11 +366,18 @@ export async function updateServiceStatus(
   adminNotes?: string
 ): Promise<{ success: boolean }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const service = await getServiceById(serviceId);
   if (!service) {
-    throw new Error("Special service request not found");
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Special service request not found",
+    });
   }
 
   const updateData: Partial<InsertSpecialService> = {
@@ -365,7 +403,11 @@ export async function getPassengerServices(
   passengerId: number
 ): Promise<SpecialService[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select()
@@ -402,7 +444,11 @@ export function getServiceDescriptionByCode(
  */
 export async function getPendingServices(): Promise<SpecialService[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select()
@@ -419,7 +465,11 @@ export async function bulkUpdateServiceStatus(
   adminNotes?: string
 ): Promise<{ success: boolean; updated: number }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   if (serviceIds.length === 0) {
     return { success: true, updated: 0 };
