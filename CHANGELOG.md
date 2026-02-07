@@ -3,16 +3,16 @@
 ## What's Changed in v1.8.3
 
 ### Bug Fixes
+
 - fix: Login button now navigates to dedicated /login page (a6a9475)
 - fix: login button now navigates to dedicated /login page (9b594ff)
 
 ### Other Changes
+
 - Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (99f30a3)
 - Merge pull request #58 from kafaat/claude/implement-todo-zrBPj (94fcebb)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.2...v1.8.3
-
 
 ---
 
