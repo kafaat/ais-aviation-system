@@ -1,7 +1,7 @@
 # AIS Aviation System - API Documentation
 
-**Version:** 2.0  
-**Last Updated:** January 2026  
+**Version:** 3.0
+**Last Updated:** February 2026
 **Base URL:** `http://localhost:3000/api/trpc`
 
 ---
@@ -16,8 +16,10 @@
 6. [Loyalty API](#loyalty-api)
 7. [Admin API](#admin-api)
 8. [Analytics API](#analytics-api)
-9. [Error Handling](#error-handling)
-10. [Rate Limiting](#rate-limiting)
+9. [Phase 2 APIs](#phase-2-apis)
+10. [Phase 3 APIs](#phase-3-apis)
+11. [Error Handling](#error-handling)
+12. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -846,6 +848,275 @@ Get most booked routes.
 
 ---
 
+## Phase 2 APIs
+
+### Gate Management (`gates`)
+
+Manage airport gates and flight gate assignments.
+
+**Endpoints:**
+
+| Endpoint                 | Type     | Auth   | Description                      |
+| ------------------------ | -------- | ------ | -------------------------------- |
+| `gates.list`             | Query    | Admin  | List all airport gates           |
+| `gates.getById`          | Query    | Admin  | Get gate details                 |
+| `gates.create`           | Mutation | Admin  | Create a new gate                |
+| `gates.update`           | Mutation | Admin  | Update gate info                 |
+| `gates.assign`           | Mutation | Admin  | Assign a gate to a flight        |
+| `gates.getAssignment`    | Query    | Public | Get gate assignment for a flight |
+| `gates.getChangeHistory` | Query    | Admin  | View gate change history         |
+
+---
+
+### Vouchers & Credits (`vouchers`)
+
+Promotional codes and user credit system.
+
+**Endpoints:**
+
+| Endpoint                  | Type     | Auth      | Description                   |
+| ------------------------- | -------- | --------- | ----------------------------- |
+| `vouchers.validate`       | Query    | Protected | Validate a voucher code       |
+| `vouchers.apply`          | Mutation | Protected | Apply voucher to booking      |
+| `vouchers.create`         | Mutation | Admin     | Create a new voucher          |
+| `vouchers.list`           | Query    | Admin     | List all vouchers             |
+| `vouchers.getUserCredits` | Query    | Protected | Get user credit balance       |
+| `vouchers.applyCredits`   | Mutation | Protected | Apply credits to booking      |
+| `vouchers.addCredits`     | Mutation | Admin     | Add credits to a user account |
+
+---
+
+### Split Payments (`splitPayments`)
+
+Allow multiple users to share booking costs.
+
+**Endpoints:**
+
+| Endpoint                     | Type     | Auth      | Description                |
+| ---------------------------- | -------- | --------- | -------------------------- |
+| `splitPayments.createSplit`  | Mutation | Protected | Create a payment split     |
+| `splitPayments.getShareLink` | Query    | Protected | Get shareable payment link |
+| `splitPayments.getShares`    | Query    | Protected | List shares for a booking  |
+| `splitPayments.payShare`     | Mutation | Public    | Pay an individual share    |
+
+---
+
+### Price Calendar (`priceCalendar`)
+
+Visual price comparison across dates.
+
+**Endpoints:**
+
+| Endpoint                    | Type  | Auth   | Description                       |
+| --------------------------- | ----- | ------ | --------------------------------- |
+| `priceCalendar.getCalendar` | Query | Public | Get prices for a month on a route |
+
+**Input:**
+
+```typescript
+{
+  originId: number;
+  destinationId: number;
+  month: number; // 1-12
+  year: number;
+}
+```
+
+---
+
+### Waitlist (`waitlist`)
+
+Join waitlist for full flights.
+
+**Endpoints:**
+
+| Endpoint               | Type     | Auth      | Description                     |
+| ---------------------- | -------- | --------- | ------------------------------- |
+| `waitlist.join`        | Mutation | Protected | Join waitlist for a flight      |
+| `waitlist.getPosition` | Query    | Protected | Check position on waitlist      |
+| `waitlist.leave`       | Mutation | Protected | Leave the waitlist              |
+| `waitlist.getByFlight` | Query    | Admin     | View all waitlist entries       |
+| `waitlist.offerSeat`   | Mutation | Admin     | Offer a seat to waitlisted user |
+
+---
+
+### Corporate Accounts (`corporate`)
+
+Business travel management.
+
+**Endpoints:**
+
+| Endpoint                  | Type     | Auth      | Description                   |
+| ------------------------- | -------- | --------- | ----------------------------- |
+| `corporate.getAccount`    | Query    | Protected | Get corporate account details |
+| `corporate.createBooking` | Mutation | Protected | Book with corporate billing   |
+| `corporate.getBookings`   | Query    | Protected | List corporate bookings       |
+| `corporate.getStatement`  | Query    | Protected | Get billing statement         |
+| `corporate.addTraveler`   | Mutation | Protected | Add approved traveler         |
+
+---
+
+### Travel Agent (`travelAgent`)
+
+Travel agent portal and commissions.
+
+**Endpoints:**
+
+| Endpoint                     | Type     | Auth      | Description             |
+| ---------------------------- | -------- | --------- | ----------------------- |
+| `travelAgent.getProfile`     | Query    | Protected | Get agent profile       |
+| `travelAgent.createBooking`  | Mutation | Protected | Create booking as agent |
+| `travelAgent.getCommissions` | Query    | Protected | View commission history |
+| `travelAgent.getBookings`    | Query    | Protected | List agent bookings     |
+
+---
+
+### Group Bookings (`groupBookings`)
+
+Group discount requests.
+
+**Endpoints:**
+
+| Endpoint                      | Type     | Auth      | Description                   |
+| ----------------------------- | -------- | --------- | ----------------------------- |
+| `groupBookings.createRequest` | Mutation | Protected | Submit group booking request  |
+| `groupBookings.getRequests`   | Query    | Protected | View user's group requests    |
+| `groupBookings.approve`       | Mutation | Admin     | Approve group booking request |
+| `groupBookings.reject`        | Mutation | Admin     | Reject group booking request  |
+
+---
+
+### Notifications (`notifications`)
+
+User notifications system.
+
+**Endpoints:**
+
+| Endpoint                          | Type     | Auth      | Description                  |
+| --------------------------------- | -------- | --------- | ---------------------------- |
+| `notifications.list`              | Query    | Protected | List user notifications      |
+| `notifications.markRead`          | Mutation | Protected | Mark notification as read    |
+| `notifications.markAllRead`       | Mutation | Protected | Mark all as read             |
+| `notifications.getPreferences`    | Query    | Protected | Get notification preferences |
+| `notifications.updatePreferences` | Mutation | Protected | Update preferences           |
+
+---
+
+### Price Alerts (`priceAlerts`)
+
+Price drop notifications.
+
+**Endpoints:**
+
+| Endpoint             | Type     | Auth      | Description              |
+| -------------------- | -------- | --------- | ------------------------ |
+| `priceAlerts.create` | Mutation | Protected | Create a price alert     |
+| `priceAlerts.list`   | Query    | Protected | List user's price alerts |
+| `priceAlerts.delete` | Mutation | Protected | Delete a price alert     |
+
+---
+
+### Additional Phase 2 Routers
+
+| Router            | Description                                |
+| ----------------- | ------------------------------------------ |
+| `baggage`         | Baggage tracking and management            |
+| `multiCity`       | Multi-city itinerary search and booking    |
+| `savedPassengers` | Saved passenger profiles for quick booking |
+| `priceLock`       | Lock flight price for limited time         |
+| `familyPool`      | Family mile pooling for loyalty program    |
+| `wallet`          | Digital wallet balance and transactions    |
+| `inventory`       | Inventory management and seat availability |
+| `pricing`         | Dynamic pricing rules and calculations     |
+
+---
+
+## Phase 3 APIs
+
+### Departure Control System (`dcs`)
+
+**Endpoints:**
+
+| Endpoint                | Type     | Auth  | Description                 |
+| ----------------------- | -------- | ----- | --------------------------- |
+| `dcs.getFlightManifest` | Query    | Admin | Get passenger manifest      |
+| `dcs.boardPassenger`    | Mutation | Admin | Board a passenger           |
+| `dcs.closeBoarding`     | Mutation | Admin | Close boarding for a flight |
+| `dcs.getSeatMap`        | Query    | Admin | Get aircraft seat map       |
+
+---
+
+### Disruptions (`disruptions`)
+
+Automated flight disruption handling.
+
+**Endpoints:**
+
+| Endpoint                          | Type     | Auth  | Description                     |
+| --------------------------------- | -------- | ----- | ------------------------------- |
+| `disruptions.getByFlight`         | Query    | Admin | Get disruptions for a flight    |
+| `disruptions.createDisruption`    | Mutation | Admin | Record a flight disruption      |
+| `disruptions.getAffectedBookings` | Query    | Admin | Get affected bookings           |
+| `disruptions.autoRebook`          | Mutation | Admin | Auto-rebook affected passengers |
+
+---
+
+### Rebooking (`rebooking`)
+
+Flight rebooking from previous booking.
+
+**Endpoints:**
+
+| Endpoint               | Type     | Auth      | Description            |
+| ---------------------- | -------- | --------- | ---------------------- |
+| `rebooking.getOptions` | Query    | Protected | Get rebooking options  |
+| `rebooking.rebook`     | Mutation | Protected | Rebook to a new flight |
+
+---
+
+### AI Chat (`aiChat`)
+
+AI-powered booking assistant.
+
+**Endpoints:**
+
+| Endpoint             | Type     | Auth      | Description                  |
+| -------------------- | -------- | --------- | ---------------------------- |
+| `aiChat.sendMessage` | Mutation | Protected | Send message to AI assistant |
+| `aiChat.getHistory`  | Query    | Protected | Get chat history             |
+| `aiChat.archiveChat` | Mutation | Protected | Archive a conversation       |
+
+---
+
+### Travel Scenarios (`travelScenarios`)
+
+Carbon offset and travel document checks.
+
+**Endpoints:**
+
+| Endpoint                                | Type  | Auth      | Description                    |
+| --------------------------------------- | ----- | --------- | ------------------------------ |
+| `travelScenarios.calculateCarbonOffset` | Query | Public    | Calculate flight carbon offset |
+| `travelScenarios.checkDocuments`        | Query | Protected | Validate travel documents      |
+
+---
+
+### Other System Routers
+
+| Router       | Description                         |
+| ------------ | ----------------------------------- |
+| `health`     | System health checks                |
+| `system`     | System info and version             |
+| `reference`  | Reference data (airlines, airports) |
+| `gdpr`       | GDPR data export and deletion       |
+| `rateLimit`  | Rate limit status                   |
+| `metrics`    | System metrics                      |
+| `cache`      | Cache management                    |
+| `softDelete` | Soft delete recovery                |
+| `sms`        | SMS notification service            |
+
+---
+
 ## Error Handling
 
 ### Error Response Format
@@ -970,5 +1241,5 @@ For API issues or questions:
 
 ---
 
-**Last Updated:** January 2026  
-**API Version:** 2.0
+**Last Updated:** February 2026
+**API Version:** 3.0
