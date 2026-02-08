@@ -527,7 +527,10 @@ export default function BookingPage() {
           {/* Flight Info Card */}
           <div className="lg:col-span-2 space-y-6">
             {flight && (
-              <Card className="p-6 bg-gradient-to-br from-white to-blue-50/50 border-0 shadow-lg">
+              <Card
+                className="p-6 bg-gradient-to-br from-white to-blue-50/50 border-0 shadow-lg"
+                data-testid="flight-info"
+              >
                 <div className="flex items-center gap-4 mb-6">
                   {flight.airline.logo ? (
                     <img
@@ -637,7 +640,7 @@ export default function BookingPage() {
             )}
 
             {/* Passenger Details */}
-            <Card className="p-6">
+            <Card className="p-6" data-testid="passenger-form">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold">
                   {t("booking.passengerInfo")}
@@ -826,7 +829,10 @@ export default function BookingPage() {
 
           {/* Booking Summary */}
           <div className="lg:col-span-1">
-            <Card className="p-6 sticky top-24 shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+            <Card
+              className="p-6 sticky top-24 shadow-lg border-0 bg-white/80 backdrop-blur-sm"
+              data-testid="booking-summary"
+            >
               <h2 className="text-xl font-semibold mb-4">
                 {t("booking.summary")}
               </h2>
@@ -910,7 +916,10 @@ export default function BookingPage() {
                       </span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center text-lg font-bold mt-4 pt-4 border-t">
+                  <div
+                    className="flex justify-between items-center text-lg font-bold mt-4 pt-4 border-t"
+                    data-testid="total-price"
+                  >
                     <span>{t("booking.total")}</span>
                     <span className="text-primary">
                       {totalAmount.toFixed(2)} {t("common.currency")}

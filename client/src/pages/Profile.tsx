@@ -217,7 +217,10 @@ export default function Profile() {
           <div className="flex items-center gap-6">
             {/* Avatar with Upload */}
             <div className="relative group">
-              <Avatar className="h-24 w-24 border-4 border-white/30 shadow-xl">
+              <Avatar
+                className="h-24 w-24 border-4 border-white/30 shadow-xl"
+                data-testid="avatar"
+              >
                 <AvatarImage src={avatarPreview || undefined} />
                 <AvatarFallback className="bg-white/20 text-white text-2xl font-bold">
                   {getUserInitials()}
@@ -227,6 +230,7 @@ export default function Profile() {
                 onClick={handleAvatarClick}
                 className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                 aria-label={t("profile.avatar.change")}
+                data-testid="avatar-upload"
               >
                 <Camera className="h-8 w-8 text-white" />
               </button>
@@ -262,6 +266,7 @@ export default function Profile() {
           value={activeTab}
           onValueChange={setActiveTab}
           className="space-y-6"
+          data-testid="profile-tabs"
         >
           {/* Improved Tabs */}
           <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm shadow-md rounded-xl p-1.5 h-auto">
@@ -731,6 +736,7 @@ export default function Profile() {
             disabled={updatePreferences.isPending}
             size="lg"
             className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg hover:shadow-xl transition-all px-8"
+            data-testid="save-button"
           >
             {updatePreferences.isPending ? (
               <>

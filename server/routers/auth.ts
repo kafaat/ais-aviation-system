@@ -19,8 +19,11 @@ import { getDb } from "../db";
 import { logger } from "../_core/logger";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
+import { sdk } from "../_core/sdk";
 // bcrypt will be used when password authentication is fully implemented
 // import bcrypt from "bcryptjs";
+
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 // ============================================================================
 // Input Schemas
@@ -221,6 +224,25 @@ export const authRouter = router({
         ipAddress,
         deviceId: deviceInfo?.deviceId,
       });
+
+      // Also set a session cookie for web clients (enables browser-based auth)
+      try {
+        const sessionToken = await sdk.createSessionToken(user.openId, {
+          name: user.name || "",
+          expiresInMs: ONE_YEAR_MS,
+        });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: ONE_YEAR_MS,
+        });
+      } catch (cookieError) {
+        // Non-fatal: JWT tokens still work even if cookie fails
+        logger.warn(
+          { error: cookieError },
+          "Failed to set session cookie during login"
+        );
+      }
 
       logger.info(
         { userId: user.id, email: user.email },

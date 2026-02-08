@@ -18,7 +18,12 @@
   },
   "login": {
     "notConfigured": "لم يتم إعداد تسجيل الدخول. يرجى التواصل مع المسؤول لإعداد المصادقة.",
-    "backToHome": "العودة إلى الرئيسية"
+    "backToHome": "العودة إلى الرئيسية",
+    "email": "البريد الإلكتروني",
+    "emailPlaceholder": "email@example.com",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "أدخل كلمة المرور",
+    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة"
   },
   "common": {
     "appName": "نظام الطيران المتكامل",

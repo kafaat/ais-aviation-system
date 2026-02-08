@@ -18,7 +18,12 @@
   },
   "login": {
     "notConfigured": "Login is not configured. Please contact the administrator to set up authentication.",
-    "backToHome": "Back to Home"
+    "backToHome": "Back to Home",
+    "email": "Email",
+    "emailPlaceholder": "email@example.com",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "invalidCredentials": "Invalid email or password"
   },
   "common": {
     "appName": "Aviation Integrated System",
