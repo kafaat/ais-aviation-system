@@ -46,6 +46,7 @@ pnpm db:studio        # Open Drizzle Studio for database inspection
 | **Frontend** | React 19, TypeScript, Tailwind CSS 4, shadcn/ui, Wouter |
 | **API**      | tRPC 11 (type-safe RPC)                                 |
 | **Backend**  | Express 4                                               |
+| **Auth**     | FastAPI microservice (Python, bcrypt, SQLAlchemy)       |
 | **Database** | MySQL/TiDB with Drizzle ORM                             |
 | **Payments** | Stripe                                                  |
 | **Testing**  | Vitest, Playwright                                      |
@@ -55,6 +56,14 @@ pnpm db:studio        # Open Drizzle Studio for database inspection
 
 ```
 ais-aviation-system/
+├── auth-service/              # FastAPI auth microservice (Python)
+│   ├── main.py               # Endpoints: register, login, verify-password, health
+│   ├── config.py             # Pydantic settings (env-based config)
+│   ├── models.py             # SQLAlchemy User model
+│   ├── schemas.py            # Pydantic request/response schemas
+│   ├── requirements.txt      # Python dependencies
+│   └── Dockerfile            # Container build
+│
 ├── client/                    # Frontend application
 │   └── src/
 │       ├── components/        # React components
@@ -357,6 +366,7 @@ DATABASE_URL=mysql://user:pass@host:3306/database
 JWT_SECRET=<strong-secret>
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
+AUTH_SERVICE_URL=http://localhost:8000    # FastAPI auth microservice
 ```
 
 ## Security Considerations
@@ -518,10 +528,41 @@ trpc.priceCalendar.getCalendar.useQuery({
 | Rebooking          | `/rebook/:bookingId` | Flight rebooking              |
 | Travel Scenarios   | -                    | Carbon offset calculations    |
 
+## Auth Service (Microservice)
+
+A standalone FastAPI microservice that handles password-based authentication. Located in `auth-service/`.
+
+### Endpoints
+
+| Method | Path                    | Description                               |
+| ------ | ----------------------- | ----------------------------------------- |
+| POST   | `/auth/register`        | Register user with email + password       |
+| POST   | `/auth/login`           | Login with email + password               |
+| POST   | `/auth/verify-password` | Verify password (used by Node.js backend) |
+| GET    | `/auth/health`          | Health check                              |
+
+### Integration
+
+- Node.js backend communicates via `server/services/auth-service.client.ts`
+- Auth service URL configured via `AUTH_SERVICE_URL` env var (default: `http://localhost:8000`)
+- Docker Compose auto-configures the service in all environments
+
+### Running Locally
+
+```bash
+# Via Docker (recommended)
+docker-compose up auth-service
+
+# Or standalone
+cd auth-service
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
 ## Docker Deployment
 
 ```bash
-# Development (MySQL + Redis + phpMyAdmin)
+# Development (MySQL + Redis + phpMyAdmin + Auth Service)
 docker-compose up
 
 # Production lite
@@ -531,6 +572,7 @@ docker-compose -f docker-compose.prod.yml up
 docker-compose -f docker-compose.production.yml up
 ```
 
+- **Auth Service**: FastAPI microservice on port 8000 for password-based authentication
 - **Worker**: Background jobs process emails, notifications, and queue jobs via `dist/worker.js`
 - **SSL**: Place `cert.pem` and `key.pem` in the `./ssl/` directory for HTTPS
 

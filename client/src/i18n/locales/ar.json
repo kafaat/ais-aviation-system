@@ -23,7 +23,17 @@
     "emailPlaceholder": "email@example.com",
     "password": "كلمة المرور",
     "passwordPlaceholder": "أدخل كلمة المرور",
-    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة",
+    "name": "الاسم الكامل",
+    "namePlaceholder": "أدخل اسمك الكامل",
+    "register": "إنشاء حساب",
+    "noAccountRegister": "ليس لديك حساب؟ سجّل الآن",
+    "hasAccountLogin": "لديك حساب بالفعل؟ تسجيل الدخول",
+    "orContinueWith": "أو المتابعة عبر",
+    "oauthLogin": "تسجيل الدخول عبر OAuth",
+    "registrationFailed": "فشل التسجيل. يرجى المحاولة مرة أخرى.",
+    "hidePassword": "إخفاء كلمة المرور",
+    "showPassword": "إظهار كلمة المرور"
   },
   "common": {
     "appName": "نظام الطيران المتكامل",
@@ -849,7 +859,8 @@
     "disconnected": "غير متصل",
     "delayedBy": "متأخرة {{minutes}} دقيقة",
     "flightDelayed": "الرحلة {{flightNumber}} متأخرة",
-    "flightCancelled": "تم إلغاء الرحلة {{flightNumber}}"
+    "flightCancelled": "تم إلغاء الرحلة {{flightNumber}}",
+    "gate": "البوابة"
   },
   "accessibility": {
     "skipToContent": "التخطي إلى المحتوى الرئيسي",

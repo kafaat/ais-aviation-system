@@ -202,7 +202,7 @@ export function FlightStatusIndicator({
   statusData?: FlightStatusData;
   isConnected?: boolean;
 }) {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
 
   if (!statusData) {
     return null;
@@ -219,7 +219,7 @@ export function FlightStatusIndicator({
       />
       {statusData.gate && (
         <Badge variant="secondary" className="text-xs">
-          Gate: {statusData.gate}
+          {t("flightStatus.gate")}: {statusData.gate}
         </Badge>
       )}
     </div>

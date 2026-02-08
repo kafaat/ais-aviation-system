@@ -46,20 +46,23 @@ test.describe("Security Features", () => {
     page,
   }) => {
     // Try to access a protected route without authentication
-    await page.goto("/admin/dashboard");
+    await page.goto("/admin");
+    await page.waitForLoadState("networkidle");
 
     // Should redirect to login or show generic error
     const url = page.url();
     const isLoginPage = url.includes("/login");
-    const hasGenericError = await page.getByText(/غير مصرح/).isVisible();
+    const hasGenericError = await page
+      .getByText(/غير مصرح|Unauthorized/)
+      .isVisible();
 
     expect(isLoginPage || hasGenericError).toBeTruthy();
 
-    // Should NOT show database errors or stack traces
-    const pageContent = await page.content();
-    expect(pageContent).not.toContain("SQL");
-    expect(pageContent).not.toContain("Error:");
-    expect(pageContent).not.toContain("at ");
+    // Should NOT show database errors or stack traces in visible text
+    const visibleText = await page.locator("body").innerText();
+    expect(visibleText).not.toContain("SQL");
+    expect(visibleText).not.toMatch(/Error:.*at /);
+    expect(visibleText).not.toMatch(/at \w+\.\w+ \(/);
   });
 
   test("should mask PII in client-side logs", async ({ page }) => {

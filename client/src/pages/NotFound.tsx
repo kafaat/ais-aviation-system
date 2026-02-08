@@ -29,7 +29,7 @@ export default function NotFound() {
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 dark:from-slate-950 dark:via-blue-950/20 dark:to-slate-950">
       <SEO
         title={t("errors.pageNotFound")}
-        description="The page you are looking for could not be found."
+        description={t("errors.pageNotFoundDescription")}
       />
 
       <div className="w-full max-w-2xl">

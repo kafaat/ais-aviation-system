@@ -321,7 +321,7 @@ export async function cleanupExpiredTokens(): Promise<void> {
 }
 
 /**
- * Authenticate user (placeholder - implement your logic)
+ * Authenticate user via auth service with DB fallback
  */
 async function authenticateUser(
   email: string,
@@ -332,31 +332,45 @@ async function authenticateUser(
   email: string | null;
   role: string;
 } | null> {
-  // TODO: Implement actual authentication logic
-  // This should:
-  // 1. Find user by email
-  // 2. Verify password (bcrypt.compare)
-  // 3. Return user if valid, null otherwise
-
-  // Placeholder implementation
-  const database = await getDb();
-  if (!database) {
-    return null;
+  // Try auth service for password verification
+  try {
+    const { authServiceClient } = await import("./auth-service.client");
+    const result = await authServiceClient.verifyPassword(email, password);
+    if (result.success && result.user) {
+      return {
+        id: result.user.id,
+        name: result.user.name,
+        email: result.user.email,
+        role: result.user.role,
+      };
+    }
+  } catch {
+    // Auth service unavailable, fall through to direct DB lookup
   }
 
-  const user = await database.query.users?.findFirst({
-    where: (users, { eq }) => eq(users.email, email),
-  });
+  // Fallback: direct DB lookup (development only, no password verification)
+  if (process.env.NODE_ENV !== "production") {
+    const database = await getDb();
+    if (!database) {
+      return null;
+    }
 
-  if (!user) {
-    return null;
+    const user = await database.query.users?.findFirst({
+      where: (users, { eq }) => eq(users.email, email),
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    logger.warn(
+      { email },
+      "Dev mode: mobile login without password verification"
+    );
+    return user;
   }
 
-  // TODO: Verify password
-  // const isValid = await bcrypt.compare(password, user.passwordHash);
-  // if (!isValid) return null;
-
-  return user;
+  return null;
 }
 
 /**

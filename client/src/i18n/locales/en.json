@@ -23,7 +23,17 @@
     "emailPlaceholder": "email@example.com",
     "password": "Password",
     "passwordPlaceholder": "Enter your password",
-    "invalidCredentials": "Invalid email or password"
+    "invalidCredentials": "Invalid email or password",
+    "name": "Full Name",
+    "namePlaceholder": "Enter your full name",
+    "register": "Create Account",
+    "noAccountRegister": "Don't have an account? Register",
+    "hasAccountLogin": "Already have an account? Sign in",
+    "orContinueWith": "Or continue with",
+    "oauthLogin": "Sign in with OAuth",
+    "registrationFailed": "Registration failed. Please try again.",
+    "hidePassword": "Hide password",
+    "showPassword": "Show password"
   },
   "common": {
     "appName": "Aviation Integrated System",
@@ -849,7 +859,8 @@
     "disconnected": "Disconnected",
     "delayedBy": "Delayed by {{minutes}} minutes",
     "flightDelayed": "Flight {{flightNumber}} is delayed",
-    "flightCancelled": "Flight {{flightNumber}} has been cancelled"
+    "flightCancelled": "Flight {{flightNumber}} has been cancelled",
+    "gate": "Gate"
   },
   "accessibility": {
     "skipToContent": "Skip to main content",
