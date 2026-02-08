@@ -49,6 +49,7 @@ import { dcsRouter } from "./routers/dcs";
 import { inventoryRouter } from "./routers/inventory.router";
 import { pricingRouter } from "./routers/pricing.router";
 import { softDeleteRouter } from "./routers/soft-delete";
+import { aiPricingRouter } from "./routers/ai-pricing.router";
 
 /**
  * Main Application Router
@@ -118,6 +119,7 @@ export const appRouter = router({
   inventory: inventoryRouter,
   pricing: pricingRouter,
   softDelete: softDeleteRouter,
+  aiPricing: aiPricingRouter,
 });
 
 export type AppRouter = typeof appRouter;

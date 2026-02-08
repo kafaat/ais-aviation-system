@@ -3550,3 +3550,484 @@ export const loadPlans = mysqlTable(
 
 export type LoadPlan = typeof loadPlans.$inferSelect;
 export type InsertLoadPlan = typeof loadPlans.$inferInsert;
+
+// ============================================================================
+// AI Dynamic Pricing System
+// ============================================================================
+
+/**
+ * AI Pricing Models
+ * Metadata for trained ML models used in demand prediction & price optimization
+ */
+export const aiPricingModels = mysqlTable(
+  "ai_pricing_models",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    name: varchar("name", { length: 255 }).notNull(),
+    version: varchar("version", { length: 50 }).notNull(),
+    modelType: mysqlEnum("modelType", [
+      "demand_forecast",
+      "price_optimization",
+      "customer_segmentation",
+      "elasticity",
+    ]).notNull(),
+
+    // Model hyperparameters and config (JSON)
+    config: text("config").notNull(),
+
+    // Performance metrics (JSON: { mae, rmse, mape, r2, accuracy })
+    metrics: text("metrics"),
+
+    // Training info
+    trainedAt: timestamp("trainedAt"),
+    trainingDataStart: timestamp("trainingDataStart"),
+    trainingDataEnd: timestamp("trainingDataEnd"),
+    sampleCount: int("sampleCount"),
+
+    // Scope
+    airlineId: int("airlineId"),
+    routeScope: text("routeScope"), // JSON: [{originId, destinationId}] or null=all
+
+    status: mysqlEnum("status", [
+      "training",
+      "validating",
+      "active",
+      "inactive",
+      "failed",
+    ])
+      .default("training")
+      .notNull(),
+
+    createdBy: int("createdBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    modelTypeIdx: index("ai_pricing_models_type_idx").on(table.modelType),
+    statusIdx: index("ai_pricing_models_status_idx").on(table.status),
+    versionIdx: index("ai_pricing_models_version_idx").on(
+      table.modelType,
+      table.version
+    ),
+  })
+);
+
+export type AiPricingModel = typeof aiPricingModels.$inferSelect;
+export type InsertAiPricingModel = typeof aiPricingModels.$inferInsert;
+
+/**
+ * Demand Predictions
+ * Stores ML-generated demand forecasts per flight/route/date
+ */
+export const demandPredictions = mysqlTable(
+  "demand_predictions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    modelId: int("modelId").notNull(),
+    flightId: int("flightId"),
+    originId: int("originId"),
+    destinationId: int("destinationId"),
+
+    // Prediction target
+    predictionDate: timestamp("predictionDate").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+
+    // Forecast values
+    predictedDemand: decimal("predictedDemand", {
+      precision: 10,
+      scale: 2,
+    }).notNull(),
+    confidenceLower: decimal("confidenceLower", { precision: 10, scale: 2 }),
+    confidenceUpper: decimal("confidenceUpper", { precision: 10, scale: 2 }),
+    confidenceLevel: decimal("confidenceLevel", {
+      precision: 5,
+      scale: 4,
+    }).default("0.95"),
+
+    // Recommended price from model
+    recommendedPrice: int("recommendedPrice"), // SAR cents
+    recommendedMultiplier: decimal("recommendedMultiplier", {
+      precision: 5,
+      scale: 4,
+    }),
+
+    // Actual values (filled post-departure for model evaluation)
+    actualDemand: decimal("actualDemand", { precision: 10, scale: 2 }),
+    actualPrice: int("actualPrice"),
+
+    // Feature importances (JSON: { feature: weight })
+    featureImportances: text("featureImportances"),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    modelIdx: index("demand_predictions_model_idx").on(table.modelId),
+    flightIdx: index("demand_predictions_flight_idx").on(table.flightId),
+    routeIdx: index("demand_predictions_route_idx").on(
+      table.originId,
+      table.destinationId
+    ),
+    dateIdx: index("demand_predictions_date_idx").on(table.predictionDate),
+    cabinIdx: index("demand_predictions_cabin_idx").on(table.cabinClass),
+  })
+);
+
+export type DemandPrediction = typeof demandPredictions.$inferSelect;
+export type InsertDemandPrediction = typeof demandPredictions.$inferInsert;
+
+/**
+ * Customer Segments
+ * Defines customer groups for personalized pricing
+ */
+export const customerSegments = mysqlTable(
+  "customer_segments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    name: varchar("name", { length: 255 }).notNull(),
+    nameAr: varchar("nameAr", { length: 255 }),
+    description: text("description"),
+
+    segmentType: mysqlEnum("segmentType", [
+      "value",
+      "frequency",
+      "behavior",
+      "loyalty_tier",
+      "corporate",
+      "price_sensitive",
+      "premium",
+    ]).notNull(),
+
+    // Segment criteria (JSON: rules for membership)
+    criteria: text("criteria").notNull(),
+
+    // Pricing adjustments for this segment
+    priceMultiplier: decimal("priceMultiplier", {
+      precision: 5,
+      scale: 4,
+    }).default("1.0000"),
+    maxDiscount: decimal("maxDiscount", { precision: 5, scale: 4 }).default(
+      "0.3000"
+    ),
+    priorityAccess: boolean("priorityAccess").default(false).notNull(),
+
+    // Segment size tracking
+    memberCount: int("memberCount").default(0).notNull(),
+
+    isActive: boolean("isActive").default(true).notNull(),
+
+    createdBy: int("createdBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    typeIdx: index("customer_segments_type_idx").on(table.segmentType),
+    activeIdx: index("customer_segments_active_idx").on(table.isActive),
+  })
+);
+
+export type CustomerSegment = typeof customerSegments.$inferSelect;
+export type InsertCustomerSegment = typeof customerSegments.$inferInsert;
+
+/**
+ * Customer Segment Assignments
+ * Maps users to segments with scoring
+ */
+export const customerSegmentAssignments = mysqlTable(
+  "customer_segment_assignments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    userId: int("userId").notNull(),
+    segmentId: int("segmentId").notNull(),
+
+    // Membership score (0-1, higher = stronger fit)
+    score: decimal("score", { precision: 5, scale: 4 }).default("1.0000"),
+
+    // Behavioral metrics at assignment time (JSON)
+    behaviorSnapshot: text("behaviorSnapshot"),
+
+    assignedAt: timestamp("assignedAt").defaultNow().notNull(),
+    expiresAt: timestamp("expiresAt"),
+
+    isActive: boolean("isActive").default(true).notNull(),
+  },
+  table => ({
+    userIdx: index("segment_assignments_user_idx").on(table.userId),
+    segmentIdx: index("segment_assignments_segment_idx").on(table.segmentId),
+    userSegmentIdx: uniqueIndex("segment_assignments_user_segment_idx").on(
+      table.userId,
+      table.segmentId
+    ),
+    activeIdx: index("segment_assignments_active_idx").on(table.isActive),
+  })
+);
+
+export type CustomerSegmentAssignment =
+  typeof customerSegmentAssignments.$inferSelect;
+export type InsertCustomerSegmentAssignment =
+  typeof customerSegmentAssignments.$inferInsert;
+
+/**
+ * Pricing A/B Tests
+ * Framework for testing pricing strategies
+ */
+export const pricingAbTests = mysqlTable(
+  "pricing_ab_tests",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    name: varchar("name", { length: 255 }).notNull(),
+    description: text("description"),
+    hypothesis: text("hypothesis"),
+
+    // Test scope
+    airlineId: int("airlineId"),
+    originId: int("originId"),
+    destinationId: int("destinationId"),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]),
+
+    // Traffic allocation
+    trafficPercentage: int("trafficPercentage").default(100).notNull(), // % of eligible traffic
+
+    // Statistical settings
+    confidenceLevel: decimal("confidenceLevel", {
+      precision: 5,
+      scale: 4,
+    }).default("0.95"),
+    minimumSampleSize: int("minimumSampleSize").default(100).notNull(),
+
+    // Timing
+    startDate: timestamp("startDate").notNull(),
+    endDate: timestamp("endDate"),
+
+    // Results
+    winnerVariantId: int("winnerVariantId"),
+    conclusionNotes: text("conclusionNotes"),
+
+    status: mysqlEnum("status", [
+      "draft",
+      "running",
+      "paused",
+      "completed",
+      "cancelled",
+    ])
+      .default("draft")
+      .notNull(),
+
+    createdBy: int("createdBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    statusIdx: index("pricing_ab_tests_status_idx").on(table.status),
+    dateIdx: index("pricing_ab_tests_date_idx").on(
+      table.startDate,
+      table.endDate
+    ),
+  })
+);
+
+export type PricingAbTest = typeof pricingAbTests.$inferSelect;
+export type InsertPricingAbTest = typeof pricingAbTests.$inferInsert;
+
+/**
+ * Pricing A/B Test Variants
+ * Each test has 2+ variants with different pricing strategies
+ */
+export const pricingAbTestVariants = mysqlTable(
+  "pricing_ab_test_variants",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    testId: int("testId").notNull(),
+
+    name: varchar("name", { length: 255 }).notNull(), // e.g., "Control", "Variant A"
+    isControl: boolean("isControl").default(false).notNull(),
+
+    // Pricing strategy for this variant (JSON)
+    pricingStrategy: text("pricingStrategy").notNull(),
+
+    // Traffic weight (relative to other variants)
+    weight: int("weight").default(50).notNull(),
+
+    // Aggregated metrics
+    impressions: int("impressions").default(0).notNull(),
+    conversions: int("conversions").default(0).notNull(),
+    totalRevenue: int("totalRevenue").default(0).notNull(), // SAR cents
+    averageOrderValue: int("averageOrderValue").default(0).notNull(),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    testIdx: index("ab_test_variants_test_idx").on(table.testId),
+    controlIdx: index("ab_test_variants_control_idx").on(table.isControl),
+  })
+);
+
+export type PricingAbTestVariant = typeof pricingAbTestVariants.$inferSelect;
+export type InsertPricingAbTestVariant =
+  typeof pricingAbTestVariants.$inferInsert;
+
+/**
+ * Pricing A/B Test Exposures
+ * Records which users saw which variant
+ */
+export const pricingAbTestExposures = mysqlTable(
+  "pricing_ab_test_exposures",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    testId: int("testId").notNull(),
+    variantId: int("variantId").notNull(),
+    userId: int("userId"),
+    sessionId: varchar("sessionId", { length: 128 }),
+
+    // Context
+    flightId: int("flightId"),
+    originalPrice: int("originalPrice"), // SAR cents
+    variantPrice: int("variantPrice"), // SAR cents
+
+    // Outcome
+    converted: boolean("converted").default(false).notNull(),
+    bookingId: int("bookingId"),
+    revenue: int("revenue"), // SAR cents
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    testIdx: index("ab_test_exposures_test_idx").on(table.testId),
+    variantIdx: index("ab_test_exposures_variant_idx").on(table.variantId),
+    userIdx: index("ab_test_exposures_user_idx").on(table.userId),
+    sessionIdx: index("ab_test_exposures_session_idx").on(table.sessionId),
+    convertedIdx: index("ab_test_exposures_converted_idx").on(table.converted),
+  })
+);
+
+export type PricingAbTestExposure = typeof pricingAbTestExposures.$inferSelect;
+export type InsertPricingAbTestExposure =
+  typeof pricingAbTestExposures.$inferInsert;
+
+/**
+ * Revenue Optimization Logs
+ * Audit trail for AI-driven price adjustments
+ */
+export const revenueOptimizationLogs = mysqlTable(
+  "revenue_optimization_logs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    flightId: int("flightId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+
+    // Price change
+    previousPrice: int("previousPrice").notNull(), // SAR cents
+    optimizedPrice: int("optimizedPrice").notNull(),
+    priceChange: decimal("priceChange", { precision: 10, scale: 2 }).notNull(),
+
+    // Decision factors (JSON)
+    factors: text("factors").notNull(),
+
+    // AI model reference
+    modelId: int("modelId"),
+    predictionId: int("predictionId"),
+
+    // Optimization goal
+    optimizationGoal: mysqlEnum("optimizationGoal", [
+      "maximize_revenue",
+      "maximize_load_factor",
+      "maximize_yield",
+      "balance",
+    ])
+      .default("balance")
+      .notNull(),
+
+    // Expected vs actual impact
+    expectedRevenueImpact: decimal("expectedRevenueImpact", {
+      precision: 12,
+      scale: 2,
+    }),
+    actualRevenueImpact: decimal("actualRevenueImpact", {
+      precision: 12,
+      scale: 2,
+    }),
+
+    // Approval
+    autoApplied: boolean("autoApplied").default(false).notNull(),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+
+    status: mysqlEnum("status", [
+      "suggested",
+      "approved",
+      "applied",
+      "rejected",
+      "reverted",
+    ])
+      .default("suggested")
+      .notNull(),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    flightIdx: index("revenue_opt_logs_flight_idx").on(table.flightId),
+    statusIdx: index("revenue_opt_logs_status_idx").on(table.status),
+    goalIdx: index("revenue_opt_logs_goal_idx").on(table.optimizationGoal),
+    modelIdx: index("revenue_opt_logs_model_idx").on(table.modelId),
+    createdAtIdx: index("revenue_opt_logs_created_idx").on(table.createdAt),
+  })
+);
+
+export type RevenueOptimizationLog =
+  typeof revenueOptimizationLogs.$inferSelect;
+export type InsertRevenueOptimizationLog =
+  typeof revenueOptimizationLogs.$inferInsert;
+
+/**
+ * Price Elasticity Data
+ * Tracks price sensitivity per route/segment for elasticity modeling
+ */
+export const priceElasticityData = mysqlTable(
+  "price_elasticity_data",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    originId: int("originId").notNull(),
+    destinationId: int("destinationId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    segmentId: int("segmentId"),
+
+    // Elasticity coefficient (negative = elastic, e.g., -1.5 means 1% price increase => 1.5% demand drop)
+    elasticity: decimal("elasticity", { precision: 8, scale: 4 }).notNull(),
+    sampleSize: int("sampleSize").notNull(),
+    rSquared: decimal("rSquared", { precision: 5, scale: 4 }),
+
+    // Price range analyzed
+    minPrice: int("minPrice").notNull(),
+    maxPrice: int("maxPrice").notNull(),
+    optimalPrice: int("optimalPrice"),
+
+    // Time window
+    periodStart: timestamp("periodStart").notNull(),
+    periodEnd: timestamp("periodEnd").notNull(),
+
+    modelId: int("modelId"),
+
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    routeIdx: index("price_elasticity_route_idx").on(
+      table.originId,
+      table.destinationId
+    ),
+    cabinIdx: index("price_elasticity_cabin_idx").on(table.cabinClass),
+    segmentIdx: index("price_elasticity_segment_idx").on(table.segmentId),
+  })
+);
+
+export type PriceElasticityRecord = typeof priceElasticityData.$inferSelect;
+export type InsertPriceElasticityRecord =
+  typeof priceElasticityData.$inferInsert;

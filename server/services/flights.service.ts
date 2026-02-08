@@ -1,10 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
-import {
-  calculateDynamicPrice,
-  calculateOccupancyRate,
-  getDaysUntilDeparture,
-} from "./dynamic-pricing.service";
+import { DynamicPricingService } from "./pricing/dynamic-pricing.service";
 import { redisCacheService, CacheTTL } from "./redis-cache.service";
 
 /**
@@ -180,46 +176,50 @@ export async function calculateFlightPrice(
   flight: NonNullable<Awaited<ReturnType<typeof db.getFlightById>>>,
   cabinClass: "economy" | "business",
   passengerCount: number,
-  passengers?: Array<{ type: "adult" | "child" | "infant" }>
+  passengers?: Array<{ type: "adult" | "child" | "infant" }>,
+  userId?: number,
+  sessionId?: string
 ): Promise<{ price: number; pricing?: any }> {
   const basePrice =
     cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
 
   try {
-    // Calculate occupancy rate
-    const totalSeats =
-      cabinClass === "economy" ? flight.economySeats : flight.businessSeats;
-    const occupancyRate = await calculateOccupancyRate(flight.id, totalSeats);
-
-    // Calculate days until departure
-    const daysUntilDeparture = getDaysUntilDeparture(flight.departureTime);
-
-    // Get dynamic price for single seat
-    const pricingResult = calculateDynamicPrice({
-      basePrice,
-      occupancyRate,
-      daysUntilDeparture,
+    // Use the enhanced dynamic pricing engine (includes AI multiplier)
+    const pricingResult = await DynamicPricingService.calculateDynamicPrice({
+      flightId: flight.id,
       cabinClass,
+      requestedSeats: passengerCount,
+      userId,
+      sessionId,
     });
 
     // Apply passenger type discounts (child 75%, infant 10%)
+    const perPassengerPrice = pricingResult.breakdown.total;
     const typeBreakdown = calculatePassengerTypePrice(
-      pricingResult.finalPrice,
+      perPassengerPrice,
       passengers
     );
     const totalPrice = passengers
       ? typeBreakdown.total
-      : pricingResult.finalPrice * passengerCount;
+      : perPassengerPrice * passengerCount;
 
     return {
       price: totalPrice,
       pricing: {
-        ...pricingResult,
+        basePrice: pricingResult.basePrice,
         finalPrice: totalPrice,
-        perPassenger: pricingResult.finalPrice,
+        perPassenger: perPassengerPrice,
+        adjustmentPercentage: Math.round(
+          ((perPassengerPrice - pricingResult.basePrice) /
+            pricingResult.basePrice) *
+            100
+        ),
+        occupancyRate: Math.round(
+          pricingResult.breakdown.occupancyMultiplier * 100 - 100
+        ),
+        daysUntilDeparture: 0,
         passengerBreakdown: typeBreakdown.breakdown,
-        occupancyRate,
-        daysUntilDeparture,
+        breakdown: pricingResult.breakdown,
       },
     };
   } catch (error) {

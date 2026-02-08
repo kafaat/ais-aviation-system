@@ -60,13 +60,15 @@ export const pricingRouter = router({
    */
   calculate: publicProcedure
     .input(calculatePriceInput)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       try {
         const result = await DynamicPricingService.calculateDynamicPrice({
           flightId: input.flightId,
           cabinClass: input.cabinClass,
           requestedSeats: input.passengers,
           promoCode: input.promoCode,
+          userId: ctx.user?.id,
+          sessionId: ctx.req.headers["x-session-id"] as string | undefined,
         });
 
         // Convert to requested currency if needed
