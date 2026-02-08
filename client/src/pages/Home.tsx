@@ -223,7 +223,10 @@ export default function Home() {
               <ThemeToggle />
               <LanguageSwitcher />
               {user ? (
-                <div className="flex items-center gap-2">
+                <div
+                  className="flex items-center gap-2"
+                  data-testid="user-menu"
+                >
                   <span className="text-sm text-muted-foreground hidden md:block">
                     {user.name}
                   </span>

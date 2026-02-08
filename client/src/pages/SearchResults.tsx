@@ -307,10 +307,10 @@ export default function SearchResults() {
 
   if (isLoading) {
     return (
-      <>
+      <div data-testid="loading">
         <SEO title={t("search.title")} />
         <SearchResultsSkeleton cardCount={3} />
-      </>
+      </div>
     );
   }
 
@@ -369,7 +369,7 @@ export default function SearchResults() {
       {/* Results */}
       <div className="container py-8">
         {!flights || flights.length === 0 ? (
-          <div className="space-y-6">
+          <div className="space-y-6" data-testid="no-results">
             <Card className="p-12 text-center border-dashed">
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
                 <Plane className="h-10 w-10 text-muted-foreground" />
@@ -386,15 +386,19 @@ export default function SearchResults() {
             </Card>
 
             {/* Recent Searches */}
-            <SearchHistory />
+            <div data-testid="search-history">
+              <SearchHistory />
+            </div>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-6" data-testid="flight-results">
             {/* Filters */}
-            <AdvancedFilters
-              onApply={handleApplyFilters}
-              onReset={handleResetFilters}
-            />
+            <div data-testid="advanced-filters">
+              <AdvancedFilters
+                onApply={handleApplyFilters}
+                onReset={handleResetFilters}
+              />
+            </div>
 
             {/* Results Count */}
             <div className="flex items-center justify-between">
@@ -437,6 +441,7 @@ export default function SearchResults() {
                       key={flight.id}
                       className="p-6 hover:shadow-xl transition-all duration-300 border-0 bg-white/80 backdrop-blur-sm"
                       role="article"
+                      data-testid="flight-card"
                       aria-label={`${t("search.title")}: ${flight.airline.name} ${flight.flightNumber}, ${flight.origin.city} ${t("home.search.to")} ${flight.destination.city}`}
                     >
                       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
@@ -458,10 +463,16 @@ export default function SearchResults() {
                               </div>
                             )}
                             <div>
-                              <p className="font-semibold">
+                              <p
+                                className="font-semibold"
+                                data-testid="airline-name"
+                              >
                                 {flight.airline.name}
                               </p>
-                              <p className="text-sm text-muted-foreground">
+                              <p
+                                className="text-sm text-muted-foreground"
+                                data-testid="flight-number"
+                              >
                                 {flight.flightNumber}
                               </p>
                               {/* Live Flight Status Badge */}
@@ -481,7 +492,10 @@ export default function SearchResults() {
                         <div className="lg:col-span-5">
                           <div className="flex items-center justify-between">
                             <div className="text-center">
-                              <p className="text-3xl font-bold">
+                              <p
+                                className="text-3xl font-bold"
+                                data-testid="departure-time"
+                              >
                                 {formatTime(flight.departureTime)}
                               </p>
                               <p className="text-sm text-muted-foreground mt-1">
@@ -496,7 +510,10 @@ export default function SearchResults() {
                               <div className="relative">
                                 <div className="border-t-2 border-dashed border-primary/30"></div>
                                 <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white px-2">
-                                  <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                                  <div
+                                    className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full"
+                                    data-testid="flight-duration"
+                                  >
                                     <Clock
                                       className="h-3 w-3"
                                       aria-hidden="true"
@@ -633,7 +650,10 @@ export default function SearchResults() {
                                   <p className="text-xs text-muted-foreground mb-1">
                                     {t("search.economy")}
                                   </p>
-                                  <p className="text-2xl font-bold text-primary">
+                                  <p
+                                    className="text-2xl font-bold text-primary"
+                                    data-testid="flight-price"
+                                  >
                                     {formatPrice(flight.economyPrice)}{" "}
                                     <span className="text-sm font-normal">
                                       {t("common.currency")}

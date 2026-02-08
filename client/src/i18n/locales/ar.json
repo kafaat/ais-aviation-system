@@ -18,7 +18,12 @@
   },
   "login": {
     "notConfigured": "لم يتم إعداد تسجيل الدخول. يرجى التواصل مع المسؤول لإعداد المصادقة.",
-    "backToHome": "العودة إلى الرئيسية"
+    "backToHome": "العودة إلى الرئيسية",
+    "email": "البريد الإلكتروني",
+    "emailPlaceholder": "email@example.com",
+    "password": "كلمة المرور",
+    "passwordPlaceholder": "أدخل كلمة المرور",
+    "invalidCredentials": "البريد الإلكتروني أو كلمة المرور غير صحيحة"
   },
   "common": {
     "appName": "نظام الطيران المتكامل",
@@ -70,7 +75,8 @@
     "groupBookings": "الحجوزات الجماعية",
     "baggage": "إدارة الأمتعة",
     "corporate": "الحسابات المؤسسية",
-    "travelAgents": "وكلاء السفر"
+    "travelAgents": "وكلاء السفر",
+    "aiPricing": "التسعير الذكي"
   },
   "home": {
     "hero": {
@@ -1851,6 +1857,59 @@
       "flightNumber": "رقم الرحلة",
       "occupancy": "الإشغال",
       "seats": "المقاعد"
+    },
+    "aiPricing": {
+      "title": "التسعير الديناميكي بالذكاء الاصطناعي",
+      "subtitle": "تحسين الأسعار بالذكاء الاصطناعي مع التنبؤ بالطلب وتقسيم العملاء واختبارات A/B",
+      "toggleEnabled": "تفعيل التسعير الذكي",
+      "totalRevenue": "إجمالي الإيرادات",
+      "avgYield": "متوسط العائد",
+      "loadFactor": "عامل الحمولة",
+      "aiImpact": "تأثير الذكاء الاصطناعي",
+      "last30Days": "آخر 30 يوم",
+      "perPassenger": "لكل راكب",
+      "seatUtilization": "استخدام المقاعد",
+      "revenueOptimization": "تحسين الإيرادات",
+      "demandForecast": "توقع الطلب",
+      "demandForecastDesc": "تنبؤ بالطلب مدعوم بالتعلم الآلي مع فترات الثقة والتسعير الموصى به",
+      "flightIdPlaceholder": "رقم الرحلة",
+      "economy": "اقتصادي",
+      "business": "أعمال",
+      "generateForecast": "إنشاء التوقع",
+      "enterFlightId": "أدخل رقم الرحلة واضغط إنشاء التوقع لعرض التنبؤات",
+      "predictedDemand": "الطلب المتوقع",
+      "confidenceLower": "الحد الأدنى (95%)",
+      "confidenceUpper": "الحد الأعلى (95%)",
+      "recommendedPrice": "السعر الموصى به",
+      "customerSegments": "شرائح العملاء",
+      "customerSegmentsDesc": "تقسيم العملاء بناءً على تحليل RFM للتسعير المخصص",
+      "members": "عضو",
+      "multiplier": "المضاعف",
+      "noSegments": "لم يتم تعريف شرائح عملاء بعد",
+      "abTests": "اختبارات A/B",
+      "abTestsDesc": "تجارب التسعير مع اختبار الدلالة الإحصائية",
+      "impressions": "مشاهدة",
+      "convRate": "معدل التحويل",
+      "noTests": "لم يتم إعداد اختبارات A/B",
+      "revenueOptDesc": "تعديلات أسعار مقترحة بالذكاء الاصطناعي لتحقيق أقصى إيرادات وعامل حمولة",
+      "flightId": "الرحلة",
+      "cabin": "الدرجة",
+      "recommendation": "التوصية",
+      "priceChange": "تغيير السعر",
+      "status": "الحالة",
+      "noOptimizations": "لا توجد توصيات تحسين متاحة",
+      "testStatus": {
+        "draft": "مسودة",
+        "running": "قيد التشغيل",
+        "paused": "متوقف مؤقتاً",
+        "completed": "مكتمل",
+        "cancelled": "ملغى"
+      },
+      "rec": {
+        "increase": "رفع السعر",
+        "decrease": "خفض السعر",
+        "hold": "إبقاء السعر"
+      }
     }
   },
   "rebook": {

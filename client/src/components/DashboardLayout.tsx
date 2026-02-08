@@ -26,6 +26,7 @@ import { useIsMobile } from "@/hooks/useMobile";
 import {
   BarChart3,
   Bell,
+  Brain,
   Briefcase,
   FileText,
   Heart,
@@ -111,6 +112,12 @@ const adminMenuItems: MenuItem[] = [
     icon: UserCheck,
     labelKey: "nav.travelAgents",
     path: "/admin/travel-agents",
+    adminOnly: true,
+  },
+  {
+    icon: Brain,
+    labelKey: "nav.aiPricing",
+    path: "/admin/ai-pricing",
     adminOnly: true,
   },
 ];

@@ -33,6 +33,7 @@ import {
 } from "drizzle-orm";
 import { cacheService } from "../cache.service";
 import * as schema from "../../../drizzle/schema";
+import { AIPricingService } from "./ai-pricing.service";
 
 // Cache TTL for pricing rules (5 minutes)
 const RULES_CACHE_TTL = 5 * 60;
@@ -46,6 +47,7 @@ export interface PricingContext {
   cabinClass: "economy" | "business";
   requestedSeats: number;
   userId?: number;
+  sessionId?: string;
   promoCode?: string;
 }
 
@@ -64,6 +66,7 @@ export interface PriceBreakdown {
   timeMultiplier: number;
   occupancyMultiplier: number;
   seasonalMultiplier: number;
+  aiMultiplier: number;
   promoDiscount: number;
   taxes: number;
   fees: number;
@@ -126,7 +129,8 @@ const DEFAULT_MULTIPLIERS = {
 export async function calculateDynamicPrice(
   context: PricingContext
 ): Promise<PricingResult> {
-  const { flightId, cabinClass, requestedSeats, promoCode } = context;
+  const { flightId, cabinClass, requestedSeats, promoCode, userId, sessionId } =
+    context;
 
   // 1. Get flight details
   const database = await getDb();
@@ -163,6 +167,21 @@ export async function calculateDynamicPrice(
   // 4. Apply custom pricing rules
   const rulesMultiplier = await applyPricingRules(flight, cabinClass);
 
+  // 4.5. Get AI pricing multiplier (demand forecast + segmentation + A/B + optimization)
+  let aiMultiplier = 1.0;
+  try {
+    const aiResult = await AIPricingService.calculateAIPricingMultiplier({
+      flightId,
+      cabinClass,
+      requestedSeats,
+      userId,
+      sessionId,
+    });
+    aiMultiplier = aiResult.aiMultiplier;
+  } catch {
+    // AI pricing is non-critical; fall back to 1.0
+  }
+
   // 5. Calculate combined multiplier (capped)
   const combinedMultiplier = Math.min(
     MAX_MULTIPLIER,
@@ -172,7 +191,8 @@ export async function calculateDynamicPrice(
         timeMultiplier *
         occupancyMultiplier *
         seasonalMultiplier *
-        rulesMultiplier
+        rulesMultiplier *
+        aiMultiplier
     )
   );
 
@@ -206,6 +226,7 @@ export async function calculateDynamicPrice(
       occupancy: occupancyMultiplier,
       seasonal: seasonalMultiplier,
       rules: rulesMultiplier,
+      ai: aiMultiplier,
     },
     priceId,
   });
@@ -217,6 +238,7 @@ export async function calculateDynamicPrice(
     timeMultiplier,
     occupancyMultiplier,
     seasonalMultiplier,
+    aiMultiplier,
     promoDiscount,
     taxes,
     fees,
