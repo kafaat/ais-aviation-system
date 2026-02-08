@@ -38,10 +38,156 @@ interface Seat {
   class: "economy" | "business";
 }
 
+interface CabinLayout {
+  rows: number;
+  sections: string[][]; // Groups of column letters, aisles between groups
+}
+
+interface AircraftSeatConfig {
+  name: string;
+  economy: CabinLayout;
+  business: CabinLayout;
+}
+
+// Aircraft seat configurations based on real layouts
+const AIRCRAFT_CONFIGS: Record<string, AircraftSeatConfig> = {
+  "Airbus A320": {
+    name: "Airbus A320-200",
+    economy: {
+      rows: 20,
+      sections: [
+        ["A", "B", "C"],
+        ["D", "E", "F"],
+      ],
+    },
+    business: {
+      rows: 5,
+      sections: [
+        ["A", "B"],
+        ["C", "D"],
+      ],
+    },
+  },
+  "Airbus A330": {
+    name: "Airbus A330-300",
+    economy: {
+      rows: 30,
+      sections: [
+        ["A", "B"],
+        ["C", "D", "E", "F"],
+        ["G", "H"],
+      ],
+    },
+    business: {
+      rows: 7,
+      sections: [
+        ["A", "C"],
+        ["D", "F"],
+      ],
+    },
+  },
+  "Airbus A350": {
+    name: "Airbus A350-900",
+    economy: {
+      rows: 30,
+      sections: [
+        ["A", "B", "C"],
+        ["D", "E", "F"],
+        ["G", "H", "K"],
+      ],
+    },
+    business: { rows: 8, sections: [["A"], ["B", "C"], ["D"]] },
+  },
+  "Boeing 727": {
+    name: "Boeing 727-200",
+    economy: {
+      rows: 22,
+      sections: [
+        ["A", "B", "C"],
+        ["D", "E", "F"],
+      ],
+    },
+    business: {
+      rows: 3,
+      sections: [
+        ["A", "B"],
+        ["C", "D"],
+      ],
+    },
+  },
+  "Boeing 737": {
+    name: "Boeing 737-800",
+    economy: {
+      rows: 23,
+      sections: [
+        ["A", "B", "C"],
+        ["D", "E", "F"],
+      ],
+    },
+    business: {
+      rows: 4,
+      sections: [
+        ["A", "B"],
+        ["C", "D"],
+      ],
+    },
+  },
+  "Boeing 777": {
+    name: "Boeing 777-300ER",
+    economy: {
+      rows: 30,
+      sections: [
+        ["A", "B", "C"],
+        ["D", "E", "F", "G"],
+        ["H", "J", "K"],
+      ],
+    },
+    business: {
+      rows: 6,
+      sections: [
+        ["A", "B"],
+        ["C", "D", "E"],
+        ["F", "G"],
+      ],
+    },
+  },
+  "Boeing 787": {
+    name: "Boeing 787-9",
+    economy: {
+      rows: 30,
+      sections: [
+        ["A", "B", "C"],
+        ["D", "E", "F"],
+        ["G", "H", "K"],
+      ],
+    },
+    business: { rows: 7, sections: [["A"], ["B", "C"], ["D"]] },
+  },
+};
+
+const DEFAULT_CONFIG: AircraftSeatConfig = {
+  name: "",
+  economy: {
+    rows: 20,
+    sections: [
+      ["A", "B", "C"],
+      ["D", "E", "F"],
+    ],
+  },
+  business: {
+    rows: 5,
+    sections: [
+      ["A", "B"],
+      ["C", "D"],
+    ],
+  },
+};
+
 interface SeatMapProps {
   cabinClass: "economy" | "business";
   onSeatSelect?: (seats: Seat[]) => void;
   maxSeats?: number;
+  aircraftType?: string;
 }
 
 // Touch/gesture state interface
@@ -67,11 +213,19 @@ export function SeatMap({
   cabinClass,
   onSeatSelect,
   maxSeats = 1,
+  aircraftType,
 }: SeatMapProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const containerRef = useRef<HTMLDivElement>(null);
   const seatMapRef = useRef<HTMLDivElement>(null);
+
+  // Resolve aircraft configuration
+  const aircraftConfig = aircraftType
+    ? (AIRCRAFT_CONFIGS[aircraftType] ?? DEFAULT_CONFIG)
+    : DEFAULT_CONFIG;
+  const cabinLayout = aircraftConfig[cabinClass];
+  const allColumns = cabinLayout.sections.flat();
 
   // State for gestures and zoom
   const [gestureState, setGestureState] = useState<GestureState>({
@@ -96,29 +250,22 @@ export function SeatMap({
     null
   );
 
-  // Generate seat map
+  // Generate seat map based on aircraft layout
   const generateSeats = (): Seat[] => {
     const seats: Seat[] = [];
-    const rows = cabinClass === "business" ? 5 : 20;
-    const columns =
-      cabinClass === "business"
-        ? ["A", "B", "C", "D"]
-        : ["A", "B", "C", "D", "E", "F"];
 
-    // Simulate some occupied seats
-    const occupiedSeats = new Set([
-      "1A",
-      "1B",
-      "3C",
-      "5D",
-      "7A",
-      "10B",
-      "12E",
-      "15F",
-    ]);
+    // Simulate some occupied seats (random but deterministic based on aircraft)
+    const occupiedSeats = new Set<string>();
+    const totalSeats = cabinLayout.rows * allColumns.length;
+    const occupiedCount = Math.floor(totalSeats * 0.15); // ~15% occupied
+    for (let i = 0; i < occupiedCount; i++) {
+      const row = ((i * 7 + 3) % cabinLayout.rows) + 1;
+      const col = allColumns[(i * 13 + 5) % allColumns.length];
+      occupiedSeats.add(`${row}${col}`);
+    }
 
-    for (let row = 1; row <= rows; row++) {
-      for (const col of columns) {
+    for (let row = 1; row <= cabinLayout.rows; row++) {
+      for (const col of allColumns) {
         const seatId = `${row}${col}`;
         seats.push({
           id: seatId,
@@ -382,11 +529,9 @@ export function SeatMap({
     }
   };
 
-  const columns =
-    cabinClass === "business"
-      ? ["A", "B", "C", "D"]
-      : ["A", "B", "C", "D", "E", "F"];
-  const rows = cabinClass === "business" ? 5 : 20;
+  const columns = allColumns;
+  const rows = cabinLayout.rows;
+  const sections = cabinLayout.sections;
 
   // Calculate responsive seat size
   const getSeatSize = () => {
@@ -410,11 +555,16 @@ export function SeatMap({
     <Card className="p-4 sm:p-6 overflow-hidden">
       {/* Header */}
       <div className="mb-4 sm:mb-6">
-        <h3 className="text-lg font-semibold mb-2">
+        <h3 className="text-lg font-semibold mb-1">
           {cabinClass === "business"
             ? t("search.business")
             : t("search.economy")}
         </h3>
+        {aircraftConfig.name && (
+          <p className="text-sm font-medium text-blue-600 mb-1">
+            {aircraftConfig.name}
+          </p>
+        )}
         <p className="text-sm text-muted-foreground">
           {t("booking.selectSeats", { count: maxSeats })}
         </p>
@@ -562,27 +712,20 @@ export function SeatMap({
             {/* Column Headers */}
             <div className="flex gap-1 sm:gap-2 mb-2 justify-center">
               <div className="w-6 sm:w-8" /> {/* Row number spacer */}
-              {columns.slice(0, Math.ceil(columns.length / 2)).map(col => (
-                <div
-                  key={col}
-                  className={cn(
-                    "text-center text-xs sm:text-sm font-medium text-muted-foreground",
-                    getSeatSize()
-                  )}
-                >
-                  {col}
-                </div>
-              ))}
-              <div className="w-6 sm:w-12" /> {/* Aisle */}
-              {columns.slice(Math.ceil(columns.length / 2)).map(col => (
-                <div
-                  key={col}
-                  className={cn(
-                    "text-center text-xs sm:text-sm font-medium text-muted-foreground",
-                    getSeatSize()
-                  )}
-                >
-                  {col}
+              {sections.map((section, sIdx) => (
+                <div key={sIdx} className="contents">
+                  {sIdx > 0 && <div className="w-4 sm:w-10" /> /* Aisle */}
+                  {section.map(col => (
+                    <div
+                      key={col}
+                      className={cn(
+                        "text-center text-xs sm:text-sm font-medium text-muted-foreground",
+                        getSeatSize()
+                      )}
+                    >
+                      {col}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -590,11 +733,6 @@ export function SeatMap({
             {/* Rows */}
             {Array.from({ length: rows }, (_, i) => i + 1).map(row => {
               const rowSeats = seats.filter(s => s.row === row);
-              const leftSeats = rowSeats.slice(
-                0,
-                Math.ceil(columns.length / 2)
-              );
-              const rightSeats = rowSeats.slice(Math.ceil(columns.length / 2));
 
               return (
                 <div
@@ -606,98 +744,63 @@ export function SeatMap({
                     {row}
                   </div>
 
-                  {/* Left Seats */}
-                  {leftSeats.map(seat => (
-                    <div key={seat.id} className="relative">
-                      <motion.button
-                        whileHover={
-                          seat.status !== "occupied" && !isMobile
-                            ? { scale: 1.1 }
-                            : {}
-                        }
-                        whileTap={
-                          seat.status !== "occupied" ? { scale: 0.95 } : {}
-                        }
-                        onClick={() => handleSeatClick(seat.id)}
-                        onContextMenu={e => {
-                          e.preventDefault();
-                          handleSeatLongPress(seat.id);
-                        }}
-                        disabled={seat.status === "occupied"}
-                        className={cn(
-                          "rounded border-2 font-medium transition-all",
-                          getSeatSize(),
-                          getSeatColor(seat.status)
-                        )}
-                        aria-label={`${t("seatMap.seat")} ${seat.id} - ${getSeatStatusText(seat.status)}`}
-                      >
-                        {seat.column}
-                      </motion.button>
+                  {/* Seats by section with aisles between */}
+                  {sections.map((section, sIdx) => (
+                    <div key={sIdx} className="contents">
+                      {sIdx > 0 && (
+                        <div className="w-4 sm:w-10 flex items-center justify-center">
+                          <div className="h-px w-full bg-border" />
+                        </div>
+                      )}
+                      {section.map(col => {
+                        const seat = rowSeats.find(s => s.column === col);
+                        if (!seat) return null;
+                        return (
+                          <div key={seat.id} className="relative">
+                            <motion.button
+                              whileHover={
+                                seat.status !== "occupied" && !isMobile
+                                  ? { scale: 1.1 }
+                                  : {}
+                              }
+                              whileTap={
+                                seat.status !== "occupied"
+                                  ? { scale: 0.95 }
+                                  : {}
+                              }
+                              onClick={() => handleSeatClick(seat.id)}
+                              onContextMenu={e => {
+                                e.preventDefault();
+                                handleSeatLongPress(seat.id);
+                              }}
+                              disabled={seat.status === "occupied"}
+                              className={cn(
+                                "rounded border-2 font-medium transition-all",
+                                getSeatSize(),
+                                getSeatColor(seat.status)
+                              )}
+                              aria-label={`${t("seatMap.seat")} ${seat.id} - ${getSeatStatusText(seat.status)}`}
+                            >
+                              {seat.column}
+                            </motion.button>
 
-                      {/* Touch-friendly tooltip */}
-                      <AnimatePresence>
-                        {activeSeatTooltip === seat.id && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 10 }}
-                            className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap"
-                          >
-                            {seat.id} - {getSeatStatusText(seat.status)}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground" />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  ))}
-
-                  {/* Aisle */}
-                  <div className="w-6 sm:w-12 flex items-center justify-center">
-                    <div className="h-px w-full bg-border" />
-                  </div>
-
-                  {/* Right Seats */}
-                  {rightSeats.map(seat => (
-                    <div key={seat.id} className="relative">
-                      <motion.button
-                        whileHover={
-                          seat.status !== "occupied" && !isMobile
-                            ? { scale: 1.1 }
-                            : {}
-                        }
-                        whileTap={
-                          seat.status !== "occupied" ? { scale: 0.95 } : {}
-                        }
-                        onClick={() => handleSeatClick(seat.id)}
-                        onContextMenu={e => {
-                          e.preventDefault();
-                          handleSeatLongPress(seat.id);
-                        }}
-                        disabled={seat.status === "occupied"}
-                        className={cn(
-                          "rounded border-2 font-medium transition-all",
-                          getSeatSize(),
-                          getSeatColor(seat.status)
-                        )}
-                        aria-label={`${t("seatMap.seat")} ${seat.id} - ${getSeatStatusText(seat.status)}`}
-                      >
-                        {seat.column}
-                      </motion.button>
-
-                      {/* Touch-friendly tooltip */}
-                      <AnimatePresence>
-                        {activeSeatTooltip === seat.id && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 10 }}
-                            className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap"
-                          >
-                            {seat.id} - {getSeatStatusText(seat.status)}
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground" />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                            {/* Touch-friendly tooltip */}
+                            <AnimatePresence>
+                              {activeSeatTooltip === seat.id && (
+                                <motion.div
+                                  initial={{ opacity: 0, y: 10 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: 10 }}
+                                  className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-foreground text-background text-xs rounded whitespace-nowrap"
+                                >
+                                  {seat.id} - {getSeatStatusText(seat.status)}
+                                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-foreground" />
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
@@ -735,18 +838,21 @@ export function SeatMap({
                           key={rowIdx}
                           className="flex gap-[1px] justify-center"
                         >
-                          {columns.slice(0, 3).map((_, colIdx) => (
+                          {sections.map((section, sIdx) => (
                             <div
-                              key={colIdx}
-                              className="w-1 h-1 bg-muted-foreground/30 rounded-[1px]"
-                            />
-                          ))}
-                          <div className="w-1" />
-                          {columns.slice(3).map((_, colIdx) => (
-                            <div
-                              key={colIdx}
-                              className="w-1 h-1 bg-muted-foreground/30 rounded-[1px]"
-                            />
+                              key={sIdx}
+                              className="flex gap-[1px]"
+                              style={{
+                                marginLeft: sIdx > 0 ? "2px" : 0,
+                              }}
+                            >
+                              {section.map((_, colIdx) => (
+                                <div
+                                  key={colIdx}
+                                  className="w-1 h-1 bg-muted-foreground/30 rounded-[1px]"
+                                />
+                              ))}
+                            </div>
                           ))}
                         </div>
                       )

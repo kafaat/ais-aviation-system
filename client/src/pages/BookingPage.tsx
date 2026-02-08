@@ -22,6 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  Armchair,
   ChevronLeft,
   Plus,
   Trash2,
@@ -42,6 +43,7 @@ import { ar, enUS } from "date-fns/locale";
 import AncillarySelection, {
   type SelectedAncillary,
 } from "@/components/AncillarySelection";
+import { SeatMap } from "@/components/SeatMap";
 import {
   SavedPassengerSelect,
   type PassengerData,
@@ -96,6 +98,9 @@ export default function BookingPage() {
     SelectedAncillary[]
   >([]);
   const [ancillariesTotalCost, setAncillariesTotalCost] = useState(0);
+  const [selectedSeats, setSelectedSeats] = useState<
+    { id: string; row: number; column: string }[]
+  >([]);
   const [showSplitPayment, setShowSplitPayment] = useState(false);
   const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
   const [createdBookingRef, setCreatedBookingRef] = useState<string | null>(
@@ -846,6 +851,40 @@ export default function BookingPage() {
               </div>
             </Card>
 
+            {/* Seat Selection */}
+            <Card className="p-6" data-testid="seat-selection">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Armchair
+                    className="h-5 w-5 text-primary"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    {t("booking.selectSeats")}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {t("seatMap.sectionDescription")}
+                  </p>
+                </div>
+              </div>
+              <SeatMap
+                cabinClass={cabinClass}
+                maxSeats={passengers.length}
+                aircraftType={flight.aircraftType ?? undefined}
+                onSeatSelect={seats =>
+                  setSelectedSeats(
+                    seats.map(s => ({
+                      id: s.id,
+                      row: s.row,
+                      column: s.column,
+                    }))
+                  )
+                }
+              />
+            </Card>
+
             {/* Ancillary Services */}
             <AncillarySelection
               cabinClass={cabinClass}
@@ -904,6 +943,24 @@ export default function BookingPage() {
                   </p>
                   <p className="font-medium">{passengers.length}</p>
                 </div>
+
+                {selectedSeats.length > 0 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      {t("seatMap.selectedSeats")}
+                    </p>
+                    <div className="flex gap-1.5 flex-wrap mt-1">
+                      {selectedSeats.map(seat => (
+                        <span
+                          key={seat.id}
+                          className="px-2 py-0.5 bg-primary/10 text-primary rounded text-sm font-medium"
+                        >
+                          {seat.id}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="border-t pt-4">
                   <div className="flex justify-between items-center mb-2">

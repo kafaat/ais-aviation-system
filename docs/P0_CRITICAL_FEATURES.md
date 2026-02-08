@@ -4,11 +4,11 @@
 
 This document describes the three critical P0 features implemented to enhance the AIS Aviation System's revenue management and operational capabilities.
 
-| Feature                       | Expected ROI     | Markets Impact                                   |
-| ----------------------------- | ---------------- | ------------------------------------------------ |
-| Dynamic Pricing Engine        | +15-25% Revenue  | All markets                                      |
-| Multi-Currency Support        | 3+ New Markets   | SAR, USD, EUR, AED, GBP, KWD, BHD, QAR, OMR, EGP |
-| Advanced Inventory Management | +5-10% Occupancy | All flights                                      |
+| Feature                       | Expected ROI     | Markets Impact                                        |
+| ----------------------------- | ---------------- | ----------------------------------------------------- |
+| Dynamic Pricing Engine        | +15-25% Revenue  | All markets                                           |
+| Multi-Currency Support        | 3+ New Markets   | SAR, USD, EUR, AED, GBP, KWD, BHD, QAR, OMR, EGP, YER |
+| Advanced Inventory Management | +5-10% Occupancy | All flights                                           |
 
 ---
 
@@ -121,6 +121,7 @@ pricing.getForecast({
 | QAR  | Qatari Riyal   | ريال قطري     | ر.ق    | 2        |
 | OMR  | Omani Rial     | ريال عماني    | ر.ع    | 3        |
 | EGP  | Egyptian Pound | جنيه مصري     | ج.م    | 2        |
+| YER  | Yemeni Rial    | ريال يمني     | ﷼      | 2        |
 
 ### 2.2 Exchange Rates (Base: SAR)
 
@@ -135,6 +136,7 @@ pricing.getForecast({
 | SAR  | QAR | 0.9707 |
 | SAR  | OMR | 0.1026 |
 | SAR  | EGP | 8.2400 |
+| SAR  | YER | 66.790 |
 
 ### 2.3 Currency Conversion
 

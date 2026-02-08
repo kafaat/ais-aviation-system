@@ -36,7 +36,7 @@ The system is designed to be modular, allowing for the easy addition of new feat
 | **Integrated Booking**     | A complete system for booking flights from search to payment.                       |
 | **E-Ticketing**            | Generation of e-tickets (PDF) with QR codes and boarding passes.                    |
 | **Loyalty Program**        | An integrated miles and rewards system with tiers (Bronze, Silver, Gold, Platinum). |
-| **Multi-Currency Support** | Support for 10 major currencies with instant price conversion.                      |
+| **Multi-Currency Support** | Support for 11 major currencies with instant price conversion.                      |
 | **Booking Management**     | Modify and cancel bookings with automatic fee calculation.                          |
 | **Admin Dashboard**        | A comprehensive interface for managing flights, bookings, and statistics.           |
 | **Advanced Security**      | Protection against attacks, account locking, and comprehensive activity logging.    |
@@ -211,7 +211,7 @@ erDiagram
 
 ### 4.1 Multi-Currency Support
 
-- **Description:** Users can view prices and pay in their preferred currency. 10 major currencies are supported, with exchange rates updated automatically every 24 hours.
+- **Description:** Users can view prices and pay in their preferred currency. 11 major currencies are supported, with exchange rates updated automatically every 24 hours.
 - **Service:** `currency.service.ts`
 - **UI:** `CurrencySelector.tsx`
 

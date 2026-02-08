@@ -190,7 +190,8 @@
     "confirmDeselect": "هل تريد إلغاء اختيار المقعد {{seat}}؟",
     "select": "اختيار المقعد",
     "deselect": "إلغاء اختيار المقعد",
-    "removeSeat": "إزالة المقعد"
+    "removeSeat": "إزالة المقعد",
+    "sectionDescription": "اختر مقاعدك المفضلة على الطائرة"
   },
   "priceLock": {
     "lockPrice": "تثبيت السعر",
