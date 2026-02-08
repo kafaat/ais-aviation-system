@@ -129,13 +129,20 @@ export default function PaymentHistory() {
         {/* Filters */}
         <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border mb-6">
           <div className="flex items-center gap-2 mb-3">
-            <Filter className="w-4 h-4 text-muted-foreground" />
+            <Filter
+              className="w-4 h-4 text-muted-foreground"
+              aria-hidden="true"
+            />
             <span className="text-sm font-medium">
               {t("paymentHistory.filters", "Filters")}
             </span>
           </div>
           <div className="flex flex-wrap gap-3">
+            <label htmlFor="statusFilter" className="sr-only">
+              {t("paymentHistory.allStatuses", "All Statuses")}
+            </label>
             <select
+              id="statusFilter"
               value={statusFilter}
               onChange={e => setStatusFilter(e.target.value)}
               className="px-3 py-2 rounded-lg border bg-background text-sm"
@@ -156,7 +163,11 @@ export default function PaymentHistory() {
                 {t("paymentHistory.failed", "Failed")}
               </option>
             </select>
+            <label htmlFor="methodFilter" className="sr-only">
+              {t("paymentHistory.allMethods", "All Methods")}
+            </label>
             <select
+              id="methodFilter"
               value={methodFilter}
               onChange={e => setMethodFilter(e.target.value)}
               className="px-3 py-2 rounded-lg border bg-background text-sm"

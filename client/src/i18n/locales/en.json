@@ -143,6 +143,7 @@
     "title": "Complete Booking",
     "passengerInfo": "Passenger Information",
     "addPassenger": "Add Passenger",
+    "removePassenger": "Remove passenger",
     "passenger": "Passenger",
     "passengerType": "Passenger Type",
     "adult": "Adult",

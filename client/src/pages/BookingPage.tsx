@@ -448,7 +448,10 @@ export default function BookingPage() {
         keywords="flight booking, passenger info, payment"
       />
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm">
+      <header
+        className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm"
+        role="banner"
+      >
         <div className="container py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -459,7 +462,7 @@ export default function BookingPage() {
                   className="rounded-full"
                   aria-label={t("common.back")}
                 >
-                  <ChevronLeft className="h-5 w-5" />
+                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                 </Button>
               </Link>
               <div>
@@ -486,12 +489,21 @@ export default function BookingPage() {
                       }`}
                       onClick={handleAddToFavorites}
                       disabled={addFavorite.isPending || isFavorited}
+                      aria-label={
+                        isFavorited
+                          ? t("favorites.removeFromFavorites")
+                          : t("favorites.addToFavorites")
+                      }
                     >
                       {addFavorite.isPending ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <Loader2
+                          className="h-5 w-5 animate-spin"
+                          aria-hidden="true"
+                        />
                       ) : (
                         <Heart
                           className={`h-5 w-5 ${isFavorited ? "fill-current" : ""}`}
+                          aria-hidden="true"
                         />
                       )}
                     </Button>
@@ -510,8 +522,9 @@ export default function BookingPage() {
                       size="icon"
                       className="rounded-full hover:text-blue-500 hover:bg-blue-50"
                       onClick={handleShare}
+                      aria-label={t("common.share")}
                     >
-                      <Share2 className="h-5 w-5" />
+                      <Share2 className="h-5 w-5" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>{t("common.share")}</TooltipContent>
@@ -522,7 +535,7 @@ export default function BookingPage() {
         </div>
       </header>
 
-      <div className="container py-8">
+      <main className="container py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Flight Info Card */}
           <div className="lg:col-span-2 space-y-6">
@@ -540,7 +553,10 @@ export default function BookingPage() {
                     />
                   ) : (
                     <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Plane className="h-6 w-6 text-primary" />
+                      <Plane
+                        className="h-6 w-6 text-primary"
+                        aria-hidden="true"
+                      />
                     </div>
                   )}
                   <div>
@@ -571,7 +587,7 @@ export default function BookingPage() {
                       <div className="border-t-2 border-dashed border-primary/30"></div>
                       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-white to-blue-50/50 px-3">
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="h-3 w-3" />
+                          <Clock className="h-3 w-3" aria-hidden="true" />
                           <span>
                             {calculateDuration(
                               flight.departureTime,
@@ -646,7 +662,7 @@ export default function BookingPage() {
                   {t("booking.passengerInfo")}
                 </h2>
                 <Button onClick={addPassenger} variant="outline" size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
                   {t("booking.addPassenger")}
                 </Button>
               </div>
@@ -667,8 +683,9 @@ export default function BookingPage() {
                           variant="ghost"
                           size="sm"
                           className="text-muted-foreground hover:text-destructive"
+                          aria-label={`${t("booking.removePassenger")} ${index + 1}`}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       )}
                     </div>
@@ -688,14 +705,16 @@ export default function BookingPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>{t("booking.passengerType")}</Label>
+                        <Label htmlFor={`pax-type-${index}`}>
+                          {t("booking.passengerType")}
+                        </Label>
                         <Select
                           value={passenger.type}
                           onValueChange={(
                             value: "adult" | "child" | "infant"
                           ) => updatePassenger(index, "type", value)}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger id={`pax-type-${index}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -713,14 +732,16 @@ export default function BookingPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>{t("booking.honorific")}</Label>
+                        <Label htmlFor={`pax-title-${index}`}>
+                          {t("booking.honorific")}
+                        </Label>
                         <Select
                           value={passenger.title || ""}
                           onValueChange={value =>
                             updatePassenger(index, "title", value)
                           }
                         >
-                          <SelectTrigger>
+                          <SelectTrigger id={`pax-title-${index}`}>
                             <SelectValue placeholder={t("common.search")} />
                           </SelectTrigger>
                           <SelectContent>
@@ -738,8 +759,11 @@ export default function BookingPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>{t("booking.firstName")}</Label>
+                        <Label htmlFor={`pax-firstname-${index}`}>
+                          {t("booking.firstName")}
+                        </Label>
                         <Input
+                          id={`pax-firstname-${index}`}
                           value={passenger.firstName}
                           onChange={e =>
                             updatePassenger(index, "firstName", e.target.value)
@@ -749,8 +773,11 @@ export default function BookingPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>{t("booking.lastName")}</Label>
+                        <Label htmlFor={`pax-lastname-${index}`}>
+                          {t("booking.lastName")}
+                        </Label>
                         <Input
+                          id={`pax-lastname-${index}`}
                           value={passenger.lastName}
                           onChange={e =>
                             updatePassenger(index, "lastName", e.target.value)
@@ -760,8 +787,11 @@ export default function BookingPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>{t("booking.passportNumber")}</Label>
+                        <Label htmlFor={`pax-passport-${index}`}>
+                          {t("booking.passportNumber")}
+                        </Label>
                         <Input
+                          id={`pax-passport-${index}`}
                           value={passenger.passportNumber || ""}
                           onChange={e =>
                             updatePassenger(
@@ -775,8 +805,11 @@ export default function BookingPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>{t("booking.nationality")}</Label>
+                        <Label htmlFor={`pax-nationality-${index}`}>
+                          {t("booking.nationality")}
+                        </Label>
                         <Input
+                          id={`pax-nationality-${index}`}
                           value={passenger.nationality || ""}
                           onChange={e =>
                             updatePassenger(
@@ -995,7 +1028,7 @@ export default function BookingPage() {
                   size="lg"
                   disabled={createBooking.isPending || createPayment.isPending}
                 >
-                  <CreditCard className="h-5 w-5 mr-2" />
+                  <CreditCard className="h-5 w-5 mr-2" aria-hidden="true" />
                   {createBooking.isPending || createPayment.isPending
                     ? t("booking.processing")
                     : t("booking.completeBooking")}
@@ -1008,7 +1041,7 @@ export default function BookingPage() {
                   size="lg"
                   disabled={createBooking.isPending || createPayment.isPending}
                 >
-                  <Split className="h-5 w-5 mr-2" />
+                  <Split className="h-5 w-5 mr-2" aria-hidden="true" />
                   {t("splitPayment.splitWithOthers")}
                 </Button>
               </div>
@@ -1019,7 +1052,7 @@ export default function BookingPage() {
             </Card>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Split Payment Dialog */}
       <Dialog open={showSplitPayment} onOpenChange={setShowSplitPayment}>

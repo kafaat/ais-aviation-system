@@ -26,7 +26,7 @@ export default function NotFound() {
   ];
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 dark:from-slate-950 dark:via-blue-950/20 dark:to-slate-950">
+    <main className="min-h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 dark:from-slate-950 dark:via-blue-950/20 dark:to-slate-950">
       <SEO
         title={t("errors.pageNotFound")}
         description={t("errors.pageNotFoundDescription")}
@@ -49,7 +49,10 @@ export default function NotFound() {
                 </span>
                 <div className="relative">
                   <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-white/20 flex items-center justify-center animate-bounce">
-                    <Plane className="w-12 h-12 md:w-14 md:h-14 text-white transform -rotate-45" />
+                    <Plane
+                      className="w-12 h-12 md:w-14 md:h-14 text-white transform -rotate-45"
+                      aria-hidden="true"
+                    />
                   </div>
                 </div>
                 <span className="text-8xl md:text-9xl font-black text-white/90">
@@ -81,14 +84,14 @@ export default function NotFound() {
                 variant="outline"
                 className="px-6 py-2.5 rounded-xl transition-all duration-200 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
+                <ArrowLeft className="w-4 h-4 mr-2" aria-hidden="true" />
                 {t("common.back")}
               </Button>
               <Button
                 onClick={handleGoHome}
                 className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg"
               >
-                <Home className="w-4 h-4 mr-2" />
+                <Home className="w-4 h-4 mr-2" aria-hidden="true" />
                 {t("errors.goHome")}
               </Button>
             </div>
@@ -102,7 +105,10 @@ export default function NotFound() {
                 {suggestions.map(item => (
                   <Link key={item.path + item.name} href={item.path}>
                     <div className="flex flex-col items-center p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer group">
-                      <item.icon className="w-5 h-5 text-slate-400 group-hover:text-blue-500 mb-2 transition-colors" />
+                      <item.icon
+                        className="w-5 h-5 text-slate-400 group-hover:text-blue-500 mb-2 transition-colors"
+                        aria-hidden="true"
+                      />
                       <span className="text-xs text-slate-600 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {item.name}
                       </span>
@@ -125,6 +131,6 @@ export default function NotFound() {
           </a>
         </p>
       </div>
-    </div>
+    </main>
   );
 }

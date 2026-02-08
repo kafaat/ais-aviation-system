@@ -602,16 +602,33 @@ jobs:
           version: "v1.29.0"
 
       - name: Configure kubectl
+        id: staging-kube-config
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
+          if [ -z "${{ secrets.STAGING_KUBECONFIG }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::warning::STAGING_KUBECONFIG secret is not set. Skipping Kubernetes deployment."
+          else
+            mkdir -p ~/.kube
+            echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify cluster connectivity
+        if: steps.staging-kube-config.outputs.configured == 'true'
+        run: |
+          if ! kubectl cluster-info --request-timeout=10s 2>/dev/null; then
+            echo "::error::Cannot connect to Kubernetes cluster. Check STAGING_KUBECONFIG secret."
+            exit 1
+          fi
 
       - name: Create deployment namespace
+        if: steps.staging-kube-config.outputs.configured == 'true'
         run: |
           kubectl create namespace ais-staging --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create/Update secrets
+        if: steps.staging-kube-config.outputs.configured == 'true'
         run: |
           kubectl create secret generic ais-secrets \
             --namespace=ais-staging \
@@ -623,6 +640,7 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Run database migrations
+        if: steps.staging-kube-config.outputs.configured == 'true'
         run: |
           kubectl run db-migrate-${{ github.run_id }} \
             --namespace=ais-staging \
@@ -635,6 +653,7 @@ jobs:
             --command -- npx drizzle-kit migrate
 
       - name: Deploy to Kubernetes
+        if: steps.staging-kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-staging"
@@ -644,19 +663,21 @@ jobs:
           envsubst < k8s/overlays/staging/ingress.yaml | kubectl apply -f -
 
       - name: Wait for rollout
+        if: steps.staging-kube-config.outputs.configured == 'true'
         run: |
           kubectl rollout status deployment/ais-api \
             --namespace=ais-staging \
             --timeout=300s
 
       - name: Run smoke tests
+        if: steps.staging-kube-config.outputs.configured == 'true'
         id: smoke-tests
         run: |
           chmod +x ./scripts/smoke-tests.sh
           ./scripts/smoke-tests.sh ${{ vars.STAGING_URL }}
 
       - name: Rollback on failure
-        if: failure() && steps.smoke-tests.outcome == 'failure'
+        if: failure() && steps.staging-kube-config.outputs.configured == 'true' && steps.smoke-tests.outcome == 'failure'
         run: |
           echo "Smoke tests failed, initiating rollback..."
           kubectl rollout undo deployment/ais-api --namespace=ais-staging
@@ -735,16 +756,33 @@ jobs:
           version: "v1.29.0"
 
       - name: Configure kubectl
+        id: kube-config
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
+          if [ -z "${{ secrets.PRODUCTION_KUBECONFIG }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::warning::PRODUCTION_KUBECONFIG secret is not set. Skipping Kubernetes deployment."
+          else
+            mkdir -p ~/.kube
+            echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify cluster connectivity
+        if: steps.kube-config.outputs.configured == 'true'
+        run: |
+          if ! kubectl cluster-info --request-timeout=10s 2>/dev/null; then
+            echo "::error::Cannot connect to Kubernetes cluster. Check PRODUCTION_KUBECONFIG secret."
+            exit 1
+          fi
 
       - name: Create deployment namespace
+        if: steps.kube-config.outputs.configured == 'true'
         run: |
           kubectl create namespace ais-production --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Create/Update secrets
+        if: steps.kube-config.outputs.configured == 'true'
         run: |
           kubectl create secret generic ais-secrets \
             --namespace=ais-production \
@@ -756,7 +794,7 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Backup database before migration
-        if: vars.ENABLE_DB_BACKUP == 'true'
+        if: steps.kube-config.outputs.configured == 'true' && vars.ENABLE_DB_BACKUP == 'true'
         continue-on-error: true
         run: |
           echo "Creating database backup before migration..."
@@ -771,6 +809,7 @@ jobs:
             --command -- sh -c "mysqldump -h ${{ secrets.PRODUCTION_DB_HOST }} -u ${{ secrets.PRODUCTION_DB_USER }} ${{ secrets.PRODUCTION_DB_NAME }} > /tmp/backup.sql && echo 'Backup completed'"
 
       - name: Run database migrations
+        if: steps.kube-config.outputs.configured == 'true'
         run: |
           kubectl run db-migrate-${{ github.run_id }} \
             --namespace=ais-production \
@@ -783,6 +822,7 @@ jobs:
             --command -- npx drizzle-kit migrate
 
       - name: Save current deployment for rollback
+        if: steps.kube-config.outputs.configured == 'true'
         id: save-current
         run: |
           CURRENT_IMAGE=$(kubectl get deployment ais-api -n ais-production -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
@@ -790,6 +830,7 @@ jobs:
           kubectl get deployment ais-api -n ais-production -o yaml > /tmp/current-deployment.yaml 2>/dev/null || true
 
       - name: Deploy to Kubernetes (Blue-Green)
+        if: steps.kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-production"
@@ -804,6 +845,7 @@ jobs:
             --timeout=300s
 
       - name: Run pre-switch health checks
+        if: steps.kube-config.outputs.configured == 'true'
         id: health-check
         run: |
           # Get new pod IPs and verify health
@@ -819,6 +861,7 @@ jobs:
           echo "All health checks passed"
 
       - name: Switch traffic to new deployment
+        if: steps.kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-production"
@@ -826,12 +869,14 @@ jobs:
           envsubst < k8s/overlays/production/ingress.yaml | kubectl apply -f -
 
       - name: Run smoke tests
+        if: steps.kube-config.outputs.configured == 'true'
         id: smoke-tests
         run: |
           chmod +x ./scripts/smoke-tests.sh
           ./scripts/smoke-tests.sh ${{ vars.PRODUCTION_URL }}
 
       - name: Run E2E tests (critical paths)
+        if: steps.kube-config.outputs.configured == 'true'
         id: e2e-tests
         continue-on-error: true
         run: |
@@ -843,7 +888,7 @@ jobs:
           fi
 
       - name: Rollback on failure
-        if: failure() && (steps.smoke-tests.outcome == 'failure' || steps.health-check.outcome == 'failure')
+        if: failure() && steps.kube-config.outputs.configured == 'true' && (steps.smoke-tests.outcome == 'failure' || steps.health-check.outcome == 'failure')
         run: |
           echo "Deployment verification failed, initiating rollback..."
 
@@ -863,7 +908,7 @@ jobs:
           exit 1
 
       - name: Create deployment record
-        if: success()
+        if: success() && steps.kube-config.outputs.configured == 'true'
         run: |
           echo "Recording successful deployment..."
           kubectl annotate deployment ais-api \
