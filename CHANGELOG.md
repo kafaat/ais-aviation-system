@@ -1,5 +1,32 @@
 # Changelog
 
+## What's Changed in v1.9.0
+
+### Features
+- feat: implement AI dynamic pricing system with ML demand forecasting, customer segmentation, revenue optimization, and A/B testing (afbe66f)
+
+### Bug Fixes
+- fix: integrate AI pricing with booking flow and add comprehensive tests (57195da)
+- fix: add E2E test support with data-testid attributes and dev login form (953a4b3)
+
+### Maintenance
+- ci: trigger fresh CI run after cancelled checks (8b58410)
+- ci: trigger CI re-run after format fix (bd3ef4d)
+
+### Other Changes
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (1d20359)
+- style: fix CHANGELOG.md formatting after merge from main (8742819)
+- login error 404 not found (38ca0ae)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (391b876)
+- style: format index.html after merge from main (802fe68)
+- Merge pull request #60 from kafaat/claude/implement-todo-zrBPj (ba0dc60)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.4...v1.9.0
+
+
+---
+
 ## What's Changed in v1.8.4
 
 ### Bug Fixes
