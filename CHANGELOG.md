@@ -3,23 +3,25 @@
 ## What's Changed in v1.10.0
 
 ### Features
+
 - feat: add FastAPI auth service with password-based authentication (c525250)
 
 ### Bug Fixes
+
 - fix: resolve non-DB E2E test failures (87d2f90)
 - fix: resolve login 404 by fixing CSP, service worker, and PWA config (d3da166)
 
 ### Maintenance
+
 - chore(release): v1.9.1 - docs update and security fixes (620d105)
 
 ### Other Changes
+
 - Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (acdb519)
 - Fix CHANGELOG.md Prettier formatting after merge from main (b47de0c)
 - Merge pull request #61 from kafaat/claude/implement-todo-zrBPj (ea14f48)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.9.0...v1.10.0
-
 
 ---
 
