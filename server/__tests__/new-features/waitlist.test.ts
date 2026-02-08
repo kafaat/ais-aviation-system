@@ -48,6 +48,11 @@ const createMockDb = () => {
     set: vi.fn().mockReturnThis(),
     leftJoin: vi.fn().mockReturnThis(),
     innerJoin: vi.fn().mockReturnThis(),
+    transaction: vi
+      .fn()
+      .mockImplementation(async (fn: (tx: typeof mockDb) => Promise<unknown>) =>
+        fn(mockDb)
+      ),
   };
 
   return mockDb;

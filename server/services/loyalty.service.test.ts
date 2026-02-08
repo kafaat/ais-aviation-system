@@ -54,6 +54,11 @@ const createMockDb = () => {
     update: vi.fn().mockReturnThis(),
     set: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
+    transaction: vi
+      .fn()
+      .mockImplementation(async (fn: (tx: typeof mockDb) => Promise<unknown>) =>
+        fn(mockDb)
+      ),
   };
 
   return mockDb;
@@ -173,8 +178,9 @@ describe("Loyalty Service", () => {
 
     mockDb._setResults(
       [bronzeAccount], // getOrCreateLoyaltyAccount: select existing
-      [], // update account
-      [{ insertId: 1 }] // insert miles transaction
+      [bronzeAccount], // tx: re-read account inside transaction
+      [], // tx: update account
+      [{ insertId: 1 }] // tx: insert miles transaction
     );
 
     const { awardMilesForBooking } = await import("./loyalty.service");
@@ -207,8 +213,9 @@ describe("Loyalty Service", () => {
 
     mockDb._setResults(
       [bronzeAccountWithPoints], // getOrCreateLoyaltyAccount: select
-      [], // update account
-      [{ insertId: 2 }] // insert miles transaction
+      [bronzeAccountWithPoints], // tx: re-read account inside transaction
+      [], // tx: update account
+      [{ insertId: 2 }] // tx: insert miles transaction
     );
 
     const { awardMilesForBooking } = await import("./loyalty.service");
@@ -237,8 +244,9 @@ describe("Loyalty Service", () => {
 
     mockDb._setResults(
       [silverAccount], // getOrCreateLoyaltyAccount: select
-      [], // update account
-      [{ insertId: 3 }] // insert miles transaction
+      [silverAccount], // tx: re-read account inside transaction
+      [], // tx: update account
+      [{ insertId: 3 }] // tx: insert miles transaction
     );
 
     const { awardMilesForBooking } = await import("./loyalty.service");
@@ -268,9 +276,9 @@ describe("Loyalty Service", () => {
     const milesToRedeem = 1000;
 
     mockDb._setResults(
-      [accountWithMiles], // getOrCreateLoyaltyAccount: select
-      [], // update account
-      [{ insertId: 4 }] // insert redemption transaction
+      [accountWithMiles], // tx: select account inside transaction
+      [], // tx: update account
+      [{ insertId: 4 }] // tx: insert redemption transaction
     );
 
     const { redeemMiles } = await import("./loyalty.service");
@@ -288,7 +296,7 @@ describe("Loyalty Service", () => {
     };
 
     mockDb._setResults(
-      [accountWithMiles] // getOrCreateLoyaltyAccount: select
+      [accountWithMiles] // tx: select account inside transaction (will throw insufficient)
     );
 
     const { redeemMiles } = await import("./loyalty.service");

@@ -109,11 +109,13 @@ describe("Flight Status Service", () => {
   });
 
   it("should cancel flight and refund all bookings", async () => {
-    // Reset flight to scheduled first
-    await updateFlightStatus({
-      flightId: testFlightId,
-      status: "scheduled",
-    });
+    // Reset flight to scheduled directly in DB (cancelled → scheduled is not a valid transition)
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
+    await db
+      .update(flights)
+      .set({ status: "scheduled" })
+      .where(eq(flights.id, testFlightId));
 
     const result = await cancelFlightAndRefund({
       flightId: testFlightId,
