@@ -190,7 +190,8 @@
     "confirmDeselect": "Would you like to deselect seat {{seat}}?",
     "select": "Select Seat",
     "deselect": "Deselect Seat",
-    "removeSeat": "Remove seat"
+    "removeSeat": "Remove seat",
+    "sectionDescription": "Choose your preferred seats on the aircraft"
   },
   "priceLock": {
     "lockPrice": "Lock Price",
