@@ -3,6 +3,7 @@
 ## What's Changed in v1.8.4
 
 ### Bug Fixes
+
 - fix: address security vulnerabilities and race conditions (bdf1e8e)
 - fix: UI fixes - icons, RTL support, accessibility, and dead links (7c11bad)
 - fix: resolve CI lint warnings and Docker build failure (e135804)
@@ -14,14 +15,13 @@
 - fix: resolve 8 failing test cases across 4 test files (df7b0b8)
 
 ### Other Changes
+
 - Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (60ee169)
 - style: fix CHANGELOG.md Prettier formatting (dec6b36)
 - Fix duplicate 'db' variable declaration in flight-status test (e33e840)
 - Merge pull request #59 from kafaat/claude/implement-todo-zrBPj (efcc30f)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.3...v1.8.4
-
 
 ---
 
