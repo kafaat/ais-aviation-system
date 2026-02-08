@@ -103,7 +103,9 @@ export async function createBooking(input: CreateBookingInput) {
       flight!,
       input.cabinClass,
       input.passengers.length,
-      input.passengers
+      input.passengers,
+      input.userId,
+      input.sessionId
     );
     const totalAmount = pricingResult.price;
 
