@@ -72,7 +72,7 @@ export default function CorporateDashboard() {
     isLoading: usersLoading,
     refetch: refetchUsers,
   } = trpc.corporate.getUsers.useQuery(
-    { corporateAccountId: account?.id || 0 },
+    { accountId: account?.id || 0 },
     { enabled: !!account }
   );
 
@@ -111,21 +111,21 @@ export default function CorporateDashboard() {
       case "pending":
         return (
           <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
-            <Clock className="h-3 w-3 mr-1" />
+            <Clock className="h-3 w-3 me-1" />
             {t("corporate.status.pending")}
           </Badge>
         );
       case "approved":
         return (
           <Badge variant="outline" className="bg-green-50 text-green-700">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
+            <CheckCircle2 className="h-3 w-3 me-1" />
             {t("corporate.status.approved")}
           </Badge>
         );
       case "rejected":
         return (
           <Badge variant="outline" className="bg-red-50 text-red-700">
-            <XCircle className="h-3 w-3 mr-1" />
+            <XCircle className="h-3 w-3 me-1" />
             {t("corporate.status.rejected")}
           </Badge>
         );
@@ -186,9 +186,9 @@ export default function CorporateDashboard() {
           <p className="text-muted-foreground mb-6">
             {t("corporate.noAccountDescription")}
           </p>
-          <Link href="/corporate/register">
+          <Link href="/corporate">
             <Button>
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4 me-2" />
               {t("corporate.registerAccount")}
             </Button>
           </Link>
@@ -236,7 +236,7 @@ export default function CorporateDashboard() {
           {getRoleBadge(account.role)}
           {account.discountPercent && Number(account.discountPercent) > 0 && (
             <Badge variant="outline" className="bg-green-50 text-green-700">
-              <Percent className="h-3 w-3 mr-1" />
+              <Percent className="h-3 w-3 me-1" />
               {account.discountPercent}% {t("corporate.discount")}
             </Badge>
           )}
@@ -346,7 +346,7 @@ export default function CorporateDashboard() {
                   <TableHead>{t("corporate.costCenter")}</TableHead>
                   <TableHead>{t("corporate.amount")}</TableHead>
                   <TableHead>{t("corporate.date")}</TableHead>
-                  <TableHead>{t("corporate.actions")}</TableHead>
+                  <TableHead>{t("common.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -415,7 +415,7 @@ export default function CorporateDashboard() {
           </h2>
           {isCorporateAdmin && (
             <Button size="sm" onClick={() => setAddUserDialogOpen(true)}>
-              <UserPlus className="h-4 w-4 mr-2" />
+              <UserPlus className="h-4 w-4 me-2" />
               {t("corporate.addMember")}
             </Button>
           )}

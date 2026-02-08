@@ -78,6 +78,12 @@ export const paymentsRouter = router({
       const productName = `Flight Booking - ${bookingData.bookingReference}`;
       const productDescription = `PNR: ${bookingData.pnr}`;
 
+      // Determine base URL, falling back to env var or protocol+host if Origin header is absent
+      const appBaseUrl =
+        ctx.req.headers.origin ||
+        process.env.VITE_APP_URL ||
+        `${ctx.req.protocol}://${ctx.req.get("host")}`;
+
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         line_items: [
@@ -98,8 +104,8 @@ export const paymentsRouter = router({
           },
         ],
         mode: "payment",
-        success_url: `${ctx.req.headers.origin}/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true`,
-        cancel_url: `${ctx.req.headers.origin}/booking/${input.bookingId}?canceled=true`,
+        success_url: `${appBaseUrl}/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true`,
+        cancel_url: `${appBaseUrl}/booking/${input.bookingId}?canceled=true`,
         customer_email: ctx.user.email || undefined,
         client_reference_id: ctx.user.id.toString(),
         metadata: {

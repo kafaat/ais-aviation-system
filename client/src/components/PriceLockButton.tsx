@@ -15,7 +15,7 @@ interface PriceLockButtonProps {
 export function PriceLockButton({
   flightId,
   cabinClass,
-  currentPrice,
+  currentPrice: _currentPrice,
 }: PriceLockButtonProps) {
   const { t } = useTranslation();
   const [isLocked, setIsLocked] = useState(false);
@@ -55,7 +55,7 @@ export function PriceLockButton({
           {t("priceLock.locked")}
         </span>
         <Badge variant="secondary" className="text-xs">
-          <Clock className="h-3 w-3 mr-1" />
+          <Clock className="h-3 w-3 me-1" />
           {hoursLeft}h
         </Badge>
       </div>
@@ -71,12 +71,12 @@ export function PriceLockButton({
       className="border-amber-200 text-amber-700 hover:bg-amber-50"
     >
       {lockMutation.isPending ? (
-        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+        <Loader2 className="h-4 w-4 me-2 animate-spin" />
       ) : (
-        <Lock className="h-4 w-4 mr-2" />
+        <Lock className="h-4 w-4 me-2" />
       )}
       {t("priceLock.lockPrice")}
-      <Badge variant="secondary" className="ml-2 text-xs">
+      <Badge variant="secondary" className="ms-2 text-xs">
         {(25).toFixed(0)} {t("common.sar")}
       </Badge>
     </Button>

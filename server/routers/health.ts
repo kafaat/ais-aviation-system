@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import {
   performHealthChecks,
   isReady,
@@ -15,7 +15,7 @@ export const healthRouter = router({
    * Comprehensive health check
    * Returns detailed status of all system components
    */
-  check: publicProcedure
+  check: adminProcedure
     .meta({
       openapi: {
         method: "GET",
@@ -23,7 +23,8 @@ export const healthRouter = router({
         tags: ["Health"],
         summary: "Comprehensive health check",
         description:
-          "Returns detailed status of all system components including database, cache, external services, and system resources. Use this for detailed diagnostics.",
+          "Returns detailed status of all system components including database, cache, external services, and system resources. Requires admin authentication.",
+        protect: true,
       },
     })
     .query(async () => {

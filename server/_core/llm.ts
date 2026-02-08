@@ -270,6 +270,9 @@ const normalizeResponseFormat = ({
   };
 };
 
+/** Timeout for LLM API calls (2 minutes - models with thinking can be slow) */
+const LLM_TIMEOUT_MS = 120_000;
+
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
@@ -283,6 +286,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     responseFormat,
     response_format,
   } = params;
+
+  if (!messages || messages.length === 0) {
+    throw new Error("invokeLLM requires at least one message");
+  }
 
   const payload: Record<string, unknown> = {
     model: "gemini-2.5-flash",
@@ -324,12 +331,13 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       authorization: `Bearer ${ENV.forgeApiKey}`,
     },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const _errorText = await response.text().catch(() => "");
     throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      `LLM invoke failed: ${response.status} ${response.statusText}`
     );
   }
 

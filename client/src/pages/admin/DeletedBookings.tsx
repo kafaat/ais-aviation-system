@@ -146,22 +146,22 @@ export default function DeletedBookings() {
               <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase">
+                    <th className="text-start p-4 text-xs font-medium text-muted-foreground uppercase">
                       {t("deletedBookings.booking", "Booking")}
                     </th>
-                    <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase">
+                    <th className="text-start p-4 text-xs font-medium text-muted-foreground uppercase">
                       {t("deletedBookings.flight", "Flight")}
                     </th>
-                    <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase">
+                    <th className="text-start p-4 text-xs font-medium text-muted-foreground uppercase">
                       {t("deletedBookings.amount", "Amount")}
                     </th>
-                    <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase">
+                    <th className="text-start p-4 text-xs font-medium text-muted-foreground uppercase">
                       {t("deletedBookings.status", "Status")}
                     </th>
-                    <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase">
+                    <th className="text-start p-4 text-xs font-medium text-muted-foreground uppercase">
                       {t("deletedBookings.deletedOn", "Deleted On")}
                     </th>
-                    <th className="text-left p-4 text-xs font-medium text-muted-foreground uppercase">
+                    <th className="text-start p-4 text-xs font-medium text-muted-foreground uppercase">
                       {t("deletedBookings.actions", "Actions")}
                     </th>
                   </tr>

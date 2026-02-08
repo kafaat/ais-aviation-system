@@ -30,11 +30,16 @@ export const flightsRouter = router({
       },
     })
     .input(
-      z.object({
-        originId: z.number().describe("Origin airport ID"),
-        destinationId: z.number().describe("Destination airport ID"),
-        departureDate: z.date().describe("Departure date (ISO 8601 format)"),
-      })
+      z
+        .object({
+          originId: z.number().describe("Origin airport ID"),
+          destinationId: z.number().describe("Destination airport ID"),
+          departureDate: z.date().describe("Departure date (ISO 8601 format)"),
+        })
+        .refine(data => data.originId !== data.destinationId, {
+          message: "Origin and destination airports must be different",
+          path: ["destinationId"],
+        })
     )
     .query(async ({ input, ctx }) => {
       const startTime = Date.now();

@@ -119,6 +119,7 @@ export function GateChangeAlert({
               size="icon"
               onClick={onDismiss}
               className="h-8 w-8 text-amber-600 hover:text-amber-800"
+              aria-label={t("common.close")}
             >
               <X className="h-4 w-4" />
             </Button>

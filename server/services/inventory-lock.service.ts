@@ -24,35 +24,72 @@ export async function createInventoryLock(
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
-    // Clean up expired locks first
     await releaseExpiredLocks();
 
-    // Check available seats (considering active locks)
-    const available = await getAvailableSeats(flightId, cabinClass);
-
-    if (available < numberOfSeats) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Only ${available} seats available. Requested: ${numberOfSeats}`,
-      });
-    }
-
-    // Create lock
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + LOCK_DURATION_MINUTES);
 
-    const [result] = await database.insert(inventoryLocks).values({
-      flightId,
-      numberOfSeats,
-      cabinClass,
-      sessionId,
-      userId,
-      status: "active",
-      expiresAt,
+    const result = await database.transaction(async tx => {
+      const [flight] = await tx
+        .select({
+          economyAvailable: flights.economyAvailable,
+          businessAvailable: flights.businessAvailable,
+        })
+        .from(flights)
+        .where(eq(flights.id, flightId))
+        .for("update")
+        .limit(1);
+
+      if (!flight) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Flight not found",
+        });
+      }
+
+      const currentAvailable =
+        cabinClass === "economy"
+          ? flight.economyAvailable
+          : flight.businessAvailable;
+
+      const [lockResult] = await tx
+        .select({
+          lockedSeats: sql<number>`COALESCE(SUM(${inventoryLocks.numberOfSeats}), 0)`,
+        })
+        .from(inventoryLocks)
+        .where(
+          and(
+            eq(inventoryLocks.flightId, flightId),
+            eq(inventoryLocks.cabinClass, cabinClass),
+            eq(inventoryLocks.status, "active")
+          )
+        );
+
+      const lockedSeats = lockResult?.lockedSeats || 0;
+      const available = Math.max(0, currentAvailable - lockedSeats);
+
+      if (available < numberOfSeats) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Only ${available} seats available. Requested: ${numberOfSeats}`,
+        });
+      }
+
+      const [insertResult] = await tx.insert(inventoryLocks).values({
+        flightId,
+        numberOfSeats,
+        cabinClass,
+        sessionId,
+        userId,
+        status: "active",
+        expiresAt,
+      });
+
+      return { lockId: (insertResult as any).insertId };
     });
 
     return {
-      lockId: (result as any).insertId,
+      lockId: result.lockId,
       expiresAt,
     };
   } catch (error) {
@@ -165,11 +202,10 @@ export async function getAvailableSeats(
     // Clean up expired locks first
     await releaseExpiredLocks();
 
-    // Get flight capacity
     const [flight] = await database
       .select({
-        economySeats: flights.economySeats,
-        businessSeats: flights.businessSeats,
+        economyAvailable: flights.economyAvailable,
+        businessAvailable: flights.businessAvailable,
       })
       .from(flights)
       .where(eq(flights.id, flightId))
@@ -182,10 +218,11 @@ export async function getAvailableSeats(
       });
     }
 
-    const totalCapacity =
-      cabinClass === "economy" ? flight.economySeats : flight.businessSeats;
+    const currentAvailable =
+      cabinClass === "economy"
+        ? flight.economyAvailable
+        : flight.businessAvailable;
 
-    // Count active locks for this flight and cabin class
     const [lockResult] = await database
       .select({
         lockedSeats: sql<number>`COALESCE(SUM(${inventoryLocks.numberOfSeats}), 0)`,
@@ -201,11 +238,7 @@ export async function getAvailableSeats(
 
     const lockedSeats = lockResult?.lockedSeats || 0;
 
-    // Count confirmed bookings (this should come from bookings table)
-    // For now, we'll use the flight's availableSeats field
-    // In a real system, you'd query the bookings table
-
-    const available = totalCapacity - lockedSeats;
+    const available = currentAvailable - lockedSeats;
 
     return Math.max(0, available);
   } catch (error) {

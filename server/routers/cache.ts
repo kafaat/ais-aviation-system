@@ -20,10 +20,9 @@ export const cacheRouter = router({
   }),
 
   /**
-   * Get detailed cache statistics
-   * Public endpoint for monitoring dashboards
+   * Get detailed cache statistics (admin only)
    */
-  stats: publicProcedure.query(async () => {
+  stats: adminProcedure.query(async () => {
     return await redisCacheService.getStats();
   }),
 

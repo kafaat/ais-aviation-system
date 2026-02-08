@@ -314,7 +314,7 @@ export default function CorporateManagement() {
                   <TableHead>{t("corporate.admin.contact")}</TableHead>
                   <TableHead>{t("corporate.admin.creditLimit")}</TableHead>
                   <TableHead>{t("corporate.admin.discount")}</TableHead>
-                  <TableHead>{t("corporate.admin.status")}</TableHead>
+                  <TableHead>{t("common.status")}</TableHead>
                   <TableHead>{t("corporate.admin.createdAt")}</TableHead>
                   <TableHead>{t("corporate.admin.actions")}</TableHead>
                 </TableRow>
@@ -498,7 +498,7 @@ export default function CorporateManagement() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    {t("corporate.admin.status")}
+                    {t("common.status")}
                   </p>
                   {getStatusBadge(selectedAccount.status)}
                 </div>

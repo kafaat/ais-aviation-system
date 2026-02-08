@@ -767,10 +767,10 @@ export default function LoyaltyDashboard() {
                             <TableHead className="font-semibold">
                               {t("loyalty.description")}
                             </TableHead>
-                            <TableHead className="text-right font-semibold">
+                            <TableHead className="text-end font-semibold">
                               {t("loyalty.miles")}
                             </TableHead>
-                            <TableHead className="text-right font-semibold">
+                            <TableHead className="text-end font-semibold">
                               {t("loyalty.balance")}
                             </TableHead>
                           </TableRow>
@@ -829,7 +829,7 @@ export default function LoyaltyDashboard() {
                                     <TableCell className="max-w-xs truncate text-muted-foreground">
                                       {tx.description || "-"}
                                     </TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell className="text-end">
                                       <span
                                         className={`font-semibold ${
                                           isEarning
@@ -841,7 +841,7 @@ export default function LoyaltyDashboard() {
                                         {tx.amount.toLocaleString()}
                                       </span>
                                     </TableCell>
-                                    <TableCell className="text-right font-medium">
+                                    <TableCell className="text-end font-medium">
                                       {tx.balanceAfter.toLocaleString()}
                                     </TableCell>
                                   </motion.tr>

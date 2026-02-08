@@ -3,6 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { OpenApiMeta } from "trpc-openapi";
 import type { TrpcContext } from "./context";
+import { isAdmin } from "../services/rbac.service";
 
 /**
  * Initialize tRPC with OpenAPI metadata support
@@ -43,7 +44,7 @@ export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    if (!ctx.user || ctx.user.role !== "admin") {
+    if (!ctx.user || !isAdmin(ctx.user.role)) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 

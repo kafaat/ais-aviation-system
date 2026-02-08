@@ -358,7 +358,7 @@ export default function RebookPage() {
 
                         {/* Price & Select */}
                         <div className="flex md:flex-col items-center md:items-end gap-3 md:gap-2">
-                          <div className="text-right">
+                          <div className="text-end">
                             <p className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                               {(price / 100).toFixed(0)}{" "}
                               <span className="text-sm">

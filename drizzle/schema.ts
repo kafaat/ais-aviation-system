@@ -631,8 +631,10 @@ export const userPreferences = mysqlTable(
     ]),
 
     // Special services
-    wheelchairAssistance: boolean("wheelchairAssistance").default(false),
-    extraLegroom: boolean("extraLegroom").default(false),
+    wheelchairAssistance: boolean("wheelchairAssistance")
+      .default(false)
+      .notNull(),
+    extraLegroom: boolean("extraLegroom").default(false).notNull(),
 
     // Saved passport info
     passportNumber: varchar("passportNumber", { length: 50 }),
@@ -645,11 +647,11 @@ export const userPreferences = mysqlTable(
     emergencyPhone: varchar("emergencyPhone", { length: 20 }),
 
     // Notification preferences
-    emailNotifications: boolean("emailNotifications").default(true),
-    smsNotifications: boolean("smsNotifications").default(false),
+    emailNotifications: boolean("emailNotifications").default(true).notNull(),
+    smsNotifications: boolean("smsNotifications").default(false).notNull(),
 
     // Auto check-in preference
-    autoCheckIn: boolean("autoCheckIn").default(false),
+    autoCheckIn: boolean("autoCheckIn").default(false).notNull(),
 
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -772,7 +774,7 @@ export const flightReviews = mysqlTable(
     ratingIdx: index("rating_idx").on(table.rating),
     statusIdx: index("status_idx").on(table.status),
     // Unique constraint: one review per user per flight
-    userFlightUnique: index("user_flight_unique").on(
+    userFlightUnique: uniqueIndex("user_flight_unique").on(
       table.userId,
       table.flightId
     ),
@@ -816,7 +818,7 @@ export const favoriteFlights = mysqlTable(
       table.maxPrice
     ),
     // Unique constraint: one favorite per user per route/airline combination
-    userRouteFavoriteUnique: index("user_route_favorite_unique").on(
+    userRouteFavoriteUnique: uniqueIndex("user_route_favorite_unique").on(
       table.userId,
       table.originId,
       table.destinationId,
@@ -1507,6 +1509,7 @@ export const waitlist = mysqlTable(
     flightIdx: index("waitlist_flight_idx").on(table.flightId),
     userIdx: index("waitlist_user_idx").on(table.userId),
     statusIdx: index("waitlist_status_idx").on(table.status),
+    bookingIdIdx: index("waitlist_booking_id_idx").on(table.bookingId),
     priorityIdx: index("waitlist_priority_idx").on(
       table.flightId,
       table.cabinClass,
@@ -2061,7 +2064,7 @@ export const userFlightFavorites = mysqlTable(
       table.flightId
     ),
     // Unique constraint: one favorite per user per flight
-    userFlightUnique: index("user_flight_favorites_unique_idx").on(
+    userFlightUnique: uniqueIndex("user_flight_favorites_unique_idx").on(
       table.userId,
       table.flightId
     ),
@@ -2104,7 +2107,7 @@ export const priceAlerts = mysqlTable(
       table.lastChecked
     ),
     // Unique constraint: one alert per user per route per cabin class
-    userRouteUnique: index("price_alerts_user_route_unique_idx").on(
+    userRouteUnique: uniqueIndex("price_alerts_user_route_unique_idx").on(
       table.userId,
       table.originId,
       table.destinationId,
@@ -2545,10 +2548,9 @@ export const corporateUsers = mysqlTable(
     userIdIdx: index("corporate_users_user_id_idx").on(table.userId),
     roleIdx: index("corporate_users_role_idx").on(table.role),
     // Unique constraint: one user can only be in one corporate account
-    userAccountUnique: index("corporate_users_user_account_unique_idx").on(
-      table.userId,
-      table.corporateAccountId
-    ),
+    userAccountUnique: uniqueIndex(
+      "corporate_users_user_account_unique_idx"
+    ).on(table.userId, table.corporateAccountId),
     isActiveIdx: index("corporate_users_is_active_idx").on(table.isActive),
   })
 );
@@ -2863,7 +2865,7 @@ export const airportGates = mysqlTable(
       table.type
     ),
     // Unique constraint: one gate number per airport
-    airportGateUnique: index("airport_gates_airport_gate_unique_idx").on(
+    airportGateUnique: uniqueIndex("airport_gates_airport_gate_unique_idx").on(
       table.airportId,
       table.gateNumber
     ),
@@ -3053,10 +3055,9 @@ export const voucherUsage = mysqlTable(
     bookingIdIdx: index("voucher_usage_booking_id_idx").on(table.bookingId),
     usedAtIdx: index("voucher_usage_used_at_idx").on(table.usedAt),
     // Unique constraint: one voucher use per booking
-    voucherBookingUnique: index("voucher_usage_voucher_booking_unique").on(
-      table.voucherId,
-      table.bookingId
-    ),
+    voucherBookingUnique: uniqueIndex(
+      "voucher_usage_voucher_booking_unique"
+    ).on(table.voucherId, table.bookingId),
   })
 );
 

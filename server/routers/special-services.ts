@@ -7,6 +7,9 @@ import {
 } from "../_core/trpc";
 import * as specialServicesService from "../services/special-services.service";
 import { TRPCError } from "@trpc/server";
+import { getDb } from "../db";
+import { bookings, passengers } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * Special Services Router
@@ -42,7 +45,35 @@ export const specialServicesRouter = router({
         details: z.any().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Verify booking ownership
+      const db = await getDb();
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+
+      const [booking] = await db
+        .select({ userId: bookings.userId })
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+
+      if (!booking) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      }
+
+      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You are not authorized to modify this booking",
+        });
+      }
+
       try {
         const service = await specialServicesService.requestService({
           bookingId: input.bookingId,
@@ -57,6 +88,7 @@ export const specialServicesRouter = router({
           service,
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         const message =
           error instanceof Error ? error.message : "Failed to request service";
         throw new TRPCError({
@@ -76,13 +108,42 @@ export const specialServicesRouter = router({
         bookingId: z.number(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Verify booking ownership
+      const db = await getDb();
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+
+      const [booking] = await db
+        .select({ userId: bookings.userId })
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+
+      if (!booking) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      }
+
+      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied",
+        });
+      }
+
       try {
         const services = await specialServicesService.getBookingServices(
           input.bookingId
         );
         return services;
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         const message =
           error instanceof Error ? error.message : "Failed to get services";
         throw new TRPCError({
@@ -129,7 +190,7 @@ export const specialServicesRouter = router({
         serviceId: z.number(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const service = await specialServicesService.getServiceById(
         input.serviceId
       );
@@ -138,6 +199,30 @@ export const specialServicesRouter = router({
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Special service not found",
+        });
+      }
+
+      // Verify booking ownership
+      const db = await getDb();
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+
+      const [booking] = await db
+        .select({ userId: bookings.userId })
+        .from(bookings)
+        .where(eq(bookings.id, service.bookingId))
+        .limit(1);
+
+      if (
+        !booking ||
+        (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied",
         });
       }
 
@@ -154,13 +239,51 @@ export const specialServicesRouter = router({
         passengerId: z.number(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Verify passenger belongs to a booking owned by the user
+      const db = await getDb();
+      if (!db)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+
+      const [passenger] = await db
+        .select({ bookingId: passengers.bookingId })
+        .from(passengers)
+        .where(eq(passengers.id, input.passengerId))
+        .limit(1);
+
+      if (!passenger) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Passenger not found",
+        });
+      }
+
+      const [booking] = await db
+        .select({ userId: bookings.userId })
+        .from(bookings)
+        .where(eq(bookings.id, passenger.bookingId))
+        .limit(1);
+
+      if (
+        !booking ||
+        (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied",
+        });
+      }
+
       try {
         const services = await specialServicesService.getPassengerServices(
           input.passengerId
         );
         return services;
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         const message =
           error instanceof Error ? error.message : "Failed to get services";
         throw new TRPCError({

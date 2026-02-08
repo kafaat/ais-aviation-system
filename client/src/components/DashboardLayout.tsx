@@ -302,7 +302,7 @@ function DashboardLayoutContent({
           disableTransition={isResizing}
         >
           <SidebarHeader className="h-16 justify-center border-b border-border/40">
-            <div className="flex items-center gap-3 pl-2 group-data-[collapsible=icon]:px-0 transition-all w-full">
+            <div className="flex items-center gap-3 ps-2 group-data-[collapsible=icon]:px-0 transition-all w-full">
               {isCollapsed ? (
                 <div className="relative h-9 w-9 shrink-0 group">
                   <img
@@ -340,7 +340,7 @@ function DashboardLayoutContent({
                   </div>
                   <button
                     onClick={toggleSidebar}
-                    className="ml-auto h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
+                    className="ms-auto h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
                     aria-label={t("accessibility.collapseSidebar")}
                   >
                     <PanelLeft
@@ -416,14 +416,14 @@ function DashboardLayoutContent({
                   onClick={() => setLocation("/profile")}
                   className="cursor-pointer"
                 >
-                  <User className="mr-2 h-4 w-4" aria-hidden="true" />
+                  <User className="me-2 h-4 w-4" aria-hidden="true" />
                   <span>{t("nav.profile")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setLocation("/loyalty")}
                   className="cursor-pointer"
                 >
-                  <Star className="mr-2 h-4 w-4" aria-hidden="true" />
+                  <Star className="me-2 h-4 w-4" aria-hidden="true" />
                   <span>{t("nav.loyalty")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -431,7 +431,7 @@ function DashboardLayoutContent({
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
-                  <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
+                  <LogOut className="me-2 h-4 w-4" aria-hidden="true" />
                   <span>{t("common.logout")}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -439,7 +439,7 @@ function DashboardLayoutContent({
           </SidebarFooter>
         </Sidebar>
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute top-0 end-0 w-1 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors ${isCollapsed ? "hidden" : ""}`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsResizing(true);

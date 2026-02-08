@@ -206,6 +206,7 @@ export default function MyWaitlist() {
                 variant="ghost"
                 size="icon"
                 className="rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+                aria-label={t("common.back")}
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
@@ -338,7 +339,7 @@ export default function MyWaitlist() {
                             </p>
                           </div>
                           {entry.status === "waiting" && (
-                            <div className="text-right">
+                            <div className="text-end">
                               <p className="text-xs text-muted-foreground">
                                 {t("waitlist.position")}
                               </p>
@@ -412,7 +413,7 @@ export default function MyWaitlist() {
                                   {entry.seats === 1
                                     ? t("waitlist.passenger")
                                     : t("waitlist.passengers")}
-                                  <span className="text-sm font-normal text-muted-foreground ml-2">
+                                  <span className="text-sm font-normal text-muted-foreground ms-2">
                                     ({t(`cabin.${entry.cabinClass}`)})
                                   </span>
                                 </p>
@@ -424,7 +425,7 @@ export default function MyWaitlist() {
 
                       {/* Actions */}
                       <div className="lg:col-span-4 flex flex-col justify-between">
-                        <div className="text-center lg:text-right mb-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl">
+                        <div className="text-center lg:text-end mb-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 rounded-xl">
                           <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
                             {t("waitlist.joinedOn")}
                           </p>

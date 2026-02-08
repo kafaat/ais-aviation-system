@@ -325,7 +325,7 @@ export async function sendPaymentRequest(splitId: number): Promise<boolean> {
     .limit(1);
 
   // Generate payment URL
-  const baseUrl = process.env.VITE_APP_URL || "http://localhost:3000";
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
   const paymentUrl = `${baseUrl}/pay/${split.paymentToken}`;
 
   // Send email
@@ -493,7 +493,7 @@ export async function processPayerPayment(
   }
 
   // Create Stripe checkout session
-  const baseUrl = process.env.VITE_APP_URL || "http://localhost:3000";
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ["card"],

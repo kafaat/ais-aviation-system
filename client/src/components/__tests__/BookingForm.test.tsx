@@ -20,7 +20,7 @@ vi.mock("react-i18next", () => ({
         "booking.addPassenger": "Add Passenger",
         "booking.passenger": "Passenger",
         "booking.passengerType": "Passenger Type",
-        "booking.title": "Title",
+        "booking.honorific": "Title",
         "booking.firstName": "First Name",
         "booking.lastName": "Last Name",
         "booking.passportNumber": "Passport Number",

@@ -1,5 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
+import { getDb } from "../db";
+import { payments } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 import {
   trackPaymentInitiated,
@@ -86,14 +89,14 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
               name: `Flight Booking - ${booking.bookingReference}`,
               description: `PNR: ${booking.pnr}`,
             },
-            unit_amount: Math.round(input.amount * 100), // Convert to cents
+            unit_amount: input.amount,
           },
           quantity: 1,
         },
       ],
       mode: "payment",
-      success_url: `${process.env.VITE_APP_URL || "http://localhost:3000"}/booking-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.VITE_APP_URL || "http://localhost:3000"}/booking-cancelled`,
+      success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/booking-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/booking-cancelled`,
       metadata: {
         bookingId: input.bookingId.toString(),
         userId: input.userId.toString(),
@@ -156,13 +159,20 @@ export async function handlePaymentSuccess(
       ? parseInt(session.metadata.userId)
       : undefined;
 
-    // Get booking details for metrics tracking
     const booking = await db.getBookingByIdWithDetails(bookingId);
 
-    // Update payment status
-    await db.updatePaymentStatus(bookingId, "completed", paymentIntentId);
+    const database = await getDb();
+    if (!database) throw new Error("Database not available");
 
-    // Update booking status
+    await database
+      .update(payments)
+      .set({
+        status: "completed",
+        transactionId: paymentIntentId,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.bookingId, bookingId));
+
     await db.updateBookingStatus(bookingId, "confirmed");
 
     // Track payment success event for metrics
@@ -209,11 +219,18 @@ export async function handlePaymentFailure(sessionId: string) {
       ? parseInt(session.metadata.userId)
       : undefined;
 
-    // Get booking details for metrics tracking
     const booking = await db.getBookingByIdWithDetails(bookingId);
 
-    // Update payment status
-    await db.updatePaymentStatus(bookingId, "failed");
+    const database = await getDb();
+    if (!database) throw new Error("Database not available");
+
+    await database
+      .update(payments)
+      .set({
+        status: "failed",
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.bookingId, bookingId));
 
     // Track payment failure event for metrics
     if (booking && userId) {

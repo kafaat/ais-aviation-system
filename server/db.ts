@@ -361,23 +361,32 @@ export function calculateOffset(page: number, limit: number): number {
  * More efficient than fetching all rows and counting
  */
 export async function efficientCount(
-  table: Parameters<typeof sql.raw>[0],
+  tableName: string,
   whereClause?: SQL
 ): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
 
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+    log.error(
+      { event: "invalid_table_name", tableName },
+      "Invalid table name for count query"
+    );
+    return 0;
+  }
+
   try {
+    const tableIdentifier = sql.raw(tableName);
     const countQuery = whereClause
-      ? sql`SELECT COUNT(*) as count FROM ${table} WHERE ${whereClause}`
-      : sql`SELECT COUNT(*) as count FROM ${table}`;
+      ? sql`SELECT COUNT(*) as count FROM ${tableIdentifier} WHERE ${whereClause}`
+      : sql`SELECT COUNT(*) as count FROM ${tableIdentifier}`;
 
     const result = await db.execute(countQuery);
     const rows = result as unknown as Array<Array<{ count: number | bigint }>>;
     return Number(rows[0]?.[0]?.count ?? 0);
   } catch (error) {
     log.error(
-      { event: "count_query_failed", table, error },
+      { event: "count_query_failed", tableName, error },
       "Failed to execute count query"
     );
     return 0;
@@ -723,13 +732,16 @@ export async function getBookingByIdWithDetails(id: number) {
   return result.length > 0 ? result[0] : null;
 }
 
-export async function updateBookingStatus(id: number, status: string) {
+export async function updateBookingStatus(
+  id: number,
+  status: "pending" | "confirmed" | "cancelled" | "completed"
+) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   await db
     .update(bookings)
-    .set({ status: status as any, updatedAt: new Date() })
+    .set({ status, updatedAt: new Date() })
     .where(eq(bookings.id, id));
 }
 
@@ -762,13 +774,16 @@ export async function createPayment(data: InsertPayment) {
 
 export async function updatePaymentStatus(
   id: number,
-  status: string,
+  status: "pending" | "completed" | "failed" | "refunded",
   transactionId?: string
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const updateData: any = { status, updatedAt: new Date() };
+  const updateData: Partial<InsertPayment> & { updatedAt: Date } = {
+    status,
+    updatedAt: new Date(),
+  };
   if (transactionId) {
     updateData.transactionId = transactionId;
   }

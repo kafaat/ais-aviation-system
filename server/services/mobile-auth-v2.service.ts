@@ -398,7 +398,8 @@ export const mobileAuthServiceV2 = {
         and(eq(refreshTokens.userId, userId), isNull(refreshTokens.revokedAt))
       );
 
-    const revokedCount = (result as any).rowsAffected || 0;
+    const revokedCount =
+      (result as any).rowsAffected || (result as any)[0]?.affectedRows || 0;
     console.log(`[Auth] Revoked ${revokedCount} tokens for user ${userId}`);
     return revokedCount;
   },
@@ -422,7 +423,8 @@ export const mobileAuthServiceV2 = {
         .delete(refreshTokens)
         .where(lt(refreshTokens.expiresAt, now));
 
-      const deletedCount = (result as any).rowsAffected || 0;
+      const deletedCount =
+        (result as any).rowsAffected || (result as any)[0]?.affectedRows || 0;
       console.log(`[Auth] Cleaned up ${deletedCount} expired tokens`);
       return deletedCount;
     } catch (err) {

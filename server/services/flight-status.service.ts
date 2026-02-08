@@ -17,9 +17,18 @@ import { notifyFlightStatusUpdate } from "./notification.service";
  * Handles flight status changes and notifications
  */
 
+export type FlightStatus = "scheduled" | "delayed" | "cancelled" | "completed";
+
+const VALID_FLIGHT_STATUS_TRANSITIONS: Record<FlightStatus, FlightStatus[]> = {
+  scheduled: ["delayed", "cancelled", "completed"],
+  delayed: ["scheduled", "cancelled", "completed"],
+  cancelled: [],
+  completed: [],
+};
+
 export interface FlightStatusUpdate {
   flightId: number;
-  status: "scheduled" | "delayed" | "cancelled" | "completed";
+  status: FlightStatus;
   delayMinutes?: number;
   reason?: string;
   adminUserId?: number;
@@ -52,8 +61,15 @@ export async function updateFlightStatus(
       throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
     }
 
-    // Get current status before updating
-    const oldStatus = flight.status;
+    const oldStatus = flight.status as FlightStatus;
+
+    const allowedTransitions = VALID_FLIGHT_STATUS_TRANSITIONS[oldStatus];
+    if (!allowedTransitions || !allowedTransitions.includes(status)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Invalid status transition from '${oldStatus}' to '${status}'`,
+      });
+    }
 
     // Update flight status
     await database
@@ -140,7 +156,7 @@ export async function updateFlightStatus(
               origin: `${originAirport?.city ?? "Unknown"} (${originAirport?.code ?? "?"})`,
               destination: `${destAirport?.city ?? "Unknown"} (${destAirport?.code ?? "?"})`,
               departureTime: flight.departureTime,
-              oldStatus: "scheduled",
+              oldStatus,
               newStatus: status,
               delayMinutes,
               reason,

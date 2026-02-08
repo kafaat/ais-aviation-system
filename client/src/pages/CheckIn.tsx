@@ -83,10 +83,11 @@ function BoardingPass({
   bookingReference: string;
   index: number;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language === "ar" ? "ar-SA" : "en-US";
 
   const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString("en-US", {
+    return new Date(date).toLocaleTimeString(locale, {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
@@ -94,7 +95,7 @@ function BoardingPass({
   };
 
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString("en-US", {
+    return new Date(date).toLocaleDateString(locale, {
       weekday: "short",
       day: "numeric",
       month: "short",
@@ -390,7 +391,12 @@ export default function CheckIn() {
         <div className="container py-4">
           <div className="flex items-center gap-4">
             <Link href="/">
-              <Button variant="ghost" size="icon" className="hover:bg-blue-50">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-blue-50"
+                aria-label={t("common.back")}
+              >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </Link>

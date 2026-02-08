@@ -9,6 +9,9 @@ export type NotificationPayload = {
 const TITLE_MAX_LENGTH = 1200;
 const CONTENT_MAX_LENGTH = 20000;
 
+/** Timeout for notification service calls */
+const NOTIFICATION_TIMEOUT_MS = 15_000;
+
 const trimValue = (value: string): string => value.trim();
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
@@ -92,6 +95,7 @@ export async function notifyOwner(
         "connect-protocol-version": "1",
       },
       body: JSON.stringify({ title, content }),
+      signal: AbortSignal.timeout(NOTIFICATION_TIMEOUT_MS),
     });
 
     if (!response.ok) {

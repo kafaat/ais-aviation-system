@@ -2,9 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Card } from "./ui/card";
-import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { Separator } from "./ui/separator";
 import {
   UtensilsCrossed,
   Leaf,
@@ -112,14 +110,14 @@ export function MealPreOrder({
               key={meal.id}
               onClick={() => handleSelectMeal(meal)}
               disabled={addToBooking.isPending}
-              className={`relative p-4 rounded-lg border-2 text-left transition-all ${
+              className={`relative p-4 rounded-lg border-2 text-start transition-all ${
                 isSelected
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/50 hover:bg-accent/50"
               }`}
             >
               {isSelected && (
-                <div className="absolute top-2 right-2">
+                <div className="absolute top-2 end-2">
                   <Check className="h-4 w-4 text-primary" />
                 </div>
               )}

@@ -98,9 +98,13 @@ export function errorResponseMiddleware(
 /**
  * Sanitize request body to remove sensitive data
  */
-function sanitizeBody(body: unknown): unknown {
-  if (!body || typeof body !== "object") {
+function sanitizeBody(body: unknown, depth: number = 0): unknown {
+  if (!body || typeof body !== "object" || depth > 5) {
     return body;
+  }
+
+  if (Array.isArray(body)) {
+    return body.map(item => sanitizeBody(item, depth + 1));
   }
 
   const sensitiveKeys = [
@@ -108,6 +112,7 @@ function sanitizeBody(body: unknown): unknown {
     "token",
     "secret",
     "apiKey",
+    "apiSecret",
     "authorization",
     "creditCard",
     "cardNumber",
@@ -121,6 +126,8 @@ function sanitizeBody(body: unknown): unknown {
     const lowerKey = key.toLowerCase();
     if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
       sanitized[key] = "[REDACTED]";
+    } else if (typeof sanitized[key] === "object" && sanitized[key] !== null) {
+      sanitized[key] = sanitizeBody(sanitized[key], depth + 1);
     }
   }
 
@@ -137,6 +144,7 @@ function sanitizeHeaders(
     "authorization",
     "cookie",
     "x-api-key",
+    "x-api-secret",
     "x-auth-token",
   ];
 

@@ -371,10 +371,11 @@ class RedisCacheService {
    * Generate hash from parameters
    */
   private hashParams(params: unknown): string {
-    const normalized = JSON.stringify(
-      params,
-      Object.keys(params as object).sort()
-    );
+    const replacer =
+      params && typeof params === "object" && !Array.isArray(params)
+        ? Object.keys(params).sort()
+        : undefined;
+    const normalized = JSON.stringify(params, replacer);
     return crypto
       .createHash("sha256")
       .update(normalized)
@@ -914,23 +915,29 @@ class RedisCacheService {
     }
 
     try {
+      await this.redisClient!.set(key, 0, "EX", windowSeconds, "NX");
+
       const multi = this.redisClient!.multi();
       multi.incr(key);
       multi.ttl(key);
 
       const results = await multi.exec();
-      if (!results) {
+      if (!results || results[0][0] || results[1][0]) {
         return { allowed: true, remaining: limit, resetIn: windowSeconds };
       }
 
       const current = results[0][1] as number;
       let ttl = results[1][1] as number;
 
-      // Set TTL on first request
+      // Safety: if the key expired between SET NX and INCR, the INCR creates
+      // a new key with no TTL (ttl === -1). Re-apply the expiry to prevent
+      // a permanently stuck rate limit counter.
       if (ttl === -1) {
         await this.redisClient!.expire(key, windowSeconds);
         ttl = windowSeconds;
       }
+
+      ttl = Math.max(ttl, 1);
 
       const allowed = current <= limit;
       const remaining = Math.max(0, limit - current);

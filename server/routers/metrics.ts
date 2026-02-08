@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { publicProcedure, router } from "../_core/trpc";
+import { adminProcedure, router } from "../_core/trpc";
 import {
   getPrometheusMetrics,
   getMetricsJson,
@@ -34,7 +34,7 @@ export const metricsRouter = router({
    * NOTE: For production Prometheus scraping, use the Express endpoint
    * at /api/metrics which returns proper content-type
    */
-  prometheus: publicProcedure.query(async () => {
+  prometheus: adminProcedure.query(async () => {
     return getPrometheusMetrics();
   }),
 
@@ -42,7 +42,7 @@ export const metricsRouter = router({
    * JSON metrics endpoint
    * Returns system metrics in JSON format for debugging
    */
-  json: publicProcedure.query(async () => {
+  json: adminProcedure.query(async () => {
     collectSystemMetrics();
     return getMetricsJson();
   }),
@@ -51,7 +51,7 @@ export const metricsRouter = router({
    * Summary of key metrics
    * Returns a high-level overview of system health
    */
-  summary: publicProcedure.query(async () => {
+  summary: adminProcedure.query(async () => {
     collectSystemMetrics();
     const memUsage = process.memoryUsage();
     const uptime = process.uptime();
@@ -119,7 +119,7 @@ export const metricsRouter = router({
    * Reset all metrics
    * WARNING: This clears all collected metrics data
    */
-  reset: publicProcedure.mutation(async () => {
+  reset: adminProcedure.mutation(async () => {
     registry.reset();
     return { success: true, message: "All metrics have been reset" };
   }),
@@ -127,7 +127,7 @@ export const metricsRouter = router({
   /**
    * Get metrics for a specific category
    */
-  category: publicProcedure
+  category: adminProcedure
     .input(
       z.object({
         category: z.enum(["http", "database", "trpc", "system", "business"]),

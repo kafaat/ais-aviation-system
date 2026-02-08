@@ -27,6 +27,71 @@
  */
 import { ENV } from "./env";
 
+/** Timeout for downloading the user-provided audio file */
+const AUDIO_DOWNLOAD_TIMEOUT_MS = 60_000;
+/** Timeout for the transcription API call */
+const TRANSCRIPTION_TIMEOUT_MS = 120_000;
+
+/**
+ * Validate a URL to prevent SSRF attacks.
+ * Blocks private/internal IPs, loopback, link-local, and cloud metadata endpoints.
+ */
+function validateAudioUrl(urlString: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return "Invalid audio URL";
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    return "Audio URL must use http or https protocol";
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Block cloud metadata endpoints (AWS, GCP, Azure)
+  const blockedHosts = [
+    "169.254.169.254",
+    "metadata.google.internal",
+    "metadata.google",
+  ];
+  if (blockedHosts.includes(hostname)) {
+    return "Audio URL points to a blocked address";
+  }
+
+  // Block localhost
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname === "::1" ||
+    hostname === "0.0.0.0"
+  ) {
+    return "Audio URL must not point to localhost";
+  }
+
+  // Block private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x)
+  const ipv4Match = hostname.match(
+    /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
+  );
+  if (ipv4Match) {
+    const a = Number(ipv4Match[1]);
+    const b = Number(ipv4Match[2]);
+    if (
+      a === 10 ||
+      a === 0 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    ) {
+      return "Audio URL must not point to a private network address";
+    }
+  }
+
+  return null;
+}
+
 export type TranscribeOptions = {
   audioUrl: string; // URL to the audio file (e.g., S3 URL)
   language?: string; // Optional: specify language code (e.g., "en", "es", "zh")
@@ -95,11 +160,23 @@ export async function transcribeAudio(
       };
     }
 
-    // Step 2: Download audio from URL
+    // Step 2: Validate audio URL against SSRF
+    const urlError = validateAudioUrl(options.audioUrl);
+    if (urlError) {
+      return {
+        error: "Invalid audio URL",
+        code: "INVALID_FORMAT",
+        details: urlError,
+      };
+    }
+
+    // Step 3: Download audio from URL
     let audioBuffer: Buffer;
     let mimeType: string;
     try {
-      const response = await fetch(options.audioUrl);
+      const response = await fetch(options.audioUrl, {
+        signal: AbortSignal.timeout(AUDIO_DOWNLOAD_TIMEOUT_MS),
+      });
       if (!response.ok) {
         return {
           error: "Failed to download audio file",
@@ -128,7 +205,7 @@ export async function transcribeAudio(
       };
     }
 
-    // Step 3: Create FormData for multipart upload to Whisper API
+    // Step 4: Create FormData for multipart upload to Whisper API
     const formData = new FormData();
 
     // Create a Blob from the buffer and append to form
@@ -149,7 +226,7 @@ export async function transcribeAudio(
         : "Transcribe the user's voice to text");
     formData.append("prompt", prompt);
 
-    // Step 4: Call the transcription service
+    // Step 5: Call the transcription service
     const baseUrl = ENV.forgeApiUrl.endsWith("/")
       ? ENV.forgeApiUrl
       : `${ENV.forgeApiUrl}/`;
@@ -163,18 +240,19 @@ export async function transcribeAudio(
         "Accept-Encoding": "identity",
       },
       body: formData,
+      signal: AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS),
     });
 
     if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
+      const _errorText = await response.text().catch(() => "");
       return {
         error: "Transcription service request failed",
         code: "TRANSCRIPTION_FAILED",
-        details: `${response.status} ${response.statusText}${errorText ? `: ${errorText}` : ""}`,
+        details: `${response.status} ${response.statusText}`,
       };
     }
 
-    // Step 5: Parse and return the transcription result
+    // Step 6: Parse and return the transcription result
     const whisperResponse = (await response.json()) as WhisperResponse;
 
     // Validate response structure

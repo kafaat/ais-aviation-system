@@ -89,6 +89,7 @@ class QueueService {
         host: process.env.REDIS_HOST || "localhost",
         port: parseInt(process.env.REDIS_PORT || "6379"),
         password: process.env.REDIS_PASSWORD,
+        maxRetriesPerRequest: null, // Required for BullMQ
       };
 
       // Initialize queues
@@ -439,14 +440,8 @@ class QueueService {
         return;
       }
 
-      // Re-fetch event from Stripe and process
       const stripeEvent = await stripe.events.retrieve(eventId);
 
-      // Import and call the webhook handler
-      const { handleStripeWebhook } = await import("../webhooks/stripe");
-
-      // Create a mock request/response for processing
-      // Note: In production, you might want to refactor this
       logger.info(
         {
           eventId,
@@ -455,13 +450,22 @@ class QueueService {
         "Re-processing Stripe event"
       );
 
-      // Update retry count
-      await db
-        .update(stripeEvents)
-        .set({
-          retryCount: event.retryCount + 1,
-        })
-        .where(eq(stripeEvents.id, eventId));
+      const { stripeWebhookServiceV2 } =
+        await import("./stripe-webhook-v2.service");
+
+      await db.transaction(async tx => {
+        await stripeWebhookServiceV2.processEvent(tx, stripeEvent as any);
+
+        await tx
+          .update(stripeEvents)
+          .set({
+            processed: true,
+            processedAt: new Date(),
+            retryCount: event.retryCount + 1,
+            error: null,
+          })
+          .where(eq(stripeEvents.id, eventId));
+      });
 
       logger.info(
         {
@@ -935,22 +939,34 @@ class QueueService {
       return;
     }
 
-    // Close all workers
     for (const [name, worker] of this.workers) {
-      await worker.close();
-      logger.info({ queue: name }, "Worker closed");
+      try {
+        await worker.close();
+        logger.info({ queue: name }, "Worker closed");
+      } catch (err) {
+        logger.error({ queue: name, error: err }, "Failed to close worker");
+      }
     }
 
-    // Close all queues
     for (const [name, queue] of this.queues) {
-      await queue.close();
-      logger.info({ queue: name }, "Queue closed");
+      try {
+        await queue.close();
+        logger.info({ queue: name }, "Queue closed");
+      } catch (err) {
+        logger.error({ queue: name, error: err }, "Failed to close queue");
+      }
     }
 
-    // Close all queue events
     for (const [name, queueEvents] of this.queueEvents) {
-      await queueEvents.close();
-      logger.info({ queue: name }, "Queue events closed");
+      try {
+        await queueEvents.close();
+        logger.info({ queue: name }, "Queue events closed");
+      } catch (err) {
+        logger.error(
+          { queue: name, error: err },
+          "Failed to close queue events"
+        );
+      }
     }
 
     this.initialized = false;

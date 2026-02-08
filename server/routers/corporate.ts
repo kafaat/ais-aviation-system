@@ -276,7 +276,7 @@ export const corporateRouter = router({
     })
     .input(
       z.object({
-        corporateAccountId: z.number().describe("Corporate account ID"),
+        accountId: z.number().describe("Corporate account ID"),
         userId: z.number().describe("User ID to add"),
         role: z
           .enum(["admin", "booker", "traveler"])
@@ -297,8 +297,7 @@ export const corporateRouter = router({
       );
       const isSystemAdmin = ctx.user.role === "admin";
       const isCorporateAdmin =
-        userAccount?.id === input.corporateAccountId &&
-        userAccount?.role === "admin";
+        userAccount?.id === input.accountId && userAccount?.role === "admin";
 
       if (!isSystemAdmin && !isCorporateAdmin) {
         throw new TRPCError({
@@ -307,7 +306,10 @@ export const corporateRouter = router({
         });
       }
 
-      const corporateUser = await corporateService.addUserToCorporate(input);
+      const corporateUser = await corporateService.addUserToCorporate({
+        ...input,
+        corporateAccountId: input.accountId,
+      });
       return {
         success: true,
         corporateUser,
@@ -331,7 +333,7 @@ export const corporateRouter = router({
     })
     .input(
       z.object({
-        corporateAccountId: z.number().describe("Corporate account ID"),
+        accountId: z.number().describe("Corporate account ID"),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -340,7 +342,7 @@ export const corporateRouter = router({
         ctx.user.id
       );
       const isSystemAdmin = ctx.user.role === "admin";
-      const isCorporateMember = userAccount?.id === input.corporateAccountId;
+      const isCorporateMember = userAccount?.id === input.accountId;
 
       if (!isSystemAdmin && !isCorporateMember) {
         throw new TRPCError({
@@ -349,7 +351,7 @@ export const corporateRouter = router({
         });
       }
 
-      return await corporateService.getCorporateUsers(input.corporateAccountId);
+      return await corporateService.getCorporateUsers(input.accountId);
     }),
 
   /**

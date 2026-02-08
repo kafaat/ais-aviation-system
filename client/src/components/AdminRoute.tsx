@@ -28,11 +28,11 @@ export function AdminRoute({ children }: AdminRouteProps) {
     return <Redirect to="/" />;
   }
 
-  // Redirect to home if not admin
-  if (user.role !== "admin") {
+  // Redirect to home if not admin or super_admin
+  if (user.role !== "admin" && user.role !== "super_admin") {
     return <Redirect to="/" />;
   }
 
-  // Render children if user is admin
+  // Render children if user is admin or super_admin
   return <>{children}</>;
 }

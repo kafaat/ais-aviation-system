@@ -523,10 +523,15 @@ class CacheService {
 
     try {
       const rateLimitKey = `${CACHE_PREFIX}:ratelimit:${key}`;
+
+      await this.client!.set(rateLimitKey, 0, "EX", windowSeconds, "NX");
       const current = await this.client!.incr(rateLimitKey);
 
-      if (current === 1) {
-        // First request in window, set expiry
+      // Safety: if the key expired between SET NX and INCR, the INCR creates
+      // a new key with no TTL. Ensure the key always has an expiry to prevent
+      // a permanently stuck rate limit counter.
+      const ttl = await this.client!.ttl(rateLimitKey);
+      if (ttl === -1) {
         await this.client!.expire(rateLimitKey, windowSeconds);
       }
 
@@ -536,7 +541,6 @@ class CacheService {
       return { allowed, remaining };
     } catch (error) {
       logger.error({ key, error }, "Rate limit check error");
-      // On error, allow the request
       return { allowed: true, remaining: limit };
     }
   }

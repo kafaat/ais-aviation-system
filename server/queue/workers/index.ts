@@ -28,12 +28,18 @@ export {
 export async function startWorkers(): Promise<void> {
   console.log("[Workers] Starting all workers...");
 
-  // Workers are started automatically when imported
-  // This function is for explicit initialization if needed
+  // Reconciliation worker is started automatically when imported (module-level init).
+  // Email worker uses lazy initialization - we must explicitly trigger it here.
+  try {
+    const { getEmailWorker } = await import("./email.worker");
+    getEmailWorker();
+    console.log("  - emailWorker: running");
+  } catch (err) {
+    console.warn("  - emailWorker: failed to start", err);
+  }
 
   console.log("[Workers] All workers started:");
   console.log("  - reconciliationWorker: running");
-  console.log("  - emailWorker: running");
 }
 
 /**
@@ -54,14 +60,31 @@ export function getWorkersStatus(): Record<
   string,
   { running: boolean; paused: boolean }
 > {
-  return {
-    reconciliation: {
-      running: reconciliationWorker.isRunning(),
-      paused: reconciliationWorker.isPaused(),
-    },
-    email: {
-      running: emailWorker.instance.isRunning(),
-      paused: emailWorker.instance.isPaused(),
-    },
+  const status: Record<string, { running: boolean; paused: boolean }> = {
+    reconciliation: { running: false, paused: false },
+    email: { running: false, paused: false },
   };
+
+  try {
+    if (reconciliationWorker) {
+      status.reconciliation = {
+        running: reconciliationWorker.isRunning(),
+        paused: reconciliationWorker.isPaused(),
+      };
+    }
+  } catch {
+    // Worker not available
+  }
+
+  try {
+    const worker = emailWorker.instance;
+    status.email = {
+      running: worker.isRunning(),
+      paused: worker.isPaused(),
+    };
+  } catch {
+    // Worker not available
+  }
+
+  return status;
 }

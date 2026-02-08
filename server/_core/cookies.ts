@@ -45,14 +45,15 @@ export function getSessionCookieOptions(
   // - sameSite: 'lax' for better CSRF protection (use 'none' only if needed for cross-site)
   // - path: Cookie available for all routes
 
-  const isProduction = process.env.NODE_ENV === "production";
   const isSecure = isSecureRequest(req);
 
   return {
     httpOnly: true,
     path: "/",
-    // Use 'lax' for better security, 'none' only if cross-site cookies are required
-    sameSite: isSecure ? "none" : "lax",
+    // 'lax' allows cookies on top-level navigations (e.g. OAuth redirects) while
+    // blocking cross-site subrequests (CSRF protection). Only use 'none' if the
+    // app must be embedded in a cross-site iframe.
+    sameSite: "lax",
     secure: isSecure,
   };
 }

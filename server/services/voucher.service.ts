@@ -311,29 +311,100 @@ export async function applyVoucher(
   }
 
   try {
-    // Validate the voucher first
-    const validation = await validateVoucher(code, amount, userId);
+    // Use a transaction to prevent race conditions on voucher usage count
+    return await database.transaction(async tx => {
+      const now = new Date();
+      const normalizedCode = code.toUpperCase().trim();
 
-    // Record the usage
-    await database.insert(voucherUsage).values({
-      voucherId: validation.voucher.id,
-      userId,
-      bookingId,
-      discountApplied: validation.discountAmount,
+      // Re-read voucher inside transaction for consistency
+      const [voucher] = await tx
+        .select()
+        .from(vouchers)
+        .where(eq(vouchers.code, normalizedCode))
+        .limit(1);
+
+      if (!voucher || !voucher.isActive) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Voucher not found or inactive",
+        });
+      }
+
+      if (
+        new Date(voucher.validFrom) > now ||
+        new Date(voucher.validUntil) < now
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Voucher is not within its validity period",
+        });
+      }
+
+      if (voucher.maxUses !== null && voucher.usedCount >= voucher.maxUses) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This voucher has reached its usage limit",
+        });
+      }
+
+      if (amount < voucher.minPurchase) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Minimum purchase of ${(voucher.minPurchase / 100).toFixed(2)} SAR required`,
+        });
+      }
+
+      // Check if user has already used this voucher
+      const [existingUsage] = await tx
+        .select()
+        .from(voucherUsage)
+        .where(
+          and(
+            eq(voucherUsage.voucherId, voucher.id),
+            eq(voucherUsage.userId, userId)
+          )
+        )
+        .limit(1);
+
+      if (existingUsage) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "You have already used this voucher",
+        });
+      }
+
+      // Calculate discount
+      let discountAmount: number;
+      if (voucher.type === "fixed") {
+        discountAmount = Math.min(voucher.value, amount);
+      } else {
+        discountAmount = Math.floor((amount * voucher.value) / 100);
+        if (voucher.maxDiscount !== null) {
+          discountAmount = Math.min(discountAmount, voucher.maxDiscount);
+        }
+      }
+
+      // Record the usage
+      await tx.insert(voucherUsage).values({
+        voucherId: voucher.id,
+        userId,
+        bookingId,
+        discountApplied: discountAmount,
+      });
+
+      // Atomically increment the used count
+      await tx
+        .update(vouchers)
+        .set({ usedCount: sql`${vouchers.usedCount} + 1` })
+        .where(eq(vouchers.id, voucher.id));
+
+      return {
+        success: true,
+        discountApplied: discountAmount,
+        finalAmount: amount - discountAmount,
+        voucherCode: voucher.code,
+      };
     });
-
-    // Update the used count
-    await database
-      .update(vouchers)
-      .set({ usedCount: validation.voucher.usedCount + 1 })
-      .where(eq(vouchers.id, validation.voucher.id));
-
-    return {
-      success: true,
-      discountApplied: validation.discountAmount,
-      finalAmount: validation.finalAmount,
-      voucherCode: validation.voucher.code,
-    };
   } catch (error) {
     if (error instanceof TRPCError) throw error;
     console.error("Error applying voucher:", error);
@@ -529,68 +600,74 @@ export async function useCredit(
   }
 
   try {
-    // Get available balance
-    const balanceInfo = await getAvailableBalance(userId);
+    // Use a transaction to prevent double-spending of credits
+    return await database.transaction(async tx => {
+      const now = new Date();
 
-    if (balanceInfo.balance < amount) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Insufficient credit balance",
-      });
-    }
-
-    // Get all valid credits sorted by expiration (soonest first) then creation date
-    const now = new Date();
-    const credits = await database
-      .select()
-      .from(userCredits)
-      .where(
-        and(
-          eq(userCredits.userId, userId),
-          or(isNull(userCredits.expiresAt), gte(userCredits.expiresAt, now)),
-          gt(sql`${userCredits.amount} - ${userCredits.usedAmount}`, 0)
+      // Get all valid credits inside transaction for consistency
+      const credits = await tx
+        .select()
+        .from(userCredits)
+        .where(
+          and(
+            eq(userCredits.userId, userId),
+            or(isNull(userCredits.expiresAt), gte(userCredits.expiresAt, now)),
+            gt(sql`${userCredits.amount} - ${userCredits.usedAmount}`, 0)
+          )
         )
-      )
-      .orderBy(userCredits.expiresAt, userCredits.createdAt);
+        .orderBy(userCredits.expiresAt, userCredits.createdAt);
 
-    let remainingAmount = amount;
-    const usages: Array<{ creditId: number; amount: number }> = [];
+      // Calculate available balance inside transaction
+      const totalAvailable = credits.reduce((sum, credit) => {
+        return sum + Math.max(0, credit.amount - credit.usedAmount);
+      }, 0);
 
-    for (const credit of credits) {
-      if (remainingAmount <= 0) break;
+      if (totalAvailable < amount) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Insufficient credit balance",
+        });
+      }
 
-      const available = credit.amount - credit.usedAmount;
-      if (available <= 0) continue;
+      let remainingAmount = amount;
+      const usages: Array<{ creditId: number; amount: number }> = [];
 
-      const toUse = Math.min(available, remainingAmount);
+      for (const credit of credits) {
+        if (remainingAmount <= 0) break;
 
-      // Update the credit
-      await database
-        .update(userCredits)
-        .set({ usedAmount: credit.usedAmount + toUse })
-        .where(eq(userCredits.id, credit.id));
+        const available = credit.amount - credit.usedAmount;
+        if (available <= 0) continue;
 
-      // Record the usage
-      await database.insert(creditUsage).values({
-        userCreditId: credit.id,
-        userId,
-        bookingId,
-        amountUsed: toUse,
-      });
+        const toUse = Math.min(available, remainingAmount);
 
-      usages.push({ creditId: credit.id, amount: toUse });
-      remainingAmount -= toUse;
-    }
+        // Update the credit
+        await tx
+          .update(userCredits)
+          .set({ usedAmount: credit.usedAmount + toUse })
+          .where(eq(userCredits.id, credit.id));
 
-    console.info(
-      `[Credits] Used ${amount} cents credit for user ${userId}, booking ${bookingId}`
-    );
+        // Record the usage
+        await tx.insert(creditUsage).values({
+          userCreditId: credit.id,
+          userId,
+          bookingId,
+          amountUsed: toUse,
+        });
 
-    return {
-      success: true,
-      amountUsed: amount,
-      usages,
-    };
+        usages.push({ creditId: credit.id, amount: toUse });
+        remainingAmount -= toUse;
+      }
+
+      console.info(
+        `[Credits] Used ${amount} cents credit for user ${userId}, booking ${bookingId}`
+      );
+
+      return {
+        success: true,
+        amountUsed: amount,
+        usages,
+      };
+    });
   } catch (error) {
     if (error instanceof TRPCError) throw error;
     console.error("Error using credit:", error);

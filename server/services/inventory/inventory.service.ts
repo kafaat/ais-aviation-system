@@ -169,8 +169,8 @@ export async function getInventoryStatus(
   const availableSeats = baseAvailable - activeHolds;
   const effectiveAvailable = Math.max(0, availableSeats + overbookingLimit);
 
-  // Calculate occupancy rate
-  const occupancyRate = (soldSeats + activeHolds) / totalSeats;
+  const occupancyRate =
+    totalSeats > 0 ? (soldSeats + activeHolds) / totalSeats : 0;
 
   // Determine status
   let status: InventoryStatus["status"];
@@ -548,7 +548,7 @@ export async function handleDeniedBoarding(
   // Calculate compensation based on regulations
   // Find alternative flights
 
-  const compensation = cabinClass === "economy" ? 1500 : 3000; // SAR
+  const compensation = cabinClass === "economy" ? 150000 : 300000; // SAR cents (100 = 1 SAR)
 
   return {
     volunteersNeeded: seatsNeeded,

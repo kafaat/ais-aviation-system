@@ -18,6 +18,9 @@
 import { storagePut } from "server/storage";
 import { ENV } from "./env";
 
+/** Timeout for image generation API calls (2 minutes - generation can be slow) */
+const IMAGE_GEN_TIMEOUT_MS = 120_000;
+
 export type GenerateImageOptions = {
   prompt: string;
   originalImages?: Array<{
@@ -41,6 +44,10 @@ export async function generateImage(
     throw new Error("BUILT_IN_FORGE_API_KEY is not configured");
   }
 
+  if (!options.prompt || options.prompt.trim().length === 0) {
+    throw new Error("Image generation requires a non-empty prompt");
+  }
+
   // Build the full URL by appending the service path to the base URL
   const baseUrl = ENV.forgeApiUrl.endsWith("/")
     ? ENV.forgeApiUrl
@@ -62,12 +69,13 @@ export async function generateImage(
       prompt: options.prompt,
       original_images: options.originalImages || [],
     }),
+    signal: AbortSignal.timeout(IMAGE_GEN_TIMEOUT_MS),
   });
 
   if (!response.ok) {
-    const detail = await response.text().catch(() => "");
+    const _detail = await response.text().catch(() => "");
     throw new Error(
-      `Image generation request failed (${response.status} ${response.statusText})${detail ? `: ${detail}` : ""}`
+      `Image generation request failed (${response.status} ${response.statusText})`
     );
   }
 

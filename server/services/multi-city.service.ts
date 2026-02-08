@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import * as db from "../db";
 import {
   bookingSegments,
@@ -491,11 +491,34 @@ export async function getBookingSegments(
 /**
  * Check if a booking is a multi-city booking
  */
-export async function isMultiCityBooking(bookingId: number): Promise<boolean> {
+export async function isMultiCityBooking(
+  bookingId: number,
+  userId: number
+): Promise<boolean> {
   const database = await db.getDb();
   if (!database) return false;
 
   try {
+    const [booking] = await database
+      .select({ id: bookings.id, userId: bookings.userId })
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
+
+    if (!booking) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Booking not found",
+      });
+    }
+
+    if (booking.userId !== userId) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "You do not have access to this booking",
+      });
+    }
+
     const segments = await database
       .select({ id: bookingSegments.id })
       .from(bookingSegments)
@@ -504,6 +527,7 @@ export async function isMultiCityBooking(bookingId: number): Promise<boolean> {
 
     return segments.length > 1;
   } catch (error) {
+    if (error instanceof TRPCError) throw error;
     console.error("Error checking multi-city booking:", error);
     return false;
   }

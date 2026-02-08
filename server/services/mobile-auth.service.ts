@@ -6,11 +6,16 @@ import {
   users,
   type InsertRefreshToken,
 } from "../../drizzle/schema";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, lt } from "drizzle-orm";
 import { logger } from "../_core/logger";
 import * as schema from "../../drizzle/schema";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const JWT_SECRET: string = process.env.JWT_SECRET ?? "";
+if (!JWT_SECRET) {
+  throw new Error(
+    "JWT_SECRET environment variable is required. Set it in your .env file."
+  );
+}
 const ACCESS_TOKEN_EXPIRY = "15m" as string | number; // 15 minutes
 const REFRESH_TOKEN_EXPIRY = "7d" as string | number; // 7 days
 
@@ -304,7 +309,7 @@ export async function cleanupExpiredTokens(): Promise<void> {
 
   const result = await database
     .delete(refreshTokens)
-    .where(gt(refreshTokens.expiresAt, new Date()));
+    .where(lt(refreshTokens.expiresAt, new Date()));
 
   const affectedRows = (result as any)[0]?.affectedRows || 0;
   logger.info(

@@ -295,7 +295,7 @@ export function FlightCompare({
                           variant="secondary"
                           className="mb-1 bg-green-100 text-green-700 text-[10px]"
                         >
-                          <Timer className="h-3 w-3 mr-1" />
+                          <Timer className="h-3 w-3 me-1" />
                           {t("compare.shortest")}
                         </Badge>
                       )}
@@ -337,7 +337,7 @@ export function FlightCompare({
                         variant="secondary"
                         className="mb-1 bg-green-100 text-green-700 text-[10px]"
                       >
-                        <Star className="h-3 w-3 mr-1" />
+                        <Star className="h-3 w-3 me-1" />
                         {t("compare.bestPrice")}
                       </Badge>
                     )}
@@ -390,7 +390,7 @@ export function FlightCompare({
                         variant="secondary"
                         className="mb-1 bg-amber-100 text-amber-700 text-[10px]"
                       >
-                        <Star className="h-3 w-3 mr-1" />
+                        <Star className="h-3 w-3 me-1" />
                         {t("compare.bestPrice")}
                       </Badge>
                     )}
@@ -428,19 +428,19 @@ export function FlightCompare({
                 <div key={flight.id} className="p-4">
                   <div className="flex flex-wrap gap-2 justify-center">
                     <Badge variant="outline" className="text-xs">
-                      <Luggage className="h-3 w-3 mr-1" />
+                      <Luggage className="h-3 w-3 me-1" />
                       {t("compare.baggage")}
                     </Badge>
                     <Badge variant="outline" className="text-xs">
-                      <Utensils className="h-3 w-3 mr-1" />
+                      <Utensils className="h-3 w-3 me-1" />
                       {t("compare.meals")}
                     </Badge>
                     <Badge variant="outline" className="text-xs">
-                      <Wifi className="h-3 w-3 mr-1" />
+                      <Wifi className="h-3 w-3 me-1" />
                       {t("compare.wifi")}
                     </Badge>
                     <Badge variant="outline" className="text-xs">
-                      <Armchair className="h-3 w-3 mr-1" />
+                      <Armchair className="h-3 w-3 me-1" />
                       {t("compare.seatSelection")}
                     </Badge>
                   </div>

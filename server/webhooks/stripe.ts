@@ -339,7 +339,7 @@ async function handleCheckoutSessionCompleted(
   const paymentIntentId = session.payment_intent as string;
   const amount = session.amount_total
     ? session.amount_total / 100
-    : booking.totalAmount;
+    : booking.totalAmount / 100;
 
   // 3. Create ledger entry (with uniqueness protection)
   try {
@@ -388,9 +388,10 @@ async function handleCheckoutSessionCompleted(
   if (previousStatus !== "confirmed") {
     await tx.insert(bookingStatusHistory).values({
       bookingId: parseInt(bookingId),
+      bookingReference: booking.bookingReference,
       previousStatus: previousStatus,
       newStatus: "confirmed",
-      reason: "Payment completed via Stripe checkout",
+      transitionReason: "Payment completed via Stripe checkout",
       changedBy: null, // System
       createdAt: new Date(),
     });
@@ -670,7 +671,6 @@ async function handlePaymentFailed(
       .update(bookings)
       .set({
         paymentStatus: "failed",
-        status: "failed",
         updatedAt: new Date(),
       })
       .where(eq(bookings.id, booking.id));
@@ -678,9 +678,10 @@ async function handlePaymentFailed(
     // Record status history
     await tx.insert(bookingStatusHistory).values({
       bookingId: booking.id,
+      bookingReference: booking.bookingReference,
       previousStatus: previousStatus,
-      newStatus: "failed",
-      reason: `Payment failed: ${paymentIntent.last_payment_error?.message || "Unknown error"}`,
+      newStatus: "payment_failed",
+      transitionReason: `Payment failed: ${paymentIntent.last_payment_error?.message || "Unknown error"}`,
       changedBy: null,
       createdAt: new Date(),
     });
@@ -790,24 +791,27 @@ async function handleChargeRefunded(
   }
 
   // Update booking status
-  const newStatus = isFullRefund ? "refunded" : "partially_refunded";
+  // bookings.status enum only allows: pending, confirmed, cancelled, completed
+  // bookings.paymentStatus enum only allows: pending, paid, refunded, failed
+  const bookingNewStatus = isFullRefund ? "cancelled" : booking.status;
   const previousStatus = booking.status;
 
   await tx
     .update(bookings)
     .set({
-      status: newStatus,
-      paymentStatus: isFullRefund ? "refunded" : "partially_refunded",
+      status: bookingNewStatus,
+      paymentStatus: "refunded",
       updatedAt: new Date(),
     })
     .where(eq(bookings.id, parseInt(bookingId)));
 
-  // Record status history
+  // Record status history (bookingStatusHistory has the full enum including "refunded")
   await tx.insert(bookingStatusHistory).values({
     bookingId: parseInt(bookingId),
+    bookingReference: booking.bookingReference,
     previousStatus,
-    newStatus,
-    reason: isFullRefund
+    newStatus: "refunded",
+    transitionReason: isFullRefund
       ? "Full refund processed"
       : `Partial refund of ${refundAmount} ${charge.currency.toUpperCase()}`,
     changedBy: null,
@@ -815,8 +819,13 @@ async function handleChargeRefunded(
   });
 
   log.info(
-    { event: "booking_refunded", bookingId, status: newStatus, refundAmount },
-    `Booking ${bookingId} ${newStatus}`
+    {
+      event: "booking_refunded",
+      bookingId,
+      status: bookingNewStatus,
+      refundAmount,
+    },
+    `Booking ${bookingId} ${bookingNewStatus}`
   );
 
   // Send in-app refund notification (outside transaction scope via own connection)
@@ -883,7 +892,7 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
       .limit(1);
 
     // Generate e-tickets
-    let eticketAttachments: Array<{
+    const eticketAttachments: Array<{
       filename: string;
       content: string;
       contentType?: string;
@@ -896,7 +905,7 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
         .where(eq(passengers.bookingId, bookingId));
 
       if (bookingPassengers.length > 0) {
-        eticketAttachments = await Promise.all(
+        const results = await Promise.allSettled(
           bookingPassengers.map(async passenger => {
             const pdf = await generateETicketForPassenger(
               bookingId,
@@ -909,6 +918,23 @@ async function sendConfirmationAndAwardMiles(bookingId: number) {
             };
           })
         );
+        for (const r of results) {
+          if (r.status === "fulfilled") {
+            eticketAttachments.push(r.value);
+          }
+        }
+        const failures = results.filter(r => r.status === "rejected");
+        if (failures.length > 0) {
+          log.warn(
+            {
+              event: "eticket_partial_failure",
+              bookingId,
+              failed: failures.length,
+              succeeded: eticketAttachments.length,
+            },
+            `Failed to generate ${failures.length}/${results.length} e-tickets`
+          );
+        }
         log.info(
           {
             event: "etickets_generated",

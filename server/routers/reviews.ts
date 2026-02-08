@@ -16,7 +16,7 @@ export const reviewsRouter = router({
         serviceRating: z.number().int().min(1).max(5).optional(),
         valueRating: z.number().int().min(1).max(5).optional(),
         title: z.string().max(200).optional(),
-        comment: z.string().optional(),
+        comment: z.string().max(5000).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -71,7 +71,7 @@ export const reviewsRouter = router({
         serviceRating: z.number().int().min(1).max(5).optional(),
         valueRating: z.number().int().min(1).max(5).optional(),
         title: z.string().max(200).optional(),
-        comment: z.string().optional(),
+        comment: z.string().max(5000).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

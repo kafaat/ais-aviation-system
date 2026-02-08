@@ -177,9 +177,9 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
             disabled={markAllAsRead.isPending}
           >
             {markAllAsRead.isPending ? (
-              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              <Loader2 className="h-3 w-3 animate-spin me-1" />
             ) : (
-              <CheckCheck className="h-3 w-3 mr-1" />
+              <CheckCheck className="h-3 w-3 me-1" />
             )}
             {t("notifications.markAllRead")}
           </Button>
@@ -280,7 +280,7 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
         >
           <Link href="/notifications">
             {t("notifications.viewAll")}
-            <ChevronRight className="h-4 w-4 ml-1" />
+            <ChevronRight className="h-4 w-4 ms-1" />
           </Link>
         </Button>
       </div>

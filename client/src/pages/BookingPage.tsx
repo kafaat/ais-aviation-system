@@ -453,7 +453,12 @@ export default function BookingPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/search">
-                <Button variant="ghost" size="icon" className="rounded-full">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full"
+                  aria-label={t("common.back")}
+                >
                   <ChevronLeft className="h-5 w-5" />
                 </Button>
               </Link>
@@ -705,7 +710,7 @@ export default function BookingPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label>{t("booking.title")}</Label>
+                        <Label>{t("booking.honorific")}</Label>
                         <Select
                           value={passenger.title || ""}
                           onValueChange={value =>

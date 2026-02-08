@@ -13,6 +13,9 @@ import { ENV } from "./env";
 // Configuration
 // ============================================================================
 
+/** Timeout for Google Maps API calls */
+const MAPS_TIMEOUT_MS = 30_000;
+
 type MapsConfig = {
   baseUrl: string;
   apiKey: string;
@@ -58,6 +61,16 @@ export async function makeRequest<T = unknown>(
 ): Promise<T> {
   const { baseUrl, apiKey } = getMapsConfig();
 
+  // Validate endpoint to prevent path traversal
+  if (!endpoint.startsWith("/")) {
+    throw new Error(
+      `Invalid maps endpoint: must start with "/". Received: "${endpoint}"`
+    );
+  }
+  if (endpoint.includes("..")) {
+    throw new Error("Invalid maps endpoint: path traversal is not allowed");
+  }
+
   // Construct full URL: baseUrl + /v1/maps/proxy + endpoint
   const url = new URL(`${baseUrl}/v1/maps/proxy${endpoint}`);
 
@@ -77,12 +90,13 @@ export async function makeRequest<T = unknown>(
       "Content-Type": "application/json",
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
+    signal: AbortSignal.timeout(MAPS_TIMEOUT_MS),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const _errorText = await response.text().catch(() => "");
     throw new Error(
-      `Google Maps API request failed (${response.status} ${response.statusText}): ${errorText}`
+      `Google Maps API request failed (${response.status} ${response.statusText})`
     );
   }
 

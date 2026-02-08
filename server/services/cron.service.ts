@@ -18,22 +18,14 @@ export async function cleanupExpiredLocks() {
       return;
     }
 
-    // Find expired locks
-    const expiredLocks = await db
-      .select()
-      .from(inventoryLocks)
-      .where(lt(inventoryLocks.expiresAt, new Date()));
-
-    if (expiredLocks.length === 0) {
-      return; // No expired locks, skip logging
-    }
-
-    // Delete expired locks
-    await db
+    const result = await db
       .delete(inventoryLocks)
       .where(lt(inventoryLocks.expiresAt, new Date()));
 
-    logInfo(`Cleaned up ${expiredLocks.length} expired inventory locks`);
+    const deletedCount = (result as any)[0]?.affectedRows || 0;
+    if (deletedCount > 0) {
+      logInfo(`Cleaned up ${deletedCount} expired inventory locks`);
+    }
   } catch (error) {
     logError(error as Error, { operation: "cleanupExpiredLocks" });
   }

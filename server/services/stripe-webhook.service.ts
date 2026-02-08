@@ -8,7 +8,7 @@ import {
   type InsertStripeEvent,
   type InsertFinancialLedger,
 } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { logger } from "../_core/logger";
 import { recordStatusChange } from "./booking-state-machine.service";
 
@@ -37,7 +37,7 @@ export function verifyWebhookSignature(
 }
 
 /**
- * Check if event has already been processed (de-duplication)
+ * Check if event has already been successfully processed (de-duplication)
  */
 export async function isEventProcessed(eventId: string): Promise<boolean> {
   const db = await getDb();
@@ -46,7 +46,7 @@ export async function isEventProcessed(eventId: string): Promise<boolean> {
   const existing = await db
     .select()
     .from(stripeEvents)
-    .where(eq(stripeEvents.id, eventId))
+    .where(and(eq(stripeEvents.id, eventId), eq(stripeEvents.processed, true)))
     .limit(1);
 
   return existing.length > 0;
@@ -63,7 +63,7 @@ export async function storeStripeEvent(event: Stripe.Event): Promise<void> {
     id: event.id,
     type: event.type,
     apiVersion: event.api_version || undefined,
-    data: JSON.stringify(event.data),
+    data: JSON.stringify(event.data.object),
     processed: false,
     createdAt: new Date(),
   };
@@ -169,8 +169,23 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
       "Error processing Stripe event"
     );
 
-    // Mark as processed with error
-    await markEventProcessed(event.id, String(error));
+    // Record error but keep processed=false to allow Stripe retries
+    try {
+      const errorDb = await getDb();
+      if (errorDb) {
+        await errorDb
+          .update(stripeEvents)
+          .set({
+            error: String(error),
+          })
+          .where(eq(stripeEvents.id, event.id));
+      }
+    } catch (_updateErr) {
+      logger.error(
+        { eventId: event.id, error: _updateErr },
+        "Failed to record webhook error status"
+      );
+    }
 
     // Re-throw to trigger retry
     throw error;
@@ -217,10 +232,36 @@ async function handlePaymentIntentSucceeded(
     return;
   }
 
-  // Update booking status to confirmed
+  // If already confirmed and paid, skip (idempotent)
+  if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
+    logger.info(
+      { bookingId: booking.id, paymentIntentId: paymentIntent.id },
+      "Booking already confirmed and paid, skipping"
+    );
+    return;
+  }
+
+  // Only update if in a pending state
+  if (booking.status !== "pending") {
+    logger.warn(
+      {
+        bookingId: booking.id,
+        currentStatus: booking.status,
+        paymentIntentId: paymentIntent.id,
+      },
+      `Skipping invalid state transition: ${booking.status} -> confirmed`
+    );
+    return;
+  }
+
+  // Update booking status to confirmed and payment status to paid
   await db
     .update(bookings)
-    .set({ status: "confirmed", updatedAt: new Date() })
+    .set({
+      status: "confirmed",
+      paymentStatus: "paid",
+      updatedAt: new Date(),
+    })
     .where(eq(bookings.id, booking.id));
 
   // Update payment status
@@ -525,7 +566,13 @@ export async function retryFailedEvents(): Promise<void> {
 
   for (const eventRecord of failedEvents) {
     try {
-      const event = JSON.parse(eventRecord.data) as Stripe.Event;
+      const dataObject = JSON.parse(eventRecord.data);
+      const event = {
+        id: eventRecord.id,
+        type: eventRecord.type,
+        api_version: eventRecord.apiVersion,
+        data: { object: dataObject },
+      } as Stripe.Event;
       await processStripeEvent(event);
 
       logger.info(

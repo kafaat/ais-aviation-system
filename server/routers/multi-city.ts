@@ -49,7 +49,7 @@ export const multiCityRouter = router({
   calculatePrice: publicProcedure
     .meta({
       openapi: {
-        method: "POST",
+        method: "GET",
         path: "/multi-city/calculate-price",
         tags: ["Multi-City"],
         summary: "Calculate multi-city booking price",
@@ -204,9 +204,10 @@ export const multiCityRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const isMultiCity = await multiCityService.isMultiCityBooking(
-        input.bookingId
+        input.bookingId,
+        ctx.user.id
       );
       return { isMultiCity };
     }),
