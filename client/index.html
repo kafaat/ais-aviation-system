@@ -21,10 +21,19 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script
-      defer
-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"
-    ></script>
+    <!-- Analytics script - only loads if VITE_ANALYTICS_ENDPOINT is configured -->
+    <script type="module">
+      const analyticsEndpoint = '%VITE_ANALYTICS_ENDPOINT%';
+      const websiteId = '%VITE_ANALYTICS_WEBSITE_ID%';
+      
+      // Only load analytics if endpoint is configured (not empty or placeholder)
+      if (analyticsEndpoint && analyticsEndpoint !== '' && !analyticsEndpoint.startsWith('%')) {
+        const script = document.createElement('script');
+        script.defer = true;
+        script.src = `${analyticsEndpoint}/umami`;
+        script.setAttribute('data-website-id', websiteId);
+        document.body.appendChild(script);
+      }
+    </script>
   </body>
 </html>
