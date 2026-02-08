@@ -125,9 +125,7 @@ describe("Flight Status Service", () => {
     expect(result.success).toBe(true);
     expect(result.refundedBookings).toBe(1);
 
-    // Verify booking was refunded
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    // Verify booking was refunded (reuse db from above)
 
     const [booking] = await db
       .select()
