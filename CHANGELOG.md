@@ -1,5 +1,36 @@
 # Changelog
 
+## What's Changed in v1.9.1
+
+### Features
+
+- feat: add FastAPI auth service with password-based authentication (c525250)
+  - New `auth-service/` microservice (FastAPI + SQLAlchemy + bcrypt)
+  - User registration, login, and password verification endpoints
+  - Auth service client for Node.js backend communication
+  - Docker Compose integration for all environments
+  - Updated Login page with email/password form alongside OAuth
+
+### Bug Fixes
+
+- fix: resolve login 404 by fixing CSP, service worker, and PWA config (d3da166)
+- fix: resolve non-DB E2E test failures (87d2f90)
+
+### Security
+
+- fix: upgrade python-jose 3.3.0 → 3.4.0 (CVE-2024-33663, CVE-2024-33664)
+- fix: upgrade python-multipart 0.0.20 → 0.0.22 (CVE-2026-24486)
+- fix: upgrade cryptography 44.0.0 → 44.0.1 (CVE-2024-12797)
+
+### Other Changes
+
+- Fix CHANGELOG.md Prettier formatting after merge from main (b47de0c)
+- Merge remote-tracking branch 'origin/main' into branch (acdb519)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.9.0...v1.9.1
+
+---
+
 ## What's Changed in v1.9.0
 
 ### Features
