@@ -20,8 +20,6 @@ import { logger } from "../_core/logger";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { sdk } from "../_core/sdk";
-// bcrypt will be used when password authentication is fully implemented
-// import bcrypt from "bcryptjs";
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -73,46 +71,53 @@ async function authenticateWithPassword(
   role: string;
   openId: string;
 } | null> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+  const { authServiceClient } = await import("../services/auth-service.client");
+
+  // Try auth service first (handles password verification with bcrypt)
+  const authResult = await authServiceClient.verifyPassword(email, password);
+  if (authResult.success && authResult.user) {
+    return {
+      id: authResult.user.id,
+      name: authResult.user.name,
+      email: authResult.user.email,
+      role: authResult.user.role,
+      openId: authResult.user.openId,
+    };
+  }
+
+  // Fallback: direct DB lookup for development (no password verification)
+  if (process.env.NODE_ENV !== "production") {
+    const db = await getDb();
+    if (!db) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
+    }
+
+    const user = await db.query.users.findFirst({
+      where: (t, { eq }) => eq(t.email, email),
     });
+
+    if (!user) {
+      return null;
+    }
+
+    logger.warn(
+      { email },
+      "Dev mode: accepting login without password verification"
+    );
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      openId: user.openId,
+    };
   }
 
-  // Find user by email
-  const user = await db.query.users.findFirst({
-    where: (t, { eq }) => eq(t.email, email),
-  });
-
-  if (!user) {
-    return null;
-  }
-
-  // For demo purposes - in production you'd have a password hash stored
-  // and compare with bcrypt.compare(password, user.passwordHash)
-  // Here we're doing a simple check for development/testing
-
-  // TODO: Add passwordHash column to users table and implement proper password verification
-  // const isValidPassword = await bcrypt.compare(password, user.passwordHash);
-  // if (!isValidPassword) return null;
-
-  // For now, we'll accept any password for existing users (REMOVE IN PRODUCTION)
-  if (process.env.NODE_ENV === "production") {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Password authentication not fully configured",
-    });
-  }
-
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    openId: user.openId,
-  };
+  return null;
 }
 
 // ============================================================================
@@ -166,6 +171,73 @@ export const authRouter = router({
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
+    }),
+
+  /**
+   * Register a new user with email and password
+   */
+  register: publicProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/auth/register",
+        tags: ["Authentication"],
+        summary: "Register new user",
+        description:
+          "Create a new user account with email and password. The password is securely hashed using bcrypt via the auth service.",
+      },
+    })
+    .input(
+      z.object({
+        email: z.string().email("Invalid email format"),
+        password: z.string().min(8, "Password must be at least 8 characters"),
+        name: z.string().optional(),
+      })
+    )
+    .output(
+      z.object({
+        success: z.boolean(),
+        message: z.string().optional(),
+        user: z
+          .object({
+            id: z.number(),
+            name: z.string().nullable(),
+            email: z.string().nullable(),
+            role: z.string(),
+          })
+          .optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { authServiceClient } =
+        await import("../services/auth-service.client");
+
+      const result = await authServiceClient.register(
+        input.email,
+        input.password,
+        input.name
+      );
+
+      if (!result.success) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: result.message || "Registration failed",
+        });
+      }
+
+      logger.info({ email: input.email }, "User registered successfully");
+
+      return {
+        success: true,
+        user: result.user
+          ? {
+              id: result.user.id,
+              name: result.user.name,
+              email: result.user.email,
+              role: result.user.role,
+            }
+          : undefined,
+      };
     }),
 
   /**

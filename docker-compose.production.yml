@@ -52,6 +52,7 @@ services:
       - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
+      - AUTH_SERVICE_URL=http://auth-service:8000
     depends_on:
       mysql:
         condition: service_healthy
@@ -102,6 +103,7 @@ services:
       - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
+      - AUTH_SERVICE_URL=http://auth-service:8000
     depends_on:
       mysql:
         condition: service_healthy
@@ -152,6 +154,7 @@ services:
       - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
+      - AUTH_SERVICE_URL=http://auth-service:8000
     depends_on:
       mysql:
         condition: service_healthy
@@ -301,6 +304,37 @@ services:
         reservations:
           cpus: "0.5"
           memory: 512M
+
+  # Auth Service (FastAPI)
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: ais_auth
+    environment:
+      - DATABASE_URL=mysql+pymysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
+      - JWT_SECRET=${JWT_SECRET}
+      - OWNER_EMAIL=${OWNER_EMAIL}
+      - CORS_ORIGINS=${FRONTEND_URL}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ais_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/auth/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
 
 networks:
   ais_network:

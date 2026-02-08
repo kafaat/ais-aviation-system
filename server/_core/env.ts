@@ -13,7 +13,16 @@ const envSchema = z.object({
 
   // Authentication
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
-  OAUTH_SERVER_URL: z.string().url("OAUTH_SERVER_URL must be a valid URL"),
+  OAUTH_SERVER_URL: z
+    .string()
+    .url("OAUTH_SERVER_URL must be a valid URL")
+    .optional()
+    .default("http://localhost:3000"),
+  AUTH_SERVICE_URL: z
+    .string()
+    .url("AUTH_SERVICE_URL must be a valid URL")
+    .optional()
+    .default("http://localhost:8000"),
   OWNER_OPEN_ID: z.string().min(1, "OWNER_OPEN_ID is required"),
 
   // Built-in Forge API
@@ -64,6 +73,7 @@ export const ENV = {
   cookieSecret: validatedEnv.JWT_SECRET,
   databaseUrl: validatedEnv.DATABASE_URL,
   oAuthServerUrl: validatedEnv.OAUTH_SERVER_URL,
+  authServiceUrl: validatedEnv.AUTH_SERVICE_URL,
   ownerOpenId: validatedEnv.OWNER_OPEN_ID,
   isProduction: validatedEnv.NODE_ENV === "production",
   forgeApiUrl: validatedEnv.BUILT_IN_FORGE_API_URL,

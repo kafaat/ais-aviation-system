@@ -56,6 +56,30 @@ services:
     depends_on:
       - mysql
 
+  # Auth Service (FastAPI - password-based authentication)
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: ais_dev_auth
+    environment:
+      DATABASE_URL: mysql+pymysql://ais_dev:ais_dev_password@mysql:3306/ais_aviation_dev
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      DEBUG: "true"
+      CORS_ORIGINS: "http://localhost:3000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/auth/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
 volumes:
   mysql_dev_data:
     driver: local

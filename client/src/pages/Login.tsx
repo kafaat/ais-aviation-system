@@ -8,15 +8,23 @@ import { Label } from "@/components/ui/label";
 import { APP_LOGO, getLoginUrl } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { Loader2, LogIn, AlertTriangle, Eye, EyeOff } from "lucide-react";
+import {
+  Loader2,
+  LogIn,
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  UserPlus,
+} from "lucide-react";
 
 export default function Login() {
   const { t } = useTranslation();
   const { user, loading, refresh } = useAuth();
   const [, navigate] = useLocation();
-  const [redirecting, setRedirecting] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -27,7 +35,6 @@ export default function Login() {
   const loginMutation = trpc.auth.login.useMutation({
     onSuccess: async () => {
       setLoginError(null);
-      // Refresh auth state after cookie is set
       await refresh();
       navigate("/", { replace: true });
     },
@@ -36,28 +43,36 @@ export default function Login() {
     },
   });
 
-  // If already authenticated, redirect to home
+  const registerMutation = trpc.auth.register.useMutation({
+    onSuccess: async () => {
+      setLoginError(null);
+      // After registration, auto-login
+      loginMutation.mutate({ email, password });
+    },
+    onError: error => {
+      setLoginError(error.message || t("login.registrationFailed"));
+    },
+  });
+
   useEffect(() => {
     if (!loading && user) {
       navigate("/", { replace: true });
     }
   }, [user, loading, navigate]);
 
-  // If OAuth is configured, auto-redirect
-  useEffect(() => {
-    if (!loading && !user && isOAuthConfigured) {
-      setRedirecting(true);
-      window.location.href = loginUrl;
-    }
-  }, [loading, user, isOAuthConfigured, loginUrl]);
-
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
-    loginMutation.mutate({ email, password });
+    if (mode === "register") {
+      registerMutation.mutate({ email, password, name: name || undefined });
+    } else {
+      loginMutation.mutate({ email, password });
+    }
   };
 
-  if (loading || redirecting) {
+  const isPending = loginMutation.isPending || registerMutation.isPending;
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
         <div className="flex flex-col items-center gap-4">
@@ -68,7 +83,6 @@ export default function Login() {
     );
   }
 
-  // Already authenticated - will redirect via useEffect
   if (user) {
     return null;
   }
@@ -92,89 +106,135 @@ export default function Login() {
           </div>
         </div>
 
-        {isOAuthConfigured ? (
-          <Button
-            onClick={() => {
-              setRedirecting(true);
-              window.location.href = loginUrl;
-            }}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90"
-          >
-            <LogIn className="mr-2 h-4 w-4" />
-            {t("common.login")}
-          </Button>
-        ) : (
-          <form onSubmit={handleLoginSubmit} className="w-full space-y-4">
-            {loginError && (
-              <div
-                className="flex items-center gap-3 p-4 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800"
-                data-testid="error-message"
-              >
-                <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
-                <p className="text-sm text-red-700 dark:text-red-400">
-                  {loginError}
-                </p>
-              </div>
-            )}
+        <form onSubmit={handleLoginSubmit} className="w-full space-y-4">
+          {loginError && (
+            <div
+              className="flex items-center gap-3 p-4 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800"
+              data-testid="error-message"
+            >
+              <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+              <p className="text-sm text-red-700 dark:text-red-400">
+                {loginError}
+              </p>
+            </div>
+          )}
 
+          {mode === "register" && (
             <div className="space-y-2">
-              <Label htmlFor="email">{t("login.email") || "Email"}</Label>
+              <Label htmlFor="name">{t("login.name")}</Label>
               <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder={t("login.emailPlaceholder") || "email@example.com"}
-                required
-                aria-label={t("login.email") || "Email"}
+                id="name"
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder={t("login.namePlaceholder")}
+                aria-label={t("login.name")}
               />
             </div>
+          )}
 
-            <div className="space-y-2">
-              <Label htmlFor="password">
-                {t("login.password") || "Password"}
-              </Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder={t("login.passwordPlaceholder") || "********"}
-                  required
-                  aria-label={t("login.password") || "Password"}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 end-0 flex items-center pe-3 text-muted-foreground hover:text-foreground"
-                  data-testid="toggle-password-visibility"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
+          <div className="space-y-2">
+            <Label htmlFor="email">{t("login.email")}</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder={t("login.emailPlaceholder") || "email@example.com"}
+              required
+              aria-label={t("login.email")}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">{t("login.password")}</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={t("login.passwordPlaceholder") || "********"}
+                required
+                minLength={mode === "register" ? 8 : 1}
+                aria-label={t("login.password")}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 end-0 flex items-center pe-3 text-muted-foreground hover:text-foreground"
+                data-testid="toggle-password-visibility"
+                aria-label={
+                  showPassword
+                    ? t("login.hidePassword")
+                    : t("login.showPassword")
+                }
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90"
+            disabled={isPending}
+          >
+            {isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : mode === "register" ? (
+              <UserPlus className="mr-2 h-4 w-4" />
+            ) : (
+              <LogIn className="mr-2 h-4 w-4" />
+            )}
+            {mode === "register" ? t("login.register") : t("common.login")}
+          </Button>
+
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setMode(mode === "login" ? "register" : "login");
+                setLoginError(null);
+              }}
+              className="text-sm text-primary hover:underline"
+            >
+              {mode === "login"
+                ? t("login.noAccountRegister")
+                : t("login.hasAccountLogin")}
+            </button>
+          </div>
+        </form>
+
+        {isOAuthConfigured && (
+          <div className="w-full space-y-3">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  {t("login.orContinueWith")}
+                </span>
               </div>
             </div>
-
             <Button
-              type="submit"
+              variant="outline"
+              onClick={() => {
+                window.location.href = loginUrl;
+              }}
               size="lg"
-              className="w-full shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90"
-              disabled={loginMutation.isPending}
+              className="w-full"
             >
-              {loginMutation.isPending ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <LogIn className="mr-2 h-4 w-4" />
-              )}
-              {t("common.login")}
+              <LogIn className="mr-2 h-4 w-4" />
+              {t("login.oauthLogin")}
             </Button>
-          </form>
+          </div>
         )}
       </Card>
     </div>
