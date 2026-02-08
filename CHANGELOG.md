@@ -1,5 +1,27 @@
 # Changelog
 
+## What's Changed in v1.10.1
+
+### Bug Fixes
+- fix: improve accessibility across all major pages (WCAG compliance) (3d7e966)
+- fix: format CHANGELOG.md after merge from main (213463b)
+- fix: add kubeconfig validation to prevent deploy failures (1fb1a88)
+
+### Maintenance
+- chore(release): v1.10.0 (5ff7483)
+
+### Other Changes
+- Auth service not registered (9668b04)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (633e88a)
+- Merge branch 'main' into claude/implement-todo-zrBPj (45ae5de)
+- Merge pull request #62 from kafaat/claude/implement-todo-zrBPj (d637f56)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.10.0...v1.10.1
+
+
+---
+
 ## What's Changed in v1.10.0
 
 ### Features
