@@ -22,6 +22,7 @@ import {
   sentryErrorMiddleware,
   errorResponseMiddleware,
 } from "./middleware/sentry.middleware";
+import { requestIdMiddleware } from "./middleware/request-id.middleware";
 import {
   apmRequestMiddleware,
   startSystemMetricsCollection,
@@ -80,6 +81,9 @@ async function startServer() {
 
   // APM request timing middleware
   app.use(apmRequestMiddleware);
+
+  // Request ID middleware - generates unique ID for each request
+  app.use(requestIdMiddleware);
 
   // Security headers with Helmet
   const isDevelopment = process.env.NODE_ENV === "development";
