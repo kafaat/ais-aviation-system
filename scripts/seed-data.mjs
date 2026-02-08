@@ -76,6 +76,20 @@ async function seedData() {
         logo: "https://upload.wikimedia.org/wikipedia/en/thumb/0/0b/Qatar_Airways_Logo.svg/200px-Qatar_Airways_Logo.svg.png",
         active: true,
       },
+      {
+        code: "IY",
+        name: "اليمنية",
+        country: "Yemen",
+        logo: "https://upload.wikimedia.org/wikipedia/en/thumb/3/37/Yemenia_Logo.svg/200px-Yemenia_Logo.svg.png",
+        active: true,
+      },
+      {
+        code: "WY",
+        name: "الطيران العُماني",
+        country: "Oman",
+        logo: "https://upload.wikimedia.org/wikipedia/en/thumb/b/b5/Oman_Air_Logo.svg/200px-Oman_Air_Logo.svg.png",
+        active: true,
+      },
     ]);
 
     // Seed Airports
@@ -122,6 +136,27 @@ async function seedData() {
         city: "الدمام",
         country: "Saudi Arabia",
         timezone: "Asia/Riyadh",
+      },
+      {
+        code: "SAH",
+        name: "مطار صنعاء الدولي",
+        city: "صنعاء",
+        country: "Yemen",
+        timezone: "Asia/Aden",
+      },
+      {
+        code: "ADE",
+        name: "مطار عدن الدولي",
+        city: "عدن",
+        country: "Yemen",
+        timezone: "Asia/Aden",
+      },
+      {
+        code: "MCT",
+        name: "مطار مسقط الدولي",
+        city: "مسقط",
+        country: "Oman",
+        timezone: "Asia/Muscat",
       },
     ]);
 
@@ -217,6 +252,159 @@ async function seedData() {
         economyAvailable: 140,
         businessAvailable: 25,
       },
+      // JED to SAH (Jeddah to Sanaa)
+      {
+        flightNumber: "IY601",
+        airlineId: 5,
+        originId: 2,
+        destinationId: 7,
+        departureTime: new Date(tomorrow.setHours(9, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(11, 30, 0, 0)),
+        aircraftType: "Airbus A320",
+        status: "scheduled",
+        economySeats: 120,
+        businessSeats: 20,
+        economyPrice: 45000, // 450 SAR
+        businessPrice: 130000, // 1300 SAR
+        economyAvailable: 120,
+        businessAvailable: 20,
+      },
+      // SAH to JED (Sanaa to Jeddah)
+      {
+        flightNumber: "IY602",
+        airlineId: 5,
+        originId: 7,
+        destinationId: 2,
+        departureTime: new Date(tomorrow.setHours(13, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(15, 30, 0, 0)),
+        aircraftType: "Airbus A320",
+        status: "scheduled",
+        economySeats: 120,
+        businessSeats: 20,
+        economyPrice: 45000, // 450 SAR
+        businessPrice: 130000, // 1300 SAR
+        economyAvailable: 120,
+        businessAvailable: 20,
+      },
+      // JED to ADE (Jeddah to Aden)
+      {
+        flightNumber: "IY603",
+        airlineId: 5,
+        originId: 2,
+        destinationId: 8,
+        departureTime: new Date(tomorrow.setHours(7, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(9, 30, 0, 0)),
+        aircraftType: "Boeing 737",
+        status: "scheduled",
+        economySeats: 130,
+        businessSeats: 20,
+        economyPrice: 42000, // 420 SAR
+        businessPrice: 125000, // 1250 SAR
+        economyAvailable: 130,
+        businessAvailable: 20,
+      },
+      // ADE to JED (Aden to Jeddah)
+      {
+        flightNumber: "IY604",
+        airlineId: 5,
+        originId: 8,
+        destinationId: 2,
+        departureTime: new Date(tomorrow.setHours(11, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(13, 30, 0, 0)),
+        aircraftType: "Boeing 737",
+        status: "scheduled",
+        economySeats: 130,
+        businessSeats: 20,
+        economyPrice: 42000, // 420 SAR
+        businessPrice: 125000, // 1250 SAR
+        economyAvailable: 130,
+        businessAvailable: 20,
+      },
+      // SAH to ADE (Sanaa to Aden - domestic Yemen)
+      {
+        flightNumber: "IY210",
+        airlineId: 5,
+        originId: 7,
+        destinationId: 8,
+        departureTime: new Date(tomorrow.setHours(6, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(7, 15, 0, 0)),
+        aircraftType: "Boeing 737",
+        status: "scheduled",
+        economySeats: 130,
+        businessSeats: 20,
+        economyPrice: 25000, // 250 SAR
+        businessPrice: 80000, // 800 SAR
+        economyAvailable: 130,
+        businessAvailable: 20,
+      },
+      // RUH to MCT (Riyadh to Muscat)
+      {
+        flightNumber: "WY812",
+        airlineId: 6,
+        originId: 1,
+        destinationId: 9,
+        departureTime: new Date(tomorrow.setHours(10, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(12, 30, 0, 0)),
+        aircraftType: "Boeing 787",
+        status: "scheduled",
+        economySeats: 180,
+        businessSeats: 30,
+        economyPrice: 55000, // 550 SAR
+        businessPrice: 160000, // 1600 SAR
+        economyAvailable: 180,
+        businessAvailable: 30,
+      },
+      // MCT to RUH (Muscat to Riyadh)
+      {
+        flightNumber: "WY813",
+        airlineId: 6,
+        originId: 9,
+        destinationId: 1,
+        departureTime: new Date(tomorrow.setHours(15, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(17, 0, 0, 0)),
+        aircraftType: "Boeing 787",
+        status: "scheduled",
+        economySeats: 180,
+        businessSeats: 30,
+        economyPrice: 55000, // 550 SAR
+        businessPrice: 160000, // 1600 SAR
+        economyAvailable: 180,
+        businessAvailable: 30,
+      },
+      // JED to MCT (Jeddah to Muscat)
+      {
+        flightNumber: "WY814",
+        airlineId: 6,
+        originId: 2,
+        destinationId: 9,
+        departureTime: new Date(tomorrow.setHours(12, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(15, 30, 0, 0)),
+        aircraftType: "Airbus A330",
+        status: "scheduled",
+        economySeats: 170,
+        businessSeats: 30,
+        economyPrice: 65000, // 650 SAR
+        businessPrice: 175000, // 1750 SAR
+        economyAvailable: 170,
+        businessAvailable: 30,
+      },
+      // MCT to DXB (Muscat to Dubai)
+      {
+        flightNumber: "WY607",
+        airlineId: 6,
+        originId: 9,
+        destinationId: 3,
+        departureTime: new Date(tomorrow.setHours(8, 0, 0, 0)),
+        arrivalTime: new Date(tomorrow.setHours(9, 0, 0, 0)),
+        aircraftType: "Boeing 737",
+        status: "scheduled",
+        economySeats: 140,
+        businessSeats: 25,
+        economyPrice: 30000, // 300 SAR
+        businessPrice: 90000, // 900 SAR
+        economyAvailable: 140,
+        businessAvailable: 25,
+      },
     ]);
 
     // Seed Currencies
@@ -276,6 +464,30 @@ async function seedData() {
         nameAr: "جنيه مصري",
         symbol: "ج.م",
         decimalPlaces: 2,
+        symbolPosition: "after",
+        thousandsSeparator: ",",
+        decimalSeparator: ".",
+        isActive: true,
+        isBaseCurrency: false,
+      },
+      {
+        code: "YER",
+        name: "Yemeni Rial",
+        nameAr: "ريال يمني",
+        symbol: "﷼",
+        decimalPlaces: 2,
+        symbolPosition: "after",
+        thousandsSeparator: ",",
+        decimalSeparator: ".",
+        isActive: true,
+        isBaseCurrency: false,
+      },
+      {
+        code: "OMR",
+        name: "Omani Rial",
+        nameAr: "ريال عُماني",
+        symbol: "ر.ع.",
+        decimalPlaces: 3,
         symbolPosition: "after",
         thousandsSeparator: ",",
         decimalSeparator: ".",
