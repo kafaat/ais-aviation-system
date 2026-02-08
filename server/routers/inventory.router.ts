@@ -285,6 +285,135 @@ export const inventoryRouter = router({
     }),
 
   /**
+   * Record denied boarding incident
+   */
+  recordDeniedBoarding: adminProcedure
+    .input(
+      z.object({
+        flightId: z.number().int().positive(),
+        bookingId: z.number().int().positive(),
+        userId: z.number().int().positive(),
+        type: z.enum(["voluntary", "involuntary"]),
+        compensationAmount: z.number().int().min(0),
+        compensationType: z.enum(["cash", "voucher", "miles"]),
+        alternativeFlightId: z.number().int().positive().optional(),
+        notes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const result = await InventoryService.recordDeniedBoarding(input);
+        return { success: true, data: result };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to record denied boarding",
+        });
+      }
+    }),
+
+  /**
+   * Get denied boarding records for a flight
+   */
+  getDeniedBoardingRecords: adminProcedure
+    .input(z.object({ flightId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      try {
+        const records = await InventoryService.getDeniedBoardingRecords(
+          input.flightId
+        );
+        return { success: true, data: records };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to get denied boarding records",
+        });
+      }
+    }),
+
+  /**
+   * Update denied boarding record status
+   */
+  updateDeniedBoardingStatus: adminProcedure
+    .input(
+      z.object({
+        recordId: z.number().int().positive(),
+        status: z.enum(["accepted", "rejected", "completed"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        await InventoryService.updateDeniedBoardingStatus(
+          input.recordId,
+          input.status
+        );
+        return { success: true };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to update denied boarding status",
+        });
+      }
+    }),
+
+  /**
+   * Get all overbooking configurations
+   */
+  getOverbookingConfigs: adminProcedure.query(async () => {
+    try {
+      const configs = await InventoryService.getOverbookingConfigs();
+      return { success: true, data: configs };
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to get overbooking configs",
+      });
+    }
+  }),
+
+  /**
+   * Create overbooking configuration
+   */
+  createOverbookingConfig: adminProcedure
+    .input(
+      z.object({
+        airlineId: z.number().int().positive().optional(),
+        originId: z.number().int().positive().optional(),
+        destinationId: z.number().int().positive().optional(),
+        economyRate: z.string(),
+        businessRate: z.string(),
+        maxOverbooking: z.number().int().min(0).max(50),
+        historicalNoShowRate: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const result = await InventoryService.upsertOverbookingConfig(input);
+        return { success: true, data: result };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to create overbooking config",
+        });
+      }
+    }),
+
+  /**
    * Expire old holds (admin/system)
    */
   expireOldHolds: adminProcedure.mutation(async () => {
@@ -314,14 +443,15 @@ export const inventoryRouter = router({
     .input(getInventoryStatusInput)
     .mutation(async ({ input }) => {
       try {
-        await InventoryService.processWaitlist(
+        const seatsOffered = await InventoryService.processWaitlist(
           input.flightId,
           input.cabinClass
         );
 
         return {
           success: true,
-          message: "Waitlist processed successfully",
+          data: { seatsOffered },
+          message: `Waitlist processed, ${seatsOffered} seats offered`,
         };
       } catch (error) {
         throw new TRPCError({

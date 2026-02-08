@@ -4032,3 +4032,75 @@ export const priceElasticityData = mysqlTable(
 export type PriceElasticityRecord = typeof priceElasticityData.$inferSelect;
 export type InsertPriceElasticityRecord =
   typeof priceElasticityData.$inferInsert;
+
+// ============================================================================
+// Flight Tracking Tables
+// ============================================================================
+
+/**
+ * Flight Tracking
+ * Real-time flight position and telemetry data
+ */
+export const flightTracking = mysqlTable(
+  "flight_tracking",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    flightId: int("flightId").notNull(),
+
+    // Position
+    latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+    longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+    altitude: int("altitude").notNull(), // feet
+    heading: int("heading").notNull(), // degrees 0-360
+    groundSpeed: int("groundSpeed").notNull(), // knots
+
+    // Flight phase
+    phase: mysqlEnum("phase", [
+      "boarding",
+      "taxiing",
+      "takeoff",
+      "climbing",
+      "cruising",
+      "descending",
+      "approach",
+      "landing",
+      "arrived",
+    ]).notNull(),
+
+    // Estimated times
+    estimatedArrival: timestamp("estimatedArrival"),
+
+    // Weather at position
+    temperature: int("temperature"), // celsius
+    windSpeed: int("windSpeed"), // knots
+    windDirection: int("windDirection"), // degrees
+    turbulence: mysqlEnum("turbulence", [
+      "none",
+      "light",
+      "moderate",
+      "severe",
+    ]).default("none"),
+
+    // Progress
+    distanceCovered: int("distanceCovered"), // km
+    distanceRemaining: int("distanceRemaining"), // km
+    progressPercent: decimal("progressPercent", {
+      precision: 5,
+      scale: 2,
+    }),
+
+    recordedAt: timestamp("recordedAt").defaultNow().notNull(),
+  },
+  table => ({
+    flightIdx: index("flight_tracking_flight_idx").on(table.flightId),
+    recordedIdx: index("flight_tracking_recorded_idx").on(table.recordedAt),
+    flightRecordedIdx: index("flight_tracking_flight_recorded_idx").on(
+      table.flightId,
+      table.recordedAt
+    ),
+  })
+);
+
+export type FlightTrackingRecord = typeof flightTracking.$inferSelect;
+export type InsertFlightTrackingRecord = typeof flightTracking.$inferInsert;

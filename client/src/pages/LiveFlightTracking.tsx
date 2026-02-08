@@ -1,11 +1,12 @@
 /**
  * LiveFlightTracking Page
  *
- * A page for tracking flights in real-time with:
+ * Real-time flight tracking with:
+ * - Backend-powered flight data via tRPC
  * - Flight timeline visualization
  * - Flight progress indicator
- * - Mock live flight data
- * - Responsive design
+ * - Telemetry data display (altitude, speed, heading)
+ * - Active flights list
  */
 
 import { useState, useMemo } from "react";
@@ -33,42 +34,16 @@ import {
   RefreshCw,
   Wifi,
   WifiOff,
+  Gauge,
+  Mountain,
+  Compass,
+  Thermometer,
+  Wind,
+  AlertTriangle,
 } from "lucide-react";
-import { format, addHours, subHours } from "date-fns";
+import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-
-// Mock flight data for demonstration
-const getMockFlight = (flightNumber: string) => {
-  const now = new Date();
-  // Create a flight that's currently in progress
-  const departure = subHours(now, 2);
-  const arrival = addHours(now, 3);
-
-  return {
-    id: 1,
-    flightNumber: flightNumber || "AIS-1234",
-    airline: {
-      name: "AIS Airlines",
-      code: "AIS",
-      logo: null,
-    },
-    origin: {
-      code: "JED",
-      city: "Jeddah",
-      name: "King Abdulaziz International Airport",
-    },
-    destination: {
-      code: "DXB",
-      city: "Dubai",
-      name: "Dubai International Airport",
-    },
-    departureTime: departure,
-    arrivalTime: arrival,
-    status: "in_flight" as const,
-    aircraft: "Boeing 787-9 Dreamliner",
-    distanceKm: 1920,
-  };
-};
+import { trpc } from "@/lib/trpc";
 
 export default function LiveFlightTracking() {
   const { t, i18n } = useTranslation();
@@ -77,37 +52,86 @@ export default function LiveFlightTracking() {
   const [_location] = useLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [trackedFlight, setTrackedFlight] = useState<ReturnType<
-    typeof getMockFlight
-  > | null>(null);
+  const [trackedFlightNumber, setTrackedFlightNumber] = useState<string | null>(
+    null
+  );
   const [isConnected, _setIsConnected] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Query flight tracking data from backend
+  const {
+    data: trackingData,
+    isLoading,
+    refetch,
+    isRefetching,
+  } = trpc.flightTracking.trackByNumber.useQuery(
+    { flightNumber: trackedFlightNumber ?? "" },
+    {
+      enabled: !!trackedFlightNumber,
+      refetchInterval: 30000, // Refresh every 30 seconds
+    }
+  );
+
+  // Active flights for quick access
+  const { data: activeFlights } = trpc.flightTracking.activeFlights.useQuery(
+    undefined,
+    { refetchInterval: 60000 }
+  );
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
-      setTrackedFlight(getMockFlight(searchQuery.trim().toUpperCase()));
+      setTrackedFlightNumber(searchQuery.trim().toUpperCase());
     }
   };
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
-    // Simulate refresh
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    if (trackedFlight) {
-      setTrackedFlight(getMockFlight(trackedFlight.flightNumber));
-    }
-    setIsRefreshing(false);
+    await refetch();
   };
 
-  // Sample flights for quick access
-  const sampleFlights = useMemo(
-    () => [
+  // Quick access flights
+  const sampleFlights = useMemo(() => {
+    if (activeFlights && activeFlights.length > 0) {
+      return activeFlights.slice(0, 3).map(f => ({
+        number: f.flightNumber,
+        route: `${f.origin} - ${f.destination}`,
+      }));
+    }
+    return [
       { number: "AIS-1234", route: "JED - DXB" },
       { number: "AIS-5678", route: "RUH - CAI" },
       { number: "AIS-9012", route: "DMM - AMM" },
-    ],
-    []
-  );
+    ];
+  }, [activeFlights]);
+
+  const flight = trackingData?.flight;
+  const position = trackingData?.currentPosition;
+
+  const phaseLabel = (phase: string) => {
+    const labels: Record<string, string> = {
+      boarding: t("liveTracking.phaseBoarding"),
+      taxiing: t("liveTracking.phaseTaxiing"),
+      takeoff: t("liveTracking.phaseTakeoff"),
+      climbing: t("liveTracking.phaseClimbing"),
+      cruising: t("liveTracking.phaseCruising"),
+      descending: t("liveTracking.phaseDescending"),
+      approach: t("liveTracking.phaseApproach"),
+      landing: t("liveTracking.phaseLanding"),
+      arrived: t("liveTracking.phaseArrived"),
+    };
+    return labels[phase] || phase;
+  };
+
+  const turbulenceColor = (turbulence: string | null | undefined) => {
+    switch (turbulence) {
+      case "light":
+        return "bg-yellow-100 text-yellow-700 border-yellow-200";
+      case "moderate":
+        return "bg-orange-100 text-orange-700 border-orange-200";
+      case "severe":
+        return "bg-red-100 text-red-700 border-red-200";
+      default:
+        return "bg-emerald-100 text-emerald-700 border-emerald-200";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 dark:from-slate-950 dark:via-blue-950/20 dark:to-slate-950">
@@ -192,6 +216,7 @@ export default function LiveFlightTracking() {
                 </div>
                 <Button
                   onClick={handleSearch}
+                  disabled={isLoading}
                   className="h-12 px-8 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                 >
                   <Search className="h-5 w-5 mr-2" />
@@ -204,19 +229,19 @@ export default function LiveFlightTracking() {
                 <span className="text-sm text-muted-foreground">
                   {t("liveTracking.quickAccess")}:
                 </span>
-                {sampleFlights.map(flight => (
+                {sampleFlights.map(f => (
                   <Button
-                    key={flight.number}
+                    key={f.number}
                     variant="outline"
                     size="sm"
                     className="rounded-full"
                     onClick={() => {
-                      setSearchQuery(flight.number);
-                      setTrackedFlight(getMockFlight(flight.number));
+                      setSearchQuery(f.number);
+                      setTrackedFlightNumber(f.number);
                     }}
                   >
                     <Plane className="h-3 w-3 mr-1" />
-                    {flight.number}
+                    {f.number}
                   </Button>
                 ))}
               </div>
@@ -224,8 +249,18 @@ export default function LiveFlightTracking() {
           </Card>
         </motion.div>
 
+        {/* Loading state */}
+        {isLoading && trackedFlightNumber && (
+          <div className="text-center py-16">
+            <RefreshCw className="h-8 w-8 mx-auto mb-4 text-blue-500 animate-spin" />
+            <p className="text-muted-foreground">
+              {t("liveTracking.searching")}
+            </p>
+          </div>
+        )}
+
         {/* Tracked flight display */}
-        {trackedFlight && (
+        {flight && !isLoading && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -243,14 +278,19 @@ export default function LiveFlightTracking() {
                     </div>
                     <div>
                       <h2 className="text-2xl font-bold">
-                        {trackedFlight.flightNumber}
+                        {flight.flightNumber}
                       </h2>
-                      <p className="text-muted-foreground">
-                        {trackedFlight.airline.name}
-                      </p>
                       <p className="text-sm text-muted-foreground">
-                        {trackedFlight.aircraft}
+                        {flight.aircraftType}
                       </p>
+                      {position && (
+                        <Badge
+                          variant="outline"
+                          className="mt-1 bg-blue-50 text-blue-700 border-blue-200"
+                        >
+                          {phaseLabel(position.phase)}
+                        </Badge>
+                      )}
                     </div>
                   </div>
 
@@ -260,12 +300,12 @@ export default function LiveFlightTracking() {
                         {t("liveTracking.departure")}
                       </p>
                       <p className="text-xl font-bold">
-                        {format(trackedFlight.departureTime, "HH:mm", {
+                        {format(new Date(flight.departureTime), "HH:mm", {
                           locale: dateLocale,
                         })}
                       </p>
                       <p className="text-sm font-medium">
-                        {trackedFlight.origin.code}
+                        {flight.origin.code}
                       </p>
                     </div>
 
@@ -280,12 +320,12 @@ export default function LiveFlightTracking() {
                         {t("liveTracking.arrival")}
                       </p>
                       <p className="text-xl font-bold">
-                        {format(trackedFlight.arrivalTime, "HH:mm", {
+                        {format(new Date(flight.arrivalTime), "HH:mm", {
                           locale: dateLocale,
                         })}
                       </p>
                       <p className="text-sm font-medium">
-                        {trackedFlight.destination.code}
+                        {flight.destination.code}
                       </p>
                     </div>
 
@@ -293,11 +333,11 @@ export default function LiveFlightTracking() {
                       variant="outline"
                       size="sm"
                       onClick={handleRefresh}
-                      disabled={isRefreshing}
+                      disabled={isRefetching}
                       className="ml-4"
                     >
                       <RefreshCw
-                        className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
+                        className={`h-4 w-4 mr-2 ${isRefetching ? "animate-spin" : ""}`}
                       />
                       {t("liveTracking.refresh")}
                     </Button>
@@ -309,20 +349,18 @@ export default function LiveFlightTracking() {
                   <div className="flex items-start gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
                     <MapPin className="h-5 w-5 text-emerald-500 mt-0.5" />
                     <div>
-                      <p className="font-medium">{trackedFlight.origin.city}</p>
+                      <p className="font-medium">{flight.origin.city}</p>
                       <p className="text-sm text-muted-foreground">
-                        {trackedFlight.origin.name}
+                        {flight.origin.name}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
                     <MapPin className="h-5 w-5 text-blue-500 mt-0.5" />
                     <div>
-                      <p className="font-medium">
-                        {trackedFlight.destination.city}
-                      </p>
+                      <p className="font-medium">{flight.destination.city}</p>
                       <p className="text-sm text-muted-foreground">
-                        {trackedFlight.destination.name}
+                        {flight.destination.name}
                       </p>
                     </div>
                   </div>
@@ -330,31 +368,114 @@ export default function LiveFlightTracking() {
               </CardContent>
             </Card>
 
+            {/* Telemetry Data */}
+            {position && (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                <Card className="border-0 shadow-md bg-white/80 dark:bg-slate-900/80 p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Mountain className="h-4 w-4 text-blue-500" />
+                    <span className="text-xs text-muted-foreground">
+                      {t("liveTracking.altitude")}
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold">
+                    {position.altitude.toLocaleString()} ft
+                  </p>
+                </Card>
+                <Card className="border-0 shadow-md bg-white/80 dark:bg-slate-900/80 p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Gauge className="h-4 w-4 text-indigo-500" />
+                    <span className="text-xs text-muted-foreground">
+                      {t("liveTracking.speed")}
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold">
+                    {position.groundSpeed} kts
+                  </p>
+                </Card>
+                <Card className="border-0 shadow-md bg-white/80 dark:bg-slate-900/80 p-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Compass className="h-4 w-4 text-purple-500" />
+                    <span className="text-xs text-muted-foreground">
+                      {t("liveTracking.heading")}
+                    </span>
+                  </div>
+                  <p className="text-lg font-bold">{position.heading}°</p>
+                </Card>
+                {position.temperature !== null && (
+                  <Card className="border-0 shadow-md bg-white/80 dark:bg-slate-900/80 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Thermometer className="h-4 w-4 text-red-500" />
+                      <span className="text-xs text-muted-foreground">
+                        {t("liveTracking.temperature")}
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold">
+                      {position.temperature}°C
+                    </p>
+                  </Card>
+                )}
+                {position.windSpeed !== null && (
+                  <Card className="border-0 shadow-md bg-white/80 dark:bg-slate-900/80 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Wind className="h-4 w-4 text-cyan-500" />
+                      <span className="text-xs text-muted-foreground">
+                        {t("liveTracking.wind")}
+                      </span>
+                    </div>
+                    <p className="text-lg font-bold">
+                      {position.windSpeed} kts
+                    </p>
+                  </Card>
+                )}
+                {position.turbulence && position.turbulence !== "none" && (
+                  <Card className="border-0 shadow-md bg-white/80 dark:bg-slate-900/80 p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <span className="text-xs text-muted-foreground">
+                        {t("liveTracking.turbulence")}
+                      </span>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={turbulenceColor(position.turbulence)}
+                    >
+                      {t(`liveTracking.turbulence_${position.turbulence}`)}
+                    </Badge>
+                  </Card>
+                )}
+              </div>
+            )}
+
             {/* Flight Progress */}
             <FlightProgress
-              departureTime={trackedFlight.departureTime}
-              arrivalTime={trackedFlight.arrivalTime}
-              origin={trackedFlight.origin.city}
-              destination={trackedFlight.destination.city}
-              originCode={trackedFlight.origin.code}
-              destinationCode={trackedFlight.destination.code}
-              flightNumber={trackedFlight.flightNumber}
-              distanceKm={trackedFlight.distanceKm}
+              departureTime={new Date(flight.departureTime)}
+              arrivalTime={new Date(flight.arrivalTime)}
+              origin={flight.origin.city}
+              destination={flight.destination.city}
+              originCode={flight.origin.code}
+              destinationCode={flight.destination.code}
+              flightNumber={flight.flightNumber}
+              distanceKm={
+                position?.distanceCovered && position?.distanceRemaining
+                  ? position.distanceCovered + position.distanceRemaining
+                  : 0
+              }
               showFlightData={true}
               className="border-0 shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm"
             />
 
             {/* Flight Timeline */}
             <FlightTimeline
-              departureTime={trackedFlight.departureTime}
-              arrivalTime={trackedFlight.arrivalTime}
-              flightNumber={trackedFlight.flightNumber}
-              origin={trackedFlight.origin.code}
-              destination={trackedFlight.destination.code}
+              departureTime={new Date(flight.departureTime)}
+              arrivalTime={new Date(flight.arrivalTime)}
+              flightNumber={flight.flightNumber}
+              origin={flight.origin.code}
+              destination={flight.destination.code}
               className="border-0 shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm"
             />
 
-            {/* Mock map placeholder */}
+            {/* Flight path visualization */}
             <Card className="border-0 shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm overflow-hidden">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -364,13 +485,11 @@ export default function LiveFlightTracking() {
               </CardHeader>
               <CardContent>
                 <div className="relative aspect-[16/9] bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl overflow-hidden">
-                  {/* Mock flight path visualization */}
                   <svg
                     className="absolute inset-0 w-full h-full"
                     viewBox="0 0 100 50"
                     preserveAspectRatio="none"
                   >
-                    {/* Flight path curve */}
                     <path
                       d="M 10 40 Q 50 5 90 40"
                       fill="none"
@@ -379,19 +498,18 @@ export default function LiveFlightTracking() {
                       className="text-blue-400 dark:text-blue-600"
                       strokeDasharray="2 2"
                     />
-                    {/* Origin marker */}
                     <circle
                       cx="10"
                       cy="40"
                       r="2"
                       className="fill-emerald-500"
                     />
-                    {/* Destination marker */}
                     <circle cx="90" cy="40" r="2" className="fill-blue-500" />
-                    {/* Plane position (animated) */}
                     <motion.g
                       initial={{ offsetDistance: "0%" }}
-                      animate={{ offsetDistance: "40%" }}
+                      animate={{
+                        offsetDistance: `${position?.progressPercent ?? 40}%`,
+                      }}
                       transition={{ duration: 2, ease: "easeOut" }}
                       style={{
                         offsetPath: "path('M 10 40 Q 50 5 90 40')",
@@ -400,14 +518,12 @@ export default function LiveFlightTracking() {
                       <circle r="1.5" className="fill-blue-600" />
                     </motion.g>
                   </svg>
-                  {/* Labels */}
                   <div className="absolute bottom-4 left-4 px-3 py-1 bg-white/90 dark:bg-slate-800/90 rounded-lg text-sm font-medium">
-                    {trackedFlight.origin.code}
+                    {flight.origin.code}
                   </div>
                   <div className="absolute bottom-4 right-4 px-3 py-1 bg-white/90 dark:bg-slate-800/90 rounded-lg text-sm font-medium">
-                    {trackedFlight.destination.code}
+                    {flight.destination.code}
                   </div>
-                  {/* Center info */}
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
                     <motion.div
                       animate={{ y: [0, -5, 0] }}
@@ -415,9 +531,16 @@ export default function LiveFlightTracking() {
                     >
                       <Plane className="h-8 w-8 mx-auto text-blue-600 rotate-45" />
                     </motion.div>
-                    <p className="mt-2 text-sm font-medium bg-white/90 dark:bg-slate-800/90 px-3 py-1 rounded-lg">
-                      {trackedFlight.distanceKm.toLocaleString()} km
-                    </p>
+                    {position?.distanceCovered != null &&
+                      position?.distanceRemaining != null && (
+                        <p className="mt-2 text-sm font-medium bg-white/90 dark:bg-slate-800/90 px-3 py-1 rounded-lg">
+                          {(
+                            position.distanceCovered +
+                            position.distanceRemaining
+                          ).toLocaleString()}{" "}
+                          km
+                        </p>
+                      )}
                   </div>
                 </div>
               </CardContent>
@@ -426,7 +549,7 @@ export default function LiveFlightTracking() {
         )}
 
         {/* Empty state */}
-        {!trackedFlight && (
+        {!flight && !isLoading && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

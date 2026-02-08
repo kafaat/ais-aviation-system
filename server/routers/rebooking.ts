@@ -3,6 +3,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import {
   getRebookData,
   searchFlightsForRebook,
+  quickRebook,
 } from "../services/rebooking.service";
 
 /**
@@ -43,5 +44,22 @@ export const rebookingRouter = router({
         input.destinationId,
         input.cabinClass
       );
+    }),
+
+  /**
+   * Quick rebook - create a new booking from a previous one in a single step
+   * Copies passengers, ancillaries, and cabin class automatically
+   */
+  quickRebook: protectedProcedure
+    .input(
+      z.object({
+        bookingId: z
+          .number()
+          .describe("Previous booking ID to copy passengers from"),
+        newFlightId: z.number().describe("New flight ID to book"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return await quickRebook(input.bookingId, input.newFlightId, ctx.user.id);
     }),
 });
