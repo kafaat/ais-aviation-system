@@ -469,9 +469,15 @@ export default function CheckIn() {
 
           {/* Error State */}
           {searchPerformed && bookingError && (
-            <Card className="p-12 text-center bg-white/80 backdrop-blur-sm shadow-xl border-0">
+            <Card
+              className="p-12 text-center bg-white/80 backdrop-blur-sm shadow-xl border-0"
+              role="alert"
+            >
               <div className="w-20 h-20 bg-gradient-to-br from-orange-100 to-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="h-10 w-10 text-orange-500" />
+                <AlertCircle
+                  className="h-10 w-10 text-orange-500"
+                  aria-hidden="true"
+                />
               </div>
               <h2 className="text-2xl font-semibold mb-2 text-gray-900">
                 {t("checkIn.notFound")}

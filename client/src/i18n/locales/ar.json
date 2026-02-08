@@ -143,6 +143,7 @@
     "title": "إكمال الحجز",
     "passengerInfo": "معلومات الركاب",
     "addPassenger": "إضافة راكب",
+    "removePassenger": "حذف الراكب",
     "passenger": "الراكب",
     "passengerType": "نوع الراكب",
     "adult": "بالغ",

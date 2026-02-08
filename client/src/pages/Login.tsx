@@ -88,7 +88,7 @@ export default function Login() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <main className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
       <Card className="flex flex-col items-center gap-8 p-8 max-w-md w-full mx-4 shadow-xl">
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
@@ -109,10 +109,14 @@ export default function Login() {
         <form onSubmit={handleLoginSubmit} className="w-full space-y-4">
           {loginError && (
             <div
+              role="alert"
               className="flex items-center gap-3 p-4 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800"
               data-testid="error-message"
             >
-              <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+              <AlertTriangle
+                className="h-5 w-5 text-red-500 shrink-0"
+                aria-hidden="true"
+              />
               <p className="text-sm text-red-700 dark:text-red-400">
                 {loginError}
               </p>
@@ -186,11 +190,14 @@ export default function Login() {
             disabled={isPending}
           >
             {isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2
+                className="mr-2 h-4 w-4 animate-spin"
+                aria-hidden="true"
+              />
             ) : mode === "register" ? (
-              <UserPlus className="mr-2 h-4 w-4" />
+              <UserPlus className="mr-2 h-4 w-4" aria-hidden="true" />
             ) : (
-              <LogIn className="mr-2 h-4 w-4" />
+              <LogIn className="mr-2 h-4 w-4" aria-hidden="true" />
             )}
             {mode === "register" ? t("login.register") : t("common.login")}
           </Button>
@@ -231,12 +238,12 @@ export default function Login() {
               size="lg"
               className="w-full"
             >
-              <LogIn className="mr-2 h-4 w-4" />
+              <LogIn className="mr-2 h-4 w-4" aria-hidden="true" />
               {t("login.oauthLogin")}
             </Button>
           </div>
         )}
       </Card>
-    </div>
+    </main>
   );
 }

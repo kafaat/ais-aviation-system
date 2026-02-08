@@ -496,11 +496,12 @@ export default function Profile() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm">
+                    <Label htmlFor="passportNumber" className="text-sm">
                       {t("profile.personal.passportNumber")}
                     </Label>
                     <div className="relative">
                       <Input
+                        id="passportNumber"
                         value={formData.passportNumber}
                         onChange={e =>
                           setFormData({
@@ -509,6 +510,12 @@ export default function Profile() {
                           })
                         }
                         placeholder={t("profile.personal.passportPlaceholder")}
+                        aria-invalid={!!formErrors.passportNumber}
+                        aria-describedby={
+                          formErrors.passportNumber
+                            ? "passportNumber-error"
+                            : undefined
+                        }
                         className={cn(
                           "bg-white border-gray-200 hover:border-primary/50 transition-colors",
                           formErrors.passportNumber &&
@@ -516,8 +523,12 @@ export default function Profile() {
                         )}
                       />
                       {formErrors.passportNumber && (
-                        <div className="flex items-center gap-1 mt-1 text-red-500 text-sm">
-                          <AlertCircle className="h-3 w-3" />
+                        <div
+                          id="passportNumber-error"
+                          role="alert"
+                          className="flex items-center gap-1 mt-1 text-red-500 text-sm"
+                        >
+                          <AlertCircle className="h-3 w-3" aria-hidden="true" />
                           <span>{formErrors.passportNumber}</span>
                         </div>
                       )}
@@ -554,10 +565,11 @@ export default function Profile() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm">
+                    <Label htmlFor="nationality" className="text-sm">
                       {t("profile.personal.nationality")}
                     </Label>
                     <Input
+                      id="nationality"
                       value={formData.nationality}
                       onChange={e =>
                         setFormData({
@@ -581,11 +593,12 @@ export default function Profile() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm">
+                    <Label htmlFor="phoneNumber" className="text-sm">
                       {t("profile.personal.phone")}
                     </Label>
                     <div className="relative">
                       <Input
+                        id="phoneNumber"
                         value={formData.phoneNumber}
                         onChange={e =>
                           setFormData({
@@ -594,6 +607,12 @@ export default function Profile() {
                           })
                         }
                         placeholder="+966 5X XXX XXXX"
+                        aria-invalid={!!formErrors.phoneNumber}
+                        aria-describedby={
+                          formErrors.phoneNumber
+                            ? "phoneNumber-error"
+                            : undefined
+                        }
                         className={cn(
                           "bg-white border-gray-200 hover:border-primary/50 transition-colors",
                           formErrors.phoneNumber &&
@@ -601,8 +620,12 @@ export default function Profile() {
                         )}
                       />
                       {formErrors.phoneNumber && (
-                        <div className="flex items-center gap-1 mt-1 text-red-500 text-sm">
-                          <AlertCircle className="h-3 w-3" />
+                        <div
+                          id="phoneNumber-error"
+                          role="alert"
+                          className="flex items-center gap-1 mt-1 text-red-500 text-sm"
+                        >
+                          <AlertCircle className="h-3 w-3" aria-hidden="true" />
                           <span>{formErrors.phoneNumber}</span>
                         </div>
                       )}
@@ -610,10 +633,11 @@ export default function Profile() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm">
+                    <Label htmlFor="emergencyContact" className="text-sm">
                       {t("profile.personal.emergencyContact")}
                     </Label>
                     <Input
+                      id="emergencyContact"
                       value={formData.emergencyContact}
                       onChange={e =>
                         setFormData({
@@ -629,11 +653,12 @@ export default function Profile() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-sm">
+                    <Label htmlFor="emergencyPhone" className="text-sm">
                       {t("profile.personal.emergencyPhone")}
                     </Label>
                     <div className="relative">
                       <Input
+                        id="emergencyPhone"
                         value={formData.emergencyPhone}
                         onChange={e =>
                           setFormData({
@@ -642,6 +667,12 @@ export default function Profile() {
                           })
                         }
                         placeholder="+966 5X XXX XXXX"
+                        aria-invalid={!!formErrors.emergencyPhone}
+                        aria-describedby={
+                          formErrors.emergencyPhone
+                            ? "emergencyPhone-error"
+                            : undefined
+                        }
                         className={cn(
                           "bg-white border-gray-200 hover:border-primary/50 transition-colors",
                           formErrors.emergencyPhone &&
@@ -649,8 +680,12 @@ export default function Profile() {
                         )}
                       />
                       {formErrors.emergencyPhone && (
-                        <div className="flex items-center gap-1 mt-1 text-red-500 text-sm">
-                          <AlertCircle className="h-3 w-3" />
+                        <div
+                          id="emergencyPhone-error"
+                          role="alert"
+                          className="flex items-center gap-1 mt-1 text-red-500 text-sm"
+                        >
+                          <AlertCircle className="h-3 w-3" aria-hidden="true" />
                           <span>{formErrors.emergencyPhone}</span>
                         </div>
                       )}

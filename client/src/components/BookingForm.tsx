@@ -93,8 +93,9 @@ export function BookingForm({
                   className="text-muted-foreground hover:text-destructive"
                   disabled={disabled}
                   data-testid={`remove-passenger-${index}`}
+                  aria-label={`${t("booking.removePassenger")} ${index + 1}`}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               )}
             </div>

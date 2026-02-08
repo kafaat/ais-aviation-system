@@ -324,7 +324,10 @@ export default function SearchResults() {
         keywords="flight search, booking, travel"
       />
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm">
+      <header
+        className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm"
+        role="banner"
+      >
         <div className="container py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -367,12 +370,15 @@ export default function SearchResults() {
       </header>
 
       {/* Results */}
-      <div className="container py-8">
+      <main className="container py-8">
         {!flights || flights.length === 0 ? (
           <div className="space-y-6" data-testid="no-results">
             <Card className="p-12 text-center border-dashed">
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
-                <Plane className="h-10 w-10 text-muted-foreground" />
+                <Plane
+                  className="h-10 w-10 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </div>
               <h2 className="text-2xl font-semibold mb-2">
                 {t("search.noFlights")}
@@ -401,7 +407,10 @@ export default function SearchResults() {
             </div>
 
             {/* Results Count */}
-            <div className="flex items-center justify-between">
+            <div
+              className="flex items-center justify-between"
+              aria-live="polite"
+            >
               <p className="text-lg font-medium">
                 {t("search.foundFlights", { count: filteredFlights.length })}
                 {filteredFlights.length !== flights.length && (
@@ -415,7 +424,10 @@ export default function SearchResults() {
             {/* Flight Cards */}
             {filteredFlights.length === 0 ? (
               <Card className="p-12 text-center border-dashed">
-                <Plane className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                <Plane
+                  className="h-16 w-16 text-muted-foreground mx-auto mb-4"
+                  aria-hidden="true"
+                />
                 <h2 className="text-2xl font-semibold mb-2">
                   {t("search.noMatchingFlights")}
                 </h2>
@@ -567,7 +579,16 @@ export default function SearchResults() {
                                     flight as unknown as FlightData
                                   )
                                 }
+                                onKeyDown={e => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    handleCompareToggle(
+                                      flight as unknown as FlightData
+                                    );
+                                  }
+                                }}
                                 role="checkbox"
+                                tabIndex={0}
                                 aria-checked={isSelected(flight.id)}
                                 aria-label={t("compare.addToCompare")}
                               >
@@ -771,7 +792,7 @@ export default function SearchResults() {
             )}
           </div>
         )}
-      </div>
+      </main>
 
       {/* Compare Bar - Sticky at bottom */}
       <CompareBar
