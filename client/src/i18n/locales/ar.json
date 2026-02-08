@@ -2260,7 +2260,13 @@
     "pending": "قيد الانتظار",
     "accepted": "مقبول",
     "rejected": "مرفوض",
-    "completed": "مكتمل"
+    "completed": "مكتمل",
+    "configCreated": "تم إنشاء إعداد الحجز الزائد",
+    "statusUpdated": "تم تحديث الحالة بنجاح",
+    "recommendations": "التوصيات",
+    "recommendedSeats": "مقاعد إضافية موصى بها",
+    "enterFlightId": "أدخل معرف الرحلة لعرض التوصيات",
+    "deniedType": "النوع"
   },
   "inventory": {
     "title": "إدارة المخزون",

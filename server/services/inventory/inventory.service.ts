@@ -20,7 +20,7 @@ import {
   overbookingConfig as overbookingConfigTable,
   deniedBoardingRecords,
 } from "../../../drizzle/schema";
-import { eq, and, gte, lte, sql, lt, count, sum, desc, asc } from "drizzle-orm";
+import { eq, and, gte, sql, lt, desc, asc } from "drizzle-orm";
 
 // ============================================================================
 // Types & Interfaces

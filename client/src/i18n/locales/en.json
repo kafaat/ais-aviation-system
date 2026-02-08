@@ -2260,7 +2260,13 @@
     "pending": "Pending",
     "accepted": "Accepted",
     "rejected": "Rejected",
-    "completed": "Completed"
+    "completed": "Completed",
+    "configCreated": "Overbooking configuration created",
+    "statusUpdated": "Status updated successfully",
+    "recommendations": "Recommendations",
+    "recommendedSeats": "recommended extra seats",
+    "enterFlightId": "Enter a Flight ID to view recommendations",
+    "deniedType": "Type"
   },
   "inventory": {
     "title": "Inventory Management",
