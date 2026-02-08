@@ -1,5 +1,29 @@
 # Changelog
 
+## What's Changed in v1.11.0
+
+### Features
+- feat: add Sanaa, Aden, and Muscat destinations with airlines and flights (0be56d6)
+- feat: add aircraft type models to seed data (A320, A330, A350, B727, B737, B777, B787) (9c26281)
+- feat: make SeatMap display aircraft-specific seat layouts (8b47507)
+- feat: integrate SeatMap component into booking flow (bad4715)
+
+### Bug Fixes
+- fix: format CHANGELOG.md for Prettier CI check (9094e2c)
+
+### Documentation
+- docs: update documentation for new destinations and currencies (cf01410)
+
+### Other Changes
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (33c33e9)
+- Merge pull request #63 from kafaat/claude/implement-todo-zrBPj (d4c8196)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.10.1...v1.11.0
+
+
+---
+
 ## What's Changed in v1.10.1
 
 ### Bug Fixes
