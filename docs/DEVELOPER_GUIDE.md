@@ -293,9 +293,10 @@ npx tsx scripts/seed-data.mjs
 
 This creates:
 
-- 5 airlines
-- 15 airports
-- 50+ flights
+- 6 airlines (SV, MS, EK, QR, IY, WY)
+- 9 airports (RUH, JED, DXB, CAI, DOH, DMM, SAH, ADE, MCT)
+- 15 flights
+- 7 currencies (SAR, USD, EUR, AED, EGP, YER, OMR)
 - Admin user
 
 ### Background Worker
