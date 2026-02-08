@@ -647,6 +647,10 @@ export default function CheckIn() {
                         }
                         onSeatSelect={handleSeatSelect}
                         maxSeats={booking.numberOfPassengers || 1}
+                        aircraftType={
+                          (flight as Record<string, unknown>)
+                            ?.aircraftType as string
+                        }
                       />
                       {selectedSeats.length > 0 &&
                         passengers &&
