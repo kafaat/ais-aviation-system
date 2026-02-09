@@ -24,25 +24,44 @@ import {
 import { APP_LOGO, APP_TITLE } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
+  Activity,
+  AlertTriangle,
   BarChart3,
+  Bed,
   Bell,
   Brain,
   Briefcase,
+  Building,
+  Calculator,
+  Database,
+  DoorOpen,
+  FileCheck,
+  FileSpreadsheet,
   FileText,
+  Fingerprint,
   Heart,
   Home,
+  ListOrdered,
   LogOut,
   Luggage,
+  Monitor,
+  Package,
   PanelLeft,
   Plane,
   RefreshCcw,
+  Scale,
   Search,
   Settings,
+  Shield,
+  ShieldAlert,
   Star,
+  Tag,
   Ticket,
+  Trash2,
   User,
   UserCheck,
   Users,
+  Weight,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -71,6 +90,7 @@ const menuItems: MenuItem[] = [
 ];
 
 const adminMenuItems: MenuItem[] = [
+  // Core Admin
   { icon: Settings, labelKey: "nav.admin", path: "/admin", adminOnly: true },
   {
     icon: BarChart3,
@@ -124,6 +144,130 @@ const adminMenuItems: MenuItem[] = [
     icon: Users,
     labelKey: "nav.overbooking",
     path: "/admin/overbooking",
+    adminOnly: true,
+  },
+  {
+    icon: DoorOpen,
+    labelKey: "nav.gates",
+    path: "/admin/gates",
+    adminOnly: true,
+  },
+  {
+    icon: Monitor,
+    labelKey: "nav.dcs",
+    path: "/admin/dcs",
+    adminOnly: true,
+  },
+  {
+    icon: Tag,
+    labelKey: "nav.vouchers",
+    path: "/admin/vouchers",
+    adminOnly: true,
+  },
+  {
+    icon: Trash2,
+    labelKey: "nav.deletedBookings",
+    path: "/admin/deleted-bookings",
+    adminOnly: true,
+  },
+  // Operations
+  {
+    icon: AlertTriangle,
+    labelKey: "nav.irops",
+    path: "/admin/irops",
+    adminOnly: true,
+  },
+  {
+    icon: Users,
+    labelKey: "nav.crewAssignment",
+    path: "/admin/crew-assignment",
+    adminOnly: true,
+  },
+  {
+    icon: Weight,
+    labelKey: "nav.weightBalance",
+    path: "/admin/weight-balance",
+    adminOnly: true,
+  },
+  {
+    icon: Package,
+    labelKey: "nav.loadPlanning",
+    path: "/admin/load-planning",
+    adminOnly: true,
+  },
+  // Passenger Services
+  {
+    icon: FileCheck,
+    labelKey: "nav.apis",
+    path: "/admin/apis",
+    adminOnly: true,
+  },
+  {
+    icon: Fingerprint,
+    labelKey: "nav.biometric",
+    path: "/admin/biometric",
+    adminOnly: true,
+  },
+  {
+    icon: Monitor,
+    labelKey: "nav.kiosk",
+    path: "/admin/kiosk",
+    adminOnly: true,
+  },
+  {
+    icon: Luggage,
+    labelKey: "nav.bagDrop",
+    path: "/admin/bag-drop",
+    adminOnly: true,
+  },
+  {
+    icon: Bed,
+    labelKey: "nav.emergencyHotel",
+    path: "/admin/emergency-hotel",
+    adminOnly: true,
+  },
+  {
+    icon: ListOrdered,
+    labelKey: "nav.passengerPriority",
+    path: "/admin/passenger-priority",
+    adminOnly: true,
+  },
+  {
+    icon: Scale,
+    labelKey: "nav.compensation",
+    path: "/admin/compensation",
+    adminOnly: true,
+  },
+  // Finance & Reporting
+  {
+    icon: Calculator,
+    labelKey: "nav.revenueAccounting",
+    path: "/admin/revenue-accounting",
+    adminOnly: true,
+  },
+  {
+    icon: FileSpreadsheet,
+    labelKey: "nav.bspReporting",
+    path: "/admin/bsp-reporting",
+    adminOnly: true,
+  },
+  {
+    icon: Database,
+    labelKey: "nav.dataWarehouse",
+    path: "/admin/data-warehouse",
+    adminOnly: true,
+  },
+  // System
+  {
+    icon: Activity,
+    labelKey: "nav.sla",
+    path: "/admin/sla",
+    adminOnly: true,
+  },
+  {
+    icon: ShieldAlert,
+    labelKey: "nav.disasterRecovery",
+    path: "/admin/disaster-recovery",
     adminOnly: true,
   },
 ];

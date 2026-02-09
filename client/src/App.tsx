@@ -88,6 +88,16 @@ const WeightBalance = lazy(() => import("./pages/admin/WeightBalance"));
 const DisasterRecovery = lazy(() => import("./pages/admin/DisasterRecovery"));
 const LoadPlanning = lazy(() => import("./pages/admin/LoadPlanning"));
 
+// Phase 4: Additional operational admin pages
+const APISManagement = lazy(() => import("./pages/admin/APISManagement"));
+const BiometricBoarding = lazy(() => import("./pages/admin/BiometricBoarding"));
+const KioskManagement = lazy(() => import("./pages/admin/KioskManagement"));
+const BagDropManagement = lazy(() => import("./pages/admin/BagDropManagement"));
+const EmergencyHotelManagement = lazy(
+  () => import("./pages/admin/EmergencyHotelManagement")
+);
+const PassengerPriority = lazy(() => import("./pages/admin/PassengerPriority"));
+
 // Corporate pages
 const CorporateDashboard = lazy(
   () => import("./pages/corporate/CorporateDashboard")
@@ -458,6 +468,48 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <LoadPlanning />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/apis">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <APISManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/biometric">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <BiometricBoarding />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/kiosk">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <KioskManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/bag-drop">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <BagDropManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/emergency-hotel">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <EmergencyHotelManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/passenger-priority">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <PassengerPriority />
               </Suspense>
             </AdminRoute>
           </Route>

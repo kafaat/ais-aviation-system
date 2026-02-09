@@ -6,7 +6,7 @@ import {
   adminProcedure,
 } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
-import * as codeshareService from "../services/codeshare.service";
+import * as interlineService from "../services/interline.service";
 
 /**
  * Interline Router
@@ -67,7 +67,7 @@ export const interlineRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        const result = await codeshareService.createInterlineAgreement({
+        const result = await interlineService.createInterlineAgreement({
           airline1Id: input.airline1Id,
           airline2Id: input.airline2Id,
           agreementType: input.agreementType,
@@ -139,7 +139,7 @@ export const interlineRouter = router({
       try {
         const { id, ...fields } = input;
 
-        const updateInput: codeshareService.UpdateInterlineAgreementInput = {};
+        const updateInput: interlineService.UpdateInterlineAgreementInput = {};
 
         if (fields.agreementType !== undefined) {
           updateInput.agreementType = fields.agreementType;
@@ -166,7 +166,7 @@ export const interlineRouter = router({
           updateInput.validUntil = new Date(fields.validUntil);
         }
 
-        const result = await codeshareService.updateInterlineAgreement(
+        const result = await interlineService.updateInterlineAgreement(
           id,
           updateInput
         );
@@ -195,7 +195,7 @@ export const interlineRouter = router({
     )
     .query(async ({ input }) => {
       try {
-        const data = await codeshareService.getInterlineAgreement(input.id);
+        const data = await interlineService.getInterlineAgreement(input.id);
 
         return {
           success: true,
@@ -260,7 +260,7 @@ export const interlineRouter = router({
         const limit = input?.limit ?? 20;
         const offset = (page - 1) * limit;
 
-        const data = await codeshareService.listInterlineAgreements({
+        const data = await interlineService.listInterlineAgreements({
           airlineId: input?.airlineId,
           status: input?.status,
           agreementType: input?.type,
@@ -298,7 +298,7 @@ export const interlineRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        const data = await codeshareService.activateInterlineAgreement(
+        const data = await interlineService.activateInterlineAgreement(
           input.id
         );
 
@@ -332,7 +332,7 @@ export const interlineRouter = router({
     )
     .mutation(async ({ input }) => {
       try {
-        const data = await codeshareService.terminateInterlineAgreement(
+        const data = await interlineService.terminateInterlineAgreement(
           input.id,
           input.reason
         );
@@ -368,7 +368,7 @@ export const interlineRouter = router({
     )
     .query(async ({ input }) => {
       try {
-        const data = await codeshareService.checkInterlineEligibility(
+        const data = await interlineService.checkInterlineEligibility(
           input.airline1Id,
           input.airline2Id
         );
@@ -419,7 +419,7 @@ export const interlineRouter = router({
     )
     .query(async ({ input }) => {
       try {
-        const data = await codeshareService.calculateProrateShare(
+        const data = await interlineService.calculateProrateShare(
           input.agreementId,
           input.totalFare,
           input.segment1Distance,
@@ -456,7 +456,7 @@ export const interlineRouter = router({
     )
     .query(async ({ input }) => {
       try {
-        const allPartners = await codeshareService.getPartnerAirlines(
+        const allPartners = await interlineService.getPartnerAirlines(
           input.airlineId
         );
 
