@@ -399,11 +399,9 @@ function validateConditionsSchema(
         );
       }
 
-      const periods = (
-        hasNewFormat
-          ? (conditions.blackoutPeriods as Array<Record<string, unknown>>)
-          : (conditions.periods as Array<Record<string, unknown>>)
-      );
+      const periods = hasNewFormat
+        ? (conditions.blackoutPeriods as Array<Record<string, unknown>>)
+        : (conditions.periods as Array<Record<string, unknown>>);
 
       for (const period of periods) {
         const hasStart = period.start || period.from;
@@ -561,9 +559,7 @@ function normalizeBlackoutPeriods(
  * Resolve the effective minimum stay days from a MinimumStayConditions,
  * supporting both `minDays` and legacy `minStayDays` keys.
  */
-function resolveMinStayDays(
-  cond: MinimumStayConditions
-): number | undefined {
+function resolveMinStayDays(cond: MinimumStayConditions): number | undefined {
   return cond.minDays ?? cond.minStayDays;
 }
 
@@ -571,9 +567,7 @@ function resolveMinStayDays(
  * Resolve the effective maximum stay days from a MaximumStayConditions,
  * supporting both `maxDays` and legacy `maxStayDays` keys.
  */
-function resolveMaxStayDays(
-  cond: MaximumStayConditions
-): number | undefined {
+function resolveMaxStayDays(cond: MaximumStayConditions): number | undefined {
   return cond.maxDays ?? cond.maxStayDays;
 }
 
@@ -1024,8 +1018,7 @@ export async function listFareRules(params: {
     conditions.push(eq(fareRules.active, params.active));
   }
 
-  const whereClause =
-    conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [rules, countResult] = await Promise.all([
     db
@@ -1070,10 +1063,7 @@ export async function deleteFareRule(id: number): Promise<void> {
     throw new Error(`Fare rule with id ${id} not found`);
   }
 
-  await db
-    .update(fareRules)
-    .set({ active: false })
-    .where(eq(fareRules.id, id));
+  await db.update(fareRules).set({ active: false }).where(eq(fareRules.id, id));
 
   log.info(`Soft-deleted fare rule ${id} (set active=false)`);
 }
@@ -1358,8 +1348,7 @@ export async function calculateFare(params: {
           const cond = conditions as unknown as AdvancePurchaseConditions;
           const now = new Date();
           const daysBeforeDeparture = Math.floor(
-            (departureDate.getTime() - now.getTime()) /
-              (1000 * 60 * 60 * 24)
+            (departureDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
           );
 
           if (daysBeforeDeparture < cond.minDaysBeforeDeparture) {
@@ -1726,8 +1715,7 @@ export async function validateBookingRules(params: {
     switch (rule.ruleCategory) {
       // ---- Advance Purchase (Cat 5) ----
       case "advance_purchase": {
-        const minDays =
-          (conditions.minDaysBeforeDeparture as number) ?? 0;
+        const minDays = (conditions.minDaysBeforeDeparture as number) ?? 0;
         const daysDiff = Math.floor(
           (departureDate.getTime() - bookingDate.getTime()) /
             (1000 * 60 * 60 * 24)
@@ -1835,10 +1823,7 @@ export async function validateBookingRules(params: {
       // ---- Day/Time (Cat 2) ----
       case "day_time": {
         const cond = conditions as unknown as DayTimeConditions;
-        if (
-          cond.allowedDaysOfWeek &&
-          cond.allowedDaysOfWeek.length > 0
-        ) {
+        if (cond.allowedDaysOfWeek && cond.allowedDaysOfWeek.length > 0) {
           const dayOfWeek = departureDate.getDay();
           if (!cond.allowedDaysOfWeek.includes(dayOfWeek)) {
             violations.push({
@@ -2005,10 +1990,7 @@ export async function calculateChangeFee(params: {
         eq(fareRules.ruleCategory, "penalties"),
         eq(fareRules.active, true),
         lte(fareRules.validFrom, changeDate),
-        or(
-          isNull(fareRules.validUntil),
-          gte(fareRules.validUntil, changeDate)
-        )
+        or(isNull(fareRules.validUntil), gte(fareRules.validUntil, changeDate))
       )
     )
     .orderBy(asc(fareRules.id));

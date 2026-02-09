@@ -1377,7 +1377,8 @@ export async function searchAvailability(
     if (!params) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "Search params are required when connectionId is passed as first argument",
+        message:
+          "Search params are required when connectionId is passed as first argument",
       });
     }
     resolvedParams = params;
