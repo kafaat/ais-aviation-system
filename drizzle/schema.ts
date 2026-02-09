@@ -362,13 +362,38 @@ export const payments = mysqlTable(
     bookingId: int("bookingId").notNull(),
     amount: int("amount").notNull(), // Amount in SAR cents
     currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-    method: mysqlEnum("method", ["card", "wallet", "bank_transfer"]).notNull(),
+    method: mysqlEnum("method", [
+      "card",
+      "wallet",
+      "bank_transfer",
+      "mada",
+      "apple_pay",
+      "stc_pay",
+      "tabby",
+      "tamara",
+    ]).notNull(),
+    provider: mysqlEnum("provider", [
+      "stripe",
+      "hyperpay",
+      "tabby",
+      "tamara",
+      "stc_pay",
+      "moyasar",
+      "floosak",
+      "jawali",
+      "onecash",
+      "easycash",
+    ])
+      .default("stripe")
+      .notNull(),
     status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"])
       .default("pending")
       .notNull(),
     transactionId: varchar("transactionId", { length: 100 }), // External payment gateway transaction ID
+    providerSessionId: varchar("providerSessionId", { length: 255 }), // Provider-specific session/checkout ID
     idempotencyKey: varchar("idempotencyKey", { length: 100 }).unique(), // For preventing duplicate payments
     stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }), // Stripe Payment Intent ID
+    providerMetadata: text("providerMetadata"), // JSON metadata from provider
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -394,6 +419,8 @@ export const payments = mysqlTable(
     ),
     // Index for payment method filtering
     methodIdx: index("payments_method_idx").on(table.method),
+    // Index for provider filtering
+    providerIdx: index("payments_provider_idx").on(table.provider),
   })
 );
 
@@ -4104,3 +4131,166 @@ export const flightTracking = mysqlTable(
 
 export type FlightTrackingRecord = typeof flightTracking.$inferSelect;
 export type InsertFlightTrackingRecord = typeof flightTracking.$inferInsert;
+
+// ============================================================================
+// Security & Account Lockout System
+// ============================================================================
+
+/**
+ * Login Attempts table
+ * Tracks failed login attempts for account security
+ */
+export const loginAttempts = mysqlTable(
+  "login_attempts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    // User identification
+    email: varchar("email", { length: 320 }),
+    openId: varchar("openId", { length: 64 }),
+
+    // Attempt details
+    ipAddress: varchar("ipAddress", { length: 45 }).notNull(), // IPv6 max length
+    userAgent: text("userAgent"),
+
+    // Result
+    success: boolean("success").notNull(),
+    failureReason: varchar("failureReason", { length: 255 }),
+
+    // Timestamp
+    attemptedAt: timestamp("attemptedAt").defaultNow().notNull(),
+  },
+  table => ({
+    loginEmailIdx: index("login_email_idx").on(table.email),
+    loginOpenIdIdx: index("login_open_id_idx").on(table.openId),
+    loginIpAddressIdx: index("login_ip_address_idx").on(table.ipAddress),
+    loginAttemptedAtIdx: index("login_attempted_at_idx").on(table.attemptedAt),
+  })
+);
+
+export type LoginAttempt = typeof loginAttempts.$inferSelect;
+export type InsertLoginAttempt = typeof loginAttempts.$inferInsert;
+
+/**
+ * Account Locks table
+ * Tracks locked accounts due to suspicious activity
+ */
+export const accountLocks = mysqlTable(
+  "account_locks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    // User identification
+    userId: int("userId").notNull().unique(),
+
+    // Lock details
+    reason: varchar("reason", { length: 255 }).notNull(),
+    lockedBy: varchar("lockedBy", { length: 50 }).notNull(), // "system" or admin user ID
+
+    // Lock status
+    isActive: boolean("isActive").default(true).notNull(),
+
+    // Unlock details
+    unlockedAt: timestamp("unlockedAt"),
+    unlockedBy: varchar("unlockedBy", { length: 50 }),
+
+    // Auto-unlock
+    autoUnlockAt: timestamp("autoUnlockAt"), // Automatic unlock time
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    accountLockUserIdIdx: index("account_lock_user_id_idx").on(table.userId),
+    accountLockIsActiveIdx: index("account_lock_is_active_idx").on(
+      table.isActive
+    ),
+  })
+);
+
+export type AccountLock = typeof accountLocks.$inferSelect;
+export type InsertAccountLock = typeof accountLocks.$inferInsert;
+
+/**
+ * Security Events table
+ * Logs security-related events for audit trail
+ */
+export const securityEvents = mysqlTable(
+  "security_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    // Event details
+    eventType: varchar("eventType", { length: 100 }).notNull(), // e.g., "account_locked", "suspicious_login"
+    severity: varchar("severity", { length: 20 }).notNull(), // "low", "medium", "high", "critical"
+
+    // User/IP details
+    userId: int("userId"),
+    ipAddress: varchar("ipAddress", { length: 45 }),
+    userAgent: text("userAgent"),
+
+    // Event data
+    description: text("description"),
+    metadata: text("metadata"), // JSON string for additional data
+
+    // Action taken
+    actionTaken: varchar("actionTaken", { length: 255 }),
+
+    // Timestamp
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    securityEventTypeIdx: index("security_event_type_idx").on(table.eventType),
+    securitySeverityIdx: index("security_severity_idx").on(table.severity),
+    securityUserIdIdx: index("security_user_id_idx").on(table.userId),
+    securityIpAddressIdx: index("security_ip_address_idx").on(table.ipAddress),
+    securityCreatedAtIdx: index("security_created_at_idx").on(table.createdAt),
+  })
+);
+
+export type SecurityEvent = typeof securityEvents.$inferSelect;
+export type InsertSecurityEvent = typeof securityEvents.$inferInsert;
+
+/**
+ * IP Blacklist table
+ * Tracks blocked IP addresses
+ */
+export const ipBlacklist = mysqlTable(
+  "ip_blacklist",
+  {
+    id: int("id").autoincrement().primaryKey(),
+
+    // IP details
+    ipAddress: varchar("ipAddress", { length: 45 }).notNull().unique(),
+
+    // Block details
+    reason: text("reason").notNull(),
+    blockedBy: varchar("blockedBy", { length: 50 }).notNull(), // "system" or admin user ID
+
+    // Block status
+    isActive: boolean("isActive").default(true).notNull(),
+
+    // Unblock details
+    unblockedAt: timestamp("unblockedAt"),
+    unblockedBy: varchar("unblockedBy", { length: 50 }),
+
+    // Auto-unblock
+    autoUnblockAt: timestamp("autoUnblockAt"),
+
+    // Timestamps
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    ipBlacklistIpAddressIdx: index("ip_blacklist_ip_address_idx").on(
+      table.ipAddress
+    ),
+    ipBlacklistIsActiveIdx: index("ip_blacklist_is_active_idx").on(
+      table.isActive
+    ),
+  })
+);
+
+export type IpBlacklist = typeof ipBlacklist.$inferSelect;
+export type InsertIpBlacklist = typeof ipBlacklist.$inferInsert;

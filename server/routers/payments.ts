@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
+import {
+  publicProcedure,
+  protectedProcedure,
+  adminProcedure,
+  router,
+} from "../_core/trpc";
 import { stripe } from "../stripe";
 import * as db from "../db";
 import { getDb } from "../db";
@@ -8,14 +13,52 @@ import { bookings } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { auditPayment } from "../services/audit.service";
 import * as paymentHistoryService from "../services/payment-history.service";
+import {
+  getAllProviderInfo,
+  getAvailableProviderInfo,
+  createCheckoutWithProvider,
+  verifyPaymentWithProvider,
+  type PaymentProviderType,
+} from "../services/payment-providers";
+
+const providerEnum = z.enum([
+  "stripe",
+  "hyperpay",
+  "tabby",
+  "tamara",
+  "stc_pay",
+  "moyasar",
+  "floosak",
+  "jawali",
+  "onecash",
+  "easycash",
+]);
 
 /**
  * Payments Router
- * Handles all payment-related operations
+ * Handles all payment-related operations with multi-provider support
  */
 export const paymentsRouter = router({
   /**
-   * Create Stripe checkout session
+   * Get all available payment providers
+   */
+  getProviders: publicProcedure
+    .input(
+      z
+        .object({
+          includeUnavailable: z.boolean().optional(),
+        })
+        .optional()
+    )
+    .query(({ input }) => {
+      if (input?.includeUnavailable) {
+        return getAllProviderInfo();
+      }
+      return getAvailableProviderInfo();
+    }),
+
+  /**
+   * Create checkout session with selected payment provider
    */
   createCheckoutSession: protectedProcedure
     .meta({
@@ -23,19 +66,26 @@ export const paymentsRouter = router({
         method: "POST",
         path: "/payments/checkout",
         tags: ["Payments"],
-        summary: "Create Stripe checkout session",
+        summary: "Create checkout session with payment provider",
         description:
-          "Create a Stripe checkout session for a pending booking. Returns a session ID and URL to redirect the user to the Stripe payment page. The booking must belong to the authenticated user and not already be paid.",
+          "Create a checkout session for a pending booking using the selected payment provider. Returns a session ID and URL to redirect the user to the payment page.",
         protect: true,
       },
     })
     .input(
-      z.object({ bookingId: z.number().describe("Booking ID to pay for") })
+      z.object({
+        bookingId: z.number().describe("Booking ID to pay for"),
+        provider: providerEnum
+          .optional()
+          .default("stripe")
+          .describe("Payment provider"),
+      })
     )
     .output(
       z.object({
-        sessionId: z.string().describe("Stripe session ID"),
-        url: z.string().nullable().describe("Stripe checkout URL"),
+        provider: z.string().describe("Payment provider used"),
+        sessionId: z.string().describe("Provider session ID"),
+        url: z.string().nullable().describe("Checkout URL"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -74,76 +124,220 @@ export const paymentsRouter = router({
         });
       }
 
-      // Create Stripe checkout session
-      const productName = `Flight Booking - ${bookingData.bookingReference}`;
-      const productDescription = `PNR: ${bookingData.pnr}`;
-
-      // Determine base URL, falling back to env var or protocol+host if Origin header is absent
       const appBaseUrl =
         ctx.req.headers.origin ||
         process.env.VITE_APP_URL ||
         `${ctx.req.protocol}://${ctx.req.get("host")}`;
 
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: "sar",
-              product_data: {
-                name: productName,
-                description: `${productDescription} - ${bookingData.numberOfPassengers} passenger(s) - Ref: ${bookingData.bookingReference}`,
-                metadata: {
-                  bookingReference: bookingData.bookingReference,
-                  pnr: bookingData.pnr,
+      const providerId = (input.provider || "stripe") as PaymentProviderType;
+
+      // Use legacy Stripe flow for backward compatibility when provider is stripe
+      if (providerId === "stripe") {
+        const productName = `Flight Booking - ${bookingData.bookingReference}`;
+        const productDescription = `PNR: ${bookingData.pnr}`;
+
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "sar",
+                product_data: {
+                  name: productName,
+                  description: `${productDescription} - ${bookingData.numberOfPassengers} passenger(s) - Ref: ${bookingData.bookingReference}`,
+                  metadata: {
+                    bookingReference: bookingData.bookingReference,
+                    pnr: bookingData.pnr,
+                  },
                 },
+                unit_amount: bookingData.totalAmount,
               },
-              unit_amount: bookingData.totalAmount,
+              quantity: 1,
             },
-            quantity: 1,
+          ],
+          mode: "payment",
+          success_url: `${appBaseUrl}/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true`,
+          cancel_url: `${appBaseUrl}/booking/${input.bookingId}?canceled=true`,
+          customer_email: ctx.user.email || undefined,
+          client_reference_id: ctx.user.id.toString(),
+          metadata: {
+            bookingId: input.bookingId.toString(),
+            userId: ctx.user.id.toString(),
+            bookingReference: bookingData.bookingReference,
+            customerEmail: ctx.user.email || "",
+            customerName: ctx.user.name || "",
           },
-        ],
-        mode: "payment",
-        success_url: `${appBaseUrl}/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true`,
-        cancel_url: `${appBaseUrl}/booking/${input.bookingId}?canceled=true`,
-        customer_email: ctx.user.email || undefined,
-        client_reference_id: ctx.user.id.toString(),
+          allow_promotion_codes: true,
+        });
+
+        await database
+          .update(bookings)
+          .set({ stripeCheckoutSessionId: session.id })
+          .where(eq(bookings.id, input.bookingId));
+
+        await auditPayment(
+          input.bookingId,
+          bookingData.bookingReference,
+          bookingData.totalAmount,
+          "PAYMENT_INITIATED",
+          ctx.user.id,
+          session.id,
+          ctx.req.ip,
+          ctx.req.headers["x-request-id"] as string
+        );
+
+        return {
+          provider: "stripe",
+          sessionId: session.id,
+          url: session.url,
+        };
+      }
+
+      // Use multi-provider flow for other providers
+      const result = await createCheckoutWithProvider(providerId, {
+        bookingId: input.bookingId,
+        userId: ctx.user.id,
+        amount: bookingData.totalAmount,
+        currency: "SAR",
+        customerEmail: ctx.user.email || undefined,
+        customerName: ctx.user.name || undefined,
+        bookingReference: bookingData.bookingReference,
+        pnr: bookingData.pnr,
+        description: `Flight Booking - ${bookingData.bookingReference}`,
+        successUrl: `${appBaseUrl}/my-bookings?provider=${providerId}&success=true`,
+        cancelUrl: `${appBaseUrl}/booking/${input.bookingId}?canceled=true`,
         metadata: {
           bookingId: input.bookingId.toString(),
           userId: ctx.user.id.toString(),
-          bookingReference: bookingData.bookingReference,
-          customerEmail: ctx.user.email || "",
-          customerName: ctx.user.name || "",
         },
-        allow_promotion_codes: true,
       });
 
-      // Update booking with session ID
-      await database
-        .update(bookings)
-        .set({ stripeCheckoutSessionId: session.id })
-        .where(eq(bookings.id, input.bookingId));
-
-      // Audit log: Payment initiated
       await auditPayment(
         input.bookingId,
         bookingData.bookingReference,
         bookingData.totalAmount,
         "PAYMENT_INITIATED",
         ctx.user.id,
-        session.id,
+        result.sessionId,
         ctx.req.ip,
         ctx.req.headers["x-request-id"] as string
       );
 
       return {
-        sessionId: session.id,
-        url: session.url,
+        provider: result.provider,
+        sessionId: result.sessionId,
+        url: result.url,
       };
     }),
 
   /**
-   * Verify Stripe session
+   * Create checkout for booking modification (date change / upgrade)
+   */
+  createModificationCheckout: protectedProcedure
+    .input(
+      z.object({
+        bookingId: z.number().describe("Booking ID"),
+        modificationId: z.number().describe("Modification request ID"),
+        amount: z.number().describe("Amount to charge in SAR cents"),
+        provider: providerEnum.optional().default("stripe"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const database = await getDb();
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
+
+      const bookingResult = await database
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .limit(1);
+
+      const bookingData = bookingResult[0];
+      if (!bookingData) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      }
+
+      if (bookingData.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      }
+
+      const appBaseUrl =
+        ctx.req.headers.origin ||
+        process.env.VITE_APP_URL ||
+        `${ctx.req.protocol}://${ctx.req.get("host")}`;
+
+      const providerId = (input.provider || "stripe") as PaymentProviderType;
+
+      if (providerId === "stripe") {
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "sar",
+                product_data: {
+                  name: `Booking Modification - ${bookingData.bookingReference}`,
+                  description: `Modification #${input.modificationId}`,
+                },
+                unit_amount: input.amount,
+              },
+              quantity: 1,
+            },
+          ],
+          mode: "payment",
+          success_url: `${appBaseUrl}/my-bookings?modification=success&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${appBaseUrl}/my-bookings?modification=cancelled`,
+          customer_email: ctx.user.email || undefined,
+          metadata: {
+            bookingId: input.bookingId.toString(),
+            modificationId: input.modificationId.toString(),
+            userId: ctx.user.id.toString(),
+            type: "modification",
+          },
+        });
+
+        return {
+          provider: "stripe",
+          sessionId: session.id,
+          url: session.url,
+        };
+      }
+
+      const result = await createCheckoutWithProvider(providerId, {
+        bookingId: input.bookingId,
+        userId: ctx.user.id,
+        amount: input.amount,
+        currency: "SAR",
+        customerEmail: ctx.user.email || undefined,
+        customerName: ctx.user.name || undefined,
+        bookingReference: bookingData.bookingReference,
+        pnr: bookingData.pnr,
+        description: `Booking Modification - ${bookingData.bookingReference}`,
+        successUrl: `${appBaseUrl}/my-bookings?modification=success`,
+        cancelUrl: `${appBaseUrl}/my-bookings?modification=cancelled`,
+        metadata: {
+          bookingId: input.bookingId.toString(),
+          modificationId: input.modificationId.toString(),
+          type: "modification",
+        },
+      });
+
+      return {
+        provider: result.provider,
+        sessionId: result.sessionId,
+        url: result.url,
+      };
+    }),
+
+  /**
+   * Verify payment session with provider
    */
   verifySession: protectedProcedure
     .meta({
@@ -151,26 +345,44 @@ export const paymentsRouter = router({
         method: "GET",
         path: "/payments/verify/{sessionId}",
         tags: ["Payments"],
-        summary: "Verify Stripe session status",
+        summary: "Verify payment session status",
         description:
-          "Verify the payment status of a Stripe checkout session. Use this after redirect from Stripe to confirm payment completion.",
+          "Verify the payment status of a checkout session. Supports all payment providers.",
         protect: true,
       },
     })
-    .input(z.object({ sessionId: z.string().describe("Stripe session ID") }))
+    .input(
+      z.object({
+        sessionId: z.string().describe("Provider session ID"),
+        provider: providerEnum.optional().default("stripe"),
+      })
+    )
     .output(
       z.object({
-        status: z
-          .string()
-          .describe("Payment status (paid, unpaid, no_payment_required)"),
+        status: z.string().describe("Payment status"),
         customerEmail: z.string().nullable().describe("Customer email"),
       })
     )
     .query(async ({ input }) => {
-      const session = await stripe.checkout.sessions.retrieve(input.sessionId);
+      const providerId = (input.provider || "stripe") as PaymentProviderType;
+
+      if (providerId === "stripe") {
+        const session = await stripe.checkout.sessions.retrieve(
+          input.sessionId
+        );
+        return {
+          status: session.payment_status,
+          customerEmail: session.customer_email,
+        };
+      }
+
+      const result = await verifyPaymentWithProvider(
+        providerId,
+        input.sessionId
+      );
       return {
-        status: session.payment_status,
-        customerEmail: session.customer_email,
+        status: result.status,
+        customerEmail: result.customerEmail || null,
       };
     }),
 
@@ -185,7 +397,7 @@ export const paymentsRouter = router({
         tags: ["Payments"],
         summary: "Create payment (legacy)",
         description:
-          "Create a payment record for non-Stripe payment methods. This is a legacy endpoint for direct card, wallet, or bank transfer payments. For new integrations, use the Stripe checkout flow.",
+          "Create a payment record for non-Stripe payment methods. Legacy endpoint.",
         protect: true,
       },
     })
@@ -206,12 +418,10 @@ export const paymentsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Get booking reference for audit
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
       const bookingReference =
         booking?.bookingReference || `booking-${input.bookingId}`;
 
-      // Create payment record
       const paymentResult = await db.createPayment({
         bookingId: input.bookingId,
         amount: input.amount,
@@ -223,8 +433,6 @@ export const paymentsRouter = router({
 
       const paymentId = Number(paymentResult[0].insertId);
 
-      // Simulate payment processing
-      // In production, integrate with actual payment gateway
       const transactionId = `TXN-${Date.now()}-${Math.random()
         .toString(36)
         .substring(7)}`;
@@ -232,7 +440,6 @@ export const paymentsRouter = router({
       await db.updatePaymentStatus(paymentId, "completed", transactionId);
       await db.updateBookingStatus(input.bookingId, "confirmed");
 
-      // Audit log: Payment success
       await auditPayment(
         input.bookingId,
         bookingReference,
