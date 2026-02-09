@@ -3,17 +3,17 @@
 ## What's Changed in v1.14.0
 
 ### Features
+
 - feat: add multi-provider payment gateway with local and regional providers (3d8d588)
 
 ### Other Changes
+
 - Add analytics date filters/export, account lockout security, and i18n (965cd7c)
 - Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (7ac0857)
 - Fix Prettier formatting for CHANGELOG.md after merge from main (f267a5f)
 - Merge pull request #66 from kafaat/claude/implement-todo-zrBPj (c7d9d99)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.13.0...v1.14.0
-
 
 ---
 
