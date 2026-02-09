@@ -289,16 +289,20 @@ export default function WeightBalance() {
   const [activeTab, setActiveTab] = useState<Tab>("calculate");
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
+    <div className="container mx-auto p-6 max-w-7xl page-enter">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-8">
         <Link href="/admin/dcs">
-          <Button variant="ghost" size="sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-full hover:bg-blue-50 dark:hover:bg-blue-950"
+          >
             <ChevronLeft className="h-4 w-4" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-700 to-blue-500 bg-clip-text text-transparent dark:from-blue-400 dark:to-blue-300">
             {t("wb.title", "Weight & Balance")}
           </h1>
           <p className="text-muted-foreground text-sm">
@@ -311,7 +315,7 @@ export default function WeightBalance() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-2 mb-8 flex-wrap">
         {(
           [
             {
@@ -1242,23 +1246,23 @@ function LoadSheetTab() {
             <table className="w-full">
               <tbody>
                 <LoadSheetRow
-                  label="Dry Operating Weight (DOW)"
+                  label={t("wb.loadsheet.dow", "Dry Operating Weight (DOW)")}
                   value={loadSheet.weights.dryOperatingWeight}
                 />
                 <LoadSheetRow
-                  label="Passenger Weight"
+                  label={t("wb.loadsheet.paxWeight", "Passenger Weight")}
                   value={loadSheet.weights.passengerWeight}
                 />
                 <LoadSheetRow
-                  label="Baggage Weight"
+                  label={t("wb.loadsheet.bagWeight", "Baggage Weight")}
                   value={loadSheet.weights.baggageWeight}
                 />
                 <LoadSheetRow
-                  label="Cargo / Mail"
+                  label={t("wb.loadsheet.cargoMail", "Cargo / Mail")}
                   value={loadSheet.weights.cargoMailWeight}
                 />
                 <LoadSheetRow
-                  label="Total Traffic Load"
+                  label={t("wb.loadsheet.totalTraffic", "Total Traffic Load")}
                   value={loadSheet.weights.totalTrafficLoad}
                   bold
                 />
@@ -1268,12 +1272,15 @@ function LoadSheetTab() {
                   </td>
                 </tr>
                 <LoadSheetRow
-                  label="Zero Fuel Weight (Actual)"
+                  label={t(
+                    "wb.loadsheet.zfwActual",
+                    "Zero Fuel Weight (Actual)"
+                  )}
                   value={loadSheet.weights.zeroFuelWeightActual}
                   bold
                 />
                 <LoadSheetRow
-                  label="Zero Fuel Weight (Max)"
+                  label={t("wb.loadsheet.zfwMax", "Zero Fuel Weight (Max)")}
                   value={loadSheet.weights.zeroFuelWeightMax}
                   muted
                 />
@@ -1283,16 +1290,16 @@ function LoadSheetTab() {
                   </td>
                 </tr>
                 <LoadSheetRow
-                  label="Takeoff Fuel"
+                  label={t("wb.loadsheet.takeoffFuel", "Takeoff Fuel")}
                   value={loadSheet.weights.takeoffFuel}
                 />
                 <LoadSheetRow
-                  label="Takeoff Weight (Actual)"
+                  label={t("wb.loadsheet.towActual", "Takeoff Weight (Actual)")}
                   value={loadSheet.weights.takeoffWeightActual}
                   bold
                 />
                 <LoadSheetRow
-                  label="Takeoff Weight (Max)"
+                  label={t("wb.loadsheet.towMax", "Takeoff Weight (Max)")}
                   value={loadSheet.weights.takeoffWeightMax}
                   muted
                 />
@@ -1302,16 +1309,16 @@ function LoadSheetTab() {
                   </td>
                 </tr>
                 <LoadSheetRow
-                  label="Trip Fuel"
+                  label={t("wb.loadsheet.tripFuel", "Trip Fuel")}
                   value={loadSheet.weights.tripFuel}
                 />
                 <LoadSheetRow
-                  label="Landing Weight (Actual)"
+                  label={t("wb.loadsheet.lwActual", "Landing Weight (Actual)")}
                   value={loadSheet.weights.landingWeightActual}
                   bold
                 />
                 <LoadSheetRow
-                  label="Landing Weight (Max)"
+                  label={t("wb.loadsheet.lwMax", "Landing Weight (Max)")}
                   value={loadSheet.weights.landingWeightMax}
                   muted
                 />
@@ -1687,6 +1694,7 @@ function WeightProgressBar({
   value: number;
   max: number;
 }) {
+  const { t } = useTranslation();
   const percentage = max > 0 ? Math.min((value / max) * 100, 100) : 0;
   const exceeds = value > max;
   const isWarning = percentage > 90 && !exceeds;
@@ -1712,7 +1720,9 @@ function WeightProgressBar({
       </div>
       {exceeds && (
         <p className="text-xs text-red-600 mt-1">
-          Exceeds limit by {(value - max).toLocaleString()} kg
+          {t("wb.result.exceedsBy", "Exceeds limit by {{amount}} kg", {
+            amount: (value - max).toLocaleString(),
+          })}
         </p>
       )}
     </div>
@@ -1732,6 +1742,7 @@ function CgEnvelopeGraph({
   forwardLimit: number;
   aftLimit: number;
 }) {
+  const { t } = useTranslation();
   // Scale: we show from 0% to 50% MAC
   const scaleMax = 50;
 
@@ -1808,7 +1819,8 @@ function CgEnvelopeGraph({
         <div className="flex items-center gap-1">
           <div className="w-3 h-3 bg-green-200 dark:bg-green-900 border border-green-600 rounded" />
           <span className="text-muted-foreground">
-            Envelope ({forwardLimit}% - {aftLimit}%)
+            {t("wb.result.envelope", "Envelope")} ({forwardLimit}% - {aftLimit}
+            %)
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -1823,7 +1835,9 @@ function CgEnvelopeGraph({
             }
           >
             CG: {cgPosition.toFixed(2)}% MAC{" "}
-            {isWithin ? "(OK)" : "(OUT OF LIMITS)"}
+            {isWithin
+              ? t("wb.result.ok", "(OK)")
+              : t("wb.result.outOfLimits", "(OUT OF LIMITS)")}
           </span>
         </div>
       </div>

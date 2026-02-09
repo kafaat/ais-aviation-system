@@ -94,6 +94,31 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   meal_voucher: "Meal Voucher",
 };
 
+// i18n key mapping for action types (snake_case to camelCase)
+const ACTION_TYPE_I18N_KEYS: Record<string, string> = {
+  rebook: "rebook",
+  hotel: "hotel",
+  compensation: "compensation",
+  notification: "notification",
+  meal_voucher: "mealVoucher",
+};
+
+// i18n key mapping for action statuses (snake_case to camelCase)
+const ACTION_STATUS_I18N_KEYS: Record<string, string> = {
+  pending: "pending",
+  in_progress: "inProgress",
+  completed: "completed",
+  failed: "failed",
+};
+
+// i18n key mapping for event types (snake_case to camelCase)
+const EVENT_TYPE_I18N_KEYS: Record<string, string> = {
+  delay: "delay",
+  cancellation: "cancellation",
+  diversion: "diversion",
+  equipment_change: "equipmentChange",
+};
+
 const ACTION_STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   pending: { color: "bg-gray-100 text-gray-700", label: "Pending" },
   in_progress: { color: "bg-blue-100 text-blue-700", label: "In Progress" },
@@ -120,17 +145,17 @@ export default function IROPSCommandCenter() {
   const [escalateLevel, setEscalateLevel] = useState<string>("high");
 
   const tabs: Array<{ id: Tab; label: string; icon: typeof Activity }> = [
-    { id: "overview", label: "Command Center", icon: Activity },
-    { id: "events", label: "Active Events", icon: AlertTriangle },
-    { id: "passengers", label: "Affected Passengers", icon: Users },
-    { id: "connections", label: "Connections at Risk", icon: Link2 },
-    { id: "metrics", label: "Recovery Metrics", icon: BarChart3 },
+    { id: "overview", label: t("irops.tabs.overview"), icon: Activity },
+    { id: "events", label: t("irops.tabs.events"), icon: AlertTriangle },
+    { id: "passengers", label: t("irops.tabs.passengers"), icon: Users },
+    { id: "connections", label: t("irops.tabs.connections"), icon: Link2 },
+    { id: "metrics", label: t("irops.tabs.metrics"), icon: BarChart3 },
   ];
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-6 p-4 rounded-xl bg-gradient-to-r from-slate-50 to-red-50/30 dark:from-slate-900 dark:to-red-950/20 border border-slate-200/60 dark:border-slate-800/60">
         <Link href="/admin">
           <Button variant="ghost" size="sm">
             <ChevronLeft className="h-4 w-4" />
@@ -139,29 +164,26 @@ export default function IROPSCommandCenter() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Shield className="h-6 w-6 text-red-500" />
-            {t("irops.title", "IROPS Command Center")}
+            {t("irops.title")}
           </h1>
-          <p className="text-muted-foreground text-sm">
-            {t(
-              "irops.subtitle",
-              "Irregular Operations management, passenger protection, and recovery tracking"
-            )}
-          </p>
+          <p className="text-muted-foreground text-sm">{t("irops.subtitle")}</p>
         </div>
         <LiveIndicator />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      {/* Tabs - Pill Style */}
+      <div className="flex gap-1.5 mb-6 flex-wrap p-1 bg-muted/50 rounded-lg w-fit">
         {tabs.map(tab => {
           const Icon = tab.icon;
           return (
             <Button
               key={tab.id}
-              variant={activeTab === tab.id ? "default" : "outline"}
+              variant={activeTab === tab.id ? "default" : "ghost"}
               size="sm"
               onClick={() => setActiveTab(tab.id)}
-              className="gap-2"
+              className={`gap-2 rounded-md ${
+                activeTab === tab.id ? "shadow-sm" : "hover:bg-background/60"
+              }`}
             >
               <Icon className="h-4 w-4" />
               {tab.label}
@@ -210,6 +232,7 @@ export default function IROPSCommandCenter() {
 // ============================================================================
 
 function LiveIndicator() {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
       <span className="relative flex h-2.5 w-2.5">
@@ -217,7 +240,7 @@ function LiveIndicator() {
         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
       </span>
       <span className="text-xs font-medium text-red-700 dark:text-red-300">
-        LIVE
+        {t("irops.live")}
       </span>
     </div>
   );
@@ -234,6 +257,7 @@ function OverviewTab({
   onSelectFlight: (id: number) => void;
   onSwitchTab: (tab: Tab) => void;
 }) {
+  const { t } = useTranslation();
   const {
     data: dashboard,
     isLoading,
@@ -244,11 +268,11 @@ function OverviewTab({
   });
 
   if (isLoading) {
-    return <LoadingState message="Loading IROPS dashboard..." />;
+    return <LoadingState message={t("irops.loadingDashboard")} />;
   }
 
   if (!dashboard) {
-    return <EmptyState message="Unable to load dashboard data." />;
+    return <EmptyState message={t("irops.unableToLoadDashboard")} />;
   }
 
   return (
@@ -256,46 +280,46 @@ function OverviewTab({
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <KPICard
-          title="Active Disruptions"
+          title={t("irops.kpi.activeDisruptions")}
           value={dashboard.activeDisruptions}
           icon={AlertTriangle}
           color="text-red-500"
-          bgColor="bg-red-50 dark:bg-red-950"
+          bgColor="bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/50 dark:to-red-900/30"
         />
         <KPICard
-          title="Passengers Affected"
+          title={t("irops.kpi.passengersAffected")}
           value={dashboard.totalPassengersAffected}
           icon={Users}
           color="text-orange-500"
-          bgColor="bg-orange-50 dark:bg-orange-950"
+          bgColor="bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/50 dark:to-orange-900/30"
         />
         <KPICard
-          title="Connections at Risk"
+          title={t("irops.kpi.connectionsAtRisk")}
           value={dashboard.connectionsAtRisk}
           icon={Link2}
           color="text-yellow-500"
-          bgColor="bg-yellow-50 dark:bg-yellow-950"
+          bgColor="bg-gradient-to-br from-yellow-50 to-yellow-100/50 dark:from-yellow-950/50 dark:to-yellow-900/30"
         />
         <KPICard
-          title="Recovery Rate"
+          title={t("irops.kpi.recoveryRate")}
           value={`${dashboard.recoveryRate}%`}
           icon={Activity}
           color="text-green-500"
-          bgColor="bg-green-50 dark:bg-green-950"
+          bgColor="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/50 dark:to-green-900/30"
         />
         <KPICard
-          title="Critical Events"
+          title={t("irops.kpi.criticalEvents")}
           value={dashboard.criticalEvents}
           icon={Zap}
           color="text-red-600"
-          bgColor="bg-red-50 dark:bg-red-950"
+          bgColor="bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/50 dark:to-red-900/30"
           highlight={dashboard.criticalEvents > 0}
         />
       </div>
 
       {/* Severity Breakdown */}
-      <Card className="p-6">
-        <h3 className="font-semibold mb-4">Severity Breakdown</h3>
+      <Card className="p-6 rounded-xl shadow-sm">
+        <h3 className="font-semibold mb-4">{t("irops.severityBreakdown")}</h3>
         <div className="grid grid-cols-4 gap-3">
           {(
             Object.entries(dashboard.severityBreakdown) as Array<
@@ -313,7 +337,7 @@ function OverviewTab({
                   <span
                     className={`text-sm font-medium capitalize ${config.text}`}
                   >
-                    {config.label}
+                    {t(`irops.severity.${severity}`)}
                   </span>
                 </div>
                 <p className={`text-2xl font-bold ${config.text}`}>{count}</p>
@@ -326,21 +350,21 @@ function OverviewTab({
       {/* Two columns: Recent Events + Recent Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Events */}
-        <Card className="p-6">
+        <Card className="p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold">Recent Disruption Events</h3>
+            <h3 className="font-semibold">{t("irops.recentEvents")}</h3>
             <Button
               variant="outline"
               size="sm"
               onClick={() => onSwitchTab("events")}
             >
-              View All
+              {t("irops.viewAll")}
             </Button>
           </div>
           <div className="space-y-3">
             {dashboard.recentEvents.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                No active disruption events
+                {t("irops.noActiveEvents")}
               </p>
             ) : (
               dashboard.recentEvents.slice(0, 5).map(event => (
@@ -359,12 +383,12 @@ function OverviewTab({
         </Card>
 
         {/* Recent Actions Timeline */}
-        <Card className="p-6">
-          <h3 className="font-semibold mb-4">Actions Timeline</h3>
+        <Card className="p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+          <h3 className="font-semibold mb-4">{t("irops.actionsTimeline")}</h3>
           <div className="space-y-3 max-h-[400px] overflow-y-auto">
             {dashboard.recentActions.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                No recent actions
+                {t("irops.noRecentActions")}
               </p>
             ) : (
               dashboard.recentActions
@@ -386,7 +410,7 @@ function OverviewTab({
           className="gap-2"
         >
           <RefreshCw className="h-4 w-4" />
-          Refresh Dashboard
+          {t("irops.refreshDashboard")}
         </Button>
       </div>
     </div>
@@ -410,6 +434,7 @@ function EventsTab({
   escalateLevel: string;
   setEscalateLevel: (level: string) => void;
 }) {
+  const { t } = useTranslation();
   const {
     data: events,
     isLoading,
@@ -422,7 +447,10 @@ function EventsTab({
   const triggerProtection = trpc.irops.triggerAutoProtection.useMutation({
     onSuccess: data => {
       toast.success(
-        `Auto-protection triggered: ${data.actionsCreated} actions for ${data.passengersProtected} passengers`
+        t("irops.protectionTriggered", {
+          actions: data.actionsCreated,
+          passengers: data.passengersProtected,
+        })
       );
       refetch();
     },
@@ -433,7 +461,7 @@ function EventsTab({
 
   const escalateMutation = trpc.irops.escalate.useMutation({
     onSuccess: data => {
-      toast.success(`Disruption escalated to ${data.severity}`);
+      toast.success(t("irops.escalatedTo", { level: data.severity }));
       setEscalateId(null);
       refetch();
     },
@@ -444,7 +472,7 @@ function EventsTab({
 
   const resolveEvent = trpc.irops.resolveEvent.useMutation({
     onSuccess: () => {
-      toast.success("Event resolved successfully");
+      toast.success(t("irops.eventResolved"));
       refetch();
     },
     onError: error => {
@@ -453,16 +481,16 @@ function EventsTab({
   });
 
   if (isLoading) {
-    return <LoadingState message="Loading active events..." />;
+    return <LoadingState message={t("irops.loadingEvents")} />;
   }
 
   if (!events || events.length === 0) {
     return (
-      <Card className="p-12 text-center">
+      <Card className="p-12 text-center rounded-xl shadow-sm">
         <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold mb-2">All Clear</h3>
+        <h3 className="text-lg font-semibold mb-2">{t("irops.allClear")}</h3>
         <p className="text-muted-foreground">
-          No active disruption events at this time.
+          {t("irops.noActiveDisruptions")}
         </p>
       </Card>
     );
@@ -472,7 +500,9 @@ function EventsTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">
-          {events.length} Active Event{events.length !== 1 ? "s" : ""}
+          {events.length !== 1
+            ? t("irops.activeEventsPlural", { count: events.length })
+            : t("irops.activeEvents", { count: events.length })}
         </h3>
         <Button
           variant="outline"
@@ -481,14 +511,14 @@ function EventsTab({
           className="gap-2"
         >
           <RefreshCw className="h-4 w-4" />
-          Refresh
+          {t("irops.refresh")}
         </Button>
       </div>
 
       {events.map(event => (
         <Card
           key={event.id}
-          className={`p-5 border-l-4 ${
+          className={`p-5 border-l-4 rounded-xl shadow-sm hover:shadow-md transition-shadow ${
             SEVERITY_CONFIG[event.severity as keyof typeof SEVERITY_CONFIG]
               ?.border ?? "border-gray-200"
           }`}
@@ -516,7 +546,7 @@ function EventsTab({
               ) : (
                 <Shield className="h-3.5 w-3.5" />
               )}
-              Auto-Protect
+              {t("irops.autoProtect")}
             </Button>
 
             <Button
@@ -526,7 +556,7 @@ function EventsTab({
               onClick={() => onSelectFlight(event.flightId)}
             >
               <Users className="h-3.5 w-3.5" />
-              View Passengers
+              {t("irops.viewPassengers")}
             </Button>
 
             {escalateId === event.id ? (
@@ -536,10 +566,18 @@ function EventsTab({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
+                    <SelectItem value="low">
+                      {t("irops.severity.low")}
+                    </SelectItem>
+                    <SelectItem value="medium">
+                      {t("irops.severity.medium")}
+                    </SelectItem>
+                    <SelectItem value="high">
+                      {t("irops.severity.high")}
+                    </SelectItem>
+                    <SelectItem value="critical">
+                      {t("irops.severity.critical")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <Button
@@ -557,14 +595,14 @@ function EventsTab({
                   }
                   disabled={escalateMutation.isPending}
                 >
-                  Confirm
+                  {t("irops.confirm")}
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
                   onClick={() => setEscalateId(null)}
                 >
-                  Cancel
+                  {t("irops.cancel")}
                 </Button>
               </div>
             ) : (
@@ -575,7 +613,7 @@ function EventsTab({
                 onClick={() => setEscalateId(event.id)}
               >
                 <ArrowUpCircle className="h-3.5 w-3.5" />
-                Escalate
+                {t("irops.escalate")}
               </Button>
             )}
 
@@ -591,7 +629,7 @@ function EventsTab({
               ) : (
                 <CheckCircle className="h-3.5 w-3.5" />
               )}
-              Resolve
+              {t("irops.resolve")}
             </Button>
           </div>
         </Card>
@@ -615,6 +653,7 @@ function PassengersTab({
   notificationMessage: string;
   setNotificationMessage: (msg: string) => void;
 }) {
+  const { t } = useTranslation();
   const [flightIdInput, setFlightIdInput] = useState(
     selectedFlightId?.toString() ?? ""
   );
@@ -630,7 +669,10 @@ function PassengersTab({
   const sendNotification = trpc.irops.sendNotification.useMutation({
     onSuccess: data => {
       toast.success(
-        `Notifications sent: ${data.notificationsSent} succeeded, ${data.failedCount} failed`
+        t("irops.notificationsSent", {
+          sent: data.notificationsSent,
+          failed: data.failedCount,
+        })
       );
       setNotificationMessage("");
     },
@@ -649,16 +691,16 @@ function PassengersTab({
   return (
     <div className="space-y-6">
       {/* Flight selection */}
-      <Card className="p-4">
+      <Card className="p-4 rounded-xl shadow-sm">
         <div className="flex items-end gap-3">
           <div className="flex-1">
             <Label htmlFor="flightId" className="text-sm">
-              Flight ID
+              {t("irops.flightId")}
             </Label>
             <Input
               id="flightId"
               type="number"
-              placeholder="Enter flight ID..."
+              placeholder={t("irops.enterFlightId")}
               value={flightIdInput}
               onChange={e => setFlightIdInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleLoadPassengers()}
@@ -666,31 +708,37 @@ function PassengersTab({
           </div>
           <Button onClick={handleLoadPassengers} className="gap-2">
             <Users className="h-4 w-4" />
-            Load Passengers
+            {t("irops.loadPassengers")}
           </Button>
         </div>
       </Card>
 
       {isLoading && queryFlightId > 0 && (
-        <LoadingState message="Loading affected passengers..." />
+        <LoadingState message={t("irops.loadingPassengers")} />
       )}
 
       {passengers && passengers.length > 0 && (
         <>
           {/* Summary */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="p-4">
-              <p className="text-sm text-muted-foreground">Total Passengers</p>
+            <Card className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-950/50 dark:to-slate-900/30">
+              <p className="text-sm text-muted-foreground">
+                {t("irops.totalPassengers")}
+              </p>
               <p className="text-2xl font-bold">{passengers.length}</p>
             </Card>
-            <Card className="p-4">
-              <p className="text-sm text-muted-foreground">With Connections</p>
+            <Card className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/50 dark:to-orange-900/30">
+              <p className="text-sm text-muted-foreground">
+                {t("irops.withConnections")}
+              </p>
               <p className="text-2xl font-bold text-orange-500">
                 {passengers.filter(p => p.hasConnection).length}
               </p>
             </Card>
-            <Card className="p-4">
-              <p className="text-sm text-muted-foreground">Business Class</p>
+            <Card className="p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/50 dark:to-purple-900/30">
+              <p className="text-sm text-muted-foreground">
+                {t("irops.businessClass")}
+              </p>
               <p className="text-2xl font-bold text-purple-500">
                 {passengers.filter(p => p.cabinClass === "business").length}
               </p>
@@ -698,14 +746,14 @@ function PassengersTab({
           </div>
 
           {/* Notification Panel */}
-          <Card className="p-4">
+          <Card className="p-4 rounded-xl shadow-sm">
             <h4 className="font-semibold mb-3 flex items-center gap-2">
               <Bell className="h-4 w-4" />
-              Mass Notification
+              {t("irops.massNotification")}
             </h4>
             <div className="flex gap-3">
               <Input
-                placeholder="Type notification message for all affected passengers..."
+                placeholder={t("irops.typeNotification")}
                 value={notificationMessage}
                 onChange={e => setNotificationMessage(e.target.value)}
                 className="flex-1"
@@ -727,23 +775,35 @@ function PassengersTab({
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
-                Send to All
+                {t("irops.sendToAll")}
               </Button>
             </div>
           </Card>
 
           {/* Passenger List */}
-          <Card className="p-0 overflow-hidden">
+          <Card className="p-0 overflow-hidden rounded-xl shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-3 font-medium">Passenger</th>
-                    <th className="text-left p-3 font-medium">Booking</th>
-                    <th className="text-left p-3 font-medium">Class</th>
-                    <th className="text-left p-3 font-medium">Seat</th>
-                    <th className="text-left p-3 font-medium">Connection</th>
-                    <th className="text-left p-3 font-medium">Contact</th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.passenger")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.booking")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.class")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.seat")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.connection")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.contact")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -793,7 +853,7 @@ function PassengersTab({
                           </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">
-                            None
+                            {t("irops.none")}
                           </span>
                         )}
                       </td>
@@ -810,11 +870,11 @@ function PassengersTab({
       )}
 
       {passengers && passengers.length === 0 && queryFlightId > 0 && (
-        <EmptyState message="No affected passengers found for this flight." />
+        <EmptyState message={t("irops.noPassengersFound")} />
       )}
 
       {!selectedFlightId && (
-        <EmptyState message="Enter a flight ID to view affected passengers." />
+        <EmptyState message={t("irops.enterFlightIdPassengers")} />
       )}
     </div>
   );
@@ -831,6 +891,7 @@ function ConnectionsTab({
   selectedFlightId: number | null;
   setSelectedFlightId: (id: number | null) => void;
 }) {
+  const { t } = useTranslation();
   const [flightIdInput, setFlightIdInput] = useState(
     selectedFlightId?.toString() ?? ""
   );
@@ -860,16 +921,16 @@ function ConnectionsTab({
   return (
     <div className="space-y-6">
       {/* Flight selection */}
-      <Card className="p-4">
+      <Card className="p-4 rounded-xl shadow-sm">
         <div className="flex items-end gap-3">
           <div className="flex-1">
             <Label htmlFor="connFlightId" className="text-sm">
-              Flight ID
+              {t("irops.flightId")}
             </Label>
             <Input
               id="connFlightId"
               type="number"
-              placeholder="Enter flight ID..."
+              placeholder={t("irops.enterFlightId")}
               value={flightIdInput}
               onChange={e => setFlightIdInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleLoad()}
@@ -877,13 +938,13 @@ function ConnectionsTab({
           </div>
           <Button onClick={handleLoad} className="gap-2">
             <Link2 className="h-4 w-4" />
-            Check Connections
+            {t("irops.checkConnections")}
           </Button>
         </div>
       </Card>
 
       {isLoading && queryFlightId > 0 && (
-        <LoadingState message="Analyzing connection risks..." />
+        <LoadingState message={t("irops.analyzingConnections")} />
       )}
 
       {connections && connections.length > 0 && (
@@ -898,14 +959,14 @@ function ConnectionsTab({
               return (
                 <Card
                   key={level}
-                  className={`p-3 border ${config.bg} ${config.border}`}
+                  className={`p-3 border rounded-xl shadow-sm ${config.bg} ${config.border}`}
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`h-2 w-2 rounded-full ${config.dot}`} />
                     <span
                       className={`text-xs font-medium uppercase ${config.text}`}
                     >
-                      {config.label} Risk
+                      {t(`irops.severity.${level}`)}
                     </span>
                   </div>
                   <p className={`text-xl font-bold ${config.text}`}>{count}</p>
@@ -915,20 +976,32 @@ function ConnectionsTab({
           </div>
 
           {/* Connection list */}
-          <Card className="p-0 overflow-hidden">
+          <Card className="p-0 overflow-hidden rounded-xl shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left p-3 font-medium">Risk</th>
-                    <th className="text-left p-3 font-medium">Passenger</th>
-                    <th className="text-left p-3 font-medium">Booking</th>
                     <th className="text-left p-3 font-medium">
-                      Connection Flight
+                      {t("irops.risk")}
                     </th>
-                    <th className="text-left p-3 font-medium">Route</th>
-                    <th className="text-left p-3 font-medium">Departure</th>
-                    <th className="text-left p-3 font-medium">Minutes Until</th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.passenger")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.booking")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.connectionFlight")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.route")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.departure")}
+                    </th>
+                    <th className="text-left p-3 font-medium">
+                      {t("irops.minutesUntil")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -985,7 +1058,7 @@ function ConnectionsTab({
                           }`}
                         >
                           {conn.minutesUntilConnection < 0
-                            ? "MISSED"
+                            ? t("irops.missed")
                             : `${conn.minutesUntilConnection}m`}
                         </span>
                       </td>
@@ -999,18 +1072,19 @@ function ConnectionsTab({
       )}
 
       {connections && connections.length === 0 && queryFlightId > 0 && (
-        <Card className="p-12 text-center">
+        <Card className="p-12 text-center rounded-xl shadow-sm">
           <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No Connections at Risk</h3>
+          <h3 className="text-lg font-semibold mb-2">
+            {t("irops.noConnectionsAtRisk")}
+          </h3>
           <p className="text-muted-foreground">
-            No connecting passengers found for this flight, or all connections
-            are secure.
+            {t("irops.noConnectionsMessage")}
           </p>
         </Card>
       )}
 
       {!selectedFlightId && (
-        <EmptyState message="Enter a flight ID to check connections at risk." />
+        <EmptyState message={t("irops.enterFlightIdConnections")} />
       )}
     </div>
   );
@@ -1021,6 +1095,7 @@ function ConnectionsTab({
 // ============================================================================
 
 function MetricsTab() {
+  const { t } = useTranslation();
   const now = new Date();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1031,54 +1106,56 @@ function MetricsTab() {
   );
 
   if (isLoading) {
-    return <LoadingState message="Loading recovery metrics..." />;
+    return <LoadingState message={t("irops.loadingMetrics")} />;
   }
 
   if (!metrics) {
-    return <EmptyState message="Unable to load recovery metrics." />;
+    return <EmptyState message={t("irops.unableToLoadMetrics")} />;
   }
 
   return (
     <div className="space-y-6">
-      <Card className="p-6">
-        <h3 className="font-semibold mb-1">Recovery Performance</h3>
+      <Card className="p-6 rounded-xl shadow-sm">
+        <h3 className="font-semibold mb-1">{t("irops.recoveryPerformance")}</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          Last 30 days metrics
+          {t("irops.last30Days")}
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
-            label="Total Events"
+            label={t("irops.totalEvents")}
             value={metrics.totalEvents}
-            subLabel="disruptions reported"
+            subLabel={t("irops.disruptionsReported")}
           />
           <MetricCard
-            label="Resolved"
+            label={t("irops.resolved")}
             value={metrics.resolvedEvents}
-            subLabel={`of ${metrics.totalEvents} events`}
+            subLabel={t("irops.ofEvents", { count: metrics.totalEvents })}
           />
           <MetricCard
-            label="Avg Resolution"
+            label={t("irops.avgResolution")}
             value={`${metrics.avgResolutionMinutes}m`}
-            subLabel="average time to resolve"
+            subLabel={t("irops.avgTimeToResolve")}
           />
           <MetricCard
-            label="Recovery Rate"
+            label={t("irops.kpi.recoveryRate")}
             value={`${metrics.recoveryRatePercent}%`}
-            subLabel="events fully resolved"
+            subLabel={t("irops.eventsFullyResolved")}
             highlight={metrics.recoveryRatePercent >= 90}
           />
         </div>
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-6">
+        <Card className="p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950 dark:to-blue-900/30">
               <Plane className="h-5 w-5 text-blue-500" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Rebooking Success</p>
+              <p className="text-sm text-muted-foreground">
+                {t("irops.rebookingSuccess")}
+              </p>
               <p className="text-2xl font-bold">{metrics.rebookingSuccess}</p>
             </div>
           </div>
@@ -1089,14 +1166,14 @@ function MetricsTab() {
           />
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-green-50 dark:bg-green-950">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950 dark:to-green-900/30">
               <CheckCircle className="h-5 w-5 text-green-500" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">
-                Compensation Issued
+                {t("irops.compensationIssued")}
               </p>
               <p className="text-2xl font-bold">{metrics.compensationIssued}</p>
             </div>
@@ -1108,14 +1185,14 @@ function MetricsTab() {
           />
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950">
+            <div className="p-2 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950 dark:to-purple-900/30">
               <Users className="h-5 w-5 text-purple-500" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">
-                Passengers Recovered
+                {t("irops.passengersRecovered")}
               </p>
               <p className="text-2xl font-bold">
                 {metrics.passengersRecovered}
@@ -1154,7 +1231,7 @@ function KPICard({
 }) {
   return (
     <Card
-      className={`p-4 ${highlight ? "ring-2 ring-red-300 dark:ring-red-700" : ""}`}
+      className={`p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow ${highlight ? "ring-2 ring-red-300 dark:ring-red-700" : ""}`}
     >
       <div className="flex items-center gap-3">
         <div className={`p-2 rounded-lg ${bgColor}`}>
@@ -1193,6 +1270,7 @@ function EventCard({
   compact: boolean;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation();
   const typeConfig =
     EVENT_TYPE_CONFIG[event.eventType as keyof typeof EVENT_TYPE_CONFIG] ??
     EVENT_TYPE_CONFIG.delay;
@@ -1200,6 +1278,10 @@ function EventCard({
   const severityConfig =
     SEVERITY_CONFIG[event.severity as keyof typeof SEVERITY_CONFIG] ??
     SEVERITY_CONFIG.medium;
+
+  const _eventTypeKey =
+    EVENT_TYPE_I18N_KEYS[event.eventType] ?? event.eventType;
+  const severityKey = event.severity as keyof typeof SEVERITY_CONFIG;
 
   return (
     <div
@@ -1220,11 +1302,11 @@ function EventCard({
         </div>
         <div className="flex items-center gap-2">
           <Badge className={`text-xs ${severityConfig.badge}`}>
-            {severityConfig.label}
+            {t(`irops.severity.${severityKey}`)}
           </Badge>
           {event.status === "recovering" && (
             <Badge className="bg-blue-100 text-blue-700 text-xs">
-              Recovering
+              {t("irops.recovering")}
             </Badge>
           )}
         </div>
@@ -1235,17 +1317,18 @@ function EventCard({
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <Users className="h-3 w-3" />
-          {event.affectedPassengers} pax
+          {event.affectedPassengers} {t("irops.pax")}
         </span>
         {event.connectionsAtRisk > 0 && (
           <span className="flex items-center gap-1 text-orange-500">
             <Link2 className="h-3 w-3" />
-            {event.connectionsAtRisk} at risk
+            {event.connectionsAtRisk} {t("irops.atRisk")}
           </span>
         )}
         {event.delayMinutes && event.delayMinutes > 0 && (
           <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />+{event.delayMinutes}min delay
+            <Clock className="h-3 w-3" />
+            {t("irops.minDelay", { min: event.delayMinutes })}
           </span>
         )}
         <span>
@@ -1270,8 +1353,14 @@ function ActionTimelineItem({
     createdAt: Date | string;
   };
 }) {
+  const { t } = useTranslation();
   const statusConfig =
     ACTION_STATUS_CONFIG[action.status] ?? ACTION_STATUS_CONFIG.pending;
+
+  const actionTypeKey =
+    ACTION_TYPE_I18N_KEYS[action.actionType] ?? action.actionType;
+  const actionStatusKey =
+    ACTION_STATUS_I18N_KEYS[action.status] ?? action.status;
 
   return (
     <div className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50">
@@ -1291,10 +1380,15 @@ function ActionTimelineItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">
-            {ACTION_TYPE_LABELS[action.actionType] ?? action.actionType}
+            {t(`irops.actions.${actionTypeKey}`, {
+              defaultValue:
+                ACTION_TYPE_LABELS[action.actionType] ?? action.actionType,
+            })}
           </span>
           <Badge className={`text-xs ${statusConfig.color}`}>
-            {statusConfig.label}
+            {t(`irops.actionStatus.${actionStatusKey}`, {
+              defaultValue: statusConfig.label,
+            })}
           </Badge>
         </div>
         {action.details.passengerName ? (
@@ -1369,7 +1463,7 @@ function ProgressBar({
 
 function LoadingState({ message }: { message: string }) {
   return (
-    <Card className="p-12">
+    <Card className="p-12 rounded-xl">
       <div className="flex flex-col items-center justify-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         <p className="text-sm text-muted-foreground">{message}</p>
@@ -1380,7 +1474,7 @@ function LoadingState({ message }: { message: string }) {
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <Card className="p-12 text-center">
+    <Card className="p-12 text-center rounded-xl">
       <Activity className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
       <p className="text-muted-foreground">{message}</p>
     </Card>

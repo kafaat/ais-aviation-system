@@ -234,7 +234,7 @@ function FlightCrewTab() {
   return (
     <div className="space-y-6">
       {/* Flight selector */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <div className="flex items-end gap-4">
           <div className="flex-1">
             <Label>{t("crew.flightId", "Flight ID")}</Label>
@@ -260,7 +260,7 @@ function FlightCrewTab() {
 
       {/* Requirements validation */}
       {requirements && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <div className="flex items-center gap-2 mb-3">
             <Shield className="h-5 w-5" />
             <h3 className="font-semibold">
@@ -328,7 +328,7 @@ function FlightCrewTab() {
 
       {/* Flight info */}
       {data?.flight && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <div className="flex items-center gap-4 flex-wrap">
             <div>
               <span className="text-sm text-muted-foreground">
@@ -377,7 +377,7 @@ function FlightCrewTab() {
       {data && (
         <div className="space-y-4">
           {/* Cockpit crew */}
-          <Card className="p-4">
+          <Card className="p-4 shadow-sm rounded-xl">
             <h3 className="font-semibold mb-3 flex items-center gap-2">
               <Shield className="h-4 w-4 text-blue-500" />
               {t("crew.cockpitCrew", "Cockpit Crew")} (
@@ -400,7 +400,7 @@ function FlightCrewTab() {
           </Card>
 
           {/* Cabin crew */}
-          <Card className="p-4">
+          <Card className="p-4 shadow-sm rounded-xl">
             <h3 className="font-semibold mb-3 flex items-center gap-2">
               <Users className="h-4 w-4 text-purple-500" />
               {t("crew.cabinCrew", "Cabin Crew")} ({data.crew.cabin.length})
@@ -424,7 +424,7 @@ function FlightCrewTab() {
       )}
 
       {flightCrewQuery.isLoading && (
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <div className="animate-pulse space-y-4">
             <div className="h-4 bg-muted rounded w-1/3" />
             <div className="h-20 bg-muted rounded" />
@@ -663,7 +663,7 @@ function AssignCrewTab() {
   return (
     <div className="space-y-6">
       {/* Assignment form */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
           <UserPlus className="h-4 w-4" />
           {t("crew.assignCrew", "Assign Crew to Flight")}
@@ -759,7 +759,7 @@ function AssignCrewTab() {
       )}
 
       {/* Crew search / directory */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
           <Search className="h-4 w-4" />
           {t("crew.crewDirectory", "Crew Directory")}
@@ -1124,7 +1124,7 @@ function AvailabilityTab() {
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <Label>{t("crew.crewMember", "Crew Member")}</Label>
@@ -1168,7 +1168,7 @@ function AvailabilityTab() {
 
       {/* Availability status */}
       {availability && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             {t("crew.availabilityStatus", "Availability Status")} -{" "}
@@ -1268,7 +1268,7 @@ function AvailabilityTab() {
 
       {/* 7-day calendar view */}
       {schedule && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             {t("crew.weekCalendar", "7-Day Calendar")} -{" "}
@@ -1329,7 +1329,7 @@ function AvailabilityTab() {
       )}
 
       {availabilityQuery.isLoading && (
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <div className="animate-pulse space-y-4">
             <div className="h-4 bg-muted rounded w-1/3" />
             <div className="h-16 bg-muted rounded" />
@@ -1416,7 +1416,7 @@ function ScheduleTab() {
   return (
     <div className="space-y-6">
       {/* Filters */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <Label>{t("crew.crewMember", "Crew Member")}</Label>
@@ -1466,7 +1466,7 @@ function ScheduleTab() {
       {/* Summary cards */}
       {schedule && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="p-4">
+          <Card className="p-4 shadow-sm rounded-xl">
             <div className="text-sm text-muted-foreground">
               {t("crew.crewMember", "Crew Member")}
             </div>
@@ -1477,13 +1477,13 @@ function ScheduleTab() {
               | {schedule.crewMember.employeeId}
             </div>
           </Card>
-          <Card className="p-4">
+          <Card className="p-4 shadow-sm rounded-xl">
             <div className="text-sm text-muted-foreground">
               {t("crew.totalFlights", "Total Flights")}
             </div>
             <div className="font-bold text-lg">{totalFlights}</div>
           </Card>
-          <Card className="p-4">
+          <Card className="p-4 shadow-sm rounded-xl">
             <div className="text-sm text-muted-foreground">
               {t("crew.totalDutyHours", "Total Duty Hours")}
             </div>
@@ -1491,7 +1491,7 @@ function ScheduleTab() {
               {Math.round(totalDuty * 10) / 10}h
             </div>
           </Card>
-          <Card className="p-4">
+          <Card className="p-4 shadow-sm rounded-xl">
             <div className="text-sm text-muted-foreground">
               {t("crew.ftlAlerts", "FTL Alerts")}
             </div>
@@ -1508,7 +1508,7 @@ function ScheduleTab() {
 
       {/* Schedule table */}
       {schedule && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
             <Clock className="h-4 w-4" />
             {t("crew.detailedSchedule", "Detailed Schedule")}
@@ -1604,7 +1604,7 @@ function ScheduleTab() {
       )}
 
       {scheduleQuery.isLoading && (
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <div className="animate-pulse space-y-4">
             <div className="h-4 bg-muted rounded w-1/3" />
             <div className="h-40 bg-muted rounded" />
@@ -1660,7 +1660,7 @@ function ReplacementTab() {
   return (
     <div className="space-y-6">
       {/* Search */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <h3 className="font-semibold mb-4 flex items-center gap-2">
           <RefreshCw className="h-4 w-4" />
           {t("crew.findReplacement", "Find Replacement Crew")}
@@ -1708,7 +1708,7 @@ function ReplacementTab() {
 
       {/* Results */}
       {data && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold">
               {t("crew.replacementResults", "Replacement Candidates")} -{" "}
@@ -1842,7 +1842,7 @@ function ReplacementTab() {
       )}
 
       {replacementQuery.isLoading && (
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <div className="animate-pulse space-y-4">
             <div className="h-4 bg-muted rounded w-1/3" />
             <div className="h-40 bg-muted rounded" />

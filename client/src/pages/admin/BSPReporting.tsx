@@ -128,23 +128,21 @@ function formatSAR(amountInCents: number): string {
   return `${(amountInCents / 100).toFixed(2)} SAR`;
 }
 
-function getStatusBadgeVariant(
-  status: string
-): "default" | "secondary" | "destructive" | "outline" {
+function getStatusBadgeClassName(status: string): string {
   switch (status) {
     case "settled":
     case "paid":
     case "reconciled":
     case "clean":
-      return "default";
+      return "bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200";
     case "submitted":
     case "pending":
-      return "secondary";
+      return "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200";
     case "disputed":
     case "discrepancies_found":
-      return "destructive";
+      return "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 border-red-200";
     default:
-      return "outline";
+      return "";
   }
 }
 
@@ -153,7 +151,7 @@ function getStatusBadgeVariant(
 // ============================================================================
 
 export default function BSPReporting() {
-  const { t: _t } = useTranslation();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
   const [startDate, setStartDate] = useState(
     format(subDays(new Date(), 15), "yyyy-MM-dd")
@@ -170,10 +168,12 @@ export default function BSPReporting() {
   // ---- Mutations ----
   const generateReportMutation = bspTrpc.generateReport.useMutation({
     onSuccess: () => {
-      toast.success("BSP report generated successfully");
+      toast.success(t("bspReporting.reportGeneratedSuccess"));
     },
     onError: (error: Error) => {
-      toast.error(`Failed to generate report: ${error.message}`);
+      toast.error(
+        t("bspReporting.reportGenerateFailed", { error: error.message })
+      );
     },
   });
 
@@ -183,15 +183,19 @@ export default function BSPReporting() {
       unmatchedTransactions: number;
     }) => {
       if (data.reconciliationStatus === "clean") {
-        toast.success("Reconciliation complete - no discrepancies found");
+        toast.success(t("bspReporting.reconciliationClean"));
       } else {
         toast.warning(
-          `Reconciliation found ${data.unmatchedTransactions} discrepancies`
+          t("bspReporting.reconciliationDiscrepancies", {
+            count: data.unmatchedTransactions,
+          })
         );
       }
     },
     onError: (error: Error) => {
-      toast.error(`Reconciliation failed: ${error.message}`);
+      toast.error(
+        t("bspReporting.reconciliationFailed", { error: error.message })
+      );
     },
   });
 
@@ -211,26 +215,32 @@ export default function BSPReporting() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      toast.success(`HOT file exported with ${data.recordCount} records`);
+      toast.success(t("bspReporting.hotExported", { count: data.recordCount }));
     },
     onError: (error: Error) => {
-      toast.error(`HOT export failed: ${error.message}`);
+      toast.error(t("bspReporting.hotExportFailed", { error: error.message }));
     },
   });
 
   const validateComplianceMutation = bspTrpc.validateCompliance.useMutation({
     onSuccess: (data: { isCompliant: boolean; checks: ComplianceCheck[] }) => {
       if (data.isCompliant) {
-        toast.success("Report is IATA compliant");
+        toast.success(t("bspReporting.reportCompliant"));
       } else {
         const failedCount = data.checks.filter(
           (c: ComplianceCheck) => !c.passed
         ).length;
-        toast.warning(`${failedCount} compliance check(s) failed`);
+        toast.warning(
+          t("bspReporting.complianceChecksFailed", { count: failedCount })
+        );
       }
     },
     onError: (error: Error) => {
-      toast.error(`Compliance validation failed: ${error.message}`);
+      toast.error(
+        t("bspReporting.complianceValidationFailed", {
+          error: error.message,
+        })
+      );
     },
   });
 
@@ -298,13 +308,10 @@ export default function BSPReporting() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/20 dark:via-indigo-950/20 dark:to-purple-950/20 p-6 rounded-xl">
         <div>
-          <h1 className="text-2xl font-bold">BSP Reporting</h1>
-          <p className="text-muted-foreground">
-            IATA Billing and Settlement Plan - Reports, Reconciliation &amp;
-            Compliance
-          </p>
+          <h1 className="text-2xl font-bold">{t("bspReporting.title")}</h1>
+          <p className="text-muted-foreground">{t("bspReporting.subtitle")}</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -317,7 +324,7 @@ export default function BSPReporting() {
             ) : (
               <FileDown className="mr-2 h-4 w-4" />
             )}
-            Export HOT File
+            {t("bspReporting.exportHOT")}
           </Button>
           <Button
             variant="outline"
@@ -329,7 +336,7 @@ export default function BSPReporting() {
             ) : (
               <ShieldCheck className="mr-2 h-4 w-4" />
             )}
-            Validate Compliance
+            {t("bspReporting.validateCompliance")}
           </Button>
         </div>
       </div>
@@ -337,61 +344,67 @@ export default function BSPReporting() {
       {/* Summary Cards */}
       {currentCycle && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Total Sales</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">
+                {t("bspReporting.totalSales")}
+              </CardTitle>
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 {formatSAR(currentCycle.totalSales)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Current settlement cycle
+                {t("bspReporting.currentCycle")}
               </p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">
-                Total Refunds
+                {t("bspReporting.totalRefunds")}
               </CardTitle>
-              <RefreshCw className="h-4 w-4 text-muted-foreground" />
+              <RefreshCw className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 {formatSAR(currentCycle.totalRefunds)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Current settlement cycle
+                {t("bspReporting.currentCycle")}
               </p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Net Amount</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">
+                {t("bspReporting.netAmount")}
+              </CardTitle>
+              <DollarSign className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 {formatSAR(currentCycle.netAmount)}
               </div>
               <p className="text-xs text-muted-foreground">
-                After refunds &amp; commissions
+                {t("bspReporting.afterRefunds")}
               </p>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Commissions</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">
+                {t("bspReporting.commissions")}
+              </CardTitle>
+              <Users className="h-4 w-4 text-purple-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
                 {formatSAR(currentCycle.commissionAmount)}
               </div>
               <p className="text-xs text-muted-foreground">
-                Agent commissions this cycle
+                {t("bspReporting.agentCommissions")}
               </p>
             </CardContent>
           </Card>
@@ -406,46 +419,57 @@ export default function BSPReporting() {
         <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview" className="flex items-center gap-1">
             <Calendar className="h-4 w-4" />
-            <span className="hidden sm:inline">Cycles</span>
+            <span className="hidden sm:inline">
+              {t("bspReporting.tabs.cycles")}
+            </span>
           </TabsTrigger>
           <TabsTrigger value="generate" className="flex items-center gap-1">
             <FileText className="h-4 w-4" />
-            <span className="hidden sm:inline">Generate</span>
+            <span className="hidden sm:inline">
+              {t("bspReporting.tabs.generate")}
+            </span>
           </TabsTrigger>
           <TabsTrigger value="transactions" className="flex items-center gap-1">
             <ClipboardCheck className="h-4 w-4" />
-            <span className="hidden sm:inline">Transactions</span>
+            <span className="hidden sm:inline">
+              {t("bspReporting.tabs.transactions")}
+            </span>
           </TabsTrigger>
           <TabsTrigger value="agents" className="flex items-center gap-1">
             <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Agents</span>
+            <span className="hidden sm:inline">
+              {t("bspReporting.tabs.agents")}
+            </span>
           </TabsTrigger>
           <TabsTrigger
             value="reconciliation"
             className="flex items-center gap-1"
           >
             <RefreshCw className="h-4 w-4" />
-            <span className="hidden sm:inline">Reconcile</span>
+            <span className="hidden sm:inline">
+              {t("bspReporting.tabs.reconcile")}
+            </span>
           </TabsTrigger>
           <TabsTrigger value="compliance" className="flex items-center gap-1">
             <ShieldCheck className="h-4 w-4" />
-            <span className="hidden sm:inline">Compliance</span>
+            <span className="hidden sm:inline">
+              {t("bspReporting.tabs.compliance")}
+            </span>
           </TabsTrigger>
         </TabsList>
 
         {/* ---- Settlement Cycles Overview ---- */}
         <TabsContent value="overview" className="space-y-4">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>Settlement Cycles</CardTitle>
+              <CardTitle>{t("bspReporting.settlementCycles")}</CardTitle>
               <CardDescription>
-                BSP bi-monthly settlement cycle overview. Each cycle covers a
-                15-day period.
+                {t("bspReporting.cyclesDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-4 mb-4">
-                <Label>Show cycles:</Label>
+                <Label>{t("bspReporting.showCycles")}</Label>
                 <Select
                   value={String(selectedCycleCount)}
                   onValueChange={v => setSelectedCycleCount(Number(v))}
@@ -480,24 +504,36 @@ export default function BSPReporting() {
                 </div>
               ) : cycles.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
-                  No settlement cycle data available
+                  {t("bspReporting.noCycleData")}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left">
-                        <th className="pb-2 font-medium">Cycle</th>
-                        <th className="pb-2 font-medium">Period</th>
-                        <th className="pb-2 font-medium text-right">Sales</th>
-                        <th className="pb-2 font-medium text-right">Refunds</th>
-                        <th className="pb-2 font-medium text-right">
-                          Commission
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.cycle")}
                         </th>
-                        <th className="pb-2 font-medium text-right">Net</th>
-                        <th className="pb-2 font-medium text-center">Status</th>
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.period")}
+                        </th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.sales")}
+                        </th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.refunds")}
+                        </th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.commission")}
+                        </th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.net")}
+                        </th>
                         <th className="pb-2 font-medium text-center">
-                          Actions
+                          {t("bspReporting.status")}
+                        </th>
+                        <th className="pb-2 font-medium text-center">
+                          {t("bspReporting.actions")}
                         </th>
                       </tr>
                     </thead>
@@ -528,7 +564,8 @@ export default function BSPReporting() {
                           </td>
                           <td className="py-3 text-center">
                             <Badge
-                              variant={getStatusBadgeVariant(cycle.status)}
+                              variant="outline"
+                              className={getStatusBadgeClassName(cycle.status)}
                             >
                               {cycle.status}
                             </Badge>
@@ -540,7 +577,7 @@ export default function BSPReporting() {
                               onClick={() => handleReconcile(cycle.cycleNumber)}
                               disabled={reconcileMutation.isPending}
                             >
-                              Reconcile
+                              {t("bspReporting.reconcile")}
                             </Button>
                           </td>
                         </tr>
@@ -555,18 +592,17 @@ export default function BSPReporting() {
 
         {/* ---- Report Generation ---- */}
         <TabsContent value="generate" className="space-y-4">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>Generate BSP / AHC Report</CardTitle>
+              <CardTitle>{t("bspReporting.generateReport")}</CardTitle>
               <CardDescription>
-                Create a new BSP settlement report or Airlines Handling Charges
-                report for a specified period.
+                {t("bspReporting.generateDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Report Type</Label>
+                  <Label>{t("bspReporting.reportType")}</Label>
                   <Select
                     value={reportType}
                     onValueChange={v => setReportType(v as ReportType)}
@@ -576,16 +612,16 @@ export default function BSPReporting() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="bsp">
-                        BSP - Settlement Report
+                        {t("bspReporting.bspSettlement")}
                       </SelectItem>
                       <SelectItem value="ahc">
-                        AHC - Airlines Handling Charges
+                        {t("bspReporting.ahcCharges")}
                       </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Period Start</Label>
+                  <Label>{t("bspReporting.periodStart")}</Label>
                   <Input
                     type="date"
                     value={startDate}
@@ -593,7 +629,7 @@ export default function BSPReporting() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Period End</Label>
+                  <Label>{t("bspReporting.periodEnd")}</Label>
                   <Input
                     type="date"
                     value={endDate}
@@ -610,57 +646,66 @@ export default function BSPReporting() {
                 ) : (
                   <FileText className="mr-2 h-4 w-4" />
                 )}
-                Generate Report
+                {t("bspReporting.generateBtn")}
               </Button>
             </CardContent>
           </Card>
 
           {/* Generated Report Result */}
           {reportData && (
-            <Card>
+            <Card className="shadow-sm rounded-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <CheckCircle className="h-5 w-5 text-green-600" />
-                  Report Generated
+                  {t("bspReporting.reportGenerated")}
                 </CardTitle>
                 <CardDescription>
-                  Report ID: {reportData.report.id} | Type:{" "}
-                  {reportData.report.reportType.toUpperCase()} | Cycle #
-                  {reportData.report.cycleNumber}
+                  {t("bspReporting.reportId")}: {reportData.report.id} |{" "}
+                  {t("bspReporting.type")}:{" "}
+                  {reportData.report.reportType.toUpperCase()} |{" "}
+                  {t("bspReporting.cycle")} #{reportData.report.cycleNumber}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Sales</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t("bspReporting.totalSales")}
+                    </p>
                     <p className="text-lg font-bold">
                       {formatSAR(reportData.report.totalSales)}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">
-                      Total Refunds
+                      {t("bspReporting.totalRefunds")}
                     </p>
                     <p className="text-lg font-bold text-red-600">
                       {formatSAR(reportData.report.totalRefunds)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Commission</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t("bspReporting.commission")}
+                    </p>
                     <p className="text-lg font-bold">
                       {formatSAR(reportData.report.commissionAmount)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Net Amount</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t("bspReporting.netAmount")}
+                    </p>
                     <p className="text-lg font-bold text-green-700">
                       {formatSAR(reportData.report.netAmount)}
                     </p>
                   </div>
                 </div>
                 <div className="mt-4 text-sm text-muted-foreground">
-                  Transactions: {reportData.transactionCount} | Agent
-                  Settlements: {reportData.agentSettlementCount}
+                  {t("bspReporting.transactionsCount")}:{" "}
+                  {reportData.transactionCount} |{" "}
+                  {t("bspReporting.agentSettlements")}:{" "}
+                  {reportData.agentSettlementCount}
                 </div>
               </CardContent>
             </Card>
@@ -669,37 +714,54 @@ export default function BSPReporting() {
 
         {/* ---- Transactions ---- */}
         <TabsContent value="transactions" className="space-y-4">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>BSP Transactions</CardTitle>
+              <CardTitle>{t("bspReporting.bspTransactions")}</CardTitle>
               <CardDescription>
-                Individual transaction records from the last generated report.
-                Generate a report first to view transactions.
+                {t("bspReporting.transactionsDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {!reportData || reportData.transactions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ClipboardCheck className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>
-                    No transactions to display. Generate a BSP report first.
-                  </p>
+                  <p>{t("bspReporting.noTransactions")}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left">
-                        <th className="pb-2 font-medium">Type</th>
-                        <th className="pb-2 font-medium">Document</th>
-                        <th className="pb-2 font-medium">Passenger</th>
-                        <th className="pb-2 font-medium">Route</th>
-                        <th className="pb-2 font-medium">Agent</th>
-                        <th className="pb-2 font-medium text-right">Fare</th>
-                        <th className="pb-2 font-medium text-right">Tax</th>
-                        <th className="pb-2 font-medium text-right">Comm.</th>
-                        <th className="pb-2 font-medium text-right">Net</th>
-                        <th className="pb-2 font-medium">Issue Date</th>
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.type")}
+                        </th>
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.document")}
+                        </th>
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.passengerName")}
+                        </th>
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.routeCode")}
+                        </th>
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.agent")}
+                        </th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.fare")}
+                        </th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.tax")}
+                        </th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.comm")}
+                        </th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.net")}
+                        </th>
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.issueDate")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -743,7 +805,9 @@ export default function BSPReporting() {
                   </table>
                   {reportData.transactionCount > 100 && (
                     <p className="text-sm text-muted-foreground mt-2 text-center">
-                      Showing 100 of {reportData.transactionCount} transactions
+                      {t("bspReporting.showingOf", {
+                        count: reportData.transactionCount,
+                      })}
                     </p>
                   )}
                 </div>
@@ -754,43 +818,45 @@ export default function BSPReporting() {
 
         {/* ---- Agent Settlements ---- */}
         <TabsContent value="agents" className="space-y-4">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>Agent Settlement Summary</CardTitle>
+              <CardTitle>{t("bspReporting.agentSettlementSummary")}</CardTitle>
               <CardDescription>
-                Commission breakdown by travel agent for the generated report
-                period. Generate a BSP report to populate agent settlement data.
+                {t("bspReporting.agentsDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {!reportData || reportData.agentSettlements.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>
-                    No agent settlements to display. Generate a BSP report with
-                    agent bookings.
-                  </p>
+                  <p>{t("bspReporting.noAgentSettlements")}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left">
-                        <th className="pb-2 font-medium">Agent</th>
-                        <th className="pb-2 font-medium">IATA Number</th>
-                        <th className="pb-2 font-medium text-right">
-                          Total Sales
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.agentName")}
+                        </th>
+                        <th className="pb-2 font-medium">
+                          {t("bspReporting.iataNumber")}
                         </th>
                         <th className="pb-2 font-medium text-right">
-                          Total Refunds
+                          {t("bspReporting.totalSales")}
                         </th>
                         <th className="pb-2 font-medium text-right">
-                          Commission
+                          {t("bspReporting.totalRefunds")}
                         </th>
                         <th className="pb-2 font-medium text-right">
-                          Net Payable
+                          {t("bspReporting.commission")}
                         </th>
-                        <th className="pb-2 font-medium text-center">Status</th>
+                        <th className="pb-2 font-medium text-right">
+                          {t("bspReporting.netPayable")}
+                        </th>
+                        <th className="pb-2 font-medium text-center">
+                          {t("bspReporting.status")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -820,7 +886,8 @@ export default function BSPReporting() {
                             </td>
                             <td className="py-3 text-center">
                               <Badge
-                                variant={getStatusBadgeVariant(
+                                variant="outline"
+                                className={getStatusBadgeClassName(
                                   settlement.status
                                 )}
                               >
@@ -840,13 +907,11 @@ export default function BSPReporting() {
 
         {/* ---- Reconciliation ---- */}
         <TabsContent value="reconciliation" className="space-y-4">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>BSP Reconciliation</CardTitle>
+              <CardTitle>{t("bspReporting.bspReconciliation")}</CardTitle>
               <CardDescription>
-                Cross-reference bookings with payment records to identify
-                discrepancies. Select a settlement cycle from the overview tab
-                and click Reconcile.
+                {t("bspReporting.reconciliationDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -854,16 +919,13 @@ export default function BSPReporting() {
                 <div className="flex flex-col items-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
                   <p className="text-muted-foreground">
-                    Running reconciliation...
+                    {t("bspReporting.runningReconciliation")}
                   </p>
                 </div>
               ) : !reconciliationData ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <RefreshCw className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>
-                    No reconciliation data. Click &quot;Reconcile&quot; on a
-                    settlement cycle in the Cycles tab.
-                  </p>
+                  <p>{t("bspReporting.noReconciliationData")}</p>
                 </div>
               ) : (
                 <div className="space-y-6">
@@ -871,37 +933,41 @@ export default function BSPReporting() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">
-                        Total Bookings
+                        {t("bspReporting.totalBookings")}
                       </p>
                       <p className="text-2xl font-bold">
                         {reconciliationData.totalBookings}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Matched</p>
+                      <p className="text-sm text-muted-foreground">
+                        {t("bspReporting.matched")}
+                      </p>
                       <p className="text-2xl font-bold text-green-600">
                         {reconciliationData.matchedTransactions}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">
-                        Discrepancies
+                        {t("bspReporting.discrepancies")}
                       </p>
                       <p className="text-2xl font-bold text-red-600">
                         {reconciliationData.unmatchedTransactions}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Status</p>
+                      <p className="text-sm text-muted-foreground">
+                        {t("bspReporting.status")}
+                      </p>
                       <Badge
-                        variant={getStatusBadgeVariant(
+                        variant="outline"
+                        className={`mt-1 ${getStatusBadgeClassName(
                           reconciliationData.reconciliationStatus
-                        )}
-                        className="mt-1"
+                        )}`}
                       >
                         {reconciliationData.reconciliationStatus === "clean"
-                          ? "Clean"
-                          : "Discrepancies Found"}
+                          ? t("bspReporting.clean")
+                          : t("bspReporting.discrepanciesFound")}
                       </Badge>
                     </div>
                   </div>
@@ -910,23 +976,27 @@ export default function BSPReporting() {
                   {reconciliationData.discrepancies.length > 0 && (
                     <div>
                       <h3 className="text-lg font-semibold mb-2">
-                        Discrepancies
+                        {t("bspReporting.discrepancies")}
                       </h3>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b text-left">
-                              <th className="pb-2 font-medium">Booking Ref</th>
-                              <th className="pb-2 font-medium text-right">
-                                Booking Amount
+                              <th className="pb-2 font-medium">
+                                {t("bspReporting.bookingRef")}
                               </th>
                               <th className="pb-2 font-medium text-right">
-                                Payment Amount
+                                {t("bspReporting.bookingAmount")}
                               </th>
                               <th className="pb-2 font-medium text-right">
-                                Difference
+                                {t("bspReporting.paymentAmount")}
                               </th>
-                              <th className="pb-2 font-medium">Issue</th>
+                              <th className="pb-2 font-medium text-right">
+                                {t("bspReporting.difference")}
+                              </th>
+                              <th className="pb-2 font-medium">
+                                {t("bspReporting.issue")}
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -962,12 +1032,13 @@ export default function BSPReporting() {
                   )}
 
                   <p className="text-xs text-muted-foreground">
-                    Reconciled at:{" "}
+                    {t("bspReporting.reconciledAt")}{" "}
                     {format(
                       new Date(reconciliationData.reconciledAt),
                       "dd MMM yyyy HH:mm:ss"
                     )}{" "}
-                    | Cycle #{reconciliationData.cycleNumber}
+                    | {t("bspReporting.cycle")} #
+                    {reconciliationData.cycleNumber}
                   </p>
                 </div>
               )}
@@ -977,13 +1048,11 @@ export default function BSPReporting() {
 
         {/* ---- Compliance Validation ---- */}
         <TabsContent value="compliance" className="space-y-4">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>IATA Compliance Validation</CardTitle>
+              <CardTitle>{t("bspReporting.iataCompliance")}</CardTitle>
               <CardDescription>
-                Validate the current settlement period against IATA BSP
-                standards. Click &quot;Validate Compliance&quot; in the header
-                to run checks.
+                {t("bspReporting.complianceDescription")}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -991,40 +1060,43 @@ export default function BSPReporting() {
                 <div className="flex flex-col items-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
                   <p className="text-muted-foreground">
-                    Running compliance checks...
+                    {t("bspReporting.runningChecks")}
                   </p>
                 </div>
               ) : !complianceData ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <ShieldCheck className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>
-                    No compliance data. Click the &quot;Validate
-                    Compliance&quot; button above.
-                  </p>
+                  <p>{t("bspReporting.noComplianceData")}</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {/* Overall result */}
-                  <div className="flex items-center gap-3 p-4 rounded-lg border">
+                  <div
+                    className={`flex items-center gap-3 p-4 rounded-lg border ${
+                      complianceData.isCompliant
+                        ? "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800"
+                        : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+                    }`}
+                  >
                     {complianceData.isCompliant ? (
-                      <CheckCircle className="h-8 w-8 text-green-600" />
+                      <CheckCircle className="h-8 w-8 text-emerald-600" />
                     ) : (
                       <XCircle className="h-8 w-8 text-red-600" />
                     )}
                     <div>
                       <p className="text-lg font-semibold">
                         {complianceData.isCompliant
-                          ? "IATA Compliant"
-                          : "Compliance Issues Detected"}
+                          ? t("bspReporting.iataCompliant")
+                          : t("bspReporting.complianceIssues")}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {
-                          complianceData.checks.filter(
+                        {t("bspReporting.checksPassed", {
+                          passed: complianceData.checks.filter(
                             (c: ComplianceCheck) => c.passed
-                          ).length
-                        }{" "}
-                        of {complianceData.checks.length} checks passed |
-                        Checked at{" "}
+                          ).length,
+                          total: complianceData.checks.length,
+                        })}{" "}
+                        | {t("bspReporting.checkedAt")}{" "}
                         {format(
                           new Date(complianceData.checkedAt),
                           "dd MMM yyyy HH:mm"

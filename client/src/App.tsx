@@ -11,6 +11,7 @@ import { PageLoadingFallback } from "./components/PageLoadingFallback";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { CookieConsent } from "./components/CookieConsent";
 import { SkipNavigation } from "./components/SkipNavigation";
+import i18next from "i18next";
 
 // Lazy load pages for better performance and code splitting
 // User-facing pages
@@ -150,24 +151,23 @@ class RouteErrorBoundary extends Component<
               </svg>
             </div>
             <h2 className="text-xl font-semibold mb-2">
-              Failed to load this page
+              {i18next.t("errorBoundary.failedToLoad")}
             </h2>
             <p className="text-muted-foreground mb-6">
-              There was an error loading the requested page. This might be due
-              to a network issue or the page might not exist.
+              {i18next.t("errorBoundary.errorMessage")}
             </p>
             <div className="flex gap-3 justify-center">
               <button
                 onClick={() => this.setState({ hasError: false, error: null })}
                 className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
               >
-                Try Again
+                {i18next.t("errorBoundary.tryAgain")}
               </button>
               <button
                 onClick={() => (window.location.href = "/")}
                 className="px-4 py-2 rounded-lg border border-border hover:bg-accent transition-colors"
               >
-                Go Home
+                {i18next.t("errorBoundary.goHome")}
               </button>
             </div>
           </div>

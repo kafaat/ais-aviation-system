@@ -192,7 +192,7 @@ function StatsCards() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {cards.map((card, i) => (
-        <Card key={i}>
+        <Card key={i} className="shadow-sm rounded-xl">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
@@ -661,7 +661,7 @@ function FlightLiability() {
       </div>
 
       {liability && (
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Plane className="h-5 w-5" />
@@ -792,7 +792,7 @@ function RulesConfiguration() {
 
   if (!rules || rules.length === 0) {
     return (
-      <Card>
+      <Card className="shadow-sm rounded-xl">
         <CardContent className="py-12 text-center">
           <Settings className="mx-auto h-12 w-12 text-muted-foreground" />
           <p className="mt-4 text-muted-foreground">
