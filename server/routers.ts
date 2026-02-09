@@ -82,6 +82,7 @@ import { seatMapRouter } from "./routers/seat-map";
 import { ndcRouter } from "./routers/ndc";
 import { gdsRouter } from "./routers/gds";
 import { interlineRouter } from "./routers/interline";
+import { suggestionsRouter } from "./routers/suggestions";
 
 /**
  * Main Application Router
@@ -184,6 +185,9 @@ export const appRouter = router({
   ndc: ndcRouter,
   gds: gdsRouter,
   interline: interlineRouter,
+
+  // Smart suggestions
+  suggestions: suggestionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

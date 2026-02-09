@@ -1371,6 +1371,126 @@ Privacy consent management (GDPR/CCPA).
 
 ---
 
+### Suggestions (`suggestions`)
+
+Personalized flight suggestions, popular flights, and deal recommendations.
+
+**Endpoints:**
+
+| Endpoint              | Type  | Auth      | Description                           |
+| --------------------- | ----- | --------- | ------------------------------------- |
+| `suggestions.forUser` | Query | Protected | Get personalized suggestions for user |
+| `suggestions.popular` | Query | Public    | Get popular flights                   |
+| `suggestions.deals`   | Query | Public    | Get deal/cheap flights                |
+
+---
+
+#### 1. Get Personalized Suggestions
+
+Returns personalized flight suggestions based on user booking history and preferences.
+
+**Endpoint:** `suggestions.forUser`
+**Type:** Query (Protected)
+
+**Input:**
+
+```typescript
+{
+  limit?: number;  // 1-20, default: 6
+}
+```
+
+**Response:**
+
+```typescript
+Array<{
+  flightId: number;
+  flightNumber: string;
+  originId: number;
+  originCode: string;
+  originCity: string;
+  destinationId: number;
+  destinationCode: string;
+  destinationCity: string;
+  departureTime: string; // ISO timestamp
+  arrivalTime: string; // ISO timestamp
+  economyPrice: number; // SAR cents
+  businessPrice: number; // SAR cents
+  economyAvailable: number;
+  businessAvailable: number;
+  airlineName: string;
+  airlineCode: string;
+  reason: "history" | "popular" | "deal" | "trending";
+  score: number;
+}>;
+```
+
+**Example:**
+
+```typescript
+const { data } = trpc.suggestions.forUser.useQuery({ limit: 10 });
+```
+
+---
+
+#### 2. Get Popular Flights
+
+Returns the most popular flights based on booking volume and demand.
+
+**Endpoint:** `suggestions.popular`
+**Type:** Query (Public)
+
+**Input:**
+
+```typescript
+{
+  limit?: number;  // 1-20, default: 6
+}
+```
+
+**Response:**
+
+```typescript
+Array<SuggestedFlight>; // Same shape as suggestions.forUser response
+```
+
+**Example:**
+
+```typescript
+const { data } = trpc.suggestions.popular.useQuery({ limit: 6 });
+```
+
+---
+
+#### 3. Get Deal Flights
+
+Returns flights with the best deals and lowest prices.
+
+**Endpoint:** `suggestions.deals`
+**Type:** Query (Public)
+
+**Input:**
+
+```typescript
+{
+  limit?: number;  // 1-20, default: 4
+}
+```
+
+**Response:**
+
+```typescript
+Array<SuggestedFlight>; // Same shape as suggestions.forUser response
+```
+
+**Example:**
+
+```typescript
+const { data } = trpc.suggestions.deals.useQuery({ limit: 4 });
+```
+
+---
+
 ## Error Handling
 
 ### Error Response Format

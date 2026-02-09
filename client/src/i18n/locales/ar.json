@@ -2755,5 +2755,35 @@
     "seatPricing": "تسعير المقاعد",
     "upgradePrice": "سعر الترقية",
     "noSeatMaps": "لم يتم إعداد خرائط مقاعد"
+  },
+  "flightPreview": {
+    "title": "تفاصيل الرحلة",
+    "viewDetails": "عرض التفاصيل",
+    "flightNumber": "رقم الرحلة",
+    "duration": "المدة",
+    "airline": "شركة الطيران",
+    "cabinClasses": "درجات السفر والأسعار",
+    "departureDate": "تاريخ المغادرة"
+  },
+  "suggestions": {
+    "title": "رحلات مقترحة",
+    "forYou": "مقترحات لك",
+    "basedOnHistory": "بناءً على سجلك",
+    "trending": "رائج",
+    "bestDeal": "أفضل عرض",
+    "recommended": "مُوصى به",
+    "from": "ابتداءً من",
+    "viewAll": "عرض الكل"
+  },
+  "validation": {
+    "required": "هذا الحقل مطلوب",
+    "invalidEmail": "يرجى إدخال بريد إلكتروني صحيح",
+    "invalidPhone": "يرجى إدخال رقم هاتف صحيح",
+    "invalidPassport": "يرجى إدخال رقم جواز سفر صحيح",
+    "nameTooShort": "يجب أن يتكون الاسم من حرفين على الأقل",
+    "nameTooLong": "يجب ألا يزيد الاسم عن 50 حرفًا",
+    "selectRequired": "يرجى الاختيار",
+    "dateRequired": "يرجى تحديد التاريخ",
+    "passportExpiry": "يجب أن يكون جواز السفر صالحًا لمدة 6 أشهر على الأقل بعد تاريخ السفر"
   }
 }

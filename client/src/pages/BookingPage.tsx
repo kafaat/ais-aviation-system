@@ -93,6 +93,9 @@ export default function BookingPage() {
   const [passengers, setPassengers] = useState<Passenger[]>([
     { type: "adult", firstName: "", lastName: "" },
   ]);
+  const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>(
+    {}
+  );
   const [rebookLoaded, setRebookLoaded] = useState(false);
   const [selectedAncillaries, setSelectedAncillaries] = useState<
     SelectedAncillary[]
@@ -259,16 +262,46 @@ export default function BookingPage() {
     setPassengers(updated);
   };
 
+  const markTouched = (field: string) => {
+    setTouchedFields(prev => ({ ...prev, [field]: true }));
+  };
+
+  const getFieldError = (
+    index: number,
+    field: string,
+    value: string | undefined
+  ): string | null => {
+    const key = `${index}-${field}`;
+    if (!touchedFields[key]) return null;
+    if (!value || value.trim() === "") {
+      if (field === "firstName" || field === "lastName") {
+        return t("validation.required");
+      }
+    }
+    if (value && value.trim().length > 0 && value.trim().length < 2) {
+      if (field === "firstName" || field === "lastName") {
+        return t("validation.nameTooShort");
+      }
+    }
+    return null;
+  };
+
   const handleSubmit = async () => {
     if (!isAuthenticated) {
       window.location.href = "/login";
       return;
     }
 
-    // Validate passengers
+    // Validate passengers - mark all fields as touched for feedback
     const isValid = passengers.every(p => p.firstName && p.lastName);
     if (!isValid) {
-      toast.error(t("common.error"));
+      const allTouched: Record<string, boolean> = {};
+      passengers.forEach((_, i) => {
+        allTouched[`${i}-firstName`] = true;
+        allTouched[`${i}-lastName`] = true;
+      });
+      setTouchedFields(prev => ({ ...prev, ...allTouched }));
+      toast.error(t("validation.required"));
       return;
     }
 
@@ -325,10 +358,16 @@ export default function BookingPage() {
       return;
     }
 
-    // Validate passengers
+    // Validate passengers - mark all fields as touched for feedback
     const isValid = passengers.every(p => p.firstName && p.lastName);
     if (!isValid) {
-      toast.error(t("common.error"));
+      const allTouched: Record<string, boolean> = {};
+      passengers.forEach((_, i) => {
+        allTouched[`${i}-firstName`] = true;
+        allTouched[`${i}-lastName`] = true;
+      });
+      setTouchedFields(prev => ({ ...prev, ...allTouched }));
+      toast.error(t("validation.required"));
       return;
     }
 
@@ -574,7 +613,7 @@ export default function BookingPage() {
 
                 <div className="flex items-center justify-between">
                   <div className="text-center">
-                    <p className="text-3xl font-bold">
+                    <p className="text-2xl sm:text-3xl font-bold">
                       {format(new Date(flight.departureTime), "HH:mm", {
                         locale: currentLocale,
                       })}
@@ -582,12 +621,12 @@ export default function BookingPage() {
                     <p className="font-semibold text-primary">
                       {flight.origin.code}
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs sm:text-sm text-muted-foreground">
                       {flight.origin.city}
                     </p>
                   </div>
 
-                  <div className="flex-1 px-8">
+                  <div className="flex-1 px-4 sm:px-8">
                     <div className="relative">
                       <div className="border-t-2 border-dashed border-primary/30"></div>
                       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-white to-blue-50/50 px-3">
@@ -765,7 +804,8 @@ export default function BookingPage() {
 
                       <div className="space-y-2">
                         <Label htmlFor={`pax-firstname-${index}`}>
-                          {t("booking.firstName")}
+                          {t("booking.firstName")}{" "}
+                          <span className="text-destructive">*</span>
                         </Label>
                         <Input
                           id={`pax-firstname-${index}`}
@@ -773,13 +813,44 @@ export default function BookingPage() {
                           onChange={e =>
                             updatePassenger(index, "firstName", e.target.value)
                           }
+                          onBlur={() => markTouched(`${index}-firstName`)}
                           placeholder={t("booking.firstName")}
+                          className={
+                            getFieldError(
+                              index,
+                              "firstName",
+                              passenger.firstName
+                            )
+                              ? "border-destructive focus-visible:ring-destructive"
+                              : ""
+                          }
+                          aria-invalid={
+                            !!getFieldError(
+                              index,
+                              "firstName",
+                              passenger.firstName
+                            )
+                          }
                         />
+                        {getFieldError(
+                          index,
+                          "firstName",
+                          passenger.firstName
+                        ) && (
+                          <p className="text-xs text-destructive mt-1">
+                            {getFieldError(
+                              index,
+                              "firstName",
+                              passenger.firstName
+                            )}
+                          </p>
+                        )}
                       </div>
 
                       <div className="space-y-2">
                         <Label htmlFor={`pax-lastname-${index}`}>
-                          {t("booking.lastName")}
+                          {t("booking.lastName")}{" "}
+                          <span className="text-destructive">*</span>
                         </Label>
                         <Input
                           id={`pax-lastname-${index}`}
@@ -787,8 +858,34 @@ export default function BookingPage() {
                           onChange={e =>
                             updatePassenger(index, "lastName", e.target.value)
                           }
+                          onBlur={() => markTouched(`${index}-lastName`)}
                           placeholder={t("booking.lastName")}
+                          className={
+                            getFieldError(index, "lastName", passenger.lastName)
+                              ? "border-destructive focus-visible:ring-destructive"
+                              : ""
+                          }
+                          aria-invalid={
+                            !!getFieldError(
+                              index,
+                              "lastName",
+                              passenger.lastName
+                            )
+                          }
                         />
+                        {getFieldError(
+                          index,
+                          "lastName",
+                          passenger.lastName
+                        ) && (
+                          <p className="text-xs text-destructive mt-1">
+                            {getFieldError(
+                              index,
+                              "lastName",
+                              passenger.lastName
+                            )}
+                          </p>
+                        )}
                       </div>
 
                       <div className="space-y-2">
