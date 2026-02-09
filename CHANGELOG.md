@@ -3,10 +3,12 @@
 ## What's Changed in v1.17.0
 
 ### Features
+
 - feat: implement TODO items - payment history, soft delete, security, timeouts, i18n emails (7eb36c5)
 - feat: add Arabic translations for Phase 4 pages and improve UI styling (8c0d604)
 
 ### Bug Fixes
+
 - fix: complete SLA Dashboard translation updates from background agent (c9d3bbb)
 - fix: finalize SLA Dashboard i18n translation updates (2a4903f)
 - fix: format SLADashboard and RevenueAccounting with Prettier (47e1525)
@@ -14,18 +16,18 @@
 - fix(lint): resolve 10 lint warnings across client components (4ec4877)
 
 ### Maintenance
+
 - ci: retrigger CI pipeline (67f1d38)
 
 ### Other Changes
+
 - test: add comprehensive tests for new features (68 tests) (4c2b8b5)
 - Fix skip-nav links visible in RTL mode & add flights table docs (2168eff)
 - Merge branch 'main' into claude/implement-todo-zrBPj (ab2e0b3)
 - style: format CHANGELOG.md with Prettier (d62052e)
 - Merge pull request #69 from kafaat/claude/implement-todo-zrBPj (8df6e72)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.16.0...v1.17.0
-
 
 ---
 

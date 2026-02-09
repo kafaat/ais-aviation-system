@@ -1,0 +1,26 @@
+#!/bin/sh
+# Pre-commit hook: auto-format staged files with Prettier
+# This prevents CI failures from unformatted code
+
+# Get list of staged files (only added/modified, not deleted)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+# Filter to files Prettier can handle
+PRETTIER_FILES=$(echo "$STAGED_FILES" | grep -E '\.(js|jsx|ts|tsx|json|css|scss|md|html|yaml|yml)$' || true)
+
+if [ -z "$PRETTIER_FILES" ]; then
+  exit 0
+fi
+
+# Format staged files
+echo "Formatting staged files with Prettier..."
+echo "$PRETTIER_FILES" | xargs pnpm exec prettier --write --ignore-unknown 2>/dev/null
+
+# Re-add formatted files to staging
+echo "$PRETTIER_FILES" | xargs git add
+
+echo "Prettier formatting applied to staged files."
