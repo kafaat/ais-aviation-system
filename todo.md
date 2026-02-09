@@ -162,9 +162,9 @@
 ### Analytics Dashboard
 
 - [x] تصميم لوحة التحكم الإحصائية
-- [ ] إضافة فلاتر التاريخ
+- [x] إضافة فلاتر التاريخ
 - [x] تكامل جميع KPIs والرسوم البيانية
-- [ ] إضافة ميزة التصدير (PDF/Excel)
+- [x] إضافة ميزة التصدير (PDF/Excel)
 
 ## Comprehensive System Improvements (Based on Deep Analysis)
 
@@ -188,7 +188,7 @@
 
 - [x] Rate Limiting on /api/trpc and /api/stripe/webhook
 - [ ] Data API Whitelist
-- [ ] Account Lock after failed login attempts
+- [x] Account Lock after failed login attempts
 
 ### Phase 4: Stripe & Database
 
@@ -513,25 +513,25 @@
 
 ### Phase 15: Reviews & Ratings System
 
-- [ ] Design reviews schema (flight_reviews table)
-- [ ] Create reviews.service.ts
-- [ ] Create reviews router
-- [ ] Add review submission form
-- [ ] Display reviews on flight details
-- [ ] Add rating aggregation
-- [ ] Write unit tests
-- [ ] Update todo.md after completion
+- [x] Design reviews schema (flight_reviews table)
+- [x] Create reviews.service.ts
+- [x] Create reviews router
+- [x] Add review submission form
+- [x] Display reviews on flight details
+- [x] Add rating aggregation
+- [x] Write unit tests
+- [x] Update todo.md after completion
 
 ### Phase 16: Favorite Flights & Price Alerts
 
-- [ ] Design favorites schema (favorite_flights table)
-- [ ] Create favorites.service.ts
-- [ ] Create favorites router
-- [ ] Add favorite button to flight cards
-- [ ] Create favorites page
-- [ ] Implement price alert notifications
-- [ ] Write unit tests
-- [ ] Update todo.md after completion
+- [x] Design favorites schema (favorite_flights table)
+- [x] Create favorites.service.ts
+- [x] Create favorites router
+- [x] Add favorite button to flight cards
+- [x] Create favorites page
+- [x] Implement price alert notifications
+- [x] Write unit tests
+- [x] Update todo.md after completion
 
 ## PSS Comprehensive Review & Completion
 

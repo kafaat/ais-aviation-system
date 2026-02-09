@@ -72,6 +72,7 @@ import { passengerPriorityRouter } from "./routers/passenger-priority";
 import { revenueAccountingRouter } from "./routers/revenue-accounting";
 import { slaRouter } from "./routers/sla";
 import { weightBalanceRouter } from "./routers/weight-balance";
+import { securityRouter } from "./routers/security";
 
 /**
  * Main Application Router
@@ -164,6 +165,7 @@ export const appRouter = router({
   revenueAccounting: revenueAccountingRouter,
   sla: slaRouter,
   weightBalance: weightBalanceRouter,
+  security: securityRouter,
 });
 
 export type AppRouter = typeof appRouter;
