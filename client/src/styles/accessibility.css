@@ -15,21 +15,24 @@
    ========================================================================== */
 
 .skip-nav {
-  position: absolute;
-  top: -100%;
+  position: fixed;
+  top: 0;
   left: 0;
   z-index: 9999;
   display: flex;
   gap: 0.25rem;
   padding: 0.25rem;
   background: transparent;
-  transition: top 0.15s ease-in-out;
+  transform: translateY(-100%);
+  transition: transform 0.15s ease-in-out;
+  pointer-events: none;
 }
 
 .skip-nav:focus-within {
-  top: 0;
+  transform: translateY(0);
   background: var(--background, #ffffff);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
 }
 
 .skip-nav__link {
