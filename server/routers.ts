@@ -52,6 +52,27 @@ import { softDeleteRouter } from "./routers/soft-delete";
 import { aiPricingRouter } from "./routers/ai-pricing.router";
 import { flightTrackingRouter } from "./routers/flight-tracking.router";
 
+// Phase 4: Competitive gap closure routers
+import { apisRouter } from "./routers/apis";
+import { bagDropRouter } from "./routers/bag-drop";
+import { biometricRouter } from "./routers/biometric";
+import { bspReportingRouter } from "./routers/bsp-reporting";
+import { compensationRouter } from "./routers/compensation";
+import { consentRouter } from "./routers/consent";
+import { crewRouter } from "./routers/crew";
+import { dataWarehouseRouter } from "./routers/data-warehouse";
+import { disasterRecoveryRouter } from "./routers/disaster-recovery";
+import { emergencyHotelRouter } from "./routers/emergency-hotel";
+import { iropsRouter } from "./routers/irops";
+import { kioskRouter } from "./routers/kiosk";
+import { loadPlanningRouter } from "./routers/load-planning";
+import { mfaRouter } from "./routers/mfa";
+import { multiRegionRouter } from "./routers/multi-region";
+import { passengerPriorityRouter } from "./routers/passenger-priority";
+import { revenueAccountingRouter } from "./routers/revenue-accounting";
+import { slaRouter } from "./routers/sla";
+import { weightBalanceRouter } from "./routers/weight-balance";
+
 /**
  * Main Application Router
  * Combines all domain routers into a single API
@@ -122,6 +143,27 @@ export const appRouter = router({
   softDelete: softDeleteRouter,
   aiPricing: aiPricingRouter,
   flightTracking: flightTrackingRouter,
+
+  // Phase 4: Competitive gap closure
+  apis: apisRouter,
+  bagDrop: bagDropRouter,
+  biometric: biometricRouter,
+  bspReporting: bspReportingRouter,
+  compensation: compensationRouter,
+  consent: consentRouter,
+  crew: crewRouter,
+  dataWarehouse: dataWarehouseRouter,
+  disasterRecovery: disasterRecoveryRouter,
+  emergencyHotel: emergencyHotelRouter,
+  irops: iropsRouter,
+  kiosk: kioskRouter,
+  loadPlanning: loadPlanningRouter,
+  mfa: mfaRouter,
+  multiRegion: multiRegionRouter,
+  passengerPriority: passengerPriorityRouter,
+  revenueAccounting: revenueAccountingRouter,
+  sla: slaRouter,
+  weightBalance: weightBalanceRouter,
 });
 
 export type AppRouter = typeof appRouter;
