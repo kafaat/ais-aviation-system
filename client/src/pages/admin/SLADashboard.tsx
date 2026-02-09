@@ -306,7 +306,7 @@ export function SLADashboard() {
         </Card>
 
         {/* Uptime */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {t("sla.averageUptime", "Average Uptime")}
@@ -325,7 +325,7 @@ export function SLADashboard() {
         </Card>
 
         {/* SLA Compliance */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {t("sla.overallCompliance", "SLA Compliance")}
@@ -352,7 +352,7 @@ export function SLADashboard() {
         </Card>
 
         {/* Active Alerts */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {t("sla.activeAlerts", "Active Alerts")}
@@ -377,7 +377,7 @@ export function SLADashboard() {
         </Card>
 
         {/* Services Monitored */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {t("sla.services", "Services")}
@@ -420,7 +420,7 @@ export function SLADashboard() {
         <TabsContent value="overview">
           <div className="grid gap-4 md:grid-cols-2 mb-8">
             {/* Uptime Display */}
-            <Card>
+            <Card className="shadow-sm rounded-xl">
               <CardHeader>
                 <CardTitle>{t("sla.systemUptime", "System Uptime")}</CardTitle>
                 <CardDescription>
@@ -440,7 +440,7 @@ export function SLADashboard() {
             </Card>
 
             {/* Compliance History Chart */}
-            <Card>
+            <Card className="shadow-sm rounded-xl">
               <CardHeader>
                 <CardTitle>
                   {t("sla.complianceHistory", "Compliance History")}
@@ -494,7 +494,7 @@ export function SLADashboard() {
           </div>
 
           {/* SLA Breaches Chart */}
-          <Card className="mb-8">
+          <Card className="mb-8 shadow-sm rounded-xl">
             <CardHeader>
               <CardTitle>{t("sla.slaBreaches", "SLA Breaches")}</CardTitle>
               <CardDescription>
@@ -536,7 +536,7 @@ export function SLADashboard() {
           </Card>
 
           {/* Recent Alerts */}
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
               <CardTitle>{t("sla.recentAlerts", "Recent Alerts")}</CardTitle>
               <CardDescription>
@@ -618,7 +618,7 @@ export function SLADashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {dashboardLoading
               ? Array.from({ length: 6 }).map((_, i) => (
-                  <Card key={i}>
+                  <Card key={i} className="shadow-sm rounded-xl">
                     <CardHeader>
                       <Skeleton className="h-6 w-32" />
                     </CardHeader>
@@ -628,7 +628,7 @@ export function SLADashboard() {
                   </Card>
                 ))
               : serviceBreakdown.map(service => (
-                  <Card key={service.serviceName}>
+                  <Card key={service.serviceName} className="shadow-sm rounded-xl">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-lg capitalize">
@@ -741,7 +741,7 @@ export function SLADashboard() {
 
         {/* Alerts Tab */}
         <TabsContent value="alerts">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5" />
@@ -863,7 +863,7 @@ export function SLADashboard() {
 
         {/* SLA Targets Tab */}
         <TabsContent value="targets">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Zap className="h-5 w-5" />
@@ -966,7 +966,7 @@ export function SLADashboard() {
         <TabsContent value="reports">
           <div className="grid gap-4 md:grid-cols-3 mb-8">
             {/* Generate Report Card */}
-            <Card>
+            <Card className="shadow-sm rounded-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
