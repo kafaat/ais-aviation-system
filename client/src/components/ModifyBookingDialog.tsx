@@ -20,6 +20,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PaymentMethodSelector } from "./PaymentMethodSelector";
 
 interface ModifyBookingDialogProps {
   open: boolean;
@@ -48,6 +49,7 @@ export function ModifyBookingDialog({
     null
   );
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState("stripe");
 
   const utils = trpc.useUtils();
 
@@ -64,24 +66,49 @@ export function ModifyBookingDialog({
       { enabled: selectedTab === "date" && open && hasRouteIds }
     );
 
+  const createModificationCheckout =
+    trpc.payments.createModificationCheckout.useMutation({
+      onSuccess: data => {
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          toast.success(t("modifyBooking.paymentInitiated"));
+        }
+      },
+      onError: error => {
+        toast.error(error.message || t("modifyBooking.paymentError"));
+        setIsProcessing(false);
+      },
+    });
+
   const requestChangeDateMutation =
     trpc.modifications.requestChangeDate.useMutation({
       onSuccess: async data => {
         if (data.requiresPayment && data.totalCost > 0) {
           toast.success(t("modifyBooking.dateChangePaymentRedirect"));
-          // TODO: Create Stripe payment intent for the difference
+          createModificationCheckout.mutate({
+            bookingId: booking.id,
+            modificationId: data.modificationId,
+            amount: data.totalCost,
+            provider: selectedProvider as Parameters<
+              typeof createModificationCheckout.mutate
+            >[0]["provider"],
+          });
         } else if (data.totalCost < 0) {
           toast.success(
             t("modifyBooking.dateChangeRefund", {
               amount: Math.abs(data.totalCost / 100),
             })
           );
+          await utils.bookings.myBookings.invalidate();
+          onOpenChange(false);
+          setIsProcessing(false);
         } else {
           toast.success(t("modifyBooking.dateChangeSuccess"));
+          await utils.bookings.myBookings.invalidate();
+          onOpenChange(false);
+          setIsProcessing(false);
         }
-        await utils.bookings.myBookings.invalidate();
-        onOpenChange(false);
-        setIsProcessing(false);
       },
       onError: error => {
         toast.error(error.message || t("modifyBooking.dateChangeError"));
@@ -90,12 +117,16 @@ export function ModifyBookingDialog({
     });
 
   const requestUpgradeMutation = trpc.modifications.requestUpgrade.useMutation({
-    onSuccess: async _data => {
+    onSuccess: async data => {
       toast.success(t("modifyBooking.upgradePaymentRedirect"));
-      // TODO: Create Stripe payment intent for upgrade
-      await utils.bookings.myBookings.invalidate();
-      onOpenChange(false);
-      setIsProcessing(false);
+      createModificationCheckout.mutate({
+        bookingId: booking.id,
+        modificationId: data.modificationId,
+        amount: data.totalCost,
+        provider: selectedProvider as Parameters<
+          typeof createModificationCheckout.mutate
+        >[0]["provider"],
+      });
     },
     onError: error => {
       toast.error(error.message || t("modifyBooking.upgradeError"));
@@ -254,6 +285,12 @@ export function ModifyBookingDialog({
                 </div>
               </div>
             </div>
+
+            <PaymentMethodSelector
+              onProviderSelect={setSelectedProvider}
+              selectedProvider={selectedProvider}
+              amount={booking.totalAmount}
+            />
           </TabsContent>
         </Tabs>
 

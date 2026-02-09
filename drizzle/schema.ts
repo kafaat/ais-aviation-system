@@ -362,13 +362,38 @@ export const payments = mysqlTable(
     bookingId: int("bookingId").notNull(),
     amount: int("amount").notNull(), // Amount in SAR cents
     currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-    method: mysqlEnum("method", ["card", "wallet", "bank_transfer"]).notNull(),
+    method: mysqlEnum("method", [
+      "card",
+      "wallet",
+      "bank_transfer",
+      "mada",
+      "apple_pay",
+      "stc_pay",
+      "tabby",
+      "tamara",
+    ]).notNull(),
+    provider: mysqlEnum("provider", [
+      "stripe",
+      "hyperpay",
+      "tabby",
+      "tamara",
+      "stc_pay",
+      "moyasar",
+      "floosak",
+      "jawali",
+      "onecash",
+      "easycash",
+    ])
+      .default("stripe")
+      .notNull(),
     status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"])
       .default("pending")
       .notNull(),
     transactionId: varchar("transactionId", { length: 100 }), // External payment gateway transaction ID
+    providerSessionId: varchar("providerSessionId", { length: 255 }), // Provider-specific session/checkout ID
     idempotencyKey: varchar("idempotencyKey", { length: 100 }).unique(), // For preventing duplicate payments
     stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }), // Stripe Payment Intent ID
+    providerMetadata: text("providerMetadata"), // JSON metadata from provider
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -394,6 +419,8 @@ export const payments = mysqlTable(
     ),
     // Index for payment method filtering
     methodIdx: index("payments_method_idx").on(table.method),
+    // Index for provider filtering
+    providerIdx: index("payments_provider_idx").on(table.provider),
   })
 );
 

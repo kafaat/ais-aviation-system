@@ -2229,7 +2229,34 @@
     "dateChangeError": "Failed to request modification",
     "upgradePaymentRedirect": "Upgrade request created! Redirecting to payment...",
     "upgradeError": "Failed to request upgrade",
-    "selectFlightError": "Please select a new flight"
+    "selectFlightError": "Please select a new flight",
+    "paymentInitiated": "Payment initiated! Please complete your payment.",
+    "paymentError": "Failed to initiate payment. Please try again."
+  },
+  "payment": {
+    "selectPaymentMethod": "Select Payment Method",
+    "noProvidersAvailable": "No payment methods available at this time",
+    "bnpl": "Pay Later",
+    "providerNotConfigured": "Not available",
+    "amountOutOfRange": "Amount must be between {{min}} and {{max}} SAR",
+    "providers": {
+      "stripe": "Credit/Debit Card",
+      "hyperpay": "HyperPay (mada, Visa, MC)",
+      "tabby": "Tabby - Pay in 4",
+      "tamara": "Tamara - Split in 3",
+      "stc_pay": "STC Pay",
+      "moyasar": "Moyasar",
+      "floosak": "FloosAk",
+      "jawali": "Jawali Mobile Money",
+      "onecash": "OneCash Wallet",
+      "easycash": "EasyCash Wallet"
+    },
+    "regions": {
+      "international": "International",
+      "saudi": "Saudi Arabia",
+      "yemen": "Yemen",
+      "mena": "MENA Region"
+    }
   },
   "bookingAncillaries": {
     "title": "Additional Services",

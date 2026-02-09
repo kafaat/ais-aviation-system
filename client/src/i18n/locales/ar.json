@@ -2229,7 +2229,34 @@
     "dateChangeError": "فشل في تقديم طلب التعديل",
     "upgradePaymentRedirect": "تم إنشاء طلب الترقية! جاري التحويل للدفع...",
     "upgradeError": "فشل في تقديم طلب الترقية",
-    "selectFlightError": "يرجى اختيار رحلة جديدة"
+    "selectFlightError": "يرجى اختيار رحلة جديدة",
+    "paymentInitiated": "تم بدء عملية الدفع! يرجى إكمال الدفع.",
+    "paymentError": "فشل في بدء عملية الدفع. يرجى المحاولة مرة أخرى."
+  },
+  "payment": {
+    "selectPaymentMethod": "اختر طريقة الدفع",
+    "noProvidersAvailable": "لا توجد طرق دفع متاحة حالياً",
+    "bnpl": "ادفع لاحقاً",
+    "providerNotConfigured": "غير متاح",
+    "amountOutOfRange": "المبلغ يجب أن يكون بين {{min}} و {{max}} ر.س",
+    "providers": {
+      "stripe": "بطاقة ائتمان / خصم",
+      "hyperpay": "هايبر باي (مدى، فيزا، ماستركارد)",
+      "tabby": "تابي - قسّمها على 4",
+      "tamara": "تمارا - قسّمها على 3",
+      "stc_pay": "STC Pay - محفظة إس تي سي",
+      "moyasar": "ميسر",
+      "floosak": "فلوسك",
+      "jawali": "جوالي - موبايل موني",
+      "onecash": "ون كاش",
+      "easycash": "محفظة إيزي كاش"
+    },
+    "regions": {
+      "international": "دولي",
+      "saudi": "السعودية",
+      "yemen": "اليمن",
+      "mena": "الشرق الأوسط"
+    }
   },
   "bookingAncillaries": {
     "title": "الخدمات الإضافية",
