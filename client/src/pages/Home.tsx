@@ -22,6 +22,7 @@ import {
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SearchHistory } from "@/components/SearchHistory";
+import { SmartSuggestions } from "@/components/SmartSuggestions";
 import { MultiCitySearch, Segment } from "@/components/MultiCitySearch";
 import { Link, useLocation } from "wouter";
 import {
@@ -470,6 +471,13 @@ export default function Home() {
                 )}
               </Card>
             </motion.div>
+          </div>
+        </section>
+
+        {/* Smart Suggestions Section */}
+        <section className="py-12 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-950">
+          <div className="container">
+            <SmartSuggestions />
           </div>
         </section>
 

@@ -66,9 +66,9 @@
 ### Interactive Features
 
 - [x] إضافة خريطة اختيار المقاعد التفاعلية
-- [ ] إضافة معاينة تفصيلية للرحلة
-- [ ] تحسين نماذج الإدخال بـ validation فوري
-- [ ] إضافة loading states محسّنة
+- [x] إضافة معاينة تفصيلية للرحلة (FlightPreviewDialog)
+- [x] تحسين نماذج الإدخال بـ validation فوري (real-time validation on BookingPage)
+- [x] إضافة loading states محسّنة (Skeletons: Notifications, Loyalty, + existing)
 
 ### Performance Optimization
 
@@ -109,30 +109,30 @@
 
 - [x] تحسين صفحة البحث بفلاتر متقدمة
 - [x] إضافة مقارنة الرحلات (Flight Comparison)
-- [ ] تحسين عرض تفاصيل الرحلة
-- [ ] إضافة Timeline للرحلة
-- [ ] تحسين Mobile Responsiveness
+- [x] تحسين عرض تفاصيل الرحلة (FlightPreviewDialog with detailed route visualization)
+- [x] إضافة Timeline للرحلة (FlightTimeline component)
+- [x] تحسين Mobile Responsiveness (responsive text sizes, action layouts)
 
 ### Advanced Features
 
-- [ ] نظام التقييمات والمراجعات
-- [ ] حفظ الرحلات المفضلة
-- [ ] تنبيهات تغيير الأسعار
-- [ ] اقتراحات رحلات ذكية
+- [x] نظام التقييمات والمراجعات (Reviews system with ratings)
+- [x] حفظ الرحلات المفضلة (Favorites system)
+- [x] تنبيهات تغيير الأسعار (Price alerts)
+- [x] اقتراحات رحلات ذكية (SmartSuggestions with history/popular/deals)
 
 ### Analytics Dashboard
 
-- [ ] إحصائيات الحجوزات
-- [ ] تحليل الإيرادات
-- [ ] رسوم بيانية تفاعلية
-- [ ] تقارير قابلة للتصدير
+- [x] إحصائيات الحجوزات
+- [x] تحليل الإيرادات
+- [x] رسوم بيانية تفاعلية
+- [x] تقارير قابلة للتصدير
 
 ### Notifications System
 
-- [ ] إشعارات داخل التطبيق
-- [ ] تنبيهات البريد الإلكتروني
-- [ ] إشعارات Push (PWA)
-- [ ] تنبيهات SMS (اختياري)
+- [x] إشعارات داخل التطبيق (NotificationBell + NotificationDropdown)
+- [x] تنبيهات البريد الإلكتروني (Email notifications via notification service)
+- [x] إشعارات Push (PWA) (PWA support with service worker)
+- [x] تنبيهات SMS (SMS notification system)
 
 ## KPIs & Analytics Dashboard
 

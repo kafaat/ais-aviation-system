@@ -24,6 +24,7 @@ import {
   useFlightStatus,
   type FlightStatusType,
 } from "@/hooks/useFlightStatus";
+import { FlightPreviewDialog } from "@/components/FlightPreviewDialog";
 import {
   Plane,
   Clock,
@@ -33,6 +34,7 @@ import {
   Share2,
   ArrowLeftRight,
   Scale,
+  Eye,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -66,6 +68,9 @@ export default function SearchResults() {
     isSelected,
     canAdd,
   } = useFlightCompare();
+
+  const [previewFlight, setPreviewFlight] = useState<FlightData | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const [filters, setFilters] = useState<FilterOptions>({
     priceRange: [0, 10000],
@@ -505,7 +510,7 @@ export default function SearchResults() {
                           <div className="flex items-center justify-between">
                             <div className="text-center">
                               <p
-                                className="text-3xl font-bold"
+                                className="text-2xl sm:text-3xl font-bold"
                                 data-testid="departure-time"
                               >
                                 {formatTime(flight.departureTime)}
@@ -550,7 +555,7 @@ export default function SearchResults() {
                             </div>
 
                             <div className="text-center">
-                              <p className="text-3xl font-bold">
+                              <p className="text-2xl sm:text-3xl font-bold">
                                 {formatTime(flight.arrivalTime)}
                               </p>
                               <p className="text-sm text-muted-foreground mt-1">
@@ -564,7 +569,7 @@ export default function SearchResults() {
                         </div>
 
                         {/* Actions */}
-                        <div className="lg:col-span-1 flex lg:flex-col items-center justify-center gap-2">
+                        <div className="lg:col-span-1 flex flex-row lg:flex-col items-center justify-center gap-2 py-2 lg:py-0">
                           {/* Compare Checkbox */}
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -659,6 +664,28 @@ export default function SearchResults() {
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>{t("common.share")}</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-full hover:text-indigo-500 hover:bg-indigo-50"
+                                onClick={() => {
+                                  setPreviewFlight(
+                                    flight as unknown as FlightData
+                                  );
+                                  setPreviewOpen(true);
+                                }}
+                                aria-label={t("flightPreview.viewDetails")}
+                              >
+                                <Eye className="h-5 w-5" aria-hidden="true" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t("flightPreview.viewDetails")}
+                            </TooltipContent>
                           </Tooltip>
                         </div>
 
@@ -793,6 +820,13 @@ export default function SearchResults() {
           </div>
         )}
       </main>
+
+      {/* Flight Preview Dialog */}
+      <FlightPreviewDialog
+        flight={previewFlight}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+      />
 
       {/* Compare Bar - Sticky at bottom */}
       <CompareBar

@@ -12,3 +12,5 @@ export { DashboardSkeleton } from "./DashboardSkeleton";
 export { ProfileSkeleton } from "./ProfileSkeleton";
 export { AnalyticsSkeleton } from "./AnalyticsSkeleton";
 export { TableSkeleton } from "./TableSkeleton";
+export { NotificationsSkeleton } from "./NotificationsSkeleton";
+export { LoyaltySkeleton } from "./LoyaltySkeleton";

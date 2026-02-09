@@ -2755,5 +2755,35 @@
     "seatPricing": "Seat Pricing",
     "upgradePrice": "Upgrade Price",
     "noSeatMaps": "No seat maps configured"
+  },
+  "flightPreview": {
+    "title": "Flight Details",
+    "viewDetails": "View Details",
+    "flightNumber": "Flight Number",
+    "duration": "Duration",
+    "airline": "Airline",
+    "cabinClasses": "Cabin Classes & Pricing",
+    "departureDate": "Departure Date"
+  },
+  "suggestions": {
+    "title": "Suggested Flights",
+    "forYou": "Suggested for You",
+    "basedOnHistory": "Based on history",
+    "trending": "Trending",
+    "bestDeal": "Best Deal",
+    "recommended": "Recommended",
+    "from": "From",
+    "viewAll": "View All"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalidEmail": "Please enter a valid email address",
+    "invalidPhone": "Please enter a valid phone number",
+    "invalidPassport": "Please enter a valid passport number",
+    "nameTooShort": "Name must be at least 2 characters",
+    "nameTooLong": "Name must be at most 50 characters",
+    "selectRequired": "Please make a selection",
+    "dateRequired": "Please select a date",
+    "passportExpiry": "Passport must be valid for at least 6 months after travel"
   }
 }
