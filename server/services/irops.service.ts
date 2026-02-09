@@ -464,7 +464,7 @@ export async function getAffectedPassengers(flightId: number): Promise<
   // departing from this flight's destination within 24h of arrival
   const userIds = affectedBookings.map(b => b.userId);
 
-  let connectionMap: Map<number, string> = new Map();
+  const connectionMap: Map<number, string> = new Map();
   if (flight) {
     const twentyFourHoursLater = new Date(flight.arrivalTime);
     twentyFourHoursLater.setHours(twentyFourHoursLater.getHours() + 24);

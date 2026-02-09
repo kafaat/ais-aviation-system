@@ -17,10 +17,8 @@ import {
   getSLAReport,
   getReports,
   getMetricHistory,
-} from "../services/sla-monitoring.service";
-import type {
-  SLASeverity,
-  SLAMetricType,
+  type SLASeverity,
+  type SLAMetricType,
 } from "../services/sla-monitoring.service";
 
 export const slaRouter = router({
