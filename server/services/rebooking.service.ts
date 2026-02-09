@@ -95,12 +95,12 @@ export async function getRebookData(
     });
   }
 
-  // Only confirmed and pending bookings are eligible for rebooking
-  const rebookableStatuses = ["confirmed", "pending"];
+  // Confirmed, pending, completed, and cancelled bookings are eligible for rebooking
+  const rebookableStatuses = ["confirmed", "pending", "completed", "cancelled"];
   if (!rebookableStatuses.includes(booking.status)) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: `Booking cannot be rebooked because it is ${booking.status}. Only confirmed or pending bookings are eligible for rebooking.`,
+      message: `Booking cannot be rebooked because it is ${booking.status}.`,
     });
   }
 
@@ -247,4 +247,140 @@ export async function searchFlightsForRebook(
     if (cabinClass === "economy") return f.economyAvailable > 0;
     return f.businessAvailable > 0;
   });
+}
+
+/**
+ * Quick rebook - creates a new booking from a previous one in a single step
+ * Copies passengers, ancillaries, and cabin class from the original booking
+ */
+export async function quickRebook(
+  bookingId: number,
+  newFlightId: number,
+  userId: number
+): Promise<{
+  newBookingId: number;
+  bookingReference: string;
+  pnr: string;
+  totalAmount: number;
+  passengers: number;
+}> {
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
+
+  // Get original booking data
+  const rebookData = await getRebookData(bookingId, userId);
+
+  // Verify new flight has availability
+  const [newFlight] = await database
+    .select()
+    .from(flights)
+    .where(and(eq(flights.id, newFlightId), eq(flights.status, "scheduled")))
+    .limit(1);
+
+  if (!newFlight) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Selected flight not found or not available",
+    });
+  }
+
+  const availableSeats =
+    rebookData.cabinClass === "economy"
+      ? newFlight.economyAvailable
+      : newFlight.businessAvailable;
+
+  if (availableSeats < rebookData.passengers.length) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Not enough seats available on the selected flight",
+    });
+  }
+
+  // Calculate total amount
+  const pricePerSeat =
+    rebookData.cabinClass === "economy"
+      ? newFlight.economyPrice
+      : newFlight.businessPrice;
+  const totalAmount = pricePerSeat * rebookData.passengers.length;
+
+  // Generate booking reference and PNR
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const generateCode = () =>
+    Array.from(
+      { length: 6 },
+      () => chars[Math.floor(Math.random() * chars.length)]
+    ).join("");
+  const bookingReference = generateCode();
+  const pnr = generateCode();
+
+  // Create new booking
+  const bookingResult = await database.insert(bookings).values({
+    userId,
+    flightId: newFlightId,
+    bookingReference,
+    pnr,
+    status: "pending",
+    paymentStatus: "pending",
+    totalAmount,
+    cabinClass: rebookData.cabinClass,
+    numberOfPassengers: rebookData.passengers.length,
+  });
+
+  const newBookingId = Number(bookingResult[0].insertId);
+
+  // Copy passengers to new booking
+  for (const passenger of rebookData.passengers) {
+    await database.insert(passengers).values({
+      bookingId: newBookingId,
+      type: passenger.type,
+      title: passenger.title,
+      firstName: passenger.firstName,
+      lastName: passenger.lastName,
+      dateOfBirth: passenger.dateOfBirth,
+      passportNumber: passenger.passportNumber,
+      nationality: passenger.nationality,
+    });
+  }
+
+  // Copy ancillaries
+  for (const ancillary of rebookData.ancillaries) {
+    await database.insert(bookingAncillaries).values({
+      bookingId: newBookingId,
+      ancillaryServiceId: ancillary.ancillaryServiceId,
+      quantity: ancillary.quantity,
+      unitPrice: 0,
+      totalPrice: 0,
+      status: "active",
+    });
+  }
+
+  // Update flight availability
+  if (rebookData.cabinClass === "economy") {
+    await database
+      .update(flights)
+      .set({
+        economyAvailable: sql`${flights.economyAvailable} - ${rebookData.passengers.length}`,
+      })
+      .where(eq(flights.id, newFlightId));
+  } else {
+    await database
+      .update(flights)
+      .set({
+        businessAvailable: sql`${flights.businessAvailable} - ${rebookData.passengers.length}`,
+      })
+      .where(eq(flights.id, newFlightId));
+  }
+
+  return {
+    newBookingId,
+    bookingReference,
+    pnr,
+    totalAmount,
+    passengers: rebookData.passengers.length,
+  };
 }

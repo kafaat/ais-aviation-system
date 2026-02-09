@@ -65,6 +65,9 @@ const AIPricingDashboard = lazy(
 const TravelAgentManagement = lazy(
   () => import("./pages/admin/TravelAgentManagement")
 );
+const OverbookingManagement = lazy(
+  () => import("./pages/admin/OverbookingManagement")
+);
 
 // Corporate pages
 const CorporateDashboard = lazy(
@@ -358,6 +361,13 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <TravelAgentManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/overbooking">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <OverbookingManagement />
               </Suspense>
             </AdminRoute>
           </Route>

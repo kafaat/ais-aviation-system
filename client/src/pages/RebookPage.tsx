@@ -17,9 +17,11 @@ import {
   ArrowRight,
   Calendar,
   Ticket,
+  Zap,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
+import { toast } from "sonner";
 
 export default function RebookPage() {
   const { t, i18n } = useTranslation();
@@ -52,11 +54,29 @@ export default function RebookPage() {
       { enabled: !!rebookData }
     );
 
+  // Quick rebook mutation
+  const quickRebookMutation = trpc.rebooking.quickRebook.useMutation({
+    onSuccess: () => {
+      navigate(`/my-bookings`);
+    },
+    onError: error => {
+      toast.error(t("rebook.rebookFailed"), {
+        description: error.message,
+      });
+    },
+  });
+
   const handleSelectFlight = (flightId: number) => {
-    // Navigate to booking page with rebook param to auto-fill passengers
     navigate(
       `/booking/${flightId}?class=${rebookData?.cabinClass}&rebook=${bookingId}`
     );
+  };
+
+  const handleQuickRebook = (flightId: number) => {
+    quickRebookMutation.mutate({
+      bookingId,
+      newFlightId: flightId,
+    });
   };
 
   const calculateDuration = (
@@ -377,13 +397,34 @@ export default function RebookPage() {
                               {t("rebook.seatsLeft", { count: seatsLeft })}
                             </Badge>
                           )}
-                          <Button
-                            size="sm"
-                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md group-hover:shadow-lg transition-all whitespace-nowrap"
-                          >
-                            {t("rebook.selectFlight")}
-                            <ArrowRight className="h-4 w-4 ms-2" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="whitespace-nowrap"
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleSelectFlight(flight.id);
+                              }}
+                            >
+                              {t("rebook.selectFlight")}
+                              <ArrowRight className="h-4 w-4 ms-2" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md group-hover:shadow-lg transition-all whitespace-nowrap"
+                              disabled={quickRebookMutation.isPending}
+                              onClick={e => {
+                                e.stopPropagation();
+                                handleQuickRebook(flight.id);
+                              }}
+                            >
+                              <Zap className="h-4 w-4 me-1" />
+                              {quickRebookMutation.isPending
+                                ? t("rebook.rebooking")
+                                : t("rebook.quickRebook")}
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>

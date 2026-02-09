@@ -50,6 +50,7 @@ import { inventoryRouter } from "./routers/inventory.router";
 import { pricingRouter } from "./routers/pricing.router";
 import { softDeleteRouter } from "./routers/soft-delete";
 import { aiPricingRouter } from "./routers/ai-pricing.router";
+import { flightTrackingRouter } from "./routers/flight-tracking.router";
 
 /**
  * Main Application Router
@@ -120,6 +121,7 @@ export const appRouter = router({
   pricing: pricingRouter,
   softDelete: softDeleteRouter,
   aiPricing: aiPricingRouter,
+  flightTracking: flightTrackingRouter,
 });
 
 export type AppRouter = typeof appRouter;

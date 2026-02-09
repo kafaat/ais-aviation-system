@@ -110,53 +110,79 @@ generate_changelog() {
         local commits=$(git log ${last_tag}..HEAD --pretty=format:"%s|%h|%an" --reverse)
     fi
 
-    # Start changelog
-    local changelog="## [${new_version}] - $(date +%Y-%m-%d)\n\n"
+    # Start changelog entry
+    local changelog="## [${new_version}] - $(date +%Y-%m-%d)\n"
 
     # Categorize commits
     local features=""
     local fixes=""
+    local security=""
     local perf=""
     local docs=""
+    local refactor=""
     local other=""
 
     while IFS='|' read -r message hash author; do
         [ -z "$message" ] && continue
 
-        local entry="- ${message} (${hash})"
+        # Skip merge commits and changelog formatting fixes
+        echo "$message" | grep -qiE "^Merge (pull request|remote-tracking|branch)" && continue
+        echo "$message" | grep -qiE "CHANGELOG.md.*(format|prettier|merge)" && continue
+        echo "$message" | grep -qiE "^(style|chore\(release\))" && continue
+
+        # Strip conventional commit prefix for cleaner output
+        local clean_msg=$(echo "$message" | sed -E 's/^(feat|fix|perf|docs|refactor|security|ci|chore|style|build|test)(\([^)]*\))?:\s*//')
+        local entry="- ${clean_msg} (${hash})"
 
         if echo "$message" | grep -qE "^(feat|feature)"; then
             features+="${entry}\n"
+        elif echo "$message" | grep -qE "^fix.*([Ss]ecurity|CVE|vuln)" || echo "$message" | grep -qE "^security"; then
+            security+="${entry}\n"
         elif echo "$message" | grep -qE "^(fix|bugfix)"; then
             fixes+="${entry}\n"
         elif echo "$message" | grep -qE "^perf"; then
             perf+="${entry}\n"
         elif echo "$message" | grep -qE "^docs"; then
             docs+="${entry}\n"
+        elif echo "$message" | grep -qE "^refactor"; then
+            refactor+="${entry}\n"
+        elif echo "$message" | grep -qE "^(ci|chore|build|test|style)"; then
+            # Skip CI/chore/build noise from changelog
+            continue
         else
             other+="${entry}\n"
         fi
     done <<< "$commits"
 
-    # Build changelog sections
+    # Build changelog sections (blank line after each header for Prettier)
     if [ -n "$features" ]; then
-        changelog+="### Added\n${features}\n"
+        changelog+="\n### Added\n\n${features}"
     fi
 
     if [ -n "$fixes" ]; then
-        changelog+="### Fixed\n${fixes}\n"
+        changelog+="\n### Fixed\n\n${fixes}"
+    fi
+
+    if [ -n "$security" ]; then
+        changelog+="\n### Security\n\n${security}"
     fi
 
     if [ -n "$perf" ]; then
-        changelog+="### Performance\n${perf}\n"
+        changelog+="\n### Performance\n\n${perf}"
     fi
 
     if [ -n "$docs" ]; then
-        changelog+="### Documentation\n${docs}\n"
+        changelog+="\n### Documentation\n\n${docs}"
     fi
 
-    if [ -n "$other" ]; then
-        changelog+="### Changed\n${other}\n"
+    if [ -n "$refactor" ]; then
+        changelog+="\n### Refactored\n\n${refactor}"
+    fi
+
+    # Add Full Changelog link
+    if [ -n "$last_tag" ]; then
+        local repo_url="https://github.com/kafaat/ais-aviation-system"
+        changelog+="\n**Full Changelog**: [${last_tag}...v${new_version}](${repo_url}/compare/${last_tag}...v${new_version})\n"
     fi
 
     if [ -n "$output_file" ]; then
@@ -177,14 +203,50 @@ update_changelog_file() {
         # Create backup
         cp CHANGELOG.md CHANGELOG.md.bak
 
-        # Insert new entry after header
-        local header=$(head -n 2 CHANGELOG.md)
-        local rest=$(tail -n +3 CHANGELOG.md)
+        # Find first version heading (## [) and insert before it
+        local insert_line=$(grep -n "^## \[" CHANGELOG.md | head -1 | cut -d: -f1)
 
-        echo -e "${header}\n\n${new_entry}\n${rest}" > CHANGELOG.md
+        if [ -n "$insert_line" ]; then
+            # Insert new entry before the first version section
+            {
+                head -n $((insert_line - 1)) CHANGELOG.md
+                echo -e "${new_entry}\n\n---\n"
+                tail -n +${insert_line} CHANGELOG.md
+            } > CHANGELOG.md.tmp
+            mv CHANGELOG.md.tmp CHANGELOG.md
+        else
+            # No existing version sections, append after header
+            local header_end=$(grep -n "^---$" CHANGELOG.md | head -1 | cut -d: -f1)
+            if [ -n "$header_end" ]; then
+                {
+                    head -n ${header_end} CHANGELOG.md
+                    echo ""
+                    echo -e "${new_entry}"
+                } > CHANGELOG.md.tmp
+                mv CHANGELOG.md.tmp CHANGELOG.md
+            else
+                echo -e "$(cat CHANGELOG.md)\n\n${new_entry}" > CHANGELOG.md
+            fi
+        fi
     else
         # Create new changelog
-        echo -e "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n${new_entry}" > CHANGELOG.md
+        cat > CHANGELOG.md << 'HEADER'
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+HEADER
+        echo -e "${new_entry}" >> CHANGELOG.md
+    fi
+
+    # Run prettier to ensure consistent formatting
+    if command -v pnpm &> /dev/null; then
+        pnpm exec prettier --write CHANGELOG.md 2>/dev/null || true
     fi
 }
 

@@ -2,10 +2,10 @@
  * Advanced Inventory Management Service
  *
  * Provides sophisticated seat inventory management:
- * - Real-time availability tracking
- * - Overbooking management
- * - Waitlist handling
- * - Seat holds and releases
+ * - Real-time availability tracking with DB-backed seat holds
+ * - Overbooking management with per-route configuration
+ * - Waitlist handling with automatic seat offers
+ * - Seat holds and releases with 15-minute expiration
  * - Inventory forecasting
  *
  * @module services/inventory/inventory.service
@@ -17,9 +17,10 @@ import {
   bookings,
   seatHolds,
   waitlist,
+  overbookingConfig as overbookingConfigTable,
+  deniedBoardingRecords,
 } from "../../../drizzle/schema";
-import { eq, and, gte, lte, sql, lt, count, sum } from "drizzle-orm";
-import * as schema from "../../../drizzle/schema";
+import { eq, and, gte, sql, lt, desc, asc } from "drizzle-orm";
 
 // ============================================================================
 // Types & Interfaces
@@ -39,7 +40,7 @@ export interface InventoryStatus {
   status: "available" | "limited" | "waitlist_only" | "closed";
 }
 
-export interface SeatHold {
+export interface SeatHoldData {
   id: number;
   flightId: number;
   cabinClass: "economy" | "business";
@@ -64,7 +65,7 @@ export interface WaitlistEntry {
 }
 
 export interface OverbookingConfig {
-  economyRate: number; // e.g., 0.05 = 5% overbooking
+  economyRate: number;
   businessRate: number;
   maxOverbooking: number;
   noShowRate: number;
@@ -91,25 +92,20 @@ export interface SeatAllocationResult {
 // Constants
 // ============================================================================
 
-// Hold expiration time (15 minutes)
 const HOLD_EXPIRATION_MINUTES = 15;
-
-// Waitlist offer expiration (24 hours)
 const WAITLIST_OFFER_HOURS = 24;
 
-// Default overbooking configuration
 const DEFAULT_OVERBOOKING: OverbookingConfig = {
-  economyRate: 0.05, // 5% overbooking for economy
-  businessRate: 0.02, // 2% overbooking for business
-  maxOverbooking: 10, // Maximum 10 seats overbooking
-  noShowRate: 0.08, // Historical 8% no-show rate
+  economyRate: 0.05,
+  businessRate: 0.02,
+  maxOverbooking: 10,
+  noShowRate: 0.08,
 };
 
-// Inventory status thresholds
 const THRESHOLDS = {
-  limited: 0.85, // 85% occupancy = limited availability
-  waitlistOnly: 0.98, // 98% occupancy = waitlist only
-  closed: 1.0, // 100% = closed
+  limited: 0.85,
+  waitlistOnly: 0.98,
+  closed: 1.0,
 };
 
 // ============================================================================
@@ -123,7 +119,6 @@ export async function getInventoryStatus(
   flightId: number,
   cabinClass: "economy" | "business"
 ): Promise<InventoryStatus> {
-  // Get flight details
   const database = await getDb();
   if (!database) {
     throw new Error("Database connection not available");
@@ -137,7 +132,6 @@ export async function getInventoryStatus(
     throw new Error(`Flight ${flightId} not found`);
   }
 
-  // Get total and available seats
   const totalSeats =
     cabinClass === "economy" ? flight.economySeats : flight.businessSeats;
   const baseAvailable =
@@ -145,34 +139,25 @@ export async function getInventoryStatus(
       ? flight.economyAvailable
       : flight.businessAvailable;
 
-  // Calculate sold seats
   const soldSeats = totalSeats - baseAvailable;
-
-  // Get active holds
   const activeHolds = await getActiveHoldsCount(flightId, cabinClass);
-
-  // Get waitlist count
   const waitlistCount = await getWaitlistCount(flightId, cabinClass);
 
-  // Calculate overbooking limit
-  const overbookingConfig = await getOverbookingConfig(flightId);
+  const overbookingCfg = await getOverbookingConfig(flightId);
   const overbookingRate =
     cabinClass === "economy"
-      ? overbookingConfig.economyRate
-      : overbookingConfig.businessRate;
+      ? overbookingCfg.economyRate
+      : overbookingCfg.businessRate;
   const overbookingLimit = Math.min(
     Math.floor(totalSeats * overbookingRate),
-    overbookingConfig.maxOverbooking
+    overbookingCfg.maxOverbooking
   );
 
-  // Calculate effective available (including overbooking)
   const availableSeats = baseAvailable - activeHolds;
   const effectiveAvailable = Math.max(0, availableSeats + overbookingLimit);
-
   const occupancyRate =
     totalSeats > 0 ? (soldSeats + activeHolds) / totalSeats : 0;
 
-  // Determine status
   let status: InventoryStatus["status"];
   if (effectiveAvailable <= 0) {
     status = waitlistCount > 0 ? "waitlist_only" : "closed";
@@ -209,12 +194,9 @@ export async function allocateSeats(
   userId: number,
   sessionId: string
 ): Promise<SeatAllocationResult> {
-  // Get current inventory status
   const inventory = await getInventoryStatus(flightId, cabinClass);
 
-  // Check if seats are available
   if (inventory.effectiveAvailable >= seats) {
-    // Create hold
     const hold = await createSeatHold(
       flightId,
       cabinClass,
@@ -232,7 +214,6 @@ export async function allocateSeats(
     };
   }
 
-  // Check if partial allocation is possible
   if (inventory.effectiveAvailable > 0) {
     const availableSeats = inventory.effectiveAvailable;
     const hold = await createSeatHold(
@@ -243,7 +224,6 @@ export async function allocateSeats(
       sessionId
     );
 
-    // Add remaining to waitlist
     const remainingSeats = seats - availableSeats;
     const waitlistEntry = await addToWaitlist(
       flightId,
@@ -262,7 +242,6 @@ export async function allocateSeats(
     };
   }
 
-  // No seats available - add to waitlist
   if (inventory.status !== "closed") {
     const waitlistEntry = await addToWaitlist(
       flightId,
@@ -287,7 +266,7 @@ export async function allocateSeats(
 }
 
 /**
- * Create a seat hold
+ * Create a seat hold in the database
  */
 async function createSeatHold(
   flightId: number,
@@ -295,12 +274,32 @@ async function createSeatHold(
   seats: number,
   userId: number,
   sessionId: string
-): Promise<SeatHold> {
+): Promise<SeatHoldData> {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
   const expiresAt = new Date(Date.now() + HOLD_EXPIRATION_MINUTES * 60 * 1000);
 
-  // In production, this would insert into seatHolds table
-  const hold: SeatHold = {
-    id: Date.now(), // Temporary ID
+  const result = await database.insert(seatHolds).values({
+    flightId,
+    cabinClass,
+    seats,
+    userId,
+    sessionId,
+    status: "active",
+    expiresAt,
+  });
+
+  const holdId = Number(result[0].insertId);
+
+  console.info(
+    `[Inventory] Seat hold created: id=${holdId}, flight=${flightId}, class=${cabinClass}, seats=${seats}, expires=${expiresAt.toISOString()}`
+  );
+
+  return {
+    id: holdId,
     flightId,
     cabinClass,
     seats,
@@ -309,34 +308,46 @@ async function createSeatHold(
     expiresAt,
     status: "active",
   };
-
-  console.log(
-    JSON.stringify({
-      event: "seat_hold_created",
-      ...hold,
-      timestamp: new Date().toISOString(),
-    })
-  );
-
-  return hold;
 }
 
 /**
  * Release a seat hold
  */
 export async function releaseSeatHold(holdId: number): Promise<void> {
-  // Update hold status to released
-  // Trigger waitlist processing
-  console.log(
-    JSON.stringify({
-      event: "seat_hold_released",
-      holdId,
-      timestamp: new Date().toISOString(),
-    })
-  );
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
 
-  // Process waitlist after release
-  // await processWaitlist(flightId, cabinClass);
+  // Get hold details before releasing
+  const [hold] = await database
+    .select()
+    .from(seatHolds)
+    .where(eq(seatHolds.id, holdId))
+    .limit(1);
+
+  if (!hold) {
+    throw new Error(`Seat hold ${holdId} not found`);
+  }
+
+  if (hold.status !== "active") {
+    throw new Error(
+      `Seat hold ${holdId} is not active (status: ${hold.status})`
+    );
+  }
+
+  await database
+    .update(seatHolds)
+    .set({ status: "released", updatedAt: new Date() })
+    .where(eq(seatHolds.id, holdId));
+
+  console.info(`[Inventory] Seat hold released: id=${holdId}`);
+
+  // Process waitlist after releasing seats
+  await processWaitlist(
+    hold.flightId,
+    hold.cabinClass as "economy" | "business"
+  );
 }
 
 /**
@@ -346,28 +357,62 @@ export async function convertHoldToBooking(
   holdId: number,
   bookingId: number
 ): Promise<void> {
-  // Update hold status to converted
-  // Update flight available seats
-  console.log(
-    JSON.stringify({
-      event: "seat_hold_converted",
-      holdId,
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
+  const [hold] = await database
+    .select()
+    .from(seatHolds)
+    .where(eq(seatHolds.id, holdId))
+    .limit(1);
+
+  if (!hold) {
+    throw new Error(`Seat hold ${holdId} not found`);
+  }
+
+  await database
+    .update(seatHolds)
+    .set({
+      status: "converted",
       bookingId,
-      timestamp: new Date().toISOString(),
+      updatedAt: new Date(),
     })
+    .where(eq(seatHolds.id, holdId));
+
+  console.info(
+    `[Inventory] Seat hold converted: id=${holdId}, bookingId=${bookingId}`
   );
 }
 
 /**
- * Get active holds count
+ * Get active holds count from database
  */
 async function getActiveHoldsCount(
   flightId: number,
   cabinClass: "economy" | "business"
 ): Promise<number> {
-  // Query active holds from database
-  // For now, return 0
-  return 0;
+  const database = await getDb();
+  if (!database) return 0;
+
+  const now = new Date();
+
+  const result = await database
+    .select({
+      totalSeats: sql<number>`COALESCE(SUM(${seatHolds.seats}), 0)`,
+    })
+    .from(seatHolds)
+    .where(
+      and(
+        eq(seatHolds.flightId, flightId),
+        eq(seatHolds.cabinClass, cabinClass),
+        eq(seatHolds.status, "active"),
+        gte(seatHolds.expiresAt, now)
+      )
+    );
+
+  return Number(result[0]?.totalSeats ?? 0);
 }
 
 // ============================================================================
@@ -383,12 +428,33 @@ export async function addToWaitlist(
   seats: number,
   userId: number
 ): Promise<WaitlistEntry> {
-  // Get current waitlist count for priority
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
   const currentCount = await getWaitlistCount(flightId, cabinClass);
   const priority = currentCount + 1;
 
-  const entry: WaitlistEntry = {
-    id: Date.now(),
+  const result = await database.insert(waitlist).values({
+    flightId,
+    cabinClass,
+    userId,
+    seats,
+    priority,
+    status: "waiting",
+    notifyByEmail: true,
+    notifyBySms: false,
+  });
+
+  const entryId = Number(result[0].insertId);
+
+  console.info(
+    `[Inventory] Waitlist entry created: id=${entryId}, flight=${flightId}, class=${cabinClass}, priority=${priority}`
+  );
+
+  return {
+    id: entryId,
     flightId,
     cabinClass,
     userId,
@@ -397,28 +463,32 @@ export async function addToWaitlist(
     status: "waiting",
     createdAt: new Date(),
   };
-
-  console.log(
-    JSON.stringify({
-      event: "waitlist_entry_created",
-      ...entry,
-      timestamp: new Date().toISOString(),
-    })
-  );
-
-  return entry;
 }
 
 /**
- * Get waitlist count
+ * Get waitlist count from database
  */
 async function getWaitlistCount(
   flightId: number,
   cabinClass: "economy" | "business"
 ): Promise<number> {
-  // Query waitlist from database
-  // For now, return 0
-  return 0;
+  const database = await getDb();
+  if (!database) return 0;
+
+  const result = await database
+    .select({
+      cnt: sql<number>`COUNT(*)`,
+    })
+    .from(waitlist)
+    .where(
+      and(
+        eq(waitlist.flightId, flightId),
+        eq(waitlist.cabinClass, cabinClass),
+        eq(waitlist.status, "waiting")
+      )
+    );
+
+  return Number(result[0]?.cnt ?? 0);
 }
 
 /**
@@ -427,26 +497,59 @@ async function getWaitlistCount(
 export async function processWaitlist(
   flightId: number,
   cabinClass: "economy" | "business"
-): Promise<void> {
-  const inventory = await getInventoryStatus(flightId, cabinClass);
+): Promise<number> {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
 
+  const inventory = await getInventoryStatus(flightId, cabinClass);
   if (inventory.availableSeats <= 0) {
-    return;
+    return 0;
   }
 
   // Get waitlist entries in priority order
-  // Offer seats to users
-  // Send notifications
+  const entries = await database
+    .select()
+    .from(waitlist)
+    .where(
+      and(
+        eq(waitlist.flightId, flightId),
+        eq(waitlist.cabinClass, cabinClass),
+        eq(waitlist.status, "waiting")
+      )
+    )
+    .orderBy(asc(waitlist.priority))
+    .limit(10);
 
-  console.log(
-    JSON.stringify({
-      event: "waitlist_processed",
-      flightId,
-      cabinClass,
-      availableSeats: inventory.availableSeats,
-      timestamp: new Date().toISOString(),
-    })
+  let seatsOffered = 0;
+  const offerExpiresAt = new Date(
+    Date.now() + WAITLIST_OFFER_HOURS * 60 * 60 * 1000
   );
+
+  for (const entry of entries) {
+    if (seatsOffered + entry.seats > inventory.availableSeats) {
+      break;
+    }
+
+    await database
+      .update(waitlist)
+      .set({
+        status: "offered",
+        offeredAt: new Date(),
+        offerExpiresAt: offerExpiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(waitlist.id, entry.id));
+
+    seatsOffered += entry.seats;
+
+    console.info(
+      `[Inventory] Waitlist offer sent: id=${entry.id}, user=${entry.userId}, seats=${entry.seats}`
+    );
+  }
+
+  return seatsOffered;
 }
 
 /**
@@ -456,13 +559,21 @@ export async function removeFromWaitlist(
   waitlistId: number,
   reason: "confirmed" | "cancelled" | "expired"
 ): Promise<void> {
-  console.log(
-    JSON.stringify({
-      event: "waitlist_entry_removed",
-      waitlistId,
-      reason,
-      timestamp: new Date().toISOString(),
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
+  await database
+    .update(waitlist)
+    .set({
+      status: reason,
+      updatedAt: new Date(),
     })
+    .where(eq(waitlist.id, waitlistId));
+
+  console.info(
+    `[Inventory] Waitlist entry removed: id=${waitlistId}, reason=${reason}`
   );
 }
 
@@ -471,12 +582,70 @@ export async function removeFromWaitlist(
 // ============================================================================
 
 /**
- * Get overbooking configuration for a flight
+ * Get overbooking configuration for a flight (checks per-route config first)
  */
 async function getOverbookingConfig(
   flightId: number
 ): Promise<OverbookingConfig> {
-  // In production, this would be configurable per route/airline
+  const database = await getDb();
+  if (!database) return DEFAULT_OVERBOOKING;
+
+  const flight = await database.query.flights.findFirst({
+    where: eq(flights.id, flightId),
+  });
+
+  if (!flight) return DEFAULT_OVERBOOKING;
+
+  // Check for route-specific config
+  const routeConfig = await database
+    .select()
+    .from(overbookingConfigTable)
+    .where(
+      and(
+        eq(overbookingConfigTable.originId, flight.originId),
+        eq(overbookingConfigTable.destinationId, flight.destinationId),
+        eq(overbookingConfigTable.isActive, true)
+      )
+    )
+    .limit(1);
+
+  if (routeConfig.length > 0) {
+    const cfg = routeConfig[0];
+    return {
+      economyRate: Number(cfg.economyRate),
+      businessRate: Number(cfg.businessRate),
+      maxOverbooking: cfg.maxOverbooking,
+      noShowRate: cfg.historicalNoShowRate
+        ? Number(cfg.historicalNoShowRate)
+        : DEFAULT_OVERBOOKING.noShowRate,
+    };
+  }
+
+  // Check for airline-specific config
+  const airlineConfig = await database
+    .select()
+    .from(overbookingConfigTable)
+    .where(
+      and(
+        eq(overbookingConfigTable.airlineId, flight.airlineId),
+        eq(overbookingConfigTable.isActive, true),
+        sql`${overbookingConfigTable.originId} IS NULL`
+      )
+    )
+    .limit(1);
+
+  if (airlineConfig.length > 0) {
+    const cfg = airlineConfig[0];
+    return {
+      economyRate: Number(cfg.economyRate),
+      businessRate: Number(cfg.businessRate),
+      maxOverbooking: cfg.maxOverbooking,
+      noShowRate: cfg.historicalNoShowRate
+        ? Number(cfg.historicalNoShowRate)
+        : DEFAULT_OVERBOOKING.noShowRate,
+    };
+  }
+
   return DEFAULT_OVERBOOKING;
 }
 
@@ -499,13 +668,11 @@ export async function calculateRecommendedOverbooking(
     throw new Error(`Flight ${flightId} not found`);
   }
 
-  // Get historical no-show rate for this route
   const noShowRate = await getHistoricalNoShowRate(
     flight.originId,
     flight.destinationId
   );
 
-  // Calculate recommended overbooking
   const economyOverbooking = Math.floor(flight.economySeats * noShowRate * 0.8);
   const businessOverbooking = Math.floor(
     flight.businessSeats * noShowRate * 0.5
@@ -527,9 +694,68 @@ async function getHistoricalNoShowRate(
   originId: number,
   destinationId: number
 ): Promise<number> {
-  // Query historical data
-  // For now, return default
-  return DEFAULT_OVERBOOKING.noShowRate;
+  const database = await getDb();
+  if (!database) return DEFAULT_OVERBOOKING.noShowRate;
+
+  // Check overbooking config for stored historical rate
+  const config = await database
+    .select()
+    .from(overbookingConfigTable)
+    .where(
+      and(
+        eq(overbookingConfigTable.originId, originId),
+        eq(overbookingConfigTable.destinationId, destinationId),
+        eq(overbookingConfigTable.isActive, true)
+      )
+    )
+    .limit(1);
+
+  if (config.length > 0 && config[0].historicalNoShowRate) {
+    return Number(config[0].historicalNoShowRate);
+  }
+
+  // Calculate from completed flights on this route
+  const completedFlights = await database
+    .select({
+      flightId: flights.id,
+      totalPassengers: sql<number>`(${flights.economySeats} + ${flights.businessSeats})`,
+    })
+    .from(flights)
+    .where(
+      and(
+        eq(flights.originId, originId),
+        eq(flights.destinationId, destinationId),
+        eq(flights.status, "completed")
+      )
+    )
+    .limit(50);
+
+  if (completedFlights.length === 0) {
+    return DEFAULT_OVERBOOKING.noShowRate;
+  }
+
+  // Count no-shows from bookings
+  let totalBookings = 0;
+  let noShows = 0;
+
+  for (const flight of completedFlights) {
+    const bookingResults = await database
+      .select({
+        cnt: sql<number>`COUNT(*)`,
+        noShowCnt: sql<number>`SUM(CASE WHEN ${bookings.status} = 'confirmed' AND ${bookings.checkedIn} = false THEN 1 ELSE 0 END)`,
+      })
+      .from(bookings)
+      .where(eq(bookings.flightId, flight.flightId));
+
+    if (bookingResults.length > 0) {
+      totalBookings += Number(bookingResults[0].cnt);
+      noShows += Number(bookingResults[0].noShowCnt ?? 0);
+    }
+  }
+
+  return totalBookings > 0
+    ? noShows / totalBookings
+    : DEFAULT_OVERBOOKING.noShowRate;
 }
 
 /**
@@ -542,19 +768,177 @@ export async function handleDeniedBoarding(
 ): Promise<{
   volunteersNeeded: number;
   compensationOffer: number;
-  alternativeFlights: number[];
+  alternativeFlights: Array<{
+    id: number;
+    flightNumber: string;
+    departureTime: Date;
+    availableSeats: number;
+  }>;
 }> {
-  // Find volunteers willing to give up seats
-  // Calculate compensation based on regulations
-  // Find alternative flights
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
 
-  const compensation = cabinClass === "economy" ? 150000 : 300000; // SAR cents (100 = 1 SAR)
+  // Get the flight info for route-based alternative search
+  const flight = await database.query.flights.findFirst({
+    where: eq(flights.id, flightId),
+  });
+
+  if (!flight) {
+    throw new Error(`Flight ${flightId} not found`);
+  }
+
+  // Calculate compensation based on cabin class
+  const compensation = cabinClass === "economy" ? 150000 : 300000;
+
+  // Find alternative flights on the same route
+  const availableCol =
+    cabinClass === "economy"
+      ? flights.economyAvailable
+      : flights.businessAvailable;
+
+  const alternatives = await database
+    .select({
+      id: flights.id,
+      flightNumber: flights.flightNumber,
+      departureTime: flights.departureTime,
+      availableSeats: availableCol,
+    })
+    .from(flights)
+    .where(
+      and(
+        eq(flights.originId, flight.originId),
+        eq(flights.destinationId, flight.destinationId),
+        eq(flights.status, "scheduled"),
+        gte(flights.departureTime, flight.departureTime),
+        sql`${flights.id} != ${flightId}`
+      )
+    )
+    .orderBy(flights.departureTime)
+    .limit(5);
 
   return {
     volunteersNeeded: seatsNeeded,
     compensationOffer: compensation,
-    alternativeFlights: [], // Would be populated with actual alternatives
+    alternativeFlights: alternatives.filter(
+      f => f.availableSeats >= seatsNeeded
+    ),
   };
+}
+
+/**
+ * Record a denied boarding incident
+ */
+export async function recordDeniedBoarding(data: {
+  flightId: number;
+  bookingId: number;
+  userId: number;
+  type: "voluntary" | "involuntary";
+  compensationAmount: number;
+  compensationType: "cash" | "voucher" | "miles";
+  alternativeFlightId?: number;
+  notes?: string;
+}): Promise<{ id: number }> {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
+  const result = await database.insert(deniedBoardingRecords).values({
+    flightId: data.flightId,
+    bookingId: data.bookingId,
+    userId: data.userId,
+    type: data.type,
+    compensationAmount: data.compensationAmount,
+    compensationCurrency: "SAR",
+    compensationType: data.compensationType,
+    alternativeFlightId: data.alternativeFlightId ?? null,
+    status: "pending",
+    notes: data.notes ?? null,
+  });
+
+  return { id: Number(result[0].insertId) };
+}
+
+/**
+ * Get denied boarding records for a flight
+ */
+export async function getDeniedBoardingRecords(flightId: number) {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
+  return database
+    .select()
+    .from(deniedBoardingRecords)
+    .where(eq(deniedBoardingRecords.flightId, flightId))
+    .orderBy(desc(deniedBoardingRecords.createdAt));
+}
+
+/**
+ * Update denied boarding record status
+ */
+export async function updateDeniedBoardingStatus(
+  recordId: number,
+  status: "accepted" | "rejected" | "completed"
+): Promise<void> {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
+  await database
+    .update(deniedBoardingRecords)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(deniedBoardingRecords.id, recordId));
+}
+
+/**
+ * Get all overbooking configurations
+ */
+export async function getOverbookingConfigs() {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
+  return database
+    .select()
+    .from(overbookingConfigTable)
+    .orderBy(desc(overbookingConfigTable.createdAt));
+}
+
+/**
+ * Create or update overbooking configuration
+ */
+export async function upsertOverbookingConfig(data: {
+  airlineId?: number;
+  originId?: number;
+  destinationId?: number;
+  economyRate: string;
+  businessRate: string;
+  maxOverbooking: number;
+  historicalNoShowRate?: string;
+}): Promise<{ id: number }> {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
+  const result = await database.insert(overbookingConfigTable).values({
+    airlineId: data.airlineId ?? null,
+    originId: data.originId ?? null,
+    destinationId: data.destinationId ?? null,
+    economyRate: data.economyRate,
+    businessRate: data.businessRate,
+    maxOverbooking: data.maxOverbooking,
+    historicalNoShowRate: data.historicalNoShowRate ?? null,
+    isActive: true,
+  });
+
+  return { id: Number(result[0].insertId) };
 }
 
 // ============================================================================
@@ -586,17 +970,20 @@ export async function forecastDemand(
     (flight.departureTime.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   );
 
-  for (let i = 0; i < Math.min(daysAhead, daysUntilDeparture); i++) {
+  for (
+    let i = 0;
+    i < Math.min(daysAhead, Math.max(daysUntilDeparture, 0));
+    i++
+  ) {
     const date = new Date();
     date.setDate(date.getDate() + i);
 
-    // Simple demand prediction based on days until departure
     const remainingDays = daysUntilDeparture - i;
     let predictedDemand: number;
     let riskLevel: InventoryForecast["riskLevel"];
 
     if (remainingDays <= 3) {
-      predictedDemand = 15; // High last-minute demand
+      predictedDemand = 15;
       riskLevel = "high";
     } else if (remainingDays <= 7) {
       predictedDemand = 10;
@@ -634,39 +1021,87 @@ export async function forecastDemand(
  * Expire old seat holds
  */
 export async function expireOldHolds(): Promise<number> {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
   const now = new Date();
 
-  // Update expired holds
-  // Release seats back to inventory
-  // Trigger waitlist processing
-
-  console.log(
-    JSON.stringify({
-      event: "holds_cleanup_completed",
-      timestamp: now.toISOString(),
+  // Find expired holds
+  const expiredHolds = await database
+    .select({
+      id: seatHolds.id,
+      flightId: seatHolds.flightId,
+      cabinClass: seatHolds.cabinClass,
+      seats: seatHolds.seats,
     })
-  );
+    .from(seatHolds)
+    .where(and(eq(seatHolds.status, "active"), lt(seatHolds.expiresAt, now)));
 
-  return 0; // Return count of expired holds
+  if (expiredHolds.length === 0) {
+    return 0;
+  }
+
+  // Update all expired holds
+  await database
+    .update(seatHolds)
+    .set({ status: "expired", updatedAt: now })
+    .where(and(eq(seatHolds.status, "active"), lt(seatHolds.expiresAt, now)));
+
+  console.info(`[Inventory] Expired ${expiredHolds.length} seat holds`);
+
+  // Process waitlist for each affected flight/class combination
+  const flightClassPairs = new Set<string>();
+  for (const hold of expiredHolds) {
+    flightClassPairs.add(`${hold.flightId}:${hold.cabinClass}`);
+  }
+
+  for (const pair of flightClassPairs) {
+    const [flightIdStr, cabinClass] = pair.split(":");
+    await processWaitlist(
+      Number(flightIdStr),
+      cabinClass as "economy" | "business"
+    );
+  }
+
+  return expiredHolds.length;
 }
 
 /**
  * Expire old waitlist offers
  */
 export async function expireWaitlistOffers(): Promise<number> {
+  const database = await getDb();
+  if (!database) {
+    throw new Error("Database connection not available");
+  }
+
   const now = new Date();
 
+  // Find expired offers
+  const expiredOffers = await database
+    .select({ id: waitlist.id })
+    .from(waitlist)
+    .where(
+      and(eq(waitlist.status, "offered"), lt(waitlist.offerExpiresAt, now))
+    );
+
+  if (expiredOffers.length === 0) {
+    return 0;
+  }
+
   // Update expired offers
-  // Move to next in waitlist
+  await database
+    .update(waitlist)
+    .set({ status: "expired", updatedAt: now })
+    .where(
+      and(eq(waitlist.status, "offered"), lt(waitlist.offerExpiresAt, now))
+    );
 
-  console.log(
-    JSON.stringify({
-      event: "waitlist_offers_cleanup_completed",
-      timestamp: now.toISOString(),
-    })
-  );
+  console.info(`[Inventory] Expired ${expiredOffers.length} waitlist offers`);
 
-  return 0;
+  return expiredOffers.length;
 }
 
 // ============================================================================
@@ -683,6 +1118,11 @@ export const InventoryService = {
   removeFromWaitlist,
   calculateRecommendedOverbooking,
   handleDeniedBoarding,
+  recordDeniedBoarding,
+  getDeniedBoardingRecords,
+  updateDeniedBoardingStatus,
+  getOverbookingConfigs,
+  upsertOverbookingConfig,
   forecastDemand,
   expireOldHolds,
   expireWaitlistOffers,

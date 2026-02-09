@@ -86,7 +86,8 @@
     "baggage": "إدارة الأمتعة",
     "corporate": "الحسابات المؤسسية",
     "travelAgents": "وكلاء السفر",
-    "aiPricing": "التسعير الذكي"
+    "aiPricing": "التسعير الذكي",
+    "overbooking": "الحجز الزائد"
   },
   "home": {
     "hero": {
@@ -1659,7 +1660,27 @@
     "refresh": "تحديث",
     "flightPath": "مسار الرحلة",
     "noFlightTracked": "لا توجد رحلة متتبعة",
-    "noFlightTrackedDesc": "أدخل رقم الرحلة أعلاه لتتبع حالتها وتقدمها في الوقت الفعلي"
+    "noFlightTrackedDesc": "أدخل رقم الرحلة أعلاه لتتبع حالتها وتقدمها في الوقت الفعلي",
+    "searching": "جاري البحث عن الرحلة...",
+    "altitude": "الارتفاع",
+    "speed": "السرعة الأرضية",
+    "heading": "الاتجاه",
+    "temperature": "درجة الحرارة",
+    "wind": "سرعة الرياح",
+    "turbulence": "اضطرابات جوية",
+    "turbulence_none": "لا يوجد",
+    "turbulence_light": "خفيفة",
+    "turbulence_moderate": "متوسطة",
+    "turbulence_severe": "شديدة",
+    "phaseBoarding": "الصعود",
+    "phaseTaxiing": "السير على المدرج",
+    "phaseTakeoff": "الإقلاع",
+    "phaseClimbing": "الصعود",
+    "phaseCruising": "التحليق",
+    "phaseDescending": "الهبوط",
+    "phaseApproach": "الاقتراب",
+    "phaseLanding": "الهبوط",
+    "phaseArrived": "وصلت"
   },
   "voucher": {
     "title": "كود الخصم",
@@ -1943,7 +1964,10 @@
     "perPerson": "للشخص الواحد",
     "seatsLeft": "باقي {{count}} مقاعد فقط",
     "prefilledBanner": "تم تعبئة بيانات المسافرين من الحجز السابق",
-    "prefilledBannerDesc": "تم تحميل البيانات من الحجز {{ref}}. يمكنك تعديل التفاصيل أدناه قبل التأكيد."
+    "prefilledBannerDesc": "تم تحميل البيانات من الحجز {{ref}}. يمكنك تعديل التفاصيل أدناه قبل التأكيد.",
+    "quickRebook": "إعادة حجز سريع",
+    "rebooking": "جاري إعادة الحجز...",
+    "rebookFailed": "فشلت إعادة الحجز"
   },
   "carbon": {
     "title": "البصمة الكربونية",
@@ -2211,5 +2235,55 @@
     "title": "الخدمات الإضافية",
     "serviceCount": "{{count}} خدمة",
     "total": "المجموع"
+  },
+  "overbooking": {
+    "title": "إدارة الحجز الزائد",
+    "subtitle": "إدارة إعدادات الحجز الزائد ورفض الصعود",
+    "configs": "إعدادات الحجز الزائد",
+    "noConfigs": "لا توجد إعدادات",
+    "createConfig": "إنشاء إعداد",
+    "economyRate": "نسبة الاقتصادية",
+    "businessRate": "نسبة رجال الأعمال",
+    "maxOverbooking": "الحد الأقصى للحجز الزائد",
+    "noShowRate": "نسبة عدم الحضور التاريخية",
+    "scope": "النطاق",
+    "global": "عام",
+    "airline": "شركة طيران",
+    "route": "مسار",
+    "active": "نشط",
+    "deniedBoarding": "سجلات رفض الصعود",
+    "noDeniedRecords": "لا توجد سجلات رفض صعود",
+    "voluntary": "طوعي",
+    "involuntary": "إجباري",
+    "compensationAmount": "التعويض",
+    "compensationType": "نوع التعويض",
+    "alternativeFlight": "رحلة بديلة",
+    "status": "الحالة",
+    "pending": "قيد الانتظار",
+    "accepted": "مقبول",
+    "rejected": "مرفوض",
+    "completed": "مكتمل",
+    "configCreated": "تم إنشاء إعداد الحجز الزائد",
+    "statusUpdated": "تم تحديث الحالة بنجاح",
+    "recommendations": "التوصيات",
+    "recommendedSeats": "مقاعد إضافية موصى بها",
+    "enterFlightId": "أدخل معرف الرحلة لعرض التوصيات",
+    "deniedType": "النوع"
+  },
+  "inventory": {
+    "title": "إدارة المخزون",
+    "seatHold": "حجز مؤقت",
+    "holdExpires": "ينتهي الحجز خلال {{minutes}} دقيقة",
+    "holdCreated": "تم حجز المقاعد بنجاح",
+    "holdReleased": "تم تحرير الحجز المؤقت",
+    "holdConverted": "تم تحويل الحجز المؤقت",
+    "noAvailability": "لا توجد مقاعد متاحة",
+    "waitlistAdded": "تمت الإضافة لقائمة الانتظار في المركز {{position}}",
+    "lockActive": "المخزون مقفل",
+    "lockExpired": "انتهى القفل",
+    "available": "متاح",
+    "limited": "محدود",
+    "waitlistOnly": "قائمة الانتظار فقط",
+    "closed": "مغلق"
   }
 }

@@ -1,257 +1,133 @@
 # Changelog
 
-## What's Changed in v1.11.0
+All notable changes to this project will be documented in this file.
 
-### Features
-- feat: add Sanaa, Aden, and Muscat destinations with airlines and flights (0be56d6)
-- feat: add aircraft type models to seed data (A320, A330, A350, B727, B737, B777, B787) (9c26281)
-- feat: make SeatMap display aircraft-specific seat layouts (8b47507)
-- feat: integrate SeatMap component into booking flow (bad4715)
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Bug Fixes
-- fix: format CHANGELOG.md for Prettier CI check (9094e2c)
+---
+
+## [1.11.0] - 2026-02-08
+
+### Added
+
+- Sanaa, Aden, and Muscat destinations with airlines and flights (0be56d6)
+- Aircraft type models to seed data: A320, A330, A350, B727, B737, B777, B787 (9c26281)
+- SeatMap displays aircraft-specific seat layouts (8b47507)
+- SeatMap component integrated into booking flow (bad4715)
 
 ### Documentation
-- docs: update documentation for new destinations and currencies (cf01410)
 
-### Other Changes
-- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (33c33e9)
-- Merge pull request #63 from kafaat/claude/implement-todo-zrBPj (d4c8196)
+- Update documentation for new destinations and currencies (cf01410)
 
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.10.1...v1.11.0
-
+**Full Changelog**: [v1.10.1...v1.11.0](https://github.com/kafaat/ais-aviation-system/compare/v1.10.1...v1.11.0)
 
 ---
 
-## What's Changed in v1.10.1
+## [1.10.1] - 2026-02-08
 
-### Bug Fixes
+### Fixed
 
-- fix: improve accessibility across all major pages (WCAG compliance) (3d7e966)
-- fix: format CHANGELOG.md after merge from main (213463b)
-- fix: add kubeconfig validation to prevent deploy failures (1fb1a88)
-
-### Maintenance
-
-- chore(release): v1.10.0 (5ff7483)
-
-### Other Changes
-
+- Improve accessibility across all major pages — WCAG compliance (3d7e966)
+- Add kubeconfig validation to prevent deploy failures (1fb1a88)
 - Auth service not registered (9668b04)
-- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (633e88a)
-- Merge branch 'main' into claude/implement-todo-zrBPj (45ae5de)
-- Merge pull request #62 from kafaat/claude/implement-todo-zrBPj (d637f56)
 
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.10.0...v1.10.1
+**Full Changelog**: [v1.10.0...v1.10.1](https://github.com/kafaat/ais-aviation-system/compare/v1.10.0...v1.10.1)
 
 ---
 
-## What's Changed in v1.10.0
+## [1.10.0] - 2026-02-08
 
-### Features
+### Added
 
-- feat: add FastAPI auth service with password-based authentication (c525250)
-
-### Bug Fixes
-
-- fix: resolve non-DB E2E test failures (87d2f90)
-- fix: resolve login 404 by fixing CSP, service worker, and PWA config (d3da166)
-
-### Maintenance
-
-- chore(release): v1.9.1 - docs update and security fixes (620d105)
-
-### Other Changes
-
-- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (acdb519)
-- Fix CHANGELOG.md Prettier formatting after merge from main (b47de0c)
-- Merge pull request #61 from kafaat/claude/implement-todo-zrBPj (ea14f48)
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.9.0...v1.10.0
-
----
-
-## What's Changed in v1.9.1
-
-### Features
-
-- feat: add FastAPI auth service with password-based authentication (c525250)
+- FastAPI auth service with password-based authentication (c525250)
   - New `auth-service/` microservice (FastAPI + SQLAlchemy + bcrypt)
   - User registration, login, and password verification endpoints
   - Auth service client for Node.js backend communication
   - Docker Compose integration for all environments
   - Updated Login page with email/password form alongside OAuth
 
-### Bug Fixes
+### Fixed
 
-- fix: resolve login 404 by fixing CSP, service worker, and PWA config (d3da166)
-- fix: resolve non-DB E2E test failures (87d2f90)
+- Resolve non-DB E2E test failures (87d2f90)
+- Resolve login 404 by fixing CSP, service worker, and PWA config (d3da166)
 
 ### Security
 
-- fix: upgrade python-jose 3.3.0 → 3.4.0 (CVE-2024-33663, CVE-2024-33664)
-- fix: upgrade python-multipart 0.0.20 → 0.0.22 (CVE-2026-24486)
-- fix: upgrade cryptography 44.0.0 → 44.0.1 (CVE-2024-12797)
+- Upgrade python-jose 3.3.0 → 3.4.0 (CVE-2024-33663, CVE-2024-33664)
+- Upgrade python-multipart 0.0.20 → 0.0.22 (CVE-2026-24486)
+- Upgrade cryptography 44.0.0 → 44.0.1 (CVE-2024-12797)
 
-### Other Changes
-
-- Fix CHANGELOG.md Prettier formatting after merge from main (b47de0c)
-- Merge remote-tracking branch 'origin/main' into branch (acdb519)
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.9.0...v1.9.1
+**Full Changelog**: [v1.9.0...v1.10.0](https://github.com/kafaat/ais-aviation-system/compare/v1.9.0...v1.10.0)
 
 ---
 
-## What's Changed in v1.9.0
+## [1.9.0] - 2026-02-08
 
-### Features
+### Added
 
-- feat: implement AI dynamic pricing system with ML demand forecasting, customer segmentation, revenue optimization, and A/B testing (afbe66f)
+- AI dynamic pricing system with ML demand forecasting, customer segmentation, revenue optimization, and A/B testing (afbe66f)
 
-### Bug Fixes
+### Fixed
 
-- fix: integrate AI pricing with booking flow and add comprehensive tests (57195da)
-- fix: add E2E test support with data-testid attributes and dev login form (953a4b3)
+- Integrate AI pricing with booking flow and add comprehensive tests (57195da)
+- Add E2E test support with data-testid attributes and dev login form (953a4b3)
 
-### Maintenance
-
-- ci: trigger fresh CI run after cancelled checks (8b58410)
-- ci: trigger CI re-run after format fix (bd3ef4d)
-
-### Other Changes
-
-- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (1d20359)
-- style: fix CHANGELOG.md formatting after merge from main (8742819)
-- login error 404 not found (38ca0ae)
-- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (391b876)
-- style: format index.html after merge from main (802fe68)
-- Merge pull request #60 from kafaat/claude/implement-todo-zrBPj (ba0dc60)
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.4...v1.9.0
+**Full Changelog**: [v1.8.4...v1.9.0](https://github.com/kafaat/ais-aviation-system/compare/v1.8.4...v1.9.0)
 
 ---
 
-## What's Changed in v1.8.4
+## [1.8.4] - 2026-02-08
 
-### Bug Fixes
+### Fixed
 
-- fix: address security vulnerabilities and race conditions (bdf1e8e)
-- fix: UI fixes - icons, RTL support, accessibility, and dead links (7c11bad)
-- fix: resolve CI lint warnings and Docker build failure (e135804)
-- fix: deep UI audit - critical bugs, RTL, accessibility, and cleanup (9369970)
-- fix: resolve 5 critical middleware bugs found in deep review (96ef1a5)
-- fix: comprehensive backend review - 28 files, security and correctness fixes (ebd4b1e)
-- fix: Phase 2 - architecture, integration, and infrastructure deep review (49 files) (9b7bb52)
-- fix: remove stale patchedDependencies from lockfile (2084105)
-- fix: resolve 8 failing test cases across 4 test files (df7b0b8)
-
-### Other Changes
-
-- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (60ee169)
-- style: fix CHANGELOG.md Prettier formatting (dec6b36)
+- Address security vulnerabilities and race conditions (bdf1e8e)
+- UI fixes — icons, RTL support, accessibility, and dead links (7c11bad)
+- Resolve CI lint warnings and Docker build failure (e135804)
+- Deep UI audit — critical bugs, RTL, accessibility, and cleanup (9369970)
+- Resolve 5 critical middleware bugs found in deep review (96ef1a5)
+- Comprehensive backend review — 28 files, security and correctness fixes (ebd4b1e)
+- Phase 2 — architecture, integration, and infrastructure deep review (49 files) (9b7bb52)
+- Remove stale patchedDependencies from lockfile (2084105)
+- Resolve 8 failing test cases across 4 test files (df7b0b8)
 - Fix duplicate 'db' variable declaration in flight-status test (e33e840)
-- Merge pull request #59 from kafaat/claude/implement-todo-zrBPj (efcc30f)
 
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.3...v1.8.4
-
----
-
-## What's Changed in v1.8.3
-
-### Bug Fixes
-
-- fix: Login button now navigates to dedicated /login page (a6a9475)
-- fix: login button now navigates to dedicated /login page (9b594ff)
-
-### Other Changes
-
-- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (99f30a3)
-- Merge pull request #58 from kafaat/claude/implement-todo-zrBPj (94fcebb)
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.2...v1.8.3
+**Full Changelog**: [v1.8.3...v1.8.4](https://github.com/kafaat/ais-aviation-system/compare/v1.8.3...v1.8.4)
 
 ---
 
-## What's Changed in v1.8.2
+## [1.8.3] - 2026-02-07
 
-### Bug Fixes
+### Fixed
 
-- fix: prevent crash when VITE_OAUTH_PORTAL_URL is not configured (4244894)
+- Login button now navigates to dedicated /login page (a6a9475)
+
+**Full Changelog**: [v1.8.2...v1.8.3](https://github.com/kafaat/ais-aviation-system/compare/v1.8.2...v1.8.3)
+
+---
+
+## [1.8.2] - 2026-02-07
+
+### Fixed
+
+- Prevent crash when VITE_OAUTH_PORTAL_URL is not configured (4244894)
 
 ### Documentation
 
-- docs: comprehensive documentation update for all sessions and phases (27b16ac)
+- Comprehensive documentation update for all sessions and phases (27b16ac)
 
-### Other Changes
-
-- Resolve CHANGELOG.md merge conflict with main (5cbfd8f)
-- Merge pull request #57 from kafaat/claude/implement-todo-zrBPj (464b432)
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.1...v1.8.2
+**Full Changelog**: [v1.8.1...v1.8.2](https://github.com/kafaat/ais-aviation-system/compare/v1.8.1...v1.8.2)
 
 ---
 
-## What's Changed in v1.8.1
+## [1.8.1] - 2026-02-07
 
-### Bug Fixes
+### Fixed
 
-- fix: mock loyalty tests and add missing env vars documentation (ad11c89)
-- fix: prevent Sentry crash with invalid/placeholder DSN values (2de0629)
+- Mock loyalty tests and add missing env vars documentation (ad11c89)
+- Prevent Sentry crash with invalid/placeholder DSN values (2de0629)
 
-### Other Changes
-
-- Fix Prettier formatting in sentry files (8fc1113)
-- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (183d86f)
-- Fix CHANGELOG.md Prettier formatting after merge from main (4f1a152)
-- Merge pull request #56 from kafaat/claude/implement-todo-zrBPj (662b4d5)
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.8.0...v1.8.1
-
----
-
-## What's Changed in v1.8.0
-
-### Features
-
-- feat: comprehensive admin, notifications, email, error handling, and security improvements (c039ce9)
-
-### Bug Fixes
-
-- fix: merge main and fix CHANGELOG.md prettier formatting (3faab9b)
-
-### Other Changes
-
-- Merge remote-tracking branch 'origin/main' into claude/fix-ci-pipeline-zrBPj (25c296d)
-- Merge pull request #55 from kafaat/claude/implement-todo-zrBPj (0c13d2d)
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.7.2...v1.8.0
-
----
-
-## What's Changed in v1.7.2
-
-### Bug Fixes
-
-- fix: critical frontend issues - missing providers, routes, and navigation (1f2e14e)
-- fix: critical Phase 1 & 2 bugs - seat deduction, pricing, validation (a01b959)
-- fix: consolidate schema imports and fix demo code router name (7659fdd)
-- fix: Phase 3 bugs + Docker configuration fixes (d348b22)
-- fix: worker entry point, inventory locks, price alerts, and prettier (93b7789)
-- fix: complete all remaining issues with i18n, todos, and documentation (9a49d52)
-- fix: rewrite CHANGELOG.md to fix recurring prettier formatting issues (f859f89)
-- fix: replace hardcoded strings with i18n, fix TODOs in MultiCity and email worker (3ff81ff)
-
-### Code Refactoring
-
-- refactor: remove duplicate schema files in favor of main schema.ts (279f443)
-
-### Other Changes
-
-- merge: resolve CHANGELOG.md conflict with main (v1.7.1) (155ba65)
-- Merge pull request #54 from kafaat/claude/implement-todo-zrBPj (741b96b)
-
-**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.7.1...v1.7.2
+**Full Changelog**: [v1.8.0...v1.8.1](https://github.com/kafaat/ais-aviation-system/compare/v1.8.0...v1.8.1)
 
 ---
 
@@ -259,7 +135,8 @@
 
 ### Added
 
-- Background job worker (`server/worker.ts` -> `dist/worker.js`)
+- Comprehensive admin, notifications, email, error handling, and security improvements (c039ce9)
+- Background job worker (`server/worker.ts` → `dist/worker.js`)
 - Inventory lock conversion after payment confirmation
 - Price alerts notification delivery (in-app + email)
 - Docker `.dockerignore` for optimized builds
@@ -285,7 +162,7 @@
 - Waitlist seat deduction on offer to prevent overbooking
 - Travel agent monthly booking limit enforcement
 - Split payment server-side amount and expiry validation
-- AI chat date comparison (eq -> lt) for archiving old conversations
+- AI chat date comparison (eq → lt) for archiving old conversations
 - AI guardrails returning safe:true for warning severity
 - Rebooking status eligibility check (only confirmed/pending)
 - Stripe webhook path mismatch in nginx.conf
@@ -300,11 +177,33 @@
 - `allowNonAppliedPatches` updated to `allowUnusedPatches` in pnpm config
 - CI pipeline: build job no longer depends on E2E tests
 - family-pool.service imports from main schema.ts instead of loyalty-schema.ts
-- AIChatBox demo code corrected: trpc.ai.chat -> trpc.aiChat.sendMessage
+- AIChatBox demo code corrected: trpc.ai.chat → trpc.aiChat.sendMessage
 
 ### Removed
 
 - 4 duplicate schema files (loyalty-schema, flight-status-history-schema, inventory-locks-schema, modification-schema)
+
+**Full Changelog**: [v1.7.2...v1.8.0](https://github.com/kafaat/ais-aviation-system/compare/v1.7.2...v1.8.0)
+
+---
+
+## [1.7.2] - 2026-02-07
+
+### Fixed
+
+- Critical frontend issues — missing providers, routes, and navigation (1f2e14e)
+- Critical Phase 1 & 2 bugs — seat deduction, pricing, validation (a01b959)
+- Consolidate schema imports and fix demo code router name (7659fdd)
+- Phase 3 bugs + Docker configuration fixes (d348b22)
+- Worker entry point, inventory locks, price alerts, and prettier (93b7789)
+- Complete all remaining issues with i18n, todos, and documentation (9a49d52)
+- Replace hardcoded strings with i18n, fix TODOs in MultiCity and email worker (3ff81ff)
+
+### Refactored
+
+- Remove duplicate schema files in favor of main schema.ts (279f443)
+
+**Full Changelog**: [v1.7.1...v1.7.2](https://github.com/kafaat/ais-aviation-system/compare/v1.7.1...v1.7.2)
 
 ---
 
@@ -319,7 +218,7 @@
 
 ---
 
-## [1.7.0] - 2026-02-05
+## [1.7.0] - 2026-02-06
 
 ### Added
 
@@ -336,13 +235,13 @@
 
 ---
 
-## [1.6.0] - 2026-02-04
+## [1.6.0] - 2026-02-06
 
 ### Added
 
 - Rebooking from previous booking feature (5b73f4b)
 - 6 travel scenarios: pricing, validation, auto check-in, sharing, carbon, travel docs (86391d0)
-- Phase 3 DCS (Departure Control System) (29b11b2)
+- Phase 3 DCS — Departure Control System (29b11b2)
 - Phase 4: payment history and soft delete for bookings (f9d94b8)
 
 ### Fixed
@@ -356,7 +255,7 @@
 
 ---
 
-## [1.4.0] - 2026-01-30
+## [1.4.0] - 2026-02-06
 
 ### Added
 
@@ -374,7 +273,7 @@
 
 ---
 
-## [1.3.3] - 2026-01-28
+## [1.3.3] - 2026-02-05
 
 ### Fixed
 
@@ -386,7 +285,7 @@
 
 ---
 
-## [1.3.2] - 2026-01-27
+## [1.3.2] - 2026-02-05
 
 ### Fixed
 
@@ -398,7 +297,7 @@
 
 ---
 
-## [1.3.1] - 2026-01-26
+## [1.3.1] - 2026-02-05
 
 ### Fixed
 
@@ -415,7 +314,7 @@
 
 ---
 
-## [1.3.0] - 2026-01-25
+## [1.3.0] - 2026-02-05
 
 ### Added
 
@@ -427,7 +326,7 @@
 
 ---
 
-## [1.2.0] - 2026-01-20
+## [1.2.0] - 2026-02-05
 
 ### Added
 
@@ -437,7 +336,7 @@
 
 ---
 
-## [1.1.1] - 2026-01-15
+## [1.1.1] - 2026-02-05
 
 ### Fixed
 
@@ -450,7 +349,7 @@
 
 ---
 
-## [1.1.0] - 2026-01-13
+## [1.1.0] - 2026-02-05
 
 ### Added
 
