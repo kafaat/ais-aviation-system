@@ -95,12 +95,12 @@ export async function getRebookData(
     });
   }
 
-  // Only confirmed and pending bookings are eligible for rebooking
-  const rebookableStatuses = ["confirmed", "pending"];
+  // Confirmed, pending, completed, and cancelled bookings are eligible for rebooking
+  const rebookableStatuses = ["confirmed", "pending", "completed", "cancelled"];
   if (!rebookableStatuses.includes(booking.status)) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: `Booking cannot be rebooked because it is ${booking.status}. Only confirmed or pending bookings are eligible for rebooking.`,
+      message: `Booking cannot be rebooked because it is ${booking.status}.`,
     });
   }
 

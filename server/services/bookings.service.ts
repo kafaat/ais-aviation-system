@@ -73,15 +73,26 @@ export async function createBooking(input: CreateBookingInput) {
       }
     }
 
-    // Verify inventory lock if provided (prevents double-booking)
-    if (input.lockId) {
-      const lockValid = await verifyLock(input.lockId, input.sessionId);
+    // Verify or create inventory lock (prevents double-booking)
+    let lockId = input.lockId;
+    if (lockId) {
+      const lockValid = await verifyLock(lockId, input.sessionId);
       if (!lockValid) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Inventory lock has expired. Please search again and retry.",
         });
       }
+    } else {
+      // No lock provided - create one to prevent double-booking during checkout
+      const lock = await createInventoryLock(
+        input.flightId,
+        input.passengers.length,
+        input.cabinClass,
+        input.sessionId,
+        input.userId
+      );
+      lockId = lock.lockId;
     }
 
     // Check flight availability
@@ -201,6 +212,16 @@ export async function createBooking(input: CreateBookingInput) {
         notifError
       );
       // Don't fail the booking if notification fails
+    }
+
+    // Convert inventory lock to booking
+    if (lockId) {
+      try {
+        await convertLockToBooking(lockId);
+      } catch (lockError) {
+        console.error("[Booking] Failed to convert inventory lock:", lockError);
+        // Don't fail the booking if lock conversion fails
+      }
     }
 
     return {

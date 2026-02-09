@@ -86,7 +86,8 @@
     "baggage": "Baggage Management",
     "corporate": "Corporate Accounts",
     "travelAgents": "Travel Agents",
-    "aiPricing": "AI Pricing"
+    "aiPricing": "AI Pricing",
+    "overbooking": "Overbooking"
   },
   "home": {
     "hero": {
@@ -1965,7 +1966,8 @@
     "prefilledBanner": "Passenger details pre-filled from previous booking",
     "prefilledBannerDesc": "Data loaded from booking {{ref}}. You can modify the details below before confirming.",
     "quickRebook": "Quick Rebook",
-    "rebooking": "Rebooking..."
+    "rebooking": "Rebooking...",
+    "rebookFailed": "Rebooking failed"
   },
   "carbon": {
     "title": "Carbon Footprint",

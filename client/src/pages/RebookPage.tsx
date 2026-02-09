@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
+import { toast } from "sonner";
 
 export default function RebookPage() {
   const { t, i18n } = useTranslation();
@@ -57,6 +58,11 @@ export default function RebookPage() {
   const quickRebookMutation = trpc.rebooking.quickRebook.useMutation({
     onSuccess: () => {
       navigate(`/my-bookings`);
+    },
+    onError: error => {
+      toast.error(t("rebook.rebookFailed"), {
+        description: error.message,
+      });
     },
   });
 

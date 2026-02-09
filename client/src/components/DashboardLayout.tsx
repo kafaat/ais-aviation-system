@@ -120,6 +120,12 @@ const adminMenuItems: MenuItem[] = [
     path: "/admin/ai-pricing",
     adminOnly: true,
   },
+  {
+    icon: Users,
+    labelKey: "nav.overbooking",
+    path: "/admin/overbooking",
+    adminOnly: true,
+  },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

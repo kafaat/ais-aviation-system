@@ -120,7 +120,12 @@ export interface ReconciliationJobData {
 }
 
 export interface CleanupJobData {
-  type: "idempotency" | "refresh-tokens" | "expired-bookings";
+  type:
+    | "idempotency"
+    | "refresh-tokens"
+    | "expired-bookings"
+    | "seat-holds"
+    | "waitlist-offers";
 }
 
 // ============================================================================
@@ -247,6 +252,30 @@ export async function scheduleCleanupJobs(): Promise<void> {
         pattern: "0 3 * * *", // 3 AM daily
       },
       jobId: "expired-bookings-cleanup",
+    }
+  );
+
+  // Seat holds expiration - every 5 minutes
+  await scheduledQueue.add(
+    "cleanup",
+    { type: "seat-holds" } as CleanupJobData,
+    {
+      repeat: {
+        pattern: "*/5 * * * *", // Every 5 minutes
+      },
+      jobId: "seat-holds-cleanup",
+    }
+  );
+
+  // Waitlist offers expiration - every hour
+  await scheduledQueue.add(
+    "cleanup",
+    { type: "waitlist-offers" } as CleanupJobData,
+    {
+      repeat: {
+        pattern: "30 * * * *", // Every hour at :30
+      },
+      jobId: "waitlist-offers-cleanup",
     }
   );
 
@@ -522,6 +551,19 @@ async function runCleanup(data: CleanupJobData): Promise<void> {
     case "expired-bookings":
       await cleanupExpiredBookings();
       break;
+
+    case "seat-holds": {
+      const { expireOldHolds } = await import("./inventory/inventory.service");
+      await expireOldHolds();
+      break;
+    }
+
+    case "waitlist-offers": {
+      const { expireWaitlistOffers } =
+        await import("./inventory/inventory.service");
+      await expireWaitlistOffers();
+      break;
+    }
   }
 
   console.log(`[Cleanup] ${data.type} cleanup completed`);
