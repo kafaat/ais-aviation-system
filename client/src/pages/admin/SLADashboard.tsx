@@ -628,7 +628,10 @@ export function SLADashboard() {
                   </Card>
                 ))
               : serviceBreakdown.map(service => (
-                  <Card key={service.serviceName} className="shadow-sm rounded-xl">
+                  <Card
+                    key={service.serviceName}
+                    className="shadow-sm rounded-xl"
+                  >
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-lg capitalize">
@@ -1019,7 +1022,7 @@ export function SLADashboard() {
             {/* Latest Report Summary */}
             {reports && reports.length > 0 && (
               <>
-                <Card>
+                <Card className="shadow-sm rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">
                       {t("sla.latestReportUptime", "Latest Report - Uptime")}
@@ -1030,7 +1033,7 @@ export function SLADashboard() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="shadow-sm rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">
                       {t(
@@ -1093,7 +1096,7 @@ export function SLADashboard() {
           </div>
 
           {/* Reports Table */}
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
               <CardTitle>{t("sla.reportHistory", "Report History")}</CardTitle>
               <CardDescription>
