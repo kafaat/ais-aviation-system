@@ -3,16 +3,16 @@
 ## What's Changed in v1.16.0
 
 ### Features
+
 - feat: implement TODO features - flight preview, smart suggestions, form validation, loading states (6762fb7)
 
 ### Other Changes
+
 - Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (a2977c7)
 - style: format CHANGELOG.md after merge from main (1e2a2fb)
 - Merge pull request #68 from kafaat/claude/implement-todo-zrBPj (c370d25)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.15.0...v1.16.0
-
 
 ---
 
