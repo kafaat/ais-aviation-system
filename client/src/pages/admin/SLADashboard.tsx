@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import {
   Card,
@@ -192,6 +193,7 @@ function AlertStatusBadge({
 // ============================================================================
 
 export function SLADashboard() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("overview");
   const [reportDays, setReportDays] = useState("7");
 
@@ -225,7 +227,7 @@ export function SLADashboard() {
   const acknowledgeAlertMutation = trpc.sla.acknowledgeAlert.useMutation({
     onSuccess: data => {
       if (data.success) {
-        toast.success("Alert acknowledged");
+        toast.success(t("sla.alertAcknowledged", "Alert acknowledged"));
         refetchDashboard();
       } else {
         toast.error(data.message || "Failed to acknowledge alert");
@@ -239,7 +241,9 @@ export function SLADashboard() {
   const generateReportMutation = trpc.sla.generateReport.useMutation({
     onSuccess: data => {
       if (data.success) {
-        toast.success("SLA report generated successfully");
+        toast.success(
+          t("sla.reportGenerated", "SLA report generated successfully")
+        );
       }
     },
     onError: error => {
@@ -264,23 +268,30 @@ export function SLADashboard() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">SLA Monitoring</h1>
+          <h1 className="text-3xl font-bold">
+            {t("sla.title", "SLA Monitoring")}
+          </h1>
           <p className="text-muted-foreground">
-            Service level agreement compliance and system health monitoring
+            {t(
+              "sla.subtitle",
+              "Service level agreement compliance and system health monitoring"
+            )}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetchDashboard()}>
           <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
+          {t("sla.refresh", "Refresh")}
         </Button>
       </div>
 
       {/* System Health Overview Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
         {/* Overall Status */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">System Status</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {t("sla.systemStatus", "System Status")}
+            </CardTitle>
             <Shield className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -295,10 +306,10 @@ export function SLADashboard() {
         </Card>
 
         {/* Uptime */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Average Uptime
+              {t("sla.averageUptime", "Average Uptime")}
             </CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -314,10 +325,10 @@ export function SLADashboard() {
         </Card>
 
         {/* SLA Compliance */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              SLA Compliance
+              {t("sla.overallCompliance", "SLA Compliance")}
             </CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -341,9 +352,11 @@ export function SLADashboard() {
         </Card>
 
         {/* Active Alerts */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Alerts</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {t("sla.activeAlerts", "Active Alerts")}
+            </CardTitle>
             <AlertTriangle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -364,9 +377,11 @@ export function SLADashboard() {
         </Card>
 
         {/* Services Monitored */}
-        <Card>
+        <Card className="shadow-sm rounded-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Services</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {t("sla.services", "Services")}
+            </CardTitle>
             <Server className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -384,22 +399,35 @@ export function SLADashboard() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="services">Services</TabsTrigger>
-          <TabsTrigger value="alerts">Alerts</TabsTrigger>
-          <TabsTrigger value="targets">SLA Targets</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="overview">
+            {t("sla.tabs.overview", "Overview")}
+          </TabsTrigger>
+          <TabsTrigger value="services">
+            {t("sla.tabs.services", "Services")}
+          </TabsTrigger>
+          <TabsTrigger value="alerts">
+            {t("sla.tabs.alerts", "Alerts")}
+          </TabsTrigger>
+          <TabsTrigger value="targets">
+            {t("sla.tabs.targets", "SLA Targets")}
+          </TabsTrigger>
+          <TabsTrigger value="reports">
+            {t("sla.tabs.reports", "Reports")}
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview Tab */}
         <TabsContent value="overview">
           <div className="grid gap-4 md:grid-cols-2 mb-8">
             {/* Uptime Display */}
-            <Card>
+            <Card className="shadow-sm rounded-xl">
               <CardHeader>
-                <CardTitle>System Uptime</CardTitle>
+                <CardTitle>{t("sla.systemUptime", "System Uptime")}</CardTitle>
                 <CardDescription>
-                  Average uptime across all monitored services
+                  {t(
+                    "sla.systemUptimeDesc",
+                    "Average uptime across all monitored services"
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex items-center justify-center py-8">
@@ -412,11 +440,16 @@ export function SLADashboard() {
             </Card>
 
             {/* Compliance History Chart */}
-            <Card>
+            <Card className="shadow-sm rounded-xl">
               <CardHeader>
-                <CardTitle>Compliance History</CardTitle>
+                <CardTitle>
+                  {t("sla.complianceHistory", "Compliance History")}
+                </CardTitle>
                 <CardDescription>
-                  SLA compliance over the last 7 days
+                  {t(
+                    "sla.complianceHistoryDesc",
+                    "SLA compliance over the last 7 days"
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -461,11 +494,14 @@ export function SLADashboard() {
           </div>
 
           {/* SLA Breaches Chart */}
-          <Card className="mb-8">
+          <Card className="mb-8 shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>SLA Breaches</CardTitle>
+              <CardTitle>{t("sla.slaBreaches", "SLA Breaches")}</CardTitle>
               <CardDescription>
-                Number of SLA violations per day over the last 7 days
+                {t(
+                  "sla.slaBreachesDesc",
+                  "Number of SLA violations per day over the last 7 days"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -500,11 +536,14 @@ export function SLADashboard() {
           </Card>
 
           {/* Recent Alerts */}
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>Recent Alerts</CardTitle>
+              <CardTitle>{t("sla.recentAlerts", "Recent Alerts")}</CardTitle>
               <CardDescription>
-                Latest SLA violation alerts (last 24 hours)
+                {t(
+                  "sla.recentAlertsDesc",
+                  "Latest SLA violation alerts (last 24 hours)"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -514,7 +553,10 @@ export function SLADashboard() {
                 <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                   <CheckCircle className="h-12 w-12 mb-3 text-green-500" />
                   <p className="text-sm">
-                    No recent alerts. All services are operating normally.
+                    {t(
+                      "sla.noRecentAlerts",
+                      "No recent alerts. All services are operating normally."
+                    )}
                   </p>
                 </div>
               ) : (
@@ -522,12 +564,24 @@ export function SLADashboard() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-background">
                       <tr className="border-b">
-                        <th className="text-start p-2">Service</th>
-                        <th className="text-start p-2">Metric</th>
-                        <th className="text-start p-2">Severity</th>
-                        <th className="text-start p-2">Status</th>
-                        <th className="text-start p-2">Message</th>
-                        <th className="text-start p-2">Time</th>
+                        <th className="text-start p-2">
+                          {t("sla.service", "Service")}
+                        </th>
+                        <th className="text-start p-2">
+                          {t("sla.metric", "Metric")}
+                        </th>
+                        <th className="text-start p-2">
+                          {t("sla.severity", "Severity")}
+                        </th>
+                        <th className="text-start p-2">
+                          {t("sla.status", "Status")}
+                        </th>
+                        <th className="text-start p-2">
+                          {t("sla.message", "Message")}
+                        </th>
+                        <th className="text-start p-2">
+                          {t("sla.time", "Time")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -564,7 +618,7 @@ export function SLADashboard() {
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {dashboardLoading
               ? Array.from({ length: 6 }).map((_, i) => (
-                  <Card key={i}>
+                  <Card key={i} className="shadow-sm rounded-xl">
                     <CardHeader>
                       <Skeleton className="h-6 w-32" />
                     </CardHeader>
@@ -574,7 +628,10 @@ export function SLADashboard() {
                   </Card>
                 ))
               : serviceBreakdown.map(service => (
-                  <Card key={service.serviceName}>
+                  <Card
+                    key={service.serviceName}
+                    className="shadow-sm rounded-xl"
+                  >
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-lg capitalize">
@@ -587,7 +644,7 @@ export function SLADashboard() {
                       {/* Uptime */}
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">
-                          Uptime
+                          {t("sla.uptime", "Uptime")}
                         </span>
                         <span
                           className={`font-mono font-semibold ${
@@ -634,7 +691,7 @@ export function SLADashboard() {
                       {/* Error Rate */}
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">
-                          Error Rate
+                          {t("sla.errorRate", "Error Rate")}
                         </span>
                         <span
                           className={`font-mono font-semibold ${
@@ -664,7 +721,7 @@ export function SLADashboard() {
                             <>
                               <CheckCircle className="h-4 w-4 text-green-500" />
                               <span className="text-sm text-green-600 dark:text-green-400">
-                                No alerts
+                                {t("sla.noAlerts", "No alerts")}
                               </span>
                             </>
                           )}
@@ -674,7 +731,9 @@ export function SLADashboard() {
                             service.slaCompliant ? "default" : "destructive"
                           }
                         >
-                          {service.slaCompliant ? "Compliant" : "Non-Compliant"}
+                          {service.slaCompliant
+                            ? t("sla.compliant", "Compliant")
+                            : t("sla.nonCompliant", "Non-Compliant")}
                         </Badge>
                       </div>
                     </CardContent>
@@ -685,14 +744,17 @@ export function SLADashboard() {
 
         {/* Alerts Tab */}
         <TabsContent value="alerts">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5" />
-                SLA Alerts
+                {t("sla.slaAlerts", "SLA Alerts")}
               </CardTitle>
               <CardDescription>
-                All SLA violation alerts from the last 7 days
+                {t(
+                  "sla.slaAlertsDesc",
+                  "All SLA violation alerts from the last 7 days"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -701,9 +763,14 @@ export function SLADashboard() {
               ) : !alerts || alerts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <CheckCircle className="h-16 w-16 mb-4 text-green-500" />
-                  <p className="text-lg font-medium">No alerts found</p>
+                  <p className="text-lg font-medium">
+                    {t("sla.noAlertsFound", "No alerts found")}
+                  </p>
                   <p className="text-sm">
-                    All services are within SLA targets.
+                    {t(
+                      "sla.allServicesWithinTargets",
+                      "All services are within SLA targets."
+                    )}
                   </p>
                 </div>
               ) : (
@@ -711,15 +778,31 @@ export function SLADashboard() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-background">
                       <tr className="border-b">
-                        <th className="text-start p-3">ID</th>
-                        <th className="text-start p-3">Service</th>
-                        <th className="text-start p-3">Metric</th>
-                        <th className="text-start p-3">Severity</th>
-                        <th className="text-start p-3">Current</th>
-                        <th className="text-start p-3">Target</th>
-                        <th className="text-start p-3">Status</th>
-                        <th className="text-start p-3">Created</th>
-                        <th className="text-start p-3">Actions</th>
+                        <th className="text-start p-3">{t("sla.id", "ID")}</th>
+                        <th className="text-start p-3">
+                          {t("sla.service", "Service")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.metric", "Metric")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.severity", "Severity")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.current", "Current")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.target", "Target")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.status", "Status")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.created", "Created")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.actions", "Actions")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -767,7 +850,7 @@ export function SLADashboard() {
                                 }
                                 disabled={acknowledgeAlertMutation.isPending}
                               >
-                                Acknowledge
+                                {t("sla.acknowledge", "Acknowledge")}
                               </Button>
                             )}
                           </td>
@@ -783,15 +866,17 @@ export function SLADashboard() {
 
         {/* SLA Targets Tab */}
         <TabsContent value="targets">
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Zap className="h-5 w-5" />
-                SLA Targets
+                {t("sla.slaTargets", "SLA Targets")}
               </CardTitle>
               <CardDescription>
-                Configured service level targets and thresholds for all
-                monitored services
+                {t(
+                  "sla.slaTargetsDesc",
+                  "Configured service level targets and thresholds for all monitored services"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -799,20 +884,34 @@ export function SLADashboard() {
                 <Skeleton className="h-[300px] w-full" />
               ) : !targets || targets.length === 0 ? (
                 <p className="text-muted-foreground py-8 text-center">
-                  No SLA targets configured.
+                  {t("sla.noTargets", "No SLA targets configured.")}
                 </p>
               ) : (
                 <div className="overflow-auto">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-background">
                       <tr className="border-b">
-                        <th className="text-start p-3">Service</th>
-                        <th className="text-start p-3">Metric</th>
-                        <th className="text-start p-3">Target</th>
-                        <th className="text-start p-3">Warning</th>
-                        <th className="text-start p-3">Critical</th>
-                        <th className="text-start p-3">Unit</th>
-                        <th className="text-start p-3">Status</th>
+                        <th className="text-start p-3">
+                          {t("sla.service", "Service")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.metric", "Metric")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.target", "Target")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.warning", "Warning")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.critical", "Critical")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.unit", "Unit")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.status", "Status")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -870,30 +969,41 @@ export function SLADashboard() {
         <TabsContent value="reports">
           <div className="grid gap-4 md:grid-cols-3 mb-8">
             {/* Generate Report Card */}
-            <Card>
+            <Card className="shadow-sm rounded-xl">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileText className="h-5 w-5" />
-                  Generate Report
+                  {t("sla.generateReport", "Generate Report")}
                 </CardTitle>
                 <CardDescription>
-                  Create a new SLA compliance report
+                  {t(
+                    "sla.generateReportDesc",
+                    "Create a new SLA compliance report"
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <label className="text-sm font-medium mb-1 block">
-                    Report Period
+                    {t("sla.reportPeriod", "Report Period")}
                   </label>
                   <Select value={reportDays} onValueChange={setReportDays}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Last 24 hours</SelectItem>
-                      <SelectItem value="7">Last 7 days</SelectItem>
-                      <SelectItem value="14">Last 14 days</SelectItem>
-                      <SelectItem value="30">Last 30 days</SelectItem>
+                      <SelectItem value="1">
+                        {t("sla.last24Hours", "Last 24 hours")}
+                      </SelectItem>
+                      <SelectItem value="7">
+                        {t("sla.last7Days", "Last 7 days")}
+                      </SelectItem>
+                      <SelectItem value="14">
+                        {t("sla.last14Days", "Last 14 days")}
+                      </SelectItem>
+                      <SelectItem value="30">
+                        {t("sla.last30Days", "Last 30 days")}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -903,8 +1013,8 @@ export function SLADashboard() {
                   className="w-full"
                 >
                   {generateReportMutation.isPending
-                    ? "Generating..."
-                    : "Generate Report"}
+                    ? t("sla.generating", "Generating...")
+                    : t("sla.generateReport", "Generate Report")}
                 </Button>
               </CardContent>
             </Card>
@@ -912,10 +1022,10 @@ export function SLADashboard() {
             {/* Latest Report Summary */}
             {reports && reports.length > 0 && (
               <>
-                <Card>
+                <Card className="shadow-sm rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">
-                      Latest Report - Uptime
+                      {t("sla.latestReportUptime", "Latest Report - Uptime")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -923,10 +1033,13 @@ export function SLADashboard() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="shadow-sm rounded-xl">
                   <CardHeader>
                     <CardTitle className="text-sm font-medium">
-                      Latest Report - Response Times
+                      {t(
+                        "sla.latestReportResponseTimes",
+                        "Latest Report - Response Times"
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -983,11 +1096,14 @@ export function SLADashboard() {
           </div>
 
           {/* Reports Table */}
-          <Card>
+          <Card className="shadow-sm rounded-xl">
             <CardHeader>
-              <CardTitle>Report History</CardTitle>
+              <CardTitle>{t("sla.reportHistory", "Report History")}</CardTitle>
               <CardDescription>
-                Previously generated SLA compliance reports
+                {t(
+                  "sla.reportHistoryDesc",
+                  "Previously generated SLA compliance reports"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -997,7 +1113,10 @@ export function SLADashboard() {
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <FileText className="h-12 w-12 mb-3" />
                   <p className="text-sm">
-                    No reports generated yet. Use the form above to create one.
+                    {t(
+                      "sla.noReports",
+                      "No reports generated yet. Use the form above to create one."
+                    )}
                   </p>
                 </div>
               ) : (
@@ -1005,16 +1124,34 @@ export function SLADashboard() {
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-background">
                       <tr className="border-b">
-                        <th className="text-start p-3">ID</th>
-                        <th className="text-start p-3">Period</th>
-                        <th className="text-start p-3">Uptime</th>
-                        <th className="text-start p-3">Avg RT</th>
-                        <th className="text-start p-3">P95 RT</th>
-                        <th className="text-start p-3">Error Rate</th>
-                        <th className="text-start p-3">Requests</th>
-                        <th className="text-start p-3">Breaches</th>
-                        <th className="text-start p-3">Status</th>
-                        <th className="text-start p-3">Generated</th>
+                        <th className="text-start p-3">{t("sla.id", "ID")}</th>
+                        <th className="text-start p-3">
+                          {t("sla.period", "Period")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.uptime", "Uptime")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.avgRT", "Avg RT")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.p95RT", "P95 RT")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.errorRate", "Error Rate")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.requests", "Requests")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.breaches", "Breaches")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.status", "Status")}
+                        </th>
+                        <th className="text-start p-3">
+                          {t("sla.generated", "Generated")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>

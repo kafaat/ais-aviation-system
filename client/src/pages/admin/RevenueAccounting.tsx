@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import {
   Card,
@@ -146,18 +147,19 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 type TabKey = "route" | "class" | "channel" | "ancillary" | "yield" | "reports";
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "route", label: "By Route" },
-  { key: "class", label: "By Class" },
-  { key: "channel", label: "By Channel" },
-  { key: "ancillary", label: "Ancillary" },
-  { key: "yield", label: "Yield Analysis" },
-  { key: "reports", label: "Reports" },
+const TAB_KEYS: TabKey[] = [
+  "route",
+  "class",
+  "channel",
+  "ancillary",
+  "yield",
+  "reports",
 ];
 
 // ============ Main Component ============
 
 export function RevenueAccounting() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabKey>("route");
   const [dateRange, setDateRange] = useState<"30" | "90" | "365" | "all">("30");
 
@@ -253,9 +255,14 @@ export function RevenueAccounting() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Revenue Accounting</h1>
+          <h1 className="text-3xl font-bold">
+            {t("revenueAccounting.title", "Revenue Accounting")}
+          </h1>
           <p className="text-muted-foreground">
-            Financial overview, revenue recognition, and yield analysis
+            {t(
+              "revenueAccounting.subtitle",
+              "Financial overview, revenue recognition, and yield analysis"
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -280,7 +287,9 @@ export function RevenueAccounting() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {t("revenueAccounting.totalRevenue", "Total Revenue")}
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -323,7 +332,7 @@ export function RevenueAccounting() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Deferred Revenue
+              {t("revenueAccounting.deferredRevenue", "Deferred Revenue")}
             </CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -336,7 +345,10 @@ export function RevenueAccounting() {
                   {formatSAR(dashboard?.deferredRevenue ?? 0)} SAR
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Tickets sold, flights pending
+                  {t(
+                    "revenueAccounting.ticketsSoldPending",
+                    "Tickets sold, flights pending"
+                  )}
                 </p>
               </>
             )}
@@ -346,7 +358,7 @@ export function RevenueAccounting() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Recognized Revenue
+              {t("revenueAccounting.recognizedRevenue", "Recognized Revenue")}
             </CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -359,7 +371,7 @@ export function RevenueAccounting() {
                   {formatSAR(dashboard?.recognizedRevenue ?? 0)} SAR
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Completed flights
+                  {t("revenueAccounting.completedFlights", "Completed flights")}
                 </p>
               </>
             )}
@@ -369,7 +381,7 @@ export function RevenueAccounting() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Ancillary Revenue
+              {t("revenueAccounting.ancillaryRevenue", "Ancillary Revenue")}
             </CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -381,7 +393,9 @@ export function RevenueAccounting() {
                 <div className="text-2xl font-bold">
                   {formatSAR(dashboard?.ancillaryRevenue ?? 0)} SAR
                 </div>
-                <p className="text-xs text-muted-foreground">Add-on services</p>
+                <p className="text-xs text-muted-foreground">
+                  {t("revenueAccounting.addOnServices", "Add-on services")}
+                </p>
               </>
             )}
           </CardContent>
@@ -393,7 +407,9 @@ export function RevenueAccounting() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Net Revenue</span>
+              <span className="text-sm text-muted-foreground">
+                {t("revenueAccounting.netRevenue", "Net Revenue")}
+              </span>
               <span className="text-lg font-semibold">
                 {formatSAR(dashboard?.netRevenue ?? 0)} SAR
               </span>
@@ -404,7 +420,10 @@ export function RevenueAccounting() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
-                Avg Revenue / Booking
+                {t(
+                  "revenueAccounting.avgRevenuePerBooking",
+                  "Avg Revenue / Booking"
+                )}
               </span>
               <span className="text-lg font-semibold">
                 {formatSAR(dashboard?.averageRevenuePerBooking ?? 0)} SAR
@@ -415,7 +434,9 @@ export function RevenueAccounting() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Refunds</span>
+              <span className="text-sm text-muted-foreground">
+                {t("revenueAccounting.refunds", "Refunds")}
+              </span>
               <span className="text-lg font-semibold text-red-600">
                 -{formatSAR(dashboard?.refundTotal ?? 0)} SAR
               </span>
@@ -426,14 +447,14 @@ export function RevenueAccounting() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        {TABS.map(tab => (
+        {TAB_KEYS.map(key => (
           <Button
-            key={tab.key}
-            variant={activeTab === tab.key ? "default" : "outline"}
+            key={key}
+            variant={activeTab === key ? "default" : "outline"}
             size="sm"
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => setActiveTab(key)}
           >
-            {tab.label}
+            {t(`revenueAccounting.tabs.${key}`, key)}
           </Button>
         ))}
       </div>
@@ -444,9 +465,14 @@ export function RevenueAccounting() {
         {activeTab === "route" && (
           <Card>
             <CardHeader>
-              <CardTitle>Revenue by Route</CardTitle>
+              <CardTitle>
+                {t("revenueAccounting.revenueByRoute", "Revenue by Route")}
+              </CardTitle>
               <CardDescription>
-                Top routes ranked by total revenue
+                {t(
+                  "revenueAccounting.topRoutesDesc",
+                  "Top routes ranked by total revenue"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -457,18 +483,27 @@ export function RevenueAccounting() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-3 font-medium">Route</th>
-                        <th className="text-right p-3 font-medium">
-                          Revenue (SAR)
-                        </th>
-                        <th className="text-right p-3 font-medium">Bookings</th>
-                        <th className="text-right p-3 font-medium">
-                          Passengers
+                        <th className="text-left p-3 font-medium">
+                          {t("revenueAccounting.route", "Route")}
                         </th>
                         <th className="text-right p-3 font-medium">
-                          Avg / Booking (SAR)
+                          {t("revenueAccounting.revenueSAR", "Revenue (SAR)")}
                         </th>
-                        <th className="p-3 font-medium">Revenue Share</th>
+                        <th className="text-right p-3 font-medium">
+                          {t("revenueAccounting.bookings", "Bookings")}
+                        </th>
+                        <th className="text-right p-3 font-medium">
+                          {t("revenueAccounting.passengers", "Passengers")}
+                        </th>
+                        <th className="text-right p-3 font-medium">
+                          {t(
+                            "revenueAccounting.avgPerBooking",
+                            "Avg / Booking (SAR)"
+                          )}
+                        </th>
+                        <th className="p-3 font-medium">
+                          {t("revenueAccounting.revenueShare", "Revenue Share")}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -526,9 +561,17 @@ export function RevenueAccounting() {
         {activeTab === "class" && (
           <Card>
             <CardHeader>
-              <CardTitle>Revenue by Cabin Class</CardTitle>
+              <CardTitle>
+                {t(
+                  "revenueAccounting.revenueByClass",
+                  "Revenue by Cabin Class"
+                )}
+              </CardTitle>
               <CardDescription>
-                Economy vs Business class revenue comparison
+                {t(
+                  "revenueAccounting.classComparisonDesc",
+                  "Economy vs Business class revenue comparison"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -608,9 +651,14 @@ export function RevenueAccounting() {
         {activeTab === "channel" && (
           <Card>
             <CardHeader>
-              <CardTitle>Revenue by Channel</CardTitle>
+              <CardTitle>
+                {t("revenueAccounting.revenueByChannel", "Revenue by Channel")}
+              </CardTitle>
               <CardDescription>
-                Direct website, travel agent, and corporate booking channels
+                {t(
+                  "revenueAccounting.channelDesc",
+                  "Direct website, travel agent, and corporate booking channels"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -688,9 +736,14 @@ export function RevenueAccounting() {
         {activeTab === "ancillary" && (
           <Card>
             <CardHeader>
-              <CardTitle>Ancillary Revenue</CardTitle>
+              <CardTitle>
+                {t("revenueAccounting.ancillaryRevenue", "Ancillary Revenue")}
+              </CardTitle>
               <CardDescription>
-                Revenue from add-on services: baggage, meals, seats, etc.
+                {t(
+                  "revenueAccounting.ancillaryDesc",
+                  "Revenue from add-on services: baggage, meals, seats, etc."
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -700,7 +753,10 @@ export function RevenueAccounting() {
                 <div className="space-y-6">
                   <div className="text-center p-4 bg-muted/50 rounded-lg">
                     <p className="text-sm text-muted-foreground">
-                      Total Ancillary Revenue
+                      {t(
+                        "revenueAccounting.totalAncillaryRevenue",
+                        "Total Ancillary Revenue"
+                      )}
                     </p>
                     <p className="text-3xl font-bold">
                       {formatSAR(ancillaryData.total)} SAR
@@ -786,9 +842,14 @@ export function RevenueAccounting() {
         {activeTab === "yield" && (
           <Card>
             <CardHeader>
-              <CardTitle>Yield Analysis</CardTitle>
+              <CardTitle>
+                {t("revenueAccounting.yieldAnalysis", "Yield Analysis")}
+              </CardTitle>
               <CardDescription>
-                Revenue per Revenue Passenger Kilometer (RPK) by flight
+                {t(
+                  "revenueAccounting.yieldDesc",
+                  "Revenue per Revenue Passenger Kilometer (RPK) by flight"
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -877,16 +938,24 @@ export function RevenueAccounting() {
             {/* Report Generation */}
             <Card>
               <CardHeader>
-                <CardTitle>Generate Monthly Report</CardTitle>
+                <CardTitle>
+                  {t(
+                    "revenueAccounting.generateMonthlyReport",
+                    "Generate Monthly Report"
+                  )}
+                </CardTitle>
                 <CardDescription>
-                  Create a revenue reconciliation report for a specific month
+                  {t(
+                    "revenueAccounting.generateMonthlyReportDesc",
+                    "Create a revenue reconciliation report for a specific month"
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-end gap-4">
                   <div>
                     <label className="text-sm font-medium block mb-1">
-                      Month
+                      {t("revenueAccounting.month", "Month")}
                     </label>
                     <select
                       className="border rounded-md px-3 py-2 text-sm bg-background"
@@ -904,7 +973,7 @@ export function RevenueAccounting() {
                   </div>
                   <div>
                     <label className="text-sm font-medium block mb-1">
-                      Year
+                      {t("revenueAccounting.year", "Year")}
                     </label>
                     <select
                       className="border rounded-md px-3 py-2 text-sm bg-background"

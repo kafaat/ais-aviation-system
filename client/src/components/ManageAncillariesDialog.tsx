@@ -21,6 +21,7 @@ import {
   Plus,
   Minus,
   Trash2,
+  type LucideIcon,
 } from "lucide-react";
 
 interface ManageAncillariesDialogProps {
@@ -31,7 +32,7 @@ interface ManageAncillariesDialogProps {
   numberOfPassengers: number;
 }
 
-const categoryIcons: Record<string, any> = {
+const categoryIcons: Record<string, LucideIcon> = {
   baggage: Package,
   meal: UtensilsCrossed,
   seat: Armchair,

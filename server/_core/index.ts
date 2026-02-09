@@ -23,6 +23,7 @@ import {
   errorResponseMiddleware,
 } from "./middleware/sentry.middleware";
 import { requestIdMiddleware } from "./middleware/request-id.middleware";
+import { requestTimeoutMiddleware } from "./middleware/request-timeout.middleware";
 import {
   apmRequestMiddleware,
   startSystemMetricsCollection,
@@ -84,6 +85,9 @@ async function startServer() {
 
   // Request ID middleware - generates unique ID for each request
   app.use(requestIdMiddleware);
+
+  // Request timeout middleware - 30s default for API requests
+  app.use("/api", requestTimeoutMiddleware(30_000));
 
   // Security headers with Helmet
   const isDevelopment = process.env.NODE_ENV === "development";

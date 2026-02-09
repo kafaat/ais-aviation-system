@@ -61,7 +61,7 @@ export default function LoadPlanning() {
       </div>
 
       {/* Flight ID input */}
-      <Card className="p-4 mb-6">
+      <Card className="p-4 mb-6 shadow-sm rounded-xl">
         <div className="flex gap-4 items-end">
           <div className="flex-1 max-w-xs">
             <Label>{t("loadPlanning.flightId", "Flight ID")}</Label>
@@ -177,7 +177,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
 
   if (!flightId) {
     return (
-      <Card className="p-8 text-center text-muted-foreground">
+      <Card className="p-8 text-center text-muted-foreground shadow-sm rounded-xl">
         {t(
           "loadPlanning.enterFlightFirst",
           "Enter a flight ID above to begin."
@@ -188,7 +188,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
 
   if (planLoading) {
     return (
-      <Card className="p-6 animate-pulse">
+      <Card className="p-6 animate-pulse shadow-sm rounded-xl">
         <div className="h-40 bg-muted rounded" />
       </Card>
     );
@@ -196,7 +196,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
 
   if (!plan) {
     return (
-      <Card className="p-8 text-center">
+      <Card className="p-8 text-center shadow-sm rounded-xl">
         <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
         <p className="text-lg font-medium mb-2">
           {t("loadPlanning.noPlan", "No load plan exists for this flight")}
@@ -222,7 +222,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
   return (
     <div className="space-y-4">
       {/* Status Bar */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <StatusBadge status={plan.status} />
@@ -277,7 +277,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
       {/* Validation Status */}
       {validation && (
         <Card
-          className={`p-4 border-2 ${validation.valid ? "border-green-500" : "border-red-500"}`}
+          className={`p-4 border-2 shadow-sm rounded-xl ${validation.valid ? "border-green-500" : "border-red-500"}`}
         >
           <div className="flex items-start gap-3">
             {validation.valid ? (
@@ -341,7 +341,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
       </div>
 
       {/* Aircraft Side-View Visualization */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("loadPlanning.aircraftLayout", "Aircraft Compartment Layout")}
         </h3>
@@ -349,7 +349,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
       </Card>
 
       {/* Compartment Details */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("loadPlanning.compartmentDetails", "Compartment Details")}
         </h3>
@@ -394,7 +394,7 @@ function LoadPlanTab({ flightId }: { flightId: number }) {
       </Card>
 
       {/* Items List */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("loadPlanning.allItems", "All Load Items")}
         </h3>
@@ -422,7 +422,7 @@ function CompartmentsTab({ flightId: _flightId }: { flightId: number }) {
 
   return (
     <div className="space-y-4">
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <div className="flex gap-4 items-end">
           <div className="flex-1 max-w-sm">
             <Label>
@@ -450,14 +450,14 @@ function CompartmentsTab({ flightId: _flightId }: { flightId: number }) {
       </Card>
 
       {isLoading && (
-        <Card className="p-6 animate-pulse">
+        <Card className="p-6 animate-pulse shadow-sm rounded-xl">
           <div className="h-40 bg-muted rounded" />
         </Card>
       )}
 
       {layout && (
         <div className="space-y-4">
-          <Card className="p-4">
+          <Card className="p-4 shadow-sm rounded-xl">
             <div className="flex items-center gap-3 mb-2">
               <Plane className="h-5 w-5 text-blue-500" />
               <h3 className="font-semibold text-lg">
@@ -503,7 +503,7 @@ function CompartmentsTab({ flightId: _flightId }: { flightId: number }) {
               maxVolume: number;
               uldCompatible: boolean;
             }) => (
-              <Card key={comp.id} className="p-4">
+              <Card key={comp.id} className="p-4 shadow-sm rounded-xl">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="font-mono font-bold text-lg">
@@ -563,7 +563,7 @@ function ULDTab({ flightId }: { flightId: number }) {
 
   if (!flightId) {
     return (
-      <Card className="p-8 text-center text-muted-foreground">
+      <Card className="p-8 text-center text-muted-foreground shadow-sm rounded-xl">
         {t(
           "loadPlanning.enterFlightFirst",
           "Enter a flight ID above to begin."
@@ -574,7 +574,7 @@ function ULDTab({ flightId }: { flightId: number }) {
 
   if (!plan) {
     return (
-      <Card className="p-8 text-center text-muted-foreground">
+      <Card className="p-8 text-center text-muted-foreground shadow-sm rounded-xl">
         {t(
           "loadPlanning.noPlanForULD",
           "Create a load plan first to see ULD calculations."
@@ -595,7 +595,7 @@ function ULDTab({ flightId }: { flightId: number }) {
 
   return (
     <div className="space-y-4">
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("loadPlanning.uldSummary", "ULD Summary")}
         </h3>
@@ -748,7 +748,7 @@ function ULDTab({ flightId }: { flightId: number }) {
         )}
       </Card>
 
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <h4 className="font-medium mb-2">
           {t("loadPlanning.uldTypes", "Standard ULD Types")}
         </h4>
@@ -855,7 +855,7 @@ function AmendTab({ flightId }: { flightId: number }) {
 
   if (!flightId) {
     return (
-      <Card className="p-8 text-center text-muted-foreground">
+      <Card className="p-8 text-center text-muted-foreground shadow-sm rounded-xl">
         {t(
           "loadPlanning.enterFlightFirst",
           "Enter a flight ID above to begin."
@@ -866,7 +866,7 @@ function AmendTab({ flightId }: { flightId: number }) {
 
   if (!plan) {
     return (
-      <Card className="p-8 text-center text-muted-foreground">
+      <Card className="p-8 text-center text-muted-foreground shadow-sm rounded-xl">
         {t(
           "loadPlanning.noPlanForAmend",
           "No load plan exists. Create one first."
@@ -880,7 +880,7 @@ function AmendTab({ flightId }: { flightId: number }) {
   return (
     <div className="space-y-4">
       {/* Current Status */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <div className="flex items-center gap-3">
           <StatusBadge status={plan.status} />
           <div>
@@ -908,7 +908,7 @@ function AmendTab({ flightId }: { flightId: number }) {
       </Card>
 
       {/* Update Bulk Cargo */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <h3 className="font-semibold mb-4">
           {t("loadPlanning.updateBulkCargo", "Update Bulk Cargo")}
         </h3>
@@ -974,7 +974,7 @@ function AmendTab({ flightId }: { flightId: number }) {
 
       {/* LIR Amendment */}
       {isAmendable && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <h3 className="font-semibold mb-4">
             {t("loadPlanning.lirAmendment", "LIR Amendment")}
           </h3>
@@ -1211,7 +1211,7 @@ function AmendTab({ flightId }: { flightId: number }) {
 
       {/* Current Items for Reference */}
       {plan.items.length > 0 && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <h3 className="font-semibold mb-3">
             {t("loadPlanning.currentItems", "Current Items (Reference)")}
           </h3>
@@ -1350,7 +1350,7 @@ function WeightCard({
 }) {
   return (
     <Card
-      className={`p-4 text-center ${highlight ? "border-2 border-blue-500" : ""}`}
+      className={`p-4 text-center shadow-sm rounded-xl ${highlight ? "border-2 border-blue-500" : ""}`}
     >
       <p className="text-2xl font-bold">
         {value.toLocaleString()}

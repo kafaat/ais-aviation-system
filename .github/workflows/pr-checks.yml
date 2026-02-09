@@ -89,7 +89,9 @@ jobs:
           fi
 
           # Check PR body for breaking change mentions (handle multiline safely)
-          if printf '%s' "$PR_BODY" | grep -qi "breaking change"; then
+          # Exclude negations and checklist items like "No breaking changes" or "- [ ] Breaking changes"
+          BODY_FILTERED=$(printf '%s' "$PR_BODY" | grep -i "breaking change" | grep -viE "(no breaking change|n/a|none|^[[:space:]]*-\s*\[[ x]?\])" || true)
+          if [ -n "$BODY_FILTERED" ]; then
             echo "::warning::This PR body mentions breaking changes. Ensure documentation is updated."
           fi
 
@@ -100,23 +102,34 @@ jobs:
     name: Review Dependencies
     runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
-    continue-on-error: true # Don't fail PR if Dependency Graph is not enabled
+    continue-on-error: true
     steps:
+      - name: Check if Dependency Graph is enabled
+        id: check-dep-graph
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              await github.rest.dependencyGraph.exportSbom({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              core.setOutput('available', 'true');
+            } catch (e) {
+              core.notice('Dependency review skipped: Dependency Graph is not enabled. To enable, go to Settings > Code security > Enable Dependency Graph');
+              core.setOutput('available', 'false');
+            }
+
       - name: Checkout code
+        if: steps.check-dep-graph.outputs.available == 'true'
         uses: actions/checkout@v4
 
       - name: Dependency Review
+        if: steps.check-dep-graph.outputs.available == 'true'
         uses: actions/dependency-review-action@v4
-        continue-on-error: true
         with:
           fail-on-severity: high
-          # Note: Can only use allow-licenses OR deny-licenses, not both
           allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, Unlicense, WTFPL, BlueOak-1.0.0, Python-2.0
-
-      - name: Dependency review note
-        if: failure()
-        run: |
-          echo "::notice::Dependency review skipped. To enable, go to Settings > Security > Enable Dependency Graph"
 
   # =============================================================================
   # Check PR Checklist

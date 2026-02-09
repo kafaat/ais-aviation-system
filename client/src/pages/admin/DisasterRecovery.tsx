@@ -373,7 +373,7 @@ function OverviewTab() {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 8 }).map((_, i) => (
-          <Card key={i} className="p-6 animate-pulse">
+          <Card key={i} className="p-6 animate-pulse shadow-sm rounded-xl">
             <div className="h-20 bg-muted rounded" />
           </Card>
         ))}
@@ -383,7 +383,7 @@ function OverviewTab() {
 
   if (!dashboard) {
     return (
-      <Card className="p-6 text-center text-muted-foreground">
+      <Card className="p-6 text-center text-muted-foreground shadow-sm rounded-xl">
         {t("dr.overview.noData", "No dashboard data available")}
       </Card>
     );
@@ -394,7 +394,7 @@ function OverviewTab() {
       {/* Top Row: Health Score + RPO/RTO */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Health Score */}
-        <Card className="p-6 flex flex-col items-center">
+        <Card className="p-6 flex flex-col items-center shadow-sm rounded-xl">
           <h3 className="text-sm font-medium text-muted-foreground mb-4">
             {t("dr.overview.healthScore", "DR Health Score")}
           </h3>
@@ -403,7 +403,7 @@ function OverviewTab() {
         </Card>
 
         {/* RPO Gauge */}
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <h3 className="text-sm font-medium text-muted-foreground mb-4">
             {t(
               "dr.overview.recoveryPointObjective",
@@ -424,7 +424,7 @@ function OverviewTab() {
         </Card>
 
         {/* RTO Gauge */}
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <h3 className="text-sm font-medium text-muted-foreground mb-4">
             {t("dr.overview.recoveryTimeObjective", "Recovery Time Objective")}
           </h3>
@@ -448,7 +448,7 @@ function OverviewTab() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <div className="flex items-center gap-3 mb-2">
             <Database className="h-5 w-5 text-blue-500" />
             <span className="text-sm text-muted-foreground">
@@ -471,7 +471,7 @@ function OverviewTab() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <div className="flex items-center gap-3 mb-2">
             <Zap className="h-5 w-5 text-purple-500" />
             <span className="text-sm text-muted-foreground">
@@ -492,7 +492,7 @@ function OverviewTab() {
           </div>
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <div className="flex items-center gap-3 mb-2">
             <AlertTriangle className="h-5 w-5 text-orange-500" />
             <span className="text-sm text-muted-foreground">
@@ -508,7 +508,7 @@ function OverviewTab() {
           )}
         </Card>
 
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <div className="flex items-center gap-3 mb-2">
             <Shield className="h-5 w-5 text-green-500" />
             <span className="text-sm text-muted-foreground">
@@ -531,7 +531,7 @@ function OverviewTab() {
       </div>
 
       {/* Component Health Grid */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("dr.overview.componentHealth", "Component Health")}
         </h3>
@@ -576,7 +576,7 @@ function OverviewTab() {
       {/* Recent Activity */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Recent Backups */}
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <h3 className="font-semibold text-lg mb-4">
             {t("dr.overview.recentBackups", "Recent Backups")}
           </h3>
@@ -615,7 +615,7 @@ function OverviewTab() {
         </Card>
 
         {/* Recent Incidents */}
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <h3 className="font-semibold text-lg mb-4">
             {t("dr.overview.recentIncidents", "Recent Incidents")}
           </h3>
@@ -684,7 +684,7 @@ function BackupsTab() {
   return (
     <div className="space-y-6">
       {/* Trigger Manual Backup */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <h3 className="font-semibold mb-4">
           {t("dr.backups.triggerManual", "Trigger Manual Backup")}
         </h3>
@@ -752,7 +752,7 @@ function BackupsTab() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Card key={i} className="p-6 animate-pulse">
+            <Card key={i} className="p-6 animate-pulse shadow-sm rounded-xl">
               <div className="h-24 bg-muted rounded" />
             </Card>
           ))}
@@ -771,7 +771,7 @@ function BackupsTab() {
             return (
               <Card
                 key={comp.component}
-                className={`p-6 border-t-4 ${borderColor}`}
+                className={`p-6 border-t-4 shadow-sm rounded-xl ${borderColor}`}
               >
                 <div className="flex items-center gap-2 mb-3">
                   <Icon className="h-5 w-5" />
@@ -811,7 +811,7 @@ function BackupsTab() {
 
       {/* Backup Schedule */}
       {schedule && (
-        <Card className="p-6">
+        <Card className="p-6 shadow-sm rounded-xl">
           <h3 className="font-semibold text-lg mb-4">
             {t("dr.backups.schedule", "Backup Schedule")}
           </h3>
@@ -907,7 +907,7 @@ function TestingTab() {
   return (
     <div className="space-y-6">
       {/* Run Test */}
-      <Card className="p-4">
+      <Card className="p-4 shadow-sm rounded-xl">
         <h3 className="font-semibold mb-4">
           {t("dr.testing.runTest", "Run Failover Test")}
         </h3>
@@ -977,7 +977,7 @@ function TestingTab() {
       {/* Latest Test Result */}
       {testMutation.data && (
         <Card
-          className={`p-4 border-2 ${
+          className={`p-4 border-2 shadow-sm rounded-xl ${
             testMutation.data.status === "passed"
               ? "border-green-500"
               : "border-red-500"
@@ -1024,7 +1024,7 @@ function TestingTab() {
       )}
 
       {/* Test History */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("dr.testing.history", "Test History")}
         </h3>
@@ -1190,7 +1190,7 @@ function IncidentsTab() {
 
       {/* Create Incident Form */}
       {showCreate && (
-        <Card className="p-4">
+        <Card className="p-4 shadow-sm rounded-xl">
           <h3 className="font-semibold mb-4">
             {t("dr.incidents.newIncident", "Report New Incident")}
           </h3>
@@ -1296,7 +1296,7 @@ function IncidentsTab() {
           <div className="h-40 bg-muted rounded" />
         </Card>
       ) : (
-        <Card className="p-0 overflow-hidden">
+        <Card className="p-0 overflow-hidden shadow-sm rounded-xl">
           <table className="w-full text-sm">
             <thead className="bg-muted">
               <tr>
@@ -1379,7 +1379,7 @@ function IncidentsTab() {
 
       {/* Resolve Dialog */}
       {resolveId !== null && (
-        <Card className="p-4 border-2 border-green-500">
+        <Card className="p-4 border-2 border-green-500 shadow-sm rounded-xl">
           <h3 className="font-semibold mb-4">
             {t("dr.incidents.resolveIncident", "Resolve Incident")} #{resolveId}
           </h3>
@@ -1432,7 +1432,7 @@ function RunbooksTab() {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i} className="p-6 animate-pulse">
+          <Card key={i} className="p-6 animate-pulse shadow-sm rounded-xl">
             <div className="h-20 bg-muted rounded" />
           </Card>
         ))}
@@ -1460,7 +1460,10 @@ function RunbooksTab() {
         const Icon = scenarioIcons[runbook.scenarioType] ?? FileText;
 
         return (
-          <Card key={runbook.id} className="overflow-hidden">
+          <Card
+            key={runbook.id}
+            className="overflow-hidden shadow-sm rounded-xl"
+          >
             {/* Runbook Header */}
             <button
               className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors text-left"
@@ -1549,7 +1552,7 @@ function RunbooksTab() {
       })}
 
       {(!runbooks || runbooks.length === 0) && (
-        <Card className="p-6 text-center text-muted-foreground">
+        <Card className="p-6 text-center text-muted-foreground shadow-sm rounded-xl">
           {t("dr.runbooks.noRunbooks", "No runbooks configured")}
         </Card>
       )}
@@ -1570,7 +1573,7 @@ function RecoveryPlanTab() {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i} className="p-6 animate-pulse">
+          <Card key={i} className="p-6 animate-pulse shadow-sm rounded-xl">
             <div className="h-24 bg-muted rounded" />
           </Card>
         ))}
@@ -1580,7 +1583,7 @@ function RecoveryPlanTab() {
 
   if (!plan) {
     return (
-      <Card className="p-6 text-center text-muted-foreground">
+      <Card className="p-6 text-center text-muted-foreground shadow-sm rounded-xl">
         {t("dr.recovery.noplan", "No recovery plan configured")}
       </Card>
     );
@@ -1589,7 +1592,7 @@ function RecoveryPlanTab() {
   return (
     <div className="space-y-6">
       {/* Plan Overview */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <div className="flex justify-between items-start mb-4">
           <div>
             <h3 className="font-semibold text-lg">
@@ -1635,7 +1638,7 @@ function RecoveryPlanTab() {
       </Card>
 
       {/* Components */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("dr.recovery.components", "Recovery Components")}
         </h3>
@@ -1682,7 +1685,7 @@ function RecoveryPlanTab() {
       </Card>
 
       {/* Communication Plan */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("dr.recovery.communicationPlan", "Communication Plan")}
         </h3>
@@ -1728,7 +1731,7 @@ function RecoveryPlanTab() {
       </Card>
 
       {/* Escalation Matrix */}
-      <Card className="p-6">
+      <Card className="p-6 shadow-sm rounded-xl">
         <h3 className="font-semibold text-lg mb-4">
           {t("dr.recovery.escalationMatrix", "Escalation Matrix")}
         </h3>

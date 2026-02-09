@@ -130,7 +130,7 @@ export default function Home() {
   const currentLocale = i18n.language === "ar" ? ar : enUS;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       {/* Skip to content link for keyboard users */}
       <a href="#main-content" className="skip-to-content">
         {t("accessibility.skipToContent")}
@@ -148,7 +148,7 @@ export default function Home() {
         transition={
           reducedMotion ? undefined : { type: "spring", stiffness: 100 }
         }
-        className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm"
+        className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm"
         role="banner"
       >
         <div className="container py-4">
@@ -279,7 +279,7 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.8 }}
             >
-              <Card className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
+              <Card className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl">
                 <Tabs
                   value={searchType}
                   onValueChange={v =>
@@ -482,7 +482,10 @@ export default function Home() {
         </section>
 
         {/* Features Section */}
-        <section className="py-20 bg-white" aria-labelledby="features-title">
+        <section
+          className="py-20 bg-white dark:bg-slate-900"
+          aria-labelledby="features-title"
+        >
           <div className="container">
             <motion.h3
               id="features-title"
@@ -529,7 +532,7 @@ export default function Home() {
                   variants={fadeIn}
                   whileHover={{ y: -10, transition: { duration: 0.3 } }}
                 >
-                  <Card className="p-8 text-center hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-white to-gray-50">
+                  <Card className="p-8 text-center hover:shadow-xl transition-all duration-300 border-0 bg-gradient-to-br from-white to-gray-50 dark:from-slate-800 dark:to-slate-800/50 rounded-xl">
                     <motion.div
                       className={`inline-flex p-4 rounded-full ${feature.bgColor} mb-6`}
                       whileHover={{ rotate: 360 }}
