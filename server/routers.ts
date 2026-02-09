@@ -73,6 +73,15 @@ import { revenueAccountingRouter } from "./routers/revenue-accounting";
 import { slaRouter } from "./routers/sla";
 import { weightBalanceRouter } from "./routers/weight-balance";
 import { securityRouter } from "./routers/security";
+import { emdRouter } from "./routers/emd";
+import { codeshareRouter } from "./routers/codeshare";
+import { fareRulesRouter } from "./routers/fare-rules";
+import { seatMapRouter } from "./routers/seat-map";
+
+// Phase 5: Industry Standards Gap Closure routers
+import { ndcRouter } from "./routers/ndc";
+import { gdsRouter } from "./routers/gds";
+import { interlineRouter } from "./routers/interline";
 
 /**
  * Main Application Router
@@ -166,6 +175,15 @@ export const appRouter = router({
   sla: slaRouter,
   weightBalance: weightBalanceRouter,
   security: securityRouter,
+  emd: emdRouter,
+  codeshare: codeshareRouter,
+  fareRules: fareRulesRouter,
+  seatMap: seatMapRouter,
+
+  // Phase 5: Industry Standards Gap Closure
+  ndc: ndcRouter,
+  gds: gdsRouter,
+  interline: interlineRouter,
 });
 
 export type AppRouter = typeof appRouter;
