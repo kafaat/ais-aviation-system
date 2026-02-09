@@ -1,5 +1,26 @@
 # Changelog
 
+## What's Changed in v1.13.0
+
+### Features
+- feat: close competitive gaps with 22 new feature modules (40946f8)
+
+### Bug Fixes
+- fix: resolve ESLint errors and format CHANGELOG.md (814b80b)
+
+### Documentation
+- docs: update documentation for Phase 4 competitive gap features (1001d1a)
+
+### Other Changes
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (37fba0d)
+- Merge pull request #65 from kafaat/claude/implement-todo-zrBPj (9041964)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.12.0...v1.13.0
+
+
+---
+
 ## What's Changed in v1.12.0
 
 ### Features
