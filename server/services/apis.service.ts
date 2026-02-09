@@ -463,7 +463,7 @@ export async function checkTravelDocValidity(
     issues.push("Document has expired");
   } else {
     // Check destination-specific validity requirements
-    const destRequirements =
+    const _destRequirements =
       DEFAULT_REQUIREMENTS[destination] ?? DEFAULT_REQUIREMENTS.DEFAULT;
     const requiredMonths = destination === "US" || destination === "CA" ? 6 : 3;
     const minExpiryDate = new Date();

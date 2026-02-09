@@ -6,14 +6,8 @@
  */
 
 import { getDb } from "../db";
-import {
-  crewMembers,
-  crewAssignments,
-  flights,
-  airlines,
-  airports,
-} from "../../drizzle/schema";
-import { eq, and, sql, gte, lte, ne } from "drizzle-orm";
+import { crewMembers, crewAssignments, flights } from "../../drizzle/schema";
+import { eq, and, sql, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
