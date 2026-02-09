@@ -428,6 +428,74 @@ export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = typeof payments.$inferInsert;
 
 /**
+ * Payment History table
+ * Tracks all payment status transitions and events for audit trail
+ */
+export const paymentHistory = mysqlTable(
+  "payment_history",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    paymentId: int("paymentId").notNull(),
+    bookingId: int("bookingId").notNull(),
+    event: mysqlEnum("event", [
+      "created",
+      "processing",
+      "completed",
+      "failed",
+      "refund_initiated",
+      "refund_completed",
+      "refund_failed",
+      "chargeback",
+      "disputed",
+      "expired",
+    ]).notNull(),
+    fromStatus: mysqlEnum("fromStatus", [
+      "pending",
+      "completed",
+      "failed",
+      "refunded",
+    ]),
+    toStatus: mysqlEnum("toStatus", [
+      "pending",
+      "completed",
+      "failed",
+      "refunded",
+    ]).notNull(),
+    amount: int("amount"), // Amount involved in this event (SAR cents)
+    currency: varchar("currency", { length: 3 }).default("SAR"),
+    providerReference: varchar("providerReference", { length: 255 }), // External reference from payment provider
+    metadata: text("metadata"), // JSON metadata for additional event details
+    initiatedBy: mysqlEnum("initiatedBy", [
+      "system",
+      "user",
+      "admin",
+      "webhook",
+      "cron",
+    ])
+      .default("system")
+      .notNull(),
+    userId: int("userId"), // Who initiated the event (null for system/webhook)
+    ipAddress: varchar("ipAddress", { length: 45 }), // IPv4/IPv6
+    userAgent: varchar("userAgent", { length: 500 }),
+    errorMessage: text("errorMessage"), // Error details if failed
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    paymentIdIdx: index("payment_history_payment_id_idx").on(table.paymentId),
+    bookingIdIdx: index("payment_history_booking_id_idx").on(table.bookingId),
+    eventIdx: index("payment_history_event_idx").on(table.event),
+    createdAtIdx: index("payment_history_created_at_idx").on(table.createdAt),
+    paymentEventIdx: index("payment_history_payment_event_idx").on(
+      table.paymentId,
+      table.event
+    ),
+  })
+);
+
+export type PaymentHistory = typeof paymentHistory.$inferSelect;
+export type InsertPaymentHistory = typeof paymentHistory.$inferInsert;
+
+/**
  * Booking Modification Requests table
  * Tracks all modification requests for bookings
  */

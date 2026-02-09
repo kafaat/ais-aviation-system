@@ -9,6 +9,38 @@ import { ENV } from "./env";
 /** Timeout for Data API calls */
 const DATA_API_TIMEOUT_MS = 30_000;
 
+/**
+ * Whitelist of allowed Data API IDs.
+ * Only APIs in this list can be called through callDataApi.
+ * Add new API IDs here when integrating new external services.
+ */
+const DATA_API_WHITELIST = new Set<string>([
+  // Flight data providers
+  "FlightAware/search",
+  "FlightAware/status",
+  "FlightAware/track",
+  "AviationStack/flights",
+  "AviationStack/airlines",
+  "AviationStack/airports",
+  // Weather data for flight operations
+  "OpenWeather/current",
+  "OpenWeather/forecast",
+  // Currency conversion for multi-currency support
+  "ExchangeRate/convert",
+  "ExchangeRate/latest",
+  // Country/timezone data
+  "RestCountries/info",
+  // Search / general
+  "Youtube/search",
+]);
+
+/**
+ * Check if an API ID is whitelisted for use
+ */
+export function isApiWhitelisted(apiId: string): boolean {
+  return DATA_API_WHITELIST.has(apiId);
+}
+
 export type DataApiCallOptions = {
   query?: Record<string, unknown>;
   body?: Record<string, unknown>;
@@ -29,6 +61,13 @@ export async function callDataApi(
 
   if (!apiId || apiId.trim().length === 0) {
     throw new Error("callDataApi requires a non-empty apiId");
+  }
+
+  // Enforce API whitelist for security
+  if (!isApiWhitelisted(apiId)) {
+    throw new Error(
+      `Data API "${apiId}" is not whitelisted. Add it to DATA_API_WHITELIST in dataApi.ts to allow access.`
+    );
   }
 
   // Build the full URL by appending the service path to the base URL

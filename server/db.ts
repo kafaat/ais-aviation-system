@@ -713,7 +713,7 @@ export async function getBookingByPNR(pnr: string) {
   const result = await db
     .select()
     .from(bookings)
-    .where(eq(bookings.pnr, pnr))
+    .where(and(eq(bookings.pnr, pnr), isNull(bookings.deletedAt)))
     .limit(1);
 
   return result.length > 0 ? result[0] : null;
@@ -726,7 +726,7 @@ export async function getBookingByIdWithDetails(id: number) {
   const result = await db
     .select()
     .from(bookings)
-    .where(eq(bookings.id, id))
+    .where(and(eq(bookings.id, id), isNull(bookings.deletedAt)))
     .limit(1);
 
   return result.length > 0 ? result[0] : null;
@@ -866,7 +866,12 @@ export async function getBookingByPaymentIntentId(paymentIntentId: string) {
   const result = await db
     .select()
     .from(bookings)
-    .where(eq(bookings.stripePaymentIntentId, paymentIntentId))
+    .where(
+      and(
+        eq(bookings.stripePaymentIntentId, paymentIntentId),
+        isNull(bookings.deletedAt)
+      )
+    )
     .limit(1);
 
   return result.length > 0 ? result[0] : null;
@@ -879,7 +884,12 @@ export async function getBookingByCheckoutSessionId(sessionId: string) {
   const result = await db
     .select()
     .from(bookings)
-    .where(eq(bookings.stripeCheckoutSessionId, sessionId))
+    .where(
+      and(
+        eq(bookings.stripeCheckoutSessionId, sessionId),
+        isNull(bookings.deletedAt)
+      )
+    )
     .limit(1);
 
   return result.length > 0 ? result[0] : null;

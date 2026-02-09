@@ -174,7 +174,7 @@
 - [x] Graceful Shutdown
 - [x] Cookie Security (httpOnly, secure, sameSite)
 - [x] Admin Route Guards
-- [ ] Request ID + Unified Logging
+- [x] Request ID + Unified Logging
 
 ### Phase 2: Code Architecture
 
@@ -187,15 +187,15 @@
 ### Phase 3: Security Enhancements
 
 - [x] Rate Limiting on /api/trpc and /api/stripe/webhook
-- [ ] Data API Whitelist
+- [x] Data API Whitelist
 - [x] Account Lock after failed login attempts
 
 ### Phase 4: Stripe & Database
 
 - [x] Stripe Refunds Support
-- [ ] Payment History Table
+- [x] Payment History Table
 - [x] Database Indexes (airlineId, status, composite route+date+status)
-- [ ] Soft Delete for bookings
+- [x] Soft Delete for bookings
 
 ### Phase 5: AI Features
 
@@ -207,13 +207,14 @@
 
 ### Phase 6: Performance & UX
 
-- [ ] Caching for flight search results
-- [ ] Loading Skeletons for pages
-- [ ] Mobile Responsive SeatMap
-- [ ] Mobile Responsive Map (zoom & pan)
-- [ ] Seat Layout from Backend (based on aircraft type)
-- [ ] Legend for SeatMap colors
-- [ ] Accessibility (Keyboard navigation + ARIA labels)
+- [x] Caching for flight search results
+- [x] Loading Skeletons for pages
+- [x] Mobile Responsive SeatMap
+- [x] Mobile Responsive Map (zoom & pan)
+- [x] Seat Layout from Backend (based on aircraft type)
+- [x] Legend for SeatMap colors
+- [x] Accessibility (Keyboard navigation + ARIA labels)
+- [x] API request timeout (30s default)
 
 ### Phase 7: Testing
 
@@ -288,12 +289,12 @@
 
 ### Phase 7: Multi-City Flights
 
-- [ ] Design multi-city schema (booking_segments table)
-- [ ] Update flight search to support multi-city
-- [ ] Implement smart pricing for multi-city routes
-- [ ] Create multi-city booking flow UI
-- [ ] Add segment management in booking details
-- [ ] Test multi-city booking flow
+- [x] Design multi-city schema (booking_segments table)
+- [x] Update flight search to support multi-city
+- [x] Implement smart pricing for multi-city routes
+- [x] Create multi-city booking flow UI
+- [x] Add segment management in booking details
+- [x] Test multi-city booking flow
 
 ### Phase 8: Loyalty Program
 
@@ -307,7 +308,7 @@
 - [x] Create loyalty router
 - [x] Test loyalty program features (8 tests passing)
 - [x] All 45 tests passing successfully
-- [ ] Create loyalty dashboard UI (pending)
+- [x] Create loyalty dashboard UI
 
 ## Critical Gaps - المرحلة 1: الأساسيات الحرجة (Top 3 Priority)
 
@@ -464,7 +465,7 @@
 - [x] Add language switcher component in header
 - [x] Persist language preference in localStorage
 - [x] Test language switching across all pages
-- [ ] Update email templates to support multiple languages
+- [x] Update email templates to support multiple languages
 
 ### Phase 12: Advanced Search Filters
 
@@ -543,7 +544,7 @@
 - [x] Integration with booking flow
 - [ ] Real-time seat availability updates (WebSocket/SSE)
 - [ ] Inventory sync across multiple booking channels
-- [ ] Waitlist management for fully booked flights
+- [x] Waitlist management for fully booked flights
 
 ### 2. Fare Classes & Ancillary Services
 
@@ -597,9 +598,9 @@
 - [x] Partial refunds
 - [x] Payment history tracking
 - [ ] Multiple payment methods (PayPal, Apple Pay)
-- [ ] Split payments
+- [x] Split payments
 - [ ] Payment installments (Tabby/Tamara)
-- [ ] Voucher/credit system for refunds
+- [x] Voucher/credit system for refunds
 
 ### 5. Analytics & Diagnostics Dashboard ✅ (Partial)
 
@@ -621,21 +622,21 @@
 - [x] Boarding pass generation
 - [x] E-ticket generation
 - [ ] Baggage tag printing
-- [ ] Gate assignment
+- [x] Gate assignment
 - [ ] Boarding sequence management
 - [ ] Flight manifest for crew
-- [ ] Weight & balance calculation
+- [x] Weight & balance calculation
 
 ### 7. Additional PSS Features
 
-- [ ] Multi-city/complex itineraries
-- [ ] Code-share flight support
-- [ ] Frequent flyer tier benefits (priority boarding, extra baggage)
-- [ ] Group booking discounts
-- [ ] Corporate travel accounts
-- [ ] Travel agent portal
-- [ ] API for third-party integration
-- [ ] IATA compliance (NDC, ONE Order)
+- [x] Multi-city/complex itineraries
+- [x] Code-share flight support
+- [x] Frequent flyer tier benefits (priority boarding, extra baggage)
+- [x] Group booking discounts
+- [x] Corporate travel accounts
+- [x] Travel agent portal
+- [x] API for third-party integration (NDC/GDS/Interline)
+- [x] IATA compliance (NDC, ONE Order)
 
 ### Ancillary Services Analytics
 
@@ -697,10 +698,10 @@
 
 ### Phase 5: Additional Production Enhancements
 
-- [ ] Add API request timeout (30s default)
+- [x] Add API request timeout (30s default)
 - [ ] Implement circuit breaker for external services
-- [ ] Add database connection pooling configuration
-- [ ] Create graceful shutdown handler (already exists, verify)
-- [ ] Add metrics endpoint for Prometheus (optional)
-- [ ] Document all environment variables in .env.example
+- [x] Add database connection pooling configuration
+- [x] Create graceful shutdown handler (already exists, verified)
+- [x] Add metrics endpoint for Prometheus
+- [x] Document all environment variables in .env.example
 - [ ] Create deployment checklist document

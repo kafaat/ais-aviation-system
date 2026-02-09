@@ -22,6 +22,106 @@ export interface EmailTemplate {
   }>;
 }
 
+/** Supported email languages */
+export type EmailLanguage = "ar" | "en";
+
+/**
+ * Email translation strings for multi-language support
+ */
+const emailTranslations: Record<string, Record<EmailLanguage, string>> = {
+  bookingConfirmedSubject: {
+    ar: "تأكيد الحجز",
+    en: "Booking Confirmation",
+  },
+  bookingConfirmedTitle: {
+    ar: "تم تأكيد الحجز بنجاح",
+    en: "Booking Confirmed Successfully",
+  },
+  bookingReference: {
+    ar: "رقم الحجز",
+    en: "Booking Reference",
+  },
+  greeting: {
+    ar: "مرحباً",
+    en: "Hello",
+  },
+  bookingConfirmedBody: {
+    ar: "يسعدنا إبلاغك بأن حجزك قد تم تأكيده بنجاح. يرجى مراجعة تفاصيل رحلتك أدناه.",
+    en: "We are pleased to confirm your booking. Please review your flight details below.",
+  },
+  flightDetails: {
+    ar: "تفاصيل الرحلة",
+    en: "Flight Details",
+  },
+  flightNumber: {
+    ar: "رقم الرحلة",
+    en: "Flight Number",
+  },
+  from: { ar: "من", en: "From" },
+  to: { ar: "إلى", en: "To" },
+  departure: { ar: "المغادرة", en: "Departure" },
+  arrival: { ar: "الوصول", en: "Arrival" },
+  cabinClass: { ar: "الدرجة", en: "Cabin Class" },
+  passengers: { ar: "عدد الركاب", en: "Passengers" },
+  totalAmount: { ar: "المبلغ الإجمالي", en: "Total Amount" },
+  economy: { ar: "اقتصادية", en: "Economy" },
+  business: { ar: "أعمال", en: "Business" },
+  keepReference: {
+    ar: "يرجى الاحتفاظ برقم الحجز للرجوع إليه.",
+    en: "Please keep your booking reference for future reference.",
+  },
+  thankYou: {
+    ar: "شكراً لاختياركم خدماتنا!",
+    en: "Thank you for choosing our services!",
+  },
+  systemName: {
+    ar: "نظام الطيران المتكامل",
+    en: "AIS Aviation System",
+  },
+  flightStatusChange: {
+    ar: "تحديث حالة الرحلة",
+    en: "Flight Status Update",
+  },
+  flightDelayed: { ar: "تأخير الرحلة", en: "Flight Delayed" },
+  flightCancelled: { ar: "إلغاء الرحلة", en: "Flight Cancelled" },
+  refundConfirmation: {
+    ar: "تأكيد الاسترداد",
+    en: "Refund Confirmation",
+  },
+  refundAmount: { ar: "مبلغ الاسترداد", en: "Refund Amount" },
+  processingDays: {
+    ar: "أيام المعالجة",
+    en: "Processing Days",
+  },
+  checkInReminder: {
+    ar: "تذكير تسجيل الوصول",
+    en: "Check-in Reminder",
+  },
+  checkInNow: {
+    ar: "سجل الوصول الآن",
+    en: "Check In Now",
+  },
+  milesEarned: { ar: "أميال مكتسبة", en: "Miles Earned" },
+  totalMiles: { ar: "إجمالي الأميال", en: "Total Miles" },
+  tierStatus: { ar: "مستوى العضوية", en: "Tier Status" },
+};
+
+/**
+ * Get a translated email string
+ */
+function t(key: string, lang: EmailLanguage = "ar"): string {
+  return (
+    emailTranslations[key]?.[lang] ?? emailTranslations[key]?.["ar"] ?? key
+  );
+}
+
+/**
+ * Get locale string for dates
+ */
+function getLocale(lang: EmailLanguage): string {
+  return lang === "ar" ? "ar-SA" : "en-US";
+}
+
 export interface BookingConfirmationData {
   passengerName: string;
   passengerEmail: string;
@@ -35,6 +135,7 @@ export interface BookingConfirmationData {
   cabinClass: string;
   numberOfPassengers: number;
   totalAmount: number;
+  language?: EmailLanguage;
   attachments?: Array<{
     filename: string;
     content: string; // base64 PDF
@@ -54,6 +155,7 @@ export interface FlightStatusChangeData {
   newStatus: string;
   delayMinutes?: number;
   reason?: string;
+  language?: EmailLanguage;
 }
 
 export interface RefundConfirmationData {
@@ -64,6 +166,7 @@ export interface RefundConfirmationData {
   refundAmount: number;
   refundReason?: string;
   processingDays: number;
+  language?: EmailLanguage;
 }
 
 export interface CheckInReminderData {
@@ -76,6 +179,7 @@ export interface CheckInReminderData {
   destination: string;
   departureTime: Date;
   checkInUrl: string;
+  language?: EmailLanguage;
 }
 
 export interface LoyaltyMilesNotificationData {
@@ -86,6 +190,7 @@ export interface LoyaltyMilesNotificationData {
   totalMiles: number;
   tierStatus: string;
   nextTierMiles?: number;
+  language?: EmailLanguage;
 }
 
 export interface SplitPaymentRequestData {
@@ -98,6 +203,7 @@ export interface SplitPaymentRequestData {
   amount: number;
   paymentUrl: string;
   expiresAt?: Date;
+  language?: EmailLanguage;
 }
 
 function escapeHtml(str: string): string {
@@ -147,35 +253,42 @@ export async function sendBookingConfirmation(
   data: BookingConfirmationData
 ): Promise<boolean> {
   try {
+    const lang = data.language || "ar";
+    const locale = getLocale(lang);
+    const dir = lang === "ar" ? "rtl" : "ltr";
+    const cabinClassLabel =
+      data.cabinClass === "economy" ? t("economy", lang) : t("business", lang);
+    const currencyLabel = lang === "ar" ? "ر.س" : "SAR";
+
     const template: EmailTemplate = {
       to: data.passengerEmail,
-      subject: `تأكيد الحجز - ${data.bookingReference}`,
+      subject: `${t("bookingConfirmedSubject", lang)} - ${data.bookingReference}`,
       attachments: data.attachments?.map(att => ({
         filename: att.filename,
         content: Buffer.from(att.content, "base64"),
         contentType: att.contentType || "application/pdf",
       })),
       text: `
-مرحباً ${data.passengerName},
+${t("greeting", lang)} ${data.passengerName},
 
-تم تأكيد حجزك بنجاح!
+${t("bookingConfirmedTitle", lang)}!
 
-تفاصيل الحجز:
-- رقم الحجز: ${data.bookingReference}
-- رقم PNR: ${data.pnr}
-- رقم الرحلة: ${data.flightNumber}
-- من: ${data.origin}
-- إلى: ${data.destination}
-- تاريخ المغادرة: ${data.departureTime.toLocaleString("ar-SA")}
-- تاريخ الوصول: ${data.arrivalTime.toLocaleString("ar-SA")}
-- الدرجة: ${data.cabinClass === "economy" ? "اقتصادية" : "أعمال"}
-- عدد الركاب: ${data.numberOfPassengers}
-- المبلغ الإجمالي: ${(data.totalAmount / 100).toFixed(2)} ر.س
+${t("flightDetails", lang)}:
+- ${t("bookingReference", lang)}: ${data.bookingReference}
+- PNR: ${data.pnr}
+- ${t("flightNumber", lang)}: ${data.flightNumber}
+- ${t("from", lang)}: ${data.origin}
+- ${t("to", lang)}: ${data.destination}
+- ${t("departure", lang)}: ${data.departureTime.toLocaleString(locale)}
+- ${t("arrival", lang)}: ${data.arrivalTime.toLocaleString(locale)}
+- ${t("cabinClass", lang)}: ${cabinClassLabel}
+- ${t("passengers", lang)}: ${data.numberOfPassengers}
+- ${t("totalAmount", lang)}: ${(data.totalAmount / 100).toFixed(2)} ${currencyLabel}
 
-يرجى الاحتفاظ برقم الحجز للرجوع إليه.
+${t("keepReference", lang)}
 
-شكراً لاختياركم خدماتنا!
-نظام الطيران المتكامل
+${t("thankYou", lang)}
+${t("systemName", lang)}
       `.trim(),
       html: `
 <!DOCTYPE html>
@@ -426,6 +539,8 @@ export async function sendFlightStatusChange(
   data: FlightStatusChangeData
 ): Promise<boolean> {
   try {
+    const lang = data.language || "ar";
+    const dir = lang === "ar" ? "rtl" : "ltr";
     const statusText =
       {
         delayed: "تأخرت",
@@ -690,9 +805,11 @@ export async function sendRefundConfirmation(
   data: RefundConfirmationData
 ): Promise<boolean> {
   try {
+    const lang = data.language || "ar";
+    const dir = lang === "ar" ? "rtl" : "ltr";
     const template: EmailTemplate = {
       to: data.passengerEmail,
-      subject: `تأكيد استرداد المبلغ - ${data.bookingReference}`,
+      subject: `${t("refundConfirmation", lang)} - ${data.bookingReference}`,
       text: `
 مرحباً ${data.passengerName},
 
@@ -908,9 +1025,11 @@ export async function sendCheckInReminder(
   data: CheckInReminderData
 ): Promise<boolean> {
   try {
+    const lang = data.language || "ar";
+    const dir = lang === "ar" ? "rtl" : "ltr";
     const template: EmailTemplate = {
       to: data.passengerEmail,
-      subject: `تذكير بتسجيل الوصول - رحلة ${data.flightNumber}`,
+      subject: `${t("checkInReminder", lang)} - ${data.flightNumber}`,
       text: `
 مرحباً ${data.passengerName},
 
@@ -1007,6 +1126,9 @@ export async function sendLoyaltyMilesNotification(
   data: LoyaltyMilesNotificationData
 ): Promise<boolean> {
   try {
+    const lang = data.language || "ar";
+    const _dir = lang === "ar" ? "rtl" : "ltr";
+    const locale = getLocale(lang);
     const tierNames: Record<string, string> = {
       bronze: "برونزي",
       silver: "فضي",
@@ -1016,12 +1138,21 @@ export async function sendLoyaltyMilesNotification(
 
     const tierName = tierNames[data.tierStatus] || data.tierStatus;
     const nextTierText = data.nextTierMiles
-      ? `أنت على بعد ${data.nextTierMiles.toLocaleString("ar-SA")} ميل من المستوى التالي!`
-      : "لقد وصلت للمستوى الأعلى!";
+      ? lang === "ar"
+        ? `أنت على بعد ${data.nextTierMiles.toLocaleString(locale)} ميل من المستوى التالي!`
+        : `You are ${data.nextTierMiles.toLocaleString(locale)} miles away from the next tier!`
+      : lang === "ar"
+        ? "لقد وصلت للمستوى الأعلى!"
+        : "You have reached the highest tier!";
+
+    const subject =
+      lang === "ar"
+        ? `تهانينا! حصلت على ${data.milesEarned.toLocaleString(locale)} ميل`
+        : `Congratulations! You earned ${data.milesEarned.toLocaleString(locale)} miles`;
 
     const template: EmailTemplate = {
       to: data.passengerEmail,
-      subject: `تهانينا! حصلت على ${data.milesEarned.toLocaleString("ar-SA")} ميل`,
+      subject,
       text: `
 مرحباً ${data.passengerName},
 
@@ -1129,16 +1260,18 @@ ${nextTierText}
 export async function sendNotificationEmail(
   to: string,
   subject: string,
-  message: string
+  message: string,
+  language: EmailLanguage = "ar"
 ): Promise<boolean> {
   try {
+    const dir = language === "ar" ? "rtl" : "ltr";
     const template: EmailTemplate = {
       to,
       subject,
       text: message,
       html: `
 <!DOCTYPE html>
-<html dir="rtl" lang="ar" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<html dir="${dir}" lang="${language}" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1259,8 +1392,13 @@ export async function sendSplitPaymentRequest(
   data: SplitPaymentRequestData
 ): Promise<boolean> {
   try {
+    const lang = data.language || "ar";
+    const _dir = lang === "ar" ? "rtl" : "ltr";
+    const locale = getLocale(lang);
     const expiryText = data.expiresAt
-      ? `يرجى إتمام الدفع قبل ${data.expiresAt.toLocaleDateString("ar-SA")}`
+      ? lang === "ar"
+        ? `يرجى إتمام الدفع قبل ${data.expiresAt.toLocaleDateString(locale)}`
+        : `Please complete payment before ${data.expiresAt.toLocaleDateString(locale)}`
       : "";
 
     const template: EmailTemplate = {
