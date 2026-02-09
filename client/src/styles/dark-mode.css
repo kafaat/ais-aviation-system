@@ -1,0 +1,494 @@
+/*
+ * Dark Mode Styles for AIS Aviation System
+ *
+ * This file provides comprehensive dark-mode overrides and custom properties
+ * that extend the base theme variables defined in index.css.
+ *
+ * The .dark class is toggled on <html> by ThemeContext.
+ * Tailwind's dark variant is configured via `@custom-variant dark (&:is(.dark *))`.
+ */
+
+/* ============================================================
+   1. Extended Dark Theme Custom Properties
+   ============================================================ */
+
+.dark {
+  /* Core surface palette (Slate scale) */
+  --dark-bg-primary: #0f172a; /* slate-900  - page background */
+  --dark-bg-secondary: #1e293b; /* slate-800  - elevated surfaces */
+  --dark-bg-tertiary: #334155; /* slate-700  - raised elements */
+  --dark-bg-hover: #475569; /* slate-600  - hover state */
+
+  /* Text palette */
+  --dark-text-primary: #f8fafc; /* slate-50   - primary text */
+  --dark-text-secondary: #e2e8f0; /* slate-200  - secondary text */
+  --dark-text-muted: #94a3b8; /* slate-400  - muted/caption text */
+  --dark-text-disabled: #64748b; /* slate-500  - disabled text */
+
+  /* Aviation-themed accent (Blue) */
+  --dark-accent-primary: #3b82f6; /* blue-500   - primary actions */
+  --dark-accent-hover: #60a5fa; /* blue-400   - primary hover */
+  --dark-accent-subtle: #1e3a5f; /* custom     - subtle accent bg */
+  --dark-accent-ring: #2563eb; /* blue-600   - focus ring */
+
+  /* Borders */
+  --dark-border-default: #334155; /* slate-700 */
+  --dark-border-subtle: #1e293b; /* slate-800 */
+  --dark-border-strong: #475569; /* slate-600 */
+
+  /* Status colors (adjusted for dark backgrounds) */
+  --dark-success: #22c55e; /* green-500 */
+  --dark-success-bg: rgba(34, 197, 94, 0.1);
+  --dark-warning: #f59e0b; /* amber-500 */
+  --dark-warning-bg: rgba(245, 158, 11, 0.1);
+  --dark-error: #ef4444; /* red-500 */
+  --dark-error-bg: rgba(239, 68, 68, 0.1);
+  --dark-info: #3b82f6; /* blue-500 */
+  --dark-info-bg: rgba(59, 130, 246, 0.1);
+
+  /* Chart/graph palette (high contrast on dark) */
+  --dark-chart-1: #60a5fa; /* blue-400 */
+  --dark-chart-2: #34d399; /* emerald-400 */
+  --dark-chart-3: #a78bfa; /* violet-400 */
+  --dark-chart-4: #fb923c; /* orange-400 */
+  --dark-chart-5: #f472b6; /* pink-400 */
+  --dark-chart-6: #38bdf8; /* sky-400 */
+
+  color-scheme: dark;
+}
+
+/* ============================================================
+   2. Scrollbar Styling
+   ============================================================ */
+
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: var(--dark-bg-primary);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--dark-bg-tertiary);
+  border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--dark-bg-hover);
+}
+
+/* ============================================================
+   3. Card & Surface Overrides
+   ============================================================ */
+
+.dark .card-elevated,
+.dark [data-slot="card"] {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-default);
+}
+
+.dark .card-elevated:hover {
+  border-color: var(--dark-border-strong);
+}
+
+/* Glass/frosted effect for overlays */
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(12px);
+  border-color: var(--dark-border-default);
+}
+
+/* ============================================================
+   4. Navigation & Sidebar
+   ============================================================ */
+
+.dark .navbar,
+.dark [data-slot="navbar"] {
+  background-color: var(--dark-bg-secondary);
+  border-bottom-color: var(--dark-border-default);
+}
+
+.dark [data-slot="sidebar"] {
+  background-color: var(--dark-bg-secondary);
+  border-right-color: var(--dark-border-default);
+}
+
+.dark [data-slot="sidebar"] [data-slot="sidebar-menu-button"]:hover {
+  background-color: var(--dark-bg-tertiary);
+}
+
+.dark
+  [data-slot="sidebar"]
+  [data-slot="sidebar-menu-button"][data-active="true"] {
+  background-color: var(--dark-accent-subtle);
+  color: var(--dark-accent-hover);
+}
+
+/* ============================================================
+   5. Table Styles
+   ============================================================ */
+
+.dark table,
+.dark [data-slot="table"] {
+  border-color: var(--dark-border-default);
+}
+
+.dark thead,
+.dark [data-slot="table-header"] {
+  background-color: var(--dark-bg-secondary);
+}
+
+.dark th {
+  color: var(--dark-text-secondary);
+  border-bottom-color: var(--dark-border-default);
+}
+
+.dark tbody tr {
+  border-bottom-color: var(--dark-border-subtle);
+}
+
+.dark tbody tr:hover {
+  background-color: var(--dark-bg-tertiary);
+}
+
+.dark td {
+  color: var(--dark-text-secondary);
+}
+
+/* ============================================================
+   6. Modal & Dialog
+   ============================================================ */
+
+.dark [data-slot="dialog-overlay"] {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.dark [data-slot="dialog-content"],
+.dark [data-slot="sheet-content"] {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-default);
+}
+
+.dark [data-slot="dialog-title"] {
+  color: var(--dark-text-primary);
+}
+
+.dark [data-slot="dialog-description"] {
+  color: var(--dark-text-muted);
+}
+
+/* ============================================================
+   7. Dropdown & Popover
+   ============================================================ */
+
+.dark [data-slot="dropdown-menu-content"],
+.dark [data-slot="dropdown-menu-sub-content"],
+.dark [data-slot="popover-content"] {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-default);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.4),
+    0 8px 10px -6px rgba(0, 0, 0, 0.3);
+}
+
+.dark [data-slot="dropdown-menu-item"]:focus {
+  background-color: var(--dark-bg-tertiary);
+}
+
+.dark [data-slot="dropdown-menu-separator"] {
+  background-color: var(--dark-border-default);
+}
+
+/* ============================================================
+   8. Form Elements
+   ============================================================ */
+
+.dark input,
+.dark textarea,
+.dark select,
+.dark [data-slot="input"],
+.dark [data-slot="textarea"] {
+  background-color: var(--dark-bg-primary);
+  border-color: var(--dark-border-default);
+  color: var(--dark-text-primary);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--dark-text-disabled);
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: var(--dark-accent-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.dark input:disabled,
+.dark textarea:disabled,
+.dark select:disabled {
+  background-color: var(--dark-bg-secondary);
+  color: var(--dark-text-disabled);
+  opacity: 0.6;
+}
+
+/* Checkbox & Radio */
+.dark input[type="checkbox"],
+.dark input[type="radio"] {
+  border-color: var(--dark-border-strong);
+  background-color: var(--dark-bg-primary);
+}
+
+.dark input[type="checkbox"]:checked,
+.dark input[type="radio"]:checked {
+  background-color: var(--dark-accent-primary);
+  border-color: var(--dark-accent-primary);
+}
+
+/* Switch/Toggle */
+.dark [data-slot="switch"] {
+  background-color: var(--dark-bg-tertiary);
+}
+
+.dark [data-slot="switch"][data-state="checked"] {
+  background-color: var(--dark-accent-primary);
+}
+
+/* ============================================================
+   9. Badges & Tags
+   ============================================================ */
+
+.dark [data-slot="badge"] {
+  border-color: var(--dark-border-default);
+}
+
+/* ============================================================
+   10. Tooltip
+   ============================================================ */
+
+.dark [data-slot="tooltip-content"] {
+  background-color: var(--dark-bg-tertiary);
+  color: var(--dark-text-primary);
+  border-color: var(--dark-border-default);
+}
+
+/* ============================================================
+   11. Alert / Toast / Notification
+   ============================================================ */
+
+.dark [data-slot="alert"] {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-default);
+  color: var(--dark-text-secondary);
+}
+
+.dark [data-sonner-toaster] [data-sonner-toast] {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-default);
+  color: var(--dark-text-primary);
+}
+
+/* ============================================================
+   12. Skeleton Loading
+   ============================================================ */
+
+.dark [data-slot="skeleton"] {
+  background-color: var(--dark-bg-tertiary);
+}
+
+@keyframes dark-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.dark [data-slot="skeleton"] {
+  animation: dark-skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ============================================================
+   13. Charts & Graphs (Dark-Friendly)
+   ============================================================ */
+
+.dark .recharts-cartesian-grid line {
+  stroke: var(--dark-border-default);
+}
+
+.dark .recharts-text {
+  fill: var(--dark-text-muted);
+}
+
+.dark .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: var(--dark-bg-secondary) !important;
+  border-color: var(--dark-border-default) !important;
+  color: var(--dark-text-primary) !important;
+}
+
+.dark .recharts-legend-item-text {
+  color: var(--dark-text-secondary) !important;
+}
+
+/* ============================================================
+   14. Aviation-Specific Components
+   ============================================================ */
+
+/* Flight card */
+.dark .flight-card {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-default);
+}
+
+.dark .flight-card:hover {
+  border-color: var(--dark-accent-primary);
+  box-shadow:
+    0 0 0 1px var(--dark-accent-primary),
+    0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+/* Boarding pass style */
+.dark .boarding-pass {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-default);
+}
+
+.dark .boarding-pass .boarding-pass-divider {
+  border-color: var(--dark-border-default);
+}
+
+/* Status indicators */
+.dark .status-scheduled {
+  color: var(--dark-info);
+}
+.dark .status-delayed {
+  color: var(--dark-warning);
+}
+.dark .status-cancelled {
+  color: var(--dark-error);
+}
+.dark .status-completed {
+  color: var(--dark-success);
+}
+
+/* Gate display */
+.dark .gate-display {
+  background-color: var(--dark-bg-tertiary);
+  color: var(--dark-text-primary);
+  border-color: var(--dark-border-default);
+}
+
+.dark .gate-change {
+  background-color: var(--dark-warning-bg);
+  border-color: var(--dark-warning);
+}
+
+/* ============================================================
+   15. Selection & Highlight
+   ============================================================ */
+
+.dark ::selection {
+  background-color: rgba(59, 130, 246, 0.3);
+  color: var(--dark-text-primary);
+}
+
+.dark ::highlight {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+/* ============================================================
+   16. Code & Preformatted Text
+   ============================================================ */
+
+.dark code,
+.dark pre {
+  background-color: var(--dark-bg-primary);
+  color: var(--dark-text-secondary);
+  border-color: var(--dark-border-default);
+}
+
+.dark pre {
+  border: 1px solid var(--dark-border-default);
+  border-radius: 0.5rem;
+}
+
+/* ============================================================
+   17. Progress & Meters
+   ============================================================ */
+
+.dark [data-slot="progress"] {
+  background-color: var(--dark-bg-tertiary);
+}
+
+.dark [data-slot="progress-indicator"] {
+  background-color: var(--dark-accent-primary);
+}
+
+/* ============================================================
+   18. Tabs
+   ============================================================ */
+
+.dark [data-slot="tabs-list"] {
+  background-color: var(--dark-bg-secondary);
+  border-color: var(--dark-border-default);
+}
+
+.dark [data-slot="tabs-trigger"][data-state="active"] {
+  background-color: var(--dark-bg-primary);
+  color: var(--dark-text-primary);
+}
+
+.dark [data-slot="tabs-trigger"] {
+  color: var(--dark-text-muted);
+}
+
+.dark [data-slot="tabs-trigger"]:hover {
+  color: var(--dark-text-secondary);
+}
+
+/* ============================================================
+   19. Separator / Divider
+   ============================================================ */
+
+.dark [data-slot="separator"],
+.dark hr {
+  background-color: var(--dark-border-default);
+  border-color: var(--dark-border-default);
+}
+
+/* ============================================================
+   20. Smooth Transitions for Theme Switching
+   ============================================================ */
+
+html.dark {
+  background-color: var(--dark-bg-primary);
+}
+
+/*
+ * Apply a brief transition when the .dark class is toggled
+ * so colors shift smoothly instead of flashing.
+ * Excluded from users who prefer reduced motion.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  html,
+  html * {
+    transition-property:
+      background-color, border-color, color, fill, stroke, box-shadow;
+    transition-duration: 150ms;
+    transition-timing-function: ease-in-out;
+  }
+
+  /* Disable transition on elements that animate on their own */
+  html [data-sonner-toaster] *,
+  html .animate-in,
+  html .animate-out,
+  html [data-state="open"],
+  html [data-state="closed"] {
+    transition-property: none;
+  }
+}

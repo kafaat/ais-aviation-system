@@ -528,6 +528,33 @@ trpc.priceCalendar.getCalendar.useQuery({
 | Rebooking          | `/rebook/:bookingId` | Flight rebooking              |
 | Travel Scenarios   | -                    | Carbon offset calculations    |
 
+## Phase 4 Features (Competitive Gap Closure)
+
+| Feature              | Route                       | Description                          |
+| -------------------- | --------------------------- | ------------------------------------ |
+| IROPS Command Center | `/admin/irops`              | Irregular operations management      |
+| Weight & Balance     | `/admin/weight-balance`     | Aircraft weight and balance          |
+| Load Planning        | `/admin/load-planning`      | Cargo and passenger load planning    |
+| Crew Assignment      | `/admin/crew-assignment`    | Crew scheduling and assignment       |
+| APIS                 | -                           | Advance passenger information system |
+| Biometric Boarding   | -                           | Facial recognition boarding          |
+| Self-Service Kiosk   | -                           | Airport kiosk check-in               |
+| Automated Bag Drop   | -                           | Self-service baggage drop            |
+| Revenue Accounting   | `/admin/revenue-accounting` | Revenue recognition and reporting    |
+| BSP Reporting        | `/admin/bsp-reporting`      | IATA BSP settlement and reporting    |
+| EU261 Compensation   | `/admin/compensation`       | Regulatory compensation management   |
+| Emergency Hotel      | -                           | IROPS hotel accommodation            |
+| Passenger Priority   | -                           | Priority scoring for rebooking       |
+| SLA Monitoring       | `/admin/sla`                | Service level agreement tracking     |
+| Data Warehouse/BI    | `/admin/data-warehouse`     | Business intelligence analytics      |
+| MFA/TOTP             | -                           | Multi-factor authentication          |
+| Dark Mode            | -                           | Theme toggle (dark/light)            |
+| PWA                  | -                           | Progressive web app support          |
+| Accessibility        | -                           | WCAG compliance tools                |
+| Cookie Consent       | -                           | GDPR/CCPA consent management         |
+| Multi-Region         | -                           | Multi-region deployment config       |
+| Disaster Recovery    | `/admin/disaster-recovery`  | Business continuity planning         |
+
 ## Auth Service (Microservice)
 
 A standalone FastAPI microservice that handles password-based authentication. Located in `auth-service/`.

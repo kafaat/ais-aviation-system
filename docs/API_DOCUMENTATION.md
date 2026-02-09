@@ -1,6 +1,6 @@
 # AIS Aviation System - API Documentation
 
-**Version:** 3.0
+**Version:** 4.0
 **Last Updated:** February 2026
 **Base URL:** `http://localhost:3000/api/trpc`
 
@@ -18,8 +18,9 @@
 8. [Analytics API](#analytics-api)
 9. [Phase 2 APIs](#phase-2-apis)
 10. [Phase 3 APIs](#phase-3-apis)
-11. [Error Handling](#error-handling)
-12. [Rate Limiting](#rate-limiting)
+11. [Phase 4 APIs](#phase-4-apis)
+12. [Error Handling](#error-handling)
+13. [Rate Limiting](#rate-limiting)
 
 ---
 
@@ -1117,6 +1118,259 @@ Carbon offset and travel document checks.
 
 ---
 
+## Phase 4 APIs
+
+Phase 4 closes competitive gaps identified in the system comparison against Altéa, SabreSonic, Travelport, Navitaire, and other major aviation platforms.
+
+### IROPS Command Center (`irops`)
+
+Irregular operations management and real-time coordination.
+
+| Endpoint                      | Type     | Auth  | Description                      |
+| ----------------------------- | -------- | ----- | -------------------------------- |
+| `irops.getActiveIROPS`        | Query    | Admin | Get active irregular operations  |
+| `irops.declareIROPS`          | Mutation | Admin | Declare IROPS for a flight       |
+| `irops.getAffectedPassengers` | Query    | Admin | Get passengers affected by IROPS |
+| `irops.executeRecoveryAction` | Mutation | Admin | Execute a recovery action        |
+| `irops.getRecoveryPlan`       | Query    | Admin | Get automated recovery plan      |
+
+---
+
+### Weight & Balance (`weightBalance`)
+
+Aircraft weight and balance calculations for flight operations.
+
+| Endpoint                            | Type     | Auth  | Description                     |
+| ----------------------------------- | -------- | ----- | ------------------------------- |
+| `weightBalance.calculate`           | Mutation | Admin | Calculate W&B for a flight      |
+| `weightBalance.getLoadSheet`        | Query    | Admin | Get load sheet                  |
+| `weightBalance.validateLimits`      | Query    | Admin | Validate within aircraft limits |
+| `weightBalance.getAircraftEnvelope` | Query    | Admin | Get CG envelope data            |
+
+---
+
+### Load Planning (`loadPlanning`)
+
+Cargo and passenger load planning for DCS operations.
+
+| Endpoint                         | Type     | Auth  | Description                   |
+| -------------------------------- | -------- | ----- | ----------------------------- |
+| `loadPlanning.createLoadPlan`    | Mutation | Admin | Create a load plan            |
+| `loadPlanning.getLoadPlan`       | Query    | Admin | Get load plan for flight      |
+| `loadPlanning.optimizeLoad`      | Mutation | Admin | Optimize cargo distribution   |
+| `loadPlanning.getULDAssignments` | Query    | Admin | Get ULD container assignments |
+
+---
+
+### Crew Assignment (`crew`)
+
+Crew scheduling and assignment management.
+
+| Endpoint                | Type     | Auth  | Description                   |
+| ----------------------- | -------- | ----- | ----------------------------- |
+| `crew.getFlightCrew`    | Query    | Admin | Get crew assigned to flight   |
+| `crew.assignCrew`       | Mutation | Admin | Assign crew member to flight  |
+| `crew.getAvailableCrew` | Query    | Admin | Get available crew members    |
+| `crew.getCrewSchedule`  | Query    | Admin | Get crew member schedule      |
+| `crew.checkFTL`         | Query    | Admin | Check flight time limitations |
+
+---
+
+### APIS - Advance Passenger Information (`apis`)
+
+Border compliance and advance passenger information submission.
+
+| Endpoint                   | Type     | Auth      | Description                     |
+| -------------------------- | -------- | --------- | ------------------------------- |
+| `apis.submitPassengerData` | Mutation | Admin     | Submit APIS data to authorities |
+| `apis.validatePassenger`   | Query    | Protected | Validate passenger travel docs  |
+| `apis.getSubmissionStatus` | Query    | Admin     | Get APIS submission status      |
+| `apis.checkNoFlyList`      | Query    | Admin     | Check passenger against no-fly  |
+
+---
+
+### Biometric Boarding (`biometric`)
+
+Facial recognition and biometric boarding system.
+
+| Endpoint                      | Type     | Auth      | Description                   |
+| ----------------------------- | -------- | --------- | ----------------------------- |
+| `biometric.enrollPassenger`   | Mutation | Protected | Enroll biometric data         |
+| `biometric.verifyIdentity`    | Mutation | Admin     | Verify passenger identity     |
+| `biometric.getBoardingStatus` | Query    | Admin     | Get biometric boarding status |
+
+---
+
+### Self-Service Kiosk (`kiosk`)
+
+Airport kiosk check-in operations.
+
+| Endpoint                  | Type     | Auth   | Description             |
+| ------------------------- | -------- | ------ | ----------------------- |
+| `kiosk.checkIn`           | Mutation | Public | Self-service check-in   |
+| `kiosk.selectSeat`        | Mutation | Public | Seat selection at kiosk |
+| `kiosk.printBoardingPass` | Mutation | Public | Print boarding pass     |
+| `kiosk.printBagTag`       | Mutation | Public | Print baggage tag       |
+
+---
+
+### Automated Bag Drop (`bagDrop`)
+
+Self-service baggage drop system.
+
+| Endpoint               | Type     | Auth  | Description                    |
+| ---------------------- | -------- | ----- | ------------------------------ |
+| `bagDrop.initiateDrop` | Mutation | Admin | Initiate bag drop session      |
+| `bagDrop.validateBag`  | Query    | Admin | Validate bag weight/dimensions |
+| `bagDrop.confirmDrop`  | Mutation | Admin | Confirm bag acceptance         |
+| `bagDrop.getStatus`    | Query    | Admin | Get bag drop station status    |
+
+---
+
+### Revenue Accounting (`revenueAccounting`)
+
+Revenue recognition and financial reporting.
+
+| Endpoint                               | Type  | Auth  | Description                  |
+| -------------------------------------- | ----- | ----- | ---------------------------- |
+| `revenueAccounting.getRevenueReport`   | Query | Admin | Get revenue report by period |
+| `revenueAccounting.getRevenueByRoute`  | Query | Admin | Revenue breakdown by route   |
+| `revenueAccounting.getUnearnedRevenue` | Query | Admin | Get unearned revenue report  |
+| `revenueAccounting.reconcileTickets`   | Query | Admin | Ticket reconciliation report |
+
+---
+
+### BSP Reporting (`bspReporting`)
+
+IATA BSP settlement and reporting.
+
+| Endpoint                           | Type     | Auth  | Description                |
+| ---------------------------------- | -------- | ----- | -------------------------- |
+| `bspReporting.generateHOT`         | Mutation | Admin | Generate HOT report        |
+| `bspReporting.getSettlementReport` | Query    | Admin | Get BSP settlement data    |
+| `bspReporting.getAgentSales`       | Query    | Admin | Get agent sales report     |
+| `bspReporting.reconcile`           | Mutation | Admin | Reconcile BSP transactions |
+
+---
+
+### EU261/DOT Compensation (`compensation`)
+
+Regulatory compensation management for flight disruptions.
+
+| Endpoint                            | Type     | Auth      | Description                    |
+| ----------------------------------- | -------- | --------- | ------------------------------ |
+| `compensation.calculateEligibility` | Query    | Protected | Check compensation eligibility |
+| `compensation.submitClaim`          | Mutation | Protected | Submit compensation claim      |
+| `compensation.getClaimStatus`       | Query    | Protected | Get claim status               |
+| `compensation.processClaim`         | Mutation | Admin     | Process/approve compensation   |
+| `compensation.getRegulations`       | Query    | Public    | Get applicable regulations     |
+
+---
+
+### Emergency Hotel (`emergencyHotel`)
+
+IROPS hotel accommodation management.
+
+| Endpoint                            | Type     | Auth  | Description                      |
+| ----------------------------------- | -------- | ----- | -------------------------------- |
+| `emergencyHotel.searchAvailability` | Query    | Admin | Search nearby hotel availability |
+| `emergencyHotel.bookAccommodation`  | Mutation | Admin | Book emergency hotel room        |
+| `emergencyHotel.getBookings`        | Query    | Admin | Get IROPS hotel bookings         |
+| `emergencyHotel.issueVoucher`       | Mutation | Admin | Issue hotel voucher to passenger |
+
+---
+
+### Passenger Priority (`passengerPriority`)
+
+Priority scoring for rebooking and service recovery.
+
+| Endpoint                               | Type  | Auth  | Description                     |
+| -------------------------------------- | ----- | ----- | ------------------------------- |
+| `passengerPriority.calculatePriority`  | Query | Admin | Calculate passenger priority    |
+| `passengerPriority.getRebookingOrder`  | Query | Admin | Get prioritized rebooking order |
+| `passengerPriority.getPriorityFactors` | Query | Admin | Get priority scoring factors    |
+
+---
+
+### SLA Monitoring (`sla`)
+
+Service level agreement tracking and compliance.
+
+| Endpoint                  | Type     | Auth  | Description                   |
+| ------------------------- | -------- | ----- | ----------------------------- |
+| `sla.getDashboard`        | Query    | Admin | Get SLA dashboard metrics     |
+| `sla.getBreaches`         | Query    | Admin | Get SLA breach events         |
+| `sla.createTarget`        | Mutation | Admin | Create SLA target             |
+| `sla.getPerformanceTrend` | Query    | Admin | Get SLA performance over time |
+
+---
+
+### Data Warehouse / BI (`dataWarehouse`)
+
+Business intelligence and analytics data warehouse.
+
+| Endpoint                             | Type  | Auth  | Description                     |
+| ------------------------------------ | ----- | ----- | ------------------------------- |
+| `dataWarehouse.getKPIs`              | Query | Admin | Get key performance indicators  |
+| `dataWarehouse.getRevenueAnalytics`  | Query | Admin | Revenue analytics and trends    |
+| `dataWarehouse.getOperationsMetrics` | Query | Admin | Operational performance metrics |
+| `dataWarehouse.getCustomerInsights`  | Query | Admin | Customer behavior analytics     |
+
+---
+
+### MFA / TOTP (`mfa`)
+
+Multi-factor authentication with TOTP.
+
+| Endpoint             | Type     | Auth      | Description             |
+| -------------------- | -------- | --------- | ----------------------- |
+| `mfa.setup`          | Mutation | Protected | Initialize MFA setup    |
+| `mfa.verifySetup`    | Mutation | Protected | Verify and enable MFA   |
+| `mfa.verifyLogin`    | Mutation | Public    | Verify MFA during login |
+| `mfa.disable`        | Mutation | Protected | Disable MFA             |
+| `mfa.generateBackup` | Mutation | Protected | Generate backup codes   |
+| `mfa.useBackupCode`  | Mutation | Public    | Use a backup code       |
+
+---
+
+### Multi-Region (`multiRegion`)
+
+Multi-region deployment configuration.
+
+| Endpoint                        | Type     | Auth  | Description                |
+| ------------------------------- | -------- | ----- | -------------------------- |
+| `multiRegion.getRegions`        | Query    | Admin | Get configured regions     |
+| `multiRegion.getRegionHealth`   | Query    | Admin | Get region health status   |
+| `multiRegion.setActiveRegion`   | Mutation | Admin | Set active region          |
+| `multiRegion.getFailoverConfig` | Query    | Admin | Get failover configuration |
+
+---
+
+### Disaster Recovery (`disasterRecovery`)
+
+Business continuity and DR planning.
+
+| Endpoint                            | Type     | Auth  | Description              |
+| ----------------------------------- | -------- | ----- | ------------------------ |
+| `disasterRecovery.getStatus`        | Query    | Admin | Get DR system status     |
+| `disasterRecovery.initiateFailover` | Mutation | Admin | Initiate failover        |
+| `disasterRecovery.runHealthCheck`   | Mutation | Admin | Run DR health check      |
+| `disasterRecovery.getRecoveryPlan`  | Query    | Admin | Get BCP/DR recovery plan |
+
+---
+
+### Cookie Consent (`consent`)
+
+Privacy consent management (GDPR/CCPA).
+
+| Endpoint                 | Type     | Auth   | Description                  |
+| ------------------------ | -------- | ------ | ---------------------------- |
+| `consent.getPreferences` | Query    | Public | Get user consent preferences |
+| `consent.updateConsent`  | Mutation | Public | Update consent choices       |
+| `consent.getPolicy`      | Query    | Public | Get current privacy policy   |
+
+---
+
 ## Error Handling
 
 ### Error Response Format
@@ -1242,4 +1496,4 @@ For API issues or questions:
 ---
 
 **Last Updated:** February 2026
-**API Version:** 3.0
+**API Version:** 4.0

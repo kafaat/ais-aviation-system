@@ -3,23 +3,25 @@
 ## What's Changed in v1.12.0
 
 ### Features
+
 - feat: add live flight tracking, inventory locking, overbooking management, and quick rebooking (dc4981b)
 - feat: add admin overbooking management page and fix unused imports (3f0310c)
 
 ### Bug Fixes
+
 - fix: rewrite CHANGELOG.md with consistent format and fix version-bump script (f5da47f)
 - fix: close critical integration gaps for inventory, rebooking, and overbooking (97399fd)
 
 ### Documentation
+
 - docs: add comprehensive system comparison analysis (AR/EN) (0a2f08a)
 
 ### Other Changes
+
 - style: apply prettier formatting to OverbookingManagement (2dbc1eb)
 - Merge pull request #64 from kafaat/claude/implement-todo-zrBPj (fa25bf1)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.11.0...v1.12.0
-
 
 ---
 

@@ -9,6 +9,8 @@ import { AccessibilityProvider } from "./contexts/AccessibilityContext";
 import { AdminRoute } from "./components/AdminRoute";
 import { PageLoadingFallback } from "./components/PageLoadingFallback";
 import { InstallPrompt } from "./components/InstallPrompt";
+import { CookieConsent } from "./components/CookieConsent";
+import { SkipNavigation } from "./components/SkipNavigation";
 
 // Lazy load pages for better performance and code splitting
 // User-facing pages
@@ -68,6 +70,22 @@ const TravelAgentManagement = lazy(
 const OverbookingManagement = lazy(
   () => import("./pages/admin/OverbookingManagement")
 );
+
+// Phase 4: Competitive gap closure admin pages
+const BSPReporting = lazy(() => import("./pages/admin/BSPReporting"));
+const CrewAssignment = lazy(() => import("./pages/admin/CrewAssignment"));
+const DataWarehouse = lazy(() => import("./pages/admin/DataWarehouse"));
+const IROPSCommandCenter = lazy(
+  () => import("./pages/admin/IROPSCommandCenter")
+);
+const RevenueAccounting = lazy(() => import("./pages/admin/RevenueAccounting"));
+const SLADashboard = lazy(() => import("./pages/admin/SLADashboard"));
+const CompensationManagement = lazy(
+  () => import("./pages/admin/CompensationManagement")
+);
+const WeightBalance = lazy(() => import("./pages/admin/WeightBalance"));
+const DisasterRecovery = lazy(() => import("./pages/admin/DisasterRecovery"));
+const LoadPlanning = lazy(() => import("./pages/admin/LoadPlanning"));
 
 // Corporate pages
 const CorporateDashboard = lazy(
@@ -372,6 +390,78 @@ function Router() {
             </AdminRoute>
           </Route>
 
+          {/* Phase 4: Competitive gap closure admin pages */}
+          <Route path="/admin/bsp-reporting">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <BSPReporting />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/crew-assignment">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <CrewAssignment />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/data-warehouse">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <DataWarehouse />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/irops">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <IROPSCommandCenter />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/revenue-accounting">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <RevenueAccounting />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/sla">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <SLADashboard />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/compensation">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <CompensationManagement />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/weight-balance">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <WeightBalance />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/disaster-recovery">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <DisasterRecovery />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/load-planning">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <LoadPlanning />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+
           {/* Baggage page */}
           <Route path="/baggage">
             <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
@@ -408,8 +498,10 @@ function App() {
           <FlightCompareProvider>
             <TooltipProvider>
               <Toaster />
+              <SkipNavigation />
               <Router />
               <InstallPrompt />
+              <CookieConsent />
             </TooltipProvider>
           </FlightCompareProvider>
         </AccessibilityProvider>

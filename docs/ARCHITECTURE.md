@@ -1,6 +1,6 @@
 # AIS Aviation System - Architecture Documentation
 
-**Version:** 3.0
+**Version:** 4.0
 **Last Updated:** February 2026
 
 ---
@@ -60,6 +60,24 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
 11. **DCS** - Departure Control System for boarding management
 12. **AI Chat** - AI-powered booking assistant
 13. **Disruption Handling** - Automated flight disruption management and rebooking
+14. **IROPS Command Center** - Irregular operations management and coordination
+15. **Weight & Balance** - Aircraft weight and balance calculations
+16. **Load Planning** - Cargo and passenger load planning
+17. **Crew Assignment** - Crew scheduling and assignment management
+18. **APIS** - Advance Passenger Information System for border compliance
+19. **Biometric Boarding** - Facial recognition boarding system
+20. **Self-Service Kiosk** - Airport kiosk check-in
+21. **Automated Bag Drop** - Self-service baggage drop
+22. **Revenue Accounting** - Revenue recognition and financial reporting
+23. **BSP Reporting** - IATA BSP settlement and reporting
+24. **EU261/DOT Compensation** - Regulatory compensation management
+25. **Emergency Hotel** - IROPS hotel accommodation management
+26. **Passenger Priority** - Priority scoring and rebooking order
+27. **SLA Monitoring** - Service level agreement tracking
+28. **Data Warehouse/BI** - Business intelligence and analytics warehouse
+29. **MFA/TOTP** - Multi-factor authentication with TOTP
+30. **Multi-Region** - Multi-region deployment configuration
+31. **Disaster Recovery** - Business continuity and DR planning
 
 ---
 
@@ -347,7 +365,7 @@ The database contains **71 tables** total. Key additional tables:
 
 ### tRPC Router Structure
 
-The system has **48 registered domain routers** organized by function:
+The system has **67+ registered domain routers** organized by function:
 
 ```typescript
 export const appRouter = router({
@@ -394,6 +412,27 @@ export const appRouter = router({
   pricing,
   softDelete,
   sms,
+
+  // Phase 4: Competitive Gap Features
+  apis,
+  bagDrop,
+  biometric,
+  bspReporting,
+  compensation,
+  consent,
+  crew,
+  dataWarehouse,
+  disasterRecovery,
+  emergencyHotel,
+  irops,
+  kiosk,
+  loadPlanning,
+  mfa,
+  multiRegion,
+  passengerPriority,
+  revenueAccounting,
+  sla,
+  weightBalance,
 
   // Admin & System
   admin,
