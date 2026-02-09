@@ -53,8 +53,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run Prettier check
-        run: pnpm exec prettier --check .
+      - name: Run Prettier format and verify
+        run: |
+          pnpm exec prettier --write .
+          if [ -n "$(git diff --name-only)" ]; then
+            echo "::error::The following files have formatting issues:"
+            git diff --name-only
+            echo ""
+            echo "Run 'pnpm format' locally and commit the changes."
+            exit 1
+          fi
+          echo "All files are properly formatted."
 
       - name: Run ESLint
         run: pnpm lint
