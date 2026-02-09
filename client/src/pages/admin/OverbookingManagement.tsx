@@ -91,17 +91,15 @@ export default function OverbookingManagement() {
     { enabled: !isNaN(flightId) && flightId > 0 }
   );
 
-  const {
-    data: recommendedData,
-    isLoading: recommendedLoading,
-  } = trpc.inventory.getRecommendedOverbooking.useQuery(
-    { flightId },
-    { enabled: !isNaN(flightId) && flightId > 0 }
-  );
+  const { data: recommendedData, isLoading: recommendedLoading } =
+    trpc.inventory.getRecommendedOverbooking.useQuery(
+      { flightId },
+      { enabled: !isNaN(flightId) && flightId > 0 }
+    );
 
   // Mutations
-  const createConfigMutation = trpc.inventory.createOverbookingConfig.useMutation(
-    {
+  const createConfigMutation =
+    trpc.inventory.createOverbookingConfig.useMutation({
       onSuccess: () => {
         toast.success(t("overbooking.configCreated"));
         setCreateOpen(false);
@@ -110,8 +108,7 @@ export default function OverbookingManagement() {
       onError: err => {
         toast.error(err.message);
       },
-    }
-  );
+    });
 
   const updateStatusMutation =
     trpc.inventory.updateDeniedBoardingStatus.useMutation({
@@ -133,7 +130,9 @@ export default function OverbookingManagement() {
       ...(newConfig.scope === "airline" && newConfig.airlineId
         ? { airlineId: parseInt(newConfig.airlineId) }
         : {}),
-      ...(newConfig.scope === "route" && newConfig.originId && newConfig.destinationId
+      ...(newConfig.scope === "route" &&
+      newConfig.originId &&
+      newConfig.destinationId
         ? {
             originId: parseInt(newConfig.originId),
             destinationId: parseInt(newConfig.destinationId),
@@ -155,25 +154,37 @@ export default function OverbookingManagement() {
     switch (status) {
       case "pending":
         return (
-          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+          <Badge
+            variant="outline"
+            className="bg-yellow-50 text-yellow-700 border-yellow-200"
+          >
             {t("overbooking.pending")}
           </Badge>
         );
       case "accepted":
         return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+          <Badge
+            variant="outline"
+            className="bg-green-50 text-green-700 border-green-200"
+          >
             {t("overbooking.accepted")}
           </Badge>
         );
       case "rejected":
         return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+          <Badge
+            variant="outline"
+            className="bg-red-50 text-red-700 border-red-200"
+          >
             {t("overbooking.rejected")}
           </Badge>
         );
       case "completed":
         return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+          <Badge
+            variant="outline"
+            className="bg-blue-50 text-blue-700 border-blue-200"
+          >
             {t("overbooking.completed")}
           </Badge>
         );
@@ -370,7 +381,10 @@ export default function OverbookingManagement() {
               <Users className="h-4 w-4" />
               {t("overbooking.deniedBoarding")}
             </TabsTrigger>
-            <TabsTrigger value="recommendations" className="flex items-center gap-2">
+            <TabsTrigger
+              value="recommendations"
+              className="flex items-center gap-2"
+            >
               <TrendingUp className="h-4 w-4" />
               {t("overbooking.recommendations")}
             </TabsTrigger>
@@ -500,9 +514,15 @@ export default function OverbookingManagement() {
                       <TableRow>
                         <TableHead>ID</TableHead>
                         <TableHead>{t("overbooking.deniedType")}</TableHead>
-                        <TableHead>{t("overbooking.compensationAmount")}</TableHead>
-                        <TableHead>{t("overbooking.compensationType")}</TableHead>
-                        <TableHead>{t("overbooking.alternativeFlight")}</TableHead>
+                        <TableHead>
+                          {t("overbooking.compensationAmount")}
+                        </TableHead>
+                        <TableHead>
+                          {t("overbooking.compensationType")}
+                        </TableHead>
+                        <TableHead>
+                          {t("overbooking.alternativeFlight")}
+                        </TableHead>
                         <TableHead>{t("overbooking.status")}</TableHead>
                         <TableHead></TableHead>
                       </TableRow>
