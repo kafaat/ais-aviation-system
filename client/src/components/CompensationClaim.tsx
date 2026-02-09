@@ -159,7 +159,7 @@ export function CompensationClaim({
   const {
     data: eligibility,
     isLoading: eligibilityLoading,
-    refetch: refetchEligibility,
+    refetch: _refetchEligibility,
   } = trpc.compensation.checkEligibility.useQuery(
     {
       bookingId,

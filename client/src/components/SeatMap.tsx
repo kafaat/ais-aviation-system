@@ -529,7 +529,6 @@ export function SeatMap({
     }
   };
 
-  const columns = allColumns;
   const rows = cabinLayout.rows;
   const sections = cabinLayout.sections;
 

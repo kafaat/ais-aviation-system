@@ -21,6 +21,7 @@ import {
   Zap,
   Plus,
   Minus,
+  type LucideIcon,
 } from "lucide-react";
 
 interface AncillarySelectionProps {
@@ -40,7 +41,7 @@ export interface SelectedAncillary {
   passengerId?: number;
 }
 
-const categoryIcons: Record<string, any> = {
+const categoryIcons: Record<string, LucideIcon> = {
   baggage: Package,
   meal: UtensilsCrossed,
   seat: Armchair,

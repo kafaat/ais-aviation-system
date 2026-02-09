@@ -117,7 +117,7 @@ export function ModifyBookingDialog({
     });
 
   const requestUpgradeMutation = trpc.modifications.requestUpgrade.useMutation({
-    onSuccess: async data => {
+    onSuccess: data => {
       toast.success(t("modifyBooking.upgradePaymentRedirect"));
       createModificationCheckout.mutate({
         bookingId: booking.id,

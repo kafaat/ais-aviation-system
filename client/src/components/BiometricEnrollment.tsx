@@ -34,7 +34,6 @@ import {
   ShieldCheck,
   ShieldAlert,
   CheckCircle2,
-  XCircle,
   Loader2,
   Camera,
   Trash2,

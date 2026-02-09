@@ -10,13 +10,14 @@ import {
   Shield,
   Coffee,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 
 interface BookingAncillariesDisplayProps {
   bookingId: number;
 }
 
-const categoryIcons: Record<string, any> = {
+const categoryIcons: Record<string, LucideIcon> = {
   baggage: Package,
   meal: UtensilsCrossed,
   seat: Armchair,

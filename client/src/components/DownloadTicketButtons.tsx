@@ -56,9 +56,11 @@ export function DownloadETicketButton({
 
       downloadPDFFromBase64(result.pdf, result.filename);
       toast.success(t("eticket.downloadSuccess"));
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error downloading e-ticket:", error);
-      toast.error(error.message || t("eticket.downloadError"));
+      toast.error(
+        error instanceof Error ? error.message : t("eticket.downloadError")
+      );
     } finally {
       setIsDownloading(false);
     }
@@ -104,9 +106,11 @@ export function DownloadBoardingPassButton({
 
       downloadPDFFromBase64(result.pdf, result.filename);
       toast.success(t("eticket.boardingPassSuccess"));
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error downloading boarding pass:", error);
-      toast.error(error.message || t("eticket.boardingPassError"));
+      toast.error(
+        error instanceof Error ? error.message : t("eticket.boardingPassError")
+      );
     } finally {
       setIsDownloading(false);
     }

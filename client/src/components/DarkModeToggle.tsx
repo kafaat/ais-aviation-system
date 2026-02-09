@@ -35,7 +35,7 @@ const THEME_OPTIONS: ReadonlyArray<{
  * Returns the icon component for the current resolved theme,
  * with a special indicator when "system" mode is active.
  */
-function CurrentThemeIcon({
+function _CurrentThemeIcon({
   mode,
   theme,
 }: {
