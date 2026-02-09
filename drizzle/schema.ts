@@ -4294,3 +4294,776 @@ export const ipBlacklist = mysqlTable(
 
 export type IpBlacklist = typeof ipBlacklist.$inferSelect;
 export type InsertIpBlacklist = typeof ipBlacklist.$inferInsert;
+
+// ============================================================================
+// Phase 5: Industry Standards Gap Closure
+// ============================================================================
+
+/**
+ * Fare Classes (RBD - Reservation Booking Designators)
+ * Supports IATA standard booking classes for revenue management
+ */
+export const fareClasses = mysqlTable(
+  "fare_classes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    code: varchar("code", { length: 2 }).notNull(), // e.g., Y, J, C, F, M, L, H, U, K, B, etc.
+    name: varchar("name", { length: 100 }).notNull(), // e.g., "Economy Full Fare"
+    cabinClass: mysqlEnum("cabinClass", [
+      "first",
+      "business",
+      "premium_economy",
+      "economy",
+    ]).notNull(),
+    fareFamily: varchar("fareFamily", { length: 50 }), // e.g., "Flex", "Light", "Value"
+    priority: int("priority").notNull().default(0), // Higher = sells first (for nested availability)
+    basePriceMultiplier: decimal("basePriceMultiplier", {
+      precision: 5,
+      scale: 3,
+    })
+      .notNull()
+      .default("1.000"), // Multiplier vs base fare
+    seatsAllocated: int("seatsAllocated").default(0), // Number of seats allocated to this class
+    // Fare attributes
+    refundable: boolean("refundable").default(false).notNull(),
+    changeable: boolean("changeable").default(true).notNull(),
+    changeFee: int("changeFee").default(0), // Fee in SAR cents
+    upgradeable: boolean("upgradeable").default(true).notNull(),
+    baggageAllowance: int("baggageAllowance").default(23), // kg
+    baggagePieces: int("baggagePieces").default(1),
+    carryOnAllowance: int("carryOnAllowance").default(7), // kg
+    mileageEarningRate: decimal("mileageEarningRate", {
+      precision: 4,
+      scale: 2,
+    }).default("1.00"), // 1.00 = 100% earning
+    seatSelection: mysqlEnum("seatSelection", ["free", "paid", "none"]).default(
+      "paid"
+    ),
+    loungeAccess: boolean("loungeAccess").default(false).notNull(),
+    priorityBoarding: boolean("priorityBoarding").default(false).notNull(),
+    mealIncluded: boolean("mealIncluded").default(false).notNull(),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    fareClassAirlineIdx: index("fare_class_airline_idx").on(table.airlineId),
+    fareClassCodeIdx: index("fare_class_code_idx").on(
+      table.airlineId,
+      table.code
+    ),
+    fareClassCabinIdx: index("fare_class_cabin_idx").on(table.cabinClass),
+    fareClassFamilyIdx: index("fare_class_family_idx").on(table.fareFamily),
+    fareClassActiveIdx: index("fare_class_active_idx").on(table.active),
+  })
+);
+
+export type FareClass = typeof fareClasses.$inferSelect;
+export type InsertFareClass = typeof fareClasses.$inferInsert;
+
+/**
+ * Fare Rules - Complex fare restrictions and conditions
+ * Supports ATPCO-style fare rules for revenue management
+ */
+export const fareRules = mysqlTable(
+  "fare_rules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    fareClassId: int("fareClassId").notNull(),
+    airlineId: int("airlineId").notNull(),
+    ruleName: varchar("ruleName", { length: 100 }).notNull(),
+    ruleCategory: mysqlEnum("ruleCategory", [
+      "eligibility", // Cat 1: Who can buy
+      "day_time", // Cat 2: Day/time restrictions
+      "seasonality", // Cat 3: Seasonal applicability
+      "flight_application", // Cat 4: Which flights
+      "advance_purchase", // Cat 5: How far in advance
+      "minimum_stay", // Cat 6: Min stay requirement
+      "maximum_stay", // Cat 7: Max stay requirement
+      "stopovers", // Cat 8: Stopover rules
+      "transfers", // Cat 9: Transfer rules
+      "combinations", // Cat 10: Combinability
+      "blackout_dates", // Cat 11: Blackout periods
+      "surcharges", // Cat 12: YQ/YR surcharges
+      "penalties", // Cat 16: Change/cancel fees
+      "children_discount", // Cat 19: Child/infant fares
+      "group_discount", // Cat 35: Group fare rules
+    ]).notNull(),
+    // Rule conditions (JSON)
+    conditions: text("conditions").notNull(), // JSON: specific rule parameters
+    // Validity
+    validFrom: timestamp("validFrom").notNull(),
+    validUntil: timestamp("validUntil"),
+    // Route restrictions
+    originAirportId: int("originAirportId"), // null = all origins
+    destinationAirportId: int("destinationAirportId"), // null = all destinations
+    // Pricing impact
+    priceAdjustment: int("priceAdjustment").default(0), // +/- SAR cents
+    priceMultiplier: decimal("priceMultiplier", {
+      precision: 5,
+      scale: 3,
+    }).default("1.000"),
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    fareRuleFareClassIdx: index("fare_rule_fare_class_idx").on(
+      table.fareClassId
+    ),
+    fareRuleAirlineIdx: index("fare_rule_airline_idx").on(table.airlineId),
+    fareRuleCategoryIdx: index("fare_rule_category_idx").on(table.ruleCategory),
+    fareRuleRouteIdx: index("fare_rule_route_idx").on(
+      table.originAirportId,
+      table.destinationAirportId
+    ),
+    fareRuleValidityIdx: index("fare_rule_validity_idx").on(
+      table.validFrom,
+      table.validUntil
+    ),
+    fareRuleActiveIdx: index("fare_rule_active_idx").on(table.active),
+  })
+);
+
+export type FareRule = typeof fareRules.$inferSelect;
+export type InsertFareRule = typeof fareRules.$inferInsert;
+
+/**
+ * Codeshare Agreements
+ * Manages codeshare partnerships between airlines
+ */
+export const codeshareAgreements = mysqlTable(
+  "codeshare_agreements",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    marketingAirlineId: int("marketingAirlineId").notNull(), // Airline selling the ticket
+    operatingAirlineId: int("operatingAirlineId").notNull(), // Airline operating the flight
+    agreementType: mysqlEnum("agreementType", [
+      "free_sale", // Marketing carrier sells freely
+      "block_space", // Fixed seat allocation
+      "hard_block", // Guaranteed seats
+      "soft_block", // Seats can be recalled
+    ]).notNull(),
+    // Agreement details
+    agreementReference: varchar("agreementReference", { length: 50 })
+      .notNull()
+      .unique(),
+    // Route scope
+    routeScope: mysqlEnum("routeScope", ["all_routes", "specific_routes"])
+      .default("specific_routes")
+      .notNull(),
+    routes: text("routes"), // JSON array of {originId, destinationId} pairs
+    // Revenue share
+    revenueShareModel: mysqlEnum("revenueShareModel", [
+      "prorate", // Revenue prorated by distance
+      "fixed_amount", // Fixed per-segment fee
+      "percentage", // Percentage of fare
+      "free_flow", // Each carrier keeps own revenue
+    ])
+      .default("prorate")
+      .notNull(),
+    revenueShareValue: decimal("revenueShareValue", {
+      precision: 10,
+      scale: 2,
+    }), // Amount or percentage
+    // Inventory
+    blockSize: int("blockSize"), // Number of seats in block_space
+    // Validity
+    validFrom: timestamp("validFrom").notNull(),
+    validUntil: timestamp("validUntil"),
+    status: mysqlEnum("status", [
+      "draft",
+      "pending_approval",
+      "active",
+      "suspended",
+      "terminated",
+    ])
+      .default("draft")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    csMarketingIdx: index("cs_marketing_airline_idx").on(
+      table.marketingAirlineId
+    ),
+    csOperatingIdx: index("cs_operating_airline_idx").on(
+      table.operatingAirlineId
+    ),
+    csStatusIdx: index("cs_status_idx").on(table.status),
+    csAgreementRefIdx: index("cs_agreement_ref_idx").on(
+      table.agreementReference
+    ),
+    csValidityIdx: index("cs_validity_idx").on(
+      table.validFrom,
+      table.validUntil
+    ),
+  })
+);
+
+export type CodeshareAgreement = typeof codeshareAgreements.$inferSelect;
+export type InsertCodeshareAgreement = typeof codeshareAgreements.$inferInsert;
+
+/**
+ * Interline Agreements
+ * Manages interline ticketing and baggage agreements
+ */
+export const interlineAgreements = mysqlTable(
+  "interline_agreements",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airline1Id: int("airline1Id").notNull(),
+    airline2Id: int("airline2Id").notNull(),
+    agreementType: mysqlEnum("agreementType", [
+      "ticketing", // Interline ticketing (IATA Resolution 780/788)
+      "baggage", // Through-check baggage
+      "full", // Both ticketing and baggage
+    ]).notNull(),
+    agreementReference: varchar("agreementReference", { length: 50 })
+      .notNull()
+      .unique(),
+    // Prorate agreement
+    prorateType: mysqlEnum("prorateType", [
+      "mileage", // Prorate by distance
+      "spi", // Special Prorate Agreement
+      "percentage", // Fixed percentage split
+    ]).default("mileage"),
+    prorateValue: decimal("prorateValue", { precision: 10, scale: 2 }),
+    // Baggage rules
+    baggageThroughCheck: boolean("baggageThroughCheck")
+      .default(false)
+      .notNull(),
+    baggageRuleApplied: mysqlEnum("baggageRuleApplied", [
+      "most_significant_carrier", // MSC baggage rules apply
+      "first_carrier", // First carrier's rules
+      "each_carrier", // Each carrier's own rules
+    ]).default("most_significant_carrier"),
+    // Settlement
+    settlementMethod: mysqlEnum("settlementMethod", [
+      "bsp", // IATA BSP
+      "bilateral", // Direct bilateral settlement
+      "ich", // IATA Clearing House
+    ]).default("bsp"),
+    // Validity
+    validFrom: timestamp("validFrom").notNull(),
+    validUntil: timestamp("validUntil"),
+    status: mysqlEnum("status", [
+      "draft",
+      "pending_approval",
+      "active",
+      "suspended",
+      "terminated",
+    ])
+      .default("draft")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    ilAirline1Idx: index("il_airline1_idx").on(table.airline1Id),
+    ilAirline2Idx: index("il_airline2_idx").on(table.airline2Id),
+    ilStatusIdx: index("il_status_idx").on(table.status),
+    ilAgreementRefIdx: index("il_agreement_ref_idx").on(
+      table.agreementReference
+    ),
+    ilTypeIdx: index("il_type_idx").on(table.agreementType),
+  })
+);
+
+export type InterlineAgreement = typeof interlineAgreements.$inferSelect;
+export type InsertInterlineAgreement = typeof interlineAgreements.$inferInsert;
+
+/**
+ * Electronic Miscellaneous Documents (EMD)
+ * IATA standard for ancillary service documentation
+ */
+export const electronicMiscDocs = mysqlTable(
+  "electronic_misc_docs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    emdNumber: varchar("emdNumber", { length: 14 }).notNull().unique(), // 13-digit + check digit
+    emdType: mysqlEnum("emdType", [
+      "EMD-S", // Standalone - not associated with a flight ticket
+      "EMD-A", // Associated - linked to a flight ticket
+    ]).notNull(),
+    // Association
+    bookingId: int("bookingId"),
+    passengerId: int("passengerId"),
+    ticketNumber: varchar("ticketNumber", { length: 14 }), // Associated ticket for EMD-A
+    // Issuing details
+    issuingAirlineId: int("issuingAirlineId").notNull(),
+    issuingAgentId: int("issuingAgentId"),
+    iataNumber: varchar("iataNumber", { length: 8 }), // IATA agent number
+    // Service details
+    reasonForIssuance: mysqlEnum("reasonForIssuance", [
+      "baggage", // Excess/prepaid baggage
+      "seat_selection", // Preferred seat purchase
+      "meal", // Special meal purchase
+      "lounge_access", // Lounge pass
+      "priority_boarding", // Priority boarding
+      "insurance", // Travel insurance
+      "pet_transport", // Pet in cabin/hold
+      "unaccompanied_minor", // UMNR service
+      "sport_equipment", // Sports gear transport
+      "upgrade", // Cabin upgrade
+      "penalty", // Change/cancel penalty
+      "residual_value", // Residual from exchange
+      "ground_transport", // Ground transfer
+      "wifi", // In-flight WiFi
+      "entertainment", // In-flight entertainment
+      "other", // Miscellaneous
+    ]).notNull(),
+    serviceDescription: varchar("serviceDescription", {
+      length: 255,
+    }).notNull(),
+    rficCode: varchar("rficCode", { length: 2 }), // Reason For Issuance Code (IATA)
+    rfiscCode: varchar("rfiscCode", { length: 4 }), // Reason For Issuance Sub-Code
+    // Financial
+    amount: int("amount").notNull(), // SAR cents
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    taxAmount: int("taxAmount").default(0).notNull(),
+    // Status
+    status: mysqlEnum("status", [
+      "issued",
+      "used", // Service consumed
+      "void", // Cancelled
+      "exchanged", // Exchanged for another EMD
+      "refunded",
+      "suspended",
+    ])
+      .default("issued")
+      .notNull(),
+    // Flight information (for EMD-A)
+    flightId: int("flightId"),
+    flightSegment: varchar("flightSegment", { length: 20 }), // e.g., "JED-RUH"
+    // Dates
+    dateOfIssuance: timestamp("dateOfIssuance").defaultNow().notNull(),
+    dateOfService: timestamp("dateOfService"),
+    expiryDate: timestamp("expiryDate"),
+    // Audit
+    voidedAt: timestamp("voidedAt"),
+    voidReason: text("voidReason"),
+    exchangedFromEmd: varchar("exchangedFromEmd", { length: 14 }), // Previous EMD number
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    emdNumberIdx: index("emd_number_idx").on(table.emdNumber),
+    emdBookingIdx: index("emd_booking_idx").on(table.bookingId),
+    emdPassengerIdx: index("emd_passenger_idx").on(table.passengerId),
+    emdTicketIdx: index("emd_ticket_idx").on(table.ticketNumber),
+    emdAirlineIdx: index("emd_airline_idx").on(table.issuingAirlineId),
+    emdStatusIdx: index("emd_status_idx").on(table.status),
+    emdTypeIdx: index("emd_type_idx").on(table.emdType),
+    emdReasonIdx: index("emd_reason_idx").on(table.reasonForIssuance),
+  })
+);
+
+export type ElectronicMiscDoc = typeof electronicMiscDocs.$inferSelect;
+export type InsertElectronicMiscDoc = typeof electronicMiscDocs.$inferInsert;
+
+/**
+ * NDC Offers
+ * IATA NDC (New Distribution Capability) offer management
+ */
+export const ndcOffers = mysqlTable(
+  "ndc_offers",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    offerId: varchar("offerId", { length: 64 }).notNull().unique(), // NDC OfferID
+    responseId: varchar("responseId", { length: 64 }).notNull(), // NDC ResponseID
+    // Shopping context
+    originId: int("originId").notNull(),
+    destinationId: int("destinationId").notNull(),
+    departureDate: timestamp("departureDate").notNull(),
+    returnDate: timestamp("returnDate"),
+    // Offer details
+    airlineId: int("airlineId").notNull(),
+    fareClassId: int("fareClassId"),
+    cabinClass: mysqlEnum("cabinClass", [
+      "first",
+      "business",
+      "premium_economy",
+      "economy",
+    ]).notNull(),
+    // Pricing
+    totalPrice: int("totalPrice").notNull(), // SAR cents
+    basePrice: int("basePrice").notNull(),
+    taxesAndFees: int("taxesAndFees").notNull(),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    // Offer content (NDC payload)
+    offerPayload: text("offerPayload").notNull(), // Full NDC XML/JSON offer
+    // Segments
+    segments: text("segments").notNull(), // JSON array of flight segments
+    // Bundled services
+    bundledServices: text("bundledServices"), // JSON array of included services
+    // Validity
+    expiresAt: timestamp("expiresAt").notNull(),
+    status: mysqlEnum("status", [
+      "active",
+      "expired",
+      "selected",
+      "ordered",
+      "cancelled",
+    ])
+      .default("active")
+      .notNull(),
+    // Owner information
+    ownerCode: varchar("ownerCode", { length: 3 }), // Airline owner code
+    channel: mysqlEnum("channel", [
+      "direct", // Airline direct
+      "ndc_aggregator", // NDC aggregator
+      "gds", // GDS channel
+      "ota", // Online travel agency
+      "travel_agent", // Traditional travel agent
+    ])
+      .default("direct")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    ndcOfferIdIdx: index("ndc_offer_id_idx").on(table.offerId),
+    ndcOfferResponseIdx: index("ndc_offer_response_idx").on(table.responseId),
+    ndcOfferRouteIdx: index("ndc_offer_route_idx").on(
+      table.originId,
+      table.destinationId
+    ),
+    ndcOfferAirlineIdx: index("ndc_offer_airline_idx").on(table.airlineId),
+    ndcOfferStatusIdx: index("ndc_offer_status_idx").on(table.status),
+    ndcOfferExpiresIdx: index("ndc_offer_expires_idx").on(table.expiresAt),
+    ndcOfferChannelIdx: index("ndc_offer_channel_idx").on(table.channel),
+  })
+);
+
+export type NdcOffer = typeof ndcOffers.$inferSelect;
+export type InsertNdcOffer = typeof ndcOffers.$inferInsert;
+
+/**
+ * NDC Orders
+ * IATA NDC order lifecycle management
+ */
+export const ndcOrders = mysqlTable(
+  "ndc_orders",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    orderId: varchar("orderId", { length: 64 }).notNull().unique(), // NDC OrderID
+    offerId: varchar("offerId", { length: 64 }).notNull(), // Source NDC OfferID
+    bookingId: int("bookingId"), // Link to internal booking
+    // Order details
+    airlineId: int("airlineId").notNull(),
+    // Passenger info
+    passengers: text("passengers").notNull(), // JSON array of passenger data
+    contactInfo: text("contactInfo").notNull(), // JSON contact details
+    // Payment
+    paymentMethod: varchar("paymentMethod", { length: 50 }),
+    totalAmount: int("totalAmount").notNull(), // SAR cents
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    // Tickets issued
+    ticketNumbers: text("ticketNumbers"), // JSON array of ticket numbers
+    emdNumbers: text("emdNumbers"), // JSON array of EMD numbers
+    // NDC status
+    status: mysqlEnum("status", [
+      "pending", // Order created, awaiting payment
+      "confirmed", // Payment confirmed, tickets pending
+      "ticketed", // Tickets issued
+      "partially_ticketed",
+      "changed", // Order modified
+      "cancelled",
+      "refunded",
+    ])
+      .default("pending")
+      .notNull(),
+    // NDC messaging
+    orderPayload: text("orderPayload").notNull(), // Full NDC order XML/JSON
+    lastServicingAction: varchar("lastServicingAction", { length: 50 }),
+    // Servicing history
+    servicingHistory: text("servicingHistory"), // JSON array of actions
+    // Channel
+    channel: mysqlEnum("channel", [
+      "direct",
+      "ndc_aggregator",
+      "gds",
+      "ota",
+      "travel_agent",
+    ])
+      .default("direct")
+      .notNull(),
+    distributorId: varchar("distributorId", { length: 50 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    ndcOrderIdIdx: index("ndc_order_id_idx").on(table.orderId),
+    ndcOrderOfferIdx: index("ndc_order_offer_idx").on(table.offerId),
+    ndcOrderBookingIdx: index("ndc_order_booking_idx").on(table.bookingId),
+    ndcOrderAirlineIdx: index("ndc_order_airline_idx").on(table.airlineId),
+    ndcOrderStatusIdx: index("ndc_order_status_idx").on(table.status),
+    ndcOrderChannelIdx: index("ndc_order_channel_idx").on(table.channel),
+  })
+);
+
+export type NdcOrder = typeof ndcOrders.$inferSelect;
+export type InsertNdcOrder = typeof ndcOrders.$inferInsert;
+
+/**
+ * GDS Connections
+ * Configuration for GDS (Global Distribution System) providers
+ */
+export const gdsConnections = mysqlTable(
+  "gds_connections",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    provider: mysqlEnum("provider", [
+      "amadeus",
+      "sabre",
+      "travelport",
+      "travelsky",
+    ]).notNull(),
+    airlineId: int("airlineId").notNull(),
+    // Connection credentials
+    connectionName: varchar("connectionName", { length: 100 }).notNull(),
+    pseudoCityCode: varchar("pseudoCityCode", { length: 10 }), // PCC
+    officeId: varchar("officeId", { length: 20 }), // Office ID
+    apiKey: varchar("apiKey", { length: 255 }), // Encrypted API key
+    apiSecret: varchar("apiSecret", { length: 255 }), // Encrypted secret
+    // Endpoint configuration
+    environment: mysqlEnum("environment", [
+      "production",
+      "certification",
+      "test",
+    ])
+      .default("test")
+      .notNull(),
+    baseUrl: varchar("baseUrl", { length: 500 }),
+    // Capabilities
+    supportsBooking: boolean("supportsBooking").default(true).notNull(),
+    supportsTicketing: boolean("supportsTicketing").default(true).notNull(),
+    supportsSchedules: boolean("supportsSchedules").default(true).notNull(),
+    supportsPricing: boolean("supportsPricing").default(true).notNull(),
+    supportsAvailability: boolean("supportsAvailability")
+      .default(true)
+      .notNull(),
+    // Rate limiting
+    maxRequestsPerMinute: int("maxRequestsPerMinute").default(100),
+    maxRequestsPerDay: int("maxRequestsPerDay").default(50000),
+    // Status
+    status: mysqlEnum("status", ["active", "inactive", "maintenance", "error"])
+      .default("inactive")
+      .notNull(),
+    lastHealthCheck: timestamp("lastHealthCheck"),
+    lastError: text("lastError"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    gdsProviderIdx: index("gds_provider_idx").on(table.provider),
+    gdsAirlineIdx: index("gds_airline_idx").on(table.airlineId),
+    gdsStatusIdx: index("gds_status_idx").on(table.status),
+    gdsProviderAirlineIdx: index("gds_provider_airline_idx").on(
+      table.provider,
+      table.airlineId
+    ),
+  })
+);
+
+export type GdsConnection = typeof gdsConnections.$inferSelect;
+export type InsertGdsConnection = typeof gdsConnections.$inferInsert;
+
+/**
+ * GDS Messages
+ * Audit log for all GDS message exchanges
+ */
+export const gdsMessages = mysqlTable(
+  "gds_messages",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    connectionId: int("connectionId").notNull(),
+    provider: mysqlEnum("provider", [
+      "amadeus",
+      "sabre",
+      "travelport",
+      "travelsky",
+    ]).notNull(),
+    // Message details
+    messageType: mysqlEnum("messageType", [
+      "availability_request",
+      "availability_response",
+      "pricing_request",
+      "pricing_response",
+      "booking_request",
+      "booking_response",
+      "ticketing_request",
+      "ticketing_response",
+      "cancel_request",
+      "cancel_response",
+      "schedule_request",
+      "schedule_response",
+    ]).notNull(),
+    direction: mysqlEnum("direction", ["outbound", "inbound"]).notNull(),
+    // Content
+    requestPayload: text("requestPayload"),
+    responsePayload: text("responsePayload"),
+    // Correlation
+    correlationId: varchar("correlationId", { length: 64 }).notNull(),
+    bookingReference: varchar("bookingReference", { length: 20 }),
+    // Performance
+    responseTimeMs: int("responseTimeMs"),
+    httpStatusCode: int("httpStatusCode"),
+    // Status
+    status: mysqlEnum("status", ["success", "error", "timeout", "pending"])
+      .default("pending")
+      .notNull(),
+    errorMessage: text("errorMessage"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    gdsMessageConnectionIdx: index("gds_msg_connection_idx").on(
+      table.connectionId
+    ),
+    gdsMessageProviderIdx: index("gds_msg_provider_idx").on(table.provider),
+    gdsMessageTypeIdx: index("gds_msg_type_idx").on(table.messageType),
+    gdsMessageCorrelationIdx: index("gds_msg_correlation_idx").on(
+      table.correlationId
+    ),
+    gdsMessageStatusIdx: index("gds_msg_status_idx").on(table.status),
+    gdsMessageCreatedIdx: index("gds_msg_created_idx").on(table.createdAt),
+  })
+);
+
+export type GdsMessage = typeof gdsMessages.$inferSelect;
+export type InsertGdsMessage = typeof gdsMessages.$inferInsert;
+
+/**
+ * Seat Maps - Aircraft cabin seat configurations
+ * Supports visual seat selection and check-in
+ */
+export const seatMaps = mysqlTable(
+  "seat_maps",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    aircraftType: varchar("aircraftType", { length: 50 }).notNull(), // e.g., "Boeing 777-300ER"
+    airlineId: int("airlineId").notNull(),
+    configName: varchar("configName", { length: 100 }).notNull(), // e.g., "3-class 396 seats"
+    // Cabin layout (JSON)
+    cabinLayout: text("cabinLayout").notNull(), // JSON: rows, columns, seat types
+    // Capacity summary
+    totalSeats: int("totalSeats").notNull(),
+    firstClassSeats: int("firstClassSeats").default(0).notNull(),
+    businessSeats: int("businessSeats").default(0).notNull(),
+    premiumEconomySeats: int("premiumEconomySeats").default(0).notNull(),
+    economySeats: int("economySeats").default(0).notNull(),
+    // Configuration details
+    seatPitch: text("seatPitch"), // JSON: pitch per cabin class in inches
+    seatWidth: text("seatWidth"), // JSON: width per cabin class
+    // Features
+    hasWifi: boolean("hasWifi").default(false).notNull(),
+    hasPowerOutlets: boolean("hasPowerOutlets").default(false).notNull(),
+    hasIFE: boolean("hasIFE").default(false).notNull(), // In-flight entertainment
+    // Status
+    active: boolean("active").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    seatMapAircraftIdx: index("seat_map_aircraft_idx").on(table.aircraftType),
+    seatMapAirlineIdx: index("seat_map_airline_idx").on(table.airlineId),
+    seatMapActiveIdx: index("seat_map_active_idx").on(table.active),
+  })
+);
+
+export type SeatMap = typeof seatMaps.$inferSelect;
+export type InsertSeatMap = typeof seatMaps.$inferInsert;
+
+/**
+ * Seat Inventory - Individual seat status per flight
+ * Tracks seat assignment, pricing, and availability
+ */
+export const seatInventory = mysqlTable(
+  "seat_inventory",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    seatMapId: int("seatMapId").notNull(),
+    seatNumber: varchar("seatNumber", { length: 5 }).notNull(), // e.g., "12A", "1F"
+    // Seat characteristics
+    row: int("row").notNull(),
+    column: varchar("column", { length: 2 }).notNull(), // A, B, C, D, E, F, etc.
+    cabinClass: mysqlEnum("cabinClass", [
+      "first",
+      "business",
+      "premium_economy",
+      "economy",
+    ]).notNull(),
+    seatType: mysqlEnum("seatType", [
+      "window",
+      "middle",
+      "aisle",
+      "bulkhead_window",
+      "bulkhead_middle",
+      "bulkhead_aisle",
+      "exit_row_window",
+      "exit_row_middle",
+      "exit_row_aisle",
+    ]).notNull(),
+    // Seat features
+    hasExtraLegroom: boolean("hasExtraLegroom").default(false).notNull(),
+    hasPowerOutlet: boolean("hasPowerOutlet").default(false).notNull(),
+    isReclinable: boolean("isReclinable").default(true).notNull(),
+    nearLavatory: boolean("nearLavatory").default(false).notNull(),
+    nearGalley: boolean("nearGalley").default(false).notNull(),
+    // Pricing
+    seatPrice: int("seatPrice").default(0).notNull(), // Additional charge in SAR cents
+    priceTier: mysqlEnum("priceTier", [
+      "free",
+      "standard",
+      "preferred",
+      "premium",
+      "extra_legroom",
+    ])
+      .default("standard")
+      .notNull(),
+    // Availability
+    status: mysqlEnum("status", [
+      "available",
+      "held", // Temporarily held during booking
+      "occupied", // Assigned to a passenger
+      "blocked", // Blocked by airline (crew, equipment, etc.)
+      "restricted", // Restricted (e.g., exit row age requirement)
+      "checked_in", // Passenger checked in with this seat
+    ])
+      .default("available")
+      .notNull(),
+    // Assignment
+    bookingId: int("bookingId"),
+    passengerId: int("passengerId"),
+    assignedAt: timestamp("assignedAt"),
+    // Check-in
+    checkedInAt: timestamp("checkedInAt"),
+    boardingPassIssued: boolean("boardingPassIssued").default(false).notNull(),
+    boardingGroup: varchar("boardingGroup", { length: 5 }), // e.g., "A", "B", "1", "2"
+    boardingSequence: int("boardingSequence"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    seatInvFlightIdx: index("seat_inv_flight_idx").on(table.flightId),
+    seatInvSeatMapIdx: index("seat_inv_seat_map_idx").on(table.seatMapId),
+    seatInvSeatNumberIdx: index("seat_inv_seat_number_idx").on(
+      table.flightId,
+      table.seatNumber
+    ),
+    seatInvStatusIdx: index("seat_inv_status_idx").on(table.status),
+    seatInvBookingIdx: index("seat_inv_booking_idx").on(table.bookingId),
+    seatInvPassengerIdx: index("seat_inv_passenger_idx").on(table.passengerId),
+    seatInvCabinIdx: index("seat_inv_cabin_idx").on(
+      table.flightId,
+      table.cabinClass,
+      table.status
+    ),
+  })
+);
+
+export type SeatInventoryItem = typeof seatInventory.$inferSelect;
+export type InsertSeatInventoryItem = typeof seatInventory.$inferInsert;
