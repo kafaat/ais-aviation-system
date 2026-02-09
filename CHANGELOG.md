@@ -1,5 +1,27 @@
 # Changelog
 
+## What's Changed in v1.15.0
+
+### Features
+- feat: add phase 5 schema and competitive analysis roadmap (462c42f)
+- feat: add ndc, gds, and codeshare/interline services (b9632f8)
+- feat: add emd, fare rules, and seat map services (8896512)
+- feat: add phase 5 routers for ndc, gds, codeshare, interline, emd, fares, seats (4013618)
+- feat: add i18n keys for phase 5 aviation modules (en/ar) (fa84b59)
+
+### Other Changes
+- style: fix prettier formatting for fare-rules and gds services (65054ec)
+- frontend running successfully (95079c1)
+- Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (8871df5)
+- style: format CHANGELOG.md after merge from main (91422e5)
+- Merge pull request #67 from kafaat/claude/implement-todo-zrBPj (9caf74c)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.14.0...v1.15.0
+
+
+---
+
 ## What's Changed in v1.14.0
 
 ### Features
