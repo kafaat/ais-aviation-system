@@ -23,8 +23,6 @@ import {
   bookings,
   passengers,
   payments,
-  type InsertAirline,
-  type InsertAirport,
   type InsertFlight,
   type InsertBooking,
   type InsertPassenger,

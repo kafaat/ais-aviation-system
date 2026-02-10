@@ -11,7 +11,7 @@
  */
 
 import { getDb } from "../db";
-import { passengers, flights, bookings } from "../../drizzle/schema";
+import { passengers, bookings } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";

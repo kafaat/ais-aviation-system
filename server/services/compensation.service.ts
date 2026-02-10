@@ -7,7 +7,7 @@ import {
   passengers,
   flightDisruptions,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte, inArray, desc } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 
 // ============================================================================
 // Inline Schema Types (not persisted as Drizzle tables)
@@ -1050,7 +1050,7 @@ export async function getClaimsByUser(
   const bookingIds = userBookings.map(b => b.id);
 
   // Fetch claims for those bookings
-  const placeholders = bookingIds.map(() => "?").join(",");
+  const _placeholders = bookingIds.map(() => "?").join(",");
   const rows = await db.execute(
     sql.raw(
       `SELECT * FROM ${CLAIMS_TABLE} WHERE bookingId IN (${bookingIds.join(",")}) ORDER BY createdAt DESC`

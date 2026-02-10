@@ -291,7 +291,7 @@ export async function getAncillaryMetrics(
     throw new Error("Database not available");
   }
 
-  const { bookingAncillaries, ancillaryServices } =
+  const { bookingAncillaries, ancillaryServices: _ancillaryServices } =
     await import("../../drizzle/schema");
 
   const dateFilter =

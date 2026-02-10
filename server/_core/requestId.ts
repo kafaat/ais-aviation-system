@@ -2,7 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import { nanoid } from "nanoid";
 import {
   createRequestLogger,
-  setLogContext,
   runWithLogContext,
   type LogContext,
 } from "./logger";

@@ -5,10 +5,8 @@ import {
   bookings,
   passengers,
   airports,
-  airlines,
-  notifications,
 } from "../../drizzle/schema";
-import { eq, and, sql, ne, inArray, gte, lte, desc, count } from "drizzle-orm";
+import { eq, and, sql, ne, inArray, gte, lte, desc } from "drizzle-orm";
 import { createNotification } from "./notification.service";
 
 // ============================================================================

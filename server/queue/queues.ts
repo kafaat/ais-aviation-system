@@ -295,7 +295,7 @@ export async function closeQueues(): Promise<void> {
   if (connection) {
     try {
       await connection.quit();
-    } catch (error) {
+    } catch (_error) {
       // Ignore quit errors
     }
     connection = null;

@@ -94,7 +94,7 @@ export async function generateETicketPDF(
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
-      doc.on("error", err => {
+      doc.on("error", _err => {
         reject(
           new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
@@ -281,7 +281,7 @@ export async function generateBoardingPassPDF(
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
-      doc.on("error", err => {
+      doc.on("error", _err => {
         reject(
           new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
