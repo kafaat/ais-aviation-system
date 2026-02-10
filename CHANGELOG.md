@@ -1,5 +1,35 @@
 # Changelog
 
+## What's Changed in v1.19.0
+
+### Features
+- feat: add Intelligence Kernel (AAIP) - multi-agent autonomous platform (978c093)
+
+### Bug Fixes
+- fix: register webhooks router, fix lint warnings, and improve type safety (b205d8f)
+- fix: improve type safety, fix lint warnings across routers, services, and tests (329aa29)
+- fix: clean up lint warnings in UI components, hooks, and test files (66ae539)
+- fix: clean up pricing services, queue, and e2e test lint warnings (f4d0e27)
+- fix: clean up lint warnings in services - console.log, unused vars, type fixes (769c303)
+- fix: clean up pricing and webhook service lint warnings (9a3a1b8)
+- fix: remove unused imports across client pages and admin dashboards (d02e6c4)
+- fix: remove unused imports in server core, services, and queue modules (3786144)
+- fix: prefix unused variables, replace last console.log calls (ceb79d7)
+- fix: resolve require-await warnings across client, server, and test files (895d96f)
+- fix: resolve require-await in currency, disaster-recovery, emergency-hotel, sms services (fbaf734)
+- fix: additional require-await fixes in auth-fetch, Login, db, sms services (6e9db28)
+- fix: remove unnecessary async from signSession in sdk.ts (fc4dcad)
+
+### Other Changes
+- style: fix Prettier formatting in CHANGELOG.md (f0cb4a4)
+- Merge pull request #71 from kafaat/claude/fix-gaps-and-bugs-Tzdte (8356fed)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.18.0...v1.19.0
+
+
+---
+
 ## What's Changed in v1.18.0
 
 ### Features
