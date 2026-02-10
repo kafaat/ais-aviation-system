@@ -160,7 +160,7 @@ export function getPoolStats(): {
   };
 }
 
-export async function getDb(): Promise<MySql2Database<typeof schema> | null> {
+export function getDb(): MySql2Database<typeof schema> | null {
   if (!_db && process.env.DATABASE_URL) {
     try {
       const pool = getPool();

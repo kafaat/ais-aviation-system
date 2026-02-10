@@ -356,7 +356,7 @@ export async function sendSMS(
 /**
  * Send templated SMS
  */
-export async function sendTemplatedSMS(
+export function sendTemplatedSMS(
   userId: number | null,
   phoneNumber: string,
   templateId: keyof typeof SMS_TEMPLATES,

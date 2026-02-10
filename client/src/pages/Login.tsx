@@ -44,7 +44,7 @@ export default function Login() {
   });
 
   const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: async () => {
+    onSuccess: () => {
       setLoginError(null);
       // After registration, auto-login
       loginMutation.mutate({ email, password });

@@ -111,11 +111,11 @@ export function clearTokens(): void {
  * Refresh the access token using the refresh token
  * Implements request deduplication to avoid multiple simultaneous refresh calls
  */
-export async function refreshAccessToken(): Promise<string | null> {
+export function refreshAccessToken(): Promise<string | null> {
   const refreshToken = getRefreshToken();
 
   if (!refreshToken) {
-    return null;
+    return Promise.resolve(null);
   }
 
   // If already refreshing, wait for that request
