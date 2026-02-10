@@ -303,7 +303,7 @@ async function startServer() {
   });
 
   // Graceful shutdown
-  const gracefulShutdown = async (signal: string) => {
+  const gracefulShutdown = (signal: string) => {
     log.info(
       { event: "shutdown_initiated", signal },
       `${signal} received. Starting graceful shutdown...`

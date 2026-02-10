@@ -119,7 +119,7 @@ export async function waitForSearchResults(page: Page): Promise<void> {
   });
 }
 
-export async function getFlightCards(page: Page): Promise<Locator> {
+export function getFlightCards(page: Page): Locator {
   return page.locator('[data-testid="flight-card"]');
 }
 
@@ -335,7 +335,7 @@ export async function takeScreenshotOnFailure(
   });
 }
 
-export async function logPageErrors(page: Page): Promise<string[]> {
+export function logPageErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on("pageerror", error => {
     errors.push(error.message);

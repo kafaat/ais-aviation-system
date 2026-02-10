@@ -171,18 +171,18 @@ export async function refreshAccessToken(): Promise<string | null> {
 /**
  * Get a valid access token, refreshing if necessary
  */
-export async function getValidAccessToken(): Promise<string | null> {
+export function getValidAccessToken(): Promise<string | null> {
   const accessToken = getAccessToken();
 
   if (!accessToken) {
-    return null;
+    return Promise.resolve(null);
   }
 
   if (isTokenExpired()) {
     return refreshAccessToken();
   }
 
-  return accessToken;
+  return Promise.resolve(accessToken);
 }
 
 // ============================================================================

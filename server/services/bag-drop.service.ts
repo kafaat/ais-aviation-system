@@ -405,15 +405,15 @@ export async function scanBoardingPass(barcode: string): Promise<{
  * Record a bag weight for an active session.
  * Validates weight limits and updates session totals.
  */
-export async function weighBag(
+export function weighBag(
   sessionId: number,
   weight: number
-): Promise<{
+): {
   session: BagDropSession;
   bagNumber: number;
   weightGrams: number;
   withinAllowance: boolean;
-}> {
+} {
   const session = getActiveSession(sessionId);
 
   if (weight <= 0) {
@@ -573,14 +573,14 @@ export async function calculateExcessFee(
  * Process payment for excess baggage on a bag drop session.
  * In production this would integrate with Stripe or another payment gateway.
  */
-export async function processPayment(
+export function processPayment(
   sessionId: number,
   amount: number
-): Promise<{
+): {
   session: BagDropSession;
   paymentConfirmed: boolean;
   transactionId: string;
-}> {
+} {
   const session = getActiveSession(sessionId);
 
   if (session.excessFee === 0) {
@@ -714,10 +714,10 @@ export async function printBagTag(
  * Confirm that all bags have been dropped onto the belt.
  * Marks the session as complete.
  */
-export async function confirmBagDrop(sessionId: number): Promise<{
+export function confirmBagDrop(sessionId: number): {
   session: BagDropSession;
   tags: BagTag[];
-}> {
+} {
   const session = getActiveSession(sessionId);
 
   if (session.totalBags === 0) {
@@ -772,11 +772,11 @@ export async function confirmBagDrop(sessionId: number): Promise<{
  * Get the health/status of a bag drop unit.
  * Returns the unit details and its current operational state.
  */
-export async function getBagDropStatus(unitId: number): Promise<{
+export function getBagDropStatus(unitId: number): {
   unit: BagDropUnit;
   activeSessions: number;
   isOperational: boolean;
-}> {
+} {
   const unit = bagDropUnits.get(unitId);
   if (!unit) {
     throw new TRPCError({
@@ -814,10 +814,10 @@ export async function getBagDropStatus(unitId: number): Promise<{
 /**
  * Get analytics and performance stats for bag drop units at an airport.
  */
-export async function getBagDropAnalytics(
+export function getBagDropAnalytics(
   airportId: number,
   dateRange: { start: Date; end: Date }
-): Promise<{
+): {
   airportId: number;
   period: { start: Date; end: Date };
   totalSessions: number;
@@ -834,7 +834,7 @@ export async function getBagDropAnalytics(
     status: BagDropUnitStatus;
     sessionsProcessed: number;
   }>;
-}> {
+} {
   const { start, end } = dateRange;
 
   // Get units for this airport

@@ -50,7 +50,7 @@ export async function checkDatabase(): Promise<CheckResult> {
 /**
  * Check Stripe API connectivity
  */
-export async function checkStripe(): Promise<CheckResult> {
+export function checkStripe(): CheckResult {
   const startTime = Date.now();
   try {
     // Check if Stripe key is configured

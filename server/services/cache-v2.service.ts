@@ -245,7 +245,7 @@ export const cacheServiceV2 = {
   /**
    * Get cached flight search results
    */
-  async getCachedFlightSearch(params: {
+  getCachedFlightSearch(params: {
     origin: string;
     destination: string;
     departureDate: string;
@@ -282,7 +282,7 @@ export const cacheServiceV2 = {
   /**
    * Get cached flight details
    */
-  async getCachedFlightDetails(flightId: number): Promise<unknown | null> {
+  getCachedFlightDetails(flightId: number): Promise<unknown | null> {
     return this.get("flight", { flightId });
   },
 
@@ -316,7 +316,7 @@ export const cacheServiceV2 = {
   /**
    * Get cached pricing
    */
-  async getCachedPricing(
+  getCachedPricing(
     flightId: number,
     cabinClass: string
   ): Promise<unknown | null> {
@@ -348,7 +348,7 @@ export const cacheServiceV2 = {
   /**
    * Get cached user data
    */
-  async getCachedUser(userId: number): Promise<unknown | null> {
+  getCachedUser(userId: number): Promise<unknown | null> {
     return this.get("user", { userId });
   },
 

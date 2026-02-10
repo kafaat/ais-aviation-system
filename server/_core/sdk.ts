@@ -133,7 +133,7 @@ class SDKServer {
    * @example
    * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
    */
-  async exchangeCodeForToken(
+  exchangeCodeForToken(
     code: string,
     state: string
   ): Promise<ExchangeTokenResponse> {
@@ -179,7 +179,7 @@ class SDKServer {
    * @example
    * const sessionToken = await sdk.createSessionToken(userInfo.openId);
    */
-  async createSessionToken(
+  createSessionToken(
     openId: string,
     options: { expiresInMs?: number; name?: string } = {}
   ): Promise<string> {

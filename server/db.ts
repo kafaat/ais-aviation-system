@@ -134,12 +134,12 @@ export function getPool(): mysql.Pool | null {
 /**
  * Get pool statistics for monitoring
  */
-export async function getPoolStats(): Promise<{
+export function getPoolStats(): {
   activeConnections: number;
   idleConnections: number;
   queuedRequests: number;
   totalConnections: number;
-} | null> {
+} | null {
   const pool = getPool();
   if (!pool) return null;
 

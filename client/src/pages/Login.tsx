@@ -60,7 +60,7 @@ export default function Login() {
     }
   }, [user, loading, navigate]);
 
-  const handleLoginSubmit = async (e: React.FormEvent) => {
+  const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
     if (mode === "register") {
