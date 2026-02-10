@@ -16,7 +16,6 @@ import {
   flights,
   demandPredictions,
   aiPricingModels,
-  pricingHistory,
 } from "../../../drizzle/schema";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { cacheService } from "../cache.service";

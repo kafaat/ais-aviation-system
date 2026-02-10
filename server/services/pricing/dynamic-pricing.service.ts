@@ -19,20 +19,8 @@ import {
   pricingHistory,
   seasonalPricing,
 } from "../../../drizzle/schema";
-import {
-  eq,
-  and,
-  gte,
-  lte,
-  sql,
-  between,
-  count,
-  desc,
-  or,
-  isNull,
-} from "drizzle-orm";
+import { eq, and, gte, lte, sql, count, desc, or, isNull } from "drizzle-orm";
 import { cacheService } from "../cache.service";
-import * as schema from "../../../drizzle/schema";
 import { AIPricingService } from "./ai-pricing.service";
 
 // Cache TTL for pricing rules (5 minutes)
@@ -443,21 +431,13 @@ async function calculateSeasonalMultiplier(
  * Get route-specific seasonal multiplier
  */
 async function getRouteSeasonalMultiplier(
-  originId: number,
-  destinationId: number,
-  departureTime: Date
+  _originId: number,
+  _destinationId: number,
+  _departureTime: Date
 ): Promise<number> {
   // Check for Hajj/Umrah routes to Jeddah/Madinah
   // This would be enhanced with actual route data
-  const hajjRoutes = [
-    { origin: "JED", destination: "any" },
-    { origin: "MED", destination: "any" },
-  ];
-
-  // Hajj season (approximate - should use Hijri calendar)
-  const month = departureTime.getMonth() + 1;
-  const isHajjSeason = month === 6 || month === 7;
-
+  // TODO: Implement route-based seasonal pricing using Hijri calendar
   // For now, return default
   return 1.0;
 }
@@ -466,8 +446,8 @@ async function getRouteSeasonalMultiplier(
  * Apply custom pricing rules from database
  */
 async function applyPricingRules(
-  flight: typeof flights.$inferSelect,
-  cabinClass: "economy" | "business"
+  _flight: typeof flights.$inferSelect,
+  _cabinClass: "economy" | "business"
 ): Promise<number> {
   // Get active pricing rules
   // This would query the pricingRules table
@@ -479,8 +459,8 @@ async function applyPricingRules(
  * Calculate promo code discount
  */
 async function calculatePromoDiscount(
-  promoCode: string,
-  price: number
+  _promoCode: string,
+  _price: number
 ): Promise<number> {
   // Query promo codes table
   // Validate code is active and not expired
@@ -519,7 +499,7 @@ async function recordPriceHistory(data: {
 }): Promise<void> {
   // Insert into price_history table
   // This helps with analytics and auditing
-  console.log(
+  console.info(
     JSON.stringify({
       event: "price_calculated",
       ...data,
@@ -623,9 +603,9 @@ async function getApplicablePricingRules(
   airlineId: number,
   originId: number,
   destinationId: number
-): Promise<any[]> {
+): Promise<Record<string, unknown>[]> {
   const cacheKey = `pricing_rules:${airlineId}:${originId}:${destinationId}`;
-  const cached = await cacheService.get<any[]>(cacheKey);
+  const cached = await cacheService.get<Record<string, unknown>[]>(cacheKey);
   if (cached) {
     return cached;
   }
@@ -667,7 +647,7 @@ async function getApplicablePricingRules(
     await cacheService.set(cacheKey, rules, RULES_CACHE_TTL);
     return rules;
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "pricing_rules_fetch_error",
         error: error instanceof Error ? error.message : "Unknown error",
@@ -719,7 +699,7 @@ async function getActiveSeasonalPricing(
       };
     }
   } catch (error) {
-    console.log(
+    console.warn(
       JSON.stringify({
         event: "seasonal_pricing_fetch_error",
         error: error instanceof Error ? error.message : "Unknown error",
@@ -799,7 +779,7 @@ export async function getPriceRange(
         requestedSeats: 1,
       });
       prices.push(result.finalPrice);
-    } catch (error) {
+    } catch {
       // Skip flights that fail pricing
     }
   }

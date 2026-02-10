@@ -68,7 +68,7 @@ export const stripeWebhookServiceV2 = {
       throw new Error("Database not available");
     }
 
-    console.log(`[Webhook] Processing event: ${event.type} (${event.id})`);
+    console.info(`[Webhook] Processing event: ${event.type} (${event.id})`);
 
     // 2. Check if event already processed (de-duplication)
     const existingResults = await db
@@ -81,7 +81,7 @@ export const stripeWebhookServiceV2 = {
 
     // If already processed successfully, return (idempotent success)
     if (existing?.processed) {
-      console.log(`[Webhook] Event ${event.id} already processed, skipping`);
+      console.info(`[Webhook] Event ${event.id} already processed, skipping`);
       return;
     }
 
@@ -100,7 +100,7 @@ export const stripeWebhookServiceV2 = {
       } catch (err: any) {
         // Handle race condition (another process inserted)
         if (err.code === "ER_DUP_ENTRY" || err.code === "23505") {
-          console.log(
+          console.info(
             `[Webhook] Event ${event.id} already stored by another process`
           );
         } else {
@@ -125,7 +125,7 @@ export const stripeWebhookServiceV2 = {
           .where(eq(stripeEvents.id, event.id));
       });
 
-      console.log(`[Webhook] Event ${event.id} processed successfully`);
+      console.info(`[Webhook] Event ${event.id} processed successfully`);
     } catch (err: any) {
       const errorMsg = err.message || "Unknown error";
       console.error(`[Webhook] Error processing event ${event.id}:`, errorMsg);
@@ -185,7 +185,7 @@ export const stripeWebhookServiceV2 = {
         );
 
       default:
-        console.log(`[Webhook] Unhandled event type: ${event.type}`);
+        console.info(`[Webhook] Unhandled event type: ${event.type}`);
         return; // Ignore unknown events safely
     }
   },
@@ -203,7 +203,7 @@ export const stripeWebhookServiceV2 = {
       throw new Error("No bookingId in session metadata");
     }
 
-    console.log(`[Webhook] Processing checkout for booking ${bookingId}`);
+    console.info(`[Webhook] Processing checkout for booking ${bookingId}`);
 
     // 1. Load booking
     const booking = await tx.query.bookings.findFirst({
@@ -216,7 +216,9 @@ export const stripeWebhookServiceV2 = {
 
     // 2. Check state transition is valid (idempotent)
     if (booking.status === "confirmed") {
-      console.log(`[Webhook] Booking ${bookingId} already confirmed, skipping`);
+      console.info(
+        `[Webhook] Booking ${bookingId} already confirmed, skipping`
+      );
       return;
     }
 
@@ -244,7 +246,7 @@ export const stripeWebhookServiceV2 = {
     } catch (err: any) {
       // Check if duplicate (unique constraint violation)
       if (err.code === "ER_DUP_ENTRY" || err.code === "23505") {
-        console.log(
+        console.info(
           `[Webhook] Ledger entry already exists for ${paymentIntentId}, skipping`
         );
         // Continue - this is OK (idempotent)
@@ -274,7 +276,7 @@ export const stripeWebhookServiceV2 = {
       createdAt: new Date(),
     });
 
-    console.log(`[Webhook] Booking ${bookingId} confirmed successfully`);
+    console.info(`[Webhook] Booking ${bookingId} confirmed successfully`);
 
     // 6. Queue background jobs (email, loyalty, etc.)
     // Note: This is outside transaction to avoid blocking
@@ -306,11 +308,11 @@ export const stripeWebhookServiceV2 = {
   ): Promise<void> {
     const bookingId = pi.metadata?.bookingId;
     if (!bookingId) {
-      console.log(`[Webhook] No bookingId in PaymentIntent ${pi.id} metadata`);
+      console.info(`[Webhook] No bookingId in PaymentIntent ${pi.id} metadata`);
       return;
     }
 
-    console.log(`[Webhook] PaymentIntent succeeded for booking ${bookingId}`);
+    console.info(`[Webhook] PaymentIntent succeeded for booking ${bookingId}`);
 
     // Similar logic to checkout.session.completed
     // but we check if already handled by checkout event
@@ -319,13 +321,13 @@ export const stripeWebhookServiceV2 = {
     });
 
     if (!booking) {
-      console.log(`[Webhook] Booking ${bookingId} not found`);
+      console.info(`[Webhook] Booking ${bookingId} not found`);
       return;
     }
 
     // If already confirmed, skip (handled by checkout event)
     if (booking.status === "confirmed") {
-      console.log(`[Webhook] Booking ${bookingId} already confirmed`);
+      console.info(`[Webhook] Booking ${bookingId} already confirmed`);
       return;
     }
 
@@ -341,7 +343,7 @@ export const stripeWebhookServiceV2 = {
         })
         .where(eq(bookings.id, parseInt(bookingId)));
 
-      console.log(
+      console.info(
         `[Webhook] Booking ${bookingId} confirmed via payment_intent`
       );
     }
@@ -357,18 +359,18 @@ export const stripeWebhookServiceV2 = {
   ): Promise<void> {
     const bookingId = pi.metadata?.bookingId;
     if (!bookingId) {
-      console.log(`[Webhook] No bookingId in PaymentIntent ${pi.id} metadata`);
+      console.info(`[Webhook] No bookingId in PaymentIntent ${pi.id} metadata`);
       return;
     }
 
-    console.log(`[Webhook] PaymentIntent failed for booking ${bookingId}`);
+    console.info(`[Webhook] PaymentIntent failed for booking ${bookingId}`);
 
     const booking = await tx.query.bookings.findFirst({
       where: (t: any, { eq }: any) => eq(t.id, parseInt(bookingId)),
     });
 
     if (!booking) {
-      console.log(`[Webhook] Booking ${bookingId} not found`);
+      console.info(`[Webhook] Booking ${bookingId} not found`);
       return;
     }
 
@@ -393,7 +395,7 @@ export const stripeWebhookServiceV2 = {
         createdAt: new Date(),
       });
 
-      console.log(`[Webhook] Booking ${bookingId} marked as failed`);
+      console.info(`[Webhook] Booking ${bookingId} marked as failed`);
     }
   },
 
@@ -407,18 +409,18 @@ export const stripeWebhookServiceV2 = {
   ): Promise<void> {
     const bookingId = charge.metadata?.bookingId;
     if (!bookingId) {
-      console.log(`[Webhook] No bookingId in Charge ${charge.id} metadata`);
+      console.info(`[Webhook] No bookingId in Charge ${charge.id} metadata`);
       return;
     }
 
-    console.log(`[Webhook] Charge refunded for booking ${bookingId}`);
+    console.info(`[Webhook] Charge refunded for booking ${bookingId}`);
 
     const booking = await tx.query.bookings.findFirst({
       where: (t: any, { eq }: any) => eq(t.id, parseInt(bookingId)),
     });
 
     if (!booking) {
-      console.log(`[Webhook] Booking ${bookingId} not found`);
+      console.info(`[Webhook] Booking ${bookingId} not found`);
       return;
     }
 
@@ -446,7 +448,7 @@ export const stripeWebhookServiceV2 = {
       });
     } catch (err: any) {
       if (err.code === "ER_DUP_ENTRY" || err.code === "23505") {
-        console.log(`[Webhook] Refund entry already exists, skipping`);
+        console.info(`[Webhook] Refund entry already exists, skipping`);
         return; // Idempotent
       }
       throw err;
@@ -477,7 +479,7 @@ export const stripeWebhookServiceV2 = {
       createdAt: new Date(),
     });
 
-    console.log(`[Webhook] Booking ${bookingId} ${newStatus}`);
+    console.info(`[Webhook] Booking ${bookingId} ${newStatus}`);
   },
 
   /**
@@ -490,11 +492,11 @@ export const stripeWebhookServiceV2 = {
   ): Promise<void> {
     const bookingId = dispute.metadata?.bookingId;
     if (!bookingId) {
-      console.log(`[Webhook] No bookingId in Dispute ${dispute.id} metadata`);
+      console.info(`[Webhook] No bookingId in Dispute ${dispute.id} metadata`);
       return;
     }
 
-    console.log(`[Webhook] Dispute created for booking ${bookingId}`);
+    console.info(`[Webhook] Dispute created for booking ${bookingId}`);
 
     // Update booking status to disputed
     await tx
@@ -517,7 +519,7 @@ export const stripeWebhookServiceV2 = {
       createdAt: new Date(),
     });
 
-    console.log(`[Webhook] Booking ${bookingId} marked as disputed`);
+    console.info(`[Webhook] Booking ${bookingId} marked as disputed`);
   },
 };
 

@@ -12,15 +12,9 @@
  */
 
 import { DemandForecastingService } from "./demand-forecasting.service";
-import {
-  CustomerSegmentationService,
-  type CustomerProfile,
-} from "./customer-segmentation.service";
-import {
-  RevenueOptimizationService,
-  type OptimizationResult,
-} from "./revenue-optimization.service";
-import { ABTestingService, type VariantAssignment } from "./ab-testing.service";
+import { CustomerSegmentationService } from "./customer-segmentation.service";
+import { RevenueOptimizationService } from "./revenue-optimization.service";
+import { ABTestingService } from "./ab-testing.service";
 import { cacheService } from "../cache.service";
 
 // ============================================================================
