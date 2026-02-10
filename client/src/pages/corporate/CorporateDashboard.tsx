@@ -103,7 +103,7 @@ export default function CorporateDashboard() {
     },
   });
 
-  const getStatusBadge = (status: string) => {
+  const _getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
         return (

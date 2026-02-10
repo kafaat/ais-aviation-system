@@ -478,7 +478,7 @@ export async function updateExchangeRates(): Promise<void> {
 export async function getHistoricalRates(
   fromCurrency: string,
   toCurrency: string,
-  days: number = 30
+  _days: number = 30
 ): Promise<{ date: Date; rate: number }[]> {
   // This would query historical data from the database
   // For now, return empty array

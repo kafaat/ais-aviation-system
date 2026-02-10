@@ -514,7 +514,7 @@ test.describe("Profile Management", () => {
         await saveButton.click();
 
         // Loading indicator might be shown briefly
-        const hasLoading =
+        const _hasLoading =
           (await saveButton.getByText(/جاري الحفظ|Saving/i).isVisible()) ||
           (await saveButton.locator('[role="progressbar"]').isVisible()) ||
           (await saveButton.locator(".animate-spin").isVisible());

@@ -202,7 +202,7 @@ describe("Saved Passengers Service", () => {
 
   it("should set new default when deleting current default passenger", async () => {
     // Add another passenger first
-    const newPassenger = await addPassenger(testUserId, {
+    const _newPassenger = await addPassenger(testUserId, {
       firstName: "Bob",
       lastName: "Wilson",
       isDefault: false,

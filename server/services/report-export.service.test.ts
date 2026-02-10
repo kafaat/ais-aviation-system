@@ -18,7 +18,7 @@ import { getDb } from "../db";
 import {
   exportBookingsToCSV,
   exportRevenueToCSV,
-  exportFlightPerformanceToCSV,
+  _exportFlightPerformanceToCSV,
   exportRefundsToCSV,
   exportBookingsToExcel,
   exportRevenueToExcel,
@@ -117,7 +117,7 @@ describe("Report Export Service", () => {
   ];
 
   // Mock database query builder
-  const createMockQueryBuilder = (data: unknown[]) => ({
+  const _createMockQueryBuilder = (data: unknown[]) => ({
     select: vi.fn().mockReturnThis(),
     from: vi.fn().mockReturnThis(),
     leftJoin: vi.fn().mockReturnThis(),

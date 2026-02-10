@@ -112,7 +112,7 @@ describe("Dynamic Pricing Engine", () => {
   describe("Price Validation", () => {
     it("should validate price within expiration time", () => {
       const priceId = "PRC-1-economy-50000-" + Date.now() + "-abc123";
-      const expectedPrice = 50000;
+      const _expectedPrice = 50000;
       const PRICE_VALIDITY_MINUTES = 15;
 
       const parts = priceId.split("-");

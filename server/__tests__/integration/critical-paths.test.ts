@@ -11,7 +11,7 @@
  * @see PRODUCTION_GRADE_IMPLEMENTATION_GUIDE.md
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getDb } from "../../db";
 import {
   bookings,

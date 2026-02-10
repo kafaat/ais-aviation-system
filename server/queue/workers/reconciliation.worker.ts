@@ -88,7 +88,7 @@ export const reconciliationWorker = redisConnection
 // ============================================================================
 
 if (reconciliationWorker) {
-  reconciliationWorker.on("completed", (job: Job, result: any) => {
+  reconciliationWorker.on("completed", (job: Job, _result: unknown) => {
     console.info(`[ReconciliationWorker] Job ${job.id} completed successfully`);
   });
 
