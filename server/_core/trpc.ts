@@ -23,7 +23,7 @@ const t = initTRPC.context<TrpcContext>().meta<OpenApiMeta>().create({
 export const router = t.router;
 export const publicProcedure = t.procedure;
 
-const requireUser = t.middleware(async opts => {
+const requireUser = t.middleware(opts => {
   const { ctx, next } = opts;
 
   if (!ctx.user) {
@@ -41,7 +41,7 @@ const requireUser = t.middleware(async opts => {
 export const protectedProcedure = t.procedure.use(requireUser);
 
 export const adminProcedure = t.procedure.use(
-  t.middleware(async opts => {
+  t.middleware(opts => {
     const { ctx, next } = opts;
 
     if (!ctx.user || !isAdmin(ctx.user.role)) {

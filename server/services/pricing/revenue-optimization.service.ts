@@ -183,8 +183,6 @@ export async function optimizeFlightPrice(
   // 9. Estimate revenue impact
   const expectedDemandChange =
     elasticity.elasticity * ((optimizedPrice - currentPrice) / currentPrice);
-  const currentRevenue =
-    currentPrice * (available > 0 ? totalSeats - available : 0);
   const expectedNewDemand = demandForecast * (1 + expectedDemandChange);
   const expectedRevenueChange =
     optimizedPrice * Math.min(expectedNewDemand, available) -
@@ -333,7 +331,6 @@ export async function getRevenueMetrics(
   const flt = flightData[0];
 
   const totalRevenue = Number(rev?.totalRevenue) || 0;
-  const bookingCount = Number(rev?.bookingCount) || 0;
   const passengerCount = Number(rev?.passengerCount) || 0;
   const flightCount = Number(flt?.flightCount) || 1;
   const totalSeats = Number(flt?.totalSeats) || 1;

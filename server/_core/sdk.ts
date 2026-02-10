@@ -30,7 +30,7 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+    console.info("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
     if (!ENV.oAuthServerUrl) {
       console.error(
         "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
@@ -133,7 +133,7 @@ class SDKServer {
    * @example
    * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
    */
-  async exchangeCodeForToken(
+  exchangeCodeForToken(
     code: string,
     state: string
   ): Promise<ExchangeTokenResponse> {
@@ -179,7 +179,7 @@ class SDKServer {
    * @example
    * const sessionToken = await sdk.createSessionToken(userInfo.openId);
    */
-  async createSessionToken(
+  createSessionToken(
     openId: string,
     options: { expiresInMs?: number; name?: string } = {}
   ): Promise<string> {
@@ -193,7 +193,7 @@ class SDKServer {
     );
   }
 
-  async signSession(
+  signSession(
     payload: SessionPayload,
     options: { expiresInMs?: number } = {}
   ): Promise<string> {

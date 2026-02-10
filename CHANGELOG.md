@@ -3,18 +3,19 @@
 ## What's Changed in v1.18.0
 
 ### Features
+
 - feat: activate remaining Phase 4 features with admin pages, navigation, and operations guide (8df652d)
 
 ### Bug Fixes
+
 - fix(ci): add pre-commit hook and auto-format to prevent recurring Prettier failures (bb7d7fe)
 
 ### Other Changes
+
 - Merge remote-tracking branch 'origin/main' into claude/implement-todo-zrBPj (f92512a)
 - Merge pull request #70 from kafaat/claude/implement-todo-zrBPj (2c97729)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.17.0...v1.18.0
-
 
 ---
 

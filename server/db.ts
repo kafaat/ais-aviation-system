@@ -23,8 +23,6 @@ import {
   bookings,
   passengers,
   payments,
-  type InsertAirline,
-  type InsertAirport,
   type InsertFlight,
   type InsertBooking,
   type InsertPassenger,
@@ -136,12 +134,12 @@ export function getPool(): mysql.Pool | null {
 /**
  * Get pool statistics for monitoring
  */
-export async function getPoolStats(): Promise<{
+export function getPoolStats(): {
   activeConnections: number;
   idleConnections: number;
   queuedRequests: number;
   totalConnections: number;
-} | null> {
+} | null {
   const pool = getPool();
   if (!pool) return null;
 
@@ -162,7 +160,7 @@ export async function getPoolStats(): Promise<{
   };
 }
 
-export async function getDb(): Promise<MySql2Database<typeof schema> | null> {
+export function getDb(): MySql2Database<typeof schema> | null {
   if (!_db && process.env.DATABASE_URL) {
     try {
       const pool = getPool();

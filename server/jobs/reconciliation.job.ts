@@ -37,8 +37,8 @@ export async function reconciliationJob(options?: {
 }): Promise<ReconciliationResult> {
   const limit = options?.limit ?? JOB_CONFIG.defaultLimit;
 
-  console.log(`[${JOB_CONFIG.name}] Starting reconciliation job...`);
-  console.log(`[${JOB_CONFIG.name}] Config: limit=${limit}`);
+  console.info(`[${JOB_CONFIG.name}] Starting reconciliation job...`);
+  console.info(`[${JOB_CONFIG.name}] Config: limit=${limit}`);
 
   const startTime = Date.now();
 
@@ -47,8 +47,8 @@ export async function reconciliationJob(options?: {
 
     const duration = Date.now() - startTime;
 
-    console.log(`[${JOB_CONFIG.name}] Completed in ${duration}ms`);
-    console.log(`[${JOB_CONFIG.name}] Results:`, {
+    console.info(`[${JOB_CONFIG.name}] Completed in ${duration}ms`);
+    console.info(`[${JOB_CONFIG.name}] Results:`, {
       scanned: result.scanned,
       fixed: result.fixed,
       errors: result.errors,
@@ -56,11 +56,11 @@ export async function reconciliationJob(options?: {
 
     // Log details for debugging
     if (result.details.length > 0) {
-      console.log(`[${JOB_CONFIG.name}] Details:`);
+      console.info(`[${JOB_CONFIG.name}] Details:`);
       for (const detail of result.details) {
-        console.log(`  - Booking #${detail.bookingId}: ${detail.action}`);
+        console.info(`  - Booking #${detail.bookingId}: ${detail.action}`);
         if (detail.error) {
-          console.log(`    Error: ${detail.error}`);
+          console.warn(`    Error: ${detail.error}`);
         }
       }
     }
@@ -81,20 +81,20 @@ export async function reconciliationJob(options?: {
  * Usage: npx ts-node server/jobs/reconciliation.job.ts
  */
 async function main(): Promise<void> {
-  console.log("=".repeat(60));
-  console.log("Stripe Reconciliation Job - Manual Run");
-  console.log("=".repeat(60));
+  console.info("=".repeat(60));
+  console.info("Stripe Reconciliation Job - Manual Run");
+  console.info("=".repeat(60));
 
   try {
     const result = await reconciliationJob();
 
-    console.log("\n" + "=".repeat(60));
-    console.log("Final Summary:");
-    console.log("=".repeat(60));
-    console.log(`  Scanned: ${result.scanned}`);
-    console.log(`  Fixed: ${result.fixed}`);
-    console.log(`  Errors: ${result.errors}`);
-    console.log(`  Duration: ${result.durationMs}ms`);
+    console.info("\n" + "=".repeat(60));
+    console.info("Final Summary:");
+    console.info("=".repeat(60));
+    console.info(`  Scanned: ${result.scanned}`);
+    console.info(`  Fixed: ${result.fixed}`);
+    console.info(`  Errors: ${result.errors}`);
+    console.info(`  Duration: ${result.durationMs}ms`);
 
     process.exit(result.errors > 0 ? 1 : 0);
   } catch (error) {

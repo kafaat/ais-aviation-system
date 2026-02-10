@@ -231,7 +231,7 @@ test.describe("Flight Search", () => {
       await page.getByRole("button", { name: /بحث|Search/i }).click();
 
       // Check for loading indicator (skeleton, spinner, or loading text)
-      const loadingVisible =
+      const _loadingVisible =
         (await page.locator('[data-testid="loading"]').isVisible()) ||
         (await page.locator('[role="progressbar"]').isVisible()) ||
         (await page.locator(".skeleton, .animate-pulse").first().isVisible()) ||

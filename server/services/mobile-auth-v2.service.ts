@@ -16,9 +16,8 @@ import crypto from "crypto";
 import jwt, { SignOptions } from "jsonwebtoken";
 import { getDb } from "../db";
 import { refreshTokens, users } from "../../drizzle/schema";
-import { eq, and, lt, isNull, gt, desc } from "drizzle-orm";
+import { eq, and, lt, isNull } from "drizzle-orm";
 import { AppError, ErrorCode } from "../_core/errors";
-import * as schema from "../../drizzle/schema";
 
 // ============================================================================
 // CONFIGURATION - Fail Fast
@@ -192,7 +191,7 @@ export const mobileAuthServiceV2 = {
       createdAt: new Date(),
     });
 
-    console.log(`[Auth] Created refresh token for user ${userId}`);
+    console.info(`[Auth] Created refresh token for user ${userId}`);
     return token; // Return plain token to client
   },
 
@@ -291,7 +290,7 @@ export const mobileAuthServiceV2 = {
       role: user.role,
     });
 
-    console.log(`[Auth] Refreshed tokens for user ${user.id}`);
+    console.info(`[Auth] Refreshed tokens for user ${user.id}`);
 
     return {
       accessToken,
@@ -374,7 +373,7 @@ export const mobileAuthServiceV2 = {
       })
       .where(eq(refreshTokens.token, tokenHash));
 
-    console.log(`[Auth] Logged out (revoked refresh token)`);
+    console.info(`[Auth] Logged out (revoked refresh token)`);
   },
 
   /**
@@ -400,7 +399,7 @@ export const mobileAuthServiceV2 = {
 
     const revokedCount =
       (result as any).rowsAffected || (result as any)[0]?.affectedRows || 0;
-    console.log(`[Auth] Revoked ${revokedCount} tokens for user ${userId}`);
+    console.info(`[Auth] Revoked ${revokedCount} tokens for user ${userId}`);
     return revokedCount;
   },
 
@@ -425,7 +424,7 @@ export const mobileAuthServiceV2 = {
 
       const deletedCount =
         (result as any).rowsAffected || (result as any)[0]?.affectedRows || 0;
-      console.log(`[Auth] Cleaned up ${deletedCount} expired tokens`);
+      console.info(`[Auth] Cleaned up ${deletedCount} expired tokens`);
       return deletedCount;
     } catch (err) {
       console.error("[Auth] Cleanup failed:", err);

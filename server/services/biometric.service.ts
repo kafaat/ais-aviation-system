@@ -11,7 +11,7 @@
  */
 
 import { getDb } from "../db";
-import { passengers, flights, bookings } from "../../drizzle/schema";
+import { passengers, bookings } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
@@ -376,7 +376,7 @@ export async function getBoardingToken(
 /**
  * Get the enrollment status for a passenger across all biometric types.
  */
-export async function getEnrollmentStatus(passengerId: number): Promise<{
+export function getEnrollmentStatus(passengerId: number): {
   passengerId: number;
   enrollments: Array<{
     id: number;
@@ -386,7 +386,7 @@ export async function getEnrollmentStatus(passengerId: number): Promise<{
     expiresAt: Date;
   }>;
   hasActiveEnrollment: boolean;
-}> {
+} {
   const passengerEnrollments = enrollments
     .filter(e => e.passengerId === passengerId)
     .map(e => ({
@@ -412,10 +412,10 @@ export async function getEnrollmentStatus(passengerId: number): Promise<{
  * Revoke a passenger's biometric enrollment and delete stored template data.
  * This implements the right to erasure for biometric data.
  */
-export async function revokeEnrollment(
+export function revokeEnrollment(
   passengerId: number,
   biometricType?: BiometricType
-): Promise<{ revoked: number }> {
+): { revoked: number } {
   let revokedCount = 0;
 
   for (const enrollment of enrollments) {
@@ -533,7 +533,7 @@ export async function getFlightBiometricStats(flightId: number): Promise<{
 /**
  * Check if a gate's biometric hardware is ready for operations.
  */
-export async function getGateReadiness(gateId: number): Promise<{
+export function getGateReadiness(gateId: number): {
   gateId: number;
   ready: boolean;
   status: GateStatus;
@@ -541,7 +541,7 @@ export async function getGateReadiness(gateId: number): Promise<{
   firmwareVersion: string | null;
   lastCalibration: Date | null;
   issues: string[];
-}> {
+} {
   const gate = gates.find(g => g.gateId === gateId);
 
   if (!gate) {
@@ -595,13 +595,13 @@ export async function getGateReadiness(gateId: number): Promise<{
 /**
  * Configure or update a biometric gate device.
  */
-export async function configureGate(input: {
+export function configureGate(input: {
   gateId: number;
   airportId: number;
   deviceType: string;
   status: GateStatus;
   firmwareVersion?: string;
-}): Promise<BiometricGate> {
+}): BiometricGate {
   const now = new Date();
 
   const existingGate = gates.find(g => g.gateId === input.gateId);
@@ -645,7 +645,7 @@ export async function configureGate(input: {
  * Log a biometric event for audit purposes.
  * All biometric operations must be logged for compliance and security.
  */
-export async function logBiometricEvent(
+export function logBiometricEvent(
   passengerId: number,
   eventType: BiometricEventType,
   gateId: number | null,
@@ -656,7 +656,7 @@ export async function logBiometricEvent(
     processingTimeMs?: number;
     deviceId?: string;
   }
-): Promise<BiometricEvent> {
+): BiometricEvent {
   const event: BiometricEvent = {
     id: nextEventId++,
     passengerId,
@@ -677,17 +677,17 @@ export async function logBiometricEvent(
 /**
  * Get biometric events for audit trail with optional filters.
  */
-export async function getBiometricEvents(filters?: {
+export function getBiometricEvents(filters?: {
   passengerId?: number;
   flightId?: number;
   gateId?: number;
   eventType?: BiometricEventType;
   limit?: number;
   offset?: number;
-}): Promise<{
+}): {
   events: BiometricEvent[];
   total: number;
-}> {
+} {
   let filtered = [...events];
 
   if (filters?.passengerId) {

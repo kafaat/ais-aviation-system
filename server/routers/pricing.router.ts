@@ -7,12 +7,7 @@
  */
 
 import { z } from "zod";
-import {
-  router,
-  publicProcedure,
-  protectedProcedure,
-  adminProcedure,
-} from "../_core/trpc";
+import { router, publicProcedure } from "../_core/trpc";
 import { DynamicPricingService } from "../services/pricing/dynamic-pricing.service";
 import { CurrencyService } from "../services/currency/currency.service";
 import { TRPCError } from "@trpc/server";
@@ -269,7 +264,7 @@ export const pricingRouter = router({
   /**
    * Get supported currencies
    */
-  getSupportedCurrencies: publicProcedure.query(async () => {
+  getSupportedCurrencies: publicProcedure.query(() => {
     const currencies = CurrencyService.getSupportedCurrencies();
     return {
       success: true,

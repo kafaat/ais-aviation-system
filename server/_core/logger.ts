@@ -59,10 +59,6 @@ export {
 import {
   logger,
   createRequestLogger as createRequestLoggerNew,
-  logError as logErrorNew,
-  logInfo as logInfoNew,
-  logWarning as logWarningNew,
-  logDebug as logDebugNew,
 } from "../services/logger.service";
 
 /**

@@ -4,7 +4,6 @@ import {
   flights,
   bookings,
   airports,
-  airlines,
 } from "../../drizzle/schema";
 import { eq, and, sql, ne, inArray } from "drizzle-orm";
 

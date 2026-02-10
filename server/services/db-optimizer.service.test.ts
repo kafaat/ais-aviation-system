@@ -14,7 +14,6 @@ import {
   formatBytes,
   SlowQueryLog,
 } from "./db-optimizer.service";
-import { gt, lt } from "drizzle-orm";
 
 // Note: We don't mock ../db here because these tests only test utility functions
 // that don't require database access. The actual db-dependent functions would

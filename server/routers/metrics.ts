@@ -15,8 +15,6 @@ import {
   dbQueriesTotal,
   trpcRequestDuration,
   trpcRequestsTotal,
-  memoryUsageBytes,
-  cpuUsagePercent,
   eventLoopLag,
   activeConnections,
   collectSystemMetrics,
@@ -34,7 +32,7 @@ export const metricsRouter = router({
    * NOTE: For production Prometheus scraping, use the Express endpoint
    * at /api/metrics which returns proper content-type
    */
-  prometheus: adminProcedure.query(async () => {
+  prometheus: adminProcedure.query(() => {
     return getPrometheusMetrics();
   }),
 
@@ -42,7 +40,7 @@ export const metricsRouter = router({
    * JSON metrics endpoint
    * Returns system metrics in JSON format for debugging
    */
-  json: adminProcedure.query(async () => {
+  json: adminProcedure.query(() => {
     collectSystemMetrics();
     return getMetricsJson();
   }),
@@ -51,7 +49,7 @@ export const metricsRouter = router({
    * Summary of key metrics
    * Returns a high-level overview of system health
    */
-  summary: adminProcedure.query(async () => {
+  summary: adminProcedure.query(() => {
     collectSystemMetrics();
     const memUsage = process.memoryUsage();
     const uptime = process.uptime();
@@ -119,7 +117,7 @@ export const metricsRouter = router({
    * Reset all metrics
    * WARNING: This clears all collected metrics data
    */
-  reset: adminProcedure.mutation(async () => {
+  reset: adminProcedure.mutation(() => {
     registry.reset();
     return { success: true, message: "All metrics have been reset" };
   }),
@@ -133,7 +131,7 @@ export const metricsRouter = router({
         category: z.enum(["http", "database", "trpc", "system", "business"]),
       })
     )
-    .query(async ({ input }) => {
+    .query(({ input }) => {
       collectSystemMetrics();
 
       switch (input.category) {

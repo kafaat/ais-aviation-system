@@ -28,7 +28,7 @@ class CacheService {
   /**
    * Initialize Redis connection
    */
-  async connect(): Promise<void> {
+  connect(): void {
     if (this.connected) {
       return;
     }
@@ -608,6 +608,8 @@ class CacheService {
 export const cacheService = new CacheService();
 
 // Initialize on module load
-cacheService.connect().catch(err => {
+try {
+  cacheService.connect();
+} catch (err) {
   logger.error({ error: err }, "Failed to initialize cache service");
-});
+}

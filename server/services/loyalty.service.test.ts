@@ -56,7 +56,7 @@ const createMockDb = () => {
     delete: vi.fn().mockReturnThis(),
     transaction: vi
       .fn()
-      .mockImplementation(async (fn: (tx: typeof mockDb) => Promise<unknown>) =>
+      .mockImplementation((fn: (tx: typeof mockDb) => Promise<unknown>) =>
         fn(mockDb)
       ),
   };

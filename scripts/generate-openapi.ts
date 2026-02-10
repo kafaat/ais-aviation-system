@@ -30,7 +30,7 @@ import { getOpenApiSpec } from "../server/openapi";
  * Main function to generate OpenAPI documentation
  */
 async function generateOpenApiDocs(): Promise<void> {
-  console.log("Generating OpenAPI documentation...\n");
+  console.info("Generating OpenAPI documentation...\n");
 
   try {
     // Generate the OpenAPI specification
@@ -43,7 +43,7 @@ async function generateOpenApiDocs(): Promise<void> {
     const docsDir = join(projectRoot, "docs");
     if (!existsSync(docsDir)) {
       mkdirSync(docsDir, { recursive: true });
-      console.log("Created docs directory");
+      console.info("Created docs directory");
     }
 
     // Write the OpenAPI specification to file
@@ -55,11 +55,11 @@ async function generateOpenApiDocs(): Promise<void> {
     if (existsSync(publicDir)) {
       const publicOutputPath = join(publicDir, "openapi.json");
       writeFileSync(publicOutputPath, openApiSpec, "utf-8");
-      console.log(`OpenAPI spec written to: ${publicOutputPath}`);
+      console.info(`OpenAPI spec written to: ${publicOutputPath}`);
     }
 
     // Print summary
-    console.log(`
+    console.info(`
 OpenAPI Documentation Generated Successfully!
 =============================================
 

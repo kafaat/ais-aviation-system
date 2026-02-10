@@ -573,7 +573,7 @@ function ensureSeedData(): void {
 /**
  * Get current backup status for all system components
  */
-export async function getBackupStatus(): Promise<{
+export function getBackupStatus(): {
   components: {
     component: BackupComponent;
     lastBackup: BackupRecord | null;
@@ -582,7 +582,7 @@ export async function getBackupStatus(): Promise<{
     totalSize: number;
   }[];
   overall: "healthy" | "warning" | "critical";
-}> {
+} {
   ensureSeedData();
 
   const components: BackupComponent[] = [
@@ -648,10 +648,10 @@ export async function getBackupStatus(): Promise<{
 /**
  * Initiate a manual backup for a specific component
  */
-export async function triggerBackup(
+export function triggerBackup(
   backupType: BackupType,
   component: BackupComponent
-): Promise<BackupRecord> {
+): BackupRecord {
   ensureSeedData();
 
   const now = new Date();

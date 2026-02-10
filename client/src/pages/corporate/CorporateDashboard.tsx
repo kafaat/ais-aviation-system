@@ -67,14 +67,11 @@ export default function CorporateDashboard() {
       enabled: !!account,
     });
 
-  const {
-    data: users,
-    isLoading: usersLoading,
-    refetch: refetchUsers,
-  } = trpc.corporate.getUsers.useQuery(
-    { accountId: account?.id || 0 },
-    { enabled: !!account }
-  );
+  const { data: users, isLoading: usersLoading } =
+    trpc.corporate.getUsers.useQuery(
+      { accountId: account?.id || 0 },
+      { enabled: !!account }
+    );
 
   const {
     data: bookings,
@@ -106,7 +103,7 @@ export default function CorporateDashboard() {
     },
   });
 
-  const getStatusBadge = (status: string) => {
+  const _getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
         return (

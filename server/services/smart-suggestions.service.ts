@@ -11,7 +11,7 @@
 
 import { getDb } from "../db";
 import { bookings, flights, airports } from "../../drizzle/schema";
-import { eq, desc, sql, and, gte, ne, isNull } from "drizzle-orm";
+import { eq, desc, sql, and, gte, isNull } from "drizzle-orm";
 import { logger } from "../_core/logger";
 
 export interface SuggestedFlight {

@@ -265,7 +265,7 @@ export const adminRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(({ input }) => {
       const hoursBack = input?.hoursBack ?? 24;
       return metricsService.getBusinessMetrics(hoursBack);
     }),
@@ -282,7 +282,7 @@ export const adminRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(({ input }) => {
       const hoursBack = input?.hoursBack ?? 1;
       return metricsService.getMetricsSummary(hoursBack);
     }),
@@ -291,14 +291,14 @@ export const adminRouter = router({
    * Get real-time statistics
    * Returns metrics from the last 5 minutes for live monitoring
    */
-  getRealTimeStats: adminProcedure.query(async () => {
+  getRealTimeStats: adminProcedure.query(() => {
     return metricsService.getRealTimeStats();
   }),
 
   /**
    * Get current metrics storage info
    */
-  getMetricsInfo: adminProcedure.query(async () => {
+  getMetricsInfo: adminProcedure.query(() => {
     return {
       eventCount: metricsService.getEventCount(),
       timestamp: new Date(),

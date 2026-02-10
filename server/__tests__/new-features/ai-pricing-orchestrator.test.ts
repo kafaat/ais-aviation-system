@@ -275,7 +275,7 @@ describe("AI Pricing Orchestrator", () => {
   describe("AI Pricing Enabled/Disabled", () => {
     it("should return default result (all 1.0) when disabled", async () => {
       // Mock cache returns false for AI enabled key
-      mockCacheGet.mockImplementation(async (key: string) => {
+      mockCacheGet.mockImplementation((key: string) => {
         if (key === "ai_pricing_enabled") return false;
         return null;
       });
@@ -363,7 +363,7 @@ describe("AI Pricing Orchestrator", () => {
         },
       };
 
-      mockCacheGet.mockImplementation(async (key: string) => {
+      mockCacheGet.mockImplementation((key: string) => {
         if (key.startsWith("ai_pricing:")) return cachedResult;
         return null;
       });

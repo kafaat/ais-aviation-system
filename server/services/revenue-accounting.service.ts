@@ -15,7 +15,7 @@ import {
   bookingAncillaries,
   ancillaryServices,
 } from "../../drizzle/schema";
-import { sql, and, gte, lte, eq, desc, between } from "drizzle-orm";
+import { sql, and, gte, lte, eq, desc } from "drizzle-orm";
 
 // ============ Inline Schema Types ============
 
@@ -150,7 +150,7 @@ export interface RefundImpact {
 
 // ============ Helper: Date Range Builder ============
 
-function buildDateRange(startDate?: Date, endDate?: Date) {
+function _buildDateRange(startDate?: Date, endDate?: Date) {
   if (startDate && endDate) {
     return and(
       gte(bookings.createdAt, startDate),
@@ -160,7 +160,7 @@ function buildDateRange(startDate?: Date, endDate?: Date) {
   return undefined;
 }
 
-function buildPaymentDateRange(startDate?: Date, endDate?: Date) {
+function _buildPaymentDateRange(startDate?: Date, endDate?: Date) {
   if (startDate && endDate) {
     return and(
       gte(payments.createdAt, startDate),
@@ -400,7 +400,7 @@ export async function getRevenueByRoute(
     );
   }
 
-  const originAirports = airports;
+  const _originAirports = airports;
 
   const routeData = await db
     .select({
@@ -868,7 +868,7 @@ export async function getYieldAnalysis(
 export async function generateRevenueReport(
   month: number,
   year: number,
-  generatedBy: number
+  _generatedBy: number
 ): Promise<GeneratedReport> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

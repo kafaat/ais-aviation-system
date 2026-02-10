@@ -1,14 +1,9 @@
 import jwt, { SignOptions } from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import {
-  refreshTokens,
-  users,
-  type InsertRefreshToken,
-} from "../../drizzle/schema";
+import { refreshTokens, type InsertRefreshToken } from "../../drizzle/schema";
 import { eq, and, gt, lt } from "drizzle-orm";
 import { logger } from "../_core/logger";
-import * as schema from "../../drizzle/schema";
 
 const JWT_SECRET: string = process.env.JWT_SECRET ?? "";
 if (!JWT_SECRET) {
@@ -376,10 +371,10 @@ async function authenticateUser(
 /**
  * Authenticate request (supports both Cookie and Bearer token)
  */
-export async function authenticateRequest(
+export function authenticateRequest(
   authHeader?: string,
   cookieToken?: string
-): Promise<TokenPayload> {
+): TokenPayload {
   // Try Bearer token first
   let token: string | undefined;
 

@@ -236,9 +236,9 @@ async function sendEmail(template: EmailTemplate): Promise<boolean> {
   const redactedTo = template.to.includes("@")
     ? template.to[0] + "***@" + template.to.split("@")[1]
     : "[REDACTED]";
-  console.log("[Email Service] Sending email:");
-  console.log(`  To: ${redactedTo}`);
-  console.log(`  Subject: ${template.subject}`);
+  console.info("[Email Service] Sending email:");
+  console.info(`  To: ${redactedTo}`);
+  console.info(`  Subject: ${template.subject}`);
 
   // Simulate email sending delay
   await new Promise(resolve => setTimeout(resolve, 100));
@@ -255,7 +255,7 @@ export async function sendBookingConfirmation(
   try {
     const lang = data.language || "ar";
     const locale = getLocale(lang);
-    const dir = lang === "ar" ? "rtl" : "ltr";
+    const _dir = lang === "ar" ? "rtl" : "ltr";
     const cabinClassLabel =
       data.cabinClass === "economy" ? t("economy", lang) : t("business", lang);
     const currencyLabel = lang === "ar" ? "ر.س" : "SAR";
@@ -540,7 +540,7 @@ export async function sendFlightStatusChange(
 ): Promise<boolean> {
   try {
     const lang = data.language || "ar";
-    const dir = lang === "ar" ? "rtl" : "ltr";
+    const _dir = lang === "ar" ? "rtl" : "ltr";
     const statusText =
       {
         delayed: "تأخرت",
@@ -806,7 +806,7 @@ export async function sendRefundConfirmation(
 ): Promise<boolean> {
   try {
     const lang = data.language || "ar";
-    const dir = lang === "ar" ? "rtl" : "ltr";
+    const _dir = lang === "ar" ? "rtl" : "ltr";
     const template: EmailTemplate = {
       to: data.passengerEmail,
       subject: `${t("refundConfirmation", lang)} - ${data.bookingReference}`,
@@ -1026,7 +1026,7 @@ export async function sendCheckInReminder(
 ): Promise<boolean> {
   try {
     const lang = data.language || "ar";
-    const dir = lang === "ar" ? "rtl" : "ltr";
+    const _dir = lang === "ar" ? "rtl" : "ltr";
     const template: EmailTemplate = {
       to: data.passengerEmail,
       subject: `${t("checkInReminder", lang)} - ${data.flightNumber}`,

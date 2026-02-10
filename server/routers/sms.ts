@@ -305,7 +305,7 @@ export const smsRouter = router({
         protect: true,
       },
     })
-    .query(async () => {
+    .query(() => {
       return Object.values(smsService.SMS_TEMPLATES);
     }),
 

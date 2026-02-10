@@ -792,7 +792,7 @@ function calculateEngagementMetrics(
   const totalLogins = loginEvents.length;
 
   // Users who made bookings
-  const usersWithBookings = new Set(
+  const _usersWithBookings = new Set(
     bookingEvents.filter(e => e.userId).map(e => e.userId!)
   );
 

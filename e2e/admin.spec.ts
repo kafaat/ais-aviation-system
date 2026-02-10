@@ -1,10 +1,5 @@
 import { test, expect } from "@playwright/test";
-import {
-  testUsers,
-  testFlightData,
-  getNextWeekDate,
-} from "./fixtures/test-data";
-import { format } from "date-fns";
+import { testUsers, testFlightData } from "./fixtures/test-data";
 
 /**
  * E2E Test: Admin Dashboard Operations
@@ -441,7 +436,7 @@ test.describe("Admin Dashboard", () => {
       });
 
       // Buttons may not be visible if no pending refunds
-      const hasActionButtons =
+      const _hasActionButtons =
         (await approveButton.isVisible()) || (await rejectButton.isVisible());
 
       // Just verify the page loads correctly
@@ -585,7 +580,7 @@ test.describe("Admin Dashboard", () => {
     });
 
     test("should display data in tables", async ({ page }) => {
-      const hasTable =
+      const _hasTable =
         (await page.locator('table, [role="table"]').isVisible()) ||
         (await page.locator('[data-testid="data-table"]').isVisible());
 

@@ -59,7 +59,7 @@ async function authenticateWithBearerToken(
     // Get user from cache or database
     const user = await getCachedUser(payload.userId);
     return user;
-  } catch (error) {
+  } catch (_error) {
     // Token is invalid or expired
     return null;
   }
@@ -79,7 +79,7 @@ export async function createContext(
       if (user) {
         authMethod = "bearer";
       }
-    } catch (error) {
+    } catch (_error) {
       // Bearer token auth failed, will try cookie auth next
       user = null;
     }
@@ -92,7 +92,7 @@ export async function createContext(
       if (user) {
         authMethod = "cookie";
       }
-    } catch (error) {
+    } catch (_error) {
       // Authentication is optional for public procedures.
       user = null;
     }

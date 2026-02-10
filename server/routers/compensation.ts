@@ -1,15 +1,8 @@
 import { z } from "zod";
-import {
-  publicProcedure,
-  protectedProcedure,
-  adminProcedure,
-  router,
-} from "../_core/trpc";
+import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import {
   createClaim,
   processClaim,
-  getClaimsByBooking,
-  getClaimsByFlight,
   getClaimById,
   getClaimsByUser,
   calculateTotalLiability,

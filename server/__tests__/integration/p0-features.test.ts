@@ -9,7 +9,7 @@
  * @module __tests__/integration/p0-features.test
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // ============================================================================
 // Dynamic Pricing Tests
@@ -17,7 +17,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 
 describe("Dynamic Pricing Engine", () => {
   describe("Price Calculation", () => {
-    it("should calculate base price correctly", async () => {
+    it("should calculate base price correctly", () => {
       const basePrice = 50000; // 500 SAR in cents
       const multiplier = 1.0;
       const expectedPrice = basePrice * multiplier;
@@ -25,7 +25,7 @@ describe("Dynamic Pricing Engine", () => {
       expect(expectedPrice).toBe(50000);
     });
 
-    it("should apply demand multiplier for high occupancy", async () => {
+    it("should apply demand multiplier for high occupancy", () => {
       const basePrice = 50000;
       const occupancyRate = 0.85; // 85% occupancy
 
@@ -36,7 +36,7 @@ describe("Dynamic Pricing Engine", () => {
       expect(finalPrice).toBe(57500); // 15% increase
     });
 
-    it("should apply time-based multiplier for last-minute booking", async () => {
+    it("should apply time-based multiplier for last-minute booking", () => {
       const basePrice = 50000;
       const daysUntilDeparture = 2;
 
@@ -47,7 +47,7 @@ describe("Dynamic Pricing Engine", () => {
       expect(finalPrice).toBe(75000); // 50% increase
     });
 
-    it("should apply early bird discount", async () => {
+    it("should apply early bird discount", () => {
       const basePrice = 50000;
       const daysUntilDeparture = 45;
 
@@ -58,7 +58,7 @@ describe("Dynamic Pricing Engine", () => {
       expect(finalPrice).toBe(45000); // 10% discount
     });
 
-    it("should cap multiplier at maximum", async () => {
+    it("should cap multiplier at maximum", () => {
       const basePrice = 50000;
       const MAX_MULTIPLIER = 2.5;
       const calculatedMultiplier = 3.0; // Exceeds max
@@ -70,7 +70,7 @@ describe("Dynamic Pricing Engine", () => {
       expect(finalPrice).toBe(125000);
     });
 
-    it("should cap multiplier at minimum", async () => {
+    it("should cap multiplier at minimum", () => {
       const basePrice = 50000;
       const MIN_MULTIPLIER = 0.7;
       const calculatedMultiplier = 0.5; // Below min
@@ -84,7 +84,7 @@ describe("Dynamic Pricing Engine", () => {
   });
 
   describe("Seasonal Pricing", () => {
-    it("should apply Hajj season multiplier", async () => {
+    it("should apply Hajj season multiplier", () => {
       const basePrice = 50000;
       const hajjMultiplier = 1.8;
       const finalPrice = Math.round(basePrice * hajjMultiplier);
@@ -92,7 +92,7 @@ describe("Dynamic Pricing Engine", () => {
       expect(finalPrice).toBe(90000); // 80% increase
     });
 
-    it("should apply Ramadan multiplier", async () => {
+    it("should apply Ramadan multiplier", () => {
       const basePrice = 50000;
       const ramadanMultiplier = 1.5;
       const finalPrice = Math.round(basePrice * ramadanMultiplier);
@@ -100,7 +100,7 @@ describe("Dynamic Pricing Engine", () => {
       expect(finalPrice).toBe(75000); // 50% increase
     });
 
-    it("should apply weekend premium", async () => {
+    it("should apply weekend premium", () => {
       const basePrice = 50000;
       const weekendMultiplier = 1.1;
       const finalPrice = Math.round(basePrice * weekendMultiplier);
@@ -110,9 +110,9 @@ describe("Dynamic Pricing Engine", () => {
   });
 
   describe("Price Validation", () => {
-    it("should validate price within expiration time", async () => {
+    it("should validate price within expiration time", () => {
       const priceId = "PRC-1-economy-50000-" + Date.now() + "-abc123";
-      const expectedPrice = 50000;
+      const _expectedPrice = 50000;
       const PRICE_VALIDITY_MINUTES = 15;
 
       const parts = priceId.split("-");
@@ -122,7 +122,7 @@ describe("Dynamic Pricing Engine", () => {
       expect(ageMinutes).toBeLessThan(PRICE_VALIDITY_MINUTES);
     });
 
-    it("should reject expired price", async () => {
+    it("should reject expired price", () => {
       const oldTimestamp = Date.now() - 20 * 60 * 1000; // 20 minutes ago
       const priceId = "PRC-1-economy-50000-" + oldTimestamp + "-abc123";
       const PRICE_VALIDITY_MINUTES = 15;
@@ -142,7 +142,7 @@ describe("Dynamic Pricing Engine", () => {
 
 describe("Multi-Currency Support", () => {
   describe("Currency Conversion", () => {
-    it("should convert SAR to USD correctly", async () => {
+    it("should convert SAR to USD correctly", () => {
       const amountSAR = 1000;
       const rate = 0.2666;
       const expectedUSD = Math.round(amountSAR * rate * 100) / 100;
@@ -150,7 +150,7 @@ describe("Multi-Currency Support", () => {
       expect(expectedUSD).toBe(266.6);
     });
 
-    it("should convert USD to SAR correctly", async () => {
+    it("should convert USD to SAR correctly", () => {
       const amountUSD = 100;
       const rate = 3.75;
       const expectedSAR = Math.round(amountUSD * rate * 100) / 100;
@@ -158,7 +158,7 @@ describe("Multi-Currency Support", () => {
       expect(expectedSAR).toBe(375);
     });
 
-    it("should handle same currency conversion", async () => {
+    it("should handle same currency conversion", () => {
       const amount = 500;
       const fromCurrency = "SAR";
       const toCurrency = "SAR";
@@ -169,7 +169,7 @@ describe("Multi-Currency Support", () => {
       expect(converted).toBe(500);
     });
 
-    it("should handle cross-currency conversion", async () => {
+    it("should handle cross-currency conversion", () => {
       // EUR to AED via SAR
       const amountEUR = 100;
       const eurToSar = 4.0816;
@@ -183,7 +183,7 @@ describe("Multi-Currency Support", () => {
   });
 
   describe("Currency Formatting", () => {
-    it("should format SAR correctly", async () => {
+    it("should format SAR correctly", () => {
       const amount = 1234.56;
       const formatted = amount.toLocaleString("en-US", {
         minimumFractionDigits: 2,
@@ -193,7 +193,7 @@ describe("Multi-Currency Support", () => {
       expect(formatted).toBe("1,234.56");
     });
 
-    it("should format KWD with 3 decimal places", async () => {
+    it("should format KWD with 3 decimal places", () => {
       const amount = 123.456;
       const formatted = amount.toLocaleString("en-US", {
         minimumFractionDigits: 3,
@@ -203,7 +203,7 @@ describe("Multi-Currency Support", () => {
       expect(formatted).toBe("123.456");
     });
 
-    it("should format USD with symbol before", async () => {
+    it("should format USD with symbol before", () => {
       const amount = 500;
       const symbol = "$";
       const formatted = `${symbol}${amount.toFixed(2)}`;
@@ -211,7 +211,7 @@ describe("Multi-Currency Support", () => {
       expect(formatted).toBe("$500.00");
     });
 
-    it("should format SAR with symbol after", async () => {
+    it("should format SAR with symbol after", () => {
       const amount = 500;
       const symbol = "ر.س";
       const formatted = `${amount.toFixed(2)} ${symbol}`;
@@ -234,17 +234,17 @@ describe("Multi-Currency Support", () => {
       "EGP",
     ];
 
-    it("should support SAR as base currency", async () => {
+    it("should support SAR as base currency", () => {
       expect(supportedCurrencies).toContain("SAR");
     });
 
-    it("should support major international currencies", async () => {
+    it("should support major international currencies", () => {
       expect(supportedCurrencies).toContain("USD");
       expect(supportedCurrencies).toContain("EUR");
       expect(supportedCurrencies).toContain("GBP");
     });
 
-    it("should support GCC currencies", async () => {
+    it("should support GCC currencies", () => {
       expect(supportedCurrencies).toContain("AED");
       expect(supportedCurrencies).toContain("KWD");
       expect(supportedCurrencies).toContain("BHD");
@@ -252,7 +252,7 @@ describe("Multi-Currency Support", () => {
       expect(supportedCurrencies).toContain("OMR");
     });
 
-    it("should support regional currencies", async () => {
+    it("should support regional currencies", () => {
       expect(supportedCurrencies).toContain("EGP");
     });
   });
@@ -264,7 +264,7 @@ describe("Multi-Currency Support", () => {
 
 describe("Advanced Inventory Management", () => {
   describe("Inventory Status", () => {
-    it("should calculate occupancy rate correctly", async () => {
+    it("should calculate occupancy rate correctly", () => {
       const totalSeats = 150;
       const soldSeats = 120;
       const heldSeats = 10;
@@ -274,7 +274,7 @@ describe("Advanced Inventory Management", () => {
       expect(occupancyRate).toBeCloseTo(0.867, 2);
     });
 
-    it("should determine available status", async () => {
+    it("should determine available status", () => {
       const occupancyRate = 0.5;
       const THRESHOLDS = { limited: 0.85, waitlistOnly: 0.98 };
 
@@ -290,7 +290,7 @@ describe("Advanced Inventory Management", () => {
       expect(status).toBe("available");
     });
 
-    it("should determine limited status", async () => {
+    it("should determine limited status", () => {
       const occupancyRate = 0.9;
       const THRESHOLDS = { limited: 0.85, waitlistOnly: 0.98 };
 
@@ -306,7 +306,7 @@ describe("Advanced Inventory Management", () => {
       expect(status).toBe("limited");
     });
 
-    it("should determine waitlist_only status", async () => {
+    it("should determine waitlist_only status", () => {
       const occupancyRate = 0.99;
       const THRESHOLDS = { limited: 0.85, waitlistOnly: 0.98 };
 
@@ -324,7 +324,7 @@ describe("Advanced Inventory Management", () => {
   });
 
   describe("Seat Holds", () => {
-    it("should create hold with correct expiration", async () => {
+    it("should create hold with correct expiration", () => {
       const HOLD_EXPIRATION_MINUTES = 15;
       const now = Date.now();
       const expiresAt = new Date(now + HOLD_EXPIRATION_MINUTES * 60 * 1000);
@@ -334,7 +334,7 @@ describe("Advanced Inventory Management", () => {
       expect(expiresAt.getTime()).toBe(expectedExpiration);
     });
 
-    it("should detect expired hold", async () => {
+    it("should detect expired hold", () => {
       const HOLD_EXPIRATION_MINUTES = 15;
       const holdCreatedAt = Date.now() - 20 * 60 * 1000; // 20 minutes ago
       const expiresAt = holdCreatedAt + HOLD_EXPIRATION_MINUTES * 60 * 1000;
@@ -344,7 +344,7 @@ describe("Advanced Inventory Management", () => {
       expect(isExpired).toBe(true);
     });
 
-    it("should reduce available seats when hold is created", async () => {
+    it("should reduce available seats when hold is created", () => {
       const availableSeats = 50;
       const heldSeats = 5;
       const newHold = 3;
@@ -356,7 +356,7 @@ describe("Advanced Inventory Management", () => {
   });
 
   describe("Overbooking", () => {
-    it("should calculate overbooking limit correctly", async () => {
+    it("should calculate overbooking limit correctly", () => {
       const totalSeats = 150;
       const economyRate = 0.05; // 5%
       const maxOverbooking = 10;
@@ -368,7 +368,7 @@ describe("Advanced Inventory Management", () => {
       expect(overbookingLimit).toBe(7);
     });
 
-    it("should cap overbooking at maximum", async () => {
+    it("should cap overbooking at maximum", () => {
       const totalSeats = 300;
       const economyRate = 0.05; // 5%
       const maxOverbooking = 10;
@@ -380,7 +380,7 @@ describe("Advanced Inventory Management", () => {
       expect(overbookingLimit).toBe(10);
     });
 
-    it("should calculate effective available with overbooking", async () => {
+    it("should calculate effective available with overbooking", () => {
       const availableSeats = 5;
       const overbookingLimit = 7;
 
@@ -391,14 +391,14 @@ describe("Advanced Inventory Management", () => {
   });
 
   describe("Waitlist", () => {
-    it("should assign correct priority", async () => {
+    it("should assign correct priority", () => {
       const currentWaitlistCount = 5;
       const newPriority = currentWaitlistCount + 1;
 
       expect(newPriority).toBe(6);
     });
 
-    it("should calculate offer expiration", async () => {
+    it("should calculate offer expiration", () => {
       const WAITLIST_OFFER_HOURS = 24;
       const offeredAt = Date.now();
       const offerExpiresAt = offeredAt + WAITLIST_OFFER_HOURS * 60 * 60 * 1000;
@@ -408,7 +408,7 @@ describe("Advanced Inventory Management", () => {
       expect(offerExpiresAt).toBe(expectedExpiration);
     });
 
-    it("should process waitlist in priority order", async () => {
+    it("should process waitlist in priority order", () => {
       const waitlist = [
         { id: 1, priority: 3 },
         { id: 2, priority: 1 },
@@ -424,7 +424,7 @@ describe("Advanced Inventory Management", () => {
   });
 
   describe("Demand Forecasting", () => {
-    it("should predict high demand close to departure", async () => {
+    it("should predict high demand close to departure", () => {
       const daysUntilDeparture = 2;
 
       let predictedDemand: number;
@@ -445,7 +445,7 @@ describe("Advanced Inventory Management", () => {
       expect(riskLevel).toBe("high");
     });
 
-    it("should calculate expected no-shows", async () => {
+    it("should calculate expected no-shows", () => {
       const totalSeats = 150;
       const noShowRate = 0.08; // 8%
 
@@ -454,7 +454,7 @@ describe("Advanced Inventory Management", () => {
       expect(expectedNoShows).toBe(12);
     });
 
-    it("should recommend overbooking based on no-shows", async () => {
+    it("should recommend overbooking based on no-shows", () => {
       const expectedNoShows = 12;
       const safetyFactor = 0.8; // 80% of expected no-shows
 
@@ -471,7 +471,7 @@ describe("Advanced Inventory Management", () => {
 
 describe("P0 Features Integration", () => {
   describe("Pricing + Currency", () => {
-    it("should calculate price and convert to USD", async () => {
+    it("should calculate price and convert to USD", () => {
       const basePriceSAR = 50000; // cents
       const multiplier = 1.15;
       const finalPriceSAR = Math.round(basePriceSAR * multiplier);
@@ -485,7 +485,7 @@ describe("P0 Features Integration", () => {
   });
 
   describe("Inventory + Pricing", () => {
-    it("should increase price when inventory is low", async () => {
+    it("should increase price when inventory is low", () => {
       const basePrice = 50000;
       const occupancyRate = 0.92;
 
@@ -498,7 +498,7 @@ describe("P0 Features Integration", () => {
   });
 
   describe("Waitlist + Inventory", () => {
-    it("should add to waitlist when no seats available", async () => {
+    it("should add to waitlist when no seats available", () => {
       const availableSeats = 0;
       const overbookingLimit = 0;
       const effectiveAvailable = availableSeats + overbookingLimit;

@@ -18,7 +18,7 @@ interface SentryConfig {
  * Initialize Sentry for the server
  * Must be called before any other imports in the main entry point
  */
-export function initSentry(app?: Express): void {
+export function initSentry(_app?: Express): void {
   const dsn = process.env.SENTRY_DSN;
 
   if (!dsn || dsn.includes("your-key") || dsn.includes("your-project")) {
@@ -195,7 +195,7 @@ export function startTransaction(
 /**
  * Flush all pending events before shutdown
  */
-export async function flushSentry(timeout: number = 2000): Promise<boolean> {
+export function flushSentry(timeout: number = 2000): Promise<boolean> {
   return Sentry.flush(timeout);
 }
 

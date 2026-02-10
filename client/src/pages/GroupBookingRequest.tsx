@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useRoute, Link } from "wouter";
+import { useRoute, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { SEO } from "@/components/SEO";
@@ -28,7 +28,6 @@ import { ar, enUS } from "date-fns/locale";
 export default function GroupBookingRequest() {
   const { t, i18n } = useTranslation();
   const [, params] = useRoute("/group-booking/:id");
-  const [, navigate] = useLocation();
 
   const flightId = params?.id ? parseInt(params.id) : 0;
   const currentLocale = i18n.language === "ar" ? ar : enUS;

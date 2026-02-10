@@ -86,7 +86,12 @@ const initialLang = localStorage.getItem("i18nextLng") || "ar";
 document.documentElement.dir = initialLang === "ar" ? "rtl" : "ltr";
 document.documentElement.lang = initialLang;
 
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root");
+if (!rootElement) {
+  throw new Error("Root element not found");
+}
+
+createRoot(rootElement).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
       <App />

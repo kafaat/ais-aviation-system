@@ -211,7 +211,7 @@ export async function withIdempotency<T>(
         )
       );
 
-    console.log(
+    console.info(
       `[Idempotency] Operation completed for ${opts.scope}:${opts.key}`
     );
     return result;
@@ -264,7 +264,7 @@ export async function cleanupExpiredIdempotencyRecords(): Promise<number> {
       .where(lt(idempotencyRequests.expiresAt, now));
 
     const deletedCount = (result as any).rowsAffected || 0;
-    console.log(`[Idempotency] Cleaned up ${deletedCount} expired records`);
+    console.info(`[Idempotency] Cleaned up ${deletedCount} expired records`);
     return deletedCount;
   } catch (err) {
     console.error("[Idempotency] Cleanup failed:", err);

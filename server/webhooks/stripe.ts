@@ -42,6 +42,21 @@ import {
 // Create service-specific logger
 const log = createServiceLogger("webhook:stripe");
 
+/** Database transaction type derived from getDb return type */
+type DatabaseTransaction = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+/** Check if an error is a database duplicate entry error */
+function isDuplicateEntryError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err.code === "ER_DUP_ENTRY" ||
+      err.code === "23505" ||
+      err.code === "23000")
+  );
+}
+
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 // Fail fast in production if webhook secret is missing
@@ -76,17 +91,18 @@ export async function handleStripeWebhook(req: Request, res: Response) {
   // 1. Verify signature
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errMessage = err instanceof Error ? err.message : String(err);
     log.error(
       {
         event: "webhook_error",
         reason: "signature_verification_failed",
-        error: err.message,
+        error: errMessage,
       },
-      `Signature verification failed: ${err.message}`
+      `Signature verification failed: ${errMessage}`
     );
     return res.status(400).json({
-      error: `Signature verification failed: ${err.message}`,
+      error: `Signature verification failed: ${errMessage}`,
       retryable: false,
     });
   }
@@ -151,13 +167,9 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           retryCount: 0,
           createdAt: new Date(),
         });
-      } catch (insertErr: any) {
+      } catch (insertErr: unknown) {
         // Handle race condition (another process inserted)
-        if (
-          insertErr.code === "ER_DUP_ENTRY" ||
-          insertErr.code === "23505" ||
-          insertErr.code === "23000"
-        ) {
+        if (isDuplicateEntryError(insertErr)) {
           log.info(
             { event: "webhook_race_condition", eventId: event.id },
             `Event ${event.id} already stored by another process`
@@ -198,14 +210,15 @@ export async function handleStripeWebhook(req: Request, res: Response) {
       `Event ${event.id} processed successfully`
     );
     return res.json({ received: true });
-  } catch (error: any) {
-    const errorMsg = error.message || "Unknown error";
+  } catch (error: unknown) {
+    const errorMsg = error instanceof Error ? error.message : "Unknown error";
+    const errorStack = error instanceof Error ? error.stack : undefined;
     log.error(
       {
         event: "webhook_error",
         eventId: event.id,
         error: errorMsg,
-        stack: error.stack,
+        stack: errorStack,
       },
       `Error processing event ${event.id}: ${errorMsg}`
     );
@@ -250,35 +263,42 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 /**
  * Process event within transaction
  */
-async function processEvent(tx: any, event: Stripe.Event): Promise<void> {
+async function processEvent(
+  tx: DatabaseTransaction,
+  event: Stripe.Event
+): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed":
-      return handleCheckoutSessionCompleted(
+      await handleCheckoutSessionCompleted(
         tx,
         event.data.object as Stripe.Checkout.Session,
         event.id
       );
+      return;
 
     case "payment_intent.succeeded":
-      return handlePaymentIntentSucceeded(
+      await handlePaymentIntentSucceeded(
         tx,
         event.data.object as Stripe.PaymentIntent,
         event.id
       );
+      return;
 
     case "payment_intent.payment_failed":
-      return handlePaymentFailed(
+      await handlePaymentFailed(
         tx,
         event.data.object as Stripe.PaymentIntent,
         event.id
       );
+      return;
 
     case "charge.refunded":
-      return handleChargeRefunded(
+      await handleChargeRefunded(
         tx,
         event.data.object as Stripe.Charge,
         event.id
       );
+      return;
 
     default:
       log.info(
@@ -293,7 +313,7 @@ async function processEvent(tx: any, event: Stripe.Event): Promise<void> {
  * Handle checkout.session.completed
  */
 async function handleCheckoutSessionCompleted(
-  tx: any,
+  tx: DatabaseTransaction,
   session: Stripe.Checkout.Session,
   eventId: string
 ) {
@@ -328,11 +348,7 @@ async function handleCheckoutSessionCompleted(
   }
 
   // Only allow transition from pending states
-  if (
-    booking.status !== "pending_payment" &&
-    booking.status !== "pending" &&
-    booking.status !== "confirmed"
-  ) {
+  if (booking.status !== "pending" && booking.status !== "confirmed") {
     throw new Error(`Invalid state transition: ${booking.status} -> confirmed`);
   }
 
@@ -348,20 +364,16 @@ async function handleCheckoutSessionCompleted(
       userId: booking.userId,
       type: "charge",
       amount: amount.toString(),
-      currency: session.currency?.toUpperCase() || booking.currency || "SAR",
+      currency: session.currency?.toUpperCase() || "SAR",
       stripeEventId: eventId,
       stripePaymentIntentId: paymentIntentId,
       description: `Payment for booking #${bookingId}`,
       transactionDate: new Date(),
       createdAt: new Date(),
     });
-  } catch (ledgerErr: any) {
+  } catch (ledgerErr: unknown) {
     // Check if duplicate (unique constraint violation)
-    if (
-      ledgerErr.code === "ER_DUP_ENTRY" ||
-      ledgerErr.code === "23505" ||
-      ledgerErr.code === "23000"
-    ) {
+    if (isDuplicateEntryError(ledgerErr)) {
       log.info(
         { event: "ledger_entry_exists", paymentIntentId, bookingId },
         `Ledger entry already exists for ${paymentIntentId}, skipping`
@@ -496,7 +508,7 @@ async function handleCheckoutSessionCompleted(
  * Handle payment_intent.succeeded
  */
 async function handlePaymentIntentSucceeded(
-  tx: any,
+  tx: DatabaseTransaction,
   pi: Stripe.PaymentIntent,
   _eventId: string
 ) {
@@ -539,7 +551,7 @@ async function handlePaymentIntentSucceeded(
   }
 
   // Update if still pending
-  if (booking.status === "pending_payment" || booking.status === "pending") {
+  if (booking.status === "pending") {
     await tx
       .update(bookings)
       .set({
@@ -628,7 +640,7 @@ async function handlePaymentIntentSucceeded(
  * Handle payment_intent.payment_failed
  */
 async function handlePaymentFailed(
-  tx: any,
+  tx: DatabaseTransaction,
   paymentIntent: Stripe.PaymentIntent,
   _eventId: string
 ) {
@@ -664,7 +676,7 @@ async function handlePaymentFailed(
   }
 
   // Only update if in pending state
-  if (booking.status === "pending_payment" || booking.status === "pending") {
+  if (booking.status === "pending") {
     const previousStatus = booking.status;
 
     await tx
@@ -721,7 +733,7 @@ async function handlePaymentFailed(
  * Handle charge.refunded
  */
 async function handleChargeRefunded(
-  tx: any,
+  tx: DatabaseTransaction,
   charge: Stripe.Charge,
   eventId: string
 ) {
@@ -775,12 +787,8 @@ async function handleChargeRefunded(
       transactionDate: new Date(),
       createdAt: new Date(),
     });
-  } catch (ledgerErr: any) {
-    if (
-      ledgerErr.code === "ER_DUP_ENTRY" ||
-      ledgerErr.code === "23505" ||
-      ledgerErr.code === "23000"
-    ) {
+  } catch (ledgerErr: unknown) {
+    if (isDuplicateEntryError(ledgerErr)) {
       log.info(
         { event: "refund_entry_exists", bookingId, chargeId: charge.id },
         "Refund entry already exists, skipping"

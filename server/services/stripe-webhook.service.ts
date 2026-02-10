@@ -10,9 +10,16 @@ import {
 } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { logger } from "../_core/logger";
-import { recordStatusChange } from "./booking-state-machine.service";
+import {
+  recordStatusChange,
+  type BookingStatus,
+} from "./booking-state-machine.service";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("STRIPE_SECRET_KEY environment variable is required");
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-12-15.clover",
 });
 
@@ -24,10 +31,13 @@ export function verifyWebhookSignature(
   signature: string
 ): Stripe.Event {
   try {
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      throw new Error("STRIPE_WEBHOOK_SECRET environment variable is required");
+    }
     const event = stripe.webhooks.constructEvent(
       payload,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      process.env.STRIPE_WEBHOOK_SECRET
     );
     return event;
   } catch (err) {
@@ -278,7 +288,7 @@ async function handlePaymentIntentSucceeded(
   await recordStatusChange({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
-    previousStatus: booking.status as any,
+    previousStatus: booking.status as BookingStatus,
     newStatus: "confirmed",
     transitionReason: "Payment succeeded via Stripe webhook",
     actorType: "payment_gateway",
@@ -360,7 +370,7 @@ async function handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
   await recordStatusChange({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
-    previousStatus: booking.status as any,
+    previousStatus: booking.status as BookingStatus,
     newStatus: "payment_failed",
     transitionReason: `Payment failed: ${paymentIntent.last_payment_error?.message}`,
     actorType: "payment_gateway",
@@ -431,7 +441,7 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
   await recordStatusChange({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
-    previousStatus: booking.status as any,
+    previousStatus: booking.status as BookingStatus,
     newStatus: "refunded",
     transitionReason: `${isFullRefund ? "Full" : "Partial"} refund processed`,
     actorType: "payment_gateway",
@@ -466,9 +476,7 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
 /**
  * Handle checkout.session.completed event
  */
-async function handleCheckoutSessionCompleted(
-  event: Stripe.Event
-): Promise<void> {
+function handleCheckoutSessionCompleted(event: Stripe.Event): void {
   const session = event.data.object as Stripe.Checkout.Session;
 
   logger.info(

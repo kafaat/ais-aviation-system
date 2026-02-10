@@ -19,11 +19,10 @@ import {
   stripeEvents,
   idempotencyRequests,
   bookings,
-  financialLedger,
   refreshTokens,
   users,
 } from "../../drizzle/schema";
-import { eq, lt, and, isNull, sql } from "drizzle-orm";
+import { eq, lt, and, sql } from "drizzle-orm";
 import { sendBookingConfirmation } from "./email.service";
 import { createNotification } from "./notification.service";
 import { stripe } from "../stripe";

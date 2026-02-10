@@ -46,7 +46,7 @@ export const aiChatRouter = router({
         .optional()
     )
     .mutation(async ({ ctx, input }) => {
-      return startConversation({
+      return await startConversation({
         userId: ctx.user.id,
         initialContext: input?.initialContext,
         sessionId: input?.sessionId,
@@ -98,7 +98,7 @@ export const aiChatRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return getConversationHistory(input.conversationId, ctx.user.id);
+      return await getConversationHistory(input.conversationId, ctx.user.id);
     }),
 
   /**
@@ -111,7 +111,10 @@ export const aiChatRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return getConversationSuggestions(input.conversationId, ctx.user.id);
+      return await getConversationSuggestions(
+        input.conversationId,
+        ctx.user.id
+      );
     }),
 
   /**
@@ -124,14 +127,14 @@ export const aiChatRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return selectSuggestion(input.suggestionId, ctx.user.id);
+      return await selectSuggestion(input.suggestionId, ctx.user.id);
     }),
 
   /**
    * Get user's active conversations
    */
   myConversations: protectedProcedure.query(async ({ ctx }) => {
-    return getUserConversations(ctx.user.id);
+    return await getUserConversations(ctx.user.id);
   }),
 
   /**

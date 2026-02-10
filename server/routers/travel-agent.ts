@@ -10,12 +10,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import {
-  publicProcedure,
-  protectedProcedure,
-  adminProcedure,
-  router,
-} from "../_core/trpc";
+import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as travelAgentService from "../services/travel-agent.service";
 
 // ============ Input Schemas ============

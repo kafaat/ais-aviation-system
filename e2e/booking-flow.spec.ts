@@ -148,7 +148,7 @@ test.describe("Booking Flow", () => {
     await expect(page.getByText("رقم الجواز مطلوب")).toBeVisible();
   });
 
-  test("should handle payment failure gracefully", async ({ page }) => {
+  test("should handle payment failure gracefully", ({ page: _page }) => {
     // This test would require mocking a payment failure
     // Implementation depends on your payment setup
   });

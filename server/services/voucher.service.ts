@@ -6,7 +6,6 @@ import {
   voucherUsage,
   creditUsage,
   type InsertVoucher,
-  type InsertUserCredit,
 } from "../../drizzle/schema";
 import { eq, and, lte, gte, gt, desc, or, isNull, sql } from "drizzle-orm";
 
@@ -164,7 +163,7 @@ export async function updateVoucher(
 /**
  * Deactivate voucher (admin only)
  */
-export async function deactivateVoucher(id: number) {
+export function deactivateVoucher(id: number) {
   return updateVoucher(id, { isActive: false });
 }
 

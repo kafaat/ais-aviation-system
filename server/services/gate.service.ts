@@ -6,13 +6,9 @@ import {
   flights,
   airports,
   bookings,
-  users,
 } from "../../drizzle/schema";
-import { eq, and, or, gte, lte, desc, asc, ne, sql, count } from "drizzle-orm";
-import {
-  createNotification,
-  notifyFlightStatusUpdate,
-} from "./notification.service";
+import { eq, and, or, gte, lte, asc, ne, sql, count } from "drizzle-orm";
+import { createNotification } from "./notification.service";
 
 /**
  * Gate Service

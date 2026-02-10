@@ -134,7 +134,7 @@ export function getCircuitBreakerStatus(): Record<string, CircuitBreakerState> {
 /**
  * Execute a function with a timeout
  */
-export async function withTimeout<T>(
+export function withTimeout<T>(
   fn: () => Promise<T>,
   timeoutMs: number = 30000,
   label: string = "operation"
@@ -176,7 +176,7 @@ export function setupGracefulShutdown(
   server: Server,
   cleanup?: () => Promise<void>
 ): void {
-  const shutdown = async (signal: string) => {
+  const shutdown = (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
 

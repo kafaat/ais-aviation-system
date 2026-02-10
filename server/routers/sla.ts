@@ -26,7 +26,7 @@ export const slaRouter = router({
    * Get overall system health summary
    * Returns health status for all monitored services with uptime and alert counts
    */
-  getSystemHealth: adminProcedure.query(async () => {
+  getSystemHealth: adminProcedure.query(() => {
     return getSystemHealth();
   }),
 
@@ -40,7 +40,7 @@ export const slaRouter = router({
         service: z.string().min(1),
       })
     )
-    .query(async ({ input }) => {
+    .query(({ input }) => {
       return getServiceStatus(input.service);
     }),
 
@@ -48,7 +48,7 @@ export const slaRouter = router({
    * Get full SLA dashboard data
    * Returns system health, recent alerts, compliance history, and service breakdown
    */
-  getSLADashboard: adminProcedure.query(async () => {
+  getSLADashboard: adminProcedure.query(() => {
     return getSLADashboard();
   }),
 
@@ -66,7 +66,7 @@ export const slaRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(({ input }) => {
       const dateRange =
         input?.startDate && input?.endDate
           ? {
@@ -89,7 +89,7 @@ export const slaRouter = router({
         alertId: z.number().int().positive(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(({ input, ctx }) => {
       const result = acknowledgeAlert(input.alertId, ctx.user.id);
       if (!result) {
         return { success: false, message: "Alert not found" };
@@ -109,7 +109,7 @@ export const slaRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(({ input }) => {
       return getTargets(input?.activeOnly ?? true);
     }),
 
@@ -127,7 +127,7 @@ export const slaRouter = router({
         isActive: z.boolean().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       const { id, ...updates } = input;
       const result = updateTarget(id, updates);
       if (!result) {
@@ -147,7 +147,7 @@ export const slaRouter = router({
         endDate: z.string().datetime(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       const report = getSLAReport({
         start: new Date(input.startDate),
         end: new Date(input.endDate),
@@ -159,7 +159,7 @@ export const slaRouter = router({
    * Get all previously generated SLA reports
    * Returns reports sorted by generation date (most recent first)
    */
-  getReports: adminProcedure.query(async () => {
+  getReports: adminProcedure.query(() => {
     return getReports();
   }),
 
@@ -181,7 +181,7 @@ export const slaRouter = router({
         endDate: z.string().datetime(),
       })
     )
-    .query(async ({ input }) => {
+    .query(({ input }) => {
       const metrics = getMetricHistory(
         input.service,
         input.metricType as SLAMetricType,

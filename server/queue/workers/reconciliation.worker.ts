@@ -43,7 +43,7 @@ export const reconciliationWorker = redisConnection
   ? new Worker<ReconciliationJobData>(
       WORKER_CONFIG.name,
       async (job: Job<ReconciliationJobData>) => {
-        console.log(`[ReconciliationWorker] Processing job ${job.id}...`);
+        console.info(`[ReconciliationWorker] Processing job ${job.id}...`);
 
         const { limit = 200, triggeredBy = "scheduler" } = job.data;
 
@@ -58,7 +58,7 @@ export const reconciliationWorker = redisConnection
           await job.updateProgress(100);
 
           // Log summary
-          console.log(`[ReconciliationWorker] Job ${job.id} completed:`, {
+          console.info(`[ReconciliationWorker] Job ${job.id} completed:`, {
             triggeredBy,
             scanned: result.scanned,
             fixed: result.fixed,
@@ -88,8 +88,8 @@ export const reconciliationWorker = redisConnection
 // ============================================================================
 
 if (reconciliationWorker) {
-  reconciliationWorker.on("completed", (job: Job, result: any) => {
-    console.log(`[ReconciliationWorker] Job ${job.id} completed successfully`);
+  reconciliationWorker.on("completed", (job: Job, _result: unknown) => {
+    console.info(`[ReconciliationWorker] Job ${job.id} completed successfully`);
   });
 
   reconciliationWorker.on("failed", (job: Job | undefined, error: Error) => {
@@ -110,14 +110,14 @@ if (reconciliationWorker) {
 
 export async function closeReconciliationWorker(): Promise<void> {
   if (!reconciliationWorker) {
-    console.log(
+    console.info(
       "[ReconciliationWorker] Worker not initialized, skipping close"
     );
     return;
   }
-  console.log("[ReconciliationWorker] Closing worker...");
+  console.info("[ReconciliationWorker] Closing worker...");
   await reconciliationWorker.close();
-  console.log("[ReconciliationWorker] Worker closed");
+  console.info("[ReconciliationWorker] Worker closed");
 }
 
 // ============================================================================
@@ -148,7 +148,7 @@ export async function triggerReconciliation(options?: {
     }
   );
 
-  console.log(
+  console.info(
     `[ReconciliationWorker] Manual reconciliation triggered: ${job.id}`
   );
   return job.id!;

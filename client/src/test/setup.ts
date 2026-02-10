@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 // Setup mocks before all tests
-beforeAll(async () => {
+beforeAll(() => {
   // Only setup browser mocks in browser environment
   if (!isBrowser) return;
 

@@ -9,7 +9,6 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   bookings,
-  payments,
   flights,
   users,
   airports,

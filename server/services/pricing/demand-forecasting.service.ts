@@ -16,9 +16,8 @@ import {
   flights,
   demandPredictions,
   aiPricingModels,
-  pricingHistory,
 } from "../../../drizzle/schema";
-import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { cacheService } from "../cache.service";
 
 // ============================================================================
@@ -771,7 +770,6 @@ export async function evaluateForecastAccuracy(
   let sumAbsError = 0;
   let sumSqError = 0;
   let sumAbsPercentError = 0;
-  let sumActual = 0;
   let sumSqDiffFromMean = 0;
 
   const meanActual =
@@ -786,7 +784,6 @@ export async function evaluateForecastAccuracy(
     sumAbsError += Math.abs(error);
     sumSqError += error * error;
     sumAbsPercentError += actual > 0 ? Math.abs(error / actual) : 0;
-    sumActual += actual;
     sumSqDiffFromMean += (actual - meanActual) * (actual - meanActual);
   }
 

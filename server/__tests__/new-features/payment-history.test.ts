@@ -36,7 +36,7 @@ describe("Payment History Service", () => {
       );
     });
 
-    it("should accept userId and filters parameters", async () => {
+    it("should accept userId and filters parameters", () => {
       // Verify the function signature accepts proper parameters
       const fn = paymentHistoryService.getUserPaymentHistory;
       expect(fn.length).toBeGreaterThanOrEqual(1); // At least userId param

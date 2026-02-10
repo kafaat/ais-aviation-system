@@ -384,7 +384,7 @@ function MaintenanceTypeBadge({ type }: { type: MaintenanceLog["type"] }) {
 // ============================================================================
 
 export default function BagDropManagement() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { user, loading } = useAuth();
   const dateLocale = useDateLocale();
   const [activeTab, setActiveTab] = useState("stations");

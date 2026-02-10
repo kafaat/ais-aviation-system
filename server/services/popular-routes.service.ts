@@ -224,7 +224,6 @@ export async function getSuggestedDestinations(
   limit: number = 5
 ): Promise<PopularRoute[]> {
   // Check cache first
-  const cacheKey = `suggestions:${originId}`;
   const cached = await redisCacheService.getCachedRoute(originId, 0);
   if (cached && Array.isArray(cached)) {
     return (cached as PopularRoute[]).slice(0, limit);

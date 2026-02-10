@@ -1,4 +1,4 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   ancillaryServices,
@@ -376,10 +376,10 @@ export async function seedAncillaryServices() {
   // Check if services already exist
   const existing = await db.select().from(ancillaryServices).limit(1);
   if (existing.length > 0) {
-    console.log("[Ancillary Services] Services already seeded");
+    console.info("[Ancillary Services] Services already seeded");
     return;
   }
 
   await db.insert(ancillaryServices).values(services);
-  console.log(`[Ancillary Services] Seeded ${services.length} services`);
+  console.info(`[Ancillary Services] Seeded ${services.length} services`);
 }

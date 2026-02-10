@@ -12,12 +12,7 @@
  */
 
 import { z } from "zod";
-import {
-  router,
-  publicProcedure,
-  protectedProcedure,
-  adminProcedure,
-} from "../_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { AIPricingService } from "../services/pricing/ai-pricing.service";
 import { DemandForecastingService } from "../services/pricing/demand-forecasting.service";
 import { CustomerSegmentationService } from "../services/pricing/customer-segmentation.service";

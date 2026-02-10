@@ -35,7 +35,9 @@ router.post(
       getCorrelationId() || req.headers["x-correlation-id"] || "unknown";
     const signature = req.header("Stripe-Signature");
 
-    console.log(`[Webhook] Received request (correlationId: ${correlationId})`);
+    console.info(
+      `[Webhook] Received request (correlationId: ${correlationId})`
+    );
 
     // Validate signature header
     if (!signature) {

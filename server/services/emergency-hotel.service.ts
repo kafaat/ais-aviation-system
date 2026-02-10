@@ -347,16 +347,16 @@ export async function getHotelBookingsByPassenger(passengerId: number) {
  * - Delay >= 4 hours: entitled to meals only
  * - Delay < 4 hours: not entitled
  */
-export async function calculateHotelEntitlement(
+export function calculateHotelEntitlement(
   disruptionType: "delay" | "cancellation" | "diversion",
   delayHours: number
-): Promise<{
+): {
   entitled: boolean;
   hotelIncluded: boolean;
   mealsIncluded: boolean;
   transportIncluded: boolean;
   reason: string;
-}> {
+} {
   if (disruptionType === "cancellation") {
     return {
       entitled: true,

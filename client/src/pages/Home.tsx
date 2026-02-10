@@ -37,7 +37,6 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
-import { APP_LOGO } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useAccessibility } from "@/contexts/AccessibilityContext";
 

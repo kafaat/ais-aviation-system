@@ -730,7 +730,7 @@ export function getSystemHealth(): SystemHealthSummary {
   let totalActiveAlerts = 0;
   let compliantServices = 0;
 
-  const dateRange: DateRange = {
+  const _dateRange: DateRange = {
     start: new Date(Date.now() - 60 * 60 * 1000),
     end: new Date(),
   };
