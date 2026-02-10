@@ -14,6 +14,8 @@
 
 import Stripe from "stripe";
 import { getDb } from "../db";
+import type { MySql2Database } from "drizzle-orm/mysql2";
+import * as schema from "../../drizzle/schema";
 import {
   stripeEvents,
   financialLedger,
@@ -23,6 +25,10 @@ import {
 import { eq } from "drizzle-orm";
 import { stripe } from "../stripe";
 import { queueBookingConfirmationEmail } from "./queue-v2.service";
+
+type DbTransaction = Parameters<
+  Parameters<MySql2Database<typeof schema>["transaction"]>[0]
+>[0];
 
 // Fail fast if webhook secret is missing
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -57,9 +63,10 @@ export const stripeWebhookServiceV2 = {
         opts.signature,
         webhookSecret
       );
-    } catch (err: any) {
-      console.error(`[Webhook] Signature verification failed:`, err.message);
-      throw new Error(`Signature verification failed: ${err.message}`);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error(`[Webhook] Signature verification failed:`, error.message);
+      throw new Error("Signature verification failed");
     }
 
     const db = await getDb();
@@ -96,9 +103,10 @@ export const stripeWebhookServiceV2 = {
           retryCount: 0,
           createdAt: new Date(),
         });
-      } catch (err: any) {
+      } catch (err) {
+        const error = err as { code?: string };
         // Handle race condition (another process inserted)
-        if (err.code === "ER_DUP_ENTRY" || err.code === "23505") {
+        if (error.code === "ER_DUP_ENTRY" || error.code === "23505") {
           console.info(
             `[Webhook] Event ${event.id} already stored by another process`
           );
@@ -125,8 +133,9 @@ export const stripeWebhookServiceV2 = {
       });
 
       console.info(`[Webhook] Event ${event.id} processed successfully`);
-    } catch (err: any) {
-      const errorMsg = err.message || "Unknown error";
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      const errorMsg = error.message || "Unknown error";
       console.error(`[Webhook] Error processing event ${event.id}:`, errorMsg);
 
       // Update error info (processed=false allows retry)
@@ -146,7 +155,7 @@ export const stripeWebhookServiceV2 = {
   /**
    * Process event within transaction
    */
-  async processEvent(tx: any, event: Stripe.Event): Promise<void> {
+  async processEvent(tx: DbTransaction, event: Stripe.Event): Promise<void> {
     switch (event.type) {
       case "checkout.session.completed":
         return this.onCheckoutSessionCompleted(
@@ -193,7 +202,7 @@ export const stripeWebhookServiceV2 = {
    * Handle checkout.session.completed
    */
   async onCheckoutSessionCompleted(
-    tx: any,
+    tx: DbTransaction,
     session: Stripe.Checkout.Session,
     eventId: string
   ): Promise<void> {
@@ -205,8 +214,9 @@ export const stripeWebhookServiceV2 = {
     console.info(`[Webhook] Processing checkout for booking ${bookingId}`);
 
     // 1. Load booking
+    const bookingIdNum = parseInt(bookingId);
     const booking = await tx.query.bookings.findFirst({
-      where: (t: any, { eq }: any) => eq(t.id, parseInt(bookingId)),
+      where: (t, { eq }) => eq(t.id, bookingIdNum),
     });
 
     if (!booking) {
@@ -242,9 +252,10 @@ export const stripeWebhookServiceV2 = {
         transactionDate: new Date(),
         createdAt: new Date(),
       });
-    } catch (err: any) {
+    } catch (err) {
+      const error = err as { code?: string };
       // Check if duplicate (unique constraint violation)
-      if (err.code === "ER_DUP_ENTRY" || err.code === "23505") {
+      if (error.code === "ER_DUP_ENTRY" || error.code === "23505") {
         console.info(
           `[Webhook] Ledger entry already exists for ${paymentIntentId}, skipping`
         );
@@ -268,11 +279,14 @@ export const stripeWebhookServiceV2 = {
     // 5. Record status history
     await tx.insert(bookingStatusHistory).values({
       bookingId: parseInt(bookingId),
-      previousStatus: booking.status,
+      bookingReference: booking.bookingReference,
+      previousStatus: booking.status as "pending", // Type assertion safe here due to check above
       newStatus: "confirmed",
-      reason: "Payment completed via Stripe checkout",
+      transitionReason: "Payment completed via Stripe checkout",
       changedBy: null, // System
-      createdAt: new Date(),
+      actorType: "payment_gateway",
+      paymentIntentId: paymentIntentId,
+      transitionedAt: new Date(),
     });
 
     console.info(`[Webhook] Booking ${bookingId} confirmed successfully`);
@@ -301,7 +315,7 @@ export const stripeWebhookServiceV2 = {
    * Handle payment_intent.succeeded
    */
   async onPaymentIntentSucceeded(
-    tx: any,
+    tx: DbTransaction,
     pi: Stripe.PaymentIntent,
     _eventId: string
   ): Promise<void> {
@@ -315,8 +329,9 @@ export const stripeWebhookServiceV2 = {
 
     // Similar logic to checkout.session.completed
     // but we check if already handled by checkout event
+    const bookingIdNum = parseInt(bookingId);
     const booking = await tx.query.bookings.findFirst({
-      where: (t: any, { eq }: any) => eq(t.id, parseInt(bookingId)),
+      where: (t, { eq }) => eq(t.id, bookingIdNum),
     });
 
     if (!booking) {
@@ -352,7 +367,7 @@ export const stripeWebhookServiceV2 = {
    * Handle payment_intent.payment_failed
    */
   async onPaymentIntentFailed(
-    tx: any,
+    tx: DbTransaction,
     pi: Stripe.PaymentIntent,
     _eventId: string
   ): Promise<void> {
@@ -364,8 +379,9 @@ export const stripeWebhookServiceV2 = {
 
     console.info(`[Webhook] PaymentIntent failed for booking ${bookingId}`);
 
+    const bookingIdNum = parseInt(bookingId);
     const booking = await tx.query.bookings.findFirst({
-      where: (t: any, { eq }: any) => eq(t.id, parseInt(bookingId)),
+      where: (t, { eq }) => eq(t.id, bookingIdNum),
     });
 
     if (!booking) {
@@ -378,7 +394,7 @@ export const stripeWebhookServiceV2 = {
       await tx
         .update(bookings)
         .set({
-          status: "failed",
+          status: "cancelled", // Use valid status - failed payments should cancel booking
           paymentStatus: "failed",
           updatedAt: new Date(),
         })
@@ -386,15 +402,20 @@ export const stripeWebhookServiceV2 = {
 
       // Record status history
       await tx.insert(bookingStatusHistory).values({
+        bookingReference: booking.bookingReference,
         bookingId: parseInt(bookingId),
-        previousStatus: booking.status,
-        newStatus: "failed",
-        reason: `Payment failed: ${pi.last_payment_error?.message || "Unknown error"}`,
+        previousStatus: booking.status as "pending",
+        newStatus: "cancelled",
+        transitionReason: `Payment failed: ${pi.last_payment_error?.message || "Unknown error"}`,
         changedBy: null,
-        createdAt: new Date(),
+        actorType: "payment_gateway",
+        paymentIntentId: pi.id,
+        transitionedAt: new Date(),
       });
 
-      console.info(`[Webhook] Booking ${bookingId} marked as failed`);
+      console.info(
+        `[Webhook] Booking ${bookingId} cancelled due to payment failure`
+      );
     }
   },
 
@@ -402,7 +423,7 @@ export const stripeWebhookServiceV2 = {
    * Handle charge.refunded
    */
   async onChargeRefunded(
-    tx: any,
+    tx: DbTransaction,
     charge: Stripe.Charge,
     eventId: string
   ): Promise<void> {
@@ -414,8 +435,9 @@ export const stripeWebhookServiceV2 = {
 
     console.info(`[Webhook] Charge refunded for booking ${bookingId}`);
 
+    const bookingIdNum = parseInt(bookingId);
     const booking = await tx.query.bookings.findFirst({
-      where: (t: any, { eq }: any) => eq(t.id, parseInt(bookingId)),
+      where: (t, { eq }) => eq(t.id, bookingIdNum),
     });
 
     if (!booking) {
@@ -445,8 +467,9 @@ export const stripeWebhookServiceV2 = {
         transactionDate: new Date(),
         createdAt: new Date(),
       });
-    } catch (err: any) {
-      if (err.code === "ER_DUP_ENTRY" || err.code === "23505") {
+    } catch (err) {
+      const error = err as { code?: string };
+      if (error.code === "ER_DUP_ENTRY" || error.code === "23505") {
         console.info(`[Webhook] Refund entry already exists, skipping`);
         return; // Idempotent
       }
@@ -454,14 +477,16 @@ export const stripeWebhookServiceV2 = {
     }
 
     // Update booking status
-    const newStatus = isFullRefund ? "refunded" : "partially_refunded";
+    // Full refund: cancelled status, partial refund: keep as confirmed
+    const newStatus = isFullRefund ? "cancelled" : booking.status;
+    const newPaymentStatus = "refunded";
     const previousStatus = booking.status;
 
     await tx
       .update(bookings)
       .set({
-        status: newStatus,
-        paymentStatus: isFullRefund ? "refunded" : "partially_refunded",
+        ...(isFullRefund && { status: "cancelled" }),
+        paymentStatus: newPaymentStatus,
         updatedAt: new Date(),
       })
       .where(eq(bookings.id, parseInt(bookingId)));
@@ -469,13 +494,23 @@ export const stripeWebhookServiceV2 = {
     // Record status history
     await tx.insert(bookingStatusHistory).values({
       bookingId: parseInt(bookingId),
-      previousStatus,
-      newStatus,
-      reason: isFullRefund
+      bookingReference: booking.bookingReference,
+      previousStatus: previousStatus as
+        | "confirmed"
+        | "cancelled"
+        | "completed"
+        | "pending",
+      newStatus: newStatus as
+        | "confirmed"
+        | "cancelled"
+        | "completed"
+        | "pending",
+      transitionReason: isFullRefund
         ? "Full refund processed"
         : `Partial refund of ${refundAmount} ${charge.currency.toUpperCase()}`,
       changedBy: null,
-      createdAt: new Date(),
+      actorType: "payment_gateway",
+      transitionedAt: new Date(),
     });
 
     console.info(`[Webhook] Booking ${bookingId} ${newStatus}`);
@@ -485,7 +520,7 @@ export const stripeWebhookServiceV2 = {
    * Handle charge.dispute.created
    */
   async onDisputeCreated(
-    tx: any,
+    tx: DbTransaction,
     dispute: Stripe.Dispute,
     eventId: string
   ): Promise<void> {
@@ -497,14 +532,9 @@ export const stripeWebhookServiceV2 = {
 
     console.info(`[Webhook] Dispute created for booking ${bookingId}`);
 
-    // Update booking status to disputed
-    await tx
-      .update(bookings)
-      .set({
-        status: "disputed",
-        updatedAt: new Date(),
-      })
-      .where(eq(bookings.id, parseInt(bookingId)));
+    // Note: We don't have a "disputed" status in the booking enum
+    // Disputes are tracked in the financial ledger
+    // The booking remains in its current status
 
     // Record in ledger
     await tx.insert(financialLedger).values({

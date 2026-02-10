@@ -27,7 +27,7 @@ export type IdempotencyStatus = "STARTED" | "COMPLETED" | "FAILED";
 /**
  * Calculate request hash from payload
  */
-function calculateRequestHash(payload: any): string {
+function calculateRequestHash(payload: unknown): string {
   const payloadString = JSON.stringify(payload);
   return crypto.createHash("sha256").update(payloadString).digest("hex");
 }
@@ -40,11 +40,11 @@ export async function checkIdempotency(
   scope: IdempotencyScope,
   idempotencyKey: string,
   userId?: number,
-  requestPayload?: any
+  requestPayload?: unknown
 ): Promise<{
   exists: boolean;
   status?: IdempotencyStatus;
-  response?: any;
+  response?: unknown;
   error?: string;
 }> {
   // Build query conditions
@@ -108,7 +108,7 @@ export async function checkIdempotency(
 export async function createIdempotencyRecord(
   scope: IdempotencyScope,
   idempotencyKey: string,
-  requestPayload: any,
+  requestPayload: unknown,
   userId?: number,
   ttlSeconds: number = 86400 // 24 hours default
 ): Promise<boolean> {
@@ -142,12 +142,13 @@ export async function createIdempotencyRecord(
     );
 
     return true;
-  } catch (error: any) {
+  } catch (error) {
     // Check if it's a duplicate key error
+    const dbError = error as { code?: string };
     if (
-      error.code === "ER_DUP_ENTRY" ||
-      error.code === "23505" ||
-      error.code === "23000"
+      dbError.code === "ER_DUP_ENTRY" ||
+      dbError.code === "23505" ||
+      dbError.code === "23000"
     ) {
       logger.info(
         {
@@ -171,7 +172,7 @@ export async function createIdempotencyRecord(
 export async function completeIdempotencyRecord(
   scope: IdempotencyScope,
   idempotencyKey: string,
-  response: any,
+  response: unknown,
   userId?: number
 ): Promise<void> {
   const conditions = [
