@@ -193,7 +193,7 @@ class SDKServer {
     );
   }
 
-  async signSession(
+  signSession(
     payload: SessionPayload,
     options: { expiresInMs?: number } = {}
   ): Promise<string> {
