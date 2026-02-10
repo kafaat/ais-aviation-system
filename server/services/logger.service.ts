@@ -299,7 +299,6 @@ function buildTransportTargets(): TransportTargetOptions[] {
  * Build logger options for ELK/CloudWatch compatibility
  */
 function buildLoggerOptions(): LoggerOptions {
-  const isProduction = NODE_ENV === "production";
   const targets = buildTransportTargets();
 
   const options: LoggerOptions = {

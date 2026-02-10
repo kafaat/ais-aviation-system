@@ -80,7 +80,6 @@ export interface RFMScores {
 // ============================================================================
 
 const PROFILE_CACHE_TTL = 30 * 60; // 30 minutes
-const SEGMENT_CACHE_TTL = 60 * 60; // 1 hour
 
 // RFM thresholds
 const RECENCY_THRESHOLDS = [7, 30, 90, 180]; // days
@@ -736,7 +735,7 @@ function calculatePriceSensitivity(
 
 function calculatePricingAdjustment(
   segments: SegmentAssignment[],
-  metrics: CustomerMetrics
+  _metrics: CustomerMetrics
 ): number {
   if (segments.length === 0) return 1.0;
 

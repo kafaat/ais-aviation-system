@@ -6,7 +6,7 @@
  */
 
 import { sql } from "drizzle-orm";
-import { getDb, getPool, getPoolStats } from "../db";
+import { getDb, getPoolStats } from "../db";
 import { createServiceLogger } from "../_core/logger";
 
 const log = createServiceLogger("db-optimizer");

@@ -1,6 +1,5 @@
 import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
-import * as db from "../db";
 import { getDb } from "../db";
 import { bookings, payments, users, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -197,7 +196,7 @@ export async function createRefund(input: CreateRefundInput) {
           processingDays: 5,
         });
 
-        console.log(
+        console.info(
           `[Refund] Confirmation email sent to ${bookingDetails.userEmail}`
         );
       }

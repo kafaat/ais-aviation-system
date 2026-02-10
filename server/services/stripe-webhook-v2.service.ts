@@ -18,10 +18,9 @@ import {
   stripeEvents,
   financialLedger,
   bookings,
-  payments,
   bookingStatusHistory,
 } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { stripe } from "../stripe";
 import { queueBookingConfirmationEmail } from "./queue-v2.service";
 

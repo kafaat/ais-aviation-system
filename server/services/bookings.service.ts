@@ -120,7 +120,7 @@ export async function createBooking(input: CreateBookingInput) {
     const totalAmount = pricingResult.price;
 
     if (pricingResult.pricing) {
-      console.log(
+      console.info(
         `[Booking] Dynamic pricing applied: ${pricingResult.pricing.adjustmentPercentage}% adjustment (Occupancy: ${pricingResult.pricing.occupancyRate}%, Days until departure: ${pricingResult.pricing.daysUntilDeparture})`
       );
     }

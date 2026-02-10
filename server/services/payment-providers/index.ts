@@ -102,7 +102,7 @@ export function getAvailableProviderInfo(): PaymentProviderInfo[] {
 /**
  * Create checkout session with a specific provider
  */
-export async function createCheckoutWithProvider(
+export function createCheckoutWithProvider(
   providerId: PaymentProviderType,
   input: CheckoutSessionInput
 ): Promise<CheckoutSessionResult> {
@@ -130,7 +130,7 @@ export async function createCheckoutWithProvider(
 /**
  * Verify payment with a specific provider
  */
-export async function verifyPaymentWithProvider(
+export function verifyPaymentWithProvider(
   providerId: PaymentProviderType,
   sessionId: string
 ): Promise<PaymentVerificationResult> {

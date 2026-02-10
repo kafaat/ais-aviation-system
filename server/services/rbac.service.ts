@@ -182,7 +182,13 @@ export function hasCapability(userRole: UserRole, capability: string): boolean {
  * Creates a middleware that checks if the user has one of the required roles
  */
 export function createRBACMiddleware(requiredRoles: UserRole[]) {
-  return async ({ ctx, next }: { ctx: TrpcContext; next: any }) => {
+  return ({
+    ctx,
+    next,
+  }: {
+    ctx: TrpcContext;
+    next: (opts: { ctx: TrpcContext }) => unknown;
+  }) => {
     // Ensure user is authenticated
     if (!ctx.user) {
       throw new TRPCError({

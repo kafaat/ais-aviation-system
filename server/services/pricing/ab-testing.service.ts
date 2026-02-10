@@ -16,7 +16,7 @@ import {
   pricingAbTestVariants,
   pricingAbTestExposures,
 } from "../../../drizzle/schema";
-import { eq, and, gte, lte, sql, count, sum, desc } from "drizzle-orm";
+import { eq, and, lte, sql, desc } from "drizzle-orm";
 import { cacheService } from "../cache.service";
 
 // ============================================================================
@@ -94,7 +94,6 @@ export interface VariantAssignment {
 // Constants
 // ============================================================================
 
-const TEST_CACHE_TTL = 5 * 60; // 5 minutes
 const ASSIGNMENT_CACHE_TTL = 60 * 60; // 1 hour
 
 // ============================================================================
@@ -514,7 +513,7 @@ export async function getTestResults(testId: number): Promise<ABTestResults> {
     };
   }
 
-  const { pValue, isSignificant, zScore } = calculateSignificance(
+  const { pValue, isSignificant } = calculateSignificance(
     control.metrics,
     treatment.metrics,
     parseFloat(test.confidenceLevel || "0.95")

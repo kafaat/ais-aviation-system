@@ -11,8 +11,8 @@
  */
 
 import { getDb } from "../../db";
-import { exchangeRates, currencies } from "../../../drizzle/schema";
-import { eq, and, gte, desc } from "drizzle-orm";
+import { exchangeRates } from "../../../drizzle/schema";
+import { eq, and, desc } from "drizzle-orm";
 import { cacheService as CacheService } from "../cache.service";
 
 // ============================================================================
@@ -285,7 +285,7 @@ async function getDbExchangeRate(
     }
   } catch (error) {
     // Table might not exist yet
-    console.log(
+    console.info(
       JSON.stringify({
         event: "exchange_rate_db_error",
         error: error instanceof Error ? error.message : "Unknown error",
@@ -420,7 +420,7 @@ export function parseAmount(formattedAmount: string): number {
  * Should be called periodically (e.g., every hour)
  */
 export async function updateExchangeRates(): Promise<void> {
-  console.log(
+  console.info(
     JSON.stringify({
       event: "exchange_rates_update_started",
       timestamp: new Date().toISOString(),
@@ -435,7 +435,7 @@ export async function updateExchangeRates(): Promise<void> {
     // - Central Bank APIs
 
     // For now, we'll use the fallback rates
-    for (const [key, rate] of Object.entries(FALLBACK_RATES)) {
+    for (const [key, _rate] of Object.entries(FALLBACK_RATES)) {
       const [from, to] = key.split("_");
 
       // Update database
@@ -454,7 +454,7 @@ export async function updateExchangeRates(): Promise<void> {
       await CacheService.del(cacheKey);
     }
 
-    console.log(
+    console.info(
       JSON.stringify({
         event: "exchange_rates_update_completed",
         ratesUpdated: Object.keys(FALLBACK_RATES).length,

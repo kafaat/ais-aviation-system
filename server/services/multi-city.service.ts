@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as db from "../db";
 import {
   bookingSegments,

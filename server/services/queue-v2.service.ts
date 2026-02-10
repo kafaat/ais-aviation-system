@@ -502,7 +502,7 @@ export function startScheduledWorker(): Worker {
 /**
  * Run reconciliation job
  */
-async function runReconciliation(data: ReconciliationJobData): Promise<void> {
+async function runReconciliation(_data: ReconciliationJobData): Promise<void> {
   console.info(`[Reconciliation] Starting reconciliation`);
 
   const db = await getDb();
