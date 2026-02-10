@@ -1,5 +1,5 @@
 import { getDb } from "../db";
-import { bookings, payments } from "../../drizzle/schema";
+import { bookings } from "../../drizzle/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 
 /**

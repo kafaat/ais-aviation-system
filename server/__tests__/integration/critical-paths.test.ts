@@ -11,15 +11,7 @@
  * @see PRODUCTION_GRADE_IMPLEMENTATION_GUIDE.md
  */
 
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  beforeEach,
-  vi,
-} from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { getDb } from "../../db";
 import {
   bookings,
@@ -39,10 +31,7 @@ import {
   IdempotencyError,
   IdempotencyScope,
 } from "../../services/idempotency-v2.service";
-import {
-  runStripeReconciliation,
-  runReconciliationDryRun,
-} from "../../services/stripe/stripe-reconciliation.service";
+import { runReconciliationDryRun } from "../../services/stripe/stripe-reconciliation.service";
 
 // ============================================================================
 // Test Configuration
@@ -196,13 +185,11 @@ async function createTestPayment(
 
 describe("Critical Path 1: Complete Booking Flow", () => {
   let bookingId: number;
-  let bookingRef: string;
   let paymentIntentId: string;
 
   it("should create a pending booking", async () => {
     const result = await createTestBooking();
     bookingId = result.bookingId;
-    bookingRef = result.bookingRef;
 
     const [booking] = await db!
       .select()
@@ -477,7 +464,7 @@ describe("Critical Path 4: Cancel Before Payment", () => {
     });
 
     // Try to cancel - should fail (or require refund)
-    const result = await db!
+    const _result = await db!
       .update(bookings)
       .set({ status: "cancelled" })
       .where(
@@ -648,7 +635,7 @@ describe("Critical Path 7: State Machine Guards", () => {
     });
 
     // Try to confirm a cancelled booking - should fail
-    const result = await db!
+    const _result = await db!
       .update(bookings)
       .set({ status: "confirmed" })
       .where(
@@ -696,7 +683,7 @@ describe("Critical Path 8: Reconciliation", () => {
   it("should run reconciliation in dry run mode without changes", async () => {
     // Skip if Stripe not configured
     if (!process.env.STRIPE_SECRET_KEY) {
-      console.log("Skipping reconciliation test - STRIPE_SECRET_KEY not set");
+      console.info("Skipping reconciliation test - STRIPE_SECRET_KEY not set");
       return;
     }
 

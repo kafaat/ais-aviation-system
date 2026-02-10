@@ -3,7 +3,6 @@ import { adminProcedure, router } from "../_core/trpc";
 import {
   getActiveIROPSDisruptions,
   createDisruptionEvent,
-  getDisruptionImpact,
   getAffectedPassengers,
   autoTriggerProtection,
   getIROPSDashboard,

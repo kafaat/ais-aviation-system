@@ -1,10 +1,5 @@
 import { test, expect } from "@playwright/test";
-import {
-  testUsers,
-  testFlightData,
-  getNextWeekDate,
-} from "./fixtures/test-data";
-import { format } from "date-fns";
+import { testUsers, testFlightData } from "./fixtures/test-data";
 
 /**
  * E2E Test: Admin Dashboard Operations

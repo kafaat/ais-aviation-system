@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  router,
-  publicProcedure,
-  protectedProcedure,
-  adminProcedure,
-} from "../_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 import * as gdsService from "../services/gds.service";
 

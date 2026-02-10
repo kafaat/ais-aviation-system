@@ -158,7 +158,7 @@ describe("Demand Forecasting Service", () => {
 
     it("should recognize Saudi weekends (Thu/Fri)", () => {
       // In Saudi Arabia, weekend is Thursday (4) and Friday (5)
-      const thursdayDate = new Date("2026-01-01"); // Just testing dayOfWeek=4
+      const _thursdayDate = new Date("2026-01-01"); // Just testing dayOfWeek=4
       const isWeekend = (dayOfWeek: number) =>
         dayOfWeek === 4 || dayOfWeek === 5;
 

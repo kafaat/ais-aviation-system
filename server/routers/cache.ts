@@ -144,7 +144,7 @@ export const cacheRouter = router({
   /**
    * Reset cache statistics (admin only)
    */
-  resetStats: adminProcedure.mutation(async () => {
+  resetStats: adminProcedure.mutation(() => {
     redisCacheService.resetStats();
     return {
       success: true,

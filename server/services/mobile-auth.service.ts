@@ -8,7 +8,6 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, gt, lt } from "drizzle-orm";
 import { logger } from "../_core/logger";
-import * as schema from "../../drizzle/schema";
 
 const JWT_SECRET: string = process.env.JWT_SECRET ?? "";
 if (!JWT_SECRET) {

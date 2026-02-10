@@ -13,11 +13,10 @@
  * @date 2026-01-26
  */
 
-import { Queue, Worker, Job, QueueEvents } from "bullmq";
+import { Queue, Worker, Job } from "bullmq";
 import { getDb } from "../db";
-import { stripeEvents, bookings, users } from "../../drizzle/schema";
-import { eq, and, lt, gt, desc } from "drizzle-orm";
-import * as schema from "../../drizzle/schema";
+import { stripeEvents, bookings } from "../../drizzle/schema";
+import { eq, and, lt } from "drizzle-orm";
 
 // ============================================================================
 // CONFIGURATION
@@ -152,7 +151,7 @@ export async function queueBookingConfirmationEmail(opts: {
       jobId: `booking-confirmation-${opts.bookingId}`, // Idempotent
     }
   );
-  console.log(
+  console.info(
     `[Queue] Queued booking confirmation email for booking ${opts.bookingId}`
   );
 }
@@ -177,7 +176,7 @@ export async function queueBookingCancellationEmail(opts: {
       jobId: `booking-cancelled-${opts.bookingId}`,
     }
   );
-  console.log(
+  console.info(
     `[Queue] Queued booking cancellation email for booking ${opts.bookingId}`
   );
 }
@@ -199,7 +198,7 @@ export async function queueWebhookRetry(opts: {
       delay: opts.delay || 60000, // Default 1 minute delay
     }
   );
-  console.log(`[Queue] Queued webhook retry for event ${opts.eventId}`);
+  console.info(`[Queue] Queued webhook retry for event ${opts.eventId}`);
 }
 
 /**
@@ -212,7 +211,7 @@ export async function scheduleReconciliation(): Promise<void> {
     },
     jobId: "daily-reconciliation",
   });
-  console.log(`[Queue] Scheduled daily reconciliation`);
+  console.info(`[Queue] Scheduled daily reconciliation`);
 }
 
 /**
@@ -279,7 +278,7 @@ export async function scheduleCleanupJobs(): Promise<void> {
     }
   );
 
-  console.log(`[Queue] Scheduled cleanup jobs`);
+  console.info(`[Queue] Scheduled cleanup jobs`);
 }
 
 // ============================================================================
@@ -301,9 +300,9 @@ export function startEmailWorker(): Worker {
   emailWorker = new Worker<EmailJobData>(
     "ais:emails",
     async (job: Job<EmailJobData>) => {
-      console.log(`[Worker] Processing email job: ${job.name} (${job.id})`);
+      console.info(`[Worker] Processing email job: ${job.name} (${job.id})`);
 
-      const { type, userId, bookingId, email, data } = job.data;
+      const { type, userId, bookingId, data } = job.data;
 
       try {
         // Import email service dynamically to avoid circular dependencies
@@ -328,17 +327,17 @@ export function startEmailWorker(): Worker {
                 `Your booking has been cancelled.${bookingId ? ` (Booking ID: ${bookingId})` : ""}`
               );
             }
-            console.log(
+            console.info(
               `[Worker] Booking cancellation notification sent for booking ${bookingId}`
             );
             break;
           }
 
           default:
-            console.log(`[Worker] Unknown email type: ${type}`);
+            console.warn(`[Worker] Unknown email type: ${type}`);
         }
 
-        console.log(`[Worker] Email job completed: ${job.id}`);
+        console.info(`[Worker] Email job completed: ${job.id}`);
       } catch (err: any) {
         console.error(`[Worker] Email job failed: ${job.id}`, err.message);
         throw err; // Re-throw to trigger retry
@@ -351,14 +350,14 @@ export function startEmailWorker(): Worker {
   );
 
   emailWorker.on("completed", job => {
-    console.log(`[Worker] Email job ${job.id} completed`);
+    console.info(`[Worker] Email job ${job.id} completed`);
   });
 
   emailWorker.on("failed", (job, err) => {
     console.error(`[Worker] Email job ${job?.id} failed:`, err.message);
   });
 
-  console.log(`[Worker] Email worker started`);
+  console.info(`[Worker] Email worker started`);
   return emailWorker;
 }
 
@@ -373,7 +372,7 @@ export function startWebhookRetryWorker(): Worker {
   webhookRetryWorker = new Worker<WebhookRetryJobData>(
     "ais:webhook-retry",
     async (job: Job<WebhookRetryJobData>) => {
-      console.log(`[Worker] Processing webhook retry: ${job.data.eventId}`);
+      console.info(`[Worker] Processing webhook retry: ${job.data.eventId}`);
 
       const db = await getDb();
       if (!db) {
@@ -388,18 +387,18 @@ export function startWebhookRetryWorker(): Worker {
       });
 
       if (!event) {
-        console.log(`[Worker] Event ${eventId} not found, skipping`);
+        console.info(`[Worker] Event ${eventId} not found, skipping`);
         return;
       }
 
       if (event.processed) {
-        console.log(`[Worker] Event ${eventId} already processed, skipping`);
+        console.info(`[Worker] Event ${eventId} already processed, skipping`);
         return;
       }
 
       // Check retry count
       if (event.retryCount >= 5) {
-        console.log(
+        console.warn(
           `[Worker] Event ${eventId} exceeded max retries, marking as failed`
         );
         await db
@@ -441,7 +440,7 @@ export function startWebhookRetryWorker(): Worker {
             .where(eq(stripeEvents.id, eventId));
         });
 
-        console.log(
+        console.info(
           `[Worker] Event ${eventId} processed successfully on retry`
         );
       } catch (err: any) {
@@ -458,7 +457,7 @@ export function startWebhookRetryWorker(): Worker {
     }
   );
 
-  console.log(`[Worker] Webhook retry worker started`);
+  console.info(`[Worker] Webhook retry worker started`);
   return webhookRetryWorker;
 }
 
@@ -473,7 +472,9 @@ export function startScheduledWorker(): Worker {
   scheduledWorker = new Worker<ReconciliationJobData | CleanupJobData>(
     "ais:scheduled",
     async (job: Job<ReconciliationJobData | CleanupJobData>) => {
-      console.log(`[Worker] Processing scheduled job: ${job.name} (${job.id})`);
+      console.info(
+        `[Worker] Processing scheduled job: ${job.name} (${job.id})`
+      );
 
       switch (job.name) {
         case "reconciliation":

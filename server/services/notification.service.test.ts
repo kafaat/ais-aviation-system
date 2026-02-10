@@ -1,7 +1,7 @@
 import { describe, expect, it, afterAll, beforeAll } from "vitest";
 import { getDb } from "../db";
 import { notifications } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   createNotification,
   getUserNotifications,

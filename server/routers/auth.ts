@@ -381,14 +381,15 @@ export const authRouter = router({
           expiresIn: result.expiresIn,
           tokenType: "Bearer" as const,
         };
-      } catch (error: any) {
-        logger.warn({ error: error.message }, "Token refresh failed");
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.warn({ error: errMsg }, "Token refresh failed");
 
         // Map service errors to TRPC errors
-        if (error.code === "UNAUTHORIZED") {
+        if (error instanceof TRPCError && error.code === "UNAUTHORIZED") {
           throw new TRPCError({
             code: "UNAUTHORIZED",
-            message: error.message || "Invalid or expired refresh token",
+            message: errMsg || "Invalid or expired refresh token",
           });
         }
 
@@ -423,9 +424,10 @@ export const authRouter = router({
         logger.info("User logged out successfully");
 
         return { success: true };
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Even if logout fails, we don't want to expose errors
-        logger.warn({ error: error.message }, "Logout error (ignored)");
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.warn({ error: errMsg }, "Logout error (ignored)");
         return { success: true };
       }
     }),
@@ -462,11 +464,9 @@ export const authRouter = router({
           success: true,
           revokedCount,
         };
-      } catch (error: any) {
-        logger.error(
-          { userId, error: error.message },
-          "Logout all devices failed"
-        );
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.error({ userId, error: errMsg }, "Logout all devices failed");
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to logout from all devices",
@@ -539,8 +539,9 @@ export const authRouter = router({
             expiresAt: session.expiresAt,
           };
         });
-      } catch (error: any) {
-        logger.error({ userId, error: error.message }, "Get sessions failed");
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.error({ userId, error: errMsg }, "Get sessions failed");
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to get active sessions",
@@ -591,7 +592,10 @@ export const authRouter = router({
         );
 
       const affected =
-        (result as any).rowsAffected || (result as any)[0]?.affectedRows || 0;
+        (result as unknown as { rowsAffected?: number }).rowsAffected ||
+        (result as unknown as Array<{ affectedRows?: number }>)[0]
+          ?.affectedRows ||
+        0;
 
       if (affected === 0) {
         throw new TRPCError({
@@ -643,14 +647,14 @@ export const authRouter = router({
         }),
       ])
     )
-    .query(async ({ input }) => {
+    .query(({ input }) => {
       const { accessToken } = input;
 
       try {
         const payload = mobileAuthServiceV2.verifyAccessToken(accessToken);
 
         return {
-          valid: true,
+          valid: true as const,
           payload: {
             userId: payload.userId,
             email: payload.email,
@@ -659,10 +663,12 @@ export const authRouter = router({
             expiresAt: new Date(payload.exp * 1000).toISOString(),
           },
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const errMsg =
+          error instanceof Error ? error.message : "Token verification failed";
         return {
-          valid: false,
-          error: error.message || "Token verification failed",
+          valid: false as const,
+          error: errMsg,
         };
       }
     }),

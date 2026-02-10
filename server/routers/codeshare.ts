@@ -1,11 +1,5 @@
 import { z } from "zod";
-import {
-  router,
-  publicProcedure,
-  protectedProcedure,
-  adminProcedure,
-} from "../_core/trpc";
-import { TRPCError } from "@trpc/server";
+import { router, publicProcedure, adminProcedure } from "../_core/trpc";
 import * as codeshareService from "../services/codeshare.service";
 
 /**
