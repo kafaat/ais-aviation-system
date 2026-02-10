@@ -15,7 +15,6 @@ import {
   DollarSign,
   TrendingDown,
   CheckCircle2,
-  Clock,
   RefreshCw,
 } from "lucide-react";
 import { format, subDays } from "date-fns";
@@ -28,8 +27,7 @@ export default function RefundsDashboard() {
     trpc.refunds.getStats.useQuery();
   const { data: history, isLoading: historyLoading } =
     trpc.refunds.getHistory.useQuery({ limit: 20 });
-  const { data: trends, isLoading: trendsLoading } =
-    trpc.refunds.getTrends.useQuery();
+  const { data: trends } = trpc.refunds.getTrends.useQuery();
 
   if (statsLoading) {
     return (

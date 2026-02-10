@@ -30,7 +30,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 import {
   Activity,
@@ -45,7 +44,7 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, subDays, subHours } from "date-fns";
+import { format, subDays } from "date-fns";
 
 // ============================================================================
 // Helper Components

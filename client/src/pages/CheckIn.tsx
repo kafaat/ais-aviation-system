@@ -36,31 +36,6 @@ interface Passenger {
   seatNumber?: string;
 }
 
-interface AirportInfo {
-  id: number;
-  code: string;
-  name: string;
-  city: string;
-  country: string;
-}
-
-interface AirlineInfo {
-  id: number;
-  code: string;
-  name: string;
-  logo: string | null;
-}
-
-interface FlightData {
-  id: number;
-  flightNumber: string;
-  airline: AirlineInfo;
-  origin: AirportInfo;
-  destination: AirportInfo;
-  departureTime: Date;
-  arrivalTime: Date;
-}
-
 interface BoardingPassFlight {
   flightNumber: string;
   airline: string;

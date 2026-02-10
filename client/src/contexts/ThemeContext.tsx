@@ -43,14 +43,6 @@ function getSystemTheme(): ResolvedTheme {
 }
 
 /**
- * Resolves a ThemeMode to a concrete light/dark value.
- */
-function resolveTheme(mode: ThemeMode): ResolvedTheme {
-  if (mode === "system") return getSystemTheme();
-  return mode;
-}
-
-/**
  * Reads the persisted theme mode from localStorage.
  * Returns the stored value if valid, otherwise the provided default.
  */

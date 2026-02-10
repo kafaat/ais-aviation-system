@@ -97,11 +97,8 @@ export default function VoucherManagement() {
     refetch: refetchVouchers,
   } = trpc.vouchers.getAll.useQuery({ includeInactive: true });
 
-  const {
-    data: credits,
-    isLoading: creditsLoading,
-    refetch: refetchCredits,
-  } = trpc.vouchers.getAllCredits.useQuery({ limit: 100, offset: 0 });
+  const { data: credits, isLoading: creditsLoading } =
+    trpc.vouchers.getAllCredits.useQuery({ limit: 100, offset: 0 });
 
   const createVoucherMutation = trpc.vouchers.create.useMutation({
     onSuccess: () => {

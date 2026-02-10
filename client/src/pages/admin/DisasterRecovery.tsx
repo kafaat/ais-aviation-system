@@ -1643,7 +1643,7 @@ function RecoveryPlanTab() {
           {t("dr.recovery.components", "Recovery Components")}
         </h3>
         <div className="space-y-4">
-          {plan.components.map((comp, idx) => (
+          {plan.components.map((comp, _idx) => (
             <div key={comp.name} className="p-4 border rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-xs font-bold text-blue-700 dark:text-blue-300">

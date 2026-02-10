@@ -7,7 +7,6 @@ import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { SearchResultsSkeleton } from "@/components/skeletons";
 import {
   Tooltip,

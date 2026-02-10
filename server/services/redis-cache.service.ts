@@ -615,7 +615,7 @@ class RedisCacheService {
   /**
    * Get cached flight search results
    */
-  async getCachedFlightSearch(params: {
+  getCachedFlightSearch(params: {
     originId: number;
     destinationId: number;
     departureDate: string;
@@ -650,7 +650,7 @@ class RedisCacheService {
   /**
    * Get cached flight details
    */
-  async getCachedFlightDetails(flightId: number): Promise<unknown | null> {
+  getCachedFlightDetails(flightId: number): Promise<unknown | null> {
     return this.get(CacheNamespace.FLIGHT, { flightId });
   }
 
@@ -687,7 +687,7 @@ class RedisCacheService {
   /**
    * Get cached airports
    */
-  async getCachedAirports(): Promise<unknown | null> {
+  getCachedAirports(): Promise<unknown | null> {
     return this.get(CacheNamespace.AIRPORTS, { key: "all" });
   }
 
@@ -709,7 +709,7 @@ class RedisCacheService {
   /**
    * Get cached airlines
    */
-  async getCachedAirlines(): Promise<unknown | null> {
+  getCachedAirlines(): Promise<unknown | null> {
     return this.get(CacheNamespace.AIRLINES, { key: "all" });
   }
 
@@ -726,7 +726,7 @@ class RedisCacheService {
   /**
    * Get cached cities
    */
-  async getCachedCities(): Promise<unknown | null> {
+  getCachedCities(): Promise<unknown | null> {
     return this.get(CacheNamespace.CITIES, { key: "all" });
   }
 
@@ -759,7 +759,7 @@ class RedisCacheService {
   /**
    * Get cached user session
    */
-  async getCachedUserSession(userId: number): Promise<unknown | null> {
+  getCachedUserSession(userId: number): Promise<unknown | null> {
     return this.getRaw(`session:${userId}`);
   }
 
@@ -805,7 +805,7 @@ class RedisCacheService {
   /**
    * Get cached popular routes
    */
-  async getCachedPopularRoutes(): Promise<unknown | null> {
+  getCachedPopularRoutes(): Promise<unknown | null> {
     return this.get(CacheNamespace.ROUTES, { key: "popular" });
   }
 
@@ -829,7 +829,7 @@ class RedisCacheService {
   /**
    * Get cached route data
    */
-  async getCachedRoute(
+  getCachedRoute(
     originId: number,
     destinationId: number
   ): Promise<unknown | null> {
@@ -867,7 +867,7 @@ class RedisCacheService {
   /**
    * Get cached pricing
    */
-  async getCachedPricing(
+  getCachedPricing(
     flightId: number,
     cabinClass: string
   ): Promise<unknown | null> {
