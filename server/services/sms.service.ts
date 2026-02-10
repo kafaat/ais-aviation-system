@@ -409,7 +409,7 @@ export async function sendTemplatedSMS(
 /**
  * Send booking confirmation SMS
  */
-export async function sendBookingConfirmationSMS(
+export function sendBookingConfirmationSMS(
   userId: number,
   phoneNumber: string,
   bookingRef: string,
@@ -431,7 +431,7 @@ export async function sendBookingConfirmationSMS(
 /**
  * Send check-in reminder SMS
  */
-export async function sendCheckInReminderSMS(
+export function sendCheckInReminderSMS(
   userId: number,
   phoneNumber: string,
   flightNumber: string,
@@ -454,7 +454,7 @@ export async function sendCheckInReminderSMS(
 /**
  * Send flight status update SMS
  */
-export async function sendFlightStatusSMS(
+export function sendFlightStatusSMS(
   userId: number,
   phoneNumber: string,
   flightNumber: string,
@@ -477,7 +477,7 @@ export async function sendFlightStatusSMS(
 /**
  * Send payment confirmation SMS
  */
-export async function sendPaymentReceivedSMS(
+export function sendPaymentReceivedSMS(
   userId: number,
   phoneNumber: string,
   amount: string,
@@ -547,7 +547,7 @@ export async function sendBulkSMS(
 /**
  * Send flight reminder SMS (24 hours before departure)
  */
-export async function sendFlightReminderSMS(
+export function sendFlightReminderSMS(
   userId: number,
   phoneNumber: string,
   flightNumber: string,
@@ -579,7 +579,7 @@ export async function sendFlightReminderSMS(
 /**
  * Send boarding pass SMS
  */
-export async function sendBoardingPassSMS(
+export function sendBoardingPassSMS(
   userId: number,
   phoneNumber: string,
   flightNumber: string,
@@ -611,7 +611,7 @@ export async function sendBoardingPassSMS(
 /**
  * Send refund processed SMS
  */
-export async function sendRefundProcessedSMS(
+export function sendRefundProcessedSMS(
   userId: number,
   phoneNumber: string,
   amount: string,
@@ -632,7 +632,7 @@ export async function sendRefundProcessedSMS(
 /**
  * Send loyalty milestone SMS
  */
-export async function sendLoyaltyMilestoneSMS(
+export function sendLoyaltyMilestoneSMS(
   userId: number,
   phoneNumber: string,
   tier: string,
