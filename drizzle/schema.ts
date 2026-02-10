@@ -1,5 +1,6 @@
 import {
   int,
+  json,
   mysqlEnum,
   mysqlTable,
   text,
@@ -5135,3 +5136,152 @@ export const seatInventory = mysqlTable(
 
 export type SeatInventoryItem = typeof seatInventory.$inferSelect;
 export type InsertSeatInventoryItem = typeof seatInventory.$inferInsert;
+
+// ============================================================================
+// Intelligence Platform Tables
+// ============================================================================
+
+/**
+ * Agent decision log - audit trail for all intelligence agent outputs
+ */
+export const agentDecisions = mysqlTable(
+  "agent_decisions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    agentId: varchar("agentId", { length: 100 }).notNull(),
+    agentName: varchar("agentName", { length: 255 }).notNull(),
+    requestId: varchar("requestId", { length: 100 }).notNull(),
+    status: mysqlEnum("status", [
+      "idle",
+      "running",
+      "completed",
+      "failed",
+      "timeout",
+    ]).notNull(),
+    confidence: decimal("confidence", { precision: 5, scale: 4 }),
+    confidenceLevel: mysqlEnum("confidenceLevel", [
+      "low",
+      "medium",
+      "high",
+      "very_high",
+    ]),
+    executionTimeMs: int("executionTimeMs"),
+    data: json("data"),
+    reasoning: json("reasoning"),
+    recommendations: json("recommendations"),
+    errors: json("errors"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    agentIdIdx: index("agent_dec_agent_idx").on(table.agentId),
+    requestIdIdx: index("agent_dec_request_idx").on(table.requestId),
+    statusIdx: index("agent_dec_status_idx").on(table.status),
+    createdIdx: index("agent_dec_created_idx").on(table.createdAt),
+  })
+);
+
+export type AgentDecision = typeof agentDecisions.$inferSelect;
+export type InsertAgentDecision = typeof agentDecisions.$inferInsert;
+
+/**
+ * Fraud assessments - detailed fraud scoring records
+ */
+export const fraudAssessments = mysqlTable(
+  "fraud_assessments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId"),
+    userId: int("userId"),
+    riskScore: int("riskScore").notNull(),
+    riskLevel: mysqlEnum("riskLevel", [
+      "low",
+      "medium",
+      "high",
+      "critical",
+    ]).notNull(),
+    recommendation: mysqlEnum("recommendation", [
+      "approve",
+      "review",
+      "block",
+    ]).notNull(),
+    signals: json("signals"),
+    reasoning: text("reasoning"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    bookingIdx: index("fraud_assess_booking_idx").on(table.bookingId),
+    userIdx: index("fraud_assess_user_idx").on(table.userId),
+    riskLevelIdx: index("fraud_assess_risk_idx").on(table.riskLevel),
+    createdIdx: index("fraud_assess_created_idx").on(table.createdAt),
+  })
+);
+
+export type FraudAssessmentRecord = typeof fraudAssessments.$inferSelect;
+export type InsertFraudAssessment = typeof fraudAssessments.$inferInsert;
+
+/**
+ * Intelligence briefings - cached briefing snapshots
+ */
+export const intelligenceBriefings = mysqlTable(
+  "intelligence_briefings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    requestId: varchar("requestId", { length: 100 }).notNull(),
+    overallHealth: mysqlEnum("overallHealth", [
+      "excellent",
+      "good",
+      "fair",
+      "poor",
+      "critical",
+    ]).notNull(),
+    healthScore: int("healthScore").notNull(),
+    executionTimeMs: int("executionTimeMs"),
+    period: varchar("period", { length: 100 }),
+    economicsSummary: text("economicsSummary"),
+    operationsSummary: text("operationsSummary"),
+    fraudSummary: text("fraudSummary"),
+    pricingSummary: text("pricingSummary"),
+    topRecommendations: json("topRecommendations"),
+    fullData: json("fullData"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    requestIdx: index("intel_brief_request_idx").on(table.requestId),
+    healthIdx: index("intel_brief_health_idx").on(table.overallHealth),
+    createdIdx: index("intel_brief_created_idx").on(table.createdAt),
+  })
+);
+
+export type IntelligenceBriefingRecord =
+  typeof intelligenceBriefings.$inferSelect;
+export type InsertIntelligenceBriefing =
+  typeof intelligenceBriefings.$inferInsert;
+
+/**
+ * AI Gateway usage log - tracks LLM API calls, costs, and performance
+ */
+export const aiGatewayLog = mysqlTable(
+  "ai_gateway_log",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    requestId: varchar("requestId", { length: 100 }).notNull(),
+    agentId: varchar("agentId", { length: 100 }),
+    modelId: varchar("modelId", { length: 100 }).notNull(),
+    taskType: varchar("taskType", { length: 50 }),
+    inputTokens: int("inputTokens"),
+    outputTokens: int("outputTokens"),
+    costUsd: decimal("costUsd", { precision: 10, scale: 6 }),
+    latencyMs: int("latencyMs"),
+    cached: boolean("cached").default(false).notNull(),
+    error: text("error"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    agentIdx: index("ai_gw_agent_idx").on(table.agentId),
+    modelIdx: index("ai_gw_model_idx").on(table.modelId),
+    createdIdx: index("ai_gw_created_idx").on(table.createdAt),
+  })
+);
+
+export type AIGatewayLogEntry = typeof aiGatewayLog.$inferSelect;
+export type InsertAIGatewayLog = typeof aiGatewayLog.$inferInsert;

@@ -85,6 +85,9 @@ import { gdsRouter } from "./routers/gds";
 import { interlineRouter } from "./routers/interline";
 import { suggestionsRouter } from "./routers/suggestions";
 
+// Intelligence Platform (AAIP)
+import { intelligenceRouter } from "./routers/intelligence.router";
+
 // Webhook handlers
 import { webhooksRouter } from "./routers/webhooks";
 
@@ -193,6 +196,9 @@ export const appRouter = router({
 
   // Smart suggestions
   suggestions: suggestionsRouter,
+
+  // Intelligence Platform (AAIP)
+  intelligence: intelligenceRouter,
 
   // Webhook handlers
   webhooks: webhooksRouter,
