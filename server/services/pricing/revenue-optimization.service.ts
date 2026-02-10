@@ -331,7 +331,6 @@ export async function getRevenueMetrics(
   const flt = flightData[0];
 
   const totalRevenue = Number(rev?.totalRevenue) || 0;
-  const bookingCount = Number(rev?.bookingCount) || 0;
   const passengerCount = Number(rev?.passengerCount) || 0;
   const flightCount = Number(flt?.flightCount) || 1;
   const totalSeats = Number(flt?.totalSeats) || 1;

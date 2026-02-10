@@ -16,10 +16,9 @@ import {
   flights,
   bookings,
   pricingRules,
-  pricingHistory,
   seasonalPricing,
 } from "../../../drizzle/schema";
-import { eq, and, gte, lte, sql, count, desc, or, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, count, desc, or, isNull } from "drizzle-orm";
 import { cacheService } from "../cache.service";
 import { AIPricingService } from "./ai-pricing.service";
 
@@ -146,14 +145,14 @@ export async function calculateDynamicPrice(
     cabinClass,
     requestedSeats
   );
-  const seasonalMultiplier = await calculateSeasonalMultiplier(
+  const seasonalMultiplier = calculateSeasonalMultiplier(
     flight.departureTime,
     flight.originId,
     flight.destinationId
   );
 
   // 4. Apply custom pricing rules
-  const rulesMultiplier = await applyPricingRules(flight, cabinClass);
+  const rulesMultiplier = applyPricingRules(flight, cabinClass);
 
   // 4.5. Get AI pricing multiplier (demand forecast + segmentation + A/B + optimization)
   let aiMultiplier = 1.0;
@@ -189,7 +188,7 @@ export async function calculateDynamicPrice(
 
   // 7. Apply promo discount
   const promoDiscount = promoCode
-    ? await calculatePromoDiscount(promoCode, adjustedPrice)
+    ? calculatePromoDiscount(promoCode, adjustedPrice)
     : 0;
 
   // 8. Calculate taxes and fees
@@ -203,7 +202,7 @@ export async function calculateDynamicPrice(
   const validUntil = new Date(Date.now() + PRICE_VALIDITY_MINUTES * 60 * 1000);
 
   // 10. Record price history
-  await recordPriceHistory({
+  recordPriceHistory({
     flightId,
     cabinClass,
     basePrice,
@@ -383,11 +382,11 @@ function calculateOccupancyMultiplier(
  * Calculate seasonal multiplier
  * Peak seasons = higher prices
  */
-async function calculateSeasonalMultiplier(
+function calculateSeasonalMultiplier(
   departureTime: Date,
   originId: number,
   destinationId: number
-): Promise<number> {
+): number {
   const month = departureTime.getMonth() + 1; // 1-12
   const dayOfWeek = departureTime.getDay(); // 0-6 (Sunday-Saturday)
 
@@ -418,7 +417,7 @@ async function calculateSeasonalMultiplier(
   }
 
   // Check for specific route rules (e.g., Hajj routes)
-  const routeMultiplier = await getRouteSeasonalMultiplier(
+  const routeMultiplier = getRouteSeasonalMultiplier(
     originId,
     destinationId,
     departureTime
@@ -430,11 +429,11 @@ async function calculateSeasonalMultiplier(
 /**
  * Get route-specific seasonal multiplier
  */
-async function getRouteSeasonalMultiplier(
+function getRouteSeasonalMultiplier(
   _originId: number,
   _destinationId: number,
   _departureTime: Date
-): Promise<number> {
+): number {
   // Check for Hajj/Umrah routes to Jeddah/Madinah
   // This would be enhanced with actual route data
   // TODO: Implement route-based seasonal pricing using Hijri calendar
@@ -445,10 +444,10 @@ async function getRouteSeasonalMultiplier(
 /**
  * Apply custom pricing rules from database
  */
-async function applyPricingRules(
+function applyPricingRules(
   _flight: typeof flights.$inferSelect,
   _cabinClass: "economy" | "business"
-): Promise<number> {
+): number {
   // Get active pricing rules
   // This would query the pricingRules table
   // For now, return default
@@ -458,10 +457,7 @@ async function applyPricingRules(
 /**
  * Calculate promo code discount
  */
-async function calculatePromoDiscount(
-  _promoCode: string,
-  _price: number
-): Promise<number> {
+function calculatePromoDiscount(_promoCode: string, _price: number): number {
   // Query promo codes table
   // Validate code is active and not expired
   // Check usage limits
@@ -489,14 +485,14 @@ function generatePriceId(
 /**
  * Record price in history for analytics
  */
-async function recordPriceHistory(data: {
+function recordPriceHistory(data: {
   flightId: number;
   cabinClass: string;
   basePrice: number;
   finalPrice: number;
   multipliers: Record<string, number>;
   priceId: string;
-}): Promise<void> {
+}): void {
   // Insert into price_history table
   // This helps with analytics and auditing
   console.info(
@@ -511,10 +507,10 @@ async function recordPriceHistory(data: {
 /**
  * Validate a previously calculated price
  */
-export async function validatePrice(
+export function validatePrice(
   priceId: string,
   expectedPrice: number
-): Promise<{ valid: boolean; reason?: string }> {
+): { valid: boolean; reason?: string } {
   // Parse price ID
   const parts = priceId.split("-");
   if (parts.length < 6) {
@@ -599,7 +595,7 @@ export async function getPriceForecast(
 /**
  * Get applicable pricing rules from database with caching
  */
-async function getApplicablePricingRules(
+async function _getApplicablePricingRules(
   airlineId: number,
   originId: number,
   destinationId: number
@@ -660,7 +656,7 @@ async function getApplicablePricingRules(
 /**
  * Get active seasonal pricing
  */
-async function getActiveSeasonalPricing(
+async function _getActiveSeasonalPricing(
   departureTime: Date,
   airlineId: number,
   originId: number,

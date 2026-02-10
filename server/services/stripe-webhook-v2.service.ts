@@ -303,7 +303,7 @@ export const stripeWebhookServiceV2 = {
   async onPaymentIntentSucceeded(
     tx: any,
     pi: Stripe.PaymentIntent,
-    eventId: string
+    _eventId: string
   ): Promise<void> {
     const bookingId = pi.metadata?.bookingId;
     if (!bookingId) {
@@ -354,7 +354,7 @@ export const stripeWebhookServiceV2 = {
   async onPaymentIntentFailed(
     tx: any,
     pi: Stripe.PaymentIntent,
-    eventId: string
+    _eventId: string
   ): Promise<void> {
     const bookingId = pi.metadata?.bookingId;
     if (!bookingId) {
