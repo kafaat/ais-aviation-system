@@ -171,7 +171,7 @@ export async function updateFlightStatus(
         }
       }
 
-      console.log(
+      console.info(
         `[Flight Status] ${affectedBookings.length} passengers notified about ${status} for flight ${flight.flightNumber}`
       );
     }

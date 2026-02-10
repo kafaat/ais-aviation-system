@@ -1,11 +1,11 @@
 // Note: ws module is optional - WebSocket functionality will be disabled if not installed
 let WebSocketServer: any;
-let WebSocket: any;
+let _WebSocket: any;
 
 try {
   const ws = require("ws");
   WebSocketServer = ws.WebSocketServer;
-  WebSocket = ws.WebSocket;
+  _WebSocket = ws.WebSocket;
 } catch {
   console.info(
     "[WebSocket] ws module not installed - WebSocket server disabled"
@@ -299,7 +299,7 @@ class WebSocketService {
    */
   private startFlightStatusSimulation(): void {
     // Simulate status changes every 30 seconds
-    this.simulationInterval = setInterval(async () => {
+    this.simulationInterval = setInterval(() => {
       // Only simulate if there are subscribed clients
       if (this.clients.size === 0) return;
 

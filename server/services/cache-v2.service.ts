@@ -51,7 +51,7 @@ function getRedisClient(): Redis | null {
     });
 
     redisClient.on("connect", () => {
-      console.log("[Cache] Redis connected");
+      console.info("[Cache] Redis connected");
       isConnected = true;
     });
 
@@ -61,7 +61,7 @@ function getRedisClient(): Redis | null {
     });
 
     redisClient.on("close", () => {
-      console.log("[Cache] Redis connection closed");
+      console.info("[Cache] Redis connection closed");
       isConnected = false;
     });
 
@@ -143,7 +143,7 @@ export const cacheServiceV2 = {
 
     try {
       await client.incr(buildVersionKey(namespace));
-      console.log(`[Cache] Invalidated namespace: ${namespace}`);
+      console.info(`[Cache] Invalidated namespace: ${namespace}`);
     } catch (err) {
       console.error(`[Cache] Failed to invalidate ${namespace}:`, err);
     }
@@ -415,7 +415,7 @@ export const cacheServiceV2 = {
       await redisClient.quit();
       redisClient = null;
       isConnected = false;
-      console.log("[Cache] Redis connection closed");
+      console.info("[Cache] Redis connection closed");
     }
   },
 };

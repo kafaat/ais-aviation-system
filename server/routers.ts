@@ -85,6 +85,9 @@ import { gdsRouter } from "./routers/gds";
 import { interlineRouter } from "./routers/interline";
 import { suggestionsRouter } from "./routers/suggestions";
 
+// Webhook handlers
+import { webhooksRouter } from "./routers/webhooks";
+
 /**
  * Main Application Router
  * Combines all domain routers into a single API
@@ -190,6 +193,9 @@ export const appRouter = router({
 
   // Smart suggestions
   suggestions: suggestionsRouter,
+
+  // Webhook handlers
+  webhooks: webhooksRouter,
 });
 
 export type AppRouter = typeof appRouter;

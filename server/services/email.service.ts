@@ -236,9 +236,9 @@ async function sendEmail(template: EmailTemplate): Promise<boolean> {
   const redactedTo = template.to.includes("@")
     ? template.to[0] + "***@" + template.to.split("@")[1]
     : "[REDACTED]";
-  console.log("[Email Service] Sending email:");
-  console.log(`  To: ${redactedTo}`);
-  console.log(`  Subject: ${template.subject}`);
+  console.info("[Email Service] Sending email:");
+  console.info(`  To: ${redactedTo}`);
+  console.info(`  Subject: ${template.subject}`);
 
   // Simulate email sending delay
   await new Promise(resolve => setTimeout(resolve, 100));

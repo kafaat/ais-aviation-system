@@ -67,7 +67,7 @@ function log(
   } else if (level === "warn") {
     console.warn(JSON.stringify(logEntry));
   } else {
-    console.log(JSON.stringify(logEntry));
+    console.info(JSON.stringify(logEntry));
   }
 }
 

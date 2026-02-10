@@ -4,7 +4,7 @@
  */
 
 import { getDb } from "../db";
-import { bookings, flights, passengers, airports } from "../../drizzle/schema";
+import { bookings, flights, airports } from "../../drizzle/schema";
 import { sql, and, gte, lte, eq, desc } from "drizzle-orm";
 
 export interface KPIMetrics {

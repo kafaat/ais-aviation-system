@@ -5,7 +5,7 @@
  * using mocked database responses.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // Skip tests that require complex database mocking
 // These tests document expected behavior

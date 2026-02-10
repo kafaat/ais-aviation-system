@@ -92,7 +92,7 @@ function log(
   } else if (level === "warn") {
     console.warn(JSON.stringify(logEntry));
   } else {
-    console.log(JSON.stringify(logEntry));
+    console.info(JSON.stringify(logEntry));
   }
 }
 
@@ -583,7 +583,7 @@ async function handleFailed(
 /**
  * تشغيل التسوية في وضع Dry Run
  */
-export async function runReconciliationDryRun(
+export function runReconciliationDryRun(
   options: Omit<ReconciliationOptions, "dryRun"> = {}
 ): Promise<ReconciliationResult> {
   return runStripeReconciliation({ ...options, dryRun: true });

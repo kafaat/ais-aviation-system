@@ -8,7 +8,6 @@ import {
 } from "./flights.service";
 import {
   createInventoryLock,
-  releaseInventoryLock,
   convertLockToBooking,
   verifyLock,
 } from "./inventory-lock.service";

@@ -11,7 +11,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, eq, gte, lte, desc, sql, between } from "drizzle-orm";
+import { and, eq, gte, lte, desc, sql } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 import { getDb } from "../db";
 import {
@@ -22,9 +22,6 @@ import {
   airports,
   airlines,
   type TravelAgent,
-  type InsertTravelAgent,
-  type AgentBooking,
-  type InsertAgentBooking,
 } from "../../drizzle/schema";
 import { createServiceLogger } from "../_core/logger";
 

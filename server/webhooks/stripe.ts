@@ -253,32 +253,36 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 async function processEvent(tx: any, event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed":
-      return handleCheckoutSessionCompleted(
+      await handleCheckoutSessionCompleted(
         tx,
         event.data.object as Stripe.Checkout.Session,
         event.id
       );
+      return;
 
     case "payment_intent.succeeded":
-      return handlePaymentIntentSucceeded(
+      await handlePaymentIntentSucceeded(
         tx,
         event.data.object as Stripe.PaymentIntent,
         event.id
       );
+      return;
 
     case "payment_intent.payment_failed":
-      return handlePaymentFailed(
+      await handlePaymentFailed(
         tx,
         event.data.object as Stripe.PaymentIntent,
         event.id
       );
+      return;
 
     case "charge.refunded":
-      return handleChargeRefunded(
+      await handleChargeRefunded(
         tx,
         event.data.object as Stripe.Charge,
         event.id
       );
+      return;
 
     default:
       log.info(
