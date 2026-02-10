@@ -65,9 +65,9 @@ describe("Group Booking Service", () => {
       status: "scheduled",
     });
 
-    testFlightId = Number(
-      (flightResult as any)[0]?.insertId ?? (flightResult as any).insertId
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle insert result type varies by driver version
+    const insertResult = flightResult as Record<string, any>;
+    testFlightId = Number(insertResult[0]?.insertId ?? insertResult.insertId);
   });
 
   afterAll(async () => {

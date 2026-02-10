@@ -486,7 +486,7 @@ export function startScheduledWorker(): Worker {
           break;
 
         default:
-          console.log(`[Worker] Unknown scheduled job: ${job.name}`);
+          console.warn(`[Worker] Unknown scheduled job: ${job.name}`);
       }
     },
     {
@@ -495,7 +495,7 @@ export function startScheduledWorker(): Worker {
     }
   );
 
-  console.log(`[Worker] Scheduled worker started`);
+  console.info(`[Worker] Scheduled worker started`);
   return scheduledWorker;
 }
 
@@ -503,7 +503,7 @@ export function startScheduledWorker(): Worker {
  * Run reconciliation job
  */
 async function runReconciliation(data: ReconciliationJobData): Promise<void> {
-  console.log(`[Reconciliation] Starting reconciliation`);
+  console.info(`[Reconciliation] Starting reconciliation`);
 
   const db = await getDb();
   if (!db) {
@@ -519,7 +519,7 @@ async function runReconciliation(data: ReconciliationJobData): Promise<void> {
     limit: 100,
   });
 
-  console.log(
+  console.info(
     `[Reconciliation] Found ${unprocessedEvents.length} unprocessed events`
   );
 
@@ -528,14 +528,14 @@ async function runReconciliation(data: ReconciliationJobData): Promise<void> {
     await queueWebhookRetry({ eventId: event.id, delay: 0 });
   }
 
-  console.log(`[Reconciliation] Completed`);
+  console.info(`[Reconciliation] Completed`);
 }
 
 /**
  * Run cleanup job
  */
 async function runCleanup(data: CleanupJobData): Promise<void> {
-  console.log(`[Cleanup] Starting ${data.type} cleanup`);
+  console.info(`[Cleanup] Starting ${data.type} cleanup`);
 
   switch (data.type) {
     case "idempotency":
@@ -567,7 +567,7 @@ async function runCleanup(data: CleanupJobData): Promise<void> {
     }
   }
 
-  console.log(`[Cleanup] ${data.type} cleanup completed`);
+  console.info(`[Cleanup] ${data.type} cleanup completed`);
 }
 
 /**
@@ -596,7 +596,7 @@ async function cleanupExpiredBookings(): Promise<void> {
     );
 
   const expiredCount = (result as any)[0]?.affectedRows || 0;
-  console.log(`[Cleanup] Expired ${expiredCount} pending bookings`);
+  console.info(`[Cleanup] Expired ${expiredCount} pending bookings`);
 }
 
 // ============================================================================
@@ -610,14 +610,14 @@ export function startAllWorkers(): void {
   startEmailWorker();
   startWebhookRetryWorker();
   startScheduledWorker();
-  console.log(`[Queue] All workers started`);
+  console.info(`[Queue] All workers started`);
 }
 
 /**
  * Stop all workers gracefully
  */
 export async function stopAllWorkers(): Promise<void> {
-  console.log(`[Queue] Stopping all workers...`);
+  console.info(`[Queue] Stopping all workers...`);
 
   const workers = [emailWorker, webhookRetryWorker, scheduledWorker];
 
@@ -639,14 +639,14 @@ export async function stopAllWorkers(): Promise<void> {
   webhookRetryWorker = null;
   scheduledWorker = null;
 
-  console.log(`[Queue] All workers stopped`);
+  console.info(`[Queue] All workers stopped`);
 }
 
 /**
  * Close all queues
  */
 export async function closeAllQueues(): Promise<void> {
-  console.log(`[Queue] Closing all queues...`);
+  console.info(`[Queue] Closing all queues...`);
 
   const results = await Promise.allSettled([
     emailQueue.close(),
@@ -660,7 +660,7 @@ export async function closeAllQueues(): Promise<void> {
     }
   }
 
-  console.log(`[Queue] All queues closed`);
+  console.info(`[Queue] All queues closed`);
 }
 
 /**
