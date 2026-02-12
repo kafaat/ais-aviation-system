@@ -52,10 +52,17 @@ export function runWithCorrelationId<T>(correlationId: string, fn: () => T): T {
  * The requestIdMiddleware already handles correlation ID, so this
  * middleware is mainly for standalone use or backward compatibility.
  */
-export function correlationMiddleware(req: any, res: any, next: any) {
+export function correlationMiddleware(
+  req: {
+    headers: Record<string, string | string[] | undefined>;
+    correlationId?: string;
+  },
+  res: { setHeader: (name: string, value: string) => void },
+  next: () => void
+) {
   // Try to get correlation ID from header, or generate new one
-  const correlationId =
-    req.headers["x-correlation-id"] || req.headers["x-request-id"] || uuidv4();
+  const rawId = req.headers["x-correlation-id"] || req.headers["x-request-id"];
+  const correlationId = (Array.isArray(rawId) ? rawId[0] : rawId) || uuidv4();
 
   // Add to response headers
   res.setHeader("x-correlation-id", correlationId);
@@ -71,7 +78,7 @@ export function correlationMiddleware(req: any, res: any, next: any) {
  * TRPC context with correlation ID
  */
 export function createCorrelationContext(opts: {
-  req?: any;
+  req?: { headers?: Record<string, string | string[] | undefined> };
   headers?: Record<string, string | string[] | undefined>;
 }): { correlationId: string } {
   // Try to get from headers
@@ -100,13 +107,15 @@ export function generateCorrelationId(): string {
 /**
  * Wrap an async function to propagate correlation ID
  */
-export function withCorrelation<T extends (...args: any[]) => Promise<any>>(
-  fn: T
-): T {
+export function withCorrelation<
+  T extends (...args: unknown[]) => Promise<unknown>,
+>(fn: T): T {
   return (async (...args: Parameters<T>): Promise<ReturnType<T>> => {
     const correlationId = getCorrelationId();
-    return runWithCorrelationId(correlationId, () => fn(...args));
-  }) as T;
+    return runWithCorrelationId(correlationId, () =>
+      fn(...args)
+    ) as ReturnType<T>;
+  }) as unknown as T;
 }
 
 /**

@@ -103,8 +103,10 @@ class CacheService {
     }
 
     try {
+      const client = this.client;
+      if (!client) return 1;
       const versionKey = `${CACHE_PREFIX}:v:${namespace}`;
-      const version = await this.client!.get(versionKey);
+      const version = await client.get(versionKey);
       return version ? parseInt(version) : 1;
     } catch (error) {
       logger.error({ namespace, error }, "Failed to get version");
@@ -122,8 +124,10 @@ class CacheService {
     }
 
     try {
+      const client = this.client;
+      if (!client) return;
       const versionKey = `${CACHE_PREFIX}:v:${namespace}`;
-      await this.client!.incr(versionKey);
+      await client.incr(versionKey);
       logger.info({ namespace }, "Invalidated namespace");
     } catch (error) {
       logger.error({ namespace, error }, "Failed to invalidate namespace");
@@ -154,7 +158,9 @@ class CacheService {
     }
 
     try {
-      const value = await this.client!.get(key);
+      const client = this.client;
+      if (!client) return null;
+      const value = await client.get(key);
       if (!value) {
         return null;
       }
@@ -176,8 +182,10 @@ class CacheService {
     }
 
     try {
+      const client = this.client;
+      if (!client) return;
       const serialized = JSON.stringify(value);
-      await this.client!.setex(key, ttlSeconds, serialized);
+      await client.setex(key, ttlSeconds, serialized);
       logger.debug({ key, ttl: ttlSeconds }, "Cache set");
     } catch (error) {
       logger.error({ key, error }, "Cache set error");
@@ -193,7 +201,9 @@ class CacheService {
     }
 
     try {
-      await this.client!.del(key);
+      const client = this.client;
+      if (!client) return;
+      await client.del(key);
       logger.debug({ key }, "Cache delete");
     } catch (error) {
       logger.error({ key, error }, "Cache delete error");
@@ -210,11 +220,13 @@ class CacheService {
     }
 
     try {
+      const client = this.client;
+      if (!client) return;
       let cursor = "0";
       let deletedCount = 0;
 
       do {
-        const result = await this.client!.scan(
+        const result = await client.scan(
           cursor,
           "MATCH",
           pattern,
@@ -226,7 +238,7 @@ class CacheService {
         const keys = result[1];
 
         if (keys.length > 0) {
-          await this.client!.del(...keys);
+          await client.del(...keys);
           deletedCount += keys.length;
         }
       } while (cursor !== "0");
@@ -267,9 +279,11 @@ class CacheService {
       await this.set(key, results, ttlSeconds);
 
       // Also add to route tag set (for backward compatibility)
+      const client = this.client;
+      if (!client) return;
       const tagKey = `${CACHE_PREFIX}:search:routes:${params.from}:${params.to}`;
-      await this.client!.sadd(tagKey, key);
-      await this.client!.expire(tagKey, ttlSeconds + 60);
+      await client.sadd(tagKey, key);
+      await client.expire(tagKey, ttlSeconds + 60);
     } catch (error) {
       logger.error({ params, error }, "Failed to cache flight search");
     }
@@ -320,14 +334,16 @@ class CacheService {
     const tagKey = `${CACHE_PREFIX}:search:routes:${from}:${to}`;
 
     try {
+      const client = this.client;
+      if (!client) return;
       // Get all cache keys for this route
-      const cacheKeys = await this.client!.smembers(tagKey);
+      const cacheKeys = await client.smembers(tagKey);
 
       if (cacheKeys.length > 0) {
         // Delete all cache keys
-        await this.client!.del(...cacheKeys);
+        await client.del(...cacheKeys);
         // Delete the tag set
-        await this.client!.del(tagKey);
+        await client.del(tagKey);
 
         logger.debug(
           {
@@ -522,17 +538,19 @@ class CacheService {
     }
 
     try {
+      const client = this.client;
+      if (!client) return { allowed: true, remaining: limit };
       const rateLimitKey = `${CACHE_PREFIX}:ratelimit:${key}`;
 
-      await this.client!.set(rateLimitKey, 0, "EX", windowSeconds, "NX");
-      const current = await this.client!.incr(rateLimitKey);
+      await client.set(rateLimitKey, 0, "EX", windowSeconds, "NX");
+      const current = await client.incr(rateLimitKey);
 
       // Safety: if the key expired between SET NX and INCR, the INCR creates
       // a new key with no TTL. Ensure the key always has an expiry to prevent
       // a permanently stuck rate limit counter.
-      const ttl = await this.client!.ttl(rateLimitKey);
+      const ttl = await client.ttl(rateLimitKey);
       if (ttl === -1) {
-        await this.client!.expire(rateLimitKey, windowSeconds);
+        await client.expire(rateLimitKey, windowSeconds);
       }
 
       const allowed = current <= limit;
@@ -562,8 +580,11 @@ class CacheService {
     }
 
     try {
+      const client = this.client;
+      if (!client)
+        return { status: "error" as const, error: "Client not available" };
       const start = Date.now();
-      await this.client!.ping();
+      await client.ping();
       const latency = Date.now() - start;
 
       return { status: "ok", latency };

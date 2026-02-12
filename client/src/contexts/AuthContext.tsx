@@ -247,7 +247,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         });
 
         // Schedule refresh
-        scheduleTokenRefresh(stored.expiresAt!);
+        if (stored.expiresAt) {
+          scheduleTokenRefresh(stored.expiresAt);
+        }
       }
     } else {
       setState(prev => ({ ...prev, isLoading: false }));
@@ -295,11 +297,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const stored = getStoredTokens();
 
         // Store new tokens
+        const currentUser = stored.user ?? {
+          id: 0,
+          name: null,
+          email: null,
+          role: "user",
+        };
         storeTokens(
           response.accessToken,
           response.refreshToken,
           response.expiresIn,
-          stored.user!
+          currentUser
         );
 
         // Update state

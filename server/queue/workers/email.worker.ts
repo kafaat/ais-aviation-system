@@ -387,7 +387,7 @@ export async function queueBookingConfirmationEmail(data: {
     bookingReference: data.bookingReference,
   });
 
-  return job.id!;
+  return job.id ?? null;
 }
 
 /**
@@ -440,7 +440,7 @@ export async function queueBookingCancellationEmail(data: {
     bookingReference: data.bookingReference,
   });
 
-  return job.id!;
+  return job.id ?? null;
 }
 
 /**
@@ -491,7 +491,7 @@ export async function queueFlightStatusChangeEmail(data: {
     newStatus: data.newStatus,
   });
 
-  return job.id!;
+  return job.id ?? null;
 }
 
 /**
@@ -536,7 +536,7 @@ export async function queueFlightReminderEmail(data: {
     flightNumber: data.flightNumber,
   });
 
-  return job.id!;
+  return job.id ?? null;
 }
 
 // ============================================================================

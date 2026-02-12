@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { eq, sql } from "drizzle-orm";
 import * as db from "../db";
-import { flights } from "../../drizzle/schema";
+import { getDb } from "../db";
+import { bookings, flights } from "../../drizzle/schema";
 import {
   checkFlightAvailability,
   calculateFlightPrice,
@@ -108,9 +109,16 @@ export async function createBooking(input: CreateBookingInput) {
       });
     }
 
+    if (!flight) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Flight not found",
+      });
+    }
+
     // Calculate total amount with dynamic pricing and passenger type discounts
     const pricingResult = await calculateFlightPrice(
-      flight!,
+      flight,
       input.cabinClass,
       input.passengers.length,
       input.passengers,
@@ -293,6 +301,7 @@ export async function getBookingById(bookingId: number, userId: number) {
 
 /**
  * Cancel booking
+ * Uses a database transaction to atomically update booking status and restore seats
  */
 export async function cancelBooking(bookingId: number, userId: number) {
   try {
@@ -312,22 +321,29 @@ export async function cancelBooking(bookingId: number, userId: number) {
       });
     }
 
-    await db.updateBookingStatus(bookingId, "cancelled");
+    const database = await getDb();
+    if (!database) throw new Error("Database not available");
 
-    // If booking was confirmed (seats were deducted on payment), restore them
-    if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
-      const database = await db.getDb();
-      if (database) {
+    // Atomically cancel booking and restore seats in a single transaction
+    await database.transaction(async tx => {
+      // Update booking status
+      await tx
+        .update(bookings)
+        .set({ status: "cancelled", updatedAt: new Date() })
+        .where(eq(bookings.id, bookingId));
+
+      // If booking was confirmed (seats were deducted on payment), restore them
+      if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
         const cabinClass = booking.cabinClass as "economy" | "business";
         if (cabinClass === "business") {
-          await database
+          await tx
             .update(flights)
             .set({
               businessAvailable: sql`${flights.businessAvailable} + ${booking.numberOfPassengers}`,
             })
             .where(eq(flights.id, booking.flightId));
         } else {
-          await database
+          await tx
             .update(flights)
             .set({
               economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
@@ -335,7 +351,7 @@ export async function cancelBooking(bookingId: number, userId: number) {
             .where(eq(flights.id, booking.flightId));
         }
       }
-    }
+    });
 
     // Track booking cancellation event for metrics
     trackBookingCancelled({

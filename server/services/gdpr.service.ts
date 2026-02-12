@@ -792,7 +792,7 @@ export async function confirmAccountDeletion(
 
   return {
     success: true,
-    scheduledDeletionAt: request[0].scheduledDeletionAt!,
+    scheduledDeletionAt: request[0].scheduledDeletionAt ?? new Date(),
   };
 }
 

@@ -58,10 +58,10 @@ export interface AuditLogData {
   requestId?: string;
   resourceType?: string;
   resourceId?: string;
-  previousValue?: any;
-  newValue?: any;
+  previousValue?: unknown;
+  newValue?: unknown;
   changeDescription?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -167,8 +167,8 @@ export async function auditBookingChange(
   userId: number,
   userRole: string,
   changeType: "created" | "modified" | "cancelled",
-  previousValue?: any,
-  newValue?: any,
+  previousValue?: unknown,
+  newValue?: unknown,
   sourceIp?: string,
   requestId?: string
 ): Promise<void> {

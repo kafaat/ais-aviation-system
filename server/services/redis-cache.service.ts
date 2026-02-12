@@ -392,8 +392,10 @@ class RedisCacheService {
     }
 
     try {
+      const client = this.redisClient;
+      if (!client) return 1;
       const versionKey = `${CACHE_PREFIX}:version:${namespace}`;
-      const version = await this.redisClient!.get(versionKey);
+      const version = await client.get(versionKey);
       return version ? parseInt(version, 10) : 1;
     } catch (error) {
       logger.error({ namespace, error }, "Failed to get namespace version");
@@ -413,8 +415,10 @@ class RedisCacheService {
     }
 
     try {
+      const client = this.redisClient;
+      if (!client) return;
       const versionKey = `${CACHE_PREFIX}:version:${namespace}`;
-      await this.redisClient!.incr(versionKey);
+      await client.incr(versionKey);
       // Also clear memory cache for this namespace
       this.memoryCache.deletePattern(`${CACHE_PREFIX}:${namespace}:*`);
       logger.info({ namespace }, "Invalidated namespace");
@@ -434,16 +438,19 @@ class RedisCacheService {
     // Try Redis first
     if (this.isConnected()) {
       try {
-        const cached = await this.redisClient!.get(key);
-        if (cached) {
-          this.stats.hits++;
-          // Also store in memory for faster subsequent access
-          const parsed = JSON.parse(cached) as T;
-          const ttl = await this.redisClient!.ttl(key);
-          if (ttl > 0) {
-            this.memoryCache.set(key, parsed, ttl);
+        const client = this.redisClient;
+        if (client) {
+          const cached = await client.get(key);
+          if (cached) {
+            this.stats.hits++;
+            // Also store in memory for faster subsequent access
+            const parsed = JSON.parse(cached) as T;
+            const ttl = await client.ttl(key);
+            if (ttl > 0) {
+              this.memoryCache.set(key, parsed, ttl);
+            }
+            return parsed;
           }
-          return parsed;
         }
       } catch (error) {
         this.stats.errors++;
@@ -485,7 +492,10 @@ class RedisCacheService {
     // Try to set in Redis
     if (this.isConnected()) {
       try {
-        await this.redisClient!.setex(key, ttlSeconds, serialized);
+        const client = this.redisClient;
+        if (client) {
+          await client.setex(key, ttlSeconds, serialized);
+        }
       } catch (error) {
         this.stats.errors++;
         logger.error({ key, error }, "Redis set error");
@@ -511,7 +521,10 @@ class RedisCacheService {
     // Delete from Redis
     if (this.isConnected()) {
       try {
-        await this.redisClient!.del(key);
+        const client = this.redisClient;
+        if (client) {
+          await client.del(key);
+        }
       } catch (error) {
         this.stats.errors++;
         logger.error({ key, error }, "Redis delete error");
@@ -531,7 +544,10 @@ class RedisCacheService {
 
     if (this.isConnected()) {
       try {
-        await this.redisClient!.setex(fullKey, ttlSeconds, serialized);
+        const client = this.redisClient;
+        if (client) {
+          await client.setex(fullKey, ttlSeconds, serialized);
+        }
       } catch (error) {
         this.stats.errors++;
         this.stats.memoryFallbackUsed++;
@@ -550,10 +566,13 @@ class RedisCacheService {
 
     if (this.isConnected()) {
       try {
-        const cached = await this.redisClient!.get(fullKey);
-        if (cached) {
-          this.stats.hits++;
-          return JSON.parse(cached) as T;
+        const client = this.redisClient;
+        if (client) {
+          const cached = await client.get(fullKey);
+          if (cached) {
+            this.stats.hits++;
+            return JSON.parse(cached) as T;
+          }
         }
       } catch (error) {
         this.stats.errors++;
@@ -583,7 +602,10 @@ class RedisCacheService {
 
     if (this.isConnected()) {
       try {
-        await this.redisClient!.del(fullKey);
+        const client = this.redisClient;
+        if (client) {
+          await client.del(fullKey);
+        }
       } catch (error) {
         this.stats.errors++;
         logger.error({ key: fullKey, error }, "Redis deleteRaw error");
@@ -915,9 +937,13 @@ class RedisCacheService {
     }
 
     try {
-      await this.redisClient!.set(key, 0, "EX", windowSeconds, "NX");
+      const client = this.redisClient;
+      if (!client)
+        return { allowed: true, remaining: limit, resetIn: windowSeconds };
 
-      const multi = this.redisClient!.multi();
+      await client.set(key, 0, "EX", windowSeconds, "NX");
+
+      const multi = client.multi();
       multi.incr(key);
       multi.ttl(key);
 
@@ -933,7 +959,7 @@ class RedisCacheService {
       // a new key with no TTL (ttl === -1). Re-apply the expiry to prevent
       // a permanently stuck rate limit counter.
       if (ttl === -1) {
-        await this.redisClient!.expire(key, windowSeconds);
+        await client.expire(key, windowSeconds);
         ttl = windowSeconds;
       }
 
@@ -972,8 +998,16 @@ class RedisCacheService {
     }
 
     try {
+      const client = this.redisClient;
+      if (!client) {
+        return {
+          status: "error" as const,
+          redis: { connected: false, error: "Client not available" },
+          memory: { entries: memoryEntries, maxSize: MEMORY_CACHE_MAX_SIZE },
+        };
+      }
       const start = Date.now();
-      await this.redisClient!.ping();
+      await client.ping();
       const latency = Date.now() - start;
 
       return {
@@ -1040,7 +1074,9 @@ class RedisCacheService {
     }
 
     try {
-      const info = await this.redisClient!.info();
+      const client = this.redisClient;
+      if (!client) return null;
+      const info = await client.info();
       const parsed: Record<string, string> = {};
 
       for (const line of info.split("\r\n")) {
@@ -1132,10 +1168,12 @@ class RedisCacheService {
 
     if (this.isConnected()) {
       try {
+        const client = this.redisClient;
+        if (!client) return;
         // Use SCAN to safely delete all keys with our prefix
         let cursor = "0";
         do {
-          const [newCursor, keys] = await this.redisClient!.scan(
+          const [newCursor, keys] = await client.scan(
             cursor,
             "MATCH",
             `${CACHE_PREFIX}:*`,
@@ -1145,7 +1183,7 @@ class RedisCacheService {
           cursor = newCursor;
 
           if (keys.length > 0) {
-            await this.redisClient!.del(...keys);
+            await client.del(...keys);
           }
         } while (cursor !== "0");
       } catch (error) {

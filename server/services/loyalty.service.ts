@@ -68,7 +68,13 @@ export async function getOrCreateLoyaltyAccount(userId: number) {
       .where(eq(loyaltyAccounts.id, (result as any).insertId))
       .limit(1);
 
-    return newAccount!;
+    if (!newAccount) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to create loyalty account",
+      });
+    }
+    return newAccount;
   } catch (error) {
     console.error("Error getting/creating loyalty account:", error);
     throw new TRPCError({

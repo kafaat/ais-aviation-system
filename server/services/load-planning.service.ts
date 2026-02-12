@@ -414,6 +414,8 @@ export async function createLoadPlan(flightId: number) {
     });
   }
 
+  const validAircraftTypeId = aircraftTypeId;
+
   // Determine compartment layout
   const isWidebody = aircraftData.totalSeats > 200;
   const layoutKey = isWidebody ? "widebody" : "narrowbody";
@@ -423,7 +425,7 @@ export async function createLoadPlan(flightId: number) {
   const compartments: CargoCompartment[] = layoutTemplate.map((tmpl, idx) => ({
     ...tmpl,
     id: nextPlanId * 100 + idx + 1,
-    aircraftTypeId: aircraftTypeId!,
+    aircraftTypeId: validAircraftTypeId,
     createdAt: new Date().toISOString(),
   }));
 
@@ -1266,8 +1268,9 @@ export async function amendLoadPlan(
             message: "newItem is required for add action.",
           });
         }
+        const changeNewItem = change.newItem;
         const compartment = plan.compartments.find(
-          c => c.compartment.compartmentCode === change.newItem!.compartmentCode
+          c => c.compartment.compartmentCode === changeNewItem.compartmentCode
         );
         const newItem: LoadPlanItem = {
           id: stored.nextItemId++,
