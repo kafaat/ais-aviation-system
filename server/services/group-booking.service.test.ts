@@ -65,8 +65,7 @@ describe("Group Booking Service", () => {
       status: "scheduled",
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Drizzle insert result type varies by driver version
-    const insertResult = flightResult as Record<string, any>;
+    const insertResult = flightResult as Record<string, unknown>;
     testFlightId = Number(insertResult[0]?.insertId ?? insertResult.insertId);
   });
 

@@ -110,7 +110,7 @@ export function generateCorrelationId(): string {
 export function withCorrelation<
   T extends (...args: unknown[]) => Promise<unknown>,
 >(fn: T): T {
-  return (async (...args: Parameters<T>): Promise<ReturnType<T>> => {
+  return ((...args: Parameters<T>): ReturnType<T> => {
     const correlationId = getCorrelationId();
     return runWithCorrelationId(correlationId, () =>
       fn(...args)

@@ -1,5 +1,33 @@
 # Changelog
 
+## What's Changed in v1.19.0
+
+### Critical Bug Fixes
+
+- **fix(webhooks):** Remove duplicate seat deduction from `payment_intent.succeeded` handler - previously both `checkout.session.completed` and `payment_intent.succeeded` deducted seats, causing flight availability to go negative in race conditions
+- **fix(refunds):** Add seat restoration when full refund is processed - neither the webhook handler nor the refund service was restoring seats back to flight availability on full refund/cancellation
+- **fix(bookings):** Make `cancelBooking` atomic with database transaction - booking status update and seat restoration were separate DB calls, risking partial failure
+- **fix(payments):** Target specific payment record by `transactionId` instead of updating all payment records for a booking via `bookingId`
+
+### Bug Fixes
+
+- **fix(ancillary):** Replace plain `Error` throws with proper `TRPCError` in ancillary services - 12 instances now return correct HTTP status codes (NOT_FOUND, BAD_REQUEST, INTERNAL_SERVER_ERROR)
+- **fix(loyalty):** Fix race condition in `processExpiredMiles` - wrap each account's mile expiration in a database transaction with fresh balance reads and SQL-level arithmetic
+- **fix(types):** Replace 30+ `any` types with proper types in core infrastructure (errors.ts, correlation.ts, idempotency.service.ts, audit.service.ts, storage.ts)
+- **fix(types):** Fix non-null assertions across 15+ service files with proper null checks
+
+### Features
+
+- **feat(intelligence):** Add Intelligence Kernel (AAIP) - multi-agent autonomous platform with Economics, Fraud, and Operations agents, AI Gateway, and tRPC router with 9 endpoints
+
+### Maintenance
+
+- **refactor:** Fix all `require-await` lint warnings (correlation.ts, intelligence router/kernel, fare-rules, load-planning)
+- **refactor:** Reduce ESLint warnings from 835 to 237 (0 errors)
+- **test:** All 755 tests passing, full build verified (dist/index.js + dist/worker.js)
+
+---
+
 ## What's Changed in v1.18.0
 
 ### Features

@@ -1913,7 +1913,7 @@ export async function validateRules(params: {
     message: string;
   }>;
 }> {
-  return validateBookingRules(params);
+  return await validateBookingRules(params);
 }
 
 // ============================================================================

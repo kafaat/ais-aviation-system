@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { loyaltyAccounts, milesTransactions } from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 /**
  * Loyalty Service
@@ -353,61 +353,69 @@ export async function processExpiredMiles(): Promise<{
     const accounts = await database.select().from(loyaltyAccounts);
 
     for (const account of accounts) {
-      // Get unexpired earn transactions that are now expired
-      const expiredTransactions = await database
-        .select()
-        .from(milesTransactions)
-        .where(eq(milesTransactions.userId, account.userId));
+      // Process each account in its own transaction to prevent race conditions
+      await database.transaction(async tx => {
+        // Re-read account inside transaction to get fresh balance
+        const [freshAccount] = await tx
+          .select()
+          .from(loyaltyAccounts)
+          .where(eq(loyaltyAccounts.userId, account.userId))
+          .limit(1);
 
-      // Filter to only expired earn transactions
-      const toExpire = expiredTransactions.filter(
-        t =>
-          t.type === "earn" &&
-          t.expiresAt &&
-          new Date(t.expiresAt) <= now &&
-          t.amount > 0
-      );
+        if (!freshAccount || freshAccount.currentMilesBalance <= 0) return;
 
-      if (toExpire.length === 0) continue;
+        // Get expired earn transactions
+        const expiredTransactions = await tx
+          .select()
+          .from(milesTransactions)
+          .where(eq(milesTransactions.userId, account.userId));
 
-      // Calculate total miles to expire
-      const milesToExpire = toExpire.reduce((sum, t) => sum + t.amount, 0);
+        const toExpire = expiredTransactions.filter(
+          t =>
+            t.type === "earn" &&
+            t.expiresAt &&
+            new Date(t.expiresAt) <= now &&
+            t.amount > 0
+        );
 
-      if (milesToExpire <= 0) continue;
+        if (toExpire.length === 0) return;
 
-      // Don't expire more than current balance
-      const actualExpireAmount = Math.min(
-        milesToExpire,
-        account.currentMilesBalance
-      );
+        const milesToExpire = toExpire.reduce((sum, t) => sum + t.amount, 0);
+        if (milesToExpire <= 0) return;
 
-      if (actualExpireAmount <= 0) continue;
+        // Use fresh balance for calculation
+        const actualExpireAmount = Math.min(
+          milesToExpire,
+          freshAccount.currentMilesBalance
+        );
+        if (actualExpireAmount <= 0) return;
 
-      // Create expiration transaction
-      await database.insert(milesTransactions).values({
-        userId: account.userId,
-        loyaltyAccountId: account.id,
-        type: "expire",
-        amount: -actualExpireAmount,
-        balanceAfter: account.currentMilesBalance - actualExpireAmount,
-        description: `انتهاء صلاحية ${actualExpireAmount} ميل - Miles expiration (${toExpire.length} transactions)`,
+        // Create expiration transaction record
+        await tx.insert(milesTransactions).values({
+          userId: account.userId,
+          loyaltyAccountId: freshAccount.id,
+          type: "expire",
+          amount: -actualExpireAmount,
+          balanceAfter: freshAccount.currentMilesBalance - actualExpireAmount,
+          description: `انتهاء صلاحية ${actualExpireAmount} ميل - Miles expiration (${toExpire.length} transactions)`,
+        });
+
+        // Use SQL-level arithmetic to safely update balance
+        await tx
+          .update(loyaltyAccounts)
+          .set({
+            currentMilesBalance: sql`GREATEST(${loyaltyAccounts.currentMilesBalance} - ${actualExpireAmount}, 0)`,
+            lastActivityAt: now,
+          })
+          .where(eq(loyaltyAccounts.userId, account.userId));
+
+        processedAccounts++;
+        totalExpiredMiles += actualExpireAmount;
+
+        console.info(
+          `[Loyalty] Expired ${actualExpireAmount} miles for user ${account.userId}`
+        );
       });
-
-      // Update account balance
-      await database
-        .update(loyaltyAccounts)
-        .set({
-          currentMilesBalance: account.currentMilesBalance - actualExpireAmount,
-          lastActivityAt: now,
-        })
-        .where(eq(loyaltyAccounts.userId, account.userId));
-
-      processedAccounts++;
-      totalExpiredMiles += actualExpireAmount;
-
-      console.info(
-        `[Loyalty] Expired ${actualExpireAmount} miles for user ${account.userId}`
-      );
     }
 
     console.info(

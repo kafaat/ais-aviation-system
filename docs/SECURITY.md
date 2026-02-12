@@ -254,6 +254,29 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 }
 ```
 
+### Webhook Event Safety
+
+Stripe sends multiple events for a single payment (`checkout.session.completed` and `payment_intent.succeeded`). To prevent double-processing:
+
+- **Seat deduction** happens exclusively in `checkout.session.completed` handler
+- `payment_intent.succeeded` is a status-only fallback (no seat deduction)
+- Each event is deduplicated via the `stripeEvents` table
+- All webhook handlers run inside database transactions
+
+**Refund seat restoration:**
+
+```typescript
+// Full refund → cancel booking + restore seats (atomically in transaction)
+if (isFullRefund && previousStatus === "confirmed") {
+  await tx
+    .update(flights)
+    .set({
+      economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
+    })
+    .where(eq(flights.id, booking.flightId));
+}
+```
+
 ### Payment Idempotency
 
 Prevent duplicate charges:
