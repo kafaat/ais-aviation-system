@@ -405,7 +405,7 @@ export async function deleteAllNotifications(
 /**
  * Create a booking confirmation notification
  */
-export async function notifyBookingConfirmed(
+export function notifyBookingConfirmed(
   userId: number,
   bookingReference: string,
   flightNumber: string,
@@ -428,7 +428,7 @@ export async function notifyBookingConfirmed(
 /**
  * Create a flight status update notification
  */
-export async function notifyFlightStatusUpdate(
+export function notifyFlightStatusUpdate(
   userId: number,
   flightNumber: string,
   status: string,
@@ -454,7 +454,7 @@ export async function notifyFlightStatusUpdate(
 /**
  * Create a payment notification
  */
-export async function notifyPaymentReceived(
+export function notifyPaymentReceived(
   userId: number,
   amount: number,
   bookingReference: string,
@@ -478,7 +478,7 @@ export async function notifyPaymentReceived(
 /**
  * Create a refund notification
  */
-export async function notifyRefundProcessed(
+export function notifyRefundProcessed(
   userId: number,
   amount: number,
   bookingReference: string
@@ -500,7 +500,7 @@ export async function notifyRefundProcessed(
 /**
  * Create a promotional notification
  */
-export async function notifyPromotion(
+export function notifyPromotion(
   userId: number,
   title: string,
   message: string,
@@ -516,7 +516,7 @@ export async function notifyPromotion(
 /**
  * Create a system notification
  */
-export async function notifySystem(
+export function notifySystem(
   userId: number,
   title: string,
   message: string,
@@ -528,7 +528,7 @@ export async function notifySystem(
 /**
  * Create a check-in reminder notification
  */
-export async function notifyCheckInReminder(
+export function notifyCheckInReminder(
   userId: number,
   flightNumber: string,
   departureTime: Date,
@@ -552,7 +552,7 @@ export async function notifyCheckInReminder(
 /**
  * Create a miles earned notification
  */
-export async function notifyMilesEarned(
+export function notifyMilesEarned(
   userId: number,
   milesEarned: number,
   newBalance: number,
