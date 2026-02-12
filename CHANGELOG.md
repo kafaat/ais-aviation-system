@@ -8,13 +8,27 @@
 - **fix(refunds):** Add seat restoration when full refund is processed - neither the webhook handler nor the refund service was restoring seats back to flight availability on full refund/cancellation
 - **fix(bookings):** Make `cancelBooking` atomic with database transaction - booking status update and seat restoration were separate DB calls, risking partial failure
 - **fix(payments):** Target specific payment record by `transactionId` instead of updating all payment records for a booking via `bookingId`
+- **fix(rebooking):** Wrap multi-step rebooking (booking + passengers + ancillaries + seat update) in single database transaction to prevent partial failures and orphan records
+- **fix(rebooking):** Fix ancillary pricing copied as 0 during rebooking - now preserves original unit/total prices
+- **fix(disruption):** Wrap flight disruption creation in transaction to prevent race conditions between concurrent disruption reports
+- **fix(kiosk):** Fix seat assignment race condition - seat availability check and assignment now wrapped in transaction
+- **fix(split-payment):** Fix markSplitPaid race condition - split status update, all-paid check, and booking confirmation now atomic in single transaction
 
 ### Bug Fixes
 
-- **fix(ancillary):** Replace plain `Error` throws with proper `TRPCError` in ancillary services - 12 instances now return correct HTTP status codes (NOT_FOUND, BAD_REQUEST, INTERNAL_SERVER_ERROR)
+- **fix(ancillary):** Replace plain `Error` throws with proper `TRPCError` in ancillary services (12 instances)
 - **fix(loyalty):** Fix race condition in `processExpiredMiles` - wrap each account's mile expiration in a database transaction with fresh balance reads and SQL-level arithmetic
+- **fix(notification):** Replace 9 plain `Error` throws with `TRPCError`, add null check on insert result
+- **fix(disruption):** Replace plain `Error` with `TRPCError`, add input validation (type, delayMinutes, newDepartureTime)
+- **fix(cancellation-fees):** Add input validation for totalAmount and departureTime, handle unconfirmed bookings
+- **fix(dcs):** Add try-catch around 3 JSON.parse calls (cargoZones, cargoDistribution, warnings) with safe fallbacks
+- **fix(kiosk):** Add try-catch around JSON.parse for applicableCabinClasses with safe fallback
 - **fix(types):** Replace 30+ `any` types with proper types in core infrastructure (errors.ts, correlation.ts, idempotency.service.ts, audit.service.ts, storage.ts)
 - **fix(types):** Fix non-null assertions across 15+ service files with proper null checks
+
+### Performance
+
+- **perf(db):** Fix N+1 query in `getBookingsByUserId` - reduced from N+1 queries to exactly 2 queries using batch passenger fetch with `inArray`
 
 ### Features
 

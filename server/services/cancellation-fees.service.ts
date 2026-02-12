@@ -3,6 +3,8 @@
  * Calculates cancellation fees based on time until departure
  */
 
+import { TRPCError } from "@trpc/server";
+
 export interface CancellationFeeResult {
   totalAmount: number;
   cancellationFee: number;
@@ -23,8 +25,36 @@ export interface CancellationFeeResult {
  */
 export function calculateCancellationFee(
   totalAmount: number,
-  departureTime: Date
+  departureTime: Date,
+  bookingStatus?: string
 ): CancellationFeeResult {
+  // Validate totalAmount is positive
+  if (totalAmount <= 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Total amount must be a positive number",
+    });
+  }
+
+  // Validate departureTime is a valid Date
+  if (!(departureTime instanceof Date) || isNaN(departureTime.getTime())) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Departure time must be a valid date",
+    });
+  }
+
+  // If booking is not yet confirmed, return 0 fee and full refund
+  if (bookingStatus && bookingStatus !== "confirmed") {
+    return {
+      totalAmount,
+      cancellationFee: 0,
+      refundAmount: totalAmount,
+      refundPercentage: 100,
+      tier: "full",
+    };
+  }
+
   const now = new Date();
   const hoursUntilDeparture =
     (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);

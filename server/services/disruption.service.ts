@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   flightDisruptions,
@@ -19,51 +20,89 @@ export async function createDisruption(input: {
   delayMinutes?: number;
   createdBy?: number;
 }) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Get original flight info
-  const [flight] = await db
-    .select()
-    .from(flights)
-    .where(eq(flights.id, input.flightId))
-    .limit(1);
-
-  if (!flight) throw new Error("Flight not found");
-
-  const [result] = await db.insert(flightDisruptions).values({
-    flightId: input.flightId,
-    type: input.type,
-    reason: input.reason,
-    severity: input.severity,
-    originalDepartureTime: flight.departureTime,
-    newDepartureTime: input.newDepartureTime || null,
-    delayMinutes: input.delayMinutes || null,
-    status: "active",
-    createdBy: input.createdBy || null,
-  });
-
-  // Update flight status
-  if (input.type === "cancellation") {
-    await db
-      .update(flights)
-      .set({ status: "cancelled" })
-      .where(eq(flights.id, input.flightId));
-  } else if (input.type === "delay" && input.newDepartureTime) {
-    await db
-      .update(flights)
-      .set({
-        status: "delayed",
-        departureTime: input.newDepartureTime,
-      })
-      .where(eq(flights.id, input.flightId));
+  // Input validation
+  const validTypes = ["delay", "cancellation", "diversion"];
+  if (!validTypes.includes(input.type)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Invalid disruption type: ${input.type}. Must be one of: ${validTypes.join(", ")}`,
+    });
   }
 
-  const [disruption] = await db
-    .select()
-    .from(flightDisruptions)
-    .where(eq(flightDisruptions.id, result.insertId))
-    .limit(1);
+  if (input.delayMinutes !== undefined && input.delayMinutes < 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "delayMinutes must be >= 0",
+    });
+  }
+
+  if (input.newDepartureTime && input.newDepartureTime < new Date()) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "newDepartureTime must not be in the past",
+    });
+  }
+
+  const db = await getDb();
+  if (!db) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
+
+  // Wrap flight read + disruption insert + flight status update in a transaction
+  const disruption = await db.transaction(async tx => {
+    // Get original flight info
+    const [flight] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, input.flightId))
+      .limit(1);
+
+    if (!flight) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Flight not found",
+      });
+    }
+
+    const [result] = await tx.insert(flightDisruptions).values({
+      flightId: input.flightId,
+      type: input.type,
+      reason: input.reason,
+      severity: input.severity,
+      originalDepartureTime: flight.departureTime,
+      newDepartureTime: input.newDepartureTime || null,
+      delayMinutes: input.delayMinutes || null,
+      status: "active",
+      createdBy: input.createdBy || null,
+    });
+
+    // Update flight status
+    if (input.type === "cancellation") {
+      await tx
+        .update(flights)
+        .set({ status: "cancelled" })
+        .where(eq(flights.id, input.flightId));
+    } else if (input.type === "delay" && input.newDepartureTime) {
+      await tx
+        .update(flights)
+        .set({
+          status: "delayed",
+          departureTime: input.newDepartureTime,
+        })
+        .where(eq(flights.id, input.flightId));
+    }
+
+    const [insertedDisruption] = await tx
+      .select()
+      .from(flightDisruptions)
+      .where(eq(flightDisruptions.id, result.insertId))
+      .limit(1);
+
+    return insertedDisruption;
+  });
 
   return disruption;
 }
@@ -73,7 +112,12 @@ export async function createDisruption(input: {
  */
 export async function getUserDisruptions(userId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
 
   // Get user's active bookings
   const userBookings = await db
@@ -133,7 +177,12 @@ export async function getUserDisruptions(userId: number) {
  */
 export async function getAlternativeFlights(flightId: number, _userId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
 
   // Get the original flight details
   const [originalFlight] = await db
@@ -142,7 +191,12 @@ export async function getAlternativeFlights(flightId: number, _userId: number) {
     .where(eq(flights.id, flightId))
     .limit(1);
 
-  if (!originalFlight) throw new Error("Flight not found");
+  if (!originalFlight) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Flight not found",
+    });
+  }
 
   // Find alternative flights on the same route within 3 days
   const threeDaysLater = new Date(originalFlight.departureTime);
@@ -205,7 +259,12 @@ export async function getAlternativeFlights(flightId: number, _userId: number) {
  */
 export async function getActiveDisruptions() {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
 
   return await db
     .select({
@@ -232,7 +291,12 @@ export async function getActiveDisruptions() {
  */
 export async function resolveDisruption(disruptionId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
 
   await db
     .update(flightDisruptions)

@@ -31,6 +31,8 @@ export interface RebookAncillary {
   name: string;
   category: string;
   quantity: number;
+  unitPrice: number;
+  totalPrice: number;
 }
 
 export interface RebookData {
@@ -148,6 +150,8 @@ export async function getRebookData(
     .select({
       ancillaryServiceId: bookingAncillaries.ancillaryServiceId,
       quantity: bookingAncillaries.quantity,
+      unitPrice: bookingAncillaries.unitPrice,
+      totalPrice: bookingAncillaries.totalPrice,
       code: ancillaryServices.code,
       name: ancillaryServices.name,
       category: ancillaryServices.category,
@@ -183,6 +187,8 @@ export async function getRebookData(
       name: a.name,
       category: a.category,
       quantity: a.quantity,
+      unitPrice: a.unitPrice,
+      totalPrice: a.totalPrice,
     })),
     route: {
       originId: flight.originId,
@@ -318,63 +324,67 @@ export async function quickRebook(
   const bookingReference = generateCode();
   const pnr = generateCode();
 
-  // Create new booking
-  const bookingResult = await database.insert(bookings).values({
-    userId,
-    flightId: newFlightId,
-    bookingReference,
-    pnr,
-    status: "pending",
-    paymentStatus: "pending",
-    totalAmount,
-    cabinClass: rebookData.cabinClass,
-    numberOfPassengers: rebookData.passengers.length,
+  // Create new booking, passengers, ancillaries, and update seats atomically
+  const newBookingId = await database.transaction(async tx => {
+    const bookingResult = await tx.insert(bookings).values({
+      userId,
+      flightId: newFlightId,
+      bookingReference,
+      pnr,
+      status: "pending",
+      paymentStatus: "pending",
+      totalAmount,
+      cabinClass: rebookData.cabinClass,
+      numberOfPassengers: rebookData.passengers.length,
+    });
+
+    const insertedBookingId = Number(bookingResult[0].insertId);
+
+    // Copy passengers to new booking
+    for (const passenger of rebookData.passengers) {
+      await tx.insert(passengers).values({
+        bookingId: insertedBookingId,
+        type: passenger.type,
+        title: passenger.title,
+        firstName: passenger.firstName,
+        lastName: passenger.lastName,
+        dateOfBirth: passenger.dateOfBirth,
+        passportNumber: passenger.passportNumber,
+        nationality: passenger.nationality,
+      });
+    }
+
+    // Copy ancillaries with original pricing
+    for (const ancillary of rebookData.ancillaries) {
+      await tx.insert(bookingAncillaries).values({
+        bookingId: insertedBookingId,
+        ancillaryServiceId: ancillary.ancillaryServiceId,
+        quantity: ancillary.quantity,
+        unitPrice: ancillary.unitPrice,
+        totalPrice: ancillary.totalPrice,
+        status: "active",
+      });
+    }
+
+    // Update flight availability
+    if (rebookData.cabinClass === "economy") {
+      await tx
+        .update(flights)
+        .set({
+          economyAvailable: sql`${flights.economyAvailable} - ${rebookData.passengers.length}`,
+        })
+        .where(eq(flights.id, newFlightId));
+    } else {
+      await tx
+        .update(flights)
+        .set({
+          businessAvailable: sql`${flights.businessAvailable} - ${rebookData.passengers.length}`,
+        })
+        .where(eq(flights.id, newFlightId));
+    }
+
+    return insertedBookingId;
   });
-
-  const newBookingId = Number(bookingResult[0].insertId);
-
-  // Copy passengers to new booking
-  for (const passenger of rebookData.passengers) {
-    await database.insert(passengers).values({
-      bookingId: newBookingId,
-      type: passenger.type,
-      title: passenger.title,
-      firstName: passenger.firstName,
-      lastName: passenger.lastName,
-      dateOfBirth: passenger.dateOfBirth,
-      passportNumber: passenger.passportNumber,
-      nationality: passenger.nationality,
-    });
-  }
-
-  // Copy ancillaries
-  for (const ancillary of rebookData.ancillaries) {
-    await database.insert(bookingAncillaries).values({
-      bookingId: newBookingId,
-      ancillaryServiceId: ancillary.ancillaryServiceId,
-      quantity: ancillary.quantity,
-      unitPrice: 0,
-      totalPrice: 0,
-      status: "active",
-    });
-  }
-
-  // Update flight availability
-  if (rebookData.cabinClass === "economy") {
-    await database
-      .update(flights)
-      .set({
-        economyAvailable: sql`${flights.economyAvailable} - ${rebookData.passengers.length}`,
-      })
-      .where(eq(flights.id, newFlightId));
-  } else {
-    await database
-      .update(flights)
-      .set({
-        businessAvailable: sql`${flights.businessAvailable} - ${rebookData.passengers.length}`,
-      })
-      .where(eq(flights.id, newFlightId));
-  }
 
   return {
     newBookingId,
