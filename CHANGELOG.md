@@ -1,5 +1,30 @@
 # Changelog
 
+## What's Changed in v1.19.1
+
+### Bug Fixes
+- fix: critical bug fixes and comprehensive type safety improvements (1fb5014)
+- fix: comprehensive review - service bugs, type safety, docs update (a8f4b1e)
+- fix: comprehensive service audit - transactions, validation, performance (2880c00)
+- fix(lint): resolve remaining require-await warnings (1b6246f)
+- fix: deep audit and fix all server/services/ (34 files, 50+ bugs) (8c2d841)
+- fix(ci): add Playwright globalTimeout and reduce E2E job timeout (4bd72c1)
+- fix(e2e): resolve strict mode violation on password field selector (0d432eb)
+- fix(e2e): resolve login button strict mode violation (3 elements) (1fc64e6)
+- fix(ci): add auth service to E2E job for login support (3806c46)
+- fix(tests): resolve all 19 failing test files (0 failures now) (4d1c5c8)
+- fix(e2e): seed test users before E2E tests to fix login timeouts (0008a50)
+
+### Other Changes
+- merge: resolve CHANGELOG.md conflict with main (9c83bdb)
+- Merge pull request #73 from kafaat/claude/fix-gaps-and-bugs-Tzdte (2e46df2)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.19.0...v1.19.1
+
+
+---
+
 ## What's Changed in v1.19.0
 
 ### Critical Security Fixes
