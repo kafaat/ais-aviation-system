@@ -2,6 +2,12 @@
 
 ## What's Changed in v1.19.0
 
+### Critical Security Fixes
+
+- **fix(compensation):** Fix 4 SQL injection vulnerabilities — replaced raw string interpolation with parameterized Drizzle queries
+- **fix(wallet):** Fix financial race conditions — switched to SQL-level arithmetic inside transactions to prevent lost updates
+- **fix(mobile-auth-v2):** Fix token refresh race condition — wrapped verify-revoke-create flow in database transaction
+
 ### Critical Bug Fixes
 
 - **fix(webhooks):** Remove duplicate seat deduction from `payment_intent.succeeded` handler - previously both `checkout.session.completed` and `payment_intent.succeeded` deducted seats, causing flight availability to go negative in race conditions
@@ -14,6 +20,10 @@
 - **fix(kiosk):** Fix seat assignment race condition - seat availability check and assignment now wrapped in transaction
 - **fix(split-payment):** Fix markSplitPaid race condition - split status update, all-paid check, and booking confirmation now atomic in single transaction
 
+### Transaction Safety (14+ services)
+
+- Wrapped multi-step operations in database transactions: irops, crew-assignment, emergency-hotel, eticket, multi-city, price-lock, travel-scenarios, stripe-webhook, idempotency-v2
+
 ### Bug Fixes
 
 - **fix(ancillary):** Replace plain `Error` throws with proper `TRPCError` in ancillary services (12 instances)
@@ -25,6 +35,8 @@
 - **fix(kiosk):** Add try-catch around JSON.parse for applicableCabinClasses with safe fallback
 - **fix(types):** Replace 30+ `any` types with proper types in core infrastructure (errors.ts, correlation.ts, idempotency.service.ts, audit.service.ts, storage.ts)
 - **fix(types):** Fix non-null assertions across 15+ service files with proper null checks
+- 75+ plain `Error` → `TRPCError` replacements across 20+ service files
+- JSON.parse safety with try-catch in 7 files (weight-balance, codeshare, apis, db-optimizer, queue, queue-v2, dcs)
 
 ### Performance
 
@@ -36,9 +48,11 @@
 
 ### Maintenance
 
-- **refactor:** Fix all `require-await` lint warnings (correlation.ts, intelligence router/kernel, fare-rules, load-planning)
-- **refactor:** Reduce ESLint warnings from 835 to 237 (0 errors)
+- **refactor:** Fix all `require-await` lint warnings (correlation.ts, intelligence router/kernel, fare-rules, load-planning, notification helpers, stripe-webhook-v2)
+- **refactor:** Reduce ESLint warnings from 835 to 233 (0 errors)
 - **test:** All 755 tests passing, full build verified (dist/index.js + dist/worker.js)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.18.0...v1.19.0
 
 ---
 
