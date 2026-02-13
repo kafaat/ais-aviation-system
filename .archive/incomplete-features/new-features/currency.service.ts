@@ -15,13 +15,45 @@ import axios from "axios";
 
 const EXCHANGE_RATE_API_URL = "https://api.exchangerate-api.com/v4/latest/SAR";
 const CACHE_DURATION_HOURS = 24; // Update rates every 24 hours
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1000;
 
 /**
- * Fetch latest exchange rates from external API
+ * Fetch with retry logic
+ */
+async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  retries: number = MAX_RETRY_ATTEMPTS
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (retries > 0) {
+      console.warn(
+        `[Currency] Request failed, retrying... (${MAX_RETRY_ATTEMPTS - retries + 1}/${MAX_RETRY_ATTEMPTS})`
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, RETRY_DELAY_MS * (MAX_RETRY_ATTEMPTS - retries + 1))
+      );
+      return fetchWithRetry(fn, retries - 1);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fetch latest exchange rates from external API with retry logic
  */
 export async function fetchLatestExchangeRates(): Promise<void> {
   try {
-    const response = await axios.get(EXCHANGE_RATE_API_URL);
+    const response = await fetchWithRetry(() =>
+      axios.get(EXCHANGE_RATE_API_URL, {
+        timeout: 10000,
+        headers: {
+          "User-Agent": "AIS-Aviation-System/1.0",
+        },
+      })
+    );
     const rates = response.data.rates;
 
     const db = await getDb();
@@ -128,10 +160,16 @@ export async function getExchangeRate(
     (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
 
   if (hoursSinceUpdate > CACHE_DURATION_HOURS) {
-    // Update rates in background (don't wait)
-    fetchLatestExchangeRates().catch(err =>
-      console.error("[Currency] Background rate update failed:", err)
-    );
+    // Update rates in background (non-blocking with improved error handling)
+    setImmediate(() => {
+      fetchLatestExchangeRates()
+        .then(() => {
+          console.log("[Currency] Background rate update completed successfully");
+        })
+        .catch((err) => {
+          console.error("[Currency] Background rate update failed:", err);
+        });
+    });
   }
 
   return parseFloat(result[0].rate);
@@ -191,7 +229,7 @@ export function formatCurrency(
   amountInCents: number,
   currency: SupportedCurrency
 ): string {
-  const currencyInfo = SUPPORTED_CURRENCIES.find(c => c.code === currency);
+  const currencyInfo = SUPPORTED_CURRENCIES.find((c) => c.code === currency);
   if (!currencyInfo) throw new Error(`Unsupported currency: ${currency}`);
 
   const amount = amountInCents / 100;
@@ -215,7 +253,7 @@ export async function getAllExchangeRates() {
     .from(exchangeRates)
     .where(eq(exchangeRates.baseCurrency, "SAR"));
 
-  return rates.map(rate => ({
+  return rates.map((rate) => ({
     currency: rate.targetCurrency,
     rate: parseFloat(rate.rate),
     lastUpdated: rate.lastUpdated,

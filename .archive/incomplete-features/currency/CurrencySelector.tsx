@@ -1,5 +1,5 @@
 import React from "react";
-import { useCurrency } from "../contexts/CurrencyContext";
+import { useCurrency } from "../CurrencyContext";
 import { trpc } from "../lib/trpc";
 import {
   Select,
@@ -28,7 +28,21 @@ export function CurrencySelector() {
     <div className="flex items-center gap-2">
       <Select
         value={currency}
-        onValueChange={value => setCurrency(value as any)}
+        onValueChange={(value) =>
+          setCurrency(
+            value as
+              | "SAR"
+              | "USD"
+              | "EUR"
+              | "GBP"
+              | "AED"
+              | "KWD"
+              | "BHD"
+              | "OMR"
+              | "QAR"
+              | "EGP"
+          )
+        }
       >
         <SelectTrigger className="w-[180px]">
           <SelectValue>
@@ -39,17 +53,16 @@ export function CurrencySelector() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span>{currencies?.find(c => c.code === currency)?.flag}</span>
+                <span>{currencies?.find((c) => c.code === currency)?.flag}</span>
                 <span>
-                  {currency} -{" "}
-                  {currencies?.find(c => c.code === currency)?.symbol}
+                  {currency} - {currencies?.find((c) => c.code === currency)?.symbol}
                 </span>
               </div>
             )}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {currencies?.map(curr => (
+          {currencies?.map((curr) => (
             <SelectItem key={curr.code} value={curr.code}>
               <div className="flex items-center gap-2">
                 <span>{curr.flag}</span>
@@ -76,19 +89,36 @@ export function CompactCurrencySelector() {
   const { data: currencies } = trpc.currency.getSupportedCurrencies.useQuery();
 
   return (
-    <Select value={currency} onValueChange={value => setCurrency(value as any)}>
+    <Select
+      value={currency}
+      onValueChange={(value) =>
+        setCurrency(
+          value as
+            | "SAR"
+            | "USD"
+            | "EUR"
+            | "GBP"
+            | "AED"
+            | "KWD"
+            | "BHD"
+            | "OMR"
+            | "QAR"
+            | "EGP"
+        )
+      }
+    >
       <SelectTrigger className="w-[100px] h-9">
         <SelectValue>
           <div className="flex items-center gap-1">
             <span className="text-xs">
-              {currencies?.find(c => c.code === currency)?.flag}
+              {currencies?.find((c) => c.code === currency)?.flag}
             </span>
             <span className="text-xs font-medium">{currency}</span>
           </div>
         </SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {currencies?.map(curr => (
+        {currencies?.map((curr) => (
           <SelectItem key={curr.code} value={curr.code}>
             <div className="flex items-center gap-2">
               <span>{curr.flag}</span>
