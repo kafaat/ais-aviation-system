@@ -27,9 +27,7 @@ export async function login(
   await page.locator("input#password").fill(password);
 
   // Submit form
-  await page
-    .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-    .click();
+  await page.locator('[data-testid="login-submit"]').click();
 
   // Wait for navigation after login
   await page.waitForURL(/^(?!.*\/login).*$/);

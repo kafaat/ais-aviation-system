@@ -188,6 +188,7 @@ export default function Login() {
             size="lg"
             className="w-full shadow-lg hover:shadow-xl transition-all bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90"
             disabled={isPending}
+            data-testid="login-submit"
           >
             {isPending ? (
               <Loader2

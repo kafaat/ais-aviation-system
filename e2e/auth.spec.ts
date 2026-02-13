@@ -17,9 +17,7 @@ test.describe("Authentication", () => {
       // Check form elements are present
       await expect(page.getByLabel(/البريد الإلكتروني|Email/i)).toBeVisible();
       await expect(page.locator("input#password")).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-      ).toBeVisible();
+      await expect(page.locator('[data-testid="login-submit"]')).toBeVisible();
 
       // Check "forgot password" link exists
       await expect(
@@ -42,9 +40,7 @@ test.describe("Authentication", () => {
       await page.locator("input#password").fill(testUsers.regular.password);
 
       // Submit form
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Wait for navigation away from login page
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
@@ -64,9 +60,7 @@ test.describe("Authentication", () => {
       await page.locator("input#password").fill("password123");
 
       // Try to submit
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Check for validation error
       await expect(
@@ -84,9 +78,7 @@ test.describe("Authentication", () => {
       await page.locator("input#password").fill("wrongpassword");
 
       // Submit form
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Wait for error message
       await page.waitForSelector('[data-testid="error-message"]', {
@@ -109,9 +101,7 @@ test.describe("Authentication", () => {
       await page.locator("input#password").fill("password123");
 
       // Submit form
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Wait for error message
       await page.waitForSelector('[data-testid="error-message"]', {
@@ -128,9 +118,7 @@ test.describe("Authentication", () => {
 
     test("should require both email and password", async ({ page }) => {
       // Try to submit empty form
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Check for required field errors
       const emailRequired = await page
@@ -338,9 +326,7 @@ test.describe("Authentication", () => {
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
       await page.locator("input#password").fill(testUsers.regular.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
     });
 
@@ -400,9 +386,7 @@ test.describe("Authentication", () => {
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
       await page.locator("input#password").fill(testUsers.regular.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
 
       // Refresh page
@@ -427,9 +411,7 @@ test.describe("Authentication", () => {
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
       await page.locator("input#password").fill(testUsers.regular.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
 
       // Try to navigate to login page
