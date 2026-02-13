@@ -12,6 +12,7 @@
  * @version 1.0.0
  */
 
+import { TRPCError } from "@trpc/server";
 import { createServiceLogger } from "../_core/logger";
 import {
   DEFAULT_MULTI_REGION_CONFIG,
@@ -174,7 +175,10 @@ export async function getRegionHealth(regionId: string): Promise<{
 }> {
   const region = regions.find(r => r.id === regionId);
   if (!region) {
-    throw new Error(`Region not found: ${regionId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Region not found: ${regionId}`,
+    });
   }
 
   const startTime = Date.now();
@@ -312,7 +316,10 @@ export function routeRequest(
   );
 
   if (activeRegions.length === 0) {
-    throw new Error("No healthy regions available for routing");
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "No healthy regions available for routing",
+    });
   }
 
   // If coordinates are provided, use geo-based routing
@@ -450,16 +457,28 @@ export async function syncData(
   const target = regions.find(r => r.id === targetRegion);
 
   if (!source) {
-    throw new Error(`Source region not found: ${sourceRegion}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Source region not found: ${sourceRegion}`,
+    });
   }
   if (!target) {
-    throw new Error(`Target region not found: ${targetRegion}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Target region not found: ${targetRegion}`,
+    });
   }
   if (!source.isActive) {
-    throw new Error(`Source region is not active: ${sourceRegion}`);
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Source region is not active: ${sourceRegion}`,
+    });
   }
   if (!target.isActive) {
-    throw new Error(`Target region is not active: ${targetRegion}`);
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Target region is not active: ${targetRegion}`,
+    });
   }
 
   // Simulate async operation (in production: triggers replication job via BullMQ)
@@ -582,13 +601,22 @@ export async function failoverToRegion(
 ): Promise<FailoverEvent> {
   const targetRegion = regions.find(r => r.id === regionId);
   if (!targetRegion) {
-    throw new Error(`Target region not found: ${regionId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Target region not found: ${regionId}`,
+    });
   }
   if (!targetRegion.isActive) {
-    throw new Error(`Target region is not active: ${regionId}`);
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Target region is not active: ${regionId}`,
+    });
   }
   if (targetRegion.healthStatus === "down") {
-    throw new Error(`Cannot failover to a region that is down: ${regionId}`);
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: `Cannot failover to a region that is down: ${regionId}`,
+    });
   }
 
   // Simulate async failover coordination (in production: distributed lock + DNS update)
@@ -596,10 +624,16 @@ export async function failoverToRegion(
 
   const currentPrimary = regions.find(r => r.isPrimary);
   if (!currentPrimary) {
-    throw new Error("No current primary region found");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "No current primary region found",
+    });
   }
   if (currentPrimary.id === regionId) {
-    throw new Error("Target region is already the primary region");
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Target region is already the primary region",
+    });
   }
 
   // Check failover cooldown
@@ -612,9 +646,10 @@ export async function failoverToRegion(
   );
 
   if (recentFailover && triggeredBy === "auto") {
-    throw new Error(
-      `Failover cooldown active. Last failover completed at ${recentFailover.completedAt}`
-    );
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: `Failover cooldown active. Last failover completed at ${recentFailover.completedAt}`,
+    });
   }
 
   const now = new Date().toISOString();
@@ -686,9 +721,10 @@ export async function failoverToRegion(
       "Failover failed, rolled back"
     );
 
-    throw new Error(
-      `Failover failed: ${error instanceof Error ? error.message : "Unknown error"}`
-    );
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `Failover failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+    });
   }
 
   return event;
@@ -715,12 +751,18 @@ export function updateRegion(
 ): Region {
   const region = regions.find(r => r.id === regionId);
   if (!region) {
-    throw new Error(`Region not found: ${regionId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Region not found: ${regionId}`,
+    });
   }
 
   // Prevent deactivating the primary region
   if (updates.isActive === false && region.isPrimary) {
-    throw new Error("Cannot deactivate the primary region. Failover first.");
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Cannot deactivate the primary region. Failover first.",
+    });
   }
 
   if (updates.isActive !== undefined) {

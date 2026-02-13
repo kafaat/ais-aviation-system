@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { flights, airports } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte } from "drizzle-orm";
@@ -135,7 +136,11 @@ export async function findNearbyHotels(
   _guests: number
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const hotels = await db
     .select()
@@ -175,55 +180,66 @@ export async function bookHotelRoom(input: {
   notes?: string;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
-  // Look up the hotel to get the rate
-  const [hotel] = await db
-    .select()
-    .from(emergencyHotels)
-    .where(eq(emergencyHotels.id, input.hotelId))
-    .limit(1);
+  return await db.transaction(async tx => {
+    // Look up the hotel to get the rate (inside transaction to prevent deactivation race)
+    const [hotel] = await tx
+      .select()
+      .from(emergencyHotels)
+      .where(eq(emergencyHotels.id, input.hotelId))
+      .limit(1);
 
-  if (!hotel) throw new Error("Hotel not found");
-  if (!hotel.isActive) throw new Error("Hotel is not currently active");
+    if (!hotel)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Hotel not found" });
+    if (!hotel.isActive)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Hotel is not currently active",
+      });
 
-  const nights = nightsBetween(input.checkIn, input.checkOut);
-  const nightlyRate =
-    input.roomType === "suite"
-      ? Math.round(hotel.standardRate * 1.8)
-      : hotel.standardRate;
-  const totalCost = nightlyRate * nights;
-  const confirmationNumber = generateConfirmationNumber();
+    const nights = nightsBetween(input.checkIn, input.checkOut);
+    const nightlyRate =
+      input.roomType === "suite"
+        ? Math.round(hotel.standardRate * 1.8)
+        : hotel.standardRate;
+    const totalCost = nightlyRate * nights;
+    const confirmationNumber = generateConfirmationNumber();
 
-  const [result] = await db.insert(emergencyHotelBookings).values({
-    hotelId: input.hotelId,
-    bookingId: input.bookingId,
-    flightId: input.flightId,
-    passengerId: input.passengerId,
-    roomType: input.roomType,
-    checkIn: input.checkIn,
-    checkOut: input.checkOut,
-    nightlyRate,
-    totalCost,
-    mealIncluded: input.mealIncluded ?? true,
-    transportIncluded: input.transportIncluded ?? hotel.hasTransport,
-    status: "reserved",
-    confirmationNumber,
-    notes: input.notes ?? null,
+    const [result] = await tx.insert(emergencyHotelBookings).values({
+      hotelId: input.hotelId,
+      bookingId: input.bookingId,
+      flightId: input.flightId,
+      passengerId: input.passengerId,
+      roomType: input.roomType,
+      checkIn: input.checkIn,
+      checkOut: input.checkOut,
+      nightlyRate,
+      totalCost,
+      mealIncluded: input.mealIncluded ?? true,
+      transportIncluded: input.transportIncluded ?? hotel.hasTransport,
+      status: "reserved",
+      confirmationNumber,
+      notes: input.notes ?? null,
+    });
+
+    const [booking] = await tx
+      .select()
+      .from(emergencyHotelBookings)
+      .where(eq(emergencyHotelBookings.id, result.insertId))
+      .limit(1);
+
+    return {
+      ...booking,
+      hotelName: hotel.name,
+      hotelAddress: hotel.address,
+      hotelPhone: hotel.phone,
+    };
   });
-
-  const [booking] = await db
-    .select()
-    .from(emergencyHotelBookings)
-    .where(eq(emergencyHotelBookings.id, result.insertId))
-    .limit(1);
-
-  return {
-    ...booking,
-    hotelName: hotel.name,
-    hotelAddress: hotel.address,
-    hotelPhone: hotel.phone,
-  };
 }
 
 /**
@@ -231,30 +247,46 @@ export async function bookHotelRoom(input: {
  */
 export async function cancelHotelBooking(hotelBookingId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
-  const [existing] = await db
-    .select()
-    .from(emergencyHotelBookings)
-    .where(eq(emergencyHotelBookings.id, hotelBookingId))
-    .limit(1);
+  return await db.transaction(async tx => {
+    const [existing] = await tx
+      .select()
+      .from(emergencyHotelBookings)
+      .where(eq(emergencyHotelBookings.id, hotelBookingId))
+      .limit(1);
 
-  if (!existing) throw new Error("Hotel booking not found");
+    if (!existing)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Hotel booking not found",
+      });
 
-  if (existing.status === "cancelled") {
-    throw new Error("Hotel booking is already cancelled");
-  }
+    if (existing.status === "cancelled") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Hotel booking is already cancelled",
+      });
+    }
 
-  if (existing.status === "checked_out") {
-    throw new Error("Cannot cancel a completed hotel booking");
-  }
+    if (existing.status === "checked_out") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Cannot cancel a completed hotel booking",
+      });
+    }
 
-  await db
-    .update(emergencyHotelBookings)
-    .set({ status: "cancelled", updatedAt: new Date() })
-    .where(eq(emergencyHotelBookings.id, hotelBookingId));
+    await tx
+      .update(emergencyHotelBookings)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(eq(emergencyHotelBookings.id, hotelBookingId));
 
-  return { success: true, confirmationNumber: existing.confirmationNumber };
+    return { success: true, confirmationNumber: existing.confirmationNumber };
+  });
 }
 
 /**
@@ -262,7 +294,11 @@ export async function cancelHotelBooking(hotelBookingId: number) {
  */
 export async function getHotelBookingsByFlight(flightId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select({
@@ -301,7 +337,11 @@ export async function getHotelBookingsByFlight(flightId: number) {
  */
 export async function getHotelBookingsByPassenger(passengerId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select({
@@ -414,7 +454,11 @@ export function calculateHotelEntitlement(
  */
 export async function getHotelCosts(dateRange: { from: Date; to: Date }) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const costData = await db
     .select({
@@ -486,37 +530,50 @@ export async function assignTransportation(
   type: "shuttle" | "taxi" | "private_car"
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
-  const [existing] = await db
-    .select()
-    .from(emergencyHotelBookings)
-    .where(eq(emergencyHotelBookings.id, hotelBookingId))
-    .limit(1);
+  return await db.transaction(async tx => {
+    const [existing] = await tx
+      .select()
+      .from(emergencyHotelBookings)
+      .where(eq(emergencyHotelBookings.id, hotelBookingId))
+      .limit(1);
 
-  if (!existing) throw new Error("Hotel booking not found");
+    if (!existing)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Hotel booking not found",
+      });
 
-  if (existing.status === "cancelled" || existing.status === "no_show") {
-    throw new Error("Cannot assign transport to cancelled or no-show booking");
-  }
+    if (existing.status === "cancelled" || existing.status === "no_show") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Cannot assign transport to cancelled or no-show booking",
+      });
+    }
 
-  const transportNote = `Transport: ${type} arranged`;
-  const existingNotes = existing.notes ? `${existing.notes}\n` : "";
+    const transportNote = `Transport: ${type} arranged`;
+    const existingNotes = existing.notes ? `${existing.notes}\n` : "";
 
-  await db
-    .update(emergencyHotelBookings)
-    .set({
-      transportIncluded: true,
-      notes: `${existingNotes}${transportNote}`,
-      updatedAt: new Date(),
-    })
-    .where(eq(emergencyHotelBookings.id, hotelBookingId));
+    await tx
+      .update(emergencyHotelBookings)
+      .set({
+        transportIncluded: true,
+        notes: `${existingNotes}${transportNote}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(emergencyHotelBookings.id, hotelBookingId));
 
-  return {
-    success: true,
-    transportType: type,
-    confirmationNumber: existing.confirmationNumber,
-  };
+    return {
+      success: true,
+      transportType: type,
+      confirmationNumber: existing.confirmationNumber,
+    };
+  });
 }
 
 /**
@@ -524,7 +581,11 @@ export async function assignTransportation(
  */
 export async function getAllHotels() {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   return await db
     .select({
@@ -563,7 +624,11 @@ export async function addHotel(input: {
   hasTransport: boolean;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [result] = await db.insert(emergencyHotels).values({
     ...input,
@@ -598,7 +663,11 @@ export async function updateHotel(
   }
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [existing] = await db
     .select()
@@ -606,7 +675,8 @@ export async function updateHotel(
     .where(eq(emergencyHotels.id, hotelId))
     .limit(1);
 
-  if (!existing) throw new Error("Hotel not found");
+  if (!existing)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Hotel not found" });
 
   // Build the update payload, converting distanceKm to string for decimal column
   const updatePayload: Record<string, unknown> = { ...input };

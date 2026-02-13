@@ -21,6 +21,20 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
+// Safe JSON parse helper
+// ============================================================================
+
+function parseJsonSafe<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    console.warn("Failed to parse JSON value, using fallback");
+    return fallback;
+  }
+}
+
+// ============================================================================
 // Inline Schema Types
 // ============================================================================
 
@@ -419,9 +433,15 @@ export async function calculateCargoWeight(flightId: number): Promise<{
     return { totalWeight: 0, zones: [] };
   }
 
-  const distribution: Array<{ zone: string; weight: number }> = JSON.parse(
-    plan.cargoDistribution
-  );
+  let distribution: Array<{ zone: string; weight: number }>;
+  try {
+    distribution = JSON.parse(plan.cargoDistribution);
+  } catch {
+    console.warn(
+      `Invalid cargoDistribution JSON for flight ${flightId}, defaulting to empty`
+    );
+    return { totalWeight: 0, zones: [] };
+  }
 
   // Get aircraft cargo zone limits
   const zoneMaxWeights: Record<string, number> = {};
@@ -433,10 +453,16 @@ export async function calculateCargoWeight(flightId: number): Promise<{
       .limit(1);
 
     if (aircraft?.cargoZones) {
-      const parsedZones: Array<{ zone: string; maxWeight: number }> =
-        JSON.parse(aircraft.cargoZones);
-      for (const z of parsedZones) {
-        zoneMaxWeights[z.zone] = z.maxWeight;
+      try {
+        const parsedZones: Array<{ zone: string; maxWeight: number }> =
+          JSON.parse(aircraft.cargoZones);
+        for (const z of parsedZones) {
+          zoneMaxWeights[z.zone] = z.maxWeight;
+        }
+      } catch {
+        console.warn(
+          `Invalid cargoZones JSON for aircraft type ${plan.aircraftTypeId}`
+        );
       }
     }
   }
@@ -796,20 +822,26 @@ export async function checkWeightLimits(flightId: number): Promise<{
 
   // Check cargo zone limits
   if (plan.cargoDistribution && aircraft.cargoZones) {
-    const cargoZones: Array<{ zone: string; weight: number }> = JSON.parse(
-      plan.cargoDistribution
-    );
-    const zoneConfig: Array<{ zone: string; maxWeight: number }> = JSON.parse(
-      aircraft.cargoZones
-    );
+    try {
+      const cargoZones: Array<{ zone: string; weight: number }> = JSON.parse(
+        plan.cargoDistribution
+      );
+      const zoneConfig: Array<{ zone: string; maxWeight: number }> = JSON.parse(
+        aircraft.cargoZones
+      );
 
-    for (const cargo of cargoZones) {
-      const config = zoneConfig.find(z => z.zone === cargo.zone);
-      if (config && cargo.weight > config.maxWeight) {
-        errors.push(
-          `Cargo zone ${cargo.zone}: ${cargo.weight.toLocaleString()} kg exceeds max ${config.maxWeight.toLocaleString()} kg`
-        );
+      for (const cargo of cargoZones) {
+        const config = zoneConfig.find(z => z.zone === cargo.zone);
+        if (config && cargo.weight > config.maxWeight) {
+          errors.push(
+            `Cargo zone ${cargo.zone}: ${cargo.weight.toLocaleString()} kg exceeds max ${config.maxWeight.toLocaleString()} kg`
+          );
+        }
       }
+    } catch {
+      warnings.push(
+        "Could not parse cargo distribution or zone configuration data"
+      );
     }
   }
 
@@ -1358,12 +1390,28 @@ export async function generateLoadSheet(flightId: number): Promise<{
   const paxWeight = await calculatePassengerWeight(flightId);
 
   // Get cargo distribution
-  const cargoDistribution: Array<{ zone: string; weight: number }> =
-    plan.cargoDistribution ? JSON.parse(plan.cargoDistribution) : [];
+  let cargoDistribution: Array<{ zone: string; weight: number }> = [];
+  if (plan.cargoDistribution) {
+    try {
+      cargoDistribution = JSON.parse(plan.cargoDistribution);
+    } catch {
+      console.warn(
+        `Invalid cargoDistribution JSON in load plan for flight ${flightId}`
+      );
+    }
+  }
 
   // Get cargo zone limits
-  const zoneConfigs: Array<{ zone: string; maxWeight: number }> =
-    aircraft.cargoZones ? JSON.parse(aircraft.cargoZones) : [];
+  let zoneConfigs: Array<{ zone: string; maxWeight: number }> = [];
+  if (aircraft.cargoZones) {
+    try {
+      zoneConfigs = JSON.parse(aircraft.cargoZones);
+    } catch {
+      console.warn(
+        `Invalid cargoZones JSON for aircraft type ${plan.aircraftTypeId}`
+      );
+    }
+  }
 
   const cargoByZone = cargoDistribution.map(c => ({
     zone: c.zone,
@@ -1530,7 +1578,7 @@ export async function getWeightHistory(flightId: number): Promise<
     landingWeight: plan.landingWeight,
     cgPosition: plan.cgPosition,
     withinLimits: plan.withinLimits,
-    warnings: plan.warnings ? JSON.parse(plan.warnings) : [],
+    warnings: parseJsonSafe<string[]>(plan.warnings, []),
     createdAt: plan.createdAt,
   }));
 }

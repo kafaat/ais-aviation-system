@@ -68,6 +68,13 @@ class WebSocketService {
       return;
     }
 
+    if (!WebSocketServer) {
+      console.warn(
+        "[WebSocket] ws module not available, skipping initialization"
+      );
+      return;
+    }
+
     this.wss = new WebSocketServer({
       server,
       path: "/ws/flight-status",

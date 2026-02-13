@@ -227,58 +227,7 @@ export async function assignCrewToFlight(input: CrewAssignmentInput) {
     });
   }
 
-  // Check for duplicate active assignment
-  const [existing] = await db
-    .select()
-    .from(crewAssignments)
-    .where(
-      and(
-        eq(crewAssignments.flightId, input.flightId),
-        eq(crewAssignments.crewMemberId, input.crewMemberId),
-        ne(crewAssignments.status, "removed")
-      )
-    )
-    .limit(1);
-
-  if (existing) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: "Crew member is already assigned to this flight",
-    });
-  }
-
-  // Check for scheduling conflicts (overlapping flights)
-  const conflictingAssignments = await db
-    .select({
-      assignmentId: crewAssignments.id,
-      flightId: crewAssignments.flightId,
-      flightNumber: flights.flightNumber,
-      departureTime: flights.departureTime,
-      arrivalTime: flights.arrivalTime,
-    })
-    .from(crewAssignments)
-    .innerJoin(flights, eq(crewAssignments.flightId, flights.id))
-    .where(
-      and(
-        eq(crewAssignments.crewMemberId, input.crewMemberId),
-        ne(crewAssignments.status, "removed"),
-        // Overlap check: existing flight overlaps with proposed flight
-        sql`${flights.departureTime} < ${flight.arrivalTime}`,
-        sql`${flights.arrivalTime} > ${flight.departureTime}`
-      )
-    );
-
-  if (conflictingAssignments.length > 0) {
-    const conflicts = conflictingAssignments
-      .map(c => c.flightNumber)
-      .join(", ");
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: `Crew member has scheduling conflict with flight(s): ${conflicts}`,
-    });
-  }
-
-  // Check FTL compliance before assigning
+  // Check FTL compliance before assigning (read-only check, safe outside transaction)
   const ftlCheck = await checkFTLCompliance(input.crewMemberId, {
     departureTime: flight.departureTime,
     arrivalTime: flight.arrivalTime,
@@ -291,12 +240,68 @@ export async function assignCrewToFlight(input: CrewAssignmentInput) {
     });
   }
 
-  const [result] = await db.insert(crewAssignments).values({
-    flightId: input.flightId,
-    crewMemberId: input.crewMemberId,
-    role: input.role,
-    notes: input.notes ?? null,
-    assignedBy: input.assignedBy,
+  // Wrap duplicate check + conflict detection + insert in a transaction to prevent race conditions
+  const result = await db.transaction(async tx => {
+    // Check for duplicate active assignment
+    const [existing] = await tx
+      .select()
+      .from(crewAssignments)
+      .where(
+        and(
+          eq(crewAssignments.flightId, input.flightId),
+          eq(crewAssignments.crewMemberId, input.crewMemberId),
+          ne(crewAssignments.status, "removed")
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Crew member is already assigned to this flight",
+      });
+    }
+
+    // Check for scheduling conflicts (overlapping flights)
+    const conflictingAssignments = await tx
+      .select({
+        assignmentId: crewAssignments.id,
+        flightId: crewAssignments.flightId,
+        flightNumber: flights.flightNumber,
+        departureTime: flights.departureTime,
+        arrivalTime: flights.arrivalTime,
+      })
+      .from(crewAssignments)
+      .innerJoin(flights, eq(crewAssignments.flightId, flights.id))
+      .where(
+        and(
+          eq(crewAssignments.crewMemberId, input.crewMemberId),
+          ne(crewAssignments.status, "removed"),
+          // Overlap check: existing flight overlaps with proposed flight
+          sql`${flights.departureTime} < ${flight.arrivalTime}`,
+          sql`${flights.arrivalTime} > ${flight.departureTime}`
+        )
+      );
+
+    if (conflictingAssignments.length > 0) {
+      const conflicts = conflictingAssignments
+        .map(c => c.flightNumber)
+        .join(", ");
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: `Crew member has scheduling conflict with flight(s): ${conflicts}`,
+      });
+    }
+
+    const [insertResult] = await tx.insert(crewAssignments).values({
+      flightId: input.flightId,
+      crewMemberId: input.crewMemberId,
+      role: input.role,
+      notes: input.notes ?? null,
+      assignedBy: input.assignedBy,
+    });
+
+    return insertResult;
   });
 
   return {
@@ -1078,7 +1083,10 @@ export async function findReplacementCrew(
 
   const assignedIds = new Set(alreadyAssigned.map(a => a.crewMemberId));
 
-  // Evaluate each candidate
+  // TODO: N+1 query pattern - each candidate triggers individual queries for conflicts,
+  // FTL compliance, and duty time. This should be batched into bulk queries
+  // (e.g., fetch all assignments for all candidate IDs in one query) to avoid
+  // O(N) database round-trips when the candidate pool is large.
   const results: Array<{
     crewMember: {
       id: number;

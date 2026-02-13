@@ -99,6 +99,9 @@ const MAX_BAG_WEIGHT_GRAMS = 32000; // 32 kg
 /** Excess baggage fee per kilogram in SAR cents */
 const EXCESS_FEE_PER_KG_CENTS = 5000; // 50 SAR per kg
 
+/** Maximum number of bags per session */
+const MAX_BAGS_PER_SESSION = 10;
+
 /** Session timeout in milliseconds (10 minutes) */
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -201,6 +204,20 @@ export async function initiateBagDrop(
   bookingId: number,
   passengerId: number
 ): Promise<BagDropSession> {
+  if (bookingId <= 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "bookingId must be greater than 0",
+    });
+  }
+
+  if (passengerId <= 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "passengerId must be greater than 0",
+    });
+  }
+
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -332,10 +349,10 @@ export async function scanBoardingPass(barcode: string): Promise<{
   const passengerIdStr = parts[1];
   const passengerId = parseInt(passengerIdStr, 10);
 
-  if (isNaN(passengerId)) {
+  if (isNaN(passengerId) || passengerId <= 0) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Invalid passenger ID in barcode",
+      message: "Invalid passenger ID in barcode: must be a positive integer",
     });
   }
 
@@ -416,6 +433,13 @@ export function weighBag(
 } {
   const session = getActiveSession(sessionId);
 
+  if (session.totalBags >= MAX_BAGS_PER_SESSION) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Maximum number of bags per session (${MAX_BAGS_PER_SESSION}) reached`,
+    });
+  }
+
   if (weight <= 0) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -470,6 +494,20 @@ export async function checkBagAllowance(
   maxBagWeightGrams: number;
   excessFeePerKgCents: number;
 }> {
+  if (bookingId <= 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "bookingId must be greater than 0",
+    });
+  }
+
+  if (passengerId <= 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "passengerId must be greater than 0",
+    });
+  }
+
   const db = await getDb();
   if (!db)
     throw new TRPCError({

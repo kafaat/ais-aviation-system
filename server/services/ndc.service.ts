@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { eq, and, gte, lte, desc, asc, lt, sql } from "drizzle-orm";
 import { getDb, generateBookingReference } from "../db";
 import {
@@ -522,7 +523,11 @@ export async function searchOffers(
   params: SearchOffersInput
 ): Promise<NdcOfferResponse[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const departureDate = toDate(params.departureDate);
   const returnDate = params.returnDate ? toDate(params.returnDate) : undefined;
@@ -538,9 +543,10 @@ export async function searchOffers(
     cabinClass,
   });
   if (!validation.valid) {
-    throw new Error(
-      `NDC AirShopping validation failed: ${validation.errors.join("; ")}`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC AirShopping validation failed: ${validation.errors.join("; ")}`,
+    });
   }
 
   const responseId = generateNdcId("RSP");
@@ -680,7 +686,11 @@ export async function searchOffers(
  */
 export async function getOffer(offerId: string): Promise<NdcOfferResponse> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const results = await db
     .select()
@@ -690,7 +700,10 @@ export async function getOffer(offerId: string): Promise<NdcOfferResponse> {
 
   const offer = results[0];
   if (!offer) {
-    throw new Error(`NDC offer not found: ${offerId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `NDC offer not found: ${offerId}`,
+    });
   }
 
   // Check if the offer has expired
@@ -702,17 +715,24 @@ export async function getOffer(offerId: string): Promise<NdcOfferResponse> {
       .set({ status: "expired", updatedAt: now })
       .where(eq(ndcOffers.id, offer.id));
 
-    throw new Error(
-      `NDC offer has expired: ${offerId}. Offer expired at ${offer.expiresAt.toISOString()}`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC offer has expired: ${offerId}. Offer expired at ${offer.expiresAt.toISOString()}`,
+    });
   }
 
   if (offer.status === "expired") {
-    throw new Error(`NDC offer has expired: ${offerId}`);
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC offer has expired: ${offerId}`,
+    });
   }
 
   if (offer.status === "cancelled") {
-    throw new Error(`NDC offer has been cancelled: ${offerId}`);
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC offer has been cancelled: ${offerId}`,
+    });
   }
 
   // Resolve airline details
@@ -840,7 +860,11 @@ export async function createOrder(
   params: CreateOrderInput
 ): Promise<NdcOrderResponse> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Normalize contactInfo to handle both email/phone and emailAddress/phoneNumber
   const contactInfo = normalizeContactInfo(params.contactInfo);
@@ -853,9 +877,10 @@ export async function createOrder(
     contactInfo,
   });
   if (!validation.valid) {
-    throw new Error(
-      `NDC OrderCreate validation failed: ${validation.errors.join("; ")}`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC OrderCreate validation failed: ${validation.errors.join("; ")}`,
+    });
   }
 
   // Fetch and validate the offer
@@ -867,7 +892,10 @@ export async function createOrder(
 
   const offer = offerResults[0];
   if (!offer) {
-    throw new Error(`NDC offer not found: ${params.offerId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `NDC offer not found: ${params.offerId}`,
+    });
   }
 
   const now = new Date();
@@ -878,15 +906,17 @@ export async function createOrder(
       .update(ndcOffers)
       .set({ status: "expired", updatedAt: now })
       .where(eq(ndcOffers.id, offer.id));
-    throw new Error(
-      `NDC offer has expired: ${params.offerId}. Cannot create order from expired offer.`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC offer has expired: ${params.offerId}. Cannot create order from expired offer.`,
+    });
   }
 
   if (offer.status !== "active" && offer.status !== "selected") {
-    throw new Error(
-      `NDC offer is not available for ordering. Current status: ${offer.status}`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC offer is not available for ordering. Current status: ${offer.status}`,
+    });
   }
 
   // Create the internal booking
@@ -916,7 +946,10 @@ export async function createOrder(
   );
 
   if (!bookingId) {
-    throw new Error("Failed to create internal booking for NDC order");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to create internal booking for NDC order",
+    });
   }
 
   // Create passenger records in the bookings system
@@ -1033,7 +1066,11 @@ export async function createOrder(
  */
 export async function getOrder(orderId: string): Promise<NdcOrderResponse> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const results = await db
     .select()
@@ -1043,7 +1080,10 @@ export async function getOrder(orderId: string): Promise<NdcOrderResponse> {
 
   const order = results[0];
   if (!order) {
-    throw new Error(`NDC order not found: ${orderId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `NDC order not found: ${orderId}`,
+    });
   }
 
   // Resolve airline
@@ -1120,7 +1160,11 @@ export async function cancelOrder(
     "Cancelled by request";
 
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const results = await db
     .select()
@@ -1130,15 +1174,19 @@ export async function cancelOrder(
 
   const order = results[0];
   if (!order) {
-    throw new Error(`NDC order not found: ${orderId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `NDC order not found: ${orderId}`,
+    });
   }
 
   // Validate cancellable status
   const nonCancellableStatuses: NdcOrderStatus[] = ["cancelled", "refunded"];
   if (nonCancellableStatuses.includes(order.status)) {
-    throw new Error(
-      `NDC order cannot be cancelled. Current status: ${order.status}`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC order cannot be cancelled. Current status: ${order.status}`,
+    });
   }
 
   const now = new Date();
@@ -1247,7 +1295,11 @@ export async function changeOrder(
     (typeof orderIdOrParams === "object" ? orderIdOrParams.changes : {});
 
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const results = await db
     .select()
@@ -1257,7 +1309,10 @@ export async function changeOrder(
 
   const order = results[0];
   if (!order) {
-    throw new Error(`NDC order not found: ${orderId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `NDC order not found: ${orderId}`,
+    });
   }
 
   // Only pending, confirmed, or ticketed orders can be changed
@@ -1267,9 +1322,10 @@ export async function changeOrder(
     "ticketed",
   ];
   if (!changeableStatuses.includes(order.status)) {
-    throw new Error(
-      `NDC order cannot be changed. Current status: ${order.status}`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `NDC order cannot be changed. Current status: ${order.status}`,
+    });
   }
 
   const now = new Date();
@@ -1371,9 +1427,10 @@ export async function changeOrder(
 
         const newFlight = newFlights[0];
         if (!newFlight) {
-          throw new Error(
-            `No available flights found on ${newDepartureDate.toISOString().split("T")[0]} for this route`
-          );
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `No available flights found on ${newDepartureDate.toISOString().split("T")[0]} for this route`,
+          });
         }
 
         // Verify seat availability on the new flight
@@ -1384,9 +1441,10 @@ export async function changeOrder(
             : newFlight.economyAvailable;
 
         if (seatsAvailable < booking.numberOfPassengers) {
-          throw new Error(
-            `Insufficient seats on the new flight. Available: ${seatsAvailable}, Required: ${booking.numberOfPassengers}`
-          );
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `Insufficient seats on the new flight. Available: ${seatsAvailable}, Required: ${booking.numberOfPassengers}`,
+          });
         }
 
         // Update the booking to point to the new flight
@@ -1427,9 +1485,10 @@ export async function changeOrder(
 
         if (targetCabin === "business" && booking.cabinClass !== "business") {
           if (currentFlight[0].businessAvailable < booking.numberOfPassengers) {
-            throw new Error(
-              `Insufficient business class seats for upgrade. Available: ${currentFlight[0].businessAvailable}`
-            );
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Insufficient business class seats for upgrade. Available: ${currentFlight[0].businessAvailable}`,
+            });
           }
           // Calculate price difference
           const priceDifference =
@@ -1496,10 +1555,17 @@ export async function serviceOrder(
   services: ServiceOrderInput[]
 ): Promise<NdcOrderResponse> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   if (!services || services.length === 0) {
-    throw new Error("At least one service must be provided");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "At least one service must be provided",
+    });
   }
 
   const orderResults = await db
@@ -1510,7 +1576,10 @@ export async function serviceOrder(
 
   const order = orderResults[0];
   if (!order) {
-    throw new Error(`NDC order not found: ${orderId}`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `NDC order not found: ${orderId}`,
+    });
   }
 
   // Only pending, confirmed, or ticketed orders can have services added
@@ -1520,15 +1589,18 @@ export async function serviceOrder(
     "ticketed",
   ];
   if (!serviceableStatuses.includes(order.status)) {
-    throw new Error(
-      `Cannot add services to order with status: ${order.status}`
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Cannot add services to order with status: ${order.status}`,
+    });
   }
 
   if (!order.bookingId) {
-    throw new Error(
-      "NDC order has no linked booking. Cannot add ancillary services."
-    );
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "NDC order has no linked booking. Cannot add ancillary services.",
+    });
   }
 
   const now = new Date();
@@ -1543,7 +1615,10 @@ export async function serviceOrder(
     // Support both serviceCode and serviceType from the router
     const code = svc.serviceCode || svc.serviceType || "";
     if (!code) {
-      throw new Error("serviceCode is required for each service");
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "serviceCode is required for each service",
+      });
     }
 
     // Look up the ancillary service by code
@@ -1560,7 +1635,10 @@ export async function serviceOrder(
 
     const ancillary = ancillaryResults[0];
     if (!ancillary) {
-      throw new Error(`Ancillary service not found or unavailable: ${code}`);
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `Ancillary service not found or unavailable: ${code}`,
+      });
     }
 
     const quantity = svc.quantity ?? 1;
@@ -1650,7 +1728,11 @@ export async function getOrderHistory(
   filters?: OrderHistoryFilters
 ): Promise<{ orders: NdcOrderResponse[]; total: number }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const conditions = [eq(ndcOrders.airlineId, airlineId)];
 
@@ -1747,7 +1829,11 @@ export async function listOrders(
   filters: OrderHistoryFilters
 ): Promise<{ orders: NdcOrderResponse[]; total: number }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const conditions: ReturnType<typeof eq>[] = [];
 
@@ -1854,7 +1940,11 @@ export async function listOrders(
  */
 export async function expireStaleOffers(): Promise<number> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const now = new Date();
 
@@ -1885,7 +1975,11 @@ export const expireOffers = expireStaleOffers;
  */
 export async function getStatistics(): Promise<NdcStatistics> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Count offers by status
   const offerCounts = await db
@@ -1988,7 +2082,11 @@ export async function generateOfferFromFlight(params: {
   returnDate?: Date;
 }): Promise<NdcOfferResponse> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const {
     flight,

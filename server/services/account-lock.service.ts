@@ -10,6 +10,7 @@ import {
   type InsertSecurityEvent,
   type InsertIpBlacklist,
 } from "../../drizzle/schema";
+import { TRPCError } from "@trpc/server";
 import { createServiceLogger } from "./logger.service";
 
 /**
@@ -35,7 +36,11 @@ export async function recordLoginAttempt(data: {
   failureReason?: string;
 }): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const attempt: InsertLoginAttempt = {
     email: data.email,
@@ -208,7 +213,11 @@ export async function lockAccount(
   autoUnlockMinutes?: number
 ): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Calculate auto-unlock time if specified
   let autoUnlockAt: Date | undefined;
@@ -269,7 +278,11 @@ export async function unlockAccount(
   unlockedBy: string
 ): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   await db
     .update(accountLocks)
@@ -299,7 +312,11 @@ export async function recordSecurityEvent(data: {
   actionTaken?: string;
 }): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const event: InsertSecurityEvent = {
     eventType: data.eventType,
@@ -325,7 +342,11 @@ export async function blockIpAddress(
   autoUnblockMinutes?: number
 ): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   let autoUnblockAt: Date | undefined;
   if (autoUnblockMinutes) {
@@ -392,7 +413,11 @@ export async function unblockIpAddress(
   unblockedBy: string
 ): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   await db
     .update(ipBlacklist)

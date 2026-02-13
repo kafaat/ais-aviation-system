@@ -7,7 +7,7 @@ import {
   passengers,
   flightDisruptions,
 } from "../../drizzle/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, type SQL } from "drizzle-orm";
 
 // ============================================================================
 // Inline Schema Types (not persisted as Drizzle tables)
@@ -207,7 +207,11 @@ export async function calculateDOTCompensation(
   ruleApplied: string;
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [flight] = await db
     .select({
@@ -282,7 +286,11 @@ export async function calculateFlightDistance(
   destinationId: number
 ): Promise<number> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [origin] = await db
     .select({
@@ -307,7 +315,10 @@ export async function calculateFlightDistance(
     .limit(1);
 
   if (!origin || !destination) {
-    throw new Error("Airport not found for distance calculation");
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Airport not found for distance calculation",
+    });
   }
 
   // Well-known airport coordinate lookup for common routes
@@ -388,7 +399,11 @@ export async function createClaim(input: {
   userId: number;
 }): Promise<CompensationClaim> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get the booking with ownership check
   const [booking] = await db
@@ -542,7 +557,11 @@ export async function processClaim(input: {
   denialReason?: string;
 }): Promise<CompensationClaim> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get existing claim
   const rows = await db.execute(
@@ -623,7 +642,11 @@ export async function getClaimsByBooking(
   userId?: number
 ): Promise<CompensationClaim[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // If userId is provided, check booking ownership
   if (userId) {
@@ -661,7 +684,11 @@ export async function getClaimsByFlight(
   flightId: number
 ): Promise<CompensationClaim[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const rows = await db.execute(
     sql`SELECT * FROM ${sql.raw(CLAIMS_TABLE)}
@@ -680,7 +707,11 @@ export async function getClaimById(
   userId?: number
 ): Promise<CompensationClaim> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const rows = await db.execute(
     sql`SELECT * FROM ${sql.raw(CLAIMS_TABLE)}
@@ -726,7 +757,11 @@ export async function calculateTotalLiability(flightId: number): Promise<{
   statusBreakdown: Record<string, number>;
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get flight info
   const [flight] = await db
@@ -804,7 +839,11 @@ export async function autoAssessEligibility(
   delayMinutes: number;
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get booking
   const [booking] = await db
@@ -986,25 +1025,31 @@ export async function getAllClaims(input: {
   totalPages: number;
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const offset = (input.page - 1) * input.limit;
 
-  // Build WHERE conditions
-  const conditions: string[] = [];
+  // Build WHERE conditions using parameterized queries
+  const conditions: SQL[] = [];
   if (input.status) {
-    conditions.push(`status = '${input.status}'`);
+    conditions.push(sql`status = ${input.status}`);
   }
   if (input.regulationType) {
-    conditions.push(`regulationType = '${input.regulationType}'`);
+    conditions.push(sql`regulationType = ${input.regulationType}`);
   }
 
   const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    conditions.length > 0
+      ? sql`WHERE ${sql.join(conditions, sql` AND `)}`
+      : sql``;
 
   // Get total count
   const countRows = await db.execute(
-    sql.raw(`SELECT COUNT(*) as total FROM ${CLAIMS_TABLE} ${whereClause}`)
+    sql`SELECT COUNT(*) as total FROM ${sql.raw(CLAIMS_TABLE)} ${whereClause}`
   );
   const countData = countRows as unknown as Array<
     Array<{ total: number | bigint }>
@@ -1013,9 +1058,7 @@ export async function getAllClaims(input: {
 
   // Get paginated claims
   const dataRows = await db.execute(
-    sql.raw(
-      `SELECT * FROM ${CLAIMS_TABLE} ${whereClause} ORDER BY createdAt DESC LIMIT ${input.limit} OFFSET ${offset}`
-    )
+    sql`SELECT * FROM ${sql.raw(CLAIMS_TABLE)} ${whereClause} ORDER BY createdAt DESC LIMIT ${input.limit} OFFSET ${offset}`
   );
   const claimData = dataRows as unknown as Array<
     Array<Record<string, unknown>>
@@ -1037,7 +1080,11 @@ export async function getClaimsByUser(
   userId: number
 ): Promise<CompensationClaim[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get user's booking IDs
   const userBookings = await db
@@ -1049,12 +1096,12 @@ export async function getClaimsByUser(
 
   const bookingIds = userBookings.map(b => b.id);
 
-  // Fetch claims for those bookings
-  const _placeholders = bookingIds.map(() => "?").join(",");
+  // Fetch claims for those bookings using parameterized IN clause
   const rows = await db.execute(
-    sql.raw(
-      `SELECT * FROM ${CLAIMS_TABLE} WHERE bookingId IN (${bookingIds.join(",")}) ORDER BY createdAt DESC`
-    )
+    sql`SELECT * FROM ${sql.raw(CLAIMS_TABLE)} WHERE bookingId IN (${sql.join(
+      bookingIds.map(id => sql`${id}`),
+      sql`, `
+    )}) ORDER BY createdAt DESC`
   );
   const claimRows = rows as unknown as Array<Array<Record<string, unknown>>>;
   return (claimRows[0] ?? []).map(mapRowToClaim);
@@ -1068,18 +1115,18 @@ export async function getCompensationStats(dateRange?: {
   to: Date;
 }): Promise<CompensationStats> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
-  let dateFilter = "";
-  if (dateRange) {
-    const fromStr = dateRange.from.toISOString().slice(0, 19).replace("T", " ");
-    const toStr = dateRange.to.toISOString().slice(0, 19).replace("T", " ");
-    dateFilter = ` WHERE createdAt >= '${fromStr}' AND createdAt <= '${toStr}'`;
-  }
+  const dateFilter = dateRange
+    ? sql`WHERE createdAt >= ${dateRange.from} AND createdAt <= ${dateRange.to}`
+    : sql``;
 
   const rows = await db.execute(
-    sql.raw(
-      `SELECT
+    sql`SELECT
         COUNT(*) as totalClaims,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pendingClaims,
         SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approvedClaims,
@@ -1090,8 +1137,7 @@ export async function getCompensationStats(dateRange?: {
         COALESCE(SUM(CASE WHEN status IN ('approved', 'paid') THEN COALESCE(approvedAmount, calculatedAmount) ELSE 0 END), 0) as totalApproved,
         COALESCE(SUM(CASE WHEN status = 'paid' THEN COALESCE(approvedAmount, calculatedAmount) ELSE 0 END), 0) as totalPaid,
         COALESCE(AVG(CASE WHEN resolvedAt IS NOT NULL THEN DATEDIFF(resolvedAt, filedAt) END), 0) as avgProcessingDays
-      FROM ${CLAIMS_TABLE}${dateFilter}`
-    )
+      FROM ${sql.raw(CLAIMS_TABLE)} ${dateFilter}`
   );
 
   const statsRows = rows as unknown as Array<
@@ -1118,7 +1164,11 @@ export async function getCompensationStats(dateRange?: {
  */
 export async function getCompensationRules(): Promise<CompensationRule[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const rows = await db.execute(
     sql.raw(`SELECT * FROM ${RULES_TABLE} ORDER BY regulationType, distanceMin`)
@@ -1141,29 +1191,33 @@ export async function updateCompensationRule(input: {
   conditions?: Record<string, unknown>;
 }): Promise<CompensationRule> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
-  const setClauses: string[] = [];
+  const setClauses: SQL[] = [];
   if (input.compensationAmount !== undefined) {
-    setClauses.push(`compensationAmount = ${input.compensationAmount}`);
+    setClauses.push(sql`compensationAmount = ${input.compensationAmount}`);
   }
   if (input.minDelay !== undefined) {
-    setClauses.push(`minDelay = ${input.minDelay}`);
+    setClauses.push(sql`minDelay = ${input.minDelay}`);
   }
   if (input.maxDelay !== undefined) {
-    setClauses.push(`maxDelay = ${input.maxDelay}`);
+    setClauses.push(sql`maxDelay = ${input.maxDelay}`);
   }
   if (input.distanceMin !== undefined) {
-    setClauses.push(`distanceMin = ${input.distanceMin}`);
+    setClauses.push(sql`distanceMin = ${input.distanceMin}`);
   }
   if (input.distanceMax !== undefined) {
-    setClauses.push(`distanceMax = ${input.distanceMax}`);
+    setClauses.push(sql`distanceMax = ${input.distanceMax}`);
   }
   if (input.isActive !== undefined) {
-    setClauses.push(`isActive = ${input.isActive ? 1 : 0}`);
+    setClauses.push(sql`isActive = ${input.isActive ? 1 : 0}`);
   }
   if (input.conditions !== undefined) {
-    setClauses.push(`\`conditions\` = '${JSON.stringify(input.conditions)}'`);
+    setClauses.push(sql`\`conditions\` = ${JSON.stringify(input.conditions)}`);
   }
 
   if (setClauses.length === 0) {
@@ -1174,14 +1228,12 @@ export async function updateCompensationRule(input: {
   }
 
   await db.execute(
-    sql.raw(
-      `UPDATE ${RULES_TABLE} SET ${setClauses.join(", ")} WHERE id = ${input.id}`
-    )
+    sql`UPDATE ${sql.raw(RULES_TABLE)} SET ${sql.join(setClauses, sql`, `)} WHERE id = ${input.id}`
   );
 
   // Re-fetch
   const rows = await db.execute(
-    sql.raw(`SELECT * FROM ${RULES_TABLE} WHERE id = ${input.id} LIMIT 1`)
+    sql`SELECT * FROM ${sql.raw(RULES_TABLE)} WHERE id = ${input.id} LIMIT 1`
   );
   const ruleRows = rows as unknown as Array<Array<Record<string, unknown>>>;
   const updated = ruleRows[0]?.[0];

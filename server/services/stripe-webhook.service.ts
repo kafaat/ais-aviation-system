@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   stripeEvents,
@@ -16,7 +17,10 @@ import {
 } from "./booking-state-machine.service";
 
 if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY environment variable is required");
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "STRIPE_SECRET_KEY environment variable is required",
+  });
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -32,7 +36,10 @@ export function verifyWebhookSignature(
 ): Stripe.Event {
   try {
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
-      throw new Error("STRIPE_WEBHOOK_SECRET environment variable is required");
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "STRIPE_WEBHOOK_SECRET environment variable is required",
+      });
     }
     const event = stripe.webhooks.constructEvent(
       payload,
@@ -42,7 +49,10 @@ export function verifyWebhookSignature(
     return event;
   } catch (err) {
     logger.error({ error: err }, "Webhook signature verification failed");
-    throw new Error("Invalid webhook signature");
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid webhook signature",
+    });
   }
 }
 
@@ -67,7 +77,11 @@ export async function isEventProcessed(eventId: string): Promise<boolean> {
  */
 export async function storeStripeEvent(event: Stripe.Event): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const eventData: InsertStripeEvent = {
     id: event.id,
@@ -97,7 +111,11 @@ export async function markEventProcessed(
   error?: string
 ): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   await db
     .update(stripeEvents)
@@ -116,7 +134,11 @@ export async function recordFinancialTransaction(
   data: InsertFinancialLedger
 ): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   await db.insert(financialLedger).values(data);
 
@@ -264,27 +286,44 @@ async function handlePaymentIntentSucceeded(
     return;
   }
 
-  // Update booking status to confirmed and payment status to paid
-  await db
-    .update(bookings)
-    .set({
-      status: "confirmed",
-      paymentStatus: "paid",
-      updatedAt: new Date(),
-    })
-    .where(eq(bookings.id, booking.id));
+  // Update booking + payment atomically in a transaction
+  await db.transaction(async tx => {
+    // Update booking status to confirmed and payment status to paid
+    await tx
+      .update(bookings)
+      .set({
+        status: "confirmed",
+        paymentStatus: "paid",
+        updatedAt: new Date(),
+      })
+      .where(eq(bookings.id, booking.id));
 
-  // Update payment status
-  await db
-    .update(payments)
-    .set({
-      status: "completed",
-      transactionId: paymentIntent.id,
-      updatedAt: new Date(),
-    })
-    .where(eq(payments.bookingId, booking.id));
+    // Update payment status
+    await tx
+      .update(payments)
+      .set({
+        status: "completed",
+        transactionId: paymentIntent.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.bookingId, booking.id));
 
-  // Record status change
+    // Record in financial ledger
+    await tx.insert(financialLedger).values({
+      bookingId: booking.id,
+      userId: booking.userId,
+      type: "charge",
+      amount: (paymentIntent.amount / 100).toString(),
+      currency: paymentIntent.currency.toUpperCase(),
+      stripeEventId: event.id,
+      stripePaymentIntentId: paymentIntent.id,
+      stripeChargeId: paymentIntent.latest_charge as string,
+      description: `Payment for booking ${booking.bookingReference}`,
+      transactionDate: new Date(),
+    });
+  });
+
+  // Record status change (audit log, outside transaction since it uses its own DB connection)
   await recordStatusChange({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
@@ -293,20 +332,6 @@ async function handlePaymentIntentSucceeded(
     transitionReason: "Payment succeeded via Stripe webhook",
     actorType: "payment_gateway",
     paymentIntentId: paymentIntent.id,
-  });
-
-  // Record in financial ledger
-  await recordFinancialTransaction({
-    bookingId: booking.id,
-    userId: booking.userId,
-    type: "charge",
-    amount: (paymentIntent.amount / 100).toString(),
-    currency: paymentIntent.currency.toUpperCase(),
-    stripeEventId: event.id,
-    stripePaymentIntentId: paymentIntent.id,
-    stripeChargeId: paymentIntent.latest_charge as string,
-    description: `Payment for booking ${booking.bookingReference}`,
-    transactionDate: new Date(),
   });
 
   logger.info(
@@ -366,7 +391,7 @@ async function handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
     })
     .where(eq(payments.bookingId, booking.id));
 
-  // Record status change
+  // Record status change (audit, uses its own DB connection)
   await recordStatusChange({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
@@ -428,16 +453,34 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
   const isFullRefund = charge.amount_refunded === charge.amount;
   const refundType = isFullRefund ? "refund" : "partial_refund";
 
-  // Update payment status
-  await db
-    .update(payments)
-    .set({
-      status: "refunded",
-      updatedAt: new Date(),
-    })
-    .where(eq(payments.bookingId, booking.id));
+  // Update payment + financial ledger atomically in a transaction
+  await db.transaction(async tx => {
+    // Update payment status
+    await tx
+      .update(payments)
+      .set({
+        status: "refunded",
+        updatedAt: new Date(),
+      })
+      .where(eq(payments.bookingId, booking.id));
 
-  // Record status change
+    // Record in financial ledger
+    await tx.insert(financialLedger).values({
+      bookingId: booking.id,
+      userId: booking.userId,
+      type: refundType,
+      amount: (charge.amount_refunded / 100).toString(),
+      currency: charge.currency.toUpperCase(),
+      stripeEventId: event.id,
+      stripePaymentIntentId: charge.payment_intent as string,
+      stripeChargeId: charge.id,
+      stripeRefundId: charge.refunds?.data[0]?.id,
+      description: `${isFullRefund ? "Full" : "Partial"} refund for booking ${booking.bookingReference}`,
+      transactionDate: new Date(),
+    });
+  });
+
+  // Record status change (audit, uses its own DB connection)
   await recordStatusChange({
     bookingId: booking.id,
     bookingReference: booking.bookingReference,
@@ -446,21 +489,6 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
     transitionReason: `${isFullRefund ? "Full" : "Partial"} refund processed`,
     actorType: "payment_gateway",
     paymentIntentId: charge.payment_intent as string,
-  });
-
-  // Record in financial ledger
-  await recordFinancialTransaction({
-    bookingId: booking.id,
-    userId: booking.userId,
-    type: refundType,
-    amount: (charge.amount_refunded / 100).toString(),
-    currency: charge.currency.toUpperCase(),
-    stripeEventId: event.id,
-    stripePaymentIntentId: charge.payment_intent as string,
-    stripeChargeId: charge.id,
-    stripeRefundId: charge.refunds?.data[0]?.id,
-    description: `${isFullRefund ? "Full" : "Partial"} refund for booking ${booking.bookingReference}`,
-    transactionDate: new Date(),
   });
 
   logger.info(
@@ -537,6 +565,7 @@ async function handleCheckoutSessionExpired(
       .set({ status: "cancelled", updatedAt: new Date() })
       .where(eq(bookings.id, booking.id));
 
+    // Record status change (audit, uses its own DB connection)
     await recordStatusChange({
       bookingId: booking.id,
       bookingReference: booking.bookingReference,
@@ -574,7 +603,16 @@ export async function retryFailedEvents(): Promise<void> {
 
   for (const eventRecord of failedEvents) {
     try {
-      const dataObject = JSON.parse(eventRecord.data);
+      let dataObject: unknown;
+      try {
+        dataObject = JSON.parse(eventRecord.data);
+      } catch {
+        logger.error(
+          { eventId: eventRecord.id },
+          "Failed to parse event data JSON, skipping retry"
+        );
+        continue;
+      }
       const event = {
         id: eventRecord.id,
         type: eventRecord.type,

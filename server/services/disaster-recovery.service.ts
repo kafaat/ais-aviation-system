@@ -5,6 +5,7 @@
  * incident tracking, and runbook management for the aviation system.
  */
 
+import { TRPCError } from "@trpc/server";
 import { checkDatabase, checkCache, checkStripe } from "./health.service";
 
 // ============================================================================
@@ -1397,7 +1398,10 @@ export function resolveIncident(
 ): DRIncident {
   const incident = drIncidents.find(i => i.id === incidentId);
   if (!incident) {
-    throw new Error(`Incident ${incidentId} not found`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Incident ${incidentId} not found`,
+    });
   }
 
   const now = new Date().toISOString();
@@ -1461,7 +1465,10 @@ export function updateRunbook(
 
   const runbook = drRunbooks.find(r => r.id === id);
   if (!runbook) {
-    throw new Error(`Runbook ${id} not found`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Runbook ${id} not found`,
+    });
   }
 
   const now = new Date().toISOString();
