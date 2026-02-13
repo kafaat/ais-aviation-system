@@ -24,7 +24,7 @@ export async function login(
 
   // Fill login form
   await page.getByLabel(/البريد الإلكتروني|Email/i).fill(email);
-  await page.getByLabel(/كلمة المرور|Password/i).fill(password);
+  await page.locator("input#password").fill(password);
 
   // Submit form
   await page
