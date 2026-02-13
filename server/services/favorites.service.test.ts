@@ -1,12 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getDb } from "../db";
-import {
-  favoriteFlights,
-  users,
-  flights,
-  airlines,
-  airports,
-} from "../../drizzle/schema";
+import { favoriteFlights, users, flights, airlines, airports } from "../../drizzle/schema";
 import * as favoritesService from "./favorites.service";
 import { eq } from "drizzle-orm";
 
@@ -78,9 +72,7 @@ describe("Favorites Service", () => {
   afterAll(async () => {
     if (!db) return;
     // Cleanup
-    await db
-      .delete(favoriteFlights)
-      .where(eq(favoriteFlights.userId, testUserId));
+    await db.delete(favoriteFlights).where(eq(favoriteFlights.userId, testUserId));
     await db.delete(flights).where(eq(flights.id, testFlightId));
     await db.delete(airlines).where(eq(airlines.id, testAirlineId));
     await db.delete(airports).where(eq(airports.id, testOriginId));
@@ -153,10 +145,7 @@ describe("Favorites Service", () => {
     const favorites = await favoritesService.getUserFavorites(testUserId);
     const favoriteId = favorites[0].favorite.id;
 
-    const prices = await favoritesService.getBestPricesForFavorite(
-      favoriteId,
-      testUserId
-    );
+    const prices = await favoritesService.getBestPricesForFavorite(favoriteId, testUserId);
     expect(prices).toBeDefined();
     expect(prices.lowestPrice).toBeLessThanOrEqual(40000);
     expect(prices.totalFlights).toBeGreaterThan(0);
@@ -172,10 +161,7 @@ describe("Favorites Service", () => {
     const favorites = await favoritesService.getUserFavorites(testUserId);
     const favoriteId = favorites[0].favorite.id;
 
-    const history = await favoritesService.getPriceAlertHistory(
-      favoriteId,
-      testUserId
-    );
+    const history = await favoritesService.getPriceAlertHistory(favoriteId, testUserId);
     expect(Array.isArray(history)).toBe(true);
   });
 
@@ -188,10 +174,7 @@ describe("Favorites Service", () => {
       // No airlineId, different from main favorite
     });
 
-    const result = await favoritesService.deleteFavorite(
-      tempFavorite.id!,
-      testUserId
-    );
+    const result = await favoritesService.deleteFavorite(tempFavorite.id!, testUserId);
     expect(result.success).toBe(true);
 
     // Verify deletion
@@ -201,75 +184,5 @@ describe("Favorites Service", () => {
       destinationId: testDestinationId,
     });
     expect(isFav).toBe(false);
-  });
-
-  // ============================================================================
-  // Flight Favorites Tests (individual flights)
-  // ============================================================================
-
-  describe("Flight Favorites (individual flights)", () => {
-    it("should add a specific flight to favorites", async () => {
-      const favorite = await favoritesService.addFlightFavorite(
-        testUserId,
-        testFlightId
-      );
-
-      expect(favorite).toBeDefined();
-      expect(favorite.flightId).toBe(testFlightId);
-      expect(favorite.userId).toBe(testUserId);
-    });
-
-    it("should prevent duplicate flight favorites", async () => {
-      await expect(
-        favoritesService.addFlightFavorite(testUserId, testFlightId)
-      ).rejects.toThrow("already in your favorites");
-    });
-
-    it("should check if a flight is favorited", async () => {
-      const isFav = await favoritesService.isFlightFavorited(
-        testUserId,
-        testFlightId
-      );
-      expect(isFav).toBe(true);
-    });
-
-    it("should return false for non-favorited flight", async () => {
-      const isFav = await favoritesService.isFlightFavorited(
-        testUserId,
-        999999
-      );
-      expect(isFav).toBe(false);
-    });
-
-    it("should get user flight favorites with details", async () => {
-      const favorites =
-        await favoritesService.getUserFlightFavorites(testUserId);
-      expect(favorites.length).toBeGreaterThan(0);
-      expect(favorites[0].flight).toBeDefined();
-      expect(favorites[0].origin).toBeDefined();
-      expect(favorites[0].destination).toBeDefined();
-      expect(favorites[0].airline).toBeDefined();
-    });
-
-    it("should remove a flight from favorites", async () => {
-      const result = await favoritesService.removeFlightFavorite(
-        testUserId,
-        testFlightId
-      );
-      expect(result.success).toBe(true);
-
-      // Verify removal
-      const isFav = await favoritesService.isFlightFavorited(
-        testUserId,
-        testFlightId
-      );
-      expect(isFav).toBe(false);
-    });
-
-    it("should throw error when removing non-existent favorite", async () => {
-      await expect(
-        favoritesService.removeFlightFavorite(testUserId, 999999)
-      ).rejects.toThrow("not found");
-    });
   });
 });

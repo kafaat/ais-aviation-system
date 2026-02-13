@@ -63,7 +63,6 @@ ais-aviation-system/
 ### 1. دعم العملات المتعددة 💱
 
 **الملفات:**
-
 - `drizzle/new-schemas/schema-currency.ts`
 - `server/services/new-features/currency.service.ts`
 - `server/routers/new-features/currency.router.ts`
@@ -71,7 +70,6 @@ ais-aviation-system/
 - `client/src/components/currency/CurrencySelector.tsx`
 
 **الميزات:**
-
 - دعم 10 عملات: SAR, USD, EUR, GBP, AED, KWD, BHD, OMR, QAR, EGP
 - تحديث أسعار الصرف تلقائياً كل 24 ساعة
 - تحويل الأسعار فوري في الواجهة
@@ -82,12 +80,10 @@ ais-aviation-system/
 ### 2. التسجيل الموحد و Request ID 📝
 
 **الملفات:**
-
 - `server/_core/middleware/request-id.middleware.ts`
 - `server/_core/unified-logger.ts`
 
 **الميزات:**
-
 - Request ID فريد لكل طلب API (16 حرف)
 - تسجيل موحد باستخدام Pino
 - PII Masking تلقائي (بريد، هاتف، بطاقات، إلخ)
@@ -99,12 +95,10 @@ ais-aviation-system/
 ### 3. ميزات الأمان المتقدمة 🔒
 
 **الملفات:**
-
 - `drizzle/new-schemas/schema-security.ts`
 - `server/services/new-features/account-lock.service.ts`
 
 **الميزات:**
-
 - تسجيل جميع محاولات تسجيل الدخول
 - قفل الحساب بعد 5 محاولات فاشلة
 - فك القفل التلقائي بعد 30 دقيقة
@@ -127,7 +121,6 @@ pnpm db:push
 ### 2. تفعيل Middleware
 
 في `server/index.ts`:
-
 ```typescript
 import { requestIdMiddleware } from "./_core/middleware/request-id.middleware";
 
@@ -138,7 +131,6 @@ app.use(requestIdMiddleware);
 ### 3. إضافة Currency Router
 
 في `server/routers/_app.ts`:
-
 ```typescript
 import { currencyRouter } from "./new-features/currency.router";
 
@@ -151,7 +143,6 @@ export const appRouter = router({
 ### 4. تفعيل Currency Context
 
 في `client/src/main.tsx`:
-
 ```typescript
 import { CurrencyProvider } from "./contexts/CurrencyContext";
 

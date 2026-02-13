@@ -1,58 +1,19 @@
-import {
-  int,
-  json,
-  mysqlEnum,
-  mysqlTable,
-  text,
-  timestamp,
-  varchar,
-  decimal,
-  boolean,
-  index,
-  uniqueIndex,
-} from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, boolean, index } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
  */
-export const users = mysqlTable(
-  "users",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    openId: varchar("openId", { length: 64 }).notNull().unique(),
-    name: text("name"),
-    email: varchar("email", { length: 320 }),
-    loginMethod: varchar("loginMethod", { length: 64 }),
-    passwordHash: varchar("passwordHash", { length: 255 }),
-    role: mysqlEnum("role", [
-      "user",
-      "admin",
-      "super_admin",
-      "airline_admin",
-      "finance",
-      "ops",
-      "support",
-    ])
-      .default("user")
-      .notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-    lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-  },
-  table => ({
-    // Index for email lookups (login, password reset)
-    emailIdx: index("users_email_idx").on(table.email),
-    // Index for role-based queries (admin panels, RBAC)
-    roleIdx: index("users_role_idx").on(table.role),
-    // Index for user listing sorted by creation date
-    createdAtIdx: index("users_created_at_idx").on(table.createdAt),
-    // Composite index for role + createdAt (admin user listing with filters)
-    roleCreatedAtIdx: index("users_role_created_at_idx").on(
-      table.role,
-      table.createdAt
-    ),
-  })
-);
+export const users = mysqlTable("users", {
+  id: int("id").autoincrement().primaryKey(),
+  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  name: text("name"),
+  email: varchar("email", { length: 320 }),
+  loginMethod: varchar("loginMethod", { length: 64 }),
+  role: mysqlEnum("role", ["user", "admin", "super_admin", "airline_admin", "finance", "ops", "support"]).default("user").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+});
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -60,29 +21,15 @@ export type InsertUser = typeof users.$inferInsert;
 /**
  * Airlines table
  */
-export const airlines = mysqlTable(
-  "airlines",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., SV, MS)
-    name: varchar("name", { length: 255 }).notNull(),
-    country: varchar("country", { length: 100 }),
-    logo: text("logo"), // URL to airline logo
-    active: boolean("active").default(true).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    // Index for active airlines lookup (common filter)
-    activeIdx: index("airlines_active_idx").on(table.active),
-    // Index for country-based filtering
-    countryIdx: index("airlines_country_idx").on(table.country),
-    // Composite index for active airlines by country
-    activeCountryIdx: index("airlines_active_country_idx").on(
-      table.active,
-      table.country
-    ),
-  })
-);
+export const airlines = mysqlTable("airlines", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., SV, MS)
+  name: varchar("name", { length: 255 }).notNull(),
+  country: varchar("country", { length: 100 }),
+  logo: text("logo"), // URL to airline logo
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 export type Airline = typeof airlines.$inferSelect;
 export type InsertAirline = typeof airlines.$inferInsert;
@@ -90,29 +37,15 @@ export type InsertAirline = typeof airlines.$inferInsert;
 /**
  * Airports table
  */
-export const airports = mysqlTable(
-  "airports",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., JED, RUH)
-    name: varchar("name", { length: 255 }).notNull(),
-    city: varchar("city", { length: 100 }).notNull(),
-    country: varchar("country", { length: 100 }).notNull(),
-    timezone: varchar("timezone", { length: 50 }), // e.g., "Asia/Riyadh"
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    // Index for city search (autocomplete, search)
-    cityIdx: index("airports_city_idx").on(table.city),
-    // Index for country filtering
-    countryIdx: index("airports_country_idx").on(table.country),
-    // Composite index for country + city (location-based search)
-    countryCity: index("airports_country_city_idx").on(
-      table.country,
-      table.city
-    ),
-  })
-);
+export const airports = mysqlTable("airports", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 3 }).notNull().unique(), // IATA code (e.g., JED, RUH)
+  name: varchar("name", { length: 255 }).notNull(),
+  city: varchar("city", { length: 100 }).notNull(),
+  country: varchar("country", { length: 100 }).notNull(),
+  timezone: varchar("timezone", { length: 50 }), // e.g., "Asia/Riyadh"
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 export type Airport = typeof airports.$inferSelect;
 export type InsertAirport = typeof airports.$inferInsert;
@@ -120,49 +53,33 @@ export type InsertAirport = typeof airports.$inferInsert;
 /**
  * Flights table
  */
-export const flights = mysqlTable(
-  "flights",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    flightNumber: varchar("flightNumber", { length: 10 }).notNull(),
-    airlineId: int("airlineId").notNull(),
-    originId: int("originId").notNull(),
-    destinationId: int("destinationId").notNull(),
-    departureTime: timestamp("departureTime").notNull(),
-    arrivalTime: timestamp("arrivalTime").notNull(),
-    aircraftType: varchar("aircraftType", { length: 50 }), // e.g., "Boeing 777"
-    status: mysqlEnum("status", [
-      "scheduled",
-      "delayed",
-      "cancelled",
-      "completed",
-    ])
-      .default("scheduled")
-      .notNull(),
-    economySeats: int("economySeats").notNull(),
-    businessSeats: int("businessSeats").notNull(),
-    economyPrice: int("economyPrice").notNull(), // Price in SAR (stored as integer, e.g., 50000 = 500.00 SAR)
-    businessPrice: int("businessPrice").notNull(),
-    economyAvailable: int("economyAvailable").notNull(),
-    businessAvailable: int("businessAvailable").notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    flightNumberIdx: index("flight_number_idx").on(table.flightNumber),
-    departureTimeIdx: index("departure_time_idx").on(table.departureTime),
-    routeIdx: index("route_idx").on(table.originId, table.destinationId),
-    airlineIdx: index("airline_idx").on(table.airlineId),
-    statusIdx: index("status_idx").on(table.status),
-    // Composite index for common search pattern: route + date + status
-    routeDateStatusIdx: index("route_date_status_idx").on(
-      table.originId,
-      table.destinationId,
-      table.departureTime,
-      table.status
-    ),
-  })
-);
+export const flights = mysqlTable("flights", {
+  id: int("id").autoincrement().primaryKey(),
+  flightNumber: varchar("flightNumber", { length: 10 }).notNull(),
+  airlineId: int("airlineId").notNull(),
+  originId: int("originId").notNull(),
+  destinationId: int("destinationId").notNull(),
+  departureTime: timestamp("departureTime").notNull(),
+  arrivalTime: timestamp("arrivalTime").notNull(),
+  aircraftType: varchar("aircraftType", { length: 50 }), // e.g., "Boeing 777"
+  status: mysqlEnum("status", ["scheduled", "delayed", "cancelled", "completed"]).default("scheduled").notNull(),
+  economySeats: int("economySeats").notNull(),
+  businessSeats: int("businessSeats").notNull(),
+  economyPrice: int("economyPrice").notNull(), // Price in SAR (stored as integer, e.g., 50000 = 500.00 SAR)
+  businessPrice: int("businessPrice").notNull(),
+  economyAvailable: int("economyAvailable").notNull(),
+  businessAvailable: int("businessAvailable").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  flightNumberIdx: index("flight_number_idx").on(table.flightNumber),
+  departureTimeIdx: index("departure_time_idx").on(table.departureTime),
+  routeIdx: index("route_idx").on(table.originId, table.destinationId),
+  airlineIdx: index("airline_idx").on(table.airlineId),
+  statusIdx: index("status_idx").on(table.status),
+  // Composite index for common search pattern: route + date + status
+  routeDateStatusIdx: index("route_date_status_idx").on(table.originId, table.destinationId, table.departureTime, table.status),
+}));
 
 export type Flight = typeof flights.$inferSelect;
 export type InsertFlight = typeof flights.$inferInsert;
@@ -170,94 +87,26 @@ export type InsertFlight = typeof flights.$inferInsert;
 /**
  * Bookings table
  */
-export const bookings = mysqlTable(
-  "bookings",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    flightId: int("flightId").notNull(),
-    bookingReference: varchar("bookingReference", { length: 6 })
-      .notNull()
-      .unique(), // e.g., "ABC123"
-    pnr: varchar("pnr", { length: 6 }).notNull().unique(), // Passenger Name Record
-    status: mysqlEnum("status", [
-      "pending",
-      "confirmed",
-      "cancelled",
-      "completed",
-    ])
-      .default("pending")
-      .notNull(),
-    totalAmount: int("totalAmount").notNull(), // Total price in SAR cents
-    paymentStatus: mysqlEnum("paymentStatus", [
-      "pending",
-      "paid",
-      "refunded",
-      "failed",
-    ])
-      .default("pending")
-      .notNull(),
-    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
-    stripeCheckoutSessionId: varchar("stripeCheckoutSessionId", {
-      length: 255,
-    }),
-    idempotencyKey: varchar("idempotencyKey", { length: 255 }).unique(), // For preventing duplicate bookings
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-    numberOfPassengers: int("numberOfPassengers").default(1).notNull(),
-    checkedIn: boolean("checkedIn").default(false).notNull(),
-    checkInReminderSentAt: timestamp("checkInReminderSentAt"), // When check-in reminder email was sent
-    deletedAt: timestamp("deletedAt"), // Soft delete timestamp
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_id_idx").on(table.userId),
-    pnrIdx: index("pnr_idx").on(table.pnr),
-    // Index for flight-based queries (flight manifest, seat availability)
-    flightIdIdx: index("bookings_flight_id_idx").on(table.flightId),
-    // Index for status filtering (admin panels, reports)
-    statusIdx: index("bookings_status_idx").on(table.status),
-    // Index for payment status queries
-    paymentStatusIdx: index("bookings_payment_status_idx").on(
-      table.paymentStatus
-    ),
-    // Index for Stripe checkout session lookups (webhook processing)
-    stripeCheckoutIdx: index("bookings_stripe_checkout_idx").on(
-      table.stripeCheckoutSessionId
-    ),
-    // Index for Stripe payment intent lookups (webhook processing)
-    stripePaymentIntentIdx: index("bookings_stripe_payment_intent_idx").on(
-      table.stripePaymentIntentId
-    ),
-    // Index for creation date sorting (user booking history)
-    createdAtIdx: index("bookings_created_at_idx").on(table.createdAt),
-    // Composite index for user bookings sorted by date
-    userCreatedAtIdx: index("bookings_user_created_at_idx").on(
-      table.userId,
-      table.createdAt
-    ),
-    // Composite index for user + status filtering
-    userStatusIdx: index("bookings_user_status_idx").on(
-      table.userId,
-      table.status
-    ),
-    // Composite index for flight + status (seat availability calculation)
-    flightStatusIdx: index("bookings_flight_status_idx").on(
-      table.flightId,
-      table.status
-    ),
-    // Index for check-in status queries
-    checkedInIdx: index("bookings_checked_in_idx").on(table.checkedIn),
-    // Composite index for check-in reminder queries
-    checkInReminderIdx: index("bookings_check_in_reminder_idx").on(
-      table.status,
-      table.checkedIn,
-      table.checkInReminderSentAt
-    ),
-    // Index for soft delete queries
-    deletedAtIdx: index("bookings_deleted_at_idx").on(table.deletedAt),
-  })
-);
+export const bookings = mysqlTable("bookings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  flightId: int("flightId").notNull(),
+  bookingReference: varchar("bookingReference", { length: 6 }).notNull().unique(), // e.g., "ABC123"
+  pnr: varchar("pnr", { length: 6 }).notNull().unique(), // Passenger Name Record
+  status: mysqlEnum("status", ["pending", "confirmed", "cancelled", "completed"]).default("pending").notNull(),
+  totalAmount: int("totalAmount").notNull(), // Total price in SAR cents
+  paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "refunded", "failed"]).default("pending").notNull(),
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  stripeCheckoutSessionId: varchar("stripeCheckoutSessionId", { length: 255 }),
+  cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+  numberOfPassengers: int("numberOfPassengers").notNull(),
+  checkedIn: boolean("checkedIn").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  pnrIdx: index("pnr_idx").on(table.pnr),
+}));
 
 export type Booking = typeof bookings.$inferSelect;
 export type InsertBooking = typeof bookings.$inferInsert;
@@ -265,38 +114,22 @@ export type InsertBooking = typeof bookings.$inferInsert;
 /**
  * Passengers table
  */
-export const passengers = mysqlTable(
-  "passengers",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId").notNull(),
-    type: mysqlEnum("type", ["adult", "child", "infant"])
-      .default("adult")
-      .notNull(),
-    title: varchar("title", { length: 10 }), // Mr, Mrs, Ms, Dr
-    firstName: varchar("firstName", { length: 100 }).notNull(),
-    lastName: varchar("lastName", { length: 100 }).notNull(),
-    dateOfBirth: timestamp("dateOfBirth"),
-    passportNumber: varchar("passportNumber", { length: 20 }),
-    nationality: varchar("nationality", { length: 3 }), // ISO country code
-    seatNumber: varchar("seatNumber", { length: 5 }), // e.g., "12A"
-    ticketNumber: varchar("ticketNumber", { length: 13 }), // IATA 13-digit ticket number
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    bookingIdIdx: index("booking_id_idx").on(table.bookingId),
-    // Index for ticket number lookups (e-ticket verification)
-    ticketNumberIdx: index("passengers_ticket_number_idx").on(
-      table.ticketNumber
-    ),
-    // Index for passport lookups (identity verification)
-    passportIdx: index("passengers_passport_idx").on(table.passportNumber),
-    // Composite index for name search (customer lookup)
-    nameIdx: index("passengers_name_idx").on(table.lastName, table.firstName),
-    // Index for passenger type filtering (pricing calculations)
-    typeIdx: index("passengers_type_idx").on(table.type),
-  })
-);
+export const passengers = mysqlTable("passengers", {
+  id: int("id").autoincrement().primaryKey(),
+  bookingId: int("bookingId").notNull(),
+  type: mysqlEnum("type", ["adult", "child", "infant"]).default("adult").notNull(),
+  title: varchar("title", { length: 10 }), // Mr, Mrs, Ms, Dr
+  firstName: varchar("firstName", { length: 100 }).notNull(),
+  lastName: varchar("lastName", { length: 100 }).notNull(),
+  dateOfBirth: timestamp("dateOfBirth"),
+  passportNumber: varchar("passportNumber", { length: 20 }),
+  nationality: varchar("nationality", { length: 3 }), // ISO country code
+  seatNumber: varchar("seatNumber", { length: 5 }), // e.g., "12A"
+  ticketNumber: varchar("ticketNumber", { length: 13 }), // IATA 13-digit ticket number
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+}));
 
 export type Passenger = typeof passengers.$inferSelect;
 export type InsertPassenger = typeof passengers.$inferInsert;
@@ -305,50 +138,16 @@ export type InsertPassenger = typeof passengers.$inferInsert;
  * Flight Status History table
  * Tracks all status changes for flights
  */
-export const flightStatusHistory = mysqlTable(
-  "flight_status_history",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    flightId: int("flightId").notNull(),
-    oldStatus: mysqlEnum("oldStatus", [
-      "scheduled",
-      "delayed",
-      "cancelled",
-      "completed",
-    ]),
-    newStatus: mysqlEnum("newStatus", [
-      "scheduled",
-      "delayed",
-      "cancelled",
-      "completed",
-    ]).notNull(),
-    delayMinutes: int("delayMinutes"),
-    reason: text("reason"),
-    changedBy: int("changedBy"), // User ID who made the change (admin)
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    // Index for flight history lookup
-    flightIdIdx: index("flight_status_history_flight_idx").on(table.flightId),
-    // Index for status filtering
-    newStatusIdx: index("flight_status_history_new_status_idx").on(
-      table.newStatus
-    ),
-    // Index for admin audit trail
-    changedByIdx: index("flight_status_history_changed_by_idx").on(
-      table.changedBy
-    ),
-    // Index for chronological queries
-    createdAtIdx: index("flight_status_history_created_at_idx").on(
-      table.createdAt
-    ),
-    // Composite index for flight status timeline
-    flightCreatedAtIdx: index("flight_status_history_flight_created_idx").on(
-      table.flightId,
-      table.createdAt
-    ),
-  })
-);
+export const flightStatusHistory = mysqlTable("flight_status_history", {
+  id: int("id").autoincrement().primaryKey(),
+  flightId: int("flightId").notNull(),
+  oldStatus: mysqlEnum("oldStatus", ["scheduled", "delayed", "cancelled", "completed"]),
+  newStatus: mysqlEnum("newStatus", ["scheduled", "delayed", "cancelled", "completed"]).notNull(),
+  delayMinutes: int("delayMinutes"),
+  reason: text("reason"),
+  changedBy: int("changedBy"), // User ID who made the change (admin)
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 export type FlightStatusHistory = typeof flightStatusHistory.$inferSelect;
 export type InsertFlightStatusHistory = typeof flightStatusHistory.$inferInsert;
@@ -356,252 +155,106 @@ export type InsertFlightStatusHistory = typeof flightStatusHistory.$inferInsert;
 /**
  * Payments table
  */
-export const payments = mysqlTable(
-  "payments",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId").notNull(),
-    amount: int("amount").notNull(), // Amount in SAR cents
-    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-    method: mysqlEnum("method", [
-      "card",
-      "wallet",
-      "bank_transfer",
-      "mada",
-      "apple_pay",
-      "stc_pay",
-      "tabby",
-      "tamara",
-    ]).notNull(),
-    provider: mysqlEnum("provider", [
-      "stripe",
-      "hyperpay",
-      "tabby",
-      "tamara",
-      "stc_pay",
-      "moyasar",
-      "floosak",
-      "jawali",
-      "onecash",
-      "easycash",
-    ])
-      .default("stripe")
-      .notNull(),
-    status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"])
-      .default("pending")
-      .notNull(),
-    transactionId: varchar("transactionId", { length: 100 }), // External payment gateway transaction ID
-    providerSessionId: varchar("providerSessionId", { length: 255 }), // Provider-specific session/checkout ID
-    idempotencyKey: varchar("idempotencyKey", { length: 100 }).unique(), // For preventing duplicate payments
-    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }), // Stripe Payment Intent ID
-    providerMetadata: text("providerMetadata"), // JSON metadata from provider
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    bookingIdIdx: index("booking_id_idx").on(table.bookingId),
-    idempotencyKeyIdx: index("idempotency_key_idx").on(table.idempotencyKey),
-    // Index for status filtering (reconciliation, reports)
-    statusIdx: index("payments_status_idx").on(table.status),
-    // Index for Stripe payment intent lookups
-    stripePaymentIntentIdx: index("payments_stripe_payment_intent_idx").on(
-      table.stripePaymentIntentId
-    ),
-    // Index for transaction ID lookups
-    transactionIdIdx: index("payments_transaction_id_idx").on(
-      table.transactionId
-    ),
-    // Index for date range queries (financial reports)
-    createdAtIdx: index("payments_created_at_idx").on(table.createdAt),
-    // Composite index for status + date (report filtering)
-    statusCreatedAtIdx: index("payments_status_created_at_idx").on(
-      table.status,
-      table.createdAt
-    ),
-    // Index for payment method filtering
-    methodIdx: index("payments_method_idx").on(table.method),
-    // Index for provider filtering
-    providerIdx: index("payments_provider_idx").on(table.provider),
-  })
-);
+export const payments = mysqlTable("payments", {
+  id: int("id").autoincrement().primaryKey(),
+  bookingId: int("bookingId").notNull(),
+  amount: int("amount").notNull(), // Amount in SAR cents
+  currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+  method: mysqlEnum("method", ["card", "wallet", "bank_transfer"]).notNull(),
+  status: mysqlEnum("status", ["pending", "completed", "failed", "refunded"]).default("pending").notNull(),
+  transactionId: varchar("transactionId", { length: 100 }), // External payment gateway transaction ID
+  idempotencyKey: varchar("idempotencyKey", { length: 100 }).unique(), // For preventing duplicate payments
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  idempotencyKeyIdx: index("idempotency_key_idx").on(table.idempotencyKey),
+}));
 
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = typeof payments.$inferInsert;
 
 /**
- * Payment History table
- * Tracks all payment status transitions and events for audit trail
- */
-export const paymentHistory = mysqlTable(
-  "payment_history",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    paymentId: int("paymentId").notNull(),
-    bookingId: int("bookingId").notNull(),
-    event: mysqlEnum("event", [
-      "created",
-      "processing",
-      "completed",
-      "failed",
-      "refund_initiated",
-      "refund_completed",
-      "refund_failed",
-      "chargeback",
-      "disputed",
-      "expired",
-    ]).notNull(),
-    fromStatus: mysqlEnum("fromStatus", [
-      "pending",
-      "completed",
-      "failed",
-      "refunded",
-    ]),
-    toStatus: mysqlEnum("toStatus", [
-      "pending",
-      "completed",
-      "failed",
-      "refunded",
-    ]).notNull(),
-    amount: int("amount"), // Amount involved in this event (SAR cents)
-    currency: varchar("currency", { length: 3 }).default("SAR"),
-    providerReference: varchar("providerReference", { length: 255 }), // External reference from payment provider
-    metadata: text("metadata"), // JSON metadata for additional event details
-    initiatedBy: mysqlEnum("initiatedBy", [
-      "system",
-      "user",
-      "admin",
-      "webhook",
-      "cron",
-    ])
-      .default("system")
-      .notNull(),
-    userId: int("userId"), // Who initiated the event (null for system/webhook)
-    ipAddress: varchar("ipAddress", { length: 45 }), // IPv4/IPv6
-    userAgent: varchar("userAgent", { length: 500 }),
-    errorMessage: text("errorMessage"), // Error details if failed
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    paymentIdIdx: index("payment_history_payment_id_idx").on(table.paymentId),
-    bookingIdIdx: index("payment_history_booking_id_idx").on(table.bookingId),
-    eventIdx: index("payment_history_event_idx").on(table.event),
-    createdAtIdx: index("payment_history_created_at_idx").on(table.createdAt),
-    paymentEventIdx: index("payment_history_payment_event_idx").on(
-      table.paymentId,
-      table.event
-    ),
-  })
-);
-
-export type PaymentHistory = typeof paymentHistory.$inferSelect;
-export type InsertPaymentHistory = typeof paymentHistory.$inferInsert;
-
-/**
  * Booking Modification Requests table
  * Tracks all modification requests for bookings
  */
-export const bookingModifications = mysqlTable(
-  "booking_modifications",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId").notNull(),
-    userId: int("userId").notNull(),
-
-    // Modification type
-    modificationType: mysqlEnum("modificationType", [
-      "change_date",
-      "upgrade_cabin",
-      "change_flight",
-      "add_services",
-    ]).notNull(),
-
-    // Original values
-    originalFlightId: int("originalFlightId"),
-    originalCabinClass: mysqlEnum("originalCabinClass", [
-      "economy",
-      "business",
-    ]),
-    originalAmount: int("originalAmount").notNull(), // in cents
-
-    // New values
-    newFlightId: int("newFlightId"),
-    newCabinClass: mysqlEnum("newCabinClass", ["economy", "business"]),
-    newAmount: int("newAmount").notNull(), // in cents
-
-    // Price difference
-    priceDifference: int("priceDifference").notNull(), // positive = pay more, negative = refund
-    modificationFee: int("modificationFee").notNull().default(0), // in cents
-    totalCost: int("totalCost").notNull(), // priceDifference + modificationFee
-
-    // Status
-    status: mysqlEnum("status", [
-      "pending",
-      "approved",
-      "rejected",
-      "completed",
-    ])
-      .notNull()
-      .default("pending"),
-
-    // Payment
-    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
-    paymentStatus: mysqlEnum("paymentStatus", [
-      "pending",
-      "paid",
-      "refunded",
-    ]).default("pending"),
-
-    // Metadata
-    reason: text("reason"),
-    adminNotes: text("adminNotes"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-    completedAt: timestamp("completedAt"),
-  },
-  table => ({
-    bookingIdIdx: index("booking_id_idx").on(table.bookingId),
-    userIdIdx: index("user_id_idx").on(table.userId),
-    statusIdx: index("status_idx").on(table.status),
-  })
-);
+export const bookingModifications = mysqlTable("booking_modifications", {
+  id: int("id").autoincrement().primaryKey(),
+  bookingId: int("bookingId").notNull(),
+  userId: int("userId").notNull(),
+  
+  // Modification type
+  modificationType: mysqlEnum("modificationType", [
+    "change_date",
+    "upgrade_cabin",
+    "change_flight",
+    "add_services"
+  ]).notNull(),
+  
+  // Original values
+  originalFlightId: int("originalFlightId"),
+  originalCabinClass: mysqlEnum("originalCabinClass", ["economy", "business"]),
+  originalAmount: int("originalAmount").notNull(), // in cents
+  
+  // New values
+  newFlightId: int("newFlightId"),
+  newCabinClass: mysqlEnum("newCabinClass", ["economy", "business"]),
+  newAmount: int("newAmount").notNull(), // in cents
+  
+  // Price difference
+  priceDifference: int("priceDifference").notNull(), // positive = pay more, negative = refund
+  modificationFee: int("modificationFee").notNull().default(0), // in cents
+  totalCost: int("totalCost").notNull(), // priceDifference + modificationFee
+  
+  // Status
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "completed"]).notNull().default("pending"),
+  
+  // Payment
+  stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
+  paymentStatus: mysqlEnum("paymentStatus", ["pending", "paid", "refunded"]).default("pending"),
+  
+  // Metadata
+  reason: text("reason"),
+  adminNotes: text("adminNotes"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  completedAt: timestamp("completedAt"),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  userIdIdx: index("user_id_idx").on(table.userId),
+  statusIdx: index("status_idx").on(table.status),
+}));
 
 export type BookingModification = typeof bookingModifications.$inferSelect;
-export type InsertBookingModification =
-  typeof bookingModifications.$inferInsert;
+export type InsertBookingModification = typeof bookingModifications.$inferInsert;
 
 /**
  * Loyalty Accounts table
  * Tracks user loyalty program membership and tier
  */
-export const loyaltyAccounts = mysqlTable(
-  "loyalty_accounts",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull().unique(),
-
-    // Miles balance
-    totalMilesEarned: int("totalMilesEarned").notNull().default(0),
-    currentMilesBalance: int("currentMilesBalance").notNull().default(0),
-    milesRedeemed: int("milesRedeemed").notNull().default(0),
-
-    // Tier system
-    tier: mysqlEnum("tier", ["bronze", "silver", "gold", "platinum"])
-      .notNull()
-      .default("bronze"),
-    tierPoints: int("tierPoints").notNull().default(0), // Points for tier qualification
-
-    // Metadata
-    memberSince: timestamp("memberSince").defaultNow().notNull(),
-    lastActivityAt: timestamp("lastActivityAt").defaultNow().notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_id_idx").on(table.userId),
-    tierIdx: index("tier_idx").on(table.tier),
-  })
-);
+export const loyaltyAccounts = mysqlTable("loyalty_accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  
+  // Miles balance
+  totalMilesEarned: int("totalMilesEarned").notNull().default(0),
+  currentMilesBalance: int("currentMilesBalance").notNull().default(0),
+  milesRedeemed: int("milesRedeemed").notNull().default(0),
+  
+  // Tier system
+  tier: mysqlEnum("tier", ["bronze", "silver", "gold", "platinum"]).notNull().default("bronze"),
+  tierPoints: int("tierPoints").notNull().default(0), // Points for tier qualification
+  
+  // Metadata
+  memberSince: timestamp("memberSince").defaultNow().notNull(),
+  lastActivityAt: timestamp("lastActivityAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  tierIdx: index("tier_idx").on(table.tier),
+}));
 
 export type LoyaltyAccount = typeof loyaltyAccounts.$inferSelect;
 export type InsertLoyaltyAccount = typeof loyaltyAccounts.$inferInsert;
@@ -610,45 +263,33 @@ export type InsertLoyaltyAccount = typeof loyaltyAccounts.$inferInsert;
  * Miles Transactions table
  * Tracks all miles earning and redemption transactions
  */
-export const milesTransactions = mysqlTable(
-  "miles_transactions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    loyaltyAccountId: int("loyaltyAccountId").notNull(),
-
-    // Transaction details
-    type: mysqlEnum("type", [
-      "earn",
-      "redeem",
-      "expire",
-      "bonus",
-      "adjustment",
-    ]).notNull(),
-    amount: int("amount").notNull(), // Positive for earn, negative for redeem
-    balanceAfter: int("balanceAfter").notNull(),
-
-    // Related entities
-    bookingId: int("bookingId"),
-    flightId: int("flightId"),
-
-    // Description
-    description: text("description").notNull(),
-    reason: text("reason"),
-
-    // Expiry
-    expiresAt: timestamp("expiresAt"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_id_idx").on(table.userId),
-    loyaltyAccountIdIdx: index("loyalty_account_id_idx").on(
-      table.loyaltyAccountId
-    ),
-    typeIdx: index("type_idx").on(table.type),
-  })
-);
+export const milesTransactions = mysqlTable("miles_transactions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  loyaltyAccountId: int("loyaltyAccountId").notNull(),
+  
+  // Transaction details
+  type: mysqlEnum("type", ["earn", "redeem", "expire", "bonus", "adjustment"]).notNull(),
+  amount: int("amount").notNull(), // Positive for earn, negative for redeem
+  balanceAfter: int("balanceAfter").notNull(),
+  
+  // Related entities
+  bookingId: int("bookingId"),
+  flightId: int("flightId"),
+  
+  // Description
+  description: text("description").notNull(),
+  reason: text("reason"),
+  
+  // Expiry
+  expiresAt: timestamp("expiresAt"),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  loyaltyAccountIdIdx: index("loyalty_account_id_idx").on(table.loyaltyAccountId),
+  typeIdx: index("type_idx").on(table.type),
+}));
 
 export type MilesTransaction = typeof milesTransactions.$inferSelect;
 export type InsertMilesTransaction = typeof milesTransactions.$inferInsert;
@@ -657,41 +298,35 @@ export type InsertMilesTransaction = typeof milesTransactions.$inferInsert;
  * Inventory Locks table
  * Prevents double booking by temporarily locking seats during checkout
  */
-export const inventoryLocks = mysqlTable(
-  "inventory_locks",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Flight and seat info
-    flightId: int("flightId").notNull(),
-    numberOfSeats: int("numberOfSeats").notNull(),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-
-    // User and session info
-    userId: int("userId"),
-    sessionId: varchar("sessionId", { length: 64 }).notNull(), // For anonymous users
-
-    // Lock status
-    status: mysqlEnum("status", ["active", "released", "expired", "converted"])
-      .notNull()
-      .default("active"),
-
-    // Timing
-    lockedAt: timestamp("lockedAt").defaultNow().notNull(),
-    expiresAt: timestamp("expiresAt").notNull(), // Auto-release after 15 minutes
-    releasedAt: timestamp("releasedAt"),
-
-    // Metadata
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    flightIdIdx: index("flight_id_idx").on(table.flightId),
-    sessionIdIdx: index("session_id_idx").on(table.sessionId),
-    statusIdx: index("status_idx").on(table.status),
-    expiresAtIdx: index("expires_at_idx").on(table.expiresAt),
-  })
-);
+export const inventoryLocks = mysqlTable("inventory_locks", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // Flight and seat info
+  flightId: int("flightId").notNull(),
+  numberOfSeats: int("numberOfSeats").notNull(),
+  cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+  
+  // User and session info
+  userId: int("userId"),
+  sessionId: varchar("sessionId", { length: 64 }).notNull(), // For anonymous users
+  
+  // Lock status
+  status: mysqlEnum("status", ["active", "released", "expired", "converted"]).notNull().default("active"),
+  
+  // Timing
+  lockedAt: timestamp("lockedAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(), // Auto-release after 15 minutes
+  releasedAt: timestamp("releasedAt"),
+  
+  // Metadata
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  flightIdIdx: index("flight_id_idx").on(table.flightId),
+  sessionIdIdx: index("session_id_idx").on(table.sessionId),
+  statusIdx: index("status_idx").on(table.status),
+  expiresAtIdx: index("expires_at_idx").on(table.expiresAt),
+}));
 
 export type InventoryLock = typeof inventoryLocks.$inferSelect;
 export type InsertInventoryLock = typeof inventoryLocks.$inferInsert;
@@ -699,64 +334,40 @@ export type InsertInventoryLock = typeof inventoryLocks.$inferInsert;
 /**
  * User Preferences table - stores user travel preferences
  */
-export const userPreferences = mysqlTable(
-  "user_preferences",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull().unique(),
-
-    // Seat preferences
-    preferredSeatType: mysqlEnum("preferredSeatType", [
-      "window",
-      "aisle",
-      "middle",
-    ]),
-    preferredCabinClass: mysqlEnum("preferredCabinClass", [
-      "economy",
-      "business",
-      "first",
-    ]),
-
-    // Meal preferences
-    mealPreference: mysqlEnum("mealPreference", [
-      "regular",
-      "vegetarian",
-      "vegan",
-      "halal",
-      "kosher",
-      "gluten_free",
-    ]),
-
-    // Special services
-    wheelchairAssistance: boolean("wheelchairAssistance")
-      .default(false)
-      .notNull(),
-    extraLegroom: boolean("extraLegroom").default(false).notNull(),
-
-    // Saved passport info
-    passportNumber: varchar("passportNumber", { length: 50 }),
-    passportExpiry: timestamp("passportExpiry"),
-    nationality: varchar("nationality", { length: 100 }),
-
-    // Contact preferences
-    phoneNumber: varchar("phoneNumber", { length: 20 }),
-    emergencyContact: varchar("emergencyContact", { length: 100 }),
-    emergencyPhone: varchar("emergencyPhone", { length: 20 }),
-
-    // Notification preferences
-    emailNotifications: boolean("emailNotifications").default(true).notNull(),
-    smsNotifications: boolean("smsNotifications").default(false).notNull(),
-
-    // Auto check-in preference
-    autoCheckIn: boolean("autoCheckIn").default(false).notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_id_idx").on(table.userId),
-  })
-);
+export const userPreferences = mysqlTable("user_preferences", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  
+  // Seat preferences
+  preferredSeatType: mysqlEnum("preferredSeatType", ["window", "aisle", "middle"]),
+  preferredCabinClass: mysqlEnum("preferredCabinClass", ["economy", "business", "first"]),
+  
+  // Meal preferences
+  mealPreference: mysqlEnum("mealPreference", ["regular", "vegetarian", "vegan", "halal", "kosher", "gluten_free"]),
+  
+  // Special services
+  wheelchairAssistance: boolean("wheelchairAssistance").default(false),
+  extraLegroom: boolean("extraLegroom").default(false),
+  
+  // Saved passport info
+  passportNumber: varchar("passportNumber", { length: 50 }),
+  passportExpiry: timestamp("passportExpiry"),
+  nationality: varchar("nationality", { length: 100 }),
+  
+  // Contact preferences
+  phoneNumber: varchar("phoneNumber", { length: 20 }),
+  emergencyContact: varchar("emergencyContact", { length: 100 }),
+  emergencyPhone: varchar("emergencyPhone", { length: 20 }),
+  
+  // Notification preferences
+  emailNotifications: boolean("emailNotifications").default(true),
+  smsNotifications: boolean("smsNotifications").default(false),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+}));
 
 export type UserPreference = typeof userPreferences.$inferSelect;
 export type InsertUserPreference = typeof userPreferences.$inferInsert;
@@ -765,37 +376,26 @@ export type InsertUserPreference = typeof userPreferences.$inferInsert;
  * Ancillary Services Catalog
  * Defines available add-on services (baggage, meals, seats, insurance)
  */
-export const ancillaryServices = mysqlTable(
-  "ancillary_services",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    code: varchar("code", { length: 50 }).notNull().unique(), // e.g., "BAG_20KG", "MEAL_VEG", "SEAT_EXTRA_LEG"
-    category: mysqlEnum("category", [
-      "baggage",
-      "meal",
-      "seat",
-      "insurance",
-      "lounge",
-      "priority_boarding",
-    ]).notNull(),
-    name: varchar("name", { length: 255 }).notNull(), // e.g., "20kg Checked Baggage"
-    description: text("description"),
-    price: int("price").notNull(), // Price in SAR cents (e.g., 5000 = 50.00 SAR)
-    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-    available: boolean("available").default(true).notNull(),
-    // Optional: restrict by cabin class
-    applicableCabinClasses: text("applicableCabinClasses"), // JSON array: ["economy", "business"]
-    // Optional: restrict by route or airline
-    applicableAirlines: text("applicableAirlines"), // JSON array of airline IDs
-    icon: varchar("icon", { length: 255 }), // Icon name or URL
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    categoryIdx: index("category_idx").on(table.category),
-    availableIdx: index("available_idx").on(table.available),
-  })
-);
+export const ancillaryServices = mysqlTable("ancillary_services", {
+  id: int("id").autoincrement().primaryKey(),
+  code: varchar("code", { length: 50 }).notNull().unique(), // e.g., "BAG_20KG", "MEAL_VEG", "SEAT_EXTRA_LEG"
+  category: mysqlEnum("category", ["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]).notNull(),
+  name: varchar("name", { length: 255 }).notNull(), // e.g., "20kg Checked Baggage"
+  description: text("description"),
+  price: int("price").notNull(), // Price in SAR cents (e.g., 5000 = 50.00 SAR)
+  currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+  available: boolean("available").default(true).notNull(),
+  // Optional: restrict by cabin class
+  applicableCabinClasses: text("applicableCabinClasses"), // JSON array: ["economy", "business"]
+  // Optional: restrict by route or airline
+  applicableAirlines: text("applicableAirlines"), // JSON array of airline IDs
+  icon: varchar("icon", { length: 255 }), // Icon name or URL
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  categoryIdx: index("category_idx").on(table.category),
+  availableIdx: index("available_idx").on(table.available),
+}));
 
 export type AncillaryService = typeof ancillaryServices.$inferSelect;
 export type InsertAncillaryService = typeof ancillaryServices.$inferInsert;
@@ -804,32 +404,24 @@ export type InsertAncillaryService = typeof ancillaryServices.$inferInsert;
  * Booking Ancillaries
  * Links ancillary services to bookings
  */
-export const bookingAncillaries = mysqlTable(
-  "booking_ancillaries",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId").notNull(),
-    passengerId: int("passengerId"), // Optional: link to specific passenger
-    ancillaryServiceId: int("ancillaryServiceId").notNull(),
-    quantity: int("quantity").default(1).notNull(),
-    unitPrice: int("unitPrice").notNull(), // Price at time of purchase (in SAR cents)
-    totalPrice: int("totalPrice").notNull(), // quantity * unitPrice
-    status: mysqlEnum("status", ["active", "cancelled", "refunded"])
-      .default("active")
-      .notNull(),
-    // Additional data (e.g., seat number, meal preference)
-    metadata: text("metadata"), // JSON object for flexible data
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    bookingIdIdx: index("booking_id_idx").on(table.bookingId),
-    passengerIdIdx: index("passenger_id_idx").on(table.passengerId),
-    ancillaryServiceIdIdx: index("ancillary_service_id_idx").on(
-      table.ancillaryServiceId
-    ),
-  })
-);
+export const bookingAncillaries = mysqlTable("booking_ancillaries", {
+  id: int("id").autoincrement().primaryKey(),
+  bookingId: int("bookingId").notNull(),
+  passengerId: int("passengerId"), // Optional: link to specific passenger
+  ancillaryServiceId: int("ancillaryServiceId").notNull(),
+  quantity: int("quantity").default(1).notNull(),
+  unitPrice: int("unitPrice").notNull(), // Price at time of purchase (in SAR cents)
+  totalPrice: int("totalPrice").notNull(), // quantity * unitPrice
+  status: mysqlEnum("status", ["active", "cancelled", "refunded"]).default("active").notNull(),
+  // Additional data (e.g., seat number, meal preference)
+  metadata: text("metadata"), // JSON object for flexible data
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  passengerIdIdx: index("passenger_id_idx").on(table.passengerId),
+  ancillaryServiceIdIdx: index("ancillary_service_id_idx").on(table.ancillaryServiceId),
+}));
 
 export type BookingAncillary = typeof bookingAncillaries.$inferSelect;
 export type InsertBookingAncillary = typeof bookingAncillaries.$inferInsert;
@@ -838,45 +430,36 @@ export type InsertBookingAncillary = typeof bookingAncillaries.$inferInsert;
  * Flight Reviews
  * User reviews and ratings for flights
  */
-export const flightReviews = mysqlTable(
-  "flight_reviews",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    flightId: int("flightId").notNull(),
-    bookingId: int("bookingId"), // Optional: link to booking for verified reviews
-    rating: int("rating").notNull(), // 1-5 stars
-    // Individual aspect ratings
-    comfortRating: int("comfortRating"), // 1-5
-    serviceRating: int("serviceRating"), // 1-5
-    valueRating: int("valueRating"), // 1-5
-    // Review content
-    title: varchar("title", { length: 200 }),
-    comment: text("comment"),
-    // Helpful votes
-    helpfulCount: int("helpfulCount").default(0).notNull(),
-    // Verification
-    isVerified: boolean("isVerified").default(false).notNull(), // True if linked to actual booking
-    // Moderation
-    status: mysqlEnum("status", ["pending", "approved", "rejected", "hidden"])
-      .default("pending")
-      .notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_id_idx").on(table.userId),
-    flightIdIdx: index("flight_id_idx").on(table.flightId),
-    bookingIdIdx: index("booking_id_idx").on(table.bookingId),
-    ratingIdx: index("rating_idx").on(table.rating),
-    statusIdx: index("status_idx").on(table.status),
-    // Unique constraint: one review per user per flight
-    userFlightUnique: uniqueIndex("user_flight_unique").on(
-      table.userId,
-      table.flightId
-    ),
-  })
-);
+export const flightReviews = mysqlTable("flight_reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  flightId: int("flightId").notNull(),
+  bookingId: int("bookingId"), // Optional: link to booking for verified reviews
+  rating: int("rating").notNull(), // 1-5 stars
+  // Individual aspect ratings
+  comfortRating: int("comfortRating"), // 1-5
+  serviceRating: int("serviceRating"), // 1-5
+  valueRating: int("valueRating"), // 1-5
+  // Review content
+  title: varchar("title", { length: 200 }),
+  comment: text("comment"),
+  // Helpful votes
+  helpfulCount: int("helpfulCount").default(0).notNull(),
+  // Verification
+  isVerified: boolean("isVerified").default(false).notNull(), // True if linked to actual booking
+  // Moderation
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "hidden"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  flightIdIdx: index("flight_id_idx").on(table.flightId),
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  ratingIdx: index("rating_idx").on(table.rating),
+  statusIdx: index("status_idx").on(table.status),
+  // Unique constraint: one review per user per flight
+  userFlightUnique: index("user_flight_unique").on(table.userId, table.flightId),
+}));
 
 export type FlightReview = typeof flightReviews.$inferSelect;
 export type InsertFlightReview = typeof flightReviews.$inferInsert;
@@ -885,44 +468,32 @@ export type InsertFlightReview = typeof flightReviews.$inferInsert;
  * Favorite Flights
  * User's saved favorite flight routes
  */
-export const favoriteFlights = mysqlTable(
-  "favorite_flights",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    originId: int("originId").notNull(),
-    destinationId: int("destinationId").notNull(),
-    // Optional: specific flight or just the route
-    airlineId: int("airlineId"), // Favorite specific airline
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]),
-    // Price alert settings
-    enablePriceAlert: boolean("enablePriceAlert").default(false).notNull(),
-    maxPrice: int("maxPrice"), // Alert when price drops below this (in SAR cents)
-    lastAlertSent: timestamp("lastAlertSent"),
-    // Notification preferences
-    emailNotifications: boolean("emailNotifications").default(true).notNull(),
-    // Additional notes
-    notes: text("notes"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_id_idx").on(table.userId),
-    routeIdx: index("route_idx").on(table.originId, table.destinationId),
-    airlineIdIdx: index("airline_id_idx").on(table.airlineId),
-    priceAlertIdx: index("price_alert_idx").on(
-      table.enablePriceAlert,
-      table.maxPrice
-    ),
-    // Unique constraint: one favorite per user per route/airline combination
-    userRouteFavoriteUnique: uniqueIndex("user_route_favorite_unique").on(
-      table.userId,
-      table.originId,
-      table.destinationId,
-      table.airlineId
-    ),
-  })
-);
+export const favoriteFlights = mysqlTable("favorite_flights", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  originId: int("originId").notNull(),
+  destinationId: int("destinationId").notNull(),
+  // Optional: specific flight or just the route
+  airlineId: int("airlineId"), // Favorite specific airline
+  cabinClass: mysqlEnum("cabinClass", ["economy", "business"]),
+  // Price alert settings
+  enablePriceAlert: boolean("enablePriceAlert").default(false).notNull(),
+  maxPrice: int("maxPrice"), // Alert when price drops below this (in SAR cents)
+  lastAlertSent: timestamp("lastAlertSent"),
+  // Notification preferences
+  emailNotifications: boolean("emailNotifications").default(true).notNull(),
+  // Additional notes
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+  routeIdx: index("route_idx").on(table.originId, table.destinationId),
+  airlineIdIdx: index("airline_id_idx").on(table.airlineId),
+  priceAlertIdx: index("price_alert_idx").on(table.enablePriceAlert, table.maxPrice),
+  // Unique constraint: one favorite per user per route/airline combination
+  userRouteFavoriteUnique: index("user_route_favorite_unique").on(table.userId, table.originId, table.destinationId, table.airlineId),
+}));
 
 export type FavoriteFlight = typeof favoriteFlights.$inferSelect;
 export type InsertFavoriteFlight = typeof favoriteFlights.$inferInsert;
@@ -931,27 +502,21 @@ export type InsertFavoriteFlight = typeof favoriteFlights.$inferInsert;
  * Price Alert History
  * Track when price alerts were triggered
  */
-export const priceAlertHistory = mysqlTable(
-  "price_alert_history",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    favoriteFlightId: int("favoriteFlightId").notNull(),
-    flightId: int("flightId").notNull(), // The specific flight that triggered the alert
-    previousPrice: int("previousPrice").notNull(), // Previous lowest price
-    newPrice: int("newPrice").notNull(), // New lower price
-    priceChange: int("priceChange").notNull(), // Difference (negative number)
-    alertSent: boolean("alertSent").default(false).notNull(),
-    sentAt: timestamp("sentAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    favoriteFlightIdIdx: index("favorite_flight_id_idx").on(
-      table.favoriteFlightId
-    ),
-    flightIdIdx: index("flight_id_idx").on(table.flightId),
-    createdAtIdx: index("created_at_idx").on(table.createdAt),
-  })
-);
+export const priceAlertHistory = mysqlTable("price_alert_history", {
+  id: int("id").autoincrement().primaryKey(),
+  favoriteFlightId: int("favoriteFlightId").notNull(),
+  flightId: int("flightId").notNull(), // The specific flight that triggered the alert
+  previousPrice: int("previousPrice").notNull(), // Previous lowest price
+  newPrice: int("newPrice").notNull(), // New lower price
+  priceChange: int("priceChange").notNull(), // Difference (negative number)
+  alertSent: boolean("alertSent").default(false).notNull(),
+  sentAt: timestamp("sentAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  favoriteFlightIdIdx: index("favorite_flight_id_idx").on(table.favoriteFlightId),
+  flightIdIdx: index("flight_id_idx").on(table.flightId),
+  createdAtIdx: index("created_at_idx").on(table.createdAt),
+}));
 
 export type PriceAlertHistory = typeof priceAlertHistory.$inferSelect;
 export type InsertPriceAlertHistory = typeof priceAlertHistory.$inferInsert;
@@ -960,76 +525,65 @@ export type InsertPriceAlertHistory = typeof priceAlertHistory.$inferInsert;
  * Audit Logs
  * Track all sensitive operations for security and compliance
  */
-export const auditLogs = mysqlTable(
-  "audit_logs",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Event identification
-    eventId: varchar("eventId", { length: 64 }).notNull().unique(), // Unique identifier for the event
-    eventType: varchar("eventType", { length: 100 }).notNull(), // e.g., "BOOKING_CREATED", "PAYMENT_PROCESSED", "USER_ROLE_CHANGED"
-    eventCategory: mysqlEnum("eventCategory", [
-      "auth",
-      "booking",
-      "payment",
-      "user_management",
-      "flight_management",
-      "refund",
-      "modification",
-      "access",
-      "system",
-    ]).notNull(),
-
-    // Outcome and severity
-    outcome: mysqlEnum("outcome", ["success", "failure", "error"]).notNull(),
-    severity: mysqlEnum("severity", ["low", "medium", "high", "critical"])
-      .default("low")
-      .notNull(),
-
-    // Actor information
-    userId: int("userId"), // User who performed the action
-    userRole: varchar("userRole", { length: 50 }), // Role at time of action
-    actorType: mysqlEnum("actorType", ["user", "admin", "system", "api"])
-      .default("user")
-      .notNull(),
-
-    // Request context
-    sourceIp: varchar("sourceIp", { length: 45 }), // IPv4 or IPv6
-    userAgent: text("userAgent"),
-    requestId: varchar("requestId", { length: 64 }), // For correlation
-
-    // Resource information
-    resourceType: varchar("resourceType", { length: 100 }), // e.g., "booking", "flight", "user"
-    resourceId: varchar("resourceId", { length: 100 }), // ID of the affected resource
-
-    // Change details
-    previousValue: text("previousValue"), // JSON of old state (for updates)
-    newValue: text("newValue"), // JSON of new state
-    changeDescription: text("changeDescription"), // Human-readable description
-
-    // Metadata
-    metadata: text("metadata"), // Additional JSON data
-
-    // Timestamps
-    timestamp: timestamp("timestamp").defaultNow().notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    eventTypeIdx: index("event_type_idx").on(table.eventType),
-    eventCategoryIdx: index("event_category_idx").on(table.eventCategory),
-    userIdIdx: index("user_id_idx").on(table.userId),
-    resourceTypeIdx: index("resource_type_idx").on(table.resourceType),
-    resourceIdIdx: index("resource_id_idx").on(table.resourceId),
-    timestampIdx: index("timestamp_idx").on(table.timestamp),
-    outcomeIdx: index("outcome_idx").on(table.outcome),
-    severityIdx: index("severity_idx").on(table.severity),
-    // Composite index for common queries
-    categoryOutcomeIdx: index("category_outcome_idx").on(
-      table.eventCategory,
-      table.outcome
-    ),
-  })
-);
+export const auditLogs = mysqlTable("audit_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // Event identification
+  eventId: varchar("eventId", { length: 64 }).notNull().unique(), // Unique identifier for the event
+  eventType: varchar("eventType", { length: 100 }).notNull(), // e.g., "BOOKING_CREATED", "PAYMENT_PROCESSED", "USER_ROLE_CHANGED"
+  eventCategory: mysqlEnum("eventCategory", [
+    "auth",
+    "booking",
+    "payment",
+    "user_management",
+    "flight_management",
+    "refund",
+    "modification",
+    "access",
+    "system"
+  ]).notNull(),
+  
+  // Outcome and severity
+  outcome: mysqlEnum("outcome", ["success", "failure", "error"]).notNull(),
+  severity: mysqlEnum("severity", ["low", "medium", "high", "critical"]).default("low").notNull(),
+  
+  // Actor information
+  userId: int("userId"), // User who performed the action
+  userRole: varchar("userRole", { length: 50 }), // Role at time of action
+  actorType: mysqlEnum("actorType", ["user", "admin", "system", "api"]).default("user").notNull(),
+  
+  // Request context
+  sourceIp: varchar("sourceIp", { length: 45 }), // IPv4 or IPv6
+  userAgent: text("userAgent"),
+  requestId: varchar("requestId", { length: 64 }), // For correlation
+  
+  // Resource information
+  resourceType: varchar("resourceType", { length: 100 }), // e.g., "booking", "flight", "user"
+  resourceId: varchar("resourceId", { length: 100 }), // ID of the affected resource
+  
+  // Change details
+  previousValue: text("previousValue"), // JSON of old state (for updates)
+  newValue: text("newValue"), // JSON of new state
+  changeDescription: text("changeDescription"), // Human-readable description
+  
+  // Metadata
+  metadata: text("metadata"), // Additional JSON data
+  
+  // Timestamps
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  eventTypeIdx: index("event_type_idx").on(table.eventType),
+  eventCategoryIdx: index("event_category_idx").on(table.eventCategory),
+  userIdIdx: index("user_id_idx").on(table.userId),
+  resourceTypeIdx: index("resource_type_idx").on(table.resourceType),
+  resourceIdIdx: index("resource_id_idx").on(table.resourceId),
+  timestampIdx: index("timestamp_idx").on(table.timestamp),
+  outcomeIdx: index("outcome_idx").on(table.outcome),
+  severityIdx: index("severity_idx").on(table.severity),
+  // Composite index for common queries
+  categoryOutcomeIdx: index("category_outcome_idx").on(table.eventCategory, table.outcome),
+}));
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
@@ -1038,4250 +592,70 @@ export type InsertAuditLog = typeof auditLogs.$inferInsert;
  * Booking Status History
  * Tracks all status transitions for bookings (state machine)
  */
-export const bookingStatusHistory = mysqlTable(
-  "booking_status_history",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Booking reference
-    bookingId: int("bookingId").notNull(),
-    bookingReference: varchar("bookingReference", { length: 6 }).notNull(),
-
-    // State transition
-    previousStatus: mysqlEnum("previousStatus", [
-      "initiated",
-      "pending",
-      "reserved",
-      "paid",
-      "confirmed",
-      "checked_in",
-      "boarded",
-      "completed",
-      "cancelled",
-      "refunded",
-      "expired",
-      "payment_failed",
-      "no_show",
-    ]),
-    newStatus: mysqlEnum("newStatus", [
-      "initiated",
-      "pending",
-      "reserved",
-      "paid",
-      "confirmed",
-      "checked_in",
-      "boarded",
-      "completed",
-      "cancelled",
-      "refunded",
-      "expired",
-      "payment_failed",
-      "no_show",
-    ]).notNull(),
-
-    // Transition metadata
-    transitionReason: text("transitionReason"), // Why the status changed
-    isValidTransition: boolean("isValidTransition").default(true).notNull(),
-
-    // Actor information
-    changedBy: int("changedBy"), // User ID who triggered the change
-    changedByRole: varchar("changedByRole", { length: 50 }), // Role at time of change
-    actorType: mysqlEnum("actorType", [
-      "user",
-      "admin",
-      "system",
-      "payment_gateway",
-    ])
-      .default("system")
-      .notNull(),
-
-    // Additional context
-    paymentIntentId: varchar("paymentIntentId", { length: 255 }), // If triggered by payment
-    metadata: text("metadata"), // Additional JSON data
-
-    // Timestamps
-    transitionedAt: timestamp("transitionedAt").defaultNow().notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    bookingIdIdx: index("booking_id_idx").on(table.bookingId),
-    bookingReferenceIdx: index("booking_reference_idx").on(
-      table.bookingReference
-    ),
-    newStatusIdx: index("new_status_idx").on(table.newStatus),
-    transitionedAtIdx: index("transitioned_at_idx").on(table.transitionedAt),
-    changedByIdx: index("changed_by_idx").on(table.changedBy),
-    // Composite index for common queries
-    bookingStatusIdx: index("booking_status_idx").on(
-      table.bookingId,
-      table.newStatus
-    ),
-  })
-);
+export const bookingStatusHistory = mysqlTable("booking_status_history", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // Booking reference
+  bookingId: int("bookingId").notNull(),
+  bookingReference: varchar("bookingReference", { length: 6 }).notNull(),
+  
+  // State transition
+  previousStatus: mysqlEnum("previousStatus", [
+    "initiated",
+    "pending",
+    "reserved",
+    "paid",
+    "confirmed",
+    "checked_in",
+    "boarded",
+    "completed",
+    "cancelled",
+    "refunded",
+    "expired",
+    "payment_failed",
+    "no_show"
+  ]),
+  newStatus: mysqlEnum("newStatus", [
+    "initiated",
+    "pending",
+    "reserved",
+    "paid",
+    "confirmed",
+    "checked_in",
+    "boarded",
+    "completed",
+    "cancelled",
+    "refunded",
+    "expired",
+    "payment_failed",
+    "no_show"
+  ]).notNull(),
+  
+  // Transition metadata
+  transitionReason: text("transitionReason"), // Why the status changed
+  isValidTransition: boolean("isValidTransition").default(true).notNull(),
+  
+  // Actor information
+  changedBy: int("changedBy"), // User ID who triggered the change
+  changedByRole: varchar("changedByRole", { length: 50 }), // Role at time of change
+  actorType: mysqlEnum("actorType", ["user", "admin", "system", "payment_gateway"]).default("system").notNull(),
+  
+  // Additional context
+  paymentIntentId: varchar("paymentIntentId", { length: 255 }), // If triggered by payment
+  metadata: text("metadata"), // Additional JSON data
+  
+  // Timestamps
+  transitionedAt: timestamp("transitionedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  bookingIdIdx: index("booking_id_idx").on(table.bookingId),
+  bookingReferenceIdx: index("booking_reference_idx").on(table.bookingReference),
+  newStatusIdx: index("new_status_idx").on(table.newStatus),
+  transitionedAtIdx: index("transitioned_at_idx").on(table.transitionedAt),
+  changedByIdx: index("changed_by_idx").on(table.changedBy),
+  // Composite index for common queries
+  bookingStatusIdx: index("booking_status_idx").on(table.bookingId, table.newStatus),
+}));
 
 export type BookingStatusHistory = typeof bookingStatusHistory.$inferSelect;
-export type InsertBookingStatusHistory =
-  typeof bookingStatusHistory.$inferInsert;
-
-/**
- * Stripe Events
- * Stores all Stripe webhook events for de-duplication and audit
- */
-export const stripeEvents = mysqlTable(
-  "stripe_events",
-  {
-    id: varchar("id", { length: 255 }).primaryKey(), // Stripe event ID
-    type: varchar("type", { length: 100 }).notNull(), // e.g., "payment_intent.succeeded"
-    apiVersion: varchar("apiVersion", { length: 20 }), // Stripe API version
-    data: text("data").notNull(), // JSON stringified event data
-    processed: boolean("processed").default(false).notNull(),
-    processedAt: timestamp("processedAt"),
-    error: text("error"), // Error message if processing failed
-    retryCount: int("retryCount").default(0).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    typeIdx: index("stripe_events_type_idx").on(table.type),
-    processedIdx: index("stripe_events_processed_idx").on(table.processed),
-    createdAtIdx: index("stripe_events_created_at_idx").on(table.createdAt),
-  })
-);
-
-export type StripeEvent = typeof stripeEvents.$inferSelect;
-export type InsertStripeEvent = typeof stripeEvents.$inferInsert;
-
-/**
- * Financial Ledger
- * Complete audit trail of all financial transactions
- */
-export const financialLedger = mysqlTable(
-  "financial_ledger",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId"), // Nullable for non-booking transactions
-    userId: int("userId"),
-    type: mysqlEnum("type", [
-      "charge",
-      "refund",
-      "partial_refund",
-      "fee",
-      "adjustment",
-    ]).notNull(),
-    amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-
-    // Stripe references
-    stripeEventId: varchar("stripeEventId", { length: 255 }),
-    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
-    stripeChargeId: varchar("stripeChargeId", { length: 255 }),
-    stripeRefundId: varchar("stripeRefundId", { length: 255 }),
-
-    // Description and metadata
-    description: text("description"),
-    metadata: text("metadata"), // JSON stringified additional data
-
-    // Balance tracking
-    balanceBefore: decimal("balanceBefore", { precision: 10, scale: 2 }),
-    balanceAfter: decimal("balanceAfter", { precision: 10, scale: 2 }),
-
-    // Timestamps
-    transactionDate: timestamp("transactionDate").defaultNow().notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    bookingIdIdx: index("financial_ledger_booking_id_idx").on(table.bookingId),
-    userIdIdx: index("financial_ledger_user_id_idx").on(table.userId),
-    typeIdx: index("financial_ledger_type_idx").on(table.type),
-    stripeEventIdIdx: index("financial_ledger_stripe_event_id_idx").on(
-      table.stripeEventId
-    ),
-    transactionDateIdx: index("financial_ledger_transaction_date_idx").on(
-      table.transactionDate
-    ),
-  })
-);
-
-export type FinancialLedger = typeof financialLedger.$inferSelect;
-export type InsertFinancialLedger = typeof financialLedger.$inferInsert;
-
-/**
- * Refresh Tokens
- * Stores refresh tokens for mobile authentication
- */
-export const refreshTokens = mysqlTable(
-  "refresh_tokens",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    token: varchar("token", { length: 500 }).notNull().unique(),
-    deviceInfo: text("deviceInfo"), // JSON: device type, OS, app version
-    ipAddress: varchar("ipAddress", { length: 45 }),
-    expiresAt: timestamp("expiresAt").notNull(),
-    revokedAt: timestamp("revokedAt"),
-    lastUsedAt: timestamp("lastUsedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("refresh_tokens_user_id_idx").on(table.userId),
-    tokenIdx: index("refresh_tokens_token_idx").on(table.token),
-    expiresAtIdx: index("refresh_tokens_expires_at_idx").on(table.expiresAt),
-  })
-);
-
-export type RefreshToken = typeof refreshTokens.$inferSelect;
-export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
-
-/**
- * Idempotency Requests
- * Stores idempotency keys for all critical operations
- * Prevents duplicate processing of the same request
- */
-export const idempotencyRequests = mysqlTable(
-  "idempotency_requests",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Idempotency key and scope
-    scope: varchar("scope", { length: 100 }).notNull(), // e.g., "booking.create", "payment.intent", "webhook.stripe"
-    idempotencyKey: varchar("idempotencyKey", { length: 255 }).notNull(),
-
-    // User/tenant context (nullable for webhooks)
-    userId: int("userId"),
-
-    // Request hash to detect payload changes
-    requestHash: varchar("requestHash", { length: 64 }).notNull(), // SHA256
-
-    // Processing status
-    status: mysqlEnum("status", ["STARTED", "COMPLETED", "FAILED"])
-      .default("STARTED")
-      .notNull(),
-
-    // Response storage
-    responseJson: text("responseJson"), // JSON stringified response
-    errorMessage: text("errorMessage"), // Error message if FAILED
-
-    // Timestamps
-    expiresAt: timestamp("expiresAt").notNull(), // TTL for cleanup
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    // Unique constraint on scope + userId + idempotencyKey
-    scopeUserKeyIdx: uniqueIndex("idempotency_scope_user_key_idx").on(
-      table.scope,
-      table.userId,
-      table.idempotencyKey
-    ),
-    // For webhook lookups (no userId)
-    scopeKeyIdx: index("idempotency_scope_key_idx").on(
-      table.scope,
-      table.idempotencyKey
-    ),
-    statusIdx: index("idempotency_status_idx").on(table.status),
-    expiresAtIdx: index("idempotency_expires_at_idx").on(table.expiresAt),
-  })
-);
-
-export type IdempotencyRequest = typeof idempotencyRequests.$inferSelect;
-export type InsertIdempotencyRequest = typeof idempotencyRequests.$inferInsert;
-
-// ============================================================================
-// P0 Critical Features - Dynamic Pricing, Multi-Currency, Inventory Management
-// ============================================================================
-
-/**
- * Pricing Rules
- * Defines dynamic pricing rules for revenue management
- */
-export const pricingRules = mysqlTable(
-  "pricing_rules",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Rule identification
-    name: varchar("name", { length: 255 }).notNull(),
-    description: text("description"),
-
-    // Rule type
-    ruleType: mysqlEnum("ruleType", [
-      "demand_multiplier",
-      "time_based",
-      "seasonal",
-      "route_specific",
-      "cabin_class",
-      "advance_purchase",
-      "load_factor",
-    ]).notNull(),
-
-    // Scope
-    airlineId: int("airlineId"), // Null = all airlines
-    originId: int("originId"), // Null = all origins
-    destinationId: int("destinationId"), // Null = all destinations
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]), // Null = both
-
-    // Rule parameters (JSON)
-    parameters: text("parameters").notNull(), // JSON: thresholds, multipliers, etc.
-
-    // Priority (higher = applied first)
-    priority: int("priority").default(0).notNull(),
-
-    // Validity
-    validFrom: timestamp("validFrom"),
-    validTo: timestamp("validTo"),
-    isActive: boolean("isActive").default(true).notNull(),
-
-    // Audit
-    createdBy: int("createdBy"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    ruleTypeIdx: index("pricing_rules_type_idx").on(table.ruleType),
-    airlineIdx: index("pricing_rules_airline_idx").on(table.airlineId),
-    routeIdx: index("pricing_rules_route_idx").on(
-      table.originId,
-      table.destinationId
-    ),
-    activeIdx: index("pricing_rules_active_idx").on(table.isActive),
-    priorityIdx: index("pricing_rules_priority_idx").on(table.priority),
-    validityIdx: index("pricing_rules_validity_idx").on(
-      table.validFrom,
-      table.validTo
-    ),
-  })
-);
-
-export type PricingRule = typeof pricingRules.$inferSelect;
-export type InsertPricingRule = typeof pricingRules.$inferInsert;
-
-/**
- * Pricing History
- * Tracks all price calculations for analytics and auditing
- */
-export const pricingHistory = mysqlTable(
-  "pricing_history",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Flight reference
-    flightId: int("flightId").notNull(),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-
-    // Pricing details
-    basePrice: int("basePrice").notNull(), // Original price in cents
-    finalPrice: int("finalPrice").notNull(), // Calculated price in cents
-    totalMultiplier: decimal("totalMultiplier", {
-      precision: 10,
-      scale: 4,
-    }).notNull(),
-
-    // Applied rules (JSON array of rule IDs and their contributions)
-    appliedRules: text("appliedRules").notNull(), // JSON
-
-    // Context at calculation time
-    occupancyRate: decimal("occupancyRate", { precision: 5, scale: 4 }),
-    daysUntilDeparture: int("daysUntilDeparture"),
-    demandScore: decimal("demandScore", { precision: 5, scale: 2 }),
-
-    // Booking reference (if price was used)
-    bookingId: int("bookingId"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("pricing_history_flight_idx").on(table.flightId),
-    bookingIdx: index("pricing_history_booking_idx").on(table.bookingId),
-    createdAtIdx: index("pricing_history_created_idx").on(table.createdAt),
-  })
-);
-
-export type PricingHistoryRecord = typeof pricingHistory.$inferSelect;
-export type InsertPricingHistory = typeof pricingHistory.$inferInsert;
-
-/**
- * Seasonal Pricing
- * Defines seasonal price adjustments
- */
-export const seasonalPricing = mysqlTable(
-  "seasonal_pricing",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    name: varchar("name", { length: 255 }).notNull(), // e.g., "Hajj Season", "Summer Peak"
-    nameAr: varchar("nameAr", { length: 255 }), // Arabic name
-
-    // Date range
-    startDate: timestamp("startDate").notNull(),
-    endDate: timestamp("endDate").notNull(),
-
-    // Multiplier
-    multiplier: decimal("multiplier", { precision: 5, scale: 2 }).notNull(), // e.g., 1.50 = 50% increase
-
-    // Scope
-    airlineId: int("airlineId"), // Null = all airlines
-    originId: int("originId"), // Null = all origins
-    destinationId: int("destinationId"), // Null = all destinations
-
-    // Status
-    isActive: boolean("isActive").default(true).notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    dateRangeIdx: index("seasonal_pricing_dates_idx").on(
-      table.startDate,
-      table.endDate
-    ),
-    activeIdx: index("seasonal_pricing_active_idx").on(table.isActive),
-  })
-);
-
-export type SeasonalPricingRecord = typeof seasonalPricing.$inferSelect;
-export type InsertSeasonalPricing = typeof seasonalPricing.$inferInsert;
-
-/**
- * Currencies
- * Supported currencies for multi-currency transactions
- */
-export const currencies = mysqlTable(
-  "currencies",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    code: varchar("code", { length: 3 }).notNull().unique(), // ISO 4217 code
-    name: varchar("name", { length: 100 }).notNull(),
-    nameAr: varchar("nameAr", { length: 100 }),
-    symbol: varchar("symbol", { length: 10 }).notNull(),
-    decimalPlaces: int("decimalPlaces").default(2).notNull(),
-
-    // Display settings
-    symbolPosition: mysqlEnum("symbolPosition", ["before", "after"])
-      .default("before")
-      .notNull(),
-    thousandsSeparator: varchar("thousandsSeparator", { length: 1 }).default(
-      ","
-    ),
-    decimalSeparator: varchar("decimalSeparator", { length: 1 }).default("."),
-
-    // Status
-    isActive: boolean("isActive").default(true).notNull(),
-    isBaseCurrency: boolean("isBaseCurrency").default(false).notNull(), // SAR is base
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    codeIdx: index("currencies_code_idx").on(table.code),
-    activeIdx: index("currencies_active_idx").on(table.isActive),
-  })
-);
-
-export type Currency = typeof currencies.$inferSelect;
-export type InsertCurrency = typeof currencies.$inferInsert;
-
-/**
- * Exchange Rates
- * Stores exchange rates between currencies
- */
-export const exchangeRates = mysqlTable(
-  "exchange_rates",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    fromCurrency: varchar("fromCurrency", { length: 3 }).notNull(),
-    toCurrency: varchar("toCurrency", { length: 3 }).notNull(),
-    rate: decimal("rate", { precision: 18, scale: 8 }).notNull(),
-
-    // Source of the rate
-    source: varchar("source", { length: 100 }), // e.g., "openexchangerates", "manual"
-
-    // Validity
-    validFrom: timestamp("validFrom").defaultNow().notNull(),
-    validTo: timestamp("validTo"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    currencyPairIdx: index("exchange_rates_pair_idx").on(
-      table.fromCurrency,
-      table.toCurrency
-    ),
-    validFromIdx: index("exchange_rates_valid_idx").on(table.validFrom),
-  })
-);
-
-export type ExchangeRateRecord = typeof exchangeRates.$inferSelect;
-export type InsertExchangeRate = typeof exchangeRates.$inferInsert;
-
-/**
- * Seat Holds
- * Temporary seat reservations before payment
- */
-export const seatHolds = mysqlTable(
-  "seat_holds",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    flightId: int("flightId").notNull(),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-    seats: int("seats").notNull(),
-
-    // User/session reference
-    userId: int("userId"),
-    sessionId: varchar("sessionId", { length: 255 }).notNull(),
-
-    // Status
-    status: mysqlEnum("status", ["active", "converted", "expired", "released"])
-      .default("active")
-      .notNull(),
-
-    // Expiration
-    expiresAt: timestamp("expiresAt").notNull(),
-
-    // Conversion reference
-    bookingId: int("bookingId"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("seat_holds_flight_idx").on(table.flightId),
-    userIdx: index("seat_holds_user_idx").on(table.userId),
-    sessionIdx: index("seat_holds_session_idx").on(table.sessionId),
-    statusIdx: index("seat_holds_status_idx").on(table.status),
-    expiresIdx: index("seat_holds_expires_idx").on(table.expiresAt),
-  })
-);
-
-export type SeatHold = typeof seatHolds.$inferSelect;
-export type InsertSeatHold = typeof seatHolds.$inferInsert;
-
-/**
- * Waitlist
- * Manages waitlist for fully booked flights
- */
-export const waitlist = mysqlTable(
-  "waitlist",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    flightId: int("flightId").notNull(),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-
-    userId: int("userId").notNull(),
-    seats: int("seats").notNull(),
-
-    // Priority (lower = higher priority)
-    priority: int("priority").notNull(),
-
-    // Status
-    status: mysqlEnum("status", [
-      "waiting",
-      "offered",
-      "confirmed",
-      "expired",
-      "cancelled",
-    ])
-      .default("waiting")
-      .notNull(),
-
-    // Offer details
-    offeredAt: timestamp("offeredAt"),
-    offerExpiresAt: timestamp("offerExpiresAt"),
-    confirmedAt: timestamp("confirmedAt"),
-
-    // Contact preferences
-    notifyByEmail: boolean("notifyByEmail").default(true).notNull(),
-    notifyBySms: boolean("notifyBySms").default(false).notNull(),
-
-    // Resulting booking
-    bookingId: int("bookingId"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("waitlist_flight_idx").on(table.flightId),
-    userIdx: index("waitlist_user_idx").on(table.userId),
-    statusIdx: index("waitlist_status_idx").on(table.status),
-    bookingIdIdx: index("waitlist_booking_id_idx").on(table.bookingId),
-    priorityIdx: index("waitlist_priority_idx").on(
-      table.flightId,
-      table.cabinClass,
-      table.priority
-    ),
-  })
-);
-
-export type WaitlistEntry = typeof waitlist.$inferSelect;
-export type InsertWaitlistEntry = typeof waitlist.$inferInsert;
-
-/**
- * Overbooking Configuration
- * Per-route overbooking settings
- */
-export const overbookingConfig = mysqlTable(
-  "overbooking_config",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Scope
-    airlineId: int("airlineId"), // Null = all airlines
-    originId: int("originId"), // Null = all origins
-    destinationId: int("destinationId"), // Null = all destinations
-
-    // Overbooking rates
-    economyRate: decimal("economyRate", { precision: 5, scale: 4 })
-      .default("0.05")
-      .notNull(), // 5%
-    businessRate: decimal("businessRate", { precision: 5, scale: 4 })
-      .default("0.02")
-      .notNull(), // 2%
-    maxOverbooking: int("maxOverbooking").default(10).notNull(),
-
-    // Historical data
-    historicalNoShowRate: decimal("historicalNoShowRate", {
-      precision: 5,
-      scale: 4,
-    }),
-
-    // Status
-    isActive: boolean("isActive").default(true).notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    routeIdx: index("overbooking_route_idx").on(
-      table.originId,
-      table.destinationId
-    ),
-    airlineIdx: index("overbooking_airline_idx").on(table.airlineId),
-    activeIdx: index("overbooking_active_idx").on(table.isActive),
-  })
-);
-
-export type OverbookingConfigRecord = typeof overbookingConfig.$inferSelect;
-export type InsertOverbookingConfig = typeof overbookingConfig.$inferInsert;
-
-/**
- * Inventory Snapshots
- * Daily snapshots of inventory for analytics
- */
-export const inventorySnapshots = mysqlTable(
-  "inventory_snapshots",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    flightId: int("flightId").notNull(),
-    snapshotDate: timestamp("snapshotDate").notNull(),
-
-    // Economy class
-    economyTotal: int("economyTotal").notNull(),
-    economySold: int("economySold").notNull(),
-    economyHeld: int("economyHeld").notNull(),
-    economyAvailable: int("economyAvailable").notNull(),
-    economyWaitlist: int("economyWaitlist").notNull(),
-
-    // Business class
-    businessTotal: int("businessTotal").notNull(),
-    businessSold: int("businessSold").notNull(),
-    businessHeld: int("businessHeld").notNull(),
-    businessAvailable: int("businessAvailable").notNull(),
-    businessWaitlist: int("businessWaitlist").notNull(),
-
-    // Pricing at snapshot time
-    economyPrice: int("economyPrice").notNull(),
-    businessPrice: int("businessPrice").notNull(),
-
-    // Days until departure
-    daysUntilDeparture: int("daysUntilDeparture").notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("inventory_snapshots_flight_idx").on(table.flightId),
-    dateIdx: index("inventory_snapshots_date_idx").on(table.snapshotDate),
-    flightDateIdx: index("inventory_snapshots_flight_date_idx").on(
-      table.flightId,
-      table.snapshotDate
-    ),
-  })
-);
-
-export type InventorySnapshot = typeof inventorySnapshots.$inferSelect;
-export type InsertInventorySnapshot = typeof inventorySnapshots.$inferInsert;
-
-/**
- * Denied Boarding Records
- * Tracks denied boarding incidents for overbooking
- */
-export const deniedBoardingRecords = mysqlTable(
-  "denied_boarding_records",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    flightId: int("flightId").notNull(),
-    bookingId: int("bookingId").notNull(),
-    userId: int("userId").notNull(),
-
-    // Type
-    type: mysqlEnum("type", ["voluntary", "involuntary"]).notNull(),
-
-    // Compensation
-    compensationAmount: int("compensationAmount").notNull(), // In cents
-    compensationCurrency: varchar("compensationCurrency", { length: 3 })
-      .default("SAR")
-      .notNull(),
-    compensationType: mysqlEnum("compensationType", [
-      "cash",
-      "voucher",
-      "miles",
-    ]).notNull(),
-
-    // Alternative flight
-    alternativeFlightId: int("alternativeFlightId"),
-
-    // Status
-    status: mysqlEnum("status", [
-      "pending",
-      "accepted",
-      "rejected",
-      "completed",
-    ])
-      .default("pending")
-      .notNull(),
-
-    // Notes
-    notes: text("notes"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("denied_boarding_flight_idx").on(table.flightId),
-    userIdx: index("denied_boarding_user_idx").on(table.userId),
-    statusIdx: index("denied_boarding_status_idx").on(table.status),
-  })
-);
-
-export type DeniedBoardingRecord = typeof deniedBoardingRecords.$inferSelect;
-export type InsertDeniedBoardingRecord =
-  typeof deniedBoardingRecords.$inferInsert;
-
-// ============================================================================
-// GDPR Compliance Tables
-// ============================================================================
-
-/**
- * User Consent Records
- * Tracks user consent preferences for GDPR compliance
- */
-export const userConsents = mysqlTable(
-  "user_consents",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull().unique(),
-
-    // Marketing consent
-    marketingEmails: boolean("marketingEmails").default(false).notNull(),
-    marketingSms: boolean("marketingSms").default(false).notNull(),
-    marketingPush: boolean("marketingPush").default(false).notNull(),
-
-    // Analytics consent
-    analyticsTracking: boolean("analyticsTracking").default(false).notNull(),
-    performanceCookies: boolean("performanceCookies").default(false).notNull(),
-
-    // Third-party data sharing
-    thirdPartySharing: boolean("thirdPartySharing").default(false).notNull(),
-    partnerOffers: boolean("partnerOffers").default(false).notNull(),
-
-    // Essential consent (always true for service operation)
-    essentialCookies: boolean("essentialCookies").default(true).notNull(),
-
-    // Personalization
-    personalizedAds: boolean("personalizedAds").default(false).notNull(),
-    personalizedContent: boolean("personalizedContent")
-      .default(false)
-      .notNull(),
-
-    // Consent metadata
-    consentVersion: varchar("consentVersion", { length: 20 })
-      .default("1.0")
-      .notNull(),
-    ipAddressAtConsent: varchar("ipAddressAtConsent", { length: 45 }),
-    userAgentAtConsent: text("userAgentAtConsent"),
-
-    // Timestamps
-    consentGivenAt: timestamp("consentGivenAt").defaultNow().notNull(),
-    lastUpdatedAt: timestamp("lastUpdatedAt")
-      .defaultNow()
-      .onUpdateNow()
-      .notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_consents_user_id_idx").on(table.userId),
-    consentVersionIdx: index("user_consents_version_idx").on(
-      table.consentVersion
-    ),
-  })
-);
-
-export type UserConsent = typeof userConsents.$inferSelect;
-export type InsertUserConsent = typeof userConsents.$inferInsert;
-
-/**
- * Consent Change History
- * Audit trail of all consent changes for compliance reporting
- */
-export const consentHistory = mysqlTable(
-  "consent_history",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-
-    // Change details
-    consentType: varchar("consentType", { length: 50 }).notNull(), // e.g., "marketingEmails", "analyticsTracking"
-    previousValue: boolean("previousValue"),
-    newValue: boolean("newValue").notNull(),
-
-    // Request context
-    ipAddress: varchar("ipAddress", { length: 45 }),
-    userAgent: text("userAgent"),
-
-    // Consent version at time of change
-    consentVersion: varchar("consentVersion", { length: 20 }).notNull(),
-
-    // Change reason
-    changeReason: mysqlEnum("changeReason", [
-      "user_update",
-      "initial_consent",
-      "withdrawal",
-      "account_deletion",
-      "system_update",
-    ])
-      .default("user_update")
-      .notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("consent_history_user_id_idx").on(table.userId),
-    consentTypeIdx: index("consent_history_type_idx").on(table.consentType),
-    createdAtIdx: index("consent_history_created_at_idx").on(table.createdAt),
-  })
-);
-
-export type ConsentHistoryRecord = typeof consentHistory.$inferSelect;
-export type InsertConsentHistory = typeof consentHistory.$inferInsert;
-
-/**
- * Data Export Requests
- * Tracks user data export requests (GDPR Article 20 - Right to Data Portability)
- */
-export const dataExportRequests = mysqlTable(
-  "data_export_requests",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-
-    // Request status
-    status: mysqlEnum("status", [
-      "pending",
-      "processing",
-      "completed",
-      "failed",
-      "expired",
-    ])
-      .default("pending")
-      .notNull(),
-
-    // Export format
-    format: mysqlEnum("format", ["json", "csv"]).default("json").notNull(),
-
-    // Export details
-    downloadUrl: text("downloadUrl"), // Temporary signed URL
-    downloadExpiresAt: timestamp("downloadExpiresAt"),
-    fileSizeBytes: int("fileSizeBytes"),
-
-    // Request context
-    ipAddress: varchar("ipAddress", { length: 45 }),
-    userAgent: text("userAgent"),
-
-    // Error tracking
-    errorMessage: text("errorMessage"),
-
-    // Timestamps
-    requestedAt: timestamp("requestedAt").defaultNow().notNull(),
-    processedAt: timestamp("processedAt"),
-    completedAt: timestamp("completedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("data_export_requests_user_id_idx").on(table.userId),
-    statusIdx: index("data_export_requests_status_idx").on(table.status),
-    requestedAtIdx: index("data_export_requests_requested_at_idx").on(
-      table.requestedAt
-    ),
-  })
-);
-
-export type DataExportRequest = typeof dataExportRequests.$inferSelect;
-export type InsertDataExportRequest = typeof dataExportRequests.$inferInsert;
-
-/**
- * Account Deletion Requests
- * Tracks user account deletion requests (GDPR Article 17 - Right to Erasure)
- */
-export const accountDeletionRequests = mysqlTable(
-  "account_deletion_requests",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-
-    // Request status
-    status: mysqlEnum("status", [
-      "pending",
-      "processing",
-      "completed",
-      "cancelled",
-      "failed",
-    ])
-      .default("pending")
-      .notNull(),
-
-    // Deletion type
-    deletionType: mysqlEnum("deletionType", ["full", "anonymize"])
-      .default("anonymize")
-      .notNull(),
-
-    // Reason for deletion
-    reason: text("reason"),
-
-    // Request context
-    ipAddress: varchar("ipAddress", { length: 45 }),
-    userAgent: text("userAgent"),
-
-    // Confirmation
-    confirmationToken: varchar("confirmationToken", { length: 64 }),
-    confirmedAt: timestamp("confirmedAt"),
-
-    // Processing details
-    dataAnonymizedAt: timestamp("dataAnonymizedAt"),
-    errorMessage: text("errorMessage"),
-
-    // Scheduled deletion (grace period)
-    scheduledDeletionAt: timestamp("scheduledDeletionAt"),
-
-    // Timestamps
-    requestedAt: timestamp("requestedAt").defaultNow().notNull(),
-    processedAt: timestamp("processedAt"),
-    completedAt: timestamp("completedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("account_deletion_requests_user_id_idx").on(table.userId),
-    statusIdx: index("account_deletion_requests_status_idx").on(table.status),
-    scheduledIdx: index("account_deletion_requests_scheduled_idx").on(
-      table.scheduledDeletionAt
-    ),
-  })
-);
-
-export type AccountDeletionRequest =
-  typeof accountDeletionRequests.$inferSelect;
-export type InsertAccountDeletionRequest =
-  typeof accountDeletionRequests.$inferInsert;
-
-// ============================================================================
-// Group Bookings System
-// ============================================================================
-
-/**
- * Group Bookings table
- * Handles booking requests for groups (10+ passengers) with special pricing
- */
-export const groupBookings = mysqlTable(
-  "group_bookings",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Organizer information
-    organizerName: varchar("organizerName", { length: 255 }).notNull(),
-    organizerEmail: varchar("organizerEmail", { length: 320 }).notNull(),
-    organizerPhone: varchar("organizerPhone", { length: 20 }).notNull(),
-
-    // Group details
-    groupSize: int("groupSize").notNull(), // Minimum 10 passengers
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"])
-      .default("economy")
-      .notNull(),
-
-    // Flight reference
-    flightId: int("flightId").notNull(),
-
-    // Status tracking
-    status: mysqlEnum("status", ["pending", "confirmed", "cancelled"])
-      .default("pending")
-      .notNull(),
-
-    // Pricing
-    discountPercent: decimal("discountPercent", { precision: 5, scale: 2 }), // e.g., 5.00, 10.00, 15.00
-    totalPrice: int("totalPrice"), // Total price in SAR cents after discount
-
-    // Additional information
-    notes: text("notes"), // Special requests or admin notes
-    rejectionReason: text("rejectionReason"), // Reason if rejected
-
-    // Audit fields
-    approvedBy: int("approvedBy"), // Admin user ID who approved
-    approvedAt: timestamp("approvedAt"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    // Index for organizer email lookups
-    organizerEmailIdx: index("group_bookings_organizer_email_idx").on(
-      table.organizerEmail
-    ),
-    // Index for flight-based queries
-    flightIdIdx: index("group_bookings_flight_id_idx").on(table.flightId),
-    // Index for status filtering (admin panels)
-    statusIdx: index("group_bookings_status_idx").on(table.status),
-    // Index for creation date sorting
-    createdAtIdx: index("group_bookings_created_at_idx").on(table.createdAt),
-    // Composite index for status + date (admin filtering)
-    statusCreatedAtIdx: index("group_bookings_status_created_at_idx").on(
-      table.status,
-      table.createdAt
-    ),
-  })
-);
-
-export type GroupBooking = typeof groupBookings.$inferSelect;
-export type InsertGroupBooking = typeof groupBookings.$inferInsert;
-
-// ============================================================================
-// Special Services System
-// ============================================================================
-
-/**
- * Special Services
- * Tracks special service requests for passengers (meals, wheelchair, UMNR, etc.)
- */
-export const specialServices = mysqlTable(
-  "special_services",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId").notNull(),
-    passengerId: int("passengerId").notNull(),
-
-    // Service identification
-    serviceType: mysqlEnum("serviceType", [
-      "meal",
-      "wheelchair",
-      "unaccompanied_minor",
-      "extra_legroom",
-      "pet_in_cabin",
-      "medical_assistance",
-    ]).notNull(),
-
-    // Service code (IATA standard codes where applicable)
-    serviceCode: varchar("serviceCode", { length: 20 }).notNull(),
-    // Examples:
-    // Meals: VGML (vegetarian), VVML (vegan), MOML (Muslim/halal), KSML (kosher), GFML (gluten-free), DBML (diabetic), CHML (child)
-    // Wheelchair: WCHR (can walk short distance), WCHS (cannot walk, can climb stairs), WCHC (immobile)
-    // UMNR: UMNR (unaccompanied minor)
-    // Pet: PETC (pet in cabin)
-    // Medical: MEDA (medical assistance)
-    // Extra legroom: EXST (extra seat)
-
-    // Additional details (JSON for flexibility)
-    details: text("details"), // JSON: additional information like age for UMNR, pet type, medical equipment, etc.
-
-    // Request status
-    status: mysqlEnum("status", [
-      "pending",
-      "confirmed",
-      "rejected",
-      "cancelled",
-    ])
-      .default("pending")
-      .notNull(),
-
-    // Admin notes for rejection reasons or special handling
-    adminNotes: text("adminNotes"),
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    bookingIdIdx: index("special_services_booking_id_idx").on(table.bookingId),
-    passengerIdIdx: index("special_services_passenger_id_idx").on(
-      table.passengerId
-    ),
-    serviceTypeIdx: index("special_services_type_idx").on(table.serviceType),
-    serviceCodeIdx: index("special_services_code_idx").on(table.serviceCode),
-    statusIdx: index("special_services_status_idx").on(table.status),
-    // Composite index for booking + passenger lookups
-    bookingPassengerIdx: index("special_services_booking_passenger_idx").on(
-      table.bookingId,
-      table.passengerId
-    ),
-  })
-);
-
-export type SpecialService = typeof specialServices.$inferSelect;
-export type InsertSpecialService = typeof specialServices.$inferInsert;
-
-// ============================================================================
-// User Flight Favorites & Price Alerts
-// ============================================================================
-
-/**
- * User Flight Favorites
- * Allows users to favorite specific individual flights
- */
-export const userFlightFavorites = mysqlTable(
-  "user_flight_favorites",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    flightId: int("flightId").notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_flight_favorites_user_id_idx").on(table.userId),
-    flightIdIdx: index("user_flight_favorites_flight_id_idx").on(
-      table.flightId
-    ),
-    // Unique constraint: one favorite per user per flight
-    userFlightUnique: uniqueIndex("user_flight_favorites_unique_idx").on(
-      table.userId,
-      table.flightId
-    ),
-  })
-);
-
-export type UserFlightFavorite = typeof userFlightFavorites.$inferSelect;
-export type InsertUserFlightFavorite = typeof userFlightFavorites.$inferInsert;
-
-/**
- * Price Alerts
- * Standalone price alerts for routes (separate from favorites)
- */
-export const priceAlerts = mysqlTable(
-  "price_alerts",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    originId: int("originId").notNull(),
-    destinationId: int("destinationId").notNull(),
-    targetPrice: int("targetPrice").notNull(), // Price in SAR cents
-    currentPrice: int("currentPrice"), // Last checked price in SAR cents
-    isActive: boolean("isActive").default(true).notNull(),
-    lastChecked: timestamp("lastChecked"),
-    notifiedAt: timestamp("notifiedAt"), // When user was last notified
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"])
-      .default("economy")
-      .notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("price_alerts_user_id_idx").on(table.userId),
-    routeIdx: index("price_alerts_route_idx").on(
-      table.originId,
-      table.destinationId
-    ),
-    activeIdx: index("price_alerts_active_idx").on(table.isActive),
-    lastCheckedIdx: index("price_alerts_last_checked_idx").on(
-      table.lastChecked
-    ),
-    // Unique constraint: one alert per user per route per cabin class
-    userRouteUnique: uniqueIndex("price_alerts_user_route_unique_idx").on(
-      table.userId,
-      table.originId,
-      table.destinationId,
-      table.cabinClass
-    ),
-  })
-);
-
-export type PriceAlert = typeof priceAlerts.$inferSelect;
-export type InsertPriceAlert = typeof priceAlerts.$inferInsert;
-
-// ============================================================================
-// In-App Notifications System
-// ============================================================================
-
-/**
- * Notifications table
- * Stores in-app notifications for users
- */
-export const notifications = mysqlTable(
-  "notifications",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-
-    // Notification type
-    type: mysqlEnum("type", [
-      "booking",
-      "flight",
-      "payment",
-      "promo",
-      "system",
-    ]).notNull(),
-
-    // Content
-    title: varchar("title", { length: 255 }).notNull(),
-    message: text("message").notNull(),
-
-    // Additional data (JSON for flexibility - booking IDs, flight details, etc.)
-    data: text("data"), // JSON stringified additional data
-
-    // Read status
-    isRead: boolean("isRead").default(false).notNull(),
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    readAt: timestamp("readAt"),
-  },
-  table => ({
-    userIdIdx: index("notifications_user_id_idx").on(table.userId),
-    typeIdx: index("notifications_type_idx").on(table.type),
-    isReadIdx: index("notifications_is_read_idx").on(table.isRead),
-    createdAtIdx: index("notifications_created_at_idx").on(table.createdAt),
-    // Composite index for common queries: user's unread notifications sorted by date
-    userUnreadIdx: index("notifications_user_unread_idx").on(
-      table.userId,
-      table.isRead,
-      table.createdAt
-    ),
-  })
-);
-
-export type Notification = typeof notifications.$inferSelect;
-export type InsertNotification = typeof notifications.$inferInsert;
-
-// ============================================================================
-// Multi-City Booking System
-// ============================================================================
-
-/**
- * Booking Segments table
- * Stores individual flight segments for multi-city bookings
- */
-export const bookingSegments = mysqlTable(
-  "booking_segments",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId").notNull(),
-    segmentOrder: int("segmentOrder").notNull(), // Order of segment in the trip (1, 2, 3, etc.)
-    flightId: int("flightId").notNull(),
-    departureDate: timestamp("departureDate").notNull(),
-    status: mysqlEnum("status", [
-      "pending",
-      "confirmed",
-      "cancelled",
-      "completed",
-    ])
-      .default("pending")
-      .notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    // Index for booking-based queries
-    bookingIdIdx: index("booking_segments_booking_id_idx").on(table.bookingId),
-    // Index for flight-based queries
-    flightIdIdx: index("booking_segments_flight_id_idx").on(table.flightId),
-    // Composite index for booking + order
-    bookingOrderIdx: index("booking_segments_booking_order_idx").on(
-      table.bookingId,
-      table.segmentOrder
-    ),
-    // Index for status filtering
-    statusIdx: index("booking_segments_status_idx").on(table.status),
-  })
-);
-
-export type BookingSegment = typeof bookingSegments.$inferSelect;
-export type InsertBookingSegment = typeof bookingSegments.$inferInsert;
-
-// ============================================================================
-// Baggage Handling & Tracking System
-// ============================================================================
-
-/**
- * Baggage Items table
- * Tracks individual baggage items for passengers
- */
-export const baggageItems = mysqlTable(
-  "baggage_items",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId").notNull(),
-    passengerId: int("passengerId").notNull(),
-    tagNumber: varchar("tagNumber", { length: 20 }).notNull().unique(), // Unique baggage tag (e.g., "AIS123456")
-    weight: decimal("weight", { precision: 5, scale: 2 }).notNull(), // Weight in kg
-    status: mysqlEnum("status", [
-      "checked_in",
-      "security_screening",
-      "loading",
-      "in_transit",
-      "arrived",
-      "customs",
-      "ready_for_pickup",
-      "claimed",
-      "lost",
-      "found",
-      "damaged",
-    ])
-      .default("checked_in")
-      .notNull(),
-    lastLocation: varchar("lastLocation", { length: 255 }), // Last known location (e.g., "JED Terminal 1 Belt 3")
-    description: text("description"), // Baggage description (color, size, brand)
-    specialHandling: text("specialHandling"), // Special handling instructions (fragile, oversized, etc.)
-    lostReportedAt: timestamp("lostReportedAt"), // When baggage was reported lost
-    lostDescription: text("lostDescription"), // Description for lost baggage report
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    bookingIdIdx: index("baggage_items_booking_id_idx").on(table.bookingId),
-    passengerIdIdx: index("baggage_items_passenger_id_idx").on(
-      table.passengerId
-    ),
-    tagNumberIdx: index("baggage_items_tag_number_idx").on(table.tagNumber),
-    statusIdx: index("baggage_items_status_idx").on(table.status),
-    // Composite index for booking + passenger lookups
-    bookingPassengerIdx: index("baggage_items_booking_passenger_idx").on(
-      table.bookingId,
-      table.passengerId
-    ),
-    // Index for lost baggage queries
-    lostStatusIdx: index("baggage_items_lost_status_idx").on(
-      table.status,
-      table.lostReportedAt
-    ),
-  })
-);
-
-export type BaggageItem = typeof baggageItems.$inferSelect;
-export type InsertBaggageItem = typeof baggageItems.$inferInsert;
-
-/**
- * Baggage Tracking table
- * Tracks all location and status updates for baggage items
- */
-export const baggageTracking = mysqlTable(
-  "baggage_tracking",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    baggageId: int("baggageId").notNull(), // References baggageItems.id
-    location: varchar("location", { length: 255 }).notNull(), // Location where scanned (e.g., "JED Terminal 1 Check-in")
-    status: mysqlEnum("status", [
-      "checked_in",
-      "security_screening",
-      "loading",
-      "in_transit",
-      "arrived",
-      "customs",
-      "ready_for_pickup",
-      "claimed",
-      "lost",
-      "found",
-      "damaged",
-    ]).notNull(),
-    scannedAt: timestamp("scannedAt").defaultNow().notNull(),
-    scannedBy: int("scannedBy"), // User ID of the handler who scanned (nullable for automated scans)
-    notes: text("notes"), // Additional notes about the scan/status update
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    baggageIdIdx: index("baggage_tracking_baggage_id_idx").on(table.baggageId),
-    statusIdx: index("baggage_tracking_status_idx").on(table.status),
-    scannedAtIdx: index("baggage_tracking_scanned_at_idx").on(table.scannedAt),
-    scannedByIdx: index("baggage_tracking_scanned_by_idx").on(table.scannedBy),
-    // Composite index for baggage timeline queries
-    baggageTimelineIdx: index("baggage_tracking_baggage_timeline_idx").on(
-      table.baggageId,
-      table.scannedAt
-    ),
-  })
-);
-
-export type BaggageTracking = typeof baggageTracking.$inferSelect;
-export type InsertBaggageTracking = typeof baggageTracking.$inferInsert;
-
-// ============================================================================
-// Split Payments System
-// ============================================================================
-
-/**
- * Payment Splits
- * Allows a booking payment to be split among multiple payers
- */
-export const paymentSplits = mysqlTable(
-  "payment_splits",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId").notNull(),
-
-    // Payer information
-    payerEmail: varchar("payerEmail", { length: 320 }).notNull(),
-    payerName: varchar("payerName", { length: 255 }).notNull(),
-
-    // Payment details
-    amount: int("amount").notNull(), // Amount in SAR cents
-    percentage: decimal("percentage", { precision: 5, scale: 2 }).notNull(), // e.g., 33.33%
-
-    // Status tracking
-    status: mysqlEnum("status", [
-      "pending",
-      "email_sent",
-      "paid",
-      "failed",
-      "cancelled",
-      "expired",
-    ])
-      .default("pending")
-      .notNull(),
-
-    // Stripe payment reference
-    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
-    stripeCheckoutSessionId: varchar("stripeCheckoutSessionId", {
-      length: 255,
-    }),
-
-    // Payment token for payer access (unique link)
-    paymentToken: varchar("paymentToken", { length: 64 }).notNull().unique(),
-
-    // Timestamps
-    paidAt: timestamp("paidAt"),
-    emailSentAt: timestamp("emailSentAt"),
-    expiresAt: timestamp("expiresAt"), // Payment request expiration
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    bookingIdIdx: index("payment_splits_booking_id_idx").on(table.bookingId),
-    payerEmailIdx: index("payment_splits_payer_email_idx").on(table.payerEmail),
-    statusIdx: index("payment_splits_status_idx").on(table.status),
-    paymentTokenIdx: index("payment_splits_token_idx").on(table.paymentToken),
-    // Composite index for booking + status queries
-    bookingStatusIdx: index("payment_splits_booking_status_idx").on(
-      table.bookingId,
-      table.status
-    ),
-    // Index for expiration queries
-    expiresAtIdx: index("payment_splits_expires_at_idx").on(table.expiresAt),
-    // Stripe session lookup
-    stripeCheckoutIdx: index("payment_splits_stripe_checkout_idx").on(
-      table.stripeCheckoutSessionId
-    ),
-  })
-);
-
-export type PaymentSplit = typeof paymentSplits.$inferSelect;
-export type InsertPaymentSplit = typeof paymentSplits.$inferInsert;
-
-// Export chat and notification schemas
-export * from "./chat-schema";
-
-// ============================================================================
-// Saved Passengers
-// ============================================================================
-
-/**
- * Saved Passengers table
- * Stores user's saved passenger profiles for quick booking
- */
-export const savedPassengers = mysqlTable(
-  "saved_passengers",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-
-    // Passenger details
-    firstName: varchar("firstName", { length: 100 }).notNull(),
-    lastName: varchar("lastName", { length: 100 }).notNull(),
-    dateOfBirth: timestamp("dateOfBirth"),
-    nationality: varchar("nationality", { length: 100 }),
-
-    // Passport information
-    passportNumber: varchar("passportNumber", { length: 50 }),
-    passportExpiry: timestamp("passportExpiry"),
-
-    // Contact information
-    email: varchar("email", { length: 320 }),
-    phone: varchar("phone", { length: 20 }),
-
-    // Default flag
-    isDefault: boolean("isDefault").default(false).notNull(),
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("saved_passengers_user_id_idx").on(table.userId),
-    // Index for default passenger lookup
-    userDefaultIdx: index("saved_passengers_user_default_idx").on(
-      table.userId,
-      table.isDefault
-    ),
-    // Index for name search
-    nameIdx: index("saved_passengers_name_idx").on(
-      table.lastName,
-      table.firstName
-    ),
-  })
-);
-
-export type SavedPassenger = typeof savedPassengers.$inferSelect;
-export type InsertSavedPassenger = typeof savedPassengers.$inferInsert;
-
-// ============================================================================
-// Corporate Travel Accounts System
-// ============================================================================
-
-/**
- * Corporate Accounts table
- * Manages corporate/business travel accounts with credit limits and discounts
- */
-export const corporateAccounts = mysqlTable(
-  "corporate_accounts",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Company information
-    companyName: varchar("companyName", { length: 255 }).notNull(),
-    taxId: varchar("taxId", { length: 50 }).notNull().unique(), // Company tax ID / registration number
-    address: text("address"),
-
-    // Primary contact
-    contactName: varchar("contactName", { length: 255 }).notNull(),
-    contactEmail: varchar("contactEmail", { length: 320 }).notNull(),
-    contactPhone: varchar("contactPhone", { length: 20 }),
-
-    // Financial settings
-    creditLimit: int("creditLimit").notNull().default(0), // Credit limit in SAR cents
-    balance: int("balance").notNull().default(0), // Current balance (negative = credit used)
-    discountPercent: decimal("discountPercent", { precision: 5, scale: 2 })
-      .default("0.00")
-      .notNull(), // Corporate discount percentage
-
-    // Account status
-    status: mysqlEnum("status", ["pending", "active", "suspended", "closed"])
-      .default("pending")
-      .notNull(),
-
-    // Approval tracking
-    approvedBy: int("approvedBy"), // Admin user ID who approved
-    approvedAt: timestamp("approvedAt"),
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    companyNameIdx: index("corporate_accounts_company_name_idx").on(
-      table.companyName
-    ),
-    taxIdIdx: index("corporate_accounts_tax_id_idx").on(table.taxId),
-    statusIdx: index("corporate_accounts_status_idx").on(table.status),
-    contactEmailIdx: index("corporate_accounts_contact_email_idx").on(
-      table.contactEmail
-    ),
-    createdAtIdx: index("corporate_accounts_created_at_idx").on(
-      table.createdAt
-    ),
-  })
-);
-
-export type CorporateAccount = typeof corporateAccounts.$inferSelect;
-export type InsertCorporateAccount = typeof corporateAccounts.$inferInsert;
-
-/**
- * Corporate Users table
- * Links users to corporate accounts with roles
- */
-export const corporateUsers = mysqlTable(
-  "corporate_users",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Account and user reference
-    corporateAccountId: int("corporateAccountId").notNull(),
-    userId: int("userId").notNull(),
-
-    // Role within the corporate account
-    role: mysqlEnum("role", ["admin", "booker", "traveler"])
-      .default("traveler")
-      .notNull(),
-    // admin: Can manage users and view all bookings
-    // booker: Can book for others in the company
-    // traveler: Can only book for themselves
-
-    // Status
-    isActive: boolean("isActive").default(true).notNull(),
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    corporateAccountIdIdx: index("corporate_users_account_id_idx").on(
-      table.corporateAccountId
-    ),
-    userIdIdx: index("corporate_users_user_id_idx").on(table.userId),
-    roleIdx: index("corporate_users_role_idx").on(table.role),
-    // Unique constraint: one user can only be in one corporate account
-    userAccountUnique: uniqueIndex(
-      "corporate_users_user_account_unique_idx"
-    ).on(table.userId, table.corporateAccountId),
-    isActiveIdx: index("corporate_users_is_active_idx").on(table.isActive),
-  })
-);
-
-export type CorporateUser = typeof corporateUsers.$inferSelect;
-export type InsertCorporateUser = typeof corporateUsers.$inferInsert;
-
-/**
- * Corporate Bookings table
- * Links bookings to corporate accounts with approval workflow
- */
-export const corporateBookings = mysqlTable(
-  "corporate_bookings",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Corporate account reference
-    corporateAccountId: int("corporateAccountId").notNull(),
-
-    // Booking reference
-    bookingId: int("bookingId").notNull().unique(),
-
-    // Corporate tracking fields
-    costCenter: varchar("costCenter", { length: 50 }), // Cost center code for accounting
-    projectCode: varchar("projectCode", { length: 50 }), // Project/department code
-    travelPurpose: text("travelPurpose"), // Business reason for travel
-
-    // Approval workflow
-    approvalStatus: mysqlEnum("approvalStatus", [
-      "pending",
-      "approved",
-      "rejected",
-    ])
-      .default("pending")
-      .notNull(),
-    approvedBy: int("approvedBy"), // Corporate admin user ID who approved
-    approvedAt: timestamp("approvedAt"),
-    rejectionReason: text("rejectionReason"),
-
-    // Booked by (may be different from traveler)
-    bookedByUserId: int("bookedByUserId").notNull(),
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    corporateAccountIdIdx: index("corporate_bookings_account_id_idx").on(
-      table.corporateAccountId
-    ),
-    bookingIdIdx: index("corporate_bookings_booking_id_idx").on(
-      table.bookingId
-    ),
-    approvalStatusIdx: index("corporate_bookings_approval_status_idx").on(
-      table.approvalStatus
-    ),
-    costCenterIdx: index("corporate_bookings_cost_center_idx").on(
-      table.costCenter
-    ),
-    projectCodeIdx: index("corporate_bookings_project_code_idx").on(
-      table.projectCode
-    ),
-    bookedByUserIdIdx: index("corporate_bookings_booked_by_idx").on(
-      table.bookedByUserId
-    ),
-    createdAtIdx: index("corporate_bookings_created_at_idx").on(
-      table.createdAt
-    ),
-    // Composite index for common queries
-    accountApprovalIdx: index("corporate_bookings_account_approval_idx").on(
-      table.corporateAccountId,
-      table.approvalStatus
-    ),
-  })
-);
-
-export type CorporateBooking = typeof corporateBookings.$inferSelect;
-export type InsertCorporateBooking = typeof corporateBookings.$inferInsert;
-
-/**
- * Travel Agents table
- * Represents travel agencies that can book flights via API
- */
-export const travelAgents = mysqlTable(
-  "travel_agents",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    agencyName: varchar("agencyName", { length: 255 }).notNull(),
-    iataNumber: varchar("iataNumber", { length: 20 }).notNull().unique(), // IATA accreditation number
-    contactName: varchar("contactName", { length: 255 }).notNull(),
-    email: varchar("email", { length: 320 }).notNull().unique(),
-    phone: varchar("phone", { length: 50 }).notNull(),
-    commissionRate: decimal("commissionRate", { precision: 5, scale: 2 })
-      .default("5.00")
-      .notNull(), // Commission percentage (e.g., 5.00 = 5%)
-    // API credentials
-    apiKey: varchar("apiKey", { length: 64 }).notNull().unique(), // Unique API key for authentication
-    apiSecret: varchar("apiSecret", { length: 128 }).notNull(), // Hashed API secret
-    // Status
-    isActive: boolean("isActive").default(true).notNull(),
-    // Rate limiting
-    dailyBookingLimit: int("dailyBookingLimit").default(100).notNull(),
-    monthlyBookingLimit: int("monthlyBookingLimit").default(2000).notNull(),
-    // Statistics
-    totalBookings: int("totalBookings").default(0).notNull(),
-    totalRevenue: int("totalRevenue").default(0).notNull(), // In SAR cents
-    totalCommission: int("totalCommission").default(0).notNull(), // In SAR cents
-    // Timestamps
-    lastActiveAt: timestamp("lastActiveAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    iataNumberIdx: index("travel_agents_iata_number_idx").on(table.iataNumber),
-    emailIdx: index("travel_agents_email_idx").on(table.email),
-    apiKeyIdx: index("travel_agents_api_key_idx").on(table.apiKey),
-    isActiveIdx: index("travel_agents_is_active_idx").on(table.isActive),
-    createdAtIdx: index("travel_agents_created_at_idx").on(table.createdAt),
-  })
-);
-
-export type TravelAgent = typeof travelAgents.$inferSelect;
-export type InsertTravelAgent = typeof travelAgents.$inferInsert;
-
-/**
- * Agent Bookings table
- * Links bookings made by travel agents with commission tracking
- */
-export const agentBookings = mysqlTable(
-  "agent_bookings",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    agentId: int("agentId").notNull(),
-    bookingId: int("bookingId").notNull().unique(),
-    // Commission details
-    commissionRate: decimal("commissionRate", {
-      precision: 5,
-      scale: 2,
-    }).notNull(), // Rate at time of booking
-    commissionAmount: int("commissionAmount").notNull(), // In SAR cents
-    bookingAmount: int("bookingAmount").notNull(), // Original booking amount in SAR cents
-    // Commission payment status
-    commissionStatus: mysqlEnum("commissionStatus", [
-      "pending",
-      "approved",
-      "paid",
-      "cancelled",
-    ])
-      .default("pending")
-      .notNull(),
-    commissionPaidAt: timestamp("commissionPaidAt"),
-    // External reference (agent's internal booking ID)
-    externalReference: varchar("externalReference", { length: 100 }),
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    agentIdIdx: index("agent_bookings_agent_id_idx").on(table.agentId),
-    bookingIdIdx: index("agent_bookings_booking_id_idx").on(table.bookingId),
-    commissionStatusIdx: index("agent_bookings_commission_status_idx").on(
-      table.commissionStatus
-    ),
-    createdAtIdx: index("agent_bookings_created_at_idx").on(table.createdAt),
-    // Composite index for agent commission queries
-    agentCommissionIdx: index("agent_bookings_agent_commission_idx").on(
-      table.agentId,
-      table.commissionStatus
-    ),
-  })
-);
-
-export type AgentBooking = typeof agentBookings.$inferSelect;
-export type InsertAgentBooking = typeof agentBookings.$inferInsert;
-
-// ============================================================================
-// SMS Notification Logs
-// ============================================================================
-
-/**
- * SMS Logs table
- * Tracks all SMS notifications sent through the system
- */
-export const smsLogs = mysqlTable(
-  "sms_logs",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId"), // Nullable for system-generated SMS
-
-    // Recipient details
-    phoneNumber: varchar("phoneNumber", { length: 20 }).notNull(),
-
-    // Message content
-    message: text("message").notNull(),
-
-    // Message type/category
-    type: mysqlEnum("type", [
-      "booking_confirmation",
-      "flight_reminder",
-      "flight_status",
-      "boarding_pass",
-      "check_in_reminder",
-      "payment_received",
-      "refund_processed",
-      "loyalty_update",
-      "promotional",
-      "system",
-    ]).notNull(),
-
-    // Status tracking
-    status: mysqlEnum("status", [
-      "pending",
-      "sent",
-      "delivered",
-      "failed",
-      "rejected",
-    ])
-      .default("pending")
-      .notNull(),
-
-    // Provider information
-    provider: varchar("provider", { length: 50 }).notNull(), // e.g., "twilio", "mock"
-    providerMessageId: varchar("providerMessageId", { length: 128 }), // External message ID from provider
-
-    // Error handling
-    errorMessage: text("errorMessage"),
-    retryCount: int("retryCount").default(0).notNull(),
-
-    // Related entities
-    bookingId: int("bookingId"),
-    flightId: int("flightId"),
-
-    // Template used
-    templateId: varchar("templateId", { length: 64 }),
-
-    // Timing
-    sentAt: timestamp("sentAt"),
-    deliveredAt: timestamp("deliveredAt"),
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("sms_logs_user_id_idx").on(table.userId),
-    phoneNumberIdx: index("sms_logs_phone_number_idx").on(table.phoneNumber),
-    typeIdx: index("sms_logs_type_idx").on(table.type),
-    statusIdx: index("sms_logs_status_idx").on(table.status),
-    providerIdx: index("sms_logs_provider_idx").on(table.provider),
-    sentAtIdx: index("sms_logs_sent_at_idx").on(table.sentAt),
-    bookingIdIdx: index("sms_logs_booking_id_idx").on(table.bookingId),
-    createdAtIdx: index("sms_logs_created_at_idx").on(table.createdAt),
-    // Composite index for user SMS history
-    userCreatedAtIdx: index("sms_logs_user_created_at_idx").on(
-      table.userId,
-      table.createdAt
-    ),
-    // Composite index for admin status filtering
-    statusCreatedAtIdx: index("sms_logs_status_created_at_idx").on(
-      table.status,
-      table.createdAt
-    ),
-  })
-);
-
-export type SMSLog = typeof smsLogs.$inferSelect;
-export type InsertSMSLog = typeof smsLogs.$inferInsert;
-
-// ============================================================================
-// Gate Assignment System
-// ============================================================================
-
-/**
- * Airport Gates table
- * Stores information about gates at each airport
- */
-export const airportGates = mysqlTable(
-  "airport_gates",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    airportId: int("airportId").notNull(),
-    gateNumber: varchar("gateNumber", { length: 10 }).notNull(), // e.g., "A1", "B12", "T1-G5"
-    terminal: varchar("terminal", { length: 50 }), // e.g., "Terminal 1", "T1", "North"
-    type: mysqlEnum("type", ["domestic", "international", "both"])
-      .default("both")
-      .notNull(),
-    status: mysqlEnum("status", ["available", "occupied", "maintenance"])
-      .default("available")
-      .notNull(),
-    capacity: varchar("capacity", { length: 50 }), // Aircraft size capability, e.g., "narrow-body", "wide-body"
-    amenities: text("amenities"), // JSON array of amenities like "jet_bridge", "wheelchair_access"
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    // Index for airport-based queries
-    airportIdIdx: index("airport_gates_airport_id_idx").on(table.airportId),
-    // Index for gate number lookups
-    gateNumberIdx: index("airport_gates_gate_number_idx").on(table.gateNumber),
-    // Index for status filtering
-    statusIdx: index("airport_gates_status_idx").on(table.status),
-    // Index for type filtering
-    typeIdx: index("airport_gates_type_idx").on(table.type),
-    // Composite index for airport + status (finding available gates)
-    airportStatusIdx: index("airport_gates_airport_status_idx").on(
-      table.airportId,
-      table.status
-    ),
-    // Composite index for airport + type (domestic/international filtering)
-    airportTypeIdx: index("airport_gates_airport_type_idx").on(
-      table.airportId,
-      table.type
-    ),
-    // Unique constraint: one gate number per airport
-    airportGateUnique: uniqueIndex("airport_gates_airport_gate_unique_idx").on(
-      table.airportId,
-      table.gateNumber
-    ),
-  })
-);
-
-export type AirportGate = typeof airportGates.$inferSelect;
-export type InsertAirportGate = typeof airportGates.$inferInsert;
-
-/**
- * Gate Assignments table
- * Tracks gate assignments for flights
- */
-export const gateAssignments = mysqlTable(
-  "gate_assignments",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    flightId: int("flightId").notNull(),
-    gateId: int("gateId").notNull(),
-
-    // Assignment timing
-    assignedAt: timestamp("assignedAt").defaultNow().notNull(),
-    boardingStartTime: timestamp("boardingStartTime"),
-    boardingEndTime: timestamp("boardingEndTime"),
-
-    // Status tracking
-    status: mysqlEnum("status", [
-      "assigned",
-      "boarding",
-      "departed",
-      "cancelled",
-      "changed",
-    ])
-      .default("assigned")
-      .notNull(),
-
-    // Admin tracking
-    assignedBy: int("assignedBy"), // User ID who made the assignment (admin)
-
-    // Change tracking
-    previousGateId: int("previousGateId"), // For gate changes
-    changeReason: text("changeReason"), // Reason for gate change
-
-    // Notifications
-    notificationSentAt: timestamp("notificationSentAt"), // When gate change notification was sent
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    // Index for flight-based queries
-    flightIdIdx: index("gate_assignments_flight_id_idx").on(table.flightId),
-    // Index for gate-based queries
-    gateIdIdx: index("gate_assignments_gate_id_idx").on(table.gateId),
-    // Index for status filtering
-    statusIdx: index("gate_assignments_status_idx").on(table.status),
-    // Index for assigned by (admin queries)
-    assignedByIdx: index("gate_assignments_assigned_by_idx").on(
-      table.assignedBy
-    ),
-    // Index for boarding times (schedule queries)
-    boardingStartIdx: index("gate_assignments_boarding_start_idx").on(
-      table.boardingStartTime
-    ),
-    // Composite index for gate + status (finding current assignments)
-    gateStatusIdx: index("gate_assignments_gate_status_idx").on(
-      table.gateId,
-      table.status
-    ),
-    // Composite index for flight + status (getting active assignment)
-    flightStatusIdx: index("gate_assignments_flight_status_idx").on(
-      table.flightId,
-      table.status
-    ),
-    // Index for assignment date
-    assignedAtIdx: index("gate_assignments_assigned_at_idx").on(
-      table.assignedAt
-    ),
-  })
-);
-
-export type GateAssignment = typeof gateAssignments.$inferSelect;
-export type InsertGateAssignment = typeof gateAssignments.$inferInsert;
-
-// ============================================================================
-// Voucher & Credit System
-// ============================================================================
-
-/**
- * Vouchers table
- * Stores promotional codes and discounts for bookings
- */
-export const vouchers = mysqlTable(
-  "vouchers",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    code: varchar("code", { length: 50 }).notNull().unique(), // Unique voucher code
-    type: mysqlEnum("type", ["fixed", "percentage"]).notNull(), // Type of discount
-    value: int("value").notNull(), // For fixed: amount in cents, for percentage: percentage value (e.g., 10 = 10%)
-    minPurchase: int("minPurchase").default(0).notNull(), // Minimum purchase amount in cents
-    maxDiscount: int("maxDiscount"), // Maximum discount amount in cents (for percentage vouchers)
-    maxUses: int("maxUses"), // Maximum number of times voucher can be used (null = unlimited)
-    usedCount: int("usedCount").default(0).notNull(), // Number of times voucher has been used
-    validFrom: timestamp("validFrom").notNull(), // Start date
-    validUntil: timestamp("validUntil").notNull(), // Expiration date
-    isActive: boolean("isActive").default(true).notNull(), // Active status
-    description: text("description"), // Admin notes/description
-    createdBy: int("createdBy"), // Admin who created the voucher
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    codeIdx: index("vouchers_code_idx").on(table.code),
-    isActiveIdx: index("vouchers_is_active_idx").on(table.isActive),
-    validFromIdx: index("vouchers_valid_from_idx").on(table.validFrom),
-    validUntilIdx: index("vouchers_valid_until_idx").on(table.validUntil),
-    // Composite index for voucher validation queries
-    activeValidIdx: index("vouchers_active_valid_idx").on(
-      table.isActive,
-      table.validFrom,
-      table.validUntil
-    ),
-  })
-);
-
-export type Voucher = typeof vouchers.$inferSelect;
-export type InsertVoucher = typeof vouchers.$inferInsert;
-
-/**
- * User Credits table
- * Tracks credit balances for users (from refunds, promotions, compensation)
- */
-export const userCredits = mysqlTable(
-  "user_credits",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(), // User who owns the credit
-    amount: int("amount").notNull(), // Credit amount in cents
-    source: mysqlEnum("source", [
-      "refund",
-      "promo",
-      "compensation",
-      "bonus",
-    ]).notNull(), // Source of credit
-    description: text("description"), // Description of why credit was given
-    expiresAt: timestamp("expiresAt"), // Expiration date (null = never expires)
-    usedAmount: int("usedAmount").default(0).notNull(), // Amount already used
-    bookingId: int("bookingId"), // Related booking ID (for refunds)
-    createdBy: int("createdBy"), // Admin who issued the credit (for manual credits)
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_credits_user_id_idx").on(table.userId),
-    sourceIdx: index("user_credits_source_idx").on(table.source),
-    expiresAtIdx: index("user_credits_expires_at_idx").on(table.expiresAt),
-    bookingIdIdx: index("user_credits_booking_id_idx").on(table.bookingId),
-    // Composite index for finding available credits
-    userAvailableIdx: index("user_credits_user_available_idx").on(
-      table.userId,
-      table.expiresAt
-    ),
-  })
-);
-
-export type UserCredit = typeof userCredits.$inferSelect;
-export type InsertUserCredit = typeof userCredits.$inferInsert;
-
-/**
- * Voucher Usage table
- * Tracks when and how vouchers are used
- */
-export const voucherUsage = mysqlTable(
-  "voucher_usage",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    voucherId: int("voucherId").notNull(), // Voucher that was used
-    userId: int("userId").notNull(), // User who used the voucher
-    bookingId: int("bookingId").notNull(), // Booking where voucher was applied
-    discountApplied: int("discountApplied").notNull(), // Actual discount amount in cents
-    usedAt: timestamp("usedAt").defaultNow().notNull(), // When voucher was used
-  },
-  table => ({
-    voucherIdIdx: index("voucher_usage_voucher_id_idx").on(table.voucherId),
-    userIdIdx: index("voucher_usage_user_id_idx").on(table.userId),
-    bookingIdIdx: index("voucher_usage_booking_id_idx").on(table.bookingId),
-    usedAtIdx: index("voucher_usage_used_at_idx").on(table.usedAt),
-    // Unique constraint: one voucher use per booking
-    voucherBookingUnique: uniqueIndex(
-      "voucher_usage_voucher_booking_unique"
-    ).on(table.voucherId, table.bookingId),
-  })
-);
-
-export type VoucherUsage = typeof voucherUsage.$inferSelect;
-export type InsertVoucherUsage = typeof voucherUsage.$inferInsert;
-
-/**
- * Credit Usage table
- * Tracks when and how user credits are used
- */
-export const creditUsage = mysqlTable(
-  "credit_usage",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userCreditId: int("userCreditId").notNull(), // Credit record that was used
-    userId: int("userId").notNull(), // User who used the credit
-    bookingId: int("bookingId").notNull(), // Booking where credit was applied
-    amountUsed: int("amountUsed").notNull(), // Amount of credit used in cents
-    usedAt: timestamp("usedAt").defaultNow().notNull(), // When credit was used
-  },
-  table => ({
-    userCreditIdIdx: index("credit_usage_user_credit_id_idx").on(
-      table.userCreditId
-    ),
-    userIdIdx: index("credit_usage_user_id_idx").on(table.userId),
-    bookingIdIdx: index("credit_usage_booking_id_idx").on(table.bookingId),
-    usedAtIdx: index("credit_usage_used_at_idx").on(table.usedAt),
-  })
-);
-
-export type CreditUsage = typeof creditUsage.$inferSelect;
-export type InsertCreditUsage = typeof creditUsage.$inferInsert;
-
-// ============================================================================
-// Price Lock System
-// ============================================================================
-
-/**
- * Price Locks table
- * Allows users to freeze a flight price for 48 hours before booking
- */
-export const priceLocks = mysqlTable(
-  "price_locks",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull(),
-    flightId: int("flightId").notNull(),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-
-    // Locked price (SAR cents)
-    lockedPrice: int("lockedPrice").notNull(),
-    originalPrice: int("originalPrice").notNull(),
-
-    // Lock fee (SAR cents) - small fee to lock the price
-    lockFee: int("lockFee").notNull().default(0),
-
-    // Lock status
-    status: mysqlEnum("status", ["active", "used", "expired", "cancelled"])
-      .default("active")
-      .notNull(),
-
-    // Resulting booking
-    bookingId: int("bookingId"),
-
-    // Expiry
-    expiresAt: timestamp("expiresAt").notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdx: index("price_locks_user_idx").on(table.userId),
-    flightIdx: index("price_locks_flight_idx").on(table.flightId),
-    statusIdx: index("price_locks_status_idx").on(table.status),
-    expiresAtIdx: index("price_locks_expires_at_idx").on(table.expiresAt),
-    userFlightIdx: index("price_locks_user_flight_idx").on(
-      table.userId,
-      table.flightId,
-      table.cabinClass
-    ),
-  })
-);
-
-export type PriceLock = typeof priceLocks.$inferSelect;
-export type InsertPriceLock = typeof priceLocks.$inferInsert;
-
-// ============================================================================
-// Family Mile Pooling System
-// ============================================================================
-
-/**
- * Family Groups table
- * Groups for sharing loyalty miles among family members
- */
-export const familyGroups = mysqlTable(
-  "family_groups",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    name: varchar("name", { length: 255 }).notNull(),
-    ownerId: int("ownerId").notNull(), // Head of family
-
-    // Pool balance (aggregated from members)
-    pooledMiles: int("pooledMiles").notNull().default(0),
-
-    // Limits
-    maxMembers: int("maxMembers").notNull().default(6),
-
-    // Status
-    status: mysqlEnum("status", ["active", "inactive"])
-      .default("active")
-      .notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    ownerIdx: index("family_groups_owner_idx").on(table.ownerId),
-    statusIdx: index("family_groups_status_idx").on(table.status),
-  })
-);
-
-export type FamilyGroup = typeof familyGroups.$inferSelect;
-export type InsertFamilyGroup = typeof familyGroups.$inferInsert;
-
-/**
- * Family Group Members table
- * Links users to family groups
- */
-export const familyGroupMembers = mysqlTable(
-  "family_group_members",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    groupId: int("groupId").notNull(),
-    userId: int("userId").notNull(),
-
-    // Role
-    role: mysqlEnum("role", ["owner", "member"]).default("member").notNull(),
-
-    // Contribution tracking
-    milesContributed: int("milesContributed").notNull().default(0),
-    milesRedeemed: int("milesRedeemed").notNull().default(0),
-
-    // Status
-    status: mysqlEnum("status", ["active", "invited", "removed"])
-      .default("active")
-      .notNull(),
-
-    joinedAt: timestamp("joinedAt").defaultNow().notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    groupIdx: index("family_group_members_group_idx").on(table.groupId),
-    userIdx: index("family_group_members_user_idx").on(table.userId),
-    statusIdx: index("family_group_members_status_idx").on(table.status),
-    groupUserIdx: index("family_group_members_group_user_idx").on(
-      table.groupId,
-      table.userId
-    ),
-  })
-);
-
-export type FamilyGroupMember = typeof familyGroupMembers.$inferSelect;
-export type InsertFamilyGroupMember = typeof familyGroupMembers.$inferInsert;
-
-// ============================================================================
-// Digital Wallet System
-// ============================================================================
-
-/**
- * Wallets table
- * Stores user wallet balances for quick payments and refunds
- */
-export const wallets = mysqlTable(
-  "wallets",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull().unique(),
-
-    // Balance (SAR cents)
-    balance: int("balance").notNull().default(0),
-    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-
-    // Status
-    status: mysqlEnum("status", ["active", "frozen", "closed"])
-      .default("active")
-      .notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    userIdx: index("wallets_user_idx").on(table.userId),
-    statusIdx: index("wallets_status_idx").on(table.status),
-  })
-);
-
-export type Wallet = typeof wallets.$inferSelect;
-export type InsertWallet = typeof wallets.$inferInsert;
-
-/**
- * Wallet Transactions table
- * Tracks all wallet transactions (top-up, payment, refund)
- */
-export const walletTransactions = mysqlTable(
-  "wallet_transactions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    walletId: int("walletId").notNull(),
-    userId: int("userId").notNull(),
-
-    // Transaction type
-    type: mysqlEnum("type", [
-      "top_up",
-      "payment",
-      "refund",
-      "bonus",
-      "withdrawal",
-    ]).notNull(),
-
-    // Amount (positive for top_up/refund/bonus, negative for payment/withdrawal)
-    amount: int("amount").notNull(),
-    balanceAfter: int("balanceAfter").notNull(),
-
-    // Description
-    description: varchar("description", { length: 500 }).notNull(),
-
-    // Related entities
-    bookingId: int("bookingId"),
-    stripePaymentIntentId: varchar("stripePaymentIntentId", { length: 255 }),
-
-    // Status
-    status: mysqlEnum("status", ["completed", "pending", "failed"])
-      .default("completed")
-      .notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    walletIdx: index("wallet_transactions_wallet_idx").on(table.walletId),
-    userIdx: index("wallet_transactions_user_idx").on(table.userId),
-    typeIdx: index("wallet_transactions_type_idx").on(table.type),
-    bookingIdx: index("wallet_transactions_booking_idx").on(table.bookingId),
-    createdAtIdx: index("wallet_transactions_created_at_idx").on(
-      table.createdAt
-    ),
-  })
-);
-
-export type WalletTransaction = typeof walletTransactions.$inferSelect;
-export type InsertWalletTransaction = typeof walletTransactions.$inferInsert;
-
-// ============================================================================
-// Flight Disruption Management
-// ============================================================================
-
-/**
- * Flight Disruptions table
- * Tracks flight disruptions (delays, cancellations) with rebooking options
- */
-export const flightDisruptions = mysqlTable(
-  "flight_disruptions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    flightId: int("flightId").notNull(),
-
-    // Disruption type
-    type: mysqlEnum("type", ["delay", "cancellation", "diversion"]).notNull(),
-
-    // Details
-    reason: varchar("reason", { length: 500 }).notNull(),
-    severity: mysqlEnum("severity", ["minor", "moderate", "severe"]).notNull(),
-
-    // Delay info
-    originalDepartureTime: timestamp("originalDepartureTime"),
-    newDepartureTime: timestamp("newDepartureTime"),
-    delayMinutes: int("delayMinutes"),
-
-    // Status
-    status: mysqlEnum("status", ["active", "resolved", "cancelled"])
-      .default("active")
-      .notNull(),
-
-    // Admin
-    createdBy: int("createdBy"),
-    resolvedAt: timestamp("resolvedAt"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("flight_disruptions_flight_idx").on(table.flightId),
-    typeIdx: index("flight_disruptions_type_idx").on(table.type),
-    statusIdx: index("flight_disruptions_status_idx").on(table.status),
-    createdAtIdx: index("flight_disruptions_created_at_idx").on(
-      table.createdAt
-    ),
-  })
-);
-
-export type FlightDisruption = typeof flightDisruptions.$inferSelect;
-export type InsertFlightDisruption = typeof flightDisruptions.$inferInsert;
-
-// ============================================================================
-// Departure Control System (DCS) - Phase 3
-// ============================================================================
-
-/**
- * Aircraft types configuration
- * Stores aircraft models with weight limits and zone configs
- */
-export const aircraftTypes = mysqlTable("aircraft_types", {
-  id: int("id").autoincrement().primaryKey(),
-  code: varchar("code", { length: 10 }).notNull().unique(), // e.g., "B777", "A320"
-  name: varchar("name", { length: 100 }).notNull(), // e.g., "Boeing 777-300ER"
-  manufacturer: varchar("manufacturer", { length: 50 }).notNull(),
-
-  // Weight limits (kg)
-  maxTakeoffWeight: int("maxTakeoffWeight").notNull(), // MTOW
-  maxLandingWeight: int("maxLandingWeight").notNull(),
-  maxZeroFuelWeight: int("maxZeroFuelWeight").notNull(),
-  operatingEmptyWeight: int("operatingEmptyWeight").notNull(), // OEW
-  maxPayload: int("maxPayload").notNull(),
-  maxFuelCapacity: int("maxFuelCapacity").notNull(), // kg
-
-  // Seating
-  totalSeats: int("totalSeats").notNull(),
-  economySeats: int("economySeats").notNull(),
-  businessSeats: int("businessSeats").notNull(),
-
-  // Cargo zones configuration (JSON)
-  cargoZones: text("cargoZones"), // JSON: [{zone: "FWD", maxWeight: 5000}, ...]
-
-  // CG limits (% MAC)
-  forwardCgLimit: decimal("forwardCgLimit", { precision: 5, scale: 2 }),
-  aftCgLimit: decimal("aftCgLimit", { precision: 5, scale: 2 }),
-
-  active: boolean("active").default(true).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
-
-export type AircraftType = typeof aircraftTypes.$inferSelect;
-export type InsertAircraftType = typeof aircraftTypes.$inferInsert;
-
-/**
- * Crew members
- * Airline crew profiles (pilots, cabin crew)
- */
-export const crewMembers = mysqlTable(
-  "crew_members",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    employeeId: varchar("employeeId", { length: 20 }).notNull().unique(),
-    firstName: varchar("firstName", { length: 100 }).notNull(),
-    lastName: varchar("lastName", { length: 100 }).notNull(),
-    role: mysqlEnum("role", [
-      "captain",
-      "first_officer",
-      "purser",
-      "cabin_crew",
-    ]).notNull(),
-    airlineId: int("airlineId").notNull(),
-
-    // Qualifications
-    licenseNumber: varchar("licenseNumber", { length: 50 }),
-    licenseExpiry: timestamp("licenseExpiry"),
-    medicalExpiry: timestamp("medicalExpiry"),
-
-    // Qualified aircraft types (JSON array of codes)
-    qualifiedAircraft: text("qualifiedAircraft"), // JSON: ["B777", "A320"]
-
-    status: mysqlEnum("status", ["active", "on_leave", "training", "inactive"])
-      .default("active")
-      .notNull(),
-
-    phone: varchar("phone", { length: 20 }),
-    email: varchar("email", { length: 320 }),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    airlineIdx: index("crew_airline_idx").on(table.airlineId),
-    roleIdx: index("crew_role_idx").on(table.role),
-    statusIdx: index("crew_status_idx").on(table.status),
-  })
-);
-
-export type CrewMember = typeof crewMembers.$inferSelect;
-export type InsertCrewMember = typeof crewMembers.$inferInsert;
-
-/**
- * Crew assignments to flights
- */
-export const crewAssignments = mysqlTable(
-  "crew_assignments",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    flightId: int("flightId").notNull(),
-    crewMemberId: int("crewMemberId").notNull(),
-    role: mysqlEnum("role", [
-      "captain",
-      "first_officer",
-      "purser",
-      "cabin_crew",
-    ]).notNull(),
-    status: mysqlEnum("status", ["assigned", "confirmed", "onboard", "removed"])
-      .default("assigned")
-      .notNull(),
-    notes: text("notes"),
-    assignedBy: int("assignedBy"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("crew_assign_flight_idx").on(table.flightId),
-    crewIdx: index("crew_assign_crew_idx").on(table.crewMemberId),
-    flightCrewIdx: index("crew_assign_flight_crew_idx").on(
-      table.flightId,
-      table.crewMemberId
-    ),
-  })
-);
-
-export type CrewAssignment = typeof crewAssignments.$inferSelect;
-export type InsertCrewAssignment = typeof crewAssignments.$inferInsert;
-
-/**
- * Load plans for flights
- * Weight & balance calculations and cargo distribution
- */
-export const loadPlans = mysqlTable(
-  "load_plans",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    flightId: int("flightId").notNull(),
-    aircraftTypeId: int("aircraftTypeId").notNull(),
-
-    // Passenger weights (kg)
-    passengerCount: int("passengerCount").notNull().default(0),
-    passengerWeight: int("passengerWeight").notNull().default(0),
-
-    // Baggage weights (kg)
-    baggageCount: int("baggageCount").notNull().default(0),
-    baggageWeight: int("baggageWeight").notNull().default(0),
-
-    // Cargo weights per zone (JSON)
-    cargoDistribution: text("cargoDistribution"), // JSON: [{zone: "FWD", weight: 2000}, ...]
-    totalCargoWeight: int("totalCargoWeight").notNull().default(0),
-
-    // Fuel (kg)
-    fuelWeight: int("fuelWeight").notNull().default(0),
-
-    // Calculated totals
-    zeroFuelWeight: int("zeroFuelWeight").notNull().default(0),
-    takeoffWeight: int("takeoffWeight").notNull().default(0),
-    landingWeight: int("landingWeight").notNull().default(0),
-
-    // Center of Gravity (% MAC)
-    cgPosition: decimal("cgPosition", { precision: 5, scale: 2 }),
-
-    // Status
-    status: mysqlEnum("status", [
-      "draft",
-      "calculated",
-      "approved",
-      "finalized",
-    ])
-      .default("draft")
-      .notNull(),
-
-    // Safety checks
-    withinLimits: boolean("withinLimits").default(false).notNull(),
-    warnings: text("warnings"), // JSON array of warning messages
-
-    approvedBy: int("approvedBy"),
-    approvedAt: timestamp("approvedAt"),
-    finalizedBy: int("finalizedBy"),
-    finalizedAt: timestamp("finalizedAt"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("load_plan_flight_idx").on(table.flightId),
-    statusIdx: index("load_plan_status_idx").on(table.status),
-  })
-);
-
-export type LoadPlan = typeof loadPlans.$inferSelect;
-export type InsertLoadPlan = typeof loadPlans.$inferInsert;
-
-// ============================================================================
-// AI Dynamic Pricing System
-// ============================================================================
-
-/**
- * AI Pricing Models
- * Metadata for trained ML models used in demand prediction & price optimization
- */
-export const aiPricingModels = mysqlTable(
-  "ai_pricing_models",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    name: varchar("name", { length: 255 }).notNull(),
-    version: varchar("version", { length: 50 }).notNull(),
-    modelType: mysqlEnum("modelType", [
-      "demand_forecast",
-      "price_optimization",
-      "customer_segmentation",
-      "elasticity",
-    ]).notNull(),
-
-    // Model hyperparameters and config (JSON)
-    config: text("config").notNull(),
-
-    // Performance metrics (JSON: { mae, rmse, mape, r2, accuracy })
-    metrics: text("metrics"),
-
-    // Training info
-    trainedAt: timestamp("trainedAt"),
-    trainingDataStart: timestamp("trainingDataStart"),
-    trainingDataEnd: timestamp("trainingDataEnd"),
-    sampleCount: int("sampleCount"),
-
-    // Scope
-    airlineId: int("airlineId"),
-    routeScope: text("routeScope"), // JSON: [{originId, destinationId}] or null=all
-
-    status: mysqlEnum("status", [
-      "training",
-      "validating",
-      "active",
-      "inactive",
-      "failed",
-    ])
-      .default("training")
-      .notNull(),
-
-    createdBy: int("createdBy"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    modelTypeIdx: index("ai_pricing_models_type_idx").on(table.modelType),
-    statusIdx: index("ai_pricing_models_status_idx").on(table.status),
-    versionIdx: index("ai_pricing_models_version_idx").on(
-      table.modelType,
-      table.version
-    ),
-  })
-);
-
-export type AiPricingModel = typeof aiPricingModels.$inferSelect;
-export type InsertAiPricingModel = typeof aiPricingModels.$inferInsert;
-
-/**
- * Demand Predictions
- * Stores ML-generated demand forecasts per flight/route/date
- */
-export const demandPredictions = mysqlTable(
-  "demand_predictions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    modelId: int("modelId").notNull(),
-    flightId: int("flightId"),
-    originId: int("originId"),
-    destinationId: int("destinationId"),
-
-    // Prediction target
-    predictionDate: timestamp("predictionDate").notNull(),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-
-    // Forecast values
-    predictedDemand: decimal("predictedDemand", {
-      precision: 10,
-      scale: 2,
-    }).notNull(),
-    confidenceLower: decimal("confidenceLower", { precision: 10, scale: 2 }),
-    confidenceUpper: decimal("confidenceUpper", { precision: 10, scale: 2 }),
-    confidenceLevel: decimal("confidenceLevel", {
-      precision: 5,
-      scale: 4,
-    }).default("0.95"),
-
-    // Recommended price from model
-    recommendedPrice: int("recommendedPrice"), // SAR cents
-    recommendedMultiplier: decimal("recommendedMultiplier", {
-      precision: 5,
-      scale: 4,
-    }),
-
-    // Actual values (filled post-departure for model evaluation)
-    actualDemand: decimal("actualDemand", { precision: 10, scale: 2 }),
-    actualPrice: int("actualPrice"),
-
-    // Feature importances (JSON: { feature: weight })
-    featureImportances: text("featureImportances"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    modelIdx: index("demand_predictions_model_idx").on(table.modelId),
-    flightIdx: index("demand_predictions_flight_idx").on(table.flightId),
-    routeIdx: index("demand_predictions_route_idx").on(
-      table.originId,
-      table.destinationId
-    ),
-    dateIdx: index("demand_predictions_date_idx").on(table.predictionDate),
-    cabinIdx: index("demand_predictions_cabin_idx").on(table.cabinClass),
-  })
-);
-
-export type DemandPrediction = typeof demandPredictions.$inferSelect;
-export type InsertDemandPrediction = typeof demandPredictions.$inferInsert;
-
-/**
- * Customer Segments
- * Defines customer groups for personalized pricing
- */
-export const customerSegments = mysqlTable(
-  "customer_segments",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    name: varchar("name", { length: 255 }).notNull(),
-    nameAr: varchar("nameAr", { length: 255 }),
-    description: text("description"),
-
-    segmentType: mysqlEnum("segmentType", [
-      "value",
-      "frequency",
-      "behavior",
-      "loyalty_tier",
-      "corporate",
-      "price_sensitive",
-      "premium",
-    ]).notNull(),
-
-    // Segment criteria (JSON: rules for membership)
-    criteria: text("criteria").notNull(),
-
-    // Pricing adjustments for this segment
-    priceMultiplier: decimal("priceMultiplier", {
-      precision: 5,
-      scale: 4,
-    }).default("1.0000"),
-    maxDiscount: decimal("maxDiscount", { precision: 5, scale: 4 }).default(
-      "0.3000"
-    ),
-    priorityAccess: boolean("priorityAccess").default(false).notNull(),
-
-    // Segment size tracking
-    memberCount: int("memberCount").default(0).notNull(),
-
-    isActive: boolean("isActive").default(true).notNull(),
-
-    createdBy: int("createdBy"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    typeIdx: index("customer_segments_type_idx").on(table.segmentType),
-    activeIdx: index("customer_segments_active_idx").on(table.isActive),
-  })
-);
-
-export type CustomerSegment = typeof customerSegments.$inferSelect;
-export type InsertCustomerSegment = typeof customerSegments.$inferInsert;
-
-/**
- * Customer Segment Assignments
- * Maps users to segments with scoring
- */
-export const customerSegmentAssignments = mysqlTable(
-  "customer_segment_assignments",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    userId: int("userId").notNull(),
-    segmentId: int("segmentId").notNull(),
-
-    // Membership score (0-1, higher = stronger fit)
-    score: decimal("score", { precision: 5, scale: 4 }).default("1.0000"),
-
-    // Behavioral metrics at assignment time (JSON)
-    behaviorSnapshot: text("behaviorSnapshot"),
-
-    assignedAt: timestamp("assignedAt").defaultNow().notNull(),
-    expiresAt: timestamp("expiresAt"),
-
-    isActive: boolean("isActive").default(true).notNull(),
-  },
-  table => ({
-    userIdx: index("segment_assignments_user_idx").on(table.userId),
-    segmentIdx: index("segment_assignments_segment_idx").on(table.segmentId),
-    userSegmentIdx: uniqueIndex("segment_assignments_user_segment_idx").on(
-      table.userId,
-      table.segmentId
-    ),
-    activeIdx: index("segment_assignments_active_idx").on(table.isActive),
-  })
-);
-
-export type CustomerSegmentAssignment =
-  typeof customerSegmentAssignments.$inferSelect;
-export type InsertCustomerSegmentAssignment =
-  typeof customerSegmentAssignments.$inferInsert;
-
-/**
- * Pricing A/B Tests
- * Framework for testing pricing strategies
- */
-export const pricingAbTests = mysqlTable(
-  "pricing_ab_tests",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    name: varchar("name", { length: 255 }).notNull(),
-    description: text("description"),
-    hypothesis: text("hypothesis"),
-
-    // Test scope
-    airlineId: int("airlineId"),
-    originId: int("originId"),
-    destinationId: int("destinationId"),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]),
-
-    // Traffic allocation
-    trafficPercentage: int("trafficPercentage").default(100).notNull(), // % of eligible traffic
-
-    // Statistical settings
-    confidenceLevel: decimal("confidenceLevel", {
-      precision: 5,
-      scale: 4,
-    }).default("0.95"),
-    minimumSampleSize: int("minimumSampleSize").default(100).notNull(),
-
-    // Timing
-    startDate: timestamp("startDate").notNull(),
-    endDate: timestamp("endDate"),
-
-    // Results
-    winnerVariantId: int("winnerVariantId"),
-    conclusionNotes: text("conclusionNotes"),
-
-    status: mysqlEnum("status", [
-      "draft",
-      "running",
-      "paused",
-      "completed",
-      "cancelled",
-    ])
-      .default("draft")
-      .notNull(),
-
-    createdBy: int("createdBy"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    statusIdx: index("pricing_ab_tests_status_idx").on(table.status),
-    dateIdx: index("pricing_ab_tests_date_idx").on(
-      table.startDate,
-      table.endDate
-    ),
-  })
-);
-
-export type PricingAbTest = typeof pricingAbTests.$inferSelect;
-export type InsertPricingAbTest = typeof pricingAbTests.$inferInsert;
-
-/**
- * Pricing A/B Test Variants
- * Each test has 2+ variants with different pricing strategies
- */
-export const pricingAbTestVariants = mysqlTable(
-  "pricing_ab_test_variants",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    testId: int("testId").notNull(),
-
-    name: varchar("name", { length: 255 }).notNull(), // e.g., "Control", "Variant A"
-    isControl: boolean("isControl").default(false).notNull(),
-
-    // Pricing strategy for this variant (JSON)
-    pricingStrategy: text("pricingStrategy").notNull(),
-
-    // Traffic weight (relative to other variants)
-    weight: int("weight").default(50).notNull(),
-
-    // Aggregated metrics
-    impressions: int("impressions").default(0).notNull(),
-    conversions: int("conversions").default(0).notNull(),
-    totalRevenue: int("totalRevenue").default(0).notNull(), // SAR cents
-    averageOrderValue: int("averageOrderValue").default(0).notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    testIdx: index("ab_test_variants_test_idx").on(table.testId),
-    controlIdx: index("ab_test_variants_control_idx").on(table.isControl),
-  })
-);
-
-export type PricingAbTestVariant = typeof pricingAbTestVariants.$inferSelect;
-export type InsertPricingAbTestVariant =
-  typeof pricingAbTestVariants.$inferInsert;
-
-/**
- * Pricing A/B Test Exposures
- * Records which users saw which variant
- */
-export const pricingAbTestExposures = mysqlTable(
-  "pricing_ab_test_exposures",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    testId: int("testId").notNull(),
-    variantId: int("variantId").notNull(),
-    userId: int("userId"),
-    sessionId: varchar("sessionId", { length: 128 }),
-
-    // Context
-    flightId: int("flightId"),
-    originalPrice: int("originalPrice"), // SAR cents
-    variantPrice: int("variantPrice"), // SAR cents
-
-    // Outcome
-    converted: boolean("converted").default(false).notNull(),
-    bookingId: int("bookingId"),
-    revenue: int("revenue"), // SAR cents
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    testIdx: index("ab_test_exposures_test_idx").on(table.testId),
-    variantIdx: index("ab_test_exposures_variant_idx").on(table.variantId),
-    userIdx: index("ab_test_exposures_user_idx").on(table.userId),
-    sessionIdx: index("ab_test_exposures_session_idx").on(table.sessionId),
-    convertedIdx: index("ab_test_exposures_converted_idx").on(table.converted),
-  })
-);
-
-export type PricingAbTestExposure = typeof pricingAbTestExposures.$inferSelect;
-export type InsertPricingAbTestExposure =
-  typeof pricingAbTestExposures.$inferInsert;
-
-/**
- * Revenue Optimization Logs
- * Audit trail for AI-driven price adjustments
- */
-export const revenueOptimizationLogs = mysqlTable(
-  "revenue_optimization_logs",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    flightId: int("flightId").notNull(),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-
-    // Price change
-    previousPrice: int("previousPrice").notNull(), // SAR cents
-    optimizedPrice: int("optimizedPrice").notNull(),
-    priceChange: decimal("priceChange", { precision: 10, scale: 2 }).notNull(),
-
-    // Decision factors (JSON)
-    factors: text("factors").notNull(),
-
-    // AI model reference
-    modelId: int("modelId"),
-    predictionId: int("predictionId"),
-
-    // Optimization goal
-    optimizationGoal: mysqlEnum("optimizationGoal", [
-      "maximize_revenue",
-      "maximize_load_factor",
-      "maximize_yield",
-      "balance",
-    ])
-      .default("balance")
-      .notNull(),
-
-    // Expected vs actual impact
-    expectedRevenueImpact: decimal("expectedRevenueImpact", {
-      precision: 12,
-      scale: 2,
-    }),
-    actualRevenueImpact: decimal("actualRevenueImpact", {
-      precision: 12,
-      scale: 2,
-    }),
-
-    // Approval
-    autoApplied: boolean("autoApplied").default(false).notNull(),
-    approvedBy: int("approvedBy"),
-    approvedAt: timestamp("approvedAt"),
-
-    status: mysqlEnum("status", [
-      "suggested",
-      "approved",
-      "applied",
-      "rejected",
-      "reverted",
-    ])
-      .default("suggested")
-      .notNull(),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("revenue_opt_logs_flight_idx").on(table.flightId),
-    statusIdx: index("revenue_opt_logs_status_idx").on(table.status),
-    goalIdx: index("revenue_opt_logs_goal_idx").on(table.optimizationGoal),
-    modelIdx: index("revenue_opt_logs_model_idx").on(table.modelId),
-    createdAtIdx: index("revenue_opt_logs_created_idx").on(table.createdAt),
-  })
-);
-
-export type RevenueOptimizationLog =
-  typeof revenueOptimizationLogs.$inferSelect;
-export type InsertRevenueOptimizationLog =
-  typeof revenueOptimizationLogs.$inferInsert;
-
-/**
- * Price Elasticity Data
- * Tracks price sensitivity per route/segment for elasticity modeling
- */
-export const priceElasticityData = mysqlTable(
-  "price_elasticity_data",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    originId: int("originId").notNull(),
-    destinationId: int("destinationId").notNull(),
-    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
-    segmentId: int("segmentId"),
-
-    // Elasticity coefficient (negative = elastic, e.g., -1.5 means 1% price increase => 1.5% demand drop)
-    elasticity: decimal("elasticity", { precision: 8, scale: 4 }).notNull(),
-    sampleSize: int("sampleSize").notNull(),
-    rSquared: decimal("rSquared", { precision: 5, scale: 4 }),
-
-    // Price range analyzed
-    minPrice: int("minPrice").notNull(),
-    maxPrice: int("maxPrice").notNull(),
-    optimalPrice: int("optimalPrice"),
-
-    // Time window
-    periodStart: timestamp("periodStart").notNull(),
-    periodEnd: timestamp("periodEnd").notNull(),
-
-    modelId: int("modelId"),
-
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    routeIdx: index("price_elasticity_route_idx").on(
-      table.originId,
-      table.destinationId
-    ),
-    cabinIdx: index("price_elasticity_cabin_idx").on(table.cabinClass),
-    segmentIdx: index("price_elasticity_segment_idx").on(table.segmentId),
-  })
-);
-
-export type PriceElasticityRecord = typeof priceElasticityData.$inferSelect;
-export type InsertPriceElasticityRecord =
-  typeof priceElasticityData.$inferInsert;
-
-// ============================================================================
-// Flight Tracking Tables
-// ============================================================================
-
-/**
- * Flight Tracking
- * Real-time flight position and telemetry data
- */
-export const flightTracking = mysqlTable(
-  "flight_tracking",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    flightId: int("flightId").notNull(),
-
-    // Position
-    latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
-    longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
-    altitude: int("altitude").notNull(), // feet
-    heading: int("heading").notNull(), // degrees 0-360
-    groundSpeed: int("groundSpeed").notNull(), // knots
-
-    // Flight phase
-    phase: mysqlEnum("phase", [
-      "boarding",
-      "taxiing",
-      "takeoff",
-      "climbing",
-      "cruising",
-      "descending",
-      "approach",
-      "landing",
-      "arrived",
-    ]).notNull(),
-
-    // Estimated times
-    estimatedArrival: timestamp("estimatedArrival"),
-
-    // Weather at position
-    temperature: int("temperature"), // celsius
-    windSpeed: int("windSpeed"), // knots
-    windDirection: int("windDirection"), // degrees
-    turbulence: mysqlEnum("turbulence", [
-      "none",
-      "light",
-      "moderate",
-      "severe",
-    ]).default("none"),
-
-    // Progress
-    distanceCovered: int("distanceCovered"), // km
-    distanceRemaining: int("distanceRemaining"), // km
-    progressPercent: decimal("progressPercent", {
-      precision: 5,
-      scale: 2,
-    }),
-
-    recordedAt: timestamp("recordedAt").defaultNow().notNull(),
-  },
-  table => ({
-    flightIdx: index("flight_tracking_flight_idx").on(table.flightId),
-    recordedIdx: index("flight_tracking_recorded_idx").on(table.recordedAt),
-    flightRecordedIdx: index("flight_tracking_flight_recorded_idx").on(
-      table.flightId,
-      table.recordedAt
-    ),
-  })
-);
-
-export type FlightTrackingRecord = typeof flightTracking.$inferSelect;
-export type InsertFlightTrackingRecord = typeof flightTracking.$inferInsert;
-
-// ============================================================================
-// Security & Account Lockout System
-// ============================================================================
-
-/**
- * Login Attempts table
- * Tracks failed login attempts for account security
- */
-export const loginAttempts = mysqlTable(
-  "login_attempts",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // User identification
-    email: varchar("email", { length: 320 }),
-    openId: varchar("openId", { length: 64 }),
-
-    // Attempt details
-    ipAddress: varchar("ipAddress", { length: 45 }).notNull(), // IPv6 max length
-    userAgent: text("userAgent"),
-
-    // Result
-    success: boolean("success").notNull(),
-    failureReason: varchar("failureReason", { length: 255 }),
-
-    // Timestamp
-    attemptedAt: timestamp("attemptedAt").defaultNow().notNull(),
-  },
-  table => ({
-    loginEmailIdx: index("login_email_idx").on(table.email),
-    loginOpenIdIdx: index("login_open_id_idx").on(table.openId),
-    loginIpAddressIdx: index("login_ip_address_idx").on(table.ipAddress),
-    loginAttemptedAtIdx: index("login_attempted_at_idx").on(table.attemptedAt),
-  })
-);
-
-export type LoginAttempt = typeof loginAttempts.$inferSelect;
-export type InsertLoginAttempt = typeof loginAttempts.$inferInsert;
-
-/**
- * Account Locks table
- * Tracks locked accounts due to suspicious activity
- */
-export const accountLocks = mysqlTable(
-  "account_locks",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // User identification
-    userId: int("userId").notNull().unique(),
-
-    // Lock details
-    reason: varchar("reason", { length: 255 }).notNull(),
-    lockedBy: varchar("lockedBy", { length: 50 }).notNull(), // "system" or admin user ID
-
-    // Lock status
-    isActive: boolean("isActive").default(true).notNull(),
-
-    // Unlock details
-    unlockedAt: timestamp("unlockedAt"),
-    unlockedBy: varchar("unlockedBy", { length: 50 }),
-
-    // Auto-unlock
-    autoUnlockAt: timestamp("autoUnlockAt"), // Automatic unlock time
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    accountLockUserIdIdx: index("account_lock_user_id_idx").on(table.userId),
-    accountLockIsActiveIdx: index("account_lock_is_active_idx").on(
-      table.isActive
-    ),
-  })
-);
-
-export type AccountLock = typeof accountLocks.$inferSelect;
-export type InsertAccountLock = typeof accountLocks.$inferInsert;
-
-/**
- * Security Events table
- * Logs security-related events for audit trail
- */
-export const securityEvents = mysqlTable(
-  "security_events",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Event details
-    eventType: varchar("eventType", { length: 100 }).notNull(), // e.g., "account_locked", "suspicious_login"
-    severity: varchar("severity", { length: 20 }).notNull(), // "low", "medium", "high", "critical"
-
-    // User/IP details
-    userId: int("userId"),
-    ipAddress: varchar("ipAddress", { length: 45 }),
-    userAgent: text("userAgent"),
-
-    // Event data
-    description: text("description"),
-    metadata: text("metadata"), // JSON string for additional data
-
-    // Action taken
-    actionTaken: varchar("actionTaken", { length: 255 }),
-
-    // Timestamp
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    securityEventTypeIdx: index("security_event_type_idx").on(table.eventType),
-    securitySeverityIdx: index("security_severity_idx").on(table.severity),
-    securityUserIdIdx: index("security_user_id_idx").on(table.userId),
-    securityIpAddressIdx: index("security_ip_address_idx").on(table.ipAddress),
-    securityCreatedAtIdx: index("security_created_at_idx").on(table.createdAt),
-  })
-);
-
-export type SecurityEvent = typeof securityEvents.$inferSelect;
-export type InsertSecurityEvent = typeof securityEvents.$inferInsert;
-
-/**
- * IP Blacklist table
- * Tracks blocked IP addresses
- */
-export const ipBlacklist = mysqlTable(
-  "ip_blacklist",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // IP details
-    ipAddress: varchar("ipAddress", { length: 45 }).notNull().unique(),
-
-    // Block details
-    reason: text("reason").notNull(),
-    blockedBy: varchar("blockedBy", { length: 50 }).notNull(), // "system" or admin user ID
-
-    // Block status
-    isActive: boolean("isActive").default(true).notNull(),
-
-    // Unblock details
-    unblockedAt: timestamp("unblockedAt"),
-    unblockedBy: varchar("unblockedBy", { length: 50 }),
-
-    // Auto-unblock
-    autoUnblockAt: timestamp("autoUnblockAt"),
-
-    // Timestamps
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    ipBlacklistIpAddressIdx: index("ip_blacklist_ip_address_idx").on(
-      table.ipAddress
-    ),
-    ipBlacklistIsActiveIdx: index("ip_blacklist_is_active_idx").on(
-      table.isActive
-    ),
-  })
-);
-
-export type IpBlacklist = typeof ipBlacklist.$inferSelect;
-export type InsertIpBlacklist = typeof ipBlacklist.$inferInsert;
-
-// ============================================================================
-// Phase 5: Industry Standards Gap Closure
-// ============================================================================
-
-/**
- * Fare Classes (RBD - Reservation Booking Designators)
- * Supports IATA standard booking classes for revenue management
- */
-export const fareClasses = mysqlTable(
-  "fare_classes",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    airlineId: int("airlineId").notNull(),
-    code: varchar("code", { length: 2 }).notNull(), // e.g., Y, J, C, F, M, L, H, U, K, B, etc.
-    name: varchar("name", { length: 100 }).notNull(), // e.g., "Economy Full Fare"
-    cabinClass: mysqlEnum("cabinClass", [
-      "first",
-      "business",
-      "premium_economy",
-      "economy",
-    ]).notNull(),
-    fareFamily: varchar("fareFamily", { length: 50 }), // e.g., "Flex", "Light", "Value"
-    priority: int("priority").notNull().default(0), // Higher = sells first (for nested availability)
-    basePriceMultiplier: decimal("basePriceMultiplier", {
-      precision: 5,
-      scale: 3,
-    })
-      .notNull()
-      .default("1.000"), // Multiplier vs base fare
-    seatsAllocated: int("seatsAllocated").default(0), // Number of seats allocated to this class
-    // Fare attributes
-    refundable: boolean("refundable").default(false).notNull(),
-    changeable: boolean("changeable").default(true).notNull(),
-    changeFee: int("changeFee").default(0), // Fee in SAR cents
-    upgradeable: boolean("upgradeable").default(true).notNull(),
-    baggageAllowance: int("baggageAllowance").default(23), // kg
-    baggagePieces: int("baggagePieces").default(1),
-    carryOnAllowance: int("carryOnAllowance").default(7), // kg
-    mileageEarningRate: decimal("mileageEarningRate", {
-      precision: 4,
-      scale: 2,
-    }).default("1.00"), // 1.00 = 100% earning
-    seatSelection: mysqlEnum("seatSelection", ["free", "paid", "none"]).default(
-      "paid"
-    ),
-    loungeAccess: boolean("loungeAccess").default(false).notNull(),
-    priorityBoarding: boolean("priorityBoarding").default(false).notNull(),
-    mealIncluded: boolean("mealIncluded").default(false).notNull(),
-    active: boolean("active").default(true).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    fareClassAirlineIdx: index("fare_class_airline_idx").on(table.airlineId),
-    fareClassCodeIdx: index("fare_class_code_idx").on(
-      table.airlineId,
-      table.code
-    ),
-    fareClassCabinIdx: index("fare_class_cabin_idx").on(table.cabinClass),
-    fareClassFamilyIdx: index("fare_class_family_idx").on(table.fareFamily),
-    fareClassActiveIdx: index("fare_class_active_idx").on(table.active),
-  })
-);
-
-export type FareClass = typeof fareClasses.$inferSelect;
-export type InsertFareClass = typeof fareClasses.$inferInsert;
-
-/**
- * Fare Rules - Complex fare restrictions and conditions
- * Supports ATPCO-style fare rules for revenue management
- */
-export const fareRules = mysqlTable(
-  "fare_rules",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    fareClassId: int("fareClassId").notNull(),
-    airlineId: int("airlineId").notNull(),
-    ruleName: varchar("ruleName", { length: 100 }).notNull(),
-    ruleCategory: mysqlEnum("ruleCategory", [
-      "eligibility", // Cat 1: Who can buy
-      "day_time", // Cat 2: Day/time restrictions
-      "seasonality", // Cat 3: Seasonal applicability
-      "flight_application", // Cat 4: Which flights
-      "advance_purchase", // Cat 5: How far in advance
-      "minimum_stay", // Cat 6: Min stay requirement
-      "maximum_stay", // Cat 7: Max stay requirement
-      "stopovers", // Cat 8: Stopover rules
-      "transfers", // Cat 9: Transfer rules
-      "combinations", // Cat 10: Combinability
-      "blackout_dates", // Cat 11: Blackout periods
-      "surcharges", // Cat 12: YQ/YR surcharges
-      "penalties", // Cat 16: Change/cancel fees
-      "children_discount", // Cat 19: Child/infant fares
-      "group_discount", // Cat 35: Group fare rules
-    ]).notNull(),
-    // Rule conditions (JSON)
-    conditions: text("conditions").notNull(), // JSON: specific rule parameters
-    // Validity
-    validFrom: timestamp("validFrom").notNull(),
-    validUntil: timestamp("validUntil"),
-    // Route restrictions
-    originAirportId: int("originAirportId"), // null = all origins
-    destinationAirportId: int("destinationAirportId"), // null = all destinations
-    // Pricing impact
-    priceAdjustment: int("priceAdjustment").default(0), // +/- SAR cents
-    priceMultiplier: decimal("priceMultiplier", {
-      precision: 5,
-      scale: 3,
-    }).default("1.000"),
-    active: boolean("active").default(true).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    fareRuleFareClassIdx: index("fare_rule_fare_class_idx").on(
-      table.fareClassId
-    ),
-    fareRuleAirlineIdx: index("fare_rule_airline_idx").on(table.airlineId),
-    fareRuleCategoryIdx: index("fare_rule_category_idx").on(table.ruleCategory),
-    fareRuleRouteIdx: index("fare_rule_route_idx").on(
-      table.originAirportId,
-      table.destinationAirportId
-    ),
-    fareRuleValidityIdx: index("fare_rule_validity_idx").on(
-      table.validFrom,
-      table.validUntil
-    ),
-    fareRuleActiveIdx: index("fare_rule_active_idx").on(table.active),
-  })
-);
-
-export type FareRule = typeof fareRules.$inferSelect;
-export type InsertFareRule = typeof fareRules.$inferInsert;
-
-/**
- * Codeshare Agreements
- * Manages codeshare partnerships between airlines
- */
-export const codeshareAgreements = mysqlTable(
-  "codeshare_agreements",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    marketingAirlineId: int("marketingAirlineId").notNull(), // Airline selling the ticket
-    operatingAirlineId: int("operatingAirlineId").notNull(), // Airline operating the flight
-    agreementType: mysqlEnum("agreementType", [
-      "free_sale", // Marketing carrier sells freely
-      "block_space", // Fixed seat allocation
-      "hard_block", // Guaranteed seats
-      "soft_block", // Seats can be recalled
-    ]).notNull(),
-    // Agreement details
-    agreementReference: varchar("agreementReference", { length: 50 })
-      .notNull()
-      .unique(),
-    // Route scope
-    routeScope: mysqlEnum("routeScope", ["all_routes", "specific_routes"])
-      .default("specific_routes")
-      .notNull(),
-    routes: text("routes"), // JSON array of {originId, destinationId} pairs
-    // Revenue share
-    revenueShareModel: mysqlEnum("revenueShareModel", [
-      "prorate", // Revenue prorated by distance
-      "fixed_amount", // Fixed per-segment fee
-      "percentage", // Percentage of fare
-      "free_flow", // Each carrier keeps own revenue
-    ])
-      .default("prorate")
-      .notNull(),
-    revenueShareValue: decimal("revenueShareValue", {
-      precision: 10,
-      scale: 2,
-    }), // Amount or percentage
-    // Inventory
-    blockSize: int("blockSize"), // Number of seats in block_space
-    // Validity
-    validFrom: timestamp("validFrom").notNull(),
-    validUntil: timestamp("validUntil"),
-    status: mysqlEnum("status", [
-      "draft",
-      "pending_approval",
-      "active",
-      "suspended",
-      "terminated",
-    ])
-      .default("draft")
-      .notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    csMarketingIdx: index("cs_marketing_airline_idx").on(
-      table.marketingAirlineId
-    ),
-    csOperatingIdx: index("cs_operating_airline_idx").on(
-      table.operatingAirlineId
-    ),
-    csStatusIdx: index("cs_status_idx").on(table.status),
-    csAgreementRefIdx: index("cs_agreement_ref_idx").on(
-      table.agreementReference
-    ),
-    csValidityIdx: index("cs_validity_idx").on(
-      table.validFrom,
-      table.validUntil
-    ),
-  })
-);
-
-export type CodeshareAgreement = typeof codeshareAgreements.$inferSelect;
-export type InsertCodeshareAgreement = typeof codeshareAgreements.$inferInsert;
-
-/**
- * Interline Agreements
- * Manages interline ticketing and baggage agreements
- */
-export const interlineAgreements = mysqlTable(
-  "interline_agreements",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    airline1Id: int("airline1Id").notNull(),
-    airline2Id: int("airline2Id").notNull(),
-    agreementType: mysqlEnum("agreementType", [
-      "ticketing", // Interline ticketing (IATA Resolution 780/788)
-      "baggage", // Through-check baggage
-      "full", // Both ticketing and baggage
-    ]).notNull(),
-    agreementReference: varchar("agreementReference", { length: 50 })
-      .notNull()
-      .unique(),
-    // Prorate agreement
-    prorateType: mysqlEnum("prorateType", [
-      "mileage", // Prorate by distance
-      "spi", // Special Prorate Agreement
-      "percentage", // Fixed percentage split
-    ]).default("mileage"),
-    prorateValue: decimal("prorateValue", { precision: 10, scale: 2 }),
-    // Baggage rules
-    baggageThroughCheck: boolean("baggageThroughCheck")
-      .default(false)
-      .notNull(),
-    baggageRuleApplied: mysqlEnum("baggageRuleApplied", [
-      "most_significant_carrier", // MSC baggage rules apply
-      "first_carrier", // First carrier's rules
-      "each_carrier", // Each carrier's own rules
-    ]).default("most_significant_carrier"),
-    // Settlement
-    settlementMethod: mysqlEnum("settlementMethod", [
-      "bsp", // IATA BSP
-      "bilateral", // Direct bilateral settlement
-      "ich", // IATA Clearing House
-    ]).default("bsp"),
-    // Validity
-    validFrom: timestamp("validFrom").notNull(),
-    validUntil: timestamp("validUntil"),
-    status: mysqlEnum("status", [
-      "draft",
-      "pending_approval",
-      "active",
-      "suspended",
-      "terminated",
-    ])
-      .default("draft")
-      .notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    ilAirline1Idx: index("il_airline1_idx").on(table.airline1Id),
-    ilAirline2Idx: index("il_airline2_idx").on(table.airline2Id),
-    ilStatusIdx: index("il_status_idx").on(table.status),
-    ilAgreementRefIdx: index("il_agreement_ref_idx").on(
-      table.agreementReference
-    ),
-    ilTypeIdx: index("il_type_idx").on(table.agreementType),
-  })
-);
-
-export type InterlineAgreement = typeof interlineAgreements.$inferSelect;
-export type InsertInterlineAgreement = typeof interlineAgreements.$inferInsert;
-
-/**
- * Electronic Miscellaneous Documents (EMD)
- * IATA standard for ancillary service documentation
- */
-export const electronicMiscDocs = mysqlTable(
-  "electronic_misc_docs",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    emdNumber: varchar("emdNumber", { length: 14 }).notNull().unique(), // 13-digit + check digit
-    emdType: mysqlEnum("emdType", [
-      "EMD-S", // Standalone - not associated with a flight ticket
-      "EMD-A", // Associated - linked to a flight ticket
-    ]).notNull(),
-    // Association
-    bookingId: int("bookingId"),
-    passengerId: int("passengerId"),
-    ticketNumber: varchar("ticketNumber", { length: 14 }), // Associated ticket for EMD-A
-    // Issuing details
-    issuingAirlineId: int("issuingAirlineId").notNull(),
-    issuingAgentId: int("issuingAgentId"),
-    iataNumber: varchar("iataNumber", { length: 8 }), // IATA agent number
-    // Service details
-    reasonForIssuance: mysqlEnum("reasonForIssuance", [
-      "baggage", // Excess/prepaid baggage
-      "seat_selection", // Preferred seat purchase
-      "meal", // Special meal purchase
-      "lounge_access", // Lounge pass
-      "priority_boarding", // Priority boarding
-      "insurance", // Travel insurance
-      "pet_transport", // Pet in cabin/hold
-      "unaccompanied_minor", // UMNR service
-      "sport_equipment", // Sports gear transport
-      "upgrade", // Cabin upgrade
-      "penalty", // Change/cancel penalty
-      "residual_value", // Residual from exchange
-      "ground_transport", // Ground transfer
-      "wifi", // In-flight WiFi
-      "entertainment", // In-flight entertainment
-      "other", // Miscellaneous
-    ]).notNull(),
-    serviceDescription: varchar("serviceDescription", {
-      length: 255,
-    }).notNull(),
-    rficCode: varchar("rficCode", { length: 2 }), // Reason For Issuance Code (IATA)
-    rfiscCode: varchar("rfiscCode", { length: 4 }), // Reason For Issuance Sub-Code
-    // Financial
-    amount: int("amount").notNull(), // SAR cents
-    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-    taxAmount: int("taxAmount").default(0).notNull(),
-    // Status
-    status: mysqlEnum("status", [
-      "issued",
-      "used", // Service consumed
-      "void", // Cancelled
-      "exchanged", // Exchanged for another EMD
-      "refunded",
-      "suspended",
-    ])
-      .default("issued")
-      .notNull(),
-    // Flight information (for EMD-A)
-    flightId: int("flightId"),
-    flightSegment: varchar("flightSegment", { length: 20 }), // e.g., "JED-RUH"
-    // Dates
-    dateOfIssuance: timestamp("dateOfIssuance").defaultNow().notNull(),
-    dateOfService: timestamp("dateOfService"),
-    expiryDate: timestamp("expiryDate"),
-    // Audit
-    voidedAt: timestamp("voidedAt"),
-    voidReason: text("voidReason"),
-    exchangedFromEmd: varchar("exchangedFromEmd", { length: 14 }), // Previous EMD number
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    emdNumberIdx: index("emd_number_idx").on(table.emdNumber),
-    emdBookingIdx: index("emd_booking_idx").on(table.bookingId),
-    emdPassengerIdx: index("emd_passenger_idx").on(table.passengerId),
-    emdTicketIdx: index("emd_ticket_idx").on(table.ticketNumber),
-    emdAirlineIdx: index("emd_airline_idx").on(table.issuingAirlineId),
-    emdStatusIdx: index("emd_status_idx").on(table.status),
-    emdTypeIdx: index("emd_type_idx").on(table.emdType),
-    emdReasonIdx: index("emd_reason_idx").on(table.reasonForIssuance),
-  })
-);
-
-export type ElectronicMiscDoc = typeof electronicMiscDocs.$inferSelect;
-export type InsertElectronicMiscDoc = typeof electronicMiscDocs.$inferInsert;
-
-/**
- * NDC Offers
- * IATA NDC (New Distribution Capability) offer management
- */
-export const ndcOffers = mysqlTable(
-  "ndc_offers",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    offerId: varchar("offerId", { length: 64 }).notNull().unique(), // NDC OfferID
-    responseId: varchar("responseId", { length: 64 }).notNull(), // NDC ResponseID
-    // Shopping context
-    originId: int("originId").notNull(),
-    destinationId: int("destinationId").notNull(),
-    departureDate: timestamp("departureDate").notNull(),
-    returnDate: timestamp("returnDate"),
-    // Offer details
-    airlineId: int("airlineId").notNull(),
-    fareClassId: int("fareClassId"),
-    cabinClass: mysqlEnum("cabinClass", [
-      "first",
-      "business",
-      "premium_economy",
-      "economy",
-    ]).notNull(),
-    // Pricing
-    totalPrice: int("totalPrice").notNull(), // SAR cents
-    basePrice: int("basePrice").notNull(),
-    taxesAndFees: int("taxesAndFees").notNull(),
-    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-    // Offer content (NDC payload)
-    offerPayload: text("offerPayload").notNull(), // Full NDC XML/JSON offer
-    // Segments
-    segments: text("segments").notNull(), // JSON array of flight segments
-    // Bundled services
-    bundledServices: text("bundledServices"), // JSON array of included services
-    // Validity
-    expiresAt: timestamp("expiresAt").notNull(),
-    status: mysqlEnum("status", [
-      "active",
-      "expired",
-      "selected",
-      "ordered",
-      "cancelled",
-    ])
-      .default("active")
-      .notNull(),
-    // Owner information
-    ownerCode: varchar("ownerCode", { length: 3 }), // Airline owner code
-    channel: mysqlEnum("channel", [
-      "direct", // Airline direct
-      "ndc_aggregator", // NDC aggregator
-      "gds", // GDS channel
-      "ota", // Online travel agency
-      "travel_agent", // Traditional travel agent
-    ])
-      .default("direct")
-      .notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    ndcOfferIdIdx: index("ndc_offer_id_idx").on(table.offerId),
-    ndcOfferResponseIdx: index("ndc_offer_response_idx").on(table.responseId),
-    ndcOfferRouteIdx: index("ndc_offer_route_idx").on(
-      table.originId,
-      table.destinationId
-    ),
-    ndcOfferAirlineIdx: index("ndc_offer_airline_idx").on(table.airlineId),
-    ndcOfferStatusIdx: index("ndc_offer_status_idx").on(table.status),
-    ndcOfferExpiresIdx: index("ndc_offer_expires_idx").on(table.expiresAt),
-    ndcOfferChannelIdx: index("ndc_offer_channel_idx").on(table.channel),
-  })
-);
-
-export type NdcOffer = typeof ndcOffers.$inferSelect;
-export type InsertNdcOffer = typeof ndcOffers.$inferInsert;
-
-/**
- * NDC Orders
- * IATA NDC order lifecycle management
- */
-export const ndcOrders = mysqlTable(
-  "ndc_orders",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    orderId: varchar("orderId", { length: 64 }).notNull().unique(), // NDC OrderID
-    offerId: varchar("offerId", { length: 64 }).notNull(), // Source NDC OfferID
-    bookingId: int("bookingId"), // Link to internal booking
-    // Order details
-    airlineId: int("airlineId").notNull(),
-    // Passenger info
-    passengers: text("passengers").notNull(), // JSON array of passenger data
-    contactInfo: text("contactInfo").notNull(), // JSON contact details
-    // Payment
-    paymentMethod: varchar("paymentMethod", { length: 50 }),
-    totalAmount: int("totalAmount").notNull(), // SAR cents
-    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
-    // Tickets issued
-    ticketNumbers: text("ticketNumbers"), // JSON array of ticket numbers
-    emdNumbers: text("emdNumbers"), // JSON array of EMD numbers
-    // NDC status
-    status: mysqlEnum("status", [
-      "pending", // Order created, awaiting payment
-      "confirmed", // Payment confirmed, tickets pending
-      "ticketed", // Tickets issued
-      "partially_ticketed",
-      "changed", // Order modified
-      "cancelled",
-      "refunded",
-    ])
-      .default("pending")
-      .notNull(),
-    // NDC messaging
-    orderPayload: text("orderPayload").notNull(), // Full NDC order XML/JSON
-    lastServicingAction: varchar("lastServicingAction", { length: 50 }),
-    // Servicing history
-    servicingHistory: text("servicingHistory"), // JSON array of actions
-    // Channel
-    channel: mysqlEnum("channel", [
-      "direct",
-      "ndc_aggregator",
-      "gds",
-      "ota",
-      "travel_agent",
-    ])
-      .default("direct")
-      .notNull(),
-    distributorId: varchar("distributorId", { length: 50 }),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    ndcOrderIdIdx: index("ndc_order_id_idx").on(table.orderId),
-    ndcOrderOfferIdx: index("ndc_order_offer_idx").on(table.offerId),
-    ndcOrderBookingIdx: index("ndc_order_booking_idx").on(table.bookingId),
-    ndcOrderAirlineIdx: index("ndc_order_airline_idx").on(table.airlineId),
-    ndcOrderStatusIdx: index("ndc_order_status_idx").on(table.status),
-    ndcOrderChannelIdx: index("ndc_order_channel_idx").on(table.channel),
-  })
-);
-
-export type NdcOrder = typeof ndcOrders.$inferSelect;
-export type InsertNdcOrder = typeof ndcOrders.$inferInsert;
-
-/**
- * GDS Connections
- * Configuration for GDS (Global Distribution System) providers
- */
-export const gdsConnections = mysqlTable(
-  "gds_connections",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    provider: mysqlEnum("provider", [
-      "amadeus",
-      "sabre",
-      "travelport",
-      "travelsky",
-    ]).notNull(),
-    airlineId: int("airlineId").notNull(),
-    // Connection credentials
-    connectionName: varchar("connectionName", { length: 100 }).notNull(),
-    pseudoCityCode: varchar("pseudoCityCode", { length: 10 }), // PCC
-    officeId: varchar("officeId", { length: 20 }), // Office ID
-    apiKey: varchar("apiKey", { length: 255 }), // Encrypted API key
-    apiSecret: varchar("apiSecret", { length: 255 }), // Encrypted secret
-    // Endpoint configuration
-    environment: mysqlEnum("environment", [
-      "production",
-      "certification",
-      "test",
-    ])
-      .default("test")
-      .notNull(),
-    baseUrl: varchar("baseUrl", { length: 500 }),
-    // Capabilities
-    supportsBooking: boolean("supportsBooking").default(true).notNull(),
-    supportsTicketing: boolean("supportsTicketing").default(true).notNull(),
-    supportsSchedules: boolean("supportsSchedules").default(true).notNull(),
-    supportsPricing: boolean("supportsPricing").default(true).notNull(),
-    supportsAvailability: boolean("supportsAvailability")
-      .default(true)
-      .notNull(),
-    // Rate limiting
-    maxRequestsPerMinute: int("maxRequestsPerMinute").default(100),
-    maxRequestsPerDay: int("maxRequestsPerDay").default(50000),
-    // Status
-    status: mysqlEnum("status", ["active", "inactive", "maintenance", "error"])
-      .default("inactive")
-      .notNull(),
-    lastHealthCheck: timestamp("lastHealthCheck"),
-    lastError: text("lastError"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    gdsProviderIdx: index("gds_provider_idx").on(table.provider),
-    gdsAirlineIdx: index("gds_airline_idx").on(table.airlineId),
-    gdsStatusIdx: index("gds_status_idx").on(table.status),
-    gdsProviderAirlineIdx: index("gds_provider_airline_idx").on(
-      table.provider,
-      table.airlineId
-    ),
-  })
-);
-
-export type GdsConnection = typeof gdsConnections.$inferSelect;
-export type InsertGdsConnection = typeof gdsConnections.$inferInsert;
-
-/**
- * GDS Messages
- * Audit log for all GDS message exchanges
- */
-export const gdsMessages = mysqlTable(
-  "gds_messages",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    connectionId: int("connectionId").notNull(),
-    provider: mysqlEnum("provider", [
-      "amadeus",
-      "sabre",
-      "travelport",
-      "travelsky",
-    ]).notNull(),
-    // Message details
-    messageType: mysqlEnum("messageType", [
-      "availability_request",
-      "availability_response",
-      "pricing_request",
-      "pricing_response",
-      "booking_request",
-      "booking_response",
-      "ticketing_request",
-      "ticketing_response",
-      "cancel_request",
-      "cancel_response",
-      "schedule_request",
-      "schedule_response",
-    ]).notNull(),
-    direction: mysqlEnum("direction", ["outbound", "inbound"]).notNull(),
-    // Content
-    requestPayload: text("requestPayload"),
-    responsePayload: text("responsePayload"),
-    // Correlation
-    correlationId: varchar("correlationId", { length: 64 }).notNull(),
-    bookingReference: varchar("bookingReference", { length: 20 }),
-    // Performance
-    responseTimeMs: int("responseTimeMs"),
-    httpStatusCode: int("httpStatusCode"),
-    // Status
-    status: mysqlEnum("status", ["success", "error", "timeout", "pending"])
-      .default("pending")
-      .notNull(),
-    errorMessage: text("errorMessage"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    gdsMessageConnectionIdx: index("gds_msg_connection_idx").on(
-      table.connectionId
-    ),
-    gdsMessageProviderIdx: index("gds_msg_provider_idx").on(table.provider),
-    gdsMessageTypeIdx: index("gds_msg_type_idx").on(table.messageType),
-    gdsMessageCorrelationIdx: index("gds_msg_correlation_idx").on(
-      table.correlationId
-    ),
-    gdsMessageStatusIdx: index("gds_msg_status_idx").on(table.status),
-    gdsMessageCreatedIdx: index("gds_msg_created_idx").on(table.createdAt),
-  })
-);
-
-export type GdsMessage = typeof gdsMessages.$inferSelect;
-export type InsertGdsMessage = typeof gdsMessages.$inferInsert;
-
-/**
- * Seat Maps - Aircraft cabin seat configurations
- * Supports visual seat selection and check-in
- */
-export const seatMaps = mysqlTable(
-  "seat_maps",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    aircraftType: varchar("aircraftType", { length: 50 }).notNull(), // e.g., "Boeing 777-300ER"
-    airlineId: int("airlineId").notNull(),
-    configName: varchar("configName", { length: 100 }).notNull(), // e.g., "3-class 396 seats"
-    // Cabin layout (JSON)
-    cabinLayout: text("cabinLayout").notNull(), // JSON: rows, columns, seat types
-    // Capacity summary
-    totalSeats: int("totalSeats").notNull(),
-    firstClassSeats: int("firstClassSeats").default(0).notNull(),
-    businessSeats: int("businessSeats").default(0).notNull(),
-    premiumEconomySeats: int("premiumEconomySeats").default(0).notNull(),
-    economySeats: int("economySeats").default(0).notNull(),
-    // Configuration details
-    seatPitch: text("seatPitch"), // JSON: pitch per cabin class in inches
-    seatWidth: text("seatWidth"), // JSON: width per cabin class
-    // Features
-    hasWifi: boolean("hasWifi").default(false).notNull(),
-    hasPowerOutlets: boolean("hasPowerOutlets").default(false).notNull(),
-    hasIFE: boolean("hasIFE").default(false).notNull(), // In-flight entertainment
-    // Status
-    active: boolean("active").default(true).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    seatMapAircraftIdx: index("seat_map_aircraft_idx").on(table.aircraftType),
-    seatMapAirlineIdx: index("seat_map_airline_idx").on(table.airlineId),
-    seatMapActiveIdx: index("seat_map_active_idx").on(table.active),
-  })
-);
-
-export type SeatMap = typeof seatMaps.$inferSelect;
-export type InsertSeatMap = typeof seatMaps.$inferInsert;
-
-/**
- * Seat Inventory - Individual seat status per flight
- * Tracks seat assignment, pricing, and availability
- */
-export const seatInventory = mysqlTable(
-  "seat_inventory",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    flightId: int("flightId").notNull(),
-    seatMapId: int("seatMapId").notNull(),
-    seatNumber: varchar("seatNumber", { length: 5 }).notNull(), // e.g., "12A", "1F"
-    // Seat characteristics
-    row: int("row").notNull(),
-    column: varchar("column", { length: 2 }).notNull(), // A, B, C, D, E, F, etc.
-    cabinClass: mysqlEnum("cabinClass", [
-      "first",
-      "business",
-      "premium_economy",
-      "economy",
-    ]).notNull(),
-    seatType: mysqlEnum("seatType", [
-      "window",
-      "middle",
-      "aisle",
-      "bulkhead_window",
-      "bulkhead_middle",
-      "bulkhead_aisle",
-      "exit_row_window",
-      "exit_row_middle",
-      "exit_row_aisle",
-    ]).notNull(),
-    // Seat features
-    hasExtraLegroom: boolean("hasExtraLegroom").default(false).notNull(),
-    hasPowerOutlet: boolean("hasPowerOutlet").default(false).notNull(),
-    isReclinable: boolean("isReclinable").default(true).notNull(),
-    nearLavatory: boolean("nearLavatory").default(false).notNull(),
-    nearGalley: boolean("nearGalley").default(false).notNull(),
-    // Pricing
-    seatPrice: int("seatPrice").default(0).notNull(), // Additional charge in SAR cents
-    priceTier: mysqlEnum("priceTier", [
-      "free",
-      "standard",
-      "preferred",
-      "premium",
-      "extra_legroom",
-    ])
-      .default("standard")
-      .notNull(),
-    // Availability
-    status: mysqlEnum("status", [
-      "available",
-      "held", // Temporarily held during booking
-      "occupied", // Assigned to a passenger
-      "blocked", // Blocked by airline (crew, equipment, etc.)
-      "restricted", // Restricted (e.g., exit row age requirement)
-      "checked_in", // Passenger checked in with this seat
-    ])
-      .default("available")
-      .notNull(),
-    // Assignment
-    bookingId: int("bookingId"),
-    passengerId: int("passengerId"),
-    assignedAt: timestamp("assignedAt"),
-    // Check-in
-    checkedInAt: timestamp("checkedInAt"),
-    boardingPassIssued: boolean("boardingPassIssued").default(false).notNull(),
-    boardingGroup: varchar("boardingGroup", { length: 5 }), // e.g., "A", "B", "1", "2"
-    boardingSequence: int("boardingSequence"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    seatInvFlightIdx: index("seat_inv_flight_idx").on(table.flightId),
-    seatInvSeatMapIdx: index("seat_inv_seat_map_idx").on(table.seatMapId),
-    seatInvSeatNumberIdx: index("seat_inv_seat_number_idx").on(
-      table.flightId,
-      table.seatNumber
-    ),
-    seatInvStatusIdx: index("seat_inv_status_idx").on(table.status),
-    seatInvBookingIdx: index("seat_inv_booking_idx").on(table.bookingId),
-    seatInvPassengerIdx: index("seat_inv_passenger_idx").on(table.passengerId),
-    seatInvCabinIdx: index("seat_inv_cabin_idx").on(
-      table.flightId,
-      table.cabinClass,
-      table.status
-    ),
-  })
-);
-
-export type SeatInventoryItem = typeof seatInventory.$inferSelect;
-export type InsertSeatInventoryItem = typeof seatInventory.$inferInsert;
-
-// ============================================================================
-// Intelligence Platform Tables
-// ============================================================================
-
-/**
- * Agent decision log - audit trail for all intelligence agent outputs
- */
-export const agentDecisions = mysqlTable(
-  "agent_decisions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    agentId: varchar("agentId", { length: 100 }).notNull(),
-    agentName: varchar("agentName", { length: 255 }).notNull(),
-    requestId: varchar("requestId", { length: 100 }).notNull(),
-    status: mysqlEnum("status", [
-      "idle",
-      "running",
-      "completed",
-      "failed",
-      "timeout",
-    ]).notNull(),
-    confidence: decimal("confidence", { precision: 5, scale: 4 }),
-    confidenceLevel: mysqlEnum("confidenceLevel", [
-      "low",
-      "medium",
-      "high",
-      "very_high",
-    ]),
-    executionTimeMs: int("executionTimeMs"),
-    data: json("data"),
-    reasoning: json("reasoning"),
-    recommendations: json("recommendations"),
-    errors: json("errors"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    agentIdIdx: index("agent_dec_agent_idx").on(table.agentId),
-    requestIdIdx: index("agent_dec_request_idx").on(table.requestId),
-    statusIdx: index("agent_dec_status_idx").on(table.status),
-    createdIdx: index("agent_dec_created_idx").on(table.createdAt),
-  })
-);
-
-export type AgentDecision = typeof agentDecisions.$inferSelect;
-export type InsertAgentDecision = typeof agentDecisions.$inferInsert;
-
-/**
- * Fraud assessments - detailed fraud scoring records
- */
-export const fraudAssessments = mysqlTable(
-  "fraud_assessments",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    bookingId: int("bookingId"),
-    userId: int("userId"),
-    riskScore: int("riskScore").notNull(),
-    riskLevel: mysqlEnum("riskLevel", [
-      "low",
-      "medium",
-      "high",
-      "critical",
-    ]).notNull(),
-    recommendation: mysqlEnum("recommendation", [
-      "approve",
-      "review",
-      "block",
-    ]).notNull(),
-    signals: json("signals"),
-    reasoning: text("reasoning"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    bookingIdx: index("fraud_assess_booking_idx").on(table.bookingId),
-    userIdx: index("fraud_assess_user_idx").on(table.userId),
-    riskLevelIdx: index("fraud_assess_risk_idx").on(table.riskLevel),
-    createdIdx: index("fraud_assess_created_idx").on(table.createdAt),
-  })
-);
-
-export type FraudAssessmentRecord = typeof fraudAssessments.$inferSelect;
-export type InsertFraudAssessment = typeof fraudAssessments.$inferInsert;
-
-/**
- * Intelligence briefings - cached briefing snapshots
- */
-export const intelligenceBriefings = mysqlTable(
-  "intelligence_briefings",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    requestId: varchar("requestId", { length: 100 }).notNull(),
-    overallHealth: mysqlEnum("overallHealth", [
-      "excellent",
-      "good",
-      "fair",
-      "poor",
-      "critical",
-    ]).notNull(),
-    healthScore: int("healthScore").notNull(),
-    executionTimeMs: int("executionTimeMs"),
-    period: varchar("period", { length: 100 }),
-    economicsSummary: text("economicsSummary"),
-    operationsSummary: text("operationsSummary"),
-    fraudSummary: text("fraudSummary"),
-    pricingSummary: text("pricingSummary"),
-    topRecommendations: json("topRecommendations"),
-    fullData: json("fullData"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    requestIdx: index("intel_brief_request_idx").on(table.requestId),
-    healthIdx: index("intel_brief_health_idx").on(table.overallHealth),
-    createdIdx: index("intel_brief_created_idx").on(table.createdAt),
-  })
-);
-
-export type IntelligenceBriefingRecord =
-  typeof intelligenceBriefings.$inferSelect;
-export type InsertIntelligenceBriefing =
-  typeof intelligenceBriefings.$inferInsert;
-
-/**
- * AI Gateway usage log - tracks LLM API calls, costs, and performance
- */
-export const aiGatewayLog = mysqlTable(
-  "ai_gateway_log",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    requestId: varchar("requestId", { length: 100 }).notNull(),
-    agentId: varchar("agentId", { length: 100 }),
-    modelId: varchar("modelId", { length: 100 }).notNull(),
-    taskType: varchar("taskType", { length: 50 }),
-    inputTokens: int("inputTokens"),
-    outputTokens: int("outputTokens"),
-    costUsd: decimal("costUsd", { precision: 10, scale: 6 }),
-    latencyMs: int("latencyMs"),
-    cached: boolean("cached").default(false).notNull(),
-    error: text("error"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    agentIdx: index("ai_gw_agent_idx").on(table.agentId),
-    modelIdx: index("ai_gw_model_idx").on(table.modelId),
-    createdIdx: index("ai_gw_created_idx").on(table.createdAt),
-  })
-);
-
-export type AIGatewayLogEntry = typeof aiGatewayLog.$inferSelect;
-export type InsertAIGatewayLog = typeof aiGatewayLog.$inferInsert;
+export type InsertBookingStatusHistory = typeof bookingStatusHistory.$inferInsert;

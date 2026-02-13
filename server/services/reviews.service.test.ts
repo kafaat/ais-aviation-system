@@ -1,13 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getDb } from "../db";
-import {
-  flightReviews,
-  users,
-  flights,
-  bookings,
-  airlines,
-  airports,
-} from "../../drizzle/schema";
+import { flightReviews, users, flights, bookings, airlines, airports } from "../../drizzle/schema";
 import * as reviewsService from "./reviews.service";
 import { eq } from "drizzle-orm";
 
@@ -168,94 +161,5 @@ describe("Reviews Service", () => {
         rating: 6, // Invalid
       })
     ).rejects.toThrow("between 1 and 5");
-  });
-
-  it("should get airline reviews", async () => {
-    // Get the airline ID from the test flight
-    if (!db) return;
-    const [flight] = await db
-      .select()
-      .from(flights)
-      .where(eq(flights.id, testFlightId));
-
-    const airlineReviews = await reviewsService.getAirlineReviews(
-      flight.airlineId
-    );
-    expect(airlineReviews).toBeDefined();
-    expect(Array.isArray(airlineReviews)).toBe(true);
-  });
-
-  it("should get airline review statistics", async () => {
-    // Get the airline ID from the test flight
-    if (!db) return;
-    const [flight] = await db
-      .select()
-      .from(flights)
-      .where(eq(flights.id, testFlightId));
-
-    const stats = await reviewsService.getAirlineReviewStats(flight.airlineId);
-    expect(stats).toBeDefined();
-    expect(stats.totalReviews).toBeDefined();
-    expect(stats.averageRating).toBeDefined();
-    expect(stats.ratingDistribution).toBeDefined();
-  });
-
-  it("should check if user can review a flight", async () => {
-    // User already has a review for this flight
-    const canReview = await reviewsService.canUserReviewFlight(
-      testUserId,
-      testFlightId
-    );
-    expect(canReview.canReview).toBe(false);
-    expect(canReview.reason).toBe("already_reviewed");
-  });
-
-  it("should return true for canReview when user has completed booking but no review", async () => {
-    // Create a new flight for testing
-    if (!db) return;
-
-    const [airlineResult] = await db.select().from(airlines).limit(1);
-
-    const [originResult] = await db.select().from(airports).limit(1);
-
-    const [newFlightResult] = await db.insert(flights).values({
-      flightNumber: "TS999",
-      airlineId: airlineResult.id,
-      originId: originResult.id,
-      destinationId: originResult.id,
-      departureTime: new Date(Date.now() + 86400000),
-      arrivalTime: new Date(Date.now() + 90000000),
-      aircraftType: "Test Aircraft",
-      economySeats: 150,
-      businessSeats: 20,
-      economyPrice: 50000,
-      businessPrice: 100000,
-      economyAvailable: 150,
-      businessAvailable: 20,
-    });
-
-    // Create a completed booking for this flight
-    await db.insert(bookings).values({
-      userId: testUserId,
-      flightId: newFlightResult.insertId,
-      bookingReference: "TSTRF2",
-      pnr: "TSTPN2",
-      status: "completed",
-      totalAmount: 50000,
-      paymentStatus: "paid",
-    });
-
-    const canReview = await reviewsService.canUserReviewFlight(
-      testUserId,
-      newFlightResult.insertId
-    );
-    expect(canReview.canReview).toBe(true);
-    expect(canReview.bookingId).toBeDefined();
-
-    // Cleanup
-    await db
-      .delete(bookings)
-      .where(eq(bookings.flightId, newFlightResult.insertId));
-    await db.delete(flights).where(eq(flights.id, newFlightResult.insertId));
   });
 });

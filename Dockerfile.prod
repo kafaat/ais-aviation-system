@@ -1,16 +1,12 @@
 # Use a smaller base image for production
 FROM node:22-alpine AS base
 
-# Security: Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 ais
-
 # Install dependencies
 FROM base AS deps
 WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && \
-    pnpm install --frozen-lockfile --prod=false
+COPY package.json pnpm-lock.yaml ./ 
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
 
 # Build the application
 FROM deps AS builder
@@ -18,31 +14,14 @@ WORKDIR /app
 COPY . .
 RUN pnpm build
 
-# Production dependencies only
-FROM base AS prod-deps
-WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && \
-    pnpm install --frozen-lockfile --prod
-
-# Migration image (includes drizzle-kit for running database migrations)
-# Build with: docker build --target migrator -t app-migrator .
-FROM deps AS migrator
-WORKDIR /app
-COPY drizzle ./drizzle
-COPY drizzle.config.ts ./
-USER ais
-CMD ["npx", "drizzle-kit", "migrate"]
-
 # Production image
 FROM base AS runner
 WORKDIR /app
 
-# Copy production dependencies only (smaller image)
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+# Copy production dependencies
+COPY --from=deps /app/node_modules ./node_modules
 
-# Copy built application (includes dist/public for serving client assets)
+# Copy built application
 COPY --from=builder /app/dist ./dist
 
 # Expose the port
@@ -50,13 +29,6 @@ EXPOSE 3000
 
 # Set production environment
 ENV NODE_ENV=production
-
-# Security: Run as non-root user
-USER ais
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "fetch('http://localhost:3000/api/trpc/health.check').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 # Start the application
 CMD ["node", "dist/index.js"]

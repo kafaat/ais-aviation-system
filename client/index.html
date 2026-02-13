@@ -1,15 +1,13 @@
 <!doctype html>
 <html lang="en">
+
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1"
-    />
+      content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <link rel="icon" type="image/png" href="%VITE_APP_LOGO%" />
     <link rel="apple-touch-icon" href="%VITE_APP_LOGO%" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#3b82f6" />
     <title>%VITE_APP_TITLE%</title>
     <!-- Add Google Fonts here, example:
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -21,23 +19,10 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- Analytics script - only loads if VITE_ANALYTICS_ENDPOINT is configured -->
-    <script type="module">
-      const analyticsEndpoint = "%VITE_ANALYTICS_ENDPOINT%";
-      const websiteId = "%VITE_ANALYTICS_WEBSITE_ID%";
-
-      // Only load analytics if endpoint is configured (not empty or placeholder)
-      if (
-        analyticsEndpoint &&
-        analyticsEndpoint !== "" &&
-        !analyticsEndpoint.startsWith("%")
-      ) {
-        const script = document.createElement("script");
-        script.defer = true;
-        script.src = `${analyticsEndpoint}/umami`;
-        script.setAttribute("data-website-id", websiteId);
-        document.body.appendChild(script);
-      }
-    </script>
+    <script
+      defer
+      src="%VITE_ANALYTICS_ENDPOINT%/umami"
+      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
+
 </html>

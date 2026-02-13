@@ -1,20 +1,7 @@
 import { trpc } from "@/lib/trpc";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Loader2,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Plane,
-} from "lucide-react";
+import { Loader2, Clock, AlertTriangle, CheckCircle2, XCircle, Plane } from "lucide-react";
 
 interface FlightStatusTimelineProps {
   flightId: number;
@@ -42,9 +29,7 @@ const statusLabels = {
 };
 
 export function FlightStatusTimeline({ flightId }: FlightStatusTimelineProps) {
-  const { data, isLoading } = trpc.flights.getStatusHistory.useQuery({
-    flightId,
-  });
+  const { data, isLoading } = trpc.flights.getStatusHistory.useQuery({ flightId });
 
   if (isLoading) {
     return (
@@ -71,11 +56,7 @@ export function FlightStatusTimeline({ flightId }: FlightStatusTimelineProps) {
         </CardTitle>
         <CardDescription>
           رقم الرحلة: {data.flightNumber} • الحالة الحالية:{" "}
-          <Badge
-            variant={
-              data.currentStatus === "cancelled" ? "destructive" : "default"
-            }
-          >
+          <Badge variant={data.currentStatus === "cancelled" ? "destructive" : "default"}>
             {statusLabels[data.currentStatus as keyof typeof statusLabels]}
           </Badge>
         </CardDescription>
@@ -94,8 +75,7 @@ export function FlightStatusTimeline({ flightId }: FlightStatusTimelineProps) {
             {/* Timeline items */}
             <div className="space-y-6">
               {data.history.map((item, index) => {
-                const Icon =
-                  statusIcons[item.newStatus as keyof typeof statusIcons];
+                const Icon = statusIcons[item.newStatus as keyof typeof statusIcons];
                 const isFirst = index === 0;
 
                 return (
@@ -103,9 +83,7 @@ export function FlightStatusTimeline({ flightId }: FlightStatusTimelineProps) {
                     {/* Icon */}
                     <div
                       className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-4 border-background ${
-                        statusColors[
-                          item.newStatus as keyof typeof statusColors
-                        ]
+                        statusColors[item.newStatus as keyof typeof statusColors]
                       }`}
                     >
                       <Icon className="h-5 w-5 text-white" />
@@ -117,30 +95,16 @@ export function FlightStatusTimeline({ flightId }: FlightStatusTimelineProps) {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             <Badge
-                              variant={
-                                item.newStatus === "cancelled"
-                                  ? "destructive"
-                                  : "default"
-                              }
+                              variant={item.newStatus === "cancelled" ? "destructive" : "default"}
                               className="font-semibold"
                             >
-                              {
-                                statusLabels[
-                                  item.newStatus as keyof typeof statusLabels
-                                ]
-                              }
+                              {statusLabels[item.newStatus as keyof typeof statusLabels]}
                             </Badge>
                             {item.oldStatus && (
                               <>
-                                <span className="text-muted-foreground text-sm">
-                                  من
-                                </span>
+                                <span className="text-muted-foreground text-sm">من</span>
                                 <Badge variant="outline" className="text-xs">
-                                  {
-                                    statusLabels[
-                                      item.oldStatus as keyof typeof statusLabels
-                                    ]
-                                  }
+                                  {statusLabels[item.oldStatus as keyof typeof statusLabels]}
                                 </Badge>
                               </>
                             )}

@@ -1,71 +1,8 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
 import * as favoritesService from "../services/favorites.service";
 
 export const favoritesRouter = router({
-  // ============================================================================
-  // Individual Flight Favorites (specific flights)
-  // ============================================================================
-
-  /**
-   * Add a specific flight to favorites
-   */
-  addFlight: protectedProcedure
-    .input(
-      z.object({
-        flightId: z.number().int().positive(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return await favoritesService.addFlightFavorite(
-        ctx.user.id,
-        input.flightId
-      );
-    }),
-
-  /**
-   * Remove a specific flight from favorites
-   */
-  removeFlight: protectedProcedure
-    .input(
-      z.object({
-        flightId: z.number().int().positive(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      return await favoritesService.removeFlightFavorite(
-        ctx.user.id,
-        input.flightId
-      );
-    }),
-
-  /**
-   * Get user's favorite flights (specific flights)
-   */
-  getFlights: protectedProcedure.query(async ({ ctx }) => {
-    return await favoritesService.getUserFlightFavorites(ctx.user.id);
-  }),
-
-  /**
-   * Check if a specific flight is favorited
-   */
-  isFlightFavorited: protectedProcedure
-    .input(
-      z.object({
-        flightId: z.number().int().positive(),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      return await favoritesService.isFlightFavorited(
-        ctx.user.id,
-        input.flightId
-      );
-    }),
-
-  // ============================================================================
-  // Route Favorites (origin/destination pairs)
-  // ============================================================================
-
   /**
    * Add a favorite flight route
    */
@@ -84,7 +21,7 @@ export const favoritesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.addFavorite({
-        userId: ctx.user.id,
+        userId: ctx.userId,
         ...input,
       });
     }),
@@ -92,9 +29,10 @@ export const favoritesRouter = router({
   /**
    * Get user's favorite flights
    */
-  getAll: protectedProcedure.query(async ({ ctx }) => {
-    return await favoritesService.getUserFavorites(ctx.user.id);
-  }),
+  getAll: protectedProcedure
+    .query(async ({ ctx }) => {
+      return await favoritesService.getUserFavorites(ctx.userId);
+    }),
 
   /**
    * Update favorite settings
@@ -112,7 +50,7 @@ export const favoritesRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.updateFavorite({
-        userId: ctx.user.id,
+        userId: ctx.userId,
         ...input,
       });
     }),
@@ -127,10 +65,7 @@ export const favoritesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return await favoritesService.deleteFavorite(
-        input.favoriteId,
-        ctx.user.id
-      );
+      return await favoritesService.deleteFavorite(input.favoriteId, ctx.userId);
     }),
 
   /**
@@ -146,7 +81,7 @@ export const favoritesRouter = router({
     )
     .query(async ({ ctx, input }) => {
       return await favoritesService.isFavorited({
-        userId: ctx.user.id,
+        userId: ctx.userId,
         ...input,
       });
     }),
@@ -161,10 +96,7 @@ export const favoritesRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return await favoritesService.getPriceAlertHistory(
-        input.favoriteId,
-        ctx.user.id
-      );
+      return await favoritesService.getPriceAlertHistory(input.favoriteId, ctx.userId);
     }),
 
   /**
@@ -177,16 +109,18 @@ export const favoritesRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return await favoritesService.getBestPricesForFavorite(
-        input.favoriteId,
-        ctx.user.id
-      );
+      return await favoritesService.getBestPricesForFavorite(input.favoriteId, ctx.userId);
     }),
 
   /**
    * Check for price alerts and notify (admin only - for cron job)
    */
-  checkPriceAlerts: adminProcedure.mutation(async () => {
-    return await favoritesService.checkPriceAlertsAndNotify();
-  }),
+  checkPriceAlerts: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      // Only allow admins to trigger this
+      if (ctx.user?.role !== "admin") {
+        throw new Error("Unauthorized");
+      }
+      return await favoritesService.checkPriceAlertsAndNotify();
+    }),
 });

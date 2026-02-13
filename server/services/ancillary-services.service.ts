@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   ancillaryServices,
@@ -60,10 +60,7 @@ export async function createAncillaryService(data: InsertAncillaryService) {
 /**
  * Update ancillary service (admin only)
  */
-export async function updateAncillaryService(
-  id: number,
-  data: Partial<InsertAncillaryService>
-) {
+export async function updateAncillaryService(id: number, data: Partial<InsertAncillaryService>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -158,13 +155,10 @@ export async function getBookingAncillaries(bookingId: number) {
       },
     })
     .from(bookingAncillaries)
-    .leftJoin(
-      ancillaryServices,
-      eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id)
-    )
+    .leftJoin(ancillaryServices, eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id))
     .where(eq(bookingAncillaries.bookingId, bookingId));
 
-  return results.map(r => ({
+  return results.map((r) => ({
     ...r,
     metadata: r.metadata ? JSON.parse(r.metadata) : null,
   }));
@@ -173,12 +167,10 @@ export async function getBookingAncillaries(bookingId: number) {
 /**
  * Calculate total ancillaries cost for a booking
  */
-export async function calculateAncillariesTotalCost(
-  bookingId: number
-): Promise<number> {
+export async function calculateAncillariesTotalCost(bookingId: number): Promise<number> {
   const ancillaries = await getBookingAncillaries(bookingId);
   return ancillaries
-    .filter(a => a.status === "active")
+    .filter((a) => a.status === "active")
     .reduce((sum, a) => sum + a.totalPrice, 0);
 }
 
@@ -220,7 +212,7 @@ export async function getAncillariesByCategory(params: {
 
   // Filter by cabin class if specified
   if (params.cabinClass) {
-    services = services.filter(s => {
+    services = services.filter((s) => {
       if (!s.applicableCabinClasses) return true;
       const classes = JSON.parse(s.applicableCabinClasses);
       return classes.includes(params.cabinClass);
@@ -229,7 +221,7 @@ export async function getAncillariesByCategory(params: {
 
   // Filter by airline if specified
   if (params.airlineId) {
-    services = services.filter(s => {
+    services = services.filter((s) => {
       if (!s.applicableAirlines) return true;
       const airlines = JSON.parse(s.applicableAirlines);
       return airlines.includes(params.airlineId);
@@ -376,10 +368,10 @@ export async function seedAncillaryServices() {
   // Check if services already exist
   const existing = await db.select().from(ancillaryServices).limit(1);
   if (existing.length > 0) {
-    console.info("[Ancillary Services] Services already seeded");
+    console.log("[Ancillary Services] Services already seeded");
     return;
   }
 
   await db.insert(ancillaryServices).values(services);
-  console.info(`[Ancillary Services] Seeded ${services.length} services`);
+  console.log(`[Ancillary Services] Seeded ${services.length} services`);
 }

@@ -12,20 +12,26 @@ export async function cleanupExpiredLocks() {
   try {
     const db = await getDb();
     if (!db) {
-      logError(new Error("Database not available"), {
-        operation: "cleanupExpiredLocks",
-      });
+      logError(new Error("Database not available"), { operation: "cleanupExpiredLocks" });
       return;
     }
 
-    const result = await db
+    // Find expired locks
+    const expiredLocks = await db
+      .select()
+      .from(inventoryLocks)
+      .where(lt(inventoryLocks.expiresAt, new Date()));
+
+    if (expiredLocks.length === 0) {
+      return; // No expired locks, skip logging
+    }
+
+    // Delete expired locks
+    await db
       .delete(inventoryLocks)
       .where(lt(inventoryLocks.expiresAt, new Date()));
 
-    const deletedCount = (result as any)[0]?.affectedRows || 0;
-    if (deletedCount > 0) {
-      logInfo(`Cleaned up ${deletedCount} expired inventory locks`);
-    }
+    logInfo(`Cleaned up ${expiredLocks.length} expired inventory locks`);
   } catch (error) {
     logError(error as Error, { operation: "cleanupExpiredLocks" });
   }
@@ -35,22 +41,22 @@ export async function cleanupExpiredLocks() {
  * Initialize and start all cron jobs
  */
 export function startCronJobs() {
-  logger.info({}, "Starting cron jobs...");
+  logger.info("Starting cron jobs...");
 
   // Clean up expired locks every 5 minutes
   cron.schedule("*/5 * * * *", async () => {
-    logger.debug({}, "Running cron job: cleanupExpiredLocks");
+    logger.debug("Running cron job: cleanupExpiredLocks");
     await cleanupExpiredLocks();
   });
 
-  logger.info({}, "Cron jobs started successfully");
+  logger.info("Cron jobs started successfully");
 }
 
 /**
  * Manually trigger cron jobs (for testing)
  */
 export async function triggerCronJobs() {
-  logger.info({}, "Manually triggering cron jobs");
+  logger.info("Manually triggering cron jobs");
   await cleanupExpiredLocks();
-  logger.info({}, "Cron jobs completed");
+  logger.info("Cron jobs completed");
 }

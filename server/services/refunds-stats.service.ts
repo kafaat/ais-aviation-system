@@ -1,5 +1,5 @@
 import { getDb } from "../db";
-import { bookings } from "../../drizzle/schema";
+import { bookings, payments } from "../../drizzle/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 
 /**
@@ -104,7 +104,7 @@ export async function getRefundHistory(params: {
       .limit(limit)
       .offset(offset);
 
-    return refunds.map(refund => ({
+    return refunds.map((refund) => ({
       id: refund.id,
       bookingId: refund.bookingId,
       bookingReference: refund.bookingReference,
@@ -149,7 +149,7 @@ export async function getRefundTrends(): Promise<
       .groupBy(sql`DATE(${bookings.updatedAt})`)
       .orderBy(sql`DATE(${bookings.updatedAt}) ASC`);
 
-    return trends.map(trend => ({
+    return trends.map((trend) => ({
       date: trend.date,
       count: Number(trend.count),
       amount: Number(trend.amount),

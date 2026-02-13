@@ -1,8 +1,5 @@
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
-import {
-  updateFlightStatus,
-  cancelFlightAndRefund,
-} from "./flight-status.service";
+import { updateFlightStatus, cancelFlightAndRefund } from "./flight-status.service";
 import { getDb } from "../db";
 import { flights, bookings, users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -109,13 +106,11 @@ describe("Flight Status Service", () => {
   });
 
   it("should cancel flight and refund all bookings", async () => {
-    // Reset flight to scheduled directly in DB (cancelled → scheduled is not a valid transition)
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
-    await db
-      .update(flights)
-      .set({ status: "scheduled" })
-      .where(eq(flights.id, testFlightId));
+    // Reset flight to scheduled first
+    await updateFlightStatus({
+      flightId: testFlightId,
+      status: "scheduled",
+    });
 
     const result = await cancelFlightAndRefund({
       flightId: testFlightId,
@@ -125,7 +120,9 @@ describe("Flight Status Service", () => {
     expect(result.success).toBe(true);
     expect(result.refundedBookings).toBe(1);
 
-    // Verify booking was refunded (reuse db from above)
+    // Verify booking was refunded
+    const db = await getDb();
+    if (!db) throw new Error("Database not available");
 
     const [booking] = await db
       .select()

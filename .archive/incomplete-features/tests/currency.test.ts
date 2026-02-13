@@ -15,7 +15,7 @@ describe("Currency Service", () => {
   describe("fetchLatestExchangeRates", () => {
     it("should fetch and store exchange rates", async () => {
       await fetchLatestExchangeRates();
-
+      
       // Verify rates are stored by trying to get one
       const usdRate = await getExchangeRate("USD");
       expect(usdRate).toBeGreaterThan(0);
@@ -60,7 +60,7 @@ describe("Currency Service", () => {
     it("should convert SAR to USD correctly", async () => {
       const amount = 100000; // 1000.00 SAR
       const converted = await convertFromSAR(amount, "USD");
-
+      
       // USD should be less than SAR (approximately 0.27)
       expect(converted).toBeGreaterThan(0);
       expect(converted).toBeLessThan(amount);
@@ -69,7 +69,7 @@ describe("Currency Service", () => {
     it("should convert SAR to EUR correctly", async () => {
       const amount = 100000; // 1000.00 SAR
       const converted = await convertFromSAR(amount, "EUR");
-
+      
       expect(converted).toBeGreaterThan(0);
       expect(converted).toBeLessThan(amount);
     });
@@ -77,14 +77,14 @@ describe("Currency Service", () => {
     it("should handle small amounts", async () => {
       const amount = 100; // 1.00 SAR
       const converted = await convertFromSAR(amount, "USD");
-
+      
       expect(converted).toBeGreaterThan(0);
     });
 
     it("should handle large amounts", async () => {
       const amount = 10000000; // 100,000.00 SAR
       const converted = await convertFromSAR(amount, "USD");
-
+      
       expect(converted).toBeGreaterThan(0);
     });
   });

@@ -1,9 +1,9 @@
 /**
  * Google Maps API Integration for Manus WebDev Templates
- *
+ * 
  * Main function: makeRequest<T>(endpoint, params) - Makes authenticated requests to Google Maps APIs
  * All credentials are automatically injected. Array parameters use | as separator.
- *
+ * 
  * See API examples below the type definitions for usage patterns.
  */
 
@@ -12,9 +12,6 @@ import { ENV } from "./env";
 // ============================================================================
 // Configuration
 // ============================================================================
-
-/** Timeout for Google Maps API calls */
-const MAPS_TIMEOUT_MS = 30_000;
 
 type MapsConfig = {
   baseUrl: string;
@@ -48,7 +45,7 @@ interface RequestOptions {
 
 /**
  * Make authenticated requests to Google Maps APIs
- *
+ * 
  * @param endpoint - The API endpoint (e.g., "/maps/api/geocode/json")
  * @param params - Query parameters for the request
  * @param options - Additional request options
@@ -60,16 +57,6 @@ export async function makeRequest<T = unknown>(
   options: RequestOptions = {}
 ): Promise<T> {
   const { baseUrl, apiKey } = getMapsConfig();
-
-  // Validate endpoint to prevent path traversal
-  if (!endpoint.startsWith("/")) {
-    throw new Error(
-      `Invalid maps endpoint: must start with "/". Received: "${endpoint}"`
-    );
-  }
-  if (endpoint.includes("..")) {
-    throw new Error("Invalid maps endpoint: path traversal is not allowed");
-  }
 
   // Construct full URL: baseUrl + /v1/maps/proxy + endpoint
   const url = new URL(`${baseUrl}/v1/maps/proxy${endpoint}`);
@@ -90,13 +77,12 @@ export async function makeRequest<T = unknown>(
       "Content-Type": "application/json",
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
-    signal: AbortSignal.timeout(MAPS_TIMEOUT_MS),
   });
 
   if (!response.ok) {
-    const _errorText = await response.text().catch(() => "");
+    const errorText = await response.text();
     throw new Error(
-      `Google Maps API request failed (${response.status} ${response.statusText})`
+      `Google Maps API request failed (${response.status} ${response.statusText}): ${errorText}`
     );
   }
 
@@ -327,3 +313,7 @@ export type RoadsResult = {
  * Output: Image URL (not JSON) - use directly in <img src={url} />
  * Note: Construct URL manually with getMapsConfig() for auth
  */
+
+
+
+

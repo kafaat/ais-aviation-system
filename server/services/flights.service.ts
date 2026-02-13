@@ -1,7 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
-import { DynamicPricingService } from "./pricing/dynamic-pricing.service";
-import { redisCacheService, CacheTTL } from "./redis-cache.service";
+import { calculateDynamicPrice, calculateOccupancyRate, getDaysUntilDeparture } from "./dynamic-pricing.service";
 
 /**
  * Flights Service
@@ -18,43 +17,12 @@ export interface GetFlightInput {
   id: number;
 }
 
-// Type for flight search results
-export type FlightSearchResult = Awaited<
-  ReturnType<typeof import("../db").searchFlights>
->;
-
 /**
  * Search for flights based on origin, destination, and date
- * Results are cached for 2 minutes to improve performance
  */
-export async function searchFlights(
-  input: SearchFlightsInput
-): Promise<FlightSearchResult> {
+export async function searchFlights(input: SearchFlightsInput) {
   try {
-    // Create cache key params
-    const cacheParams = {
-      originId: input.originId,
-      destinationId: input.destinationId,
-      departureDate: input.departureDate.toISOString().split("T")[0],
-    };
-
-    // Try to get from cache
-    const cached = await redisCacheService.getCachedFlightSearch(cacheParams);
-    if (cached) {
-      return cached as FlightSearchResult;
-    }
-
-    // Fetch from database
-    const results = await db.searchFlights(input);
-
-    // Cache the results
-    await redisCacheService.cacheFlightSearch(
-      cacheParams,
-      results,
-      CacheTTL.FLIGHT_SEARCH
-    );
-
-    return results;
+    return await db.searchFlights(input);
   } catch (error) {
     console.error("Error searching flights:", error);
     throw new TRPCError({
@@ -66,33 +34,18 @@ export async function searchFlights(
 
 /**
  * Get flight details by ID
- * Results are cached for 5 minutes to improve performance
  */
 export async function getFlightById(input: GetFlightInput) {
   try {
-    // Try to get from cache
-    const cached = await redisCacheService.getCachedFlightDetails(input.id);
-    if (cached) {
-      return cached as Awaited<ReturnType<typeof db.getFlightById>>;
-    }
-
-    // Fetch from database
     const flight = await db.getFlightById(input.id);
-
+    
     if (!flight) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "Flight not found",
       });
     }
-
-    // Cache the result
-    await redisCacheService.cacheFlightDetails(
-      input.id,
-      flight,
-      CacheTTL.FLIGHT_DETAILS
-    );
-
+    
     return flight;
   } catch (error) {
     if (error instanceof TRPCError) {
@@ -113,24 +66,20 @@ export async function checkFlightAvailability(
   flightId: number,
   cabinClass: "economy" | "business",
   requiredSeats: number
-): Promise<{
-  available: boolean;
-  flight: Awaited<ReturnType<typeof db.getFlightById>>;
-}> {
+): Promise<{ available: boolean; flight: Awaited<ReturnType<typeof db.getFlightById>> }> {
   const flight = await db.getFlightById(flightId);
-
+  
   if (!flight) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Flight not found",
     });
   }
-
-  const availableSeats =
-    cabinClass === "economy"
-      ? flight.economyAvailable
-      : flight.businessAvailable;
-
+  
+  const availableSeats = cabinClass === "economy" 
+    ? flight.economyAvailable 
+    : flight.businessAvailable;
+  
   return {
     available: availableSeats >= requiredSeats,
     flight,
@@ -138,96 +87,53 @@ export async function checkFlightAvailability(
 }
 
 /**
- * Passenger type discount multipliers (IATA standard)
- * Adult: 100%, Child (2-11): 75%, Infant (0-2): 10%
- */
-const PASSENGER_TYPE_MULTIPLIERS: Record<string, number> = {
-  adult: 1.0,
-  child: 0.75,
-  infant: 0.1,
-};
-
-/**
- * Calculate total price considering passenger type discounts
- */
-function calculatePassengerTypePrice(
-  perPassengerPrice: number,
-  passengers?: Array<{ type: "adult" | "child" | "infant" }>
-): { total: number; breakdown: Array<{ type: string; price: number }> } {
-  if (!passengers || passengers.length === 0) {
-    return { total: perPassengerPrice, breakdown: [] };
-  }
-
-  const breakdown = passengers.map(p => ({
-    type: p.type,
-    price: Math.round(
-      perPassengerPrice * (PASSENGER_TYPE_MULTIPLIERS[p.type] ?? 1.0)
-    ),
-  }));
-
-  const total = breakdown.reduce((sum, b) => sum + b.price, 0);
-  return { total, breakdown };
-}
-
-/**
- * Calculate flight price with dynamic pricing and passenger type discounts
+ * Calculate flight price with dynamic pricing
  */
 export async function calculateFlightPrice(
   flight: NonNullable<Awaited<ReturnType<typeof db.getFlightById>>>,
   cabinClass: "economy" | "business",
-  passengerCount: number,
-  passengers?: Array<{ type: "adult" | "child" | "infant" }>,
-  userId?: number,
-  sessionId?: string
-): Promise<{ price: number; pricing?: any }> {
-  const basePrice =
-    cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
-
+  passengerCount: number
+): Promise<{price: number; pricing?: any}> {
+  const basePrice = cabinClass === "economy" 
+    ? flight.economyPrice 
+    : flight.businessPrice;
+  
   try {
-    // Use the enhanced dynamic pricing engine (includes AI multiplier)
-    const pricingResult = await DynamicPricingService.calculateDynamicPrice({
-      flightId: flight.id,
+    // Calculate occupancy rate
+    const totalSeats = cabinClass === "economy" 
+      ? flight.economySeats 
+      : flight.businessSeats;
+    const occupancyRate = await calculateOccupancyRate(flight.id, totalSeats);
+    
+    // Calculate days until departure
+    const daysUntilDeparture = getDaysUntilDeparture(flight.departureTime);
+    
+    // Get dynamic price for single seat
+    const pricingResult = calculateDynamicPrice({
+      basePrice,
+      occupancyRate,
+      daysUntilDeparture,
       cabinClass,
-      requestedSeats: passengerCount,
-      userId,
-      sessionId,
     });
-
-    // Apply passenger type discounts (child 75%, infant 10%)
-    const perPassengerPrice = pricingResult.breakdown.total;
-    const typeBreakdown = calculatePassengerTypePrice(
-      perPassengerPrice,
-      passengers
-    );
-    const totalPrice = passengers
-      ? typeBreakdown.total
-      : perPassengerPrice * passengerCount;
-
+    
+    // Multiply by passenger count
+    const totalPrice = pricingResult.finalPrice * passengerCount;
+    
     return {
       price: totalPrice,
       pricing: {
-        basePrice: pricingResult.basePrice,
+        ...pricingResult,
         finalPrice: totalPrice,
-        perPassenger: perPassengerPrice,
-        adjustmentPercentage: Math.round(
-          ((perPassengerPrice - pricingResult.basePrice) /
-            pricingResult.basePrice) *
-            100
-        ),
-        occupancyRate: Math.round(
-          pricingResult.breakdown.occupancyMultiplier * 100 - 100
-        ),
-        daysUntilDeparture: 0,
-        passengerBreakdown: typeBreakdown.breakdown,
-        breakdown: pricingResult.breakdown,
+        perPassenger: pricingResult.finalPrice,
+        occupancyRate,
+        daysUntilDeparture,
       },
     };
   } catch (error) {
     console.error("Error calculating dynamic price:", error);
-    // Fallback to base price with passenger type discounts
-    const typeBreakdown = calculatePassengerTypePrice(basePrice, passengers);
+    // Fallback to base price if dynamic pricing fails
     return {
-      price: passengers ? typeBreakdown.total : basePrice * passengerCount,
+      price: basePrice * passengerCount,
     };
   }
 }

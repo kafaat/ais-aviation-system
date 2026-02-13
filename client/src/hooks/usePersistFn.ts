@@ -1,6 +1,5 @@
 import { useRef } from "react";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type noop = (...args: any[]) => any;
 
 /**
@@ -13,11 +12,9 @@ export function usePersistFn<T extends noop>(fn: T) {
   const persistFn = useRef<T>(null);
   if (!persistFn.current) {
     persistFn.current = function (this: unknown, ...args) {
-      if (fnRef.current) {
-        return fnRef.current.apply(this, args);
-      }
+      return fnRef.current!.apply(this, args);
     } as T;
   }
 
-  return persistFn.current as T;
+  return persistFn.current!;
 }

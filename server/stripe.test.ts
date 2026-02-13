@@ -2,7 +2,7 @@ import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { getDb } from "./db";
-import { bookings } from "../drizzle/schema";
+import { bookings, flights, airlines, airports } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
@@ -34,12 +34,7 @@ function createAuthContext(): { ctx: TrpcContext } {
   return { ctx };
 }
 
-// Skip Stripe tests if no real API key is configured
-const stripeKey = process.env.STRIPE_SECRET_KEY || "";
-const hasRealStripeKey =
-  stripeKey.startsWith("sk_test_") && stripeKey.length > 20;
-
-describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
+describe("Stripe Payment Integration", () => {
   let testBookingId: number;
   // Generate unique 6-character references using timestamp last 3 digits + random
   const uniqueRef = `T${Date.now().toString().slice(-3)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
@@ -70,7 +65,7 @@ describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
     // Clean up test data
     const db = await getDb();
     if (!db) return;
-
+    
     try {
       await db.delete(bookings).where(eq(bookings.id, testBookingId));
     } catch (error) {
@@ -97,8 +92,7 @@ describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
     if (!db) throw new Error("Database not available");
 
     // Mark booking as paid
-    await db
-      .update(bookings)
+    await db.update(bookings)
       .set({ paymentStatus: "paid" })
       .where({ id: testBookingId });
 
@@ -110,8 +104,7 @@ describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
     ).rejects.toThrow("already paid");
 
     // Reset for other tests
-    await db
-      .update(bookings)
+    await db.update(bookings)
       .set({ paymentStatus: "pending" })
       .where({ id: testBookingId });
   });
@@ -120,7 +113,7 @@ describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
     const { ctx } = createAuthContext();
     // Change user ID to simulate different user
     ctx.user!.id = 999;
-
+    
     const caller = appRouter.createCaller(ctx);
 
     await expect(

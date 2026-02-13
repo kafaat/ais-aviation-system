@@ -48,10 +48,7 @@ export async function recordLoginAttempt(data: {
 
   // Log the attempt
   if (data.success) {
-    logger.logAuth("login", undefined, {
-      email: data.email,
-      ip: data.ipAddress,
-    });
+    logger.logAuth("login", undefined, { email: data.email, ip: data.ipAddress });
   } else {
     logger.logAuth("failed_login", undefined, {
       email: data.email,
@@ -83,7 +80,7 @@ async function checkAndLockAccount(
 
   // Count failed attempts in the time window
   let failedAttempts;
-
+  
   if (email) {
     failedAttempts = await db
       .select()
@@ -115,7 +112,7 @@ async function checkAndLockAccount(
     // Get user ID (you'll need to implement this based on your user lookup logic)
     // For now, we'll create a placeholder
     // const user = await getUserByEmail(email) or getUserByOpenId(openId);
-
+    
     logger.logSecurity(
       "Account locked due to multiple failed login attempts",
       "high",
@@ -133,11 +130,7 @@ async function checkAndLockAccount(
       severity: "high",
       ipAddress,
       description: `Account locked after ${failedAttempts.length} failed login attempts`,
-      metadata: JSON.stringify({
-        email,
-        openId,
-        attempts: failedAttempts.length,
-      }),
+      metadata: JSON.stringify({ email, openId, attempts: failedAttempts.length }),
       actionTaken: `Account locked for ${LOCKOUT_DURATION_MINUTES} minutes`,
     });
 
@@ -190,7 +183,10 @@ export async function isAccountLocked(userId: number): Promise<boolean> {
     .select()
     .from(accountLocks)
     .where(
-      and(eq(accountLocks.userId, userId), eq(accountLocks.isActive, true))
+      and(
+        eq(accountLocks.userId, userId),
+        eq(accountLocks.isActive, true)
+      )
     )
     .orderBy(desc(accountLocks.createdAt))
     .limit(1);
@@ -212,10 +208,7 @@ export async function isAccountLocked(userId: number): Promise<boolean> {
 /**
  * Unlock an account
  */
-export async function unlockAccount(
-  userId: number,
-  unlockedBy: string
-): Promise<void> {
+export async function unlockAccount(userId: number, unlockedBy: string): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -227,7 +220,10 @@ export async function unlockAccount(
       unlockedBy,
     })
     .where(
-      and(eq(accountLocks.userId, userId), eq(accountLocks.isActive, true))
+      and(
+        eq(accountLocks.userId, userId),
+        eq(accountLocks.isActive, true)
+      )
     );
 
   logger.logSecurity("Account unlocked", "medium", { userId, unlockedBy });
@@ -290,11 +286,7 @@ export async function blockIpAddress(
 
   await db.insert(ipBlacklist).values(block);
 
-  logger.logSecurity("IP address blocked", "high", {
-    ipAddress,
-    reason,
-    blockedBy,
-  });
+  logger.logSecurity("IP address blocked", "high", { ipAddress, reason, blockedBy });
 }
 
 /**
@@ -310,7 +302,10 @@ export async function isIpBlocked(ipAddress: string): Promise<boolean> {
     .select()
     .from(ipBlacklist)
     .where(
-      and(eq(ipBlacklist.ipAddress, ipAddress), eq(ipBlacklist.isActive, true))
+      and(
+        eq(ipBlacklist.ipAddress, ipAddress),
+        eq(ipBlacklist.isActive, true)
+      )
     )
     .limit(1);
 
@@ -331,10 +326,7 @@ export async function isIpBlocked(ipAddress: string): Promise<boolean> {
 /**
  * Unblock an IP address
  */
-export async function unblockIpAddress(
-  ipAddress: string,
-  unblockedBy: string
-): Promise<void> {
+export async function unblockIpAddress(ipAddress: string, unblockedBy: string): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -346,13 +338,13 @@ export async function unblockIpAddress(
       unblockedBy,
     })
     .where(
-      and(eq(ipBlacklist.ipAddress, ipAddress), eq(ipBlacklist.isActive, true))
+      and(
+        eq(ipBlacklist.ipAddress, ipAddress),
+        eq(ipBlacklist.isActive, true)
+      )
     );
 
-  logger.logSecurity("IP address unblocked", "medium", {
-    ipAddress,
-    unblockedBy,
-  });
+  logger.logSecurity("IP address unblocked", "medium", { ipAddress, unblockedBy });
 }
 
 /**
@@ -372,9 +364,7 @@ export async function getRecentSecurityEvents(limit: number = 50) {
 /**
  * Clean up old login attempts (run periodically)
  */
-export async function cleanupOldLoginAttempts(
-  daysToKeep: number = 30
-): Promise<void> {
+export async function cleanupOldLoginAttempts(daysToKeep: number = 30): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
@@ -383,6 +373,6 @@ export async function cleanupOldLoginAttempts(
 
   // Note: Drizzle doesn't have a direct delete with where clause in this version
   // You might need to use raw SQL or implement differently based on your Drizzle version
-
+  
   logger.info(`Cleaned up login attempts older than ${daysToKeep} days`);
 }

@@ -1,7 +1,6 @@
 # AIS Aviation System – خطة QA لتكامل Flights + Loyalty + SeatMap
 
 يتضمن هذا الملف سيناريوهات الاختبار اليدوي:
-
 - حجز رحلة بدون Loyalty
 - حجز مع نقاط ولاء
 - اختيار مقاعد من Seat Map

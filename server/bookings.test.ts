@@ -1,8 +1,9 @@
 import { describe, expect, it, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
-import { bookings, type User } from "../drizzle/schema";
+import type { User } from "../drizzle/schema";
 import { getDb } from "./db";
+import { bookings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 function createAuthenticatedContext(): TrpcContext {
@@ -35,7 +36,7 @@ describe("Booking APIs", () => {
     // Clean up test bookings
     const db = await getDb();
     if (!db) return;
-
+    
     try {
       for (const bookingId of createdBookingIds) {
         await db.delete(bookings).where(eq(bookings.id, bookingId));
@@ -49,30 +50,8 @@ describe("Booking APIs", () => {
     const ctx = createAuthenticatedContext();
     const caller = appRouter.createCaller(ctx);
 
-    // Find a valid flight first
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-
-    const publicCaller = appRouter.createCaller({
-      user: undefined,
-      req: { protocol: "https", headers: {} } as TrpcContext["req"],
-      res: {} as TrpcContext["res"],
-    });
-
-    const flights = await publicCaller.flights.search({
-      originId: 1,
-      destinationId: 2,
-      departureDate: tomorrow,
-    });
-
-    if (flights.length === 0) {
-      // No flights available - skip gracefully
-      return;
-    }
-
     const booking = await caller.bookings.create({
-      flightId: flights[0].id,
+      flightId: 1,
       cabinClass: "economy",
       passengers: [
         {
@@ -92,7 +71,7 @@ describe("Booking APIs", () => {
     expect(booking).toHaveProperty("totalAmount");
     expect(booking.bookingReference).toHaveLength(6);
     expect(booking.pnr).toHaveLength(6);
-
+    
     // Track for cleanup
     createdBookingIds.push(booking.bookingId);
   });

@@ -19,12 +19,7 @@ export type FileContent = {
   type: "file_url";
   file_url: {
     url: string;
-    mime_type?:
-      | "audio/mpeg"
-      | "audio/wav"
-      | "application/pdf"
-      | "audio/mp4"
-      | "video/mp4";
+    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4" ;
   };
 };
 
@@ -270,9 +265,6 @@ const normalizeResponseFormat = ({
   };
 };
 
-/** Timeout for LLM API calls (2 minutes - models with thinking can be slow) */
-const LLM_TIMEOUT_MS = 120_000;
-
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
 
@@ -286,10 +278,6 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     responseFormat,
     response_format,
   } = params;
-
-  if (!messages || messages.length === 0) {
-    throw new Error("invokeLLM requires at least one message");
-  }
 
   const payload: Record<string, unknown> = {
     model: "gemini-2.5-flash",
@@ -308,10 +296,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768;
+  payload.max_tokens = 32768
   payload.thinking = {
-    budget_tokens: 128,
-  };
+    "budget_tokens": 128
+  }
 
   const normalizedResponseFormat = normalizeResponseFormat({
     responseFormat,
@@ -331,13 +319,12 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
       authorization: `Bearer ${ENV.forgeApiKey}`,
     },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
   });
 
   if (!response.ok) {
-    const _errorText = await response.text().catch(() => "");
+    const errorText = await response.text();
     throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText}`
+      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
     );
   }
 

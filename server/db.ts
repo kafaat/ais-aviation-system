@@ -1,422 +1,25 @@
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  lte,
-  sql,
-  gt,
-  lt,
-  isNull,
-  SQL,
-} from "drizzle-orm";
-import { drizzle, MySql2Database } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
-import * as schema from "../drizzle/schema";
-import {
-  InsertUser,
-  users,
-  airlines,
-  airports,
-  flights,
-  bookings,
-  passengers,
-  payments,
-  type InsertFlight,
-  type InsertBooking,
-  type InsertPassenger,
-  type InsertPayment,
+import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
+import { 
+  InsertUser, users, 
+  airlines, airports, flights, bookings, passengers, payments,
+  type InsertAirline, type InsertAirport, type InsertFlight,
+  type InsertBooking, type InsertPassenger, type InsertPayment
 } from "../drizzle/schema";
-import { ENV } from "./_core/env";
-import { createServiceLogger } from "./_core/logger";
+import { ENV } from './_core/env';
 
-const log = createServiceLogger("database");
+let _db: ReturnType<typeof drizzle> | null = null;
 
-// ============ Connection Pool Configuration ============
-
-/**
- * Production-optimized connection pool configuration
- * These settings are tuned for high-traffic aviation booking systems
- */
-export const POOL_CONFIG = {
-  // Connection limits
-  connectionLimit: parseInt(process.env.DB_POOL_SIZE || "20", 10),
-  maxIdle: parseInt(process.env.DB_MAX_IDLE || "10", 10),
-  idleTimeout: parseInt(process.env.DB_IDLE_TIMEOUT || "60000", 10), // 60 seconds
-
-  // Queue management
-  queueLimit: parseInt(process.env.DB_QUEUE_LIMIT || "0", 10), // 0 = unlimited
-  waitForConnections: true,
-
-  // Connection health
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 10000, // 10 seconds
-
-  // Timeouts
-  connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT || "10000", 10), // 10 seconds
-
-  // MySQL specific
-  multipleStatements: false, // Prevent SQL injection via multiple statements
-  namedPlaceholders: true,
-
-  // Timezone handling
-  timezone: "Z", // UTC
-  dateStrings: false,
-} as const;
-
-let _pool: mysql.Pool | null = null;
-let _db: MySql2Database<typeof schema> | null = null;
-
-/**
- * Get the MySQL connection pool (singleton)
- * Uses connection pooling for better performance under load
- */
-export function getPool(): mysql.Pool | null {
-  if (!_pool && process.env.DATABASE_URL) {
-    try {
-      const url = new URL(process.env.DATABASE_URL);
-
-      _pool = mysql.createPool({
-        host: url.hostname,
-        port: parseInt(url.port || "3306", 10),
-        user: url.username,
-        password: url.password,
-        database: url.pathname.slice(1), // Remove leading /
-        ssl:
-          url.searchParams.get("ssl") === "true"
-            ? { rejectUnauthorized: false }
-            : undefined,
-        ...POOL_CONFIG,
-      });
-
-      // Monitor pool events
-      _pool.on("connection", () => {
-        log.debug(
-          { event: "pool_connection_created" },
-          "New pool connection created"
-        );
-      });
-
-      _pool.on("release", () => {
-        log.debug(
-          { event: "pool_connection_released" },
-          "Pool connection released"
-        );
-      });
-
-      _pool.on("enqueue", () => {
-        log.warn(
-          { event: "pool_connection_queued" },
-          "Connection request queued - pool may be exhausted"
-        );
-      });
-
-      log.info(
-        {
-          event: "pool_initialized",
-          connectionLimit: POOL_CONFIG.connectionLimit,
-          maxIdle: POOL_CONFIG.maxIdle,
-        },
-        "Database connection pool initialized"
-      );
-    } catch (error) {
-      log.error(
-        { event: "pool_init_failed", error },
-        "Failed to initialize connection pool"
-      );
-      _pool = null;
-    }
-  }
-  return _pool;
-}
-
-/**
- * Get pool statistics for monitoring
- */
-export function getPoolStats(): {
-  activeConnections: number;
-  idleConnections: number;
-  queuedRequests: number;
-  totalConnections: number;
-} | null {
-  const pool = getPool();
-  if (!pool) return null;
-
-  // Note: mysql2 pool stats are accessed through internal properties
-  const poolInternal = pool.pool as {
-    _allConnections?: { length: number };
-    _freeConnections?: { length: number };
-    _connectionQueue?: { length: number };
-  };
-
-  return {
-    totalConnections: poolInternal._allConnections?.length ?? 0,
-    idleConnections: poolInternal._freeConnections?.length ?? 0,
-    activeConnections:
-      (poolInternal._allConnections?.length ?? 0) -
-      (poolInternal._freeConnections?.length ?? 0),
-    queuedRequests: poolInternal._connectionQueue?.length ?? 0,
-  };
-}
-
-export function getDb(): MySql2Database<typeof schema> | null {
+export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      const pool = getPool();
-      if (pool) {
-        _db = drizzle(pool, { schema, mode: "default" });
-      } else {
-        // Fallback to direct connection if pool fails
-        _db = drizzle(process.env.DATABASE_URL, { schema, mode: "default" });
-      }
+      _db = drizzle(process.env.DATABASE_URL);
     } catch (error) {
-      log.warn(
-        { event: "db_connection_failed", error },
-        "Failed to connect to database"
-      );
+      console.warn("[Database] Failed to connect:", error);
       _db = null;
     }
   }
   return _db;
-}
-
-/**
- * Gracefully close the connection pool
- * Call this during application shutdown
- */
-export async function closePool(): Promise<void> {
-  if (_pool) {
-    try {
-      await _pool.end();
-      _pool = null;
-      _db = null;
-      log.info({ event: "pool_closed" }, "Database connection pool closed");
-    } catch (error) {
-      log.error(
-        { event: "pool_close_failed", error },
-        "Failed to close connection pool"
-      );
-    }
-  }
-}
-
-// ============ Pagination Types & Helpers ============
-
-/**
- * Cursor-based pagination parameters
- */
-export interface CursorPaginationParams {
-  cursor?: string | number | null;
-  limit?: number;
-  direction?: "forward" | "backward";
-}
-
-/**
- * Offset-based pagination parameters
- */
-export interface OffsetPaginationParams {
-  page?: number;
-  limit?: number;
-}
-
-/**
- * Paginated result with metadata
- */
-export interface PaginatedResult<T> {
-  data: T[];
-  pagination: {
-    hasMore: boolean;
-    nextCursor?: string | number | null;
-    previousCursor?: string | number | null;
-    total?: number;
-    page?: number;
-    totalPages?: number;
-  };
-}
-
-/**
- * Default pagination limits
- */
-export const PAGINATION_DEFAULTS = {
-  DEFAULT_LIMIT: 20,
-  MAX_LIMIT: 100,
-  MIN_LIMIT: 1,
-} as const;
-
-/**
- * Normalize pagination limit to safe bounds
- */
-export function normalizePaginationLimit(
-  limit?: number,
-  defaultLimit = PAGINATION_DEFAULTS.DEFAULT_LIMIT
-): number {
-  if (!limit || limit < PAGINATION_DEFAULTS.MIN_LIMIT) {
-    return defaultLimit;
-  }
-  return Math.min(limit, PAGINATION_DEFAULTS.MAX_LIMIT);
-}
-
-/**
- * Build cursor-based pagination query conditions
- * @param cursorColumn - The column to use for cursor (typically id or createdAt)
- * @param cursor - The cursor value
- * @param direction - Pagination direction
- * @returns SQL condition for cursor pagination
- */
-export function buildCursorCondition<T>(
-  cursorColumn: T,
-  cursor: string | number | null | undefined,
-  direction: "forward" | "backward" = "forward"
-): SQL | undefined {
-  if (cursor === null || cursor === undefined) {
-    return undefined;
-  }
-
-  // For forward pagination, get items after cursor
-  // For backward pagination, get items before cursor
-  if (direction === "forward") {
-    return gt(cursorColumn as SQL, cursor);
-  }
-  return lt(cursorColumn as SQL, cursor);
-}
-
-/**
- * Create a paginated response with cursor metadata
- * @param data - The query results (fetch limit + 1 to detect hasMore)
- * @param limit - The requested limit
- * @param getCursor - Function to extract cursor from an item
- * @param direction - Pagination direction
- */
-export function createCursorPaginatedResponse<T, C extends string | number>(
-  data: T[],
-  limit: number,
-  getCursor: (item: T) => C,
-  direction: "forward" | "backward" = "forward"
-): PaginatedResult<T> {
-  const hasMore = data.length > limit;
-  const items = hasMore ? data.slice(0, limit) : data;
-
-  const result: PaginatedResult<T> = {
-    data: items,
-    pagination: {
-      hasMore,
-    },
-  };
-
-  if (items.length > 0) {
-    if (direction === "forward") {
-      result.pagination.nextCursor = hasMore
-        ? getCursor(items[items.length - 1])
-        : null;
-      result.pagination.previousCursor = getCursor(items[0]);
-    } else {
-      result.pagination.previousCursor = hasMore ? getCursor(items[0]) : null;
-      result.pagination.nextCursor = getCursor(items[items.length - 1]);
-    }
-  }
-
-  return result;
-}
-
-/**
- * Create offset-based paginated response
- * @param data - The query results
- * @param total - Total count of items
- * @param page - Current page number (1-indexed)
- * @param limit - Items per page
- */
-export function createOffsetPaginatedResponse<T>(
-  data: T[],
-  total: number,
-  page: number,
-  limit: number
-): PaginatedResult<T> {
-  const totalPages = Math.ceil(total / limit);
-
-  return {
-    data,
-    pagination: {
-      hasMore: page < totalPages,
-      total,
-      page,
-      totalPages,
-    },
-  };
-}
-
-/**
- * Calculate offset from page number
- */
-export function calculateOffset(page: number, limit: number): number {
-  return Math.max(0, (page - 1) * limit);
-}
-
-// ============ Efficient Count Queries ============
-
-/**
- * Perform an efficient count query using SQL COUNT(*)
- * More efficient than fetching all rows and counting
- */
-export async function efficientCount(
-  tableName: string,
-  whereClause?: SQL
-): Promise<number> {
-  const db = await getDb();
-  if (!db) return 0;
-
-  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
-    log.error(
-      { event: "invalid_table_name", tableName },
-      "Invalid table name for count query"
-    );
-    return 0;
-  }
-
-  try {
-    const tableIdentifier = sql.raw(tableName);
-    const countQuery = whereClause
-      ? sql`SELECT COUNT(*) as count FROM ${tableIdentifier} WHERE ${whereClause}`
-      : sql`SELECT COUNT(*) as count FROM ${tableIdentifier}`;
-
-    const result = await db.execute(countQuery);
-    const rows = result as unknown as Array<Array<{ count: number | bigint }>>;
-    return Number(rows[0]?.[0]?.count ?? 0);
-  } catch (error) {
-    log.error(
-      { event: "count_query_failed", tableName, error },
-      "Failed to execute count query"
-    );
-    return 0;
-  }
-}
-
-/**
- * Perform count with estimate for very large tables
- * Uses EXPLAIN to get row estimate (much faster but approximate)
- */
-export async function estimatedCount(tableName: string): Promise<number> {
-  const db = await getDb();
-  if (!db) return 0;
-
-  try {
-    const result = await db.execute(
-      sql`SELECT TABLE_ROWS as count
-          FROM information_schema.TABLES
-          WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = ${tableName}`
-    );
-    const rows = result as unknown as Array<
-      Array<{ count: number | bigint | null }>
-    >;
-    return Number(rows[0]?.[0]?.count ?? 0);
-  } catch (error) {
-    log.error(
-      { event: "estimated_count_failed", tableName, error },
-      "Failed to get estimated count"
-    );
-    return 0;
-  }
 }
 
 // ============ User Functions ============
@@ -427,10 +30,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   const db = await getDb();
   if (!db) {
-    log.warn(
-      { event: "db_unavailable", operation: "upsert_user" },
-      "Cannot upsert user: database not available"
-    );
+    console.warn("[Database] Cannot upsert user: database not available");
     return;
   }
 
@@ -461,8 +61,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
+      values.role = 'admin';
+      updateSet.role = 'admin';
     }
 
     if (!values.lastSignedIn) {
@@ -477,7 +77,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       set: updateSet,
     });
   } catch (error) {
-    log.error({ event: "upsert_user_failed", error }, "Failed to upsert user");
+    console.error("[Database] Failed to upsert user:", error);
     throw error;
   }
 }
@@ -485,52 +85,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) {
-    log.warn(
-      { event: "db_unavailable", operation: "get_user" },
-      "Cannot get user: database not available"
-    );
+    console.warn("[Database] Cannot get user: database not available");
     return undefined;
   }
 
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.openId, openId))
-    .limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
-}
-
-export async function getUserById(id: number) {
-  const db = await getDb();
-  if (!db) {
-    log.warn(
-      { event: "db_unavailable", operation: "get_user" },
-      "Cannot get user: database not available"
-    );
-    return undefined;
-  }
-
-  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
-}
-
-export async function getUserByEmail(email: string) {
-  const db = await getDb();
-  if (!db) {
-    log.warn(
-      { event: "db_unavailable", operation: "get_user" },
-      "Cannot get user: database not available"
-    );
-    return undefined;
-  }
-
-  const result = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
 
   return result.length > 0 ? result[0] : undefined;
 }
@@ -669,13 +228,10 @@ export async function getBookingsByUserId(userId: number) {
       numberOfPassengers: bookings.numberOfPassengers,
       checkedIn: bookings.checkedIn,
       createdAt: bookings.createdAt,
-      flightId: bookings.flightId,
       flight: {
-        id: flights.id,
         flightNumber: flights.flightNumber,
         departureTime: flights.departureTime,
         arrivalTime: flights.arrivalTime,
-        status: flights.status,
         origin: airports.code,
         destination: sql<string>`dest.code`,
       },
@@ -684,12 +240,12 @@ export async function getBookingsByUserId(userId: number) {
     .innerJoin(flights, eq(bookings.flightId, flights.id))
     .innerJoin(airports, eq(flights.originId, airports.id))
     .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
-    .where(and(eq(bookings.userId, userId), isNull(bookings.deletedAt)))
+    .where(eq(bookings.userId, userId))
     .orderBy(desc(bookings.createdAt));
 
   // Fetch passengers for each booking
   const bookingsWithPassengers = await Promise.all(
-    result.map(async booking => {
+    result.map(async (booking) => {
       const bookingPassengers = await db
         .select()
         .from(passengers)
@@ -711,7 +267,7 @@ export async function getBookingByPNR(pnr: string) {
   const result = await db
     .select()
     .from(bookings)
-    .where(and(eq(bookings.pnr, pnr), isNull(bookings.deletedAt)))
+    .where(eq(bookings.pnr, pnr))
     .limit(1);
 
   return result.length > 0 ? result[0] : null;
@@ -724,22 +280,19 @@ export async function getBookingByIdWithDetails(id: number) {
   const result = await db
     .select()
     .from(bookings)
-    .where(and(eq(bookings.id, id), isNull(bookings.deletedAt)))
+    .where(eq(bookings.id, id))
     .limit(1);
 
   return result.length > 0 ? result[0] : null;
 }
 
-export async function updateBookingStatus(
-  id: number,
-  status: "pending" | "confirmed" | "cancelled" | "completed"
-) {
+export async function updateBookingStatus(id: number, status: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   await db
     .update(bookings)
-    .set({ status, updatedAt: new Date() })
+    .set({ status: status as any, updatedAt: new Date() })
     .where(eq(bookings.id, id));
 }
 
@@ -770,23 +323,19 @@ export async function createPayment(data: InsertPayment) {
   return result;
 }
 
-export async function updatePaymentStatus(
-  id: number,
-  status: "pending" | "completed" | "failed" | "refunded",
-  transactionId?: string
-) {
+export async function updatePaymentStatus(id: number, status: string, transactionId?: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const updateData: Partial<InsertPayment> & { updatedAt: Date } = {
-    status,
-    updatedAt: new Date(),
-  };
+  const updateData: any = { status, updatedAt: new Date() };
   if (transactionId) {
     updateData.transactionId = transactionId;
   }
 
-  await db.update(payments).set(updateData).where(eq(payments.id, id));
+  await db
+    .update(payments)
+    .set(updateData)
+    .where(eq(payments.id, id));
 }
 
 export async function getPaymentByIdempotencyKey(idempotencyKey: string) {
@@ -825,11 +374,7 @@ export async function createFlight(data: InsertFlight) {
   return result;
 }
 
-export async function updateFlightAvailability(
-  flightId: number,
-  cabinClass: string,
-  seats: number
-) {
+export async function updateFlightAvailability(flightId: number, cabinClass: string, seats: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
@@ -848,50 +393,10 @@ export async function updateFlightAvailability(
 
 // Helper function to generate unique booking reference
 export function generateBookingReference(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let result = "";
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let result = '';
   for (let i = 0; i < 6; i++) {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
 }
-
-// ============ Stripe-related Functions ============
-export async function getBookingByPaymentIntentId(paymentIntentId: string) {
-  const db = await getDb();
-  if (!db) return null;
-
-  const result = await db
-    .select()
-    .from(bookings)
-    .where(
-      and(
-        eq(bookings.stripePaymentIntentId, paymentIntentId),
-        isNull(bookings.deletedAt)
-      )
-    )
-    .limit(1);
-
-  return result.length > 0 ? result[0] : null;
-}
-
-export async function getBookingByCheckoutSessionId(sessionId: string) {
-  const db = await getDb();
-  if (!db) return null;
-
-  const result = await db
-    .select()
-    .from(bookings)
-    .where(
-      and(
-        eq(bookings.stripeCheckoutSessionId, sessionId),
-        isNull(bookings.deletedAt)
-      )
-    )
-    .limit(1);
-
-  return result.length > 0 ? result[0] : null;
-}
-
-// Export the db instance for direct access when needed
-export { getDb as db };

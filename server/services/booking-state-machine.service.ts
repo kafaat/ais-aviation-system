@@ -1,10 +1,6 @@
-import { getDb } from "../db";
-import {
-  bookingStatusHistory,
-  type InsertBookingStatusHistory,
-} from "../../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
-import { logger } from "../_core/logger";
+import { db } from "../db";
+import { bookingStatusHistory, type InsertBookingStatusHistory } from "../../drizzle/schema";
+import { logger } from "./logger.service";
 
 // Define all possible booking states
 export type BookingStatus =
@@ -72,9 +68,7 @@ export function isValidTransition(
 /**
  * Get all possible transitions from current status
  */
-export function getValidTransitions(
-  currentStatus: BookingStatus
-): BookingStatus[] {
+export function getValidTransitions(currentStatus: BookingStatus): BookingStatus[] {
   return VALID_TRANSITIONS[currentStatus];
 }
 
@@ -95,20 +89,17 @@ export async function recordStatusChange(data: {
 }): Promise<void> {
   try {
     // Validate transition if there's a previous status
-    const isValid = data.previousStatus
+    const isValid = data.previousStatus 
       ? isValidTransition(data.previousStatus, data.newStatus)
       : true; // First status is always valid
 
     if (!isValid) {
-      logger.warn(
-        {
-          bookingId: data.bookingId,
-          bookingReference: data.bookingReference,
-          previousStatus: data.previousStatus,
-          newStatus: data.newStatus,
-        },
-        "Invalid booking status transition attempted"
-      );
+      logger.warn({
+        bookingId: data.bookingId,
+        bookingReference: data.bookingReference,
+        previousStatus: data.previousStatus,
+        newStatus: data.newStatus,
+      }, "Invalid booking status transition attempted");
     }
 
     const historyEntry: InsertBookingStatusHistory = {
@@ -125,34 +116,23 @@ export async function recordStatusChange(data: {
       metadata: data.metadata ? JSON.stringify(data.metadata) : null,
     };
 
-    const database = await getDb();
-    if (!database) {
-      logger.error({}, "Database not available");
-      return;
-    }
+    await db.insert(bookingStatusHistory).values(historyEntry);
 
-    await database.insert(bookingStatusHistory).values(historyEntry);
+    logger.info({
+      bookingId: data.bookingId,
+      bookingReference: data.bookingReference,
+      previousStatus: data.previousStatus,
+      newStatus: data.newStatus,
+      isValid,
+      actorType: data.actorType,
+    }, `Booking status changed: ${data.previousStatus || "none"} -> ${data.newStatus}`);
 
-    logger.info(
-      {
-        bookingId: data.bookingId,
-        bookingReference: data.bookingReference,
-        previousStatus: data.previousStatus,
-        newStatus: data.newStatus,
-        isValid,
-        actorType: data.actorType,
-      },
-      `Booking status changed: ${data.previousStatus || "none"} -> ${data.newStatus}`
-    );
   } catch (error) {
-    logger.error(
-      {
-        error,
-        bookingId: data.bookingId,
-        bookingReference: data.bookingReference,
-      },
-      "Failed to record booking status change"
-    );
+    logger.error({
+      error,
+      bookingId: data.bookingId,
+      bookingReference: data.bookingReference,
+    }, "Failed to record booking status change");
     // Don't throw - status history is important but shouldn't break the main operation
   }
 }
@@ -162,17 +142,11 @@ export async function recordStatusChange(data: {
  */
 export async function getBookingStatusHistory(bookingId: number) {
   try {
-    const database = await getDb();
-    if (!database) {
-      logger.error({}, "Database not available");
-      return [];
-    }
-
-    const history = await database
+    const history = await db
       .select()
       .from(bookingStatusHistory)
-      .where(eq(bookingStatusHistory.bookingId, bookingId))
-      .orderBy(desc(bookingStatusHistory.transitionedAt));
+      .where(db.eq(bookingStatusHistory.bookingId, bookingId))
+      .orderBy(db.desc(bookingStatusHistory.transitionedAt));
 
     return history.map(entry => ({
       ...entry,
@@ -204,11 +178,8 @@ export async function transitionBookingStatus(
   // Validate transition
   if (!isValidTransition(currentStatus, newStatus)) {
     const error = `Invalid transition from ${currentStatus} to ${newStatus}`;
-    logger.warn(
-      { bookingId, bookingReference, currentStatus, newStatus },
-      error
-    );
-
+    logger.warn({ bookingId, bookingReference, currentStatus, newStatus }, error);
+    
     // Still record the attempted transition
     await recordStatusChange({
       bookingId,
@@ -222,7 +193,7 @@ export async function transitionBookingStatus(
       paymentIntentId: options.paymentIntentId,
       metadata: options.metadata,
     });
-
+    
     return { success: false, error };
   }
 

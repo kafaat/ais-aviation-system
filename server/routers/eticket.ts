@@ -1,18 +1,8 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import {
-  generateETicketPDF,
-  generateBoardingPassPDF,
-  generateTicketNumber,
-} from "../services/eticket.service";
+import { generateETicketPDF, generateBoardingPassPDF, generateTicketNumber } from "../services/eticket.service";
 import { getDb } from "../db";
-import {
-  bookings,
-  flights,
-  airports,
-  passengers,
-  airlines,
-} from "../../drizzle/schema";
+import { bookings, flights, airports, passengers, airlines } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -33,11 +23,7 @@ export const eticketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
-      if (!database)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
+      if (!database) throw new Error("Database not available");
 
       // Get booking details
       const [booking] = await database
@@ -48,7 +34,6 @@ export const eticketRouter = router({
           userId: bookings.userId,
           cabinClass: bookings.cabinClass,
           totalAmount: bookings.totalAmount,
-          status: bookings.status,
           flightNumber: flights.flightNumber,
           airlineId: flights.airlineId,
           departureTime: flights.departureTime,
@@ -65,14 +50,6 @@ export const eticketRouter = router({
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Booking not found",
-        });
-      }
-
-      // Check if booking is confirmed
-      if (booking.status !== "confirmed" && booking.status !== "completed") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Booking must be confirmed before generating an e-ticket",
         });
       }
 
@@ -147,8 +124,7 @@ export const eticketRouter = router({
         arrivalTime: booking.arrivalTime,
         cabinClass: booking.cabinClass,
         seatNumber: passenger.seatNumber || undefined,
-        baggageAllowance:
-          booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
+        baggageAllowance: booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
         totalAmount: booking.totalAmount,
         currency: "SAR",
         issueDate: new Date(),
@@ -174,11 +150,7 @@ export const eticketRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
-      if (!database)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
+      if (!database) throw new Error("Database not available");
 
       // Get booking details
       const [booking] = await database
@@ -280,8 +252,7 @@ export const eticketRouter = router({
         arrivalTime: booking.arrivalTime,
         cabinClass: booking.cabinClass,
         seatNumber: passenger.seatNumber || undefined,
-        baggageAllowance:
-          booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
+        baggageAllowance: booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
         totalAmount: booking.totalAmount,
         currency: "SAR",
         issueDate: new Date(),
@@ -295,140 +266,6 @@ export const eticketRouter = router({
         pdf: pdfBuffer.toString("base64"),
         ticketNumber,
         filename: `boarding_pass_${booking.bookingReference}_${passenger.firstName}_${passenger.lastName}.pdf`,
-      };
-    }),
-
-  /**
-   * Generate .ics calendar event for a booking
-   */
-  generateCalendarEvent: protectedProcedure
-    .input(
-      z.object({
-        bookingId: z.number(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const database = await getDb();
-      if (!database)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      // Get booking with flight details
-      const [booking] = await database
-        .select({
-          bookingId: bookings.id,
-          bookingReference: bookings.bookingReference,
-          pnr: bookings.pnr,
-          userId: bookings.userId,
-          cabinClass: bookings.cabinClass,
-          flightNumber: flights.flightNumber,
-          airlineId: flights.airlineId,
-          departureTime: flights.departureTime,
-          arrivalTime: flights.arrivalTime,
-          originId: flights.originId,
-          destinationId: flights.destinationId,
-        })
-        .from(bookings)
-        .innerJoin(flights, eq(bookings.flightId, flights.id))
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (!booking || booking.userId !== ctx.user.id) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      // Get airport details
-      const [origin] = await database
-        .select()
-        .from(airports)
-        .where(eq(airports.id, booking.originId))
-        .limit(1);
-
-      const [destination] = await database
-        .select()
-        .from(airports)
-        .where(eq(airports.id, booking.destinationId))
-        .limit(1);
-
-      if (!origin || !destination) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Airport not found",
-        });
-      }
-
-      // Get airline details
-      const [airline] = await database
-        .select()
-        .from(airlines)
-        .where(eq(airlines.id, booking.airlineId))
-        .limit(1);
-
-      const airlineName = airline?.name || "Unknown Airline";
-
-      // Format date to iCal format (YYYYMMDDTHHmmSSZ)
-      const formatICalDate = (date: Date): string => {
-        return date
-          .toISOString()
-          .replace(/[-:]/g, "")
-          .replace(/\.\d{3}/, "");
-      };
-
-      const uid = `${booking.bookingReference}-${booking.pnr}@ais-aviation`;
-      const now = formatICalDate(new Date());
-      const dtStart = formatICalDate(new Date(booking.departureTime));
-      const dtEnd = formatICalDate(new Date(booking.arrivalTime));
-
-      const summary = `${airlineName} ${booking.flightNumber}: ${origin.code} → ${destination.code}`;
-      const description = [
-        `Flight: ${airlineName} ${booking.flightNumber}`,
-        `From: ${origin.name} (${origin.code}), ${origin.city}`,
-        `To: ${destination.name} (${destination.code}), ${destination.city}`,
-        `Booking Reference: ${booking.bookingReference}`,
-        `PNR: ${booking.pnr}`,
-        `Class: ${booking.cabinClass}`,
-      ].join("\\n");
-
-      const location = `${origin.name} (${origin.code}), ${origin.city}, ${origin.country}`;
-
-      // Build .ics content
-      const icsContent = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//AIS Aviation System//EN",
-        "CALSCALE:GREGORIAN",
-        "METHOD:PUBLISH",
-        "BEGIN:VEVENT",
-        `UID:${uid}`,
-        `DTSTAMP:${now}`,
-        `DTSTART:${dtStart}`,
-        `DTEND:${dtEnd}`,
-        `SUMMARY:${summary}`,
-        `DESCRIPTION:${description}`,
-        `LOCATION:${location}`,
-        "STATUS:CONFIRMED",
-        "BEGIN:VALARM",
-        "TRIGGER:-PT3H",
-        "ACTION:DISPLAY",
-        "DESCRIPTION:Flight departure in 3 hours",
-        "END:VALARM",
-        "BEGIN:VALARM",
-        "TRIGGER:-PT24H",
-        "ACTION:DISPLAY",
-        "DESCRIPTION:Flight departure tomorrow - check-in reminder",
-        "END:VALARM",
-        "END:VEVENT",
-        "END:VCALENDAR",
-      ].join("\r\n");
-
-      return {
-        ics: Buffer.from(icsContent, "utf-8").toString("base64"),
-        filename: `flight_${booking.bookingReference}_${booking.flightNumber}.ics`,
       };
     }),
 });

@@ -1,300 +1,133 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-// Mock the database module
-vi.mock("../../db", () => ({
-  getDb: vi.fn().mockResolvedValue(null),
-}));
-
-// Mock the cache service
-vi.mock("../../services/cache.service", () => ({
-  cacheService: {
-    get: vi.fn().mockResolvedValue(null),
-    set: vi.fn().mockResolvedValue(undefined),
-    del: vi.fn().mockResolvedValue(undefined),
-  },
-}));
-
-// Mock drizzle schema
-vi.mock("../../../drizzle/schema", () => ({
-  exchangeRates: {
-    fromCurrency: "fromCurrency",
-    toCurrency: "toCurrency",
-    rate: "rate",
-    source: "source",
-    updatedAt: "updatedAt",
-  },
-  currencies: {
-    code: "code",
-    name: "name",
-  },
-}));
-
-// Mock drizzle-orm
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((a, b) => ({ type: "eq", a, b })),
-  and: vi.fn((...args) => ({ type: "and", args })),
-  gte: vi.fn((a, b) => ({ type: "gte", a, b })),
-  desc: vi.fn(a => ({ type: "desc", a })),
-}));
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  fetchLatestExchangeRates,
+  getExchangeRate,
+  convertFromSAR,
+  formatCurrency,
+} from "../../services/new-features/currency.service";
 
 describe("Currency Service", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeAll(async () => {
+    // Initialize exchange rates before tests
+    await fetchLatestExchangeRates();
+  });
+
+  describe("fetchLatestExchangeRates", () => {
+    it("should fetch and store exchange rates", async () => {
+      await fetchLatestExchangeRates();
+      
+      // Verify rates are stored by trying to get one
+      const usdRate = await getExchangeRate("USD");
+      expect(usdRate).toBeGreaterThan(0);
+    });
   });
 
   describe("getExchangeRate", () => {
-    it("should return 1.0 for same currency conversion", async () => {
-      const { getExchangeRate } =
-        await import("../../services/currency/currency.service");
-
-      const rate = await getExchangeRate("SAR", "SAR");
-
-      expect(rate.rate).toBe(1);
-      expect(rate.fromCurrency).toBe("SAR");
-      expect(rate.toCurrency).toBe("SAR");
-      expect(rate.source).toBe("identity");
+    it("should return 1.0 for SAR to SAR", async () => {
+      const rate = await getExchangeRate("SAR");
+      expect(rate).toBe(1.0);
     });
 
-    it("should return fallback rate for SAR to USD", async () => {
-      const { getExchangeRate } =
-        await import("../../services/currency/currency.service");
-
-      const rate = await getExchangeRate("SAR", "USD");
-
-      expect(rate.rate).toBeCloseTo(0.2666, 3);
-      expect(rate.fromCurrency).toBe("SAR");
-      expect(rate.toCurrency).toBe("USD");
-      expect(rate.source).toBe("fallback");
+    it("should return valid rate for USD", async () => {
+      const rate = await getExchangeRate("USD");
+      expect(rate).toBeGreaterThan(0);
+      expect(rate).toBeLessThan(1); // SAR is worth less than USD
     });
 
-    it("should return fallback rate for USD to SAR", async () => {
-      const { getExchangeRate } =
-        await import("../../services/currency/currency.service");
-
-      const rate = await getExchangeRate("USD", "SAR");
-
-      expect(rate.rate).toBe(3.75);
-      expect(rate.source).toBe("fallback");
+    it("should return valid rate for EUR", async () => {
+      const rate = await getExchangeRate("EUR");
+      expect(rate).toBeGreaterThan(0);
     });
 
-    it("should return fallback rate for SAR to EUR", async () => {
-      const { getExchangeRate } =
-        await import("../../services/currency/currency.service");
-
-      const rate = await getExchangeRate("SAR", "EUR");
-
-      expect(rate.rate).toBeCloseTo(0.245, 3);
+    it("should return valid rate for GBP", async () => {
+      const rate = await getExchangeRate("GBP");
+      expect(rate).toBeGreaterThan(0);
     });
 
-    it("should return fallback rate for SAR to GBP", async () => {
-      const { getExchangeRate } =
-        await import("../../services/currency/currency.service");
-
-      const rate = await getExchangeRate("SAR", "GBP");
-
-      expect(rate.rate).toBeCloseTo(0.21, 2);
-    });
-
-    it("should return fallback rate for SAR to AED", async () => {
-      const { getExchangeRate } =
-        await import("../../services/currency/currency.service");
-
-      const rate = await getExchangeRate("SAR", "AED");
-
-      expect(rate.rate).toBeCloseTo(0.9793, 3);
+    it("should return valid rate for AED", async () => {
+      const rate = await getExchangeRate("AED");
+      expect(rate).toBeGreaterThan(0);
     });
   });
 
-  describe("convertCurrency", () => {
-    it("should return same amount for same currency", async () => {
-      const { convertCurrency } =
-        await import("../../services/currency/currency.service");
-
-      const result = await convertCurrency(100, "SAR", "SAR");
-
-      expect(result.convertedAmount).toBe(100);
-      expect(result.exchangeRate).toBe(1);
+  describe("convertFromSAR", () => {
+    it("should return same amount for SAR to SAR", async () => {
+      const amount = 50000; // 500.00 SAR
+      const converted = await convertFromSAR(amount, "SAR");
+      expect(converted).toBe(amount);
     });
 
     it("should convert SAR to USD correctly", async () => {
-      const { convertCurrency } =
-        await import("../../services/currency/currency.service");
-
-      const result = await convertCurrency(1000, "SAR", "USD");
-
-      // 1000 SAR * 0.2666 = ~266.60 USD
-      expect(result.convertedAmount).toBeCloseTo(266.6, 1);
-      expect(result.originalCurrency).toBe("SAR");
-      expect(result.targetCurrency).toBe("USD");
+      const amount = 100000; // 1000.00 SAR
+      const converted = await convertFromSAR(amount, "USD");
+      
+      // USD should be less than SAR (approximately 0.27)
+      expect(converted).toBeGreaterThan(0);
+      expect(converted).toBeLessThan(amount);
     });
 
-    it("should convert USD to SAR correctly", async () => {
-      const { convertCurrency } =
-        await import("../../services/currency/currency.service");
-
-      const result = await convertCurrency(100, "USD", "SAR");
-
-      // 100 USD * 3.75 = 375 SAR
-      expect(result.convertedAmount).toBe(375);
-    });
-  });
-
-  describe("convertPriceForDisplay", () => {
-    it("should return SAR price unchanged", async () => {
-      const { convertPriceForDisplay } =
-        await import("../../services/currency/currency.service");
-
-      const result = await convertPriceForDisplay(500, "SAR");
-
-      expect(result.amount).toBe(500);
-      expect(result.currency).toBe("SAR");
-      expect(result.formatted).toContain("500");
+    it("should convert SAR to EUR correctly", async () => {
+      const amount = 100000; // 1000.00 SAR
+      const converted = await convertFromSAR(amount, "EUR");
+      
+      expect(converted).toBeGreaterThan(0);
+      expect(converted).toBeLessThan(amount);
     });
 
-    it("should convert to USD for display", async () => {
-      const { convertPriceForDisplay } =
-        await import("../../services/currency/currency.service");
+    it("should handle small amounts", async () => {
+      const amount = 100; // 1.00 SAR
+      const converted = await convertFromSAR(amount, "USD");
+      
+      expect(converted).toBeGreaterThan(0);
+    });
 
-      const result = await convertPriceForDisplay(1000, "USD");
-
-      expect(result.currency).toBe("USD");
-      expect(result.amount).toBeCloseTo(266.6, 1);
+    it("should handle large amounts", async () => {
+      const amount = 10000000; // 100,000.00 SAR
+      const converted = await convertFromSAR(amount, "USD");
+      
+      expect(converted).toBeGreaterThan(0);
     });
   });
 
-  describe("getCurrencyInfo", () => {
-    it("should return SAR currency info", async () => {
-      const { getCurrencyInfo } =
-        await import("../../services/currency/currency.service");
-
-      const info = getCurrencyInfo("SAR");
-
-      expect(info.code).toBe("SAR");
-      expect(info.name).toBe("Saudi Riyal");
-      expect(info.symbol).toBe("ر.س");
-      expect(info.decimalPlaces).toBe(2);
+  describe("formatCurrency", () => {
+    it("should format SAR correctly", () => {
+      const formatted = formatCurrency(50000, "SAR");
+      expect(formatted).toContain("﷼");
+      expect(formatted).toContain("500.00");
     });
 
-    it("should return USD currency info", async () => {
-      const { getCurrencyInfo } =
-        await import("../../services/currency/currency.service");
-
-      const info = getCurrencyInfo("USD");
-
-      expect(info.code).toBe("USD");
-      expect(info.name).toBe("US Dollar");
-      expect(info.symbol).toBe("$");
+    it("should format USD correctly", () => {
+      const formatted = formatCurrency(50000, "USD");
+      expect(formatted).toContain("$");
+      expect(formatted).toContain("500.00");
     });
 
-    it("should throw error for unsupported currency", async () => {
-      const { getCurrencyInfo } =
-        await import("../../services/currency/currency.service");
-
-      expect(() => getCurrencyInfo("XYZ")).toThrow("Unsupported currency: XYZ");
-    });
-  });
-
-  describe("getSupportedCurrencies", () => {
-    it("should return list of supported currencies", async () => {
-      const { getSupportedCurrencies } =
-        await import("../../services/currency/currency.service");
-
-      const currencies = getSupportedCurrencies();
-
-      expect(currencies.length).toBeGreaterThan(0);
-      expect(currencies.some(c => c.code === "SAR")).toBe(true);
-      expect(currencies.some(c => c.code === "USD")).toBe(true);
-      expect(currencies.some(c => c.code === "EUR")).toBe(true);
-    });
-  });
-
-  describe("isCurrencySupported", () => {
-    it("should return true for supported currencies", async () => {
-      const { isCurrencySupported } =
-        await import("../../services/currency/currency.service");
-
-      expect(isCurrencySupported("SAR")).toBe(true);
-      expect(isCurrencySupported("USD")).toBe(true);
-      expect(isCurrencySupported("EUR")).toBe(true);
+    it("should format EUR correctly", () => {
+      const formatted = formatCurrency(50000, "EUR");
+      expect(formatted).toContain("€");
+      expect(formatted).toContain("500.00");
     });
 
-    it("should return false for unsupported currencies", async () => {
-      const { isCurrencySupported } =
-        await import("../../services/currency/currency.service");
-
-      expect(isCurrencySupported("XYZ")).toBe(false);
-      expect(isCurrencySupported("ABC")).toBe(false);
-    });
-  });
-
-  describe("formatAmount", () => {
-    it("should format SAR amount correctly", async () => {
-      const { formatAmount, getCurrencyInfo } =
-        await import("../../services/currency/currency.service");
-
-      const sarInfo = getCurrencyInfo("SAR");
-      const formatted = formatAmount(1234.56, sarInfo);
-
-      expect(formatted).toContain("1,234.56");
+    it("should format GBP correctly", () => {
+      const formatted = formatCurrency(50000, "GBP");
+      expect(formatted).toContain("£");
+      expect(formatted).toContain("500.00");
     });
 
-    it("should format KWD with 3 decimal places", async () => {
-      const { formatAmount, getCurrencyInfo } =
-        await import("../../services/currency/currency.service");
-
-      const kwdInfo = getCurrencyInfo("KWD");
-      const formatted = formatAmount(1234.567, kwdInfo);
-
-      expect(formatted).toContain("1,234.567");
-    });
-  });
-
-  describe("formatPrice", () => {
-    it("should format SAR with symbol after amount", async () => {
-      const { formatPrice } =
-        await import("../../services/currency/currency.service");
-
-      const formatted = formatPrice(500, "SAR");
-
-      expect(formatted).toContain("500");
-      expect(formatted).toContain("ر.س");
+    it("should format AED correctly", () => {
+      const formatted = formatCurrency(50000, "AED");
+      expect(formatted).toContain("د.إ");
+      expect(formatted).toContain("500.00");
     });
 
-    it("should format USD with symbol before amount", async () => {
-      const { formatPrice } =
-        await import("../../services/currency/currency.service");
-
-      const formatted = formatPrice(500, "USD");
-
-      expect(formatted).toBe("$500.00");
+    it("should handle zero amount", () => {
+      const formatted = formatCurrency(0, "SAR");
+      expect(formatted).toContain("0.00");
     });
 
-    it("should format EUR with symbol before amount", async () => {
-      const { formatPrice } =
-        await import("../../services/currency/currency.service");
-
-      const formatted = formatPrice(500, "EUR");
-
-      expect(formatted).toBe("€500.00");
-    });
-  });
-
-  describe("parseAmount", () => {
-    it("should parse formatted amount correctly", async () => {
-      const { parseAmount } =
-        await import("../../services/currency/currency.service");
-
-      expect(parseAmount("1,234.56")).toBe(1234.56);
-      expect(parseAmount("$500.00")).toBe(500);
-      expect(parseAmount("500.00 ر.س")).toBe(500);
-    });
-
-    it("should handle amounts without formatting", async () => {
-      const { parseAmount } =
-        await import("../../services/currency/currency.service");
-
-      expect(parseAmount("500")).toBe(500);
-      expect(parseAmount("123.45")).toBe(123.45);
+    it("should handle decimal amounts correctly", () => {
+      const formatted = formatCurrency(12345, "SAR"); // 123.45 SAR
+      expect(formatted).toContain("123.45");
     });
   });
 });

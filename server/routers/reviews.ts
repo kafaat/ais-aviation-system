@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
 import * as reviewsService from "../services/reviews.service";
 
 export const reviewsRouter = router({
@@ -16,20 +16,20 @@ export const reviewsRouter = router({
         serviceRating: z.number().int().min(1).max(5).optional(),
         valueRating: z.number().int().min(1).max(5).optional(),
         title: z.string().max(200).optional(),
-        comment: z.string().max(5000).optional(),
+        comment: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       return await reviewsService.createReview({
-        userId: ctx.user.id,
+        userId: ctx.userId,
         ...input,
       });
     }),
 
   /**
-   * Get reviews for a flight (public - anyone can view reviews)
+   * Get reviews for a flight
    */
-  getFlightReviews: publicProcedure
+  getFlightReviews: protectedProcedure
     .input(
       z.object({
         flightId: z.number().int().positive(),
@@ -47,9 +47,9 @@ export const reviewsRouter = router({
     }),
 
   /**
-   * Get review statistics for a flight (public)
+   * Get review statistics for a flight
    */
-  getFlightStats: publicProcedure
+  getFlightStats: protectedProcedure
     .input(
       z.object({
         flightId: z.number().int().positive(),
@@ -71,15 +71,14 @@ export const reviewsRouter = router({
         serviceRating: z.number().int().min(1).max(5).optional(),
         valueRating: z.number().int().min(1).max(5).optional(),
         title: z.string().max(200).optional(),
-        comment: z.string().max(5000).optional(),
+        comment: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { reviewId, ...updateData } = input;
       return await reviewsService.updateReview({
-        reviewId,
-        userId: ctx.user.id,
-        ...updateData,
+        reviewId: input.reviewId,
+        userId: ctx.userId,
+        ...input,
       });
     }),
 
@@ -93,7 +92,7 @@ export const reviewsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return await reviewsService.deleteReview(input.reviewId, ctx.user.id);
+      return await reviewsService.deleteReview(input.reviewId, ctx.userId);
     }),
 
   /**
@@ -107,7 +106,7 @@ export const reviewsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
-      return await reviewsService.getUserReviews(ctx.user.id, {
+      return await reviewsService.getUserReviews(ctx.userId, {
         limit: input.limit,
         offset: input.offset,
       });
@@ -124,54 +123,5 @@ export const reviewsRouter = router({
     )
     .mutation(async ({ input }) => {
       return await reviewsService.markReviewHelpful(input.reviewId);
-    }),
-
-  /**
-   * Get reviews for an airline (aggregated from all flights)
-   */
-  getAirlineReviews: publicProcedure
-    .input(
-      z.object({
-        airlineId: z.number().int().positive(),
-        limit: z.number().int().min(1).max(100).optional(),
-        offset: z.number().int().min(0).optional(),
-        minRating: z.number().int().min(1).max(5).optional(),
-      })
-    )
-    .query(async ({ input }) => {
-      return await reviewsService.getAirlineReviews(input.airlineId, {
-        limit: input.limit,
-        offset: input.offset,
-        minRating: input.minRating,
-      });
-    }),
-
-  /**
-   * Get review statistics for an airline
-   */
-  getAirlineStats: publicProcedure
-    .input(
-      z.object({
-        airlineId: z.number().int().positive(),
-      })
-    )
-    .query(async ({ input }) => {
-      return await reviewsService.getAirlineReviewStats(input.airlineId);
-    }),
-
-  /**
-   * Check if user can review a flight
-   */
-  canReview: protectedProcedure
-    .input(
-      z.object({
-        flightId: z.number().int().positive(),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      return await reviewsService.canUserReviewFlight(
-        ctx.user.id,
-        input.flightId
-      );
     }),
 });

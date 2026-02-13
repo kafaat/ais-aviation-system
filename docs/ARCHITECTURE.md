@@ -1,7 +1,7 @@
 # AIS Aviation System - Architecture Documentation
 
-**Version:** 4.0
-**Last Updated:** February 2026
+**Version:** 2.0  
+**Last Updated:** January 2026
 
 ---
 
@@ -41,7 +41,7 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Data Persistence Layer                    │
-│              MySQL/TiDB + Redis (cache + queues)            │
+│              MySQL/TiDB + Redis (future cache)              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -49,35 +49,11 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
 
 1. **Flight Management** - Search, browse, and manage flight schedules
 2. **Booking System** - Complete booking flow with inventory management
-3. **Payment Processing** - Secure payment via Stripe with split payments
+3. **Payment Processing** - Secure payment via Stripe with webhooks
 4. **E-Ticketing** - PDF generation for tickets and boarding passes
 5. **User Management** - Authentication, profiles, and preferences
-6. **Loyalty Program** - Miles earning, redemption, and family pooling
+6. **Loyalty Program** - Miles earning and redemption system
 7. **Admin Dashboard** - Analytics, reports, and system management
-8. **Gate Management** - Airport gate assignments and change tracking
-9. **Vouchers & Credits** - Promotional codes and user credit system
-10. **Background Jobs** - BullMQ worker for emails, notifications, and queue processing
-11. **DCS** - Departure Control System for boarding management
-12. **AI Chat** - AI-powered booking assistant
-13. **Disruption Handling** - Automated flight disruption management and rebooking
-14. **IROPS Command Center** - Irregular operations management and coordination
-15. **Weight & Balance** - Aircraft weight and balance calculations
-16. **Load Planning** - Cargo and passenger load planning
-17. **Crew Assignment** - Crew scheduling and assignment management
-18. **APIS** - Advance Passenger Information System for border compliance
-19. **Biometric Boarding** - Facial recognition boarding system
-20. **Self-Service Kiosk** - Airport kiosk check-in
-21. **Automated Bag Drop** - Self-service baggage drop
-22. **Revenue Accounting** - Revenue recognition and financial reporting
-23. **BSP Reporting** - IATA BSP settlement and reporting
-24. **EU261/DOT Compensation** - Regulatory compensation management
-25. **Emergency Hotel** - IROPS hotel accommodation management
-26. **Passenger Priority** - Priority scoring and rebooking order
-27. **SLA Monitoring** - Service level agreement tracking
-28. **Data Warehouse/BI** - Business intelligence and analytics warehouse
-29. **MFA/TOTP** - Multi-factor authentication with TOTP
-30. **Multi-Region** - Multi-region deployment configuration
-31. **Disaster Recovery** - Business continuity and DR planning
 
 ---
 
@@ -98,7 +74,6 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
 ```
 
 **Benefits:**
-
 - Clear separation of concerns
 - Easy to test each layer independently
 - Maintainable and scalable codebase
@@ -107,14 +82,11 @@ AIS (Aviation Information System) is a full-stack web application for flight boo
 
 The codebase is organized by business domains:
 
-- **Flights Domain** - Flight search, scheduling, status, price calendar
-- **Bookings Domain** - Reservations, modifications, cancellations, group bookings
-- **Payments Domain** - Checkout, refunds, split payments, vouchers, credits
-- **Loyalty Domain** - Miles, tiers, rewards, family pooling, wallet
-- **Admin Domain** - Analytics, management, reports, DCS
-- **Operations Domain** - Gate management, disruptions, rebooking, baggage
-- **Commercial Domain** - Corporate accounts, travel agents, price alerts
-- **Communication Domain** - Notifications, SMS, email, AI chat
+- **Flights Domain** - Flight search, scheduling, status
+- **Bookings Domain** - Reservations, modifications, cancellations
+- **Payments Domain** - Checkout, refunds, payment history
+- **Loyalty Domain** - Miles, tiers, rewards
+- **Admin Domain** - Analytics, management, reports
 
 ### 3. Type-Safe End-to-End
 
@@ -139,33 +111,33 @@ No need for manual API documentation or type definitions!
 
 ### Backend Stack
 
-| Component        | Technology     | Purpose                    |
-| ---------------- | -------------- | -------------------------- |
-| **Runtime**      | Node.js 22     | JavaScript runtime         |
-| **Framework**    | Express 4      | Web server                 |
-| **API Layer**    | tRPC 11        | Type-safe RPC framework    |
-| **Database ORM** | Drizzle        | Type-safe database queries |
-| **Database**     | MySQL 8 / TiDB | Relational database        |
-| **Validation**   | Zod 4          | Runtime type validation    |
-| **Payments**     | Stripe API     | Payment processing         |
-| **Auth**         | Manus OAuth    | Authentication service     |
-| **Logging**      | Pino           | Structured logging         |
-| **Testing**      | Vitest         | Unit & integration tests   |
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Runtime** | Node.js 22 | JavaScript runtime |
+| **Framework** | Express 4 | Web server |
+| **API Layer** | tRPC 11 | Type-safe RPC framework |
+| **Database ORM** | Drizzle | Type-safe database queries |
+| **Database** | MySQL 8 / TiDB | Relational database |
+| **Validation** | Zod 4 | Runtime type validation |
+| **Payments** | Stripe API | Payment processing |
+| **Auth** | Manus OAuth | Authentication service |
+| **Logging** | Pino | Structured logging |
+| **Testing** | Vitest | Unit & integration tests |
 
 ### Frontend Stack
 
-| Component      | Technology      | Purpose                 |
-| -------------- | --------------- | ----------------------- |
-| **Framework**  | React 19        | UI library              |
-| **Language**   | TypeScript 5.9  | Type-safe JavaScript    |
-| **Build Tool** | Vite 7          | Fast build & HMR        |
-| **Styling**    | Tailwind CSS 4  | Utility-first CSS       |
-| **Components** | shadcn/ui       | Pre-built components    |
-| **Routing**    | Wouter          | Client-side routing     |
-| **State**      | React Query     | Server state management |
-| **Forms**      | React Hook Form | Form management         |
-| **i18n**       | react-i18next   | Internationalization    |
-| **Icons**      | Lucide React    | Icon library            |
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Framework** | React 19 | UI library |
+| **Language** | TypeScript 5.9 | Type-safe JavaScript |
+| **Build Tool** | Vite 7 | Fast build & HMR |
+| **Styling** | Tailwind CSS 4 | Utility-first CSS |
+| **Components** | shadcn/ui | Pre-built components |
+| **Routing** | Wouter | Client-side routing |
+| **State** | React Query | Server state management |
+| **Forms** | React Hook Form | Form management |
+| **i18n** | react-i18next | Internationalization |
+| **Icons** | Lucide React | Icon library |
 
 ### DevOps & Tools
 
@@ -191,24 +163,23 @@ No need for manual API documentation or type definitions!
 ┌──────────┐       ┌──────────┐       ┌──────────┐
 │ LOYALTY  │       │PASSENGERS│       │ AIRLINES │
 │ ACCOUNTS │       └──────────┘       └──────────┘
-└──────────┘            │
+└──────────┘            │                   
      │                  │              ┌──────────┐
      │                  │              │ AIRPORTS │
      ▼                  ▼              └──────────┘
-┌──────────┐       ┌──────────┐
-│  MILES   │       │ PAYMENTS │
-│TRANSACT. │       └──────────┘
-└──────────┘            │
-                        ▼
-                   ┌──────────┐
-                   │ REFUNDS  │
-                   └──────────┘
+┌──────────┐       ┌──────────┐            
+│  MILES   │       │ PAYMENTS │            
+│TRANSACT. │       └──────────┘            
+└──────────┘            │                  
+                        ▼                  
+                   ┌──────────┐            
+                   │ REFUNDS  │            
+                   └──────────┘            
 ```
 
 ### Core Tables
 
 #### 1. **users**
-
 Stores user accounts and authentication data.
 
 ```sql
@@ -223,7 +194,6 @@ CREATE TABLE users (
 ```
 
 #### 2. **flights**
-
 Flight schedules and availability.
 
 ```sql
@@ -240,7 +210,7 @@ CREATE TABLE flights (
   available_seats INT,
   total_seats INT,
   cabin_class ENUM('economy', 'business', 'first'),
-
+  
   INDEX idx_route_date (origin_airport_id, destination_airport_id, departure_time),
   INDEX idx_airline (airline_id),
   INDEX idx_status (status)
@@ -248,7 +218,6 @@ CREATE TABLE flights (
 ```
 
 #### 3. **bookings**
-
 Customer reservations and booking details.
 
 ```sql
@@ -261,7 +230,7 @@ CREATE TABLE bookings (
   status ENUM('pending', 'confirmed', 'cancelled', 'completed'),
   total_amount DECIMAL(10,2),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
+  
   INDEX idx_user (user_id),
   INDEX idx_flight (flight_id),
   INDEX idx_reference (booking_reference)
@@ -269,7 +238,6 @@ CREATE TABLE bookings (
 ```
 
 #### 4. **passengers**
-
 Individual passenger details for bookings.
 
 ```sql
@@ -283,13 +251,12 @@ CREATE TABLE passengers (
   date_of_birth DATE,
   ticket_number VARCHAR(13),
   seat_number VARCHAR(5),
-
+  
   INDEX idx_booking (booking_id)
 );
 ```
 
 #### 5. **payments**
-
 Payment transactions and history.
 
 ```sql
@@ -303,7 +270,7 @@ CREATE TABLE payments (
   status ENUM('pending', 'succeeded', 'failed', 'refunded'),
   idempotency_key VARCHAR(255) UNIQUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
+  
   INDEX idx_booking (booking_id),
   INDEX idx_stripe_session (stripe_session_id)
 );
@@ -311,53 +278,19 @@ CREATE TABLE payments (
 
 ### Advanced Features Tables
 
-The database contains **71 tables** total. Key additional tables:
-
 #### Loyalty Program
-
-- **loyalty_accounts** - User loyalty account info (tier, miles, points)
+- **loyalty_accounts** - User loyalty account info
 - **miles_transactions** - Miles earning/spending history
-- **family_pools** - Family mile pooling groups
 
-#### Inventory & Pricing
-
+#### Inventory Management
 - **inventory_locks** - Temporary seat holds during booking
-- **price_locks** - Locked prices for users
-- **price_alerts** - User price drop alerts
-
-#### Gate Management
-
-- **airport_gates** - Airport gate definitions with terminal info
-- **gate_assignments** - Flight-to-gate assignments with change tracking
-
-#### Vouchers & Credits
-
-- **vouchers** - Promotional/discount codes
-- **voucher_usage** - Voucher redemption history
-- **user_credits** - User credit balances from refunds/promos
-- **credit_usage** - Credit usage tracking
-
-#### Commercial
-
-- **corporate_accounts** - Business travel accounts
-- **travel_agents** - Travel agent profiles and commissions
-- **waitlist** - Flight waitlist entries
-
-#### Operations
-
-- **split_payments** - Split payment shares between users
-- **notifications** - User notification records
-- **group_booking_requests** - Group discount requests
 
 #### Service Management
-
 - **ancillary_services** - Extra services catalog (meals, baggage, etc.)
 - **booking_ancillaries** - Services added to bookings
 
 #### User Preferences
-
 - **user_preferences** - Seat preferences, meal choices, etc.
-- **saved_passengers** - Stored passenger profiles for quick booking
 
 ---
 
@@ -365,88 +298,26 @@ The database contains **71 tables** total. Key additional tables:
 
 ### tRPC Router Structure
 
-The system has **67+ registered domain routers** organized by function:
-
 ```typescript
 export const appRouter = router({
-  // Core APIs
-  auth,
-  flights,
-  bookings,
-  payments,
-  refunds,
-  eticket,
-
-  // User Features
-  loyalty,
-  userPreferences,
-  favorites,
-  savedPassengers,
-  ancillary,
-  notifications,
-  priceAlerts,
-  reviews,
-
-  // Phase 2: Advanced Features
-  gates,
-  vouchers,
-  splitPayments,
-  priceCalendar,
-  waitlist,
-  corporate,
-  travelAgent,
-  groupBookings,
-  priceLock,
-  familyPool,
-  wallet,
-  multiCity,
-  baggage,
-
-  // Phase 3: Operations
-  dcs,
-  disruptions,
-  rebooking,
-  travelScenarios,
-  aiChat,
-  inventory,
-  pricing,
-  softDelete,
-  sms,
-
-  // Phase 4: Competitive Gap Features
-  apis,
-  bagDrop,
-  biometric,
-  bspReporting,
-  compensation,
-  consent,
-  crew,
-  dataWarehouse,
-  disasterRecovery,
-  emergencyHotel,
-  irops,
-  kiosk,
-  loadPlanning,
-  mfa,
-  multiRegion,
-  passengerPriority,
-  revenueAccounting,
-  sla,
-  weightBalance,
-
-  // Admin & System
-  admin,
-  analytics,
-  reports,
-  reference,
-  modifications,
-  health,
-  system,
-  gdpr,
-  rateLimit,
-  metrics,
-  cache,
-  specialServices,
+  // Public APIs
+  flights: flightsRouter,           // Search, list, details
+  airlines: airlinesRouter,         // Airline information
+  airports: airportsRouter,         // Airport data
+  
+  // Protected APIs (require authentication)
+  bookings: bookingsRouter,         // User bookings
+  payments: paymentsRouter,         // Payment processing
+  loyalty: loyaltyRouter,           // Loyalty program
+  profile: profileRouter,           // User profile
+  
+  // Admin APIs (require admin role)
+  admin: adminRouter,               // System management
+  analytics: analyticsRouter,       // Reports & analytics
+  
+  // System APIs
+  health: healthRouter,             // Health checks
+  system: systemRouter,             // System info
 });
 ```
 
@@ -576,16 +447,16 @@ User Action → Event Handler → tRPC Mutation/Query
 
 ### Security Measures
 
-| Layer                | Protection                 | Implementation      |
-| -------------------- | -------------------------- | ------------------- |
-| **Transport**        | HTTPS only                 | Nginx/Load Balancer |
-| **Cookies**          | httpOnly, Secure, SameSite | Cookie middleware   |
-| **CSRF**             | SameSite cookies           | Express cookies     |
-| **Rate Limiting**    | 100 req/15min              | express-rate-limit  |
-| **Input Validation** | Zod schemas                | tRPC input          |
-| **SQL Injection**    | Parameterized queries      | Drizzle ORM         |
-| **XSS**              | React auto-escaping        | React rendering     |
-| **Secrets**          | Environment variables      | .env file           |
+| Layer | Protection | Implementation |
+|-------|-----------|----------------|
+| **Transport** | HTTPS only | Nginx/Load Balancer |
+| **Cookies** | httpOnly, Secure, SameSite | Cookie middleware |
+| **CSRF** | SameSite cookies | Express cookies |
+| **Rate Limiting** | 100 req/15min | express-rate-limit |
+| **Input Validation** | Zod schemas | tRPC input |
+| **SQL Injection** | Parameterized queries | Drizzle ORM |
+| **XSS** | React auto-escaping | React rendering |
+| **Secrets** | Environment variables | .env file |
 
 ### Data Privacy
 
@@ -688,13 +559,7 @@ if (existing) {
                            │
                     ┌──────────────┐
                     │ Redis Cache  │
-                    │  + BullMQ    │
-                    └──────────────┘
-                           │
-                    ┌──────────────┐
-                    │   Worker     │
-                    │ (dist/worker │
-                    │    .js)      │
+                    │  (future)    │
                     └──────────────┘
 ```
 
@@ -736,8 +601,7 @@ CMD ["pnpm", "start"]
    - Read replicas for analytics queries
 
 2. **API:**
-   - Response caching (Redis)
-   - Background job processing (BullMQ + Redis)
+   - Response caching (Redis - future)
    - Pagination for large datasets
    - Lazy loading for related data
 
@@ -756,14 +620,7 @@ CMD ["pnpm", "start"]
 
 ### Monitoring
 
-Integrated tools:
-
-- **Error Tracking:** Sentry (client + server)
-- **Logging:** Pino (structured JSON logging)
-- **Analytics:** Umami (optional)
-
-Recommended additional tools:
-
+Recommended tools:
 - **Application:** New Relic, DataDog
 - **Database:** Percona Monitoring
 - **Logs:** ELK Stack (Elasticsearch, Logstash, Kibana)
@@ -795,6 +652,6 @@ Recommended additional tools:
 
 ---
 
-**Document Version:** 3.0
-**Last Review:** February 2026
-**Next Review:** August 2026
+**Document Version:** 2.0  
+**Last Review:** January 2026  
+**Next Review:** July 2026

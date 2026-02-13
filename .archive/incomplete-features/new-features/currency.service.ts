@@ -1,11 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { getDb } from "../db";
-import {
-  exchangeRates,
-  type InsertExchangeRate,
-  type SupportedCurrency,
-  SUPPORTED_CURRENCIES,
-} from "../../drizzle/schema-currency";
+import { exchangeRates, type InsertExchangeRate, type SupportedCurrency, SUPPORTED_CURRENCIES } from "../../drizzle/schema-currency";
 import axios from "axios";
 
 /**
@@ -23,7 +18,7 @@ export async function fetchLatestExchangeRates(): Promise<void> {
   try {
     const response = await axios.get(EXCHANGE_RATE_API_URL);
     const rates = response.data.rates;
-
+    
     const db = await getDb();
     if (!db) throw new Error("Database not available");
 
@@ -80,9 +75,7 @@ export async function fetchLatestExchangeRates(): Promise<void> {
 /**
  * Get exchange rate from SAR to target currency
  */
-export async function getExchangeRate(
-  targetCurrency: SupportedCurrency
-): Promise<number> {
+export async function getExchangeRate(targetCurrency: SupportedCurrency): Promise<number> {
   if (targetCurrency === "SAR") return 1.0;
 
   const db = await getDb();
@@ -102,7 +95,7 @@ export async function getExchangeRate(
   if (result.length === 0) {
     // If rate not found, fetch latest rates and try again
     await fetchLatestExchangeRates();
-
+    
     const retryResult = await db
       .select()
       .from(exchangeRates)
@@ -124,12 +117,11 @@ export async function getExchangeRate(
   // Check if rate is outdated (older than CACHE_DURATION_HOURS)
   const lastUpdated = new Date(result[0].lastUpdated);
   const now = new Date();
-  const hoursSinceUpdate =
-    (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
+  const hoursSinceUpdate = (now.getTime() - lastUpdated.getTime()) / (1000 * 60 * 60);
 
   if (hoursSinceUpdate > CACHE_DURATION_HOURS) {
     // Update rates in background (don't wait)
-    fetchLatestExchangeRates().catch(err =>
+    fetchLatestExchangeRates().catch(err => 
       console.error("[Currency] Background rate update failed:", err)
     );
   }
@@ -150,7 +142,7 @@ export async function convertFromSAR(
   if (targetCurrency === "SAR") return amountInSAR;
 
   const rate = await getExchangeRate(targetCurrency);
-
+  
   // Convert: SAR cents -> SAR -> target currency -> target currency cents
   const amountInSARUnits = amountInSAR / 100;
   const convertedAmount = amountInSARUnits * rate;
@@ -172,7 +164,7 @@ export async function convertToSAR(
   if (sourceCurrency === "SAR") return amountInTargetCurrency;
 
   const rate = await getExchangeRate(sourceCurrency);
-
+  
   // Convert: target currency cents -> target currency -> SAR -> SAR cents
   const amountInTargetUnits = amountInTargetCurrency / 100;
   const convertedAmount = amountInTargetUnits / rate;
@@ -187,10 +179,7 @@ export async function convertToSAR(
  * @param currency - Currency code
  * @returns Formatted string (e.g., "﷼ 500.00" or "$ 135.00")
  */
-export function formatCurrency(
-  amountInCents: number,
-  currency: SupportedCurrency
-): string {
+export function formatCurrency(amountInCents: number, currency: SupportedCurrency): string {
   const currencyInfo = SUPPORTED_CURRENCIES.find(c => c.code === currency);
   if (!currencyInfo) throw new Error(`Unsupported currency: ${currency}`);
 
@@ -242,19 +231,14 @@ export async function initializeExchangeRates(): Promise<void> {
  */
 export function scheduleExchangeRateUpdates(): void {
   // Update rates every 24 hours
-  setInterval(
-    async () => {
-      try {
-        console.log("[Currency] Running scheduled exchange rate update...");
-        await fetchLatestExchangeRates();
-      } catch (error) {
-        console.error("[Currency] Scheduled rate update failed:", error);
-      }
-    },
-    CACHE_DURATION_HOURS * 60 * 60 * 1000
-  );
+  setInterval(async () => {
+    try {
+      console.log("[Currency] Running scheduled exchange rate update...");
+      await fetchLatestExchangeRates();
+    } catch (error) {
+      console.error("[Currency] Scheduled rate update failed:", error);
+    }
+  }, CACHE_DURATION_HOURS * 60 * 60 * 1000);
 
-  console.log(
-    `[Currency] Scheduled exchange rate updates every ${CACHE_DURATION_HOURS} hours`
-  );
+  console.log(`[Currency] Scheduled exchange rate updates every ${CACHE_DURATION_HOURS} hours`);
 }

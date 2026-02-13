@@ -8,6 +8,27 @@
 
 ## العربية
 
+### 🌟 مرحباً بك في مشروع نظام الطيران المتكامل
+
+نحن سعداء بمساهمتك في تطوير نظام الطيران المتكامل (AIS)! هذا الدليل سيساعدك على البدء.
+
+---
+
+## 📋 جدول المحتويات
+
+1. [حالة المستودع](#حالة-المستودع)
+2. [قواعد السلوك](#قواعد-السلوك)
+3. [كيف يمكنك المساهمة](#كيف-يمكنك-المساهمة)
+4. [عملية التطوير](#عملية-التطوير)
+5. [معايير الكود](#معايير-الكود)
+6. [رسائل الـ Commit](#رسائل-الـ-commit)
+7. [عملية Pull Request](#عملية-pull-request)
+8. [متطلبات الاختبارات](#متطلبات-الاختبارات)
+
+---
+
+## 🌐 حالة المستودع
+
 ### هل المستودع عام؟
 
 يمكنك التحقق من حالة المستودع (عام أو خاص) بالطرق التالية:
@@ -77,14 +98,83 @@ gh repo edit kafaat/ais-aviation-system --visibility public
 4. **مراجعة الترخيص:**
    - تأكد من وجود ملف `LICENSE` مناسب (المستودع الحالي يستخدم MIT License)
 
-### المساهمة في المشروع
+---
 
-نرحب بالمساهمات! يرجى اتباع الإرشادات التالية:
+## 🤝 قواعد السلوك
 
-#### 1. تهيئة بيئة التطوير
+يرجى قراءة [قواعد السلوك](CODE_OF_CONDUCT.md) قبل المساهمة. نتوقع من جميع المساهمين:
+
+- الاحترام المتبادل والتعامل المهني
+- تقديم وتلقي النقد البناء بإيجابية
+- التركيز على ما هو أفضل للمجتمع والمشروع
+- إظهار التعاطف تجاه أعضاء المجتمع الآخرين
+
+---
+
+## 💡 كيف يمكنك المساهمة
+
+### الإبلاغ عن الأخطاء (Bug Reports)
+
+عند الإبلاغ عن خطأ، يرجى تضمين:
+
+1. **وصف واضح للمشكلة**
+2. **خطوات إعادة إنتاج الخطأ**
+3. **السلوك المتوقع**
+4. **السلوك الفعلي**
+5. **لقطات الشاشة** (إن وجدت)
+6. **معلومات البيئة**:
+   - نظام التشغيل
+   - إصدار Node.js
+   - إصدار المتصفح
+
+**مثال على تقرير خطأ:**
+
+```markdown
+**الوصف:** لا يمكن إكمال عملية الحجز عند اختيار رحلة ذهاب وعودة
+
+**خطوات إعادة الإنتاج:**
+1. انتقل إلى صفحة البحث
+2. اختر رحلة ذهاب وعودة
+3. أدخل معلومات الراكب
+4. انقر على "إكمال الحجز"
+
+**المتوقع:** يجب أن تنتقل إلى صفحة الدفع
+
+**الفعلي:** يظهر خطأ "Failed to create booking"
+
+**البيئة:**
+- OS: macOS Sonoma 14.2
+- Node.js: v22.1.0
+- Browser: Chrome 120.0
+```
+
+### طلب ميزة جديدة (Feature Requests)
+
+عند طلب ميزة جديدة:
+
+1. **اشرح المشكلة** التي تحاول حلها
+2. **وضح الحل المقترح**
+3. **اذكر البدائل** التي فكرت فيها
+4. **أضف سياق إضافي** أو لقطات شاشة
+
+### تحسين الوثائق
+
+الوثائق بنفس أهمية الكود! يمكنك المساهمة من خلال:
+
+- تصحيح الأخطاء الإملائية أو النحوية
+- تحسين الشرح والوضوح
+- إضافة أمثلة جديدة
+- ترجمة الوثائق
+- إضافة رسوم بيانية أو صور توضيحية
+
+---
+
+## 🔧 عملية التطوير
+
+### 1. إعداد البيئة
 
 ```bash
-# استنساخ المستودع
+# استنساخ المشروع
 git clone https://github.com/kafaat/ais-aviation-system.git
 cd ais-aviation-system
 
@@ -93,241 +183,378 @@ pnpm install
 
 # نسخ ملف البيئة
 cp .env.example .env
-# قم بتعديل .env بالإعدادات المناسبة
+# قم بتعديل .env بإعداداتك
 
-# تطبيق migrations لقاعدة البيانات
+# تطبيق migrations
 pnpm db:push
 
 # إضافة بيانات تجريبية
 npx tsx scripts/seed-data.mjs
+
+# تشغيل المشروع
+pnpm dev
 ```
 
-#### 2. تشغيل المشروع
+### 2. إنشاء فرع جديد
+
+استخدم أسماء وصفية للفروع:
 
 ```bash
-# تشغيل في وضع التطوير
-pnpm dev
+# للميزات الجديدة
+git checkout -b feature/flight-price-comparison
 
-# الوصول إلى التطبيق
-# Frontend: http://localhost:3000
-# Backend: http://localhost:3000/api
+# لإصلاح الأخطاء
+git checkout -b fix/booking-payment-error
+
+# للوثائق
+git checkout -b docs/api-examples
+
+# للتحسينات
+git checkout -b refactor/booking-service
 ```
 
-#### 3. تشغيل الاختبارات
+### 3. تطوير الميزة
+
+- اتبع [معايير الكود](#معايير-الكود)
+- اكتب اختبارات لجميع الميزات الجديدة
+- تأكد من عدم كسر الاختبارات الموجودة
+- أضف وثائق للميزات الجديدة
+
+### 4. اختبار التغييرات
 
 ```bash
 # تشغيل جميع الاختبارات
 pnpm test
 
-# تشغيل الاختبارات في وضع المراقبة
-pnpm test:watch
+# تشغيل اختبارات محددة
+pnpm test bookings
 
-# تشغيل اختبارات E2E
-pnpm test:e2e
+# فحص الأنواع
+pnpm check
+
+# تنسيق الكود
+pnpm format
 ```
-
-#### 4. إنشاء Pull Request
-
-1. أنشئ فرع جديد للميزة أو الإصلاح:
-
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. قم بالتعديلات والالتزامات:
-
-   ```bash
-   git add .
-   git commit -m "وصف واضح للتغييرات"
-   ```
-
-3. ادفع التغييرات:
-
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-4. افتح Pull Request على GitHub
-
-#### 5. معايير الكود
-
-- **TypeScript:** استخدم الكتابة القوية وتجنب `any`
-- **التنسيق:** استخدم Prettier للتنسيق (`pnpm format`)
-- **الاختبارات:** أضف اختبارات للميزات الجديدة
-- **التوثيق:** حدّث الوثائق عند الحاجة
-- **الالتزامات:** استخدم رسائل التزام واضحة وذات معنى
-
-### الدعم
-
-للحصول على المساعدة:
-
-- افتح [issue على GitHub](https://github.com/kafaat/ais-aviation-system/issues)
-- راجع [دليل المطور](docs/DEVELOPER_GUIDE.md)
-- راجع [دليل استكشاف الأخطاء](docs/TROUBLESHOOTING.md)
 
 ---
 
-## English
+## 📝 معايير الكود
 
-### Is the Repository Public?
+### TypeScript
 
-You can check if the repository is public or private by:
+- **استخدم TypeScript دائماً** - تجنب `any` إلا عند الضرورة القصوى
+- **استخدم أسماء واضحة** للمتغيرات والدوال
+- **اكتب تعليقات** للكود المعقد فقط
+- **تجنب التكرار** (DRY Principle)
 
-1. **Via GitHub Web Interface:**
-   - Open the repository on GitHub: https://github.com/kafaat/ais-aviation-system
-   - If the repository is public, you'll see a "Public" badge next to the repository name
-   - If the repository is private, you'll see a "Private" badge
+```typescript
+// ✅ جيد
+interface FlightSearchParams {
+  origin: string;
+  destination: string;
+  departureDate: Date;
+  returnDate?: Date;
+}
 
-2. **Via Command Line:**
-   ```bash
-   # Using GitHub CLI
-   gh repo view kafaat/ais-aviation-system --json visibility
-   ```
+async function searchFlights(params: FlightSearchParams): Promise<Flight[]> {
+  // Implementation
+}
 
-### How to Make the Repository Public
-
-If you are the **repository owner** or have admin permissions, you can make the repository public by following these steps:
-
-#### Method 1: Via GitHub Web Interface
-
-1. **Open the repository** on GitHub
-2. Go to **Settings**
-3. Scroll down to the **Danger Zone** section
-4. Find **Change repository visibility**
-5. Click **Change visibility**
-6. Select **Make public**
-7. **Warning:** You'll need to confirm the action by typing the repository name
-8. Click **I understand, change repository visibility**
-
-#### Method 2: Via GitHub CLI
-
-```bash
-# Ensure you're logged in
-gh auth login
-
-# Change repository visibility to public
-gh repo edit kafaat/ais-aviation-system --visibility public
+// ❌ سيء
+async function search(o: any, d: any, dd: any, rd: any) {
+  // Implementation
+}
 ```
 
-#### ⚠️ Important Warnings Before Making Repository Public
+### React Components
 
-Before making the repository public, ensure you:
+- **استخدم Functional Components** مع Hooks
+- **فصل المنطق عن العرض** باستخدام custom hooks
+- **استخدم TypeScript** لتحديد props
 
-1. **Remove sensitive information:**
-   - API keys
-   - Passwords
-   - Credentials
-   - Personal information
-   - `.env` files (should be in `.gitignore`)
+```typescript
+// ✅ جيد
+interface FlightCardProps {
+  flight: Flight;
+  onSelect: (flightId: string) => void;
+}
 
-2. **Review Git History:**
+export function FlightCard({ flight, onSelect }: FlightCardProps) {
+  return (
+    <Card onClick={() => onSelect(flight.id)}>
+      {/* Component content */}
+    </Card>
+  );
+}
 
-   ```bash
-   # Check history for sensitive information
-   git log --all --full-history -- "*.env"
-   git log -p --all -S "password"
-   ```
-
-3. **Ensure proper `.gitignore`:**
-
-   ```bash
-   # Verify sensitive files are excluded
-   cat .gitignore
-   ```
-
-4. **Review License:**
-   - Ensure you have an appropriate `LICENSE` file (current repository uses MIT License)
-
-### Contributing to the Project
-
-We welcome contributions! Please follow these guidelines:
-
-#### 1. Setup Development Environment
-
-```bash
-# Clone the repository
-git clone https://github.com/kafaat/ais-aviation-system.git
-cd ais-aviation-system
-
-# Install dependencies
-pnpm install
-
-# Copy environment file
-cp .env.example .env
-# Edit .env with appropriate settings
-
-# Apply database migrations
-pnpm db:push
-
-# Seed test data
-npx tsx scripts/seed-data.mjs
+// ❌ سيء
+export function FlightCard(props: any) {
+  return <div>{/* ... */}</div>;
+}
 ```
 
-#### 2. Run the Project
+### API Development (tRPC)
 
-```bash
-# Run in development mode
-pnpm dev
+- **استخدم Zod** للتحقق من المدخلات
+- **اكتب رسائل خطأ واضحة**
+- **استخدم middleware** للمنطق المشترك
 
-# Access the application
-# Frontend: http://localhost:3000
-# Backend: http://localhost:3000/api
+```typescript
+// ✅ جيد
+export const bookingsRouter = router({
+  create: protectedProcedure
+    .input(z.object({
+      flightId: z.string().min(1),
+      passengers: z.array(passengerSchema).min(1).max(9),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      // Implementation with proper error handling
+    }),
+});
 ```
 
-#### 3. Run Tests
+### Database
 
-```bash
-# Run all tests
-pnpm test
+- **استخدم Drizzle ORM** للاستعلامات
+- **استخدم transactions** للعمليات المترابطة
+- **أضف indexes** للأعمدة المستخدمة في الاستعلامات
 
-# Run tests in watch mode
-pnpm test:watch
-
-# Run E2E tests
-pnpm test:e2e
+```typescript
+// ✅ جيد
+await db.transaction(async (tx) => {
+  const booking = await tx.insert(bookings).values(bookingData);
+  await tx.insert(passengers).values(passengersData);
+  await tx.update(flights).set({ availableSeats: sql`${flights.availableSeats} - 1` });
+});
 ```
 
-#### 4. Create a Pull Request
+### Styling
 
-1. Create a new branch for your feature or fix:
+- **استخدم Tailwind CSS** للتنسيق
+- **استخدم مكونات shadcn/ui** عند الإمكان
+- **اتبع نظام التصميم** الموجود
 
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
+```tsx
+// ✅ جيد
+<Button variant="default" size="lg" className="w-full">
+  احجز الآن
+</Button>
 
-2. Make changes and commit:
-
-   ```bash
-   git add .
-   git commit -m "Clear description of changes"
-   ```
-
-3. Push changes:
-
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-4. Open a Pull Request on GitHub
-
-#### 5. Code Standards
-
-- **TypeScript:** Use strong typing, avoid `any`
-- **Formatting:** Use Prettier for formatting (`pnpm format`)
-- **Tests:** Add tests for new features
-- **Documentation:** Update documentation when needed
-- **Commits:** Use clear and meaningful commit messages
-
-### Support
-
-For help:
-
-- Open an [issue on GitHub](https://github.com/kafaat/ais-aviation-system/issues)
-- Review the [Developer Guide](docs/DEVELOPER_GUIDE.md)
-- Review the [Troubleshooting Guide](docs/TROUBLESHOOTING.md)
+// ❌ سيء
+<button style={{ padding: '10px', backgroundColor: 'blue' }}>
+  احجز الآن
+</button>
+```
 
 ---
 
-## License
+## 📨 رسائل الـ Commit
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+نتبع [Conventional Commits](https://www.conventionalcommits.org/):
+
+### الصيغة
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### الأنواع (Types)
+
+- **feat**: ميزة جديدة
+- **fix**: إصلاح خطأ
+- **docs**: تغييرات في الوثائق
+- **style**: تنسيق الكود (لا يؤثر على المنطق)
+- **refactor**: إعادة هيكلة الكود
+- **perf**: تحسين الأداء
+- **test**: إضافة أو تحديث اختبارات
+- **chore**: مهام صيانة
+
+### أمثلة
+
+```bash
+# ميزة جديدة
+git commit -m "feat(bookings): add multi-city flight search"
+
+# إصلاح خطأ
+git commit -m "fix(payments): handle Stripe webhook errors correctly"
+
+# وثائق
+git commit -m "docs(api): add examples for loyalty endpoints"
+
+# مع body
+git commit -m "feat(loyalty): implement tier upgrade system
+
+- Add automatic tier upgrades based on miles
+- Send notification when user upgrades
+- Update dashboard to show tier progress"
+```
+
+---
+
+## 🔀 عملية Pull Request
+
+### قبل إنشاء PR
+
+- [ ] تأكد من نجاح جميع الاختبارات
+- [ ] قم بتشغيل `pnpm format` لتنسيق الكود
+- [ ] قم بتشغيل `pnpm check` للتحقق من الأنواع
+- [ ] أضف أو حدّث الاختبارات
+- [ ] حدّث الوثائق إذا لزم الأمر
+- [ ] تأكد من عدم وجود console.log متبقية
+
+### قالب PR
+
+عند إنشاء Pull Request، استخدم القالب التالي:
+
+```markdown
+## الوصف
+[وصف موجز للتغييرات]
+
+## نوع التغيير
+- [ ] ميزة جديدة (feature)
+- [ ] إصلاح خطأ (bug fix)
+- [ ] تحسين (improvement)
+- [ ] وثائق (documentation)
+
+## التغييرات الرئيسية
+- تغيير 1
+- تغيير 2
+- تغيير 3
+
+## الاختبارات
+- [ ] تم اختبار الميزة يدوياً
+- [ ] تم إضافة اختبارات آلية جديدة
+- [ ] جميع الاختبارات الموجودة تنجح
+
+## لقطات الشاشة
+[إن وجدت]
+
+## ملاحظات للمراجعين
+[أي ملاحظات إضافية]
+```
+
+### مراجعة الكود
+
+- كن محترماً ومهنياً في التعليقات
+- اشرح **لماذا** يجب تغيير شيء ما
+- قدم اقتراحات بناءة
+- اقبل النقد بإيجابية
+
+---
+
+## 🧪 متطلبات الاختبارات
+
+### اختبارات الوحدة (Unit Tests)
+
+يجب اختبار:
+
+- جميع الدوال utility functions
+- Services والمنطق التجاري
+- Validation schemas
+- State management
+
+```typescript
+// مثال اختبار
+import { describe, it, expect } from 'vitest';
+import { calculateBookingPrice } from './bookings.service';
+
+describe('calculateBookingPrice', () => {
+  it('should calculate correct price for one passenger', () => {
+    const result = calculateBookingPrice({
+      basePrice: 100,
+      passengers: 1,
+      ancillaries: [],
+    });
+    expect(result).toBe(100);
+  });
+
+  it('should include ancillary services in total', () => {
+    const result = calculateBookingPrice({
+      basePrice: 100,
+      passengers: 1,
+      ancillaries: [{ price: 20 }, { price: 30 }],
+    });
+    expect(result).toBe(150);
+  });
+});
+```
+
+### اختبارات التكامل (Integration Tests)
+
+يجب اختبار:
+
+- API endpoints
+- Database operations
+- Third-party integrations
+
+### تغطية الاختبارات
+
+- نستهدف **80%+** تغطية للكود الجديد
+- التغطية الحالية: **85-90%**
+- لا تقلل من تغطية الاختبارات
+
+---
+
+## 🎯 مجالات المساهمة ذات الأولوية
+
+نحن نبحث بشكل خاص عن مساهمات في:
+
+1. **الأداء والتحسين**
+   - تحسين أوقات التحميل
+   - تقليل حجم الحزمة
+   - تحسين استعلامات قاعدة البيانات
+
+2. **إمكانية الوصول (Accessibility)**
+   - تحسين ARIA labels
+   - دعم قارئات الشاشة
+   - دعم لوحة المفاتيح
+
+3. **الاختبارات**
+   - إضافة اختبارات E2E
+   - تحسين تغطية الاختبارات
+   - اختبارات الأداء
+
+4. **الوثائق**
+   - أمثلة كود جديدة
+   - دروس تعليمية
+   - ترجمات
+
+5. **الميزات الجديدة**
+   - من قائمة [TODO](todo.md)
+   - المقترحة في Issues
+
+---
+
+## 📚 موارد مفيدة
+
+### الوثائق
+- [دليل المطور](docs/DEVELOPER_GUIDE.md)
+- [البنية المعمارية](docs/ARCHITECTURE.md)
+- [توثيق API](docs/API_DOCUMENTATION.md)
+- [دليل الأمان](docs/SECURITY.md)
+
+### التقنيات المستخدمة
+- [React Documentation](https://react.dev)
+- [tRPC Documentation](https://trpc.io)
+- [Drizzle ORM](https://orm.drizzle.team)
+- [Tailwind CSS](https://tailwindcss.com)
+- [shadcn/ui](https://ui.shadcn.com)
+
+---
+
+## 🙏 الشكر
+
+شكراً لك على مساهمتك في جعل نظام الطيران المتكامل أفضل! كل مساهمة، مهما كانت صغيرة، تحدث فرقاً.
+
+إذا كانت لديك أي أسئلة، لا تتردد في:
+- فتح Issue
+- التواصل عبر البريد الإلكتروني: info@ais.com
+- مراجعة [الأسئلة الشائعة](docs/FAQ.md)
+
+---
+
+**Happy Coding! 🚀**

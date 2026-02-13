@@ -1,4 +1,4 @@
-version: "3.8"
+version: '3.8'
 
 services:
   app:
@@ -9,50 +9,9 @@ services:
       - "3000:3000"
     env_file:
       - .env.prod
-    environment:
-      AUTH_SERVICE_URL: http://auth-service:8000
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - db
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://localhost:3000/api/trpc/health.check').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: "2"
-          memory: 2G
-
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.prod
-    command: node dist/worker.js
-    env_file:
-      - .env.prod
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 1G
 
   db:
     image: mysql:8.0
@@ -61,73 +20,11 @@ services:
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
-    command: >
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_unicode_ci
-      --max-connections=200
     volumes:
       - db_data:/var/lib/mysql
     ports:
       - "3306:3306"
     restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "-h",
-          "localhost",
-          "-u",
-          "root",
-          "-p${DB_ROOT_PASSWORD}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
-  redis:
-    image: redis:7-alpine
-    command: >
-      redis-server
-      --maxmemory 512mb
-      --maxmemory-policy allkeys-lru
-      --appendonly yes
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    restart: unless-stopped
-
-  auth-service:
-    build:
-      context: ./auth-service
-      dockerfile: Dockerfile
-    env_file:
-      - .env.prod
-    environment:
-      DATABASE_URL: mysql+pymysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/auth/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: "1"
-          memory: 512M
 
 volumes:
   db_data:
-  redis_data:

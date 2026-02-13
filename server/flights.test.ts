@@ -41,23 +41,7 @@ describe("Flight APIs", () => {
     const ctx = createMockContext();
     const caller = appRouter.createCaller(ctx);
 
-    // First search to find a valid flight ID
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-
-    const searchResults = await caller.flights.search({
-      originId: 1,
-      destinationId: 2,
-      departureDate: tomorrow,
-    });
-
-    if (searchResults.length === 0) {
-      // No flights in DB - skip gracefully
-      return;
-    }
-
-    const flight = await caller.flights.getById({ id: searchResults[0].id });
+    const flight = await caller.flights.getById({ id: 1 });
 
     expect(flight).toBeDefined();
     if (flight) {
@@ -72,8 +56,8 @@ describe("Flight APIs", () => {
     const ctx = createMockContext();
     const caller = appRouter.createCaller(ctx);
 
-    await expect(caller.flights.getById({ id: 99999 })).rejects.toThrow(
-      "Flight not found"
-    );
+    await expect(
+      caller.flights.getById({ id: 99999 })
+    ).rejects.toThrow("Flight not found");
   });
 });

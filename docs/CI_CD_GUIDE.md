@@ -11,7 +11,6 @@ The AIS Aviation System uses GitHub Actions for continuous integration and deplo
 **Purpose**: Ensure code quality and consistency
 
 **Steps**:
-
 - Code formatting check (Prettier)
 - TypeScript type checking
 - ESLint validation
@@ -25,7 +24,6 @@ The AIS Aviation System uses GitHub Actions for continuous integration and deplo
 **Purpose**: Verify functionality and prevent regressions
 
 **Steps**:
-
 - Setup MySQL test database
 - Run database migrations
 - Execute unit tests
@@ -37,7 +35,6 @@ The AIS Aviation System uses GitHub Actions for continuous integration and deplo
 **Database**: Ephemeral MySQL 8.0 container
 
 **Environment Variables**:
-
 ```bash
 DATABASE_URL=mysql://root:test_password@127.0.0.1:3306/ais_test
 NODE_ENV=test
@@ -51,7 +48,6 @@ STRIPE_WEBHOOK_SECRET=whsec_mock_secret
 **Purpose**: Detect vulnerabilities in dependencies
 
 **Steps**:
-
 - Run `pnpm audit`
 - Check for known CVEs
 - Generate security report
@@ -65,7 +61,6 @@ STRIPE_WEBHOOK_SECRET=whsec_mock_secret
 **Purpose**: Verify the application builds successfully
 
 **Steps**:
-
 - Install dependencies
 - Build frontend (Vite)
 - Build backend (esbuild)
@@ -82,7 +77,6 @@ STRIPE_WEBHOOK_SECRET=whsec_mock_secret
 **Trigger**: Push to `main` branch only
 
 **Steps**:
-
 - Download build artifacts
 - Deploy to hosting provider
 - Run production migrations
@@ -99,9 +93,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop, "copilot/**"]
+    branches: [ main, develop, "copilot/**" ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main, develop ]
 ```
 
 ### Branch Strategy
@@ -116,7 +110,6 @@ on:
 ### Automatic Deployment
 
 Deployments to production are triggered automatically when:
-
 1. Code is pushed to `main` branch
 2. All pipeline stages pass
 3. Manual approval (if configured)
@@ -201,7 +194,6 @@ mysql -u root -p ais_aviation < backup.sql
 ### Required Environment Variables
 
 #### Development
-
 ```bash
 NODE_ENV=development
 DATABASE_URL=mysql://user:pass@localhost:3306/ais_dev
@@ -210,7 +202,6 @@ STRIPE_SECRET_KEY=sk_test_...
 ```
 
 #### Staging
-
 ```bash
 NODE_ENV=staging
 DATABASE_URL=mysql://user:pass@staging-host:3306/ais_staging
@@ -219,7 +210,6 @@ STRIPE_SECRET_KEY=sk_test_...
 ```
 
 #### Production
-
 ```bash
 NODE_ENV=production
 DATABASE_URL=mysql://user:pass@prod-host:3306/ais_production
@@ -242,21 +232,18 @@ The application exposes health check endpoints:
 ### Metrics to Monitor
 
 **Application Metrics**:
-
 - Request rate (requests/second)
 - Response time (P50, P95, P99)
 - Error rate (errors/second)
 - Active connections
 
 **Business Metrics**:
-
 - Bookings per hour
 - Revenue per hour
 - Failed payments
 - Booking conversion rate
 
 **Infrastructure Metrics**:
-
 - CPU usage
 - Memory usage
 - Database connections
@@ -272,7 +259,6 @@ logger.error({ error, requestId }, "Payment failed");
 ```
 
 **Log Levels**:
-
 - `debug`: Detailed debugging information
 - `info`: General informational messages
 - `warn`: Warning messages
@@ -284,7 +270,6 @@ logger.error({ error, requestId }, "Payment failed");
 ### Pipeline Failures
 
 #### Lint Stage Fails
-
 ```bash
 # Run locally
 pnpm exec prettier --check .
@@ -295,7 +280,6 @@ pnpm exec prettier --write .
 ```
 
 #### Test Stage Fails
-
 ```bash
 # Run tests locally
 pnpm run test
@@ -308,7 +292,6 @@ pnpm run test -- --inspect-brk
 ```
 
 #### Build Stage Fails
-
 ```bash
 # Clean and rebuild
 rm -rf dist/ .output/
@@ -321,21 +304,18 @@ pnpm run check
 ### Deployment Issues
 
 #### Database Connection Failed
-
 - Verify DATABASE_URL is correct
 - Check firewall rules
 - Verify database is running
 - Check connection pool limits
 
 #### Migration Failed
-
 - Review migration SQL
 - Check for breaking changes
 - Verify database user permissions
 - Check for data conflicts
 
 #### Application Won't Start
-
 - Check environment variables
 - Review application logs
 - Verify all dependencies installed
@@ -346,7 +326,6 @@ pnpm run check
 ### Secrets Management
 
 **DO NOT** commit secrets to repository:
-
 - Use environment variables
 - Use secrets manager (AWS Secrets Manager, HashiCorp Vault)
 - Rotate secrets regularly
@@ -386,7 +365,6 @@ pnpm run build -- --analyze
 ### Cache Strategy
 
 GitHub Actions caches:
-
 - pnpm store directory
 - node_modules (via pnpm)
 - Build artifacts
@@ -396,7 +374,6 @@ GitHub Actions caches:
 ### Commit Messages
 
 Follow conventional commits:
-
 ```
 feat: Add user role management
 fix: Resolve booking state transition bug
@@ -428,7 +405,6 @@ refactor: Improve RBAC middleware
 ## 🆘 Support
 
 For CI/CD issues:
-
 1. Check GitHub Actions logs
 2. Review recent changes
 3. Consult this documentation

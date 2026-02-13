@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   createAuditLog,
   auditLogin,
@@ -7,6 +7,7 @@ import {
   auditRoleChange,
   auditAdminAccess,
 } from "./audit.service";
+import * as db from "../db";
 
 describe("Audit Service", () => {
   describe("createAuditLog", () => {

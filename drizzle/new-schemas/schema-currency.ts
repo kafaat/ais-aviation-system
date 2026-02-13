@@ -1,44 +1,28 @@
-import {
-  mysqlTable,
-  int,
-  varchar,
-  decimal,
-  timestamp,
-  index,
-} from "drizzle-orm/mysql-core";
+import { mysqlTable, int, varchar, decimal, timestamp, index } from "drizzle-orm/mysql-core";
 
 /**
  * Exchange Rates table
  * Stores currency exchange rates for multi-currency support
  */
-export const exchangeRates = mysqlTable(
-  "exchange_rates",
-  {
-    id: int("id").autoincrement().primaryKey(),
-
-    // Currency codes (ISO 4217)
-    baseCurrency: varchar("baseCurrency", { length: 3 })
-      .notNull()
-      .default("SAR"), // Base currency (SAR)
-    targetCurrency: varchar("targetCurrency", { length: 3 }).notNull(), // Target currency (USD, EUR, etc.)
-
-    // Exchange rate (e.g., 1 SAR = 0.27 USD)
-    rate: decimal("rate", { precision: 10, scale: 6 }).notNull(),
-
-    // Metadata
-    source: varchar("source", { length: 100 }), // API source (e.g., "exchangerate-api.com")
-    lastUpdated: timestamp("lastUpdated").defaultNow().notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    // Composite unique index to prevent duplicate currency pairs
-    currencyPairIdx: index("currency_pair_idx").on(
-      table.baseCurrency,
-      table.targetCurrency
-    ),
-    targetCurrencyIdx: index("target_currency_idx").on(table.targetCurrency),
-  })
-);
+export const exchangeRates = mysqlTable("exchange_rates", {
+  id: int("id").autoincrement().primaryKey(),
+  
+  // Currency codes (ISO 4217)
+  baseCurrency: varchar("baseCurrency", { length: 3 }).notNull().default("SAR"), // Base currency (SAR)
+  targetCurrency: varchar("targetCurrency", { length: 3 }).notNull(), // Target currency (USD, EUR, etc.)
+  
+  // Exchange rate (e.g., 1 SAR = 0.27 USD)
+  rate: decimal("rate", { precision: 10, scale: 6 }).notNull(),
+  
+  // Metadata
+  source: varchar("source", { length: 100 }), // API source (e.g., "exchangerate-api.com")
+  lastUpdated: timestamp("lastUpdated").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  // Composite unique index to prevent duplicate currency pairs
+  currencyPairIdx: index("currency_pair_idx").on(table.baseCurrency, table.targetCurrency),
+  targetCurrencyIdx: index("target_currency_idx").on(table.targetCurrency),
+}));
 
 export type ExchangeRate = typeof exchangeRates.$inferSelect;
 export type InsertExchangeRate = typeof exchangeRates.$inferInsert;
@@ -47,26 +31,18 @@ export type InsertExchangeRate = typeof exchangeRates.$inferInsert;
  * User Currency Preferences table
  * Stores user's preferred currency for display
  */
-export const userCurrencyPreferences = mysqlTable(
-  "user_currency_preferences",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId").notNull().unique(),
-    preferredCurrency: varchar("preferredCurrency", { length: 3 })
-      .notNull()
-      .default("SAR"),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("user_id_idx").on(table.userId),
-  })
-);
+export const userCurrencyPreferences = mysqlTable("user_currency_preferences", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  preferredCurrency: varchar("preferredCurrency", { length: 3 }).notNull().default("SAR"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index("user_id_idx").on(table.userId),
+}));
 
-export type UserCurrencyPreference =
-  typeof userCurrencyPreferences.$inferSelect;
-export type InsertUserCurrencyPreference =
-  typeof userCurrencyPreferences.$inferInsert;
+export type UserCurrencyPreference = typeof userCurrencyPreferences.$inferSelect;
+export type InsertUserCurrencyPreference = typeof userCurrencyPreferences.$inferInsert;
 
 /**
  * Supported currencies configuration
@@ -84,4 +60,4 @@ export const SUPPORTED_CURRENCIES = [
   { code: "EGP", name: "Egyptian Pound", symbol: "ج.م", flag: "🇪🇬" },
 ] as const;
 
-export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]["code"];
+export type SupportedCurrency = typeof SUPPORTED_CURRENCIES[number]["code"];

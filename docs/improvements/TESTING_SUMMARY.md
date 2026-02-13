@@ -7,11 +7,9 @@
 ## الاختبارات المطورة
 
 ### 1. Currency Service Tests (currency.test.ts)
-
 **عدد الاختبارات:** 18 اختبار
 
 #### Test Suites:
-
 1. **fetchLatestExchangeRates**
    - ✅ Should fetch and store exchange rates
 
@@ -41,11 +39,9 @@
 ---
 
 ### 2. Unified Logger Tests (unified-logger.test.ts)
-
 **عدد الاختبارات:** 15 اختبار
 
 #### Test Suites:
-
 1. **maskPII**
    - ✅ Should mask email addresses
    - ✅ Should mask phone numbers
@@ -68,18 +64,17 @@
 
 ## إجمالي الاختبارات
 
-| المكون           | عدد الاختبارات | الحالة      |
-| ---------------- | -------------- | ----------- |
-| Currency Service | 18             | ✅ جاهز     |
-| Unified Logger   | 15             | ✅ جاهز     |
-| **الإجمالي**     | **33**         | **✅ جاهز** |
+| المكون | عدد الاختبارات | الحالة |
+|--------|----------------|--------|
+| Currency Service | 18 | ✅ جاهز |
+| Unified Logger | 15 | ✅ جاهز |
+| **الإجمالي** | **33** | **✅ جاهز** |
 
 ---
 
 ## الاختبارات الإضافية المقترحة
 
 ### 1. Account Lock Service Tests
-
 - [ ] Should record login attempt
 - [ ] Should lock account after 5 failed attempts
 - [ ] Should unlock account automatically after timeout
@@ -87,21 +82,18 @@
 - [ ] Should record security events
 
 ### 2. Currency Router Tests
-
 - [ ] Should get all supported currencies
 - [ ] Should get exchange rates
 - [ ] Should convert amounts via API
 - [ ] Should refresh exchange rates (admin)
 
 ### 3. Integration Tests
-
 - [ ] Currency conversion in booking flow
 - [ ] Request ID propagation through system
 - [ ] Security event logging on failed login
 - [ ] Account lock preventing login
 
 ### 4. E2E Tests (Playwright)
-
 - [ ] User can change currency and see updated prices
 - [ ] Failed login attempts trigger account lock
 - [ ] Request ID appears in response headers
@@ -112,13 +104,11 @@
 ## كيفية تشغيل الاختبارات
 
 ### تشغيل جميع الاختبارات
-
 ```bash
 pnpm test
 ```
 
 ### تشغيل اختبارات محددة
-
 ```bash
 # Currency tests
 pnpm test currency.test.ts
@@ -128,7 +118,6 @@ pnpm test unified-logger.test.ts
 ```
 
 ### تشغيل في وضع المراقبة
-
 ```bash
 pnpm test:watch
 ```
@@ -138,13 +127,11 @@ pnpm test:watch
 ## معايير النجاح
 
 ### الحد الأدنى للتغطية
-
 - **Unit Tests:** 80%+
 - **Integration Tests:** 60%+
 - **E2E Tests:** 40%+
 
 ### الحالة الحالية
-
 - **Unit Tests:** ✅ 90%+ (للمكونات الجديدة)
 - **Integration Tests:** ⏳ قيد التطوير
 - **E2E Tests:** ⏳ قيد التطوير

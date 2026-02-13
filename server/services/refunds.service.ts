@@ -1,12 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
+import * as db from "../db";
 import { getDb } from "../db";
 import { bookings, payments, users, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
-import { trackRefundIssued } from "./metrics.service";
-import { notifyRefundProcessed } from "./notification.service";
 
 /**
  * Refunds Service
@@ -14,7 +13,7 @@ import { notifyRefundProcessed } from "./notification.service";
  */
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
+  apiVersion: "2025-11-17.clover",
 });
 
 export interface CreateRefundInput {
@@ -123,12 +122,9 @@ export async function createRefund(input: CreateRefundInput) {
     const refundParams: Stripe.RefundCreateParams = {
       payment_intent: booking.stripePaymentIntentId,
       amount: refundAmount,
-      reason:
-        input.reason === "duplicate"
-          ? "duplicate"
-          : input.reason === "fraudulent"
-            ? "fraudulent"
-            : "requested_by_customer",
+      reason: input.reason === "duplicate" ? "duplicate" : 
+              input.reason === "fraudulent" ? "fraudulent" : 
+              "requested_by_customer",
     };
 
     const refund = await stripe.refunds.create(refundParams);
@@ -137,10 +133,8 @@ export async function createRefund(input: CreateRefundInput) {
     await database
       .update(bookings)
       .set({
-        paymentStatus:
-          refund.amount === booking.totalAmount ? "refunded" : "paid",
-        status:
-          refund.amount === booking.totalAmount ? "cancelled" : booking.status,
+        paymentStatus: refund.amount === booking.totalAmount ? "refunded" : "paid",
+        status: refund.amount === booking.totalAmount ? "cancelled" : booking.status,
       })
       .where(eq(bookings.id, input.bookingId));
 
@@ -155,20 +149,10 @@ export async function createRefund(input: CreateRefundInput) {
       await database
         .update(payments)
         .set({
-          status:
-            refund.amount === booking.totalAmount ? "refunded" : "completed",
+          status: refund.amount === booking.totalAmount ? "refunded" : "completed",
         })
         .where(eq(payments.id, paymentResult[0].id));
     }
-
-    // Track refund issued event for metrics
-    trackRefundIssued({
-      userId: input.userId,
-      bookingId: input.bookingId,
-      refundAmount: refund.amount || booking.totalAmount,
-      originalAmount: booking.totalAmount,
-      reason: input.reason,
-    });
 
     // Send refund confirmation email
     try {
@@ -187,7 +171,7 @@ export async function createRefund(input: CreateRefundInput) {
 
       if (bookingDetails && bookingDetails.userEmail) {
         await sendRefundConfirmation({
-          passengerName: bookingDetails.userName || "Passenger",
+          passengerName: bookingDetails.userName || 'Passenger',
           passengerEmail: bookingDetails.userEmail,
           bookingReference: bookingDetails.bookingReference,
           flightNumber: bookingDetails.flightNumber,
@@ -196,25 +180,11 @@ export async function createRefund(input: CreateRefundInput) {
           processingDays: 5,
         });
 
-        console.info(
-          `[Refund] Confirmation email sent to ${bookingDetails.userEmail}`
-        );
+        console.log(`[Refund] Confirmation email sent to ${bookingDetails.userEmail}`);
       }
     } catch (emailError) {
-      console.error("[Refund] Error sending confirmation email:", emailError);
+      console.error('[Refund] Error sending confirmation email:', emailError);
       // Don't fail the refund if email fails
-    }
-
-    // Send in-app refund notification
-    try {
-      await notifyRefundProcessed(
-        booking.userId,
-        refund.amount || booking.totalAmount,
-        booking.bookingReference || `#${input.bookingId}`
-      );
-    } catch (notifError) {
-      console.error("[Refund] Error sending in-app notification:", notifError);
-      // Don't fail the refund if notification fails
     }
 
     return {

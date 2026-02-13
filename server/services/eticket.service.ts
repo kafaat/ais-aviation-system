@@ -11,12 +11,12 @@ export interface TicketData {
   // Passenger info
   passengerName: string;
   passengerType: "adult" | "child" | "infant";
-
+  
   // Booking info
   ticketNumber: string; // 13-digit IATA standard
   bookingReference: string;
   pnr: string;
-
+  
   // Flight info
   flightNumber: string;
   airline: string;
@@ -26,18 +26,18 @@ export interface TicketData {
   destinationCode: string;
   departureTime: Date;
   arrivalTime: Date;
-
+  
   // Seat & class
   cabinClass: string;
   seatNumber?: string;
-
+  
   // Baggage
   baggageAllowance: string;
-
+  
   // Payment
   totalAmount: number;
   currency: string;
-
+  
   // Dates
   issueDate: Date;
 }
@@ -58,33 +58,18 @@ export interface BoardingPassData extends TicketData {
 export function generateTicketNumber(airlineCode: string = "001"): string {
   // Generate 9-digit serial number
   const serial = Math.floor(100000000 + Math.random() * 900000000);
-
+  
   // Calculate check digit (simple mod 7 for demo)
   const checkDigit = (parseInt(airlineCode) + serial) % 7;
-
+  
   return `${airlineCode}${serial}${checkDigit}`;
 }
 
 /**
  * Generate E-Ticket PDF
  */
-export async function generateETicketPDF(
-  ticketData: TicketData
-): Promise<Buffer> {
-  // Generate QR code first (async operation)
-  const qrData = `${ticketData.pnr}|${ticketData.ticketNumber}|${ticketData.passengerName}`;
-  let qrCodeDataURL: string;
-  try {
-    qrCodeDataURL = await QRCode.toDataURL(qrData);
-  } catch (error) {
-    console.error("Error generating QR code:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to generate e-ticket QR code",
-    });
-  }
-
-  return new Promise((resolve, reject) => {
+export async function generateETicketPDF(ticketData: TicketData): Promise<Buffer> {
+  return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: "A4", margin: 50 });
       const buffers: Buffer[] = [];
@@ -94,14 +79,10 @@ export async function generateETicketPDF(
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
-      doc.on("error", _err => {
-        reject(
-          new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to generate e-ticket PDF",
-          })
-        );
-      });
+
+      // Generate QR code
+      const qrData = `${ticketData.pnr}|${ticketData.ticketNumber}|${ticketData.passengerName}`;
+      const qrCodeDataURL = await QRCode.toDataURL(qrData);
 
       // Header
       doc
@@ -121,14 +102,14 @@ export async function generateETicketPDF(
         .fontSize(12)
         .fillColor("#000")
         .text(`Ticket Number: ${ticketData.ticketNumber}`, { align: "center" })
-        .text(`Booking Reference: ${ticketData.bookingReference}`, {
-          align: "center",
-        })
+        .text(`Booking Reference: ${ticketData.bookingReference}`, { align: "center" })
         .text(`PNR: ${ticketData.pnr}`, { align: "center" })
         .moveDown(1.5);
 
       // Passenger info box
-      doc.rect(50, doc.y, 495, 80).fillAndStroke("#f3f4f6", "#d1d5db");
+      doc
+        .rect(50, doc.y, 495, 80)
+        .fillAndStroke("#f3f4f6", "#d1d5db");
 
       doc
         .fillColor("#000")
@@ -144,7 +125,9 @@ export async function generateETicketPDF(
         .moveDown(1.5);
 
       // Flight info box
-      doc.rect(50, doc.y, 495, 120).fillAndStroke("#eff6ff", "#bfdbfe");
+      doc
+        .rect(50, doc.y, 495, 120)
+        .fillAndStroke("#eff6ff", "#bfdbfe");
 
       doc
         .fillColor("#1e40af")
@@ -190,7 +173,9 @@ export async function generateETicketPDF(
         .moveDown(1.5);
 
       // Service details
-      doc.rect(50, doc.y, 495, 80).fillAndStroke("#f9fafb", "#e5e7eb");
+      doc
+        .rect(50, doc.y, 495, 80)
+        .fillAndStroke("#f9fafb", "#e5e7eb");
 
       doc
         .fillColor("#000")
@@ -207,10 +192,7 @@ export async function generateETicketPDF(
       // Payment info
       doc
         .fontSize(10)
-        .text(
-          `Total Amount: ${(ticketData.totalAmount / 100).toFixed(2)} ${ticketData.currency}`,
-          60
-        )
+        .text(`Total Amount: ${(ticketData.totalAmount / 100).toFixed(2)} ${ticketData.currency}`, 60)
         .text(
           `Issue Date: ${ticketData.issueDate.toLocaleDateString("en-US", {
             dateStyle: "medium",
@@ -234,10 +216,7 @@ export async function generateETicketPDF(
           { align: "center", width: 495 }
         )
         .moveDown(0.5)
-        .text("For inquiries, please contact customer service.", {
-          align: "center",
-          width: 495,
-        });
+        .text("For inquiries, please contact customer service.", { align: "center", width: 495 });
 
       doc.end();
     } catch (error) {
@@ -255,23 +234,8 @@ export async function generateETicketPDF(
 /**
  * Generate Boarding Pass PDF
  */
-export async function generateBoardingPassPDF(
-  passData: BoardingPassData
-): Promise<Buffer> {
-  // Generate barcode data first (async operation)
-  const barcodeData = `M1${passData.passengerName.substring(0, 20).padEnd(20)}E${passData.bookingReference}${passData.originCode}${passData.destinationCode}${passData.flightNumber.padEnd(5)}${passData.sequence || "001"}`;
-  let barcodeDataURL: string;
-  try {
-    barcodeDataURL = await QRCode.toDataURL(barcodeData);
-  } catch (error) {
-    console.error("Error generating barcode:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to generate boarding pass barcode",
-    });
-  }
-
-  return new Promise((resolve, reject) => {
+export async function generateBoardingPassPDF(passData: BoardingPassData): Promise<Buffer> {
+  return new Promise(async (resolve, reject) => {
     try {
       const doc = new PDFDocument({ size: [600, 250], margin: 20 });
       const buffers: Buffer[] = [];
@@ -281,14 +245,10 @@ export async function generateBoardingPassPDF(
         const pdfBuffer = Buffer.concat(buffers);
         resolve(pdfBuffer);
       });
-      doc.on("error", _err => {
-        reject(
-          new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to generate boarding pass PDF",
-          })
-        );
-      });
+
+      // Generate barcode data
+      const barcodeData = `M1${passData.passengerName.substring(0, 20).padEnd(20)}E${passData.bookingReference}${passData.originCode}${passData.destinationCode}${passData.flightNumber.padEnd(5)}${passData.sequence || "001"}`;
+      const barcodeDataURL = await QRCode.toDataURL(barcodeData);
 
       // Header
       doc
@@ -354,16 +314,11 @@ export async function generateETicketForPassenger(
   passengerId: number
 ): Promise<string> {
   const { getDb } = await import("../db");
-  const { bookings, flights, airports, passengers, airlines } =
-    await import("../../drizzle/schema");
+  const { bookings, flights, airports, passengers, airlines } = await import("../../drizzle/schema");
   const { eq } = await import("drizzle-orm");
 
   const database = await getDb();
-  if (!database)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
+  if (!database) throw new Error("Database not available");
 
   // Get booking details
   const [booking] = await database
@@ -385,7 +340,7 @@ export async function generateETicketForPassenger(
     .limit(1);
 
   if (!booking) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    throw new Error("Booking not found");
   }
 
   // Get passenger details
@@ -396,7 +351,7 @@ export async function generateETicketForPassenger(
     .limit(1);
 
   if (!passenger || passenger.bookingId !== bookingId) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Passenger not found" });
+    throw new Error("Passenger not found");
   }
 
   // Get airport details
@@ -413,7 +368,7 @@ export async function generateETicketForPassenger(
     .limit(1);
 
   if (!origin || !destination) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Airport not found" });
+    throw new Error("Airport not found");
   }
 
   // Get airline details
@@ -453,8 +408,7 @@ export async function generateETicketForPassenger(
     arrivalTime: booking.arrivalTime,
     cabinClass: booking.cabinClass,
     seatNumber: passenger.seatNumber || undefined,
-    baggageAllowance:
-      booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
+    baggageAllowance: booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
     totalAmount: booking.totalAmount,
     currency: "SAR",
     issueDate: new Date(),

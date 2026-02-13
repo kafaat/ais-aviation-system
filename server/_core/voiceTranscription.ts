@@ -5,7 +5,7 @@
  * 1. Capture audio using MediaRecorder API
  * 2. Upload audio to storage (e.g., S3) to get URL
  * 3. Call transcription with the URL
- *
+ * 
  * Example usage:
  * ```tsx
  * // Frontend component
@@ -16,7 +16,7 @@
  *     console.log(data.segments); // Timestamped segments
  *   }
  * });
- *
+ * 
  * // After uploading audio to storage
  * transcribeMutation.mutate({
  *   audioUrl: uploadedAudioUrl,
@@ -26,71 +26,6 @@
  * ```
  */
 import { ENV } from "./env";
-
-/** Timeout for downloading the user-provided audio file */
-const AUDIO_DOWNLOAD_TIMEOUT_MS = 60_000;
-/** Timeout for the transcription API call */
-const TRANSCRIPTION_TIMEOUT_MS = 120_000;
-
-/**
- * Validate a URL to prevent SSRF attacks.
- * Blocks private/internal IPs, loopback, link-local, and cloud metadata endpoints.
- */
-function validateAudioUrl(urlString: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(urlString);
-  } catch {
-    return "Invalid audio URL";
-  }
-
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    return "Audio URL must use http or https protocol";
-  }
-
-  const hostname = parsed.hostname.toLowerCase();
-
-  // Block cloud metadata endpoints (AWS, GCP, Azure)
-  const blockedHosts = [
-    "169.254.169.254",
-    "metadata.google.internal",
-    "metadata.google",
-  ];
-  if (blockedHosts.includes(hostname)) {
-    return "Audio URL points to a blocked address";
-  }
-
-  // Block localhost
-  if (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "[::1]" ||
-    hostname === "::1" ||
-    hostname === "0.0.0.0"
-  ) {
-    return "Audio URL must not point to localhost";
-  }
-
-  // Block private IP ranges (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 169.254.x.x)
-  const ipv4Match = hostname.match(
-    /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/
-  );
-  if (ipv4Match) {
-    const a = Number(ipv4Match[1]);
-    const b = Number(ipv4Match[2]);
-    if (
-      a === 10 ||
-      a === 0 ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 169 && b === 254)
-    ) {
-      return "Audio URL must not point to a private network address";
-    }
-  }
-
-  return null;
-}
 
 export type TranscribeOptions = {
   audioUrl: string; // URL to the audio file (e.g., S3 URL)
@@ -125,18 +60,13 @@ export type TranscriptionResponse = WhisperResponse; // Return native Whisper AP
 
 export type TranscriptionError = {
   error: string;
-  code:
-    | "FILE_TOO_LARGE"
-    | "INVALID_FORMAT"
-    | "TRANSCRIPTION_FAILED"
-    | "UPLOAD_FAILED"
-    | "SERVICE_ERROR";
+  code: "FILE_TOO_LARGE" | "INVALID_FORMAT" | "TRANSCRIPTION_FAILED" | "UPLOAD_FAILED" | "SERVICE_ERROR";
   details?: string;
 };
 
 /**
  * Transcribe audio to text using the internal Speech-to-Text service
- *
+ * 
  * @param options - Audio data and metadata
  * @returns Transcription result or error
  */
@@ -149,89 +79,78 @@ export async function transcribeAudio(
       return {
         error: "Voice transcription service is not configured",
         code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_URL is not set",
+        details: "BUILT_IN_FORGE_API_URL is not set"
       };
     }
     if (!ENV.forgeApiKey) {
       return {
         error: "Voice transcription service authentication is missing",
         code: "SERVICE_ERROR",
-        details: "BUILT_IN_FORGE_API_KEY is not set",
+        details: "BUILT_IN_FORGE_API_KEY is not set"
       };
     }
 
-    // Step 2: Validate audio URL against SSRF
-    const urlError = validateAudioUrl(options.audioUrl);
-    if (urlError) {
-      return {
-        error: "Invalid audio URL",
-        code: "INVALID_FORMAT",
-        details: urlError,
-      };
-    }
-
-    // Step 3: Download audio from URL
+    // Step 2: Download audio from URL
     let audioBuffer: Buffer;
     let mimeType: string;
     try {
-      const response = await fetch(options.audioUrl, {
-        signal: AbortSignal.timeout(AUDIO_DOWNLOAD_TIMEOUT_MS),
-      });
+      const response = await fetch(options.audioUrl);
       if (!response.ok) {
         return {
           error: "Failed to download audio file",
           code: "INVALID_FORMAT",
-          details: `HTTP ${response.status}: ${response.statusText}`,
+          details: `HTTP ${response.status}: ${response.statusText}`
         };
       }
-
+      
       audioBuffer = Buffer.from(await response.arrayBuffer());
-      mimeType = response.headers.get("content-type") || "audio/mpeg";
-
+      mimeType = response.headers.get('content-type') || 'audio/mpeg';
+      
       // Check file size (16MB limit)
       const sizeMB = audioBuffer.length / (1024 * 1024);
       if (sizeMB > 16) {
         return {
           error: "Audio file exceeds maximum size limit",
           code: "FILE_TOO_LARGE",
-          details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 16MB`,
+          details: `File size is ${sizeMB.toFixed(2)}MB, maximum allowed is 16MB`
         };
       }
     } catch (error) {
       return {
         error: "Failed to fetch audio file",
         code: "SERVICE_ERROR",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: error instanceof Error ? error.message : "Unknown error"
       };
     }
 
-    // Step 4: Create FormData for multipart upload to Whisper API
+    // Step 3: Create FormData for multipart upload to Whisper API
     const formData = new FormData();
-
+    
     // Create a Blob from the buffer and append to form
     const filename = `audio.${getFileExtension(mimeType)}`;
-    const audioBlob = new Blob([new Uint8Array(audioBuffer)], {
-      type: mimeType,
-    });
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
     formData.append("file", audioBlob, filename);
-
+    
     formData.append("model", "whisper-1");
     formData.append("response_format", "verbose_json");
-
+    
     // Add prompt - use custom prompt if provided, otherwise generate based on language
-    const prompt =
-      options.prompt ||
-      (options.language
+    const prompt = options.prompt || (
+      options.language 
         ? `Transcribe the user's voice to text, the user's working language is ${getLanguageName(options.language)}`
-        : "Transcribe the user's voice to text");
+        : "Transcribe the user's voice to text"
+    );
     formData.append("prompt", prompt);
 
-    // Step 5: Call the transcription service
+    // Step 4: Call the transcription service
     const baseUrl = ENV.forgeApiUrl.endsWith("/")
       ? ENV.forgeApiUrl
       : `${ENV.forgeApiUrl}/`;
-
-    const fullUrl = new URL("v1/audio/transcriptions", baseUrl).toString();
+    
+    const fullUrl = new URL(
+      "v1/audio/transcriptions",
+      baseUrl
+    ).toString();
 
     const response = await fetch(fullUrl, {
       method: "POST",
@@ -240,38 +159,37 @@ export async function transcribeAudio(
         "Accept-Encoding": "identity",
       },
       body: formData,
-      signal: AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS),
     });
 
     if (!response.ok) {
-      const _errorText = await response.text().catch(() => "");
+      const errorText = await response.text().catch(() => "");
       return {
         error: "Transcription service request failed",
         code: "TRANSCRIPTION_FAILED",
-        details: `${response.status} ${response.statusText}`,
+        details: `${response.status} ${response.statusText}${errorText ? `: ${errorText}` : ""}`
       };
     }
 
-    // Step 6: Parse and return the transcription result
-    const whisperResponse = (await response.json()) as WhisperResponse;
-
+    // Step 5: Parse and return the transcription result
+    const whisperResponse = await response.json() as WhisperResponse;
+    
     // Validate response structure
-    if (!whisperResponse.text || typeof whisperResponse.text !== "string") {
+    if (!whisperResponse.text || typeof whisperResponse.text !== 'string') {
       return {
         error: "Invalid transcription response",
         code: "SERVICE_ERROR",
-        details: "Transcription service returned an invalid response format",
+        details: "Transcription service returned an invalid response format"
       };
     }
 
     return whisperResponse; // Return native Whisper API response directly
+
   } catch (error) {
     // Handle unexpected errors
     return {
       error: "Voice transcription failed",
       code: "SERVICE_ERROR",
-      details:
-        error instanceof Error ? error.message : "An unexpected error occurred",
+      details: error instanceof Error ? error.message : "An unexpected error occurred"
     };
   }
 }
@@ -281,17 +199,17 @@ export async function transcribeAudio(
  */
 function getFileExtension(mimeType: string): string {
   const mimeToExt: Record<string, string> = {
-    "audio/webm": "webm",
-    "audio/mp3": "mp3",
-    "audio/mpeg": "mp3",
-    "audio/wav": "wav",
-    "audio/wave": "wav",
-    "audio/ogg": "ogg",
-    "audio/m4a": "m4a",
-    "audio/mp4": "m4a",
+    'audio/webm': 'webm',
+    'audio/mp3': 'mp3',
+    'audio/mpeg': 'mp3',
+    'audio/wav': 'wav',
+    'audio/wave': 'wav',
+    'audio/ogg': 'ogg',
+    'audio/m4a': 'm4a',
+    'audio/mp4': 'm4a',
   };
-
-  return mimeToExt[mimeType] || "audio";
+  
+  return mimeToExt[mimeType] || 'audio';
 }
 
 /**
@@ -299,37 +217,37 @@ function getFileExtension(mimeType: string): string {
  */
 function getLanguageName(langCode: string): string {
   const langMap: Record<string, string> = {
-    en: "English",
-    es: "Spanish",
-    fr: "French",
-    de: "German",
-    it: "Italian",
-    pt: "Portuguese",
-    ru: "Russian",
-    ja: "Japanese",
-    ko: "Korean",
-    zh: "Chinese",
-    ar: "Arabic",
-    hi: "Hindi",
-    nl: "Dutch",
-    pl: "Polish",
-    tr: "Turkish",
-    sv: "Swedish",
-    da: "Danish",
-    no: "Norwegian",
-    fi: "Finnish",
+    'en': 'English',
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'ru': 'Russian',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'zh': 'Chinese',
+    'ar': 'Arabic',
+    'hi': 'Hindi',
+    'nl': 'Dutch',
+    'pl': 'Polish',
+    'tr': 'Turkish',
+    'sv': 'Swedish',
+    'da': 'Danish',
+    'no': 'Norwegian',
+    'fi': 'Finnish',
   };
-
+  
   return langMap[langCode] || langCode;
 }
 
 /**
  * Example tRPC procedure implementation:
- *
+ * 
  * ```ts
  * // In server/routers.ts
  * import { transcribeAudio } from "./_core/voiceTranscription";
- *
+ * 
  * export const voiceRouter = router({
  *   transcribe: protectedProcedure
  *     .input(z.object({
@@ -339,7 +257,7 @@ function getLanguageName(langCode: string): string {
  *     }))
  *     .mutation(async ({ input, ctx }) => {
  *       const result = await transcribeAudio(input);
- *
+ *       
  *       // Check if it's an error
  *       if ('error' in result) {
  *         throw new TRPCError({
@@ -348,7 +266,7 @@ function getLanguageName(langCode: string): string {
  *           cause: result,
  *         });
  *       }
- *
+ *       
  *       // Optionally save transcription to database
  *       await db.insert(transcriptions).values({
  *         userId: ctx.user.id,
@@ -358,7 +276,7 @@ function getLanguageName(langCode: string): string {
  *         audioUrl: input.audioUrl,
  *         createdAt: new Date(),
  *       });
- *
+ *       
  *       return result;
  *     }),
  * });

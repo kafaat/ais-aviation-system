@@ -1,15 +1,7 @@
 import { z } from "zod";
-import {
-  publicProcedure,
-  protectedProcedure,
-  adminProcedure,
-  router,
-} from "../_core/trpc";
+import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import * as ancillaryService from "../services/ancillary-services.service";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "../db";
-import { bookings, bookingAncillaries } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
 
 /**
  * Ancillary Services Router
@@ -22,16 +14,7 @@ export const ancillaryRouter = router({
   getAvailable: publicProcedure
     .input(
       z.object({
-        category: z
-          .enum([
-            "baggage",
-            "meal",
-            "seat",
-            "insurance",
-            "lounge",
-            "priority_boarding",
-          ])
-          .optional(),
+        category: z.enum(["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]).optional(),
       })
     )
     .query(async ({ input }) => {
@@ -44,14 +27,7 @@ export const ancillaryRouter = router({
   getByCategory: publicProcedure
     .input(
       z.object({
-        category: z.enum([
-          "baggage",
-          "meal",
-          "seat",
-          "insurance",
-          "lounge",
-          "priority_boarding",
-        ]),
+        category: z.enum(["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]),
         cabinClass: z.enum(["economy", "business"]).optional(),
         airlineId: z.number().optional(),
       })
@@ -90,33 +66,7 @@ export const ancillaryRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
-        });
-      }
-
+      // TODO: Verify booking belongs to user
       return await ancillaryService.addAncillaryToBooking(input);
     }),
 
@@ -126,33 +76,7 @@ export const ancillaryRouter = router({
   getBookingAncillaries: protectedProcedure
     .input(z.object({ bookingId: z.number() }))
     .query(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
-        });
-      }
-
+      // TODO: Verify booking belongs to user
       return await ancillaryService.getBookingAncillaries(input.bookingId);
     }),
 
@@ -162,45 +86,8 @@ export const ancillaryRouter = router({
   removeFromBooking: protectedProcedure
     .input(z.object({ ancillaryId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      const [ancillary] = await db
-        .select({ bookingId: bookingAncillaries.bookingId })
-        .from(bookingAncillaries)
-        .where(eq(bookingAncillaries.id, input.ancillaryId))
-        .limit(1);
-
-      if (!ancillary) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking ancillary not found",
-        });
-      }
-
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, ancillary.bookingId))
-        .limit(1);
-
-      if (
-        !booking ||
-        (booking.userId !== ctx.user.id && ctx.user.role !== "admin")
-      ) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
-        });
-      }
-
-      return await ancillaryService.removeAncillaryFromBooking(
-        input.ancillaryId
-      );
+      // TODO: Verify ancillary belongs to user's booking
+      return await ancillaryService.removeAncillaryFromBooking(input.ancillaryId);
     }),
 
   /**
@@ -208,55 +95,19 @@ export const ancillaryRouter = router({
    */
   calculateTotal: protectedProcedure
     .input(z.object({ bookingId: z.number() }))
-    .query(async ({ input, ctx }) => {
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      const [booking] = await db
-        .select({ userId: bookings.userId })
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Access denied",
-        });
-      }
-
-      const total = await ancillaryService.calculateAncillariesTotalCost(
-        input.bookingId
-      );
+    .query(async ({ input }) => {
+      const total = await ancillaryService.calculateAncillariesTotalCost(input.bookingId);
       return { total };
     }),
 
   /**
    * Admin: Create ancillary service
    */
-  adminCreate: adminProcedure
+  adminCreate: protectedProcedure
     .input(
       z.object({
         code: z.string().max(50),
-        category: z.enum([
-          "baggage",
-          "meal",
-          "seat",
-          "insurance",
-          "lounge",
-          "priority_boarding",
-        ]),
+        category: z.enum(["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]),
         name: z.string().max(255),
         description: z.string().optional(),
         price: z.number().min(0),
@@ -267,7 +118,15 @@ export const ancillaryRouter = router({
         icon: z.string().max(255).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Check admin role
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Admin access required",
+        });
+      }
+
       const id = await ancillaryService.createAncillaryService(input);
       return { id, success: true };
     }),
@@ -275,21 +134,12 @@ export const ancillaryRouter = router({
   /**
    * Admin: Update ancillary service
    */
-  adminUpdate: adminProcedure
+  adminUpdate: protectedProcedure
     .input(
       z.object({
         id: z.number(),
         code: z.string().max(50).optional(),
-        category: z
-          .enum([
-            "baggage",
-            "meal",
-            "seat",
-            "insurance",
-            "lounge",
-            "priority_boarding",
-          ])
-          .optional(),
+        category: z.enum(["baggage", "meal", "seat", "insurance", "lounge", "priority_boarding"]).optional(),
         name: z.string().max(255).optional(),
         description: z.string().optional(),
         price: z.number().min(0).optional(),
@@ -299,7 +149,15 @@ export const ancillaryRouter = router({
         icon: z.string().max(255).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Check admin role
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Admin access required",
+        });
+      }
+
       const { id, ...data } = input;
       await ancillaryService.updateAncillaryService(id, data);
       return { success: true };
@@ -308,9 +166,17 @@ export const ancillaryRouter = router({
   /**
    * Admin: Deactivate ancillary service
    */
-  adminDeactivate: adminProcedure
+  adminDeactivate: protectedProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Check admin role
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Admin access required",
+        });
+      }
+
       await ancillaryService.deactivateAncillaryService(input.id);
       return { success: true };
     }),

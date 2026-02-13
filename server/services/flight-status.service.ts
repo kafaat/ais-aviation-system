@@ -1,37 +1,19 @@
-import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import {
-  flights,
-  bookings,
-  users,
-  airports,
-  flightStatusHistory,
-} from "../../drizzle/schema";
+import { flights, bookings, users, airports, flightStatusHistory } from "../../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { notifyOwner } from "../_core/notification";
 import { sendFlightStatusChange } from "./email.service";
-import { notifyFlightStatusUpdate } from "./notification.service";
 
 /**
  * Flight Status Update Service
  * Handles flight status changes and notifications
  */
 
-export type FlightStatus = "scheduled" | "delayed" | "cancelled" | "completed";
-
-const VALID_FLIGHT_STATUS_TRANSITIONS: Record<FlightStatus, FlightStatus[]> = {
-  scheduled: ["delayed", "cancelled", "completed"],
-  delayed: ["scheduled", "cancelled", "completed"],
-  cancelled: [],
-  completed: [],
-};
-
 export interface FlightStatusUpdate {
   flightId: number;
-  status: FlightStatus;
+  status: "scheduled" | "delayed" | "cancelled" | "completed";
   delayMinutes?: number;
   reason?: string;
-  adminUserId?: number;
 }
 
 /**
@@ -42,13 +24,9 @@ export async function updateFlightStatus(
 ): Promise<{ success: boolean; affectedBookings: number }> {
   try {
     const database = await getDb();
-    if (!database)
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Database not available",
-      });
+    if (!database) throw new Error("Database not available");
 
-    const { flightId, status, delayMinutes, reason, adminUserId } = update;
+    const { flightId, status, delayMinutes, reason } = update;
 
     // Get flight details first
     const [flight] = await database
@@ -58,18 +36,11 @@ export async function updateFlightStatus(
       .limit(1);
 
     if (!flight) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+      throw new Error("Flight not found");
     }
 
-    const oldStatus = flight.status as FlightStatus;
-
-    const allowedTransitions = VALID_FLIGHT_STATUS_TRANSITIONS[oldStatus];
-    if (!allowedTransitions || !allowedTransitions.includes(status)) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Invalid status transition from '${oldStatus}' to '${status}'`,
-      });
-    }
+    // Get current status before updating
+    const oldStatus = flight.status;
 
     // Update flight status
     await database
@@ -84,7 +55,7 @@ export async function updateFlightStatus(
       newStatus: status,
       delayMinutes,
       reason,
-      changedBy: adminUserId ?? null,
+      changedBy: null, // TODO: Add admin user ID when available
     });
 
     // Get all bookings for this flight with flight and airport details
@@ -99,7 +70,10 @@ export async function updateFlightStatus(
       .from(bookings)
       .innerJoin(users, eq(bookings.userId, users.id))
       .where(
-        and(eq(bookings.flightId, flightId), eq(bookings.status, "confirmed"))
+        and(
+          eq(bookings.flightId, flightId),
+          eq(bookings.status, "confirmed")
+        )
       );
 
     // Get origin and destination airports for email
@@ -127,53 +101,31 @@ export async function updateFlightStatus(
         content: `الرحلة ${flight.flightNumber} ${statusText}${delayText}.\nعدد الحجوزات المتأثرة: ${affectedBookings.length}${reasonText}`,
       });
 
-      // Send email and in-app notifications to all affected passengers
+      // Send email notifications to all affected passengers
       for (const booking of affectedBookings) {
-        // Send in-app notification
-        try {
-          await notifyFlightStatusUpdate(
-            booking.userId,
-            flight.flightNumber,
-            status,
-            flightId,
-            delayMinutes
-          );
-        } catch (notifError) {
-          console.error(
-            `[Flight Status] Error sending in-app notification to user ${booking.userId}:`,
-            notifError
-          );
-        }
-
-        // Send email notification
         if (booking.userEmail) {
           try {
             await sendFlightStatusChange({
-              passengerName: booking.userName || "Passenger",
+              passengerName: booking.userName || 'Passenger',
               passengerEmail: booking.userEmail,
               bookingReference: booking.bookingReference,
               flightNumber: flight.flightNumber,
-              origin: `${originAirport?.city ?? "Unknown"} (${originAirport?.code ?? "?"})`,
-              destination: `${destAirport?.city ?? "Unknown"} (${destAirport?.code ?? "?"})`,
+              origin: `${originAirport.city} (${originAirport.code})`,
+              destination: `${destAirport.city} (${destAirport.code})`,
               departureTime: flight.departureTime,
-              oldStatus,
+              oldStatus: 'scheduled',
               newStatus: status,
               delayMinutes,
               reason,
             });
           } catch (emailError) {
-            console.error(
-              `[Flight Status] Error sending email to ${booking.userEmail}:`,
-              emailError
-            );
+            console.error(`[Flight Status] Error sending email to ${booking.userEmail}:`, emailError);
             // Continue with other emails even if one fails
           }
         }
       }
 
-      console.info(
-        `[Flight Status] ${affectedBookings.length} passengers notified about ${status} for flight ${flight.flightNumber}`
-      );
+      console.log(`[Flight Status] ${affectedBookings.length} passengers notified about ${status} for flight ${flight.flightNumber}`);
     }
 
     return {
@@ -192,11 +144,7 @@ export async function updateFlightStatus(
 export async function getFlightStatusHistory(flightId: number) {
   try {
     const database = await getDb();
-    if (!database)
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Database not available",
-      });
+    if (!database) throw new Error("Database not available");
 
     const [flight] = await database
       .select()
@@ -205,7 +153,7 @@ export async function getFlightStatusHistory(flightId: number) {
       .limit(1);
 
     if (!flight) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+      throw new Error("Flight not found");
     }
 
     // Get all status changes
@@ -236,11 +184,7 @@ export async function cancelFlightAndRefund(params: {
 }): Promise<{ success: boolean; refundedBookings: number }> {
   try {
     const database = await getDb();
-    if (!database)
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Database not available",
-      });
+    if (!database) throw new Error("Database not available");
 
     const { flightId, reason } = params;
 
@@ -252,7 +196,7 @@ export async function cancelFlightAndRefund(params: {
       .limit(1);
 
     if (!flight) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+      throw new Error("Flight not found");
     }
 
     // Update flight status to cancelled (this will send status change emails)
@@ -267,7 +211,10 @@ export async function cancelFlightAndRefund(params: {
       .select()
       .from(bookings)
       .where(
-        and(eq(bookings.flightId, flightId), eq(bookings.paymentStatus, "paid"))
+        and(
+          eq(bookings.flightId, flightId),
+          eq(bookings.paymentStatus, "paid")
+        )
       );
 
     // Update all bookings to cancelled and refunded
@@ -281,7 +228,7 @@ export async function cancelFlightAndRefund(params: {
           updatedAt: new Date(),
         })
         .where(eq(bookings.id, booking.id));
-
+      
       refundedCount++;
     }
 

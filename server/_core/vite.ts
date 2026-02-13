@@ -3,7 +3,7 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer, type UserConfig } from "vite";
+import { createServer as createViteServer } from "vite";
 import viteConfig from "../../vite.config";
 
 export async function setupVite(app: Express, server: Server) {
@@ -13,14 +13,8 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
-  // viteConfig may be a function (from defineConfig with callback) - resolve it
-  const resolvedConfig: UserConfig =
-    typeof viteConfig === "function"
-      ? await viteConfig({ mode: "development", command: "serve" })
-      : viteConfig;
-
   const vite = await createViteServer({
-    ...resolvedConfig,
+    ...viteConfig,
     configFile: false,
     server: serverOptions,
     appType: "custom",
@@ -58,27 +52,16 @@ export function serveStatic(app: Express) {
     process.env.NODE_ENV === "development"
       ? path.resolve(import.meta.dirname, "../..", "dist", "public")
       : path.resolve(import.meta.dirname, "public");
-
   if (!fs.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
     );
-    // Without the build directory, express.static serves nothing and the
-    // catch-all sendFile throws on every request.  Return a clear 503 instead.
-    app.use("*", (_req, res) => {
-      res.status(503).json({
-        error:
-          "Frontend assets not found. The application has not been built yet.",
-      });
-    });
-    return;
   }
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist (SPA routing)
-  const indexPath = path.resolve(distPath, "index.html");
+  // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
-    res.sendFile(indexPath);
+    res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

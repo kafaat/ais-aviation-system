@@ -1,7 +1,7 @@
 # AIS Aviation System - Developer Guide
 
-**Version:** 3.0
-**Last Updated:** February 2026
+**Version:** 2.0  
+**Last Updated:** January 2026  
 **Author:** Manus AI
 
 ---
@@ -28,7 +28,6 @@ The AIS (Aviation Information System) is a comprehensive flight booking and mana
 ### Tech Stack Overview
 
 **Backend:**
-
 - Node.js 22+ with TypeScript
 - Express 4 (Web Server)
 - tRPC 11 (Type-safe API)
@@ -37,7 +36,6 @@ The AIS (Aviation Information System) is a comprehensive flight booking and mana
 - Stripe (Payments)
 
 **Frontend:**
-
 - React 19
 - TypeScript 5.9
 - Vite 7 (Build Tool)
@@ -47,7 +45,6 @@ The AIS (Aviation Information System) is a comprehensive flight booking and mana
 - React Query (State Management)
 
 **Testing:**
-
 - Vitest (Unit & Integration Tests)
 - Playwright (E2E Tests)
 
@@ -80,37 +77,32 @@ docker run -d \
 ### Installation Steps
 
 1. **Clone the repository**
-
    ```bash
    git clone https://github.com/kafaat/ais-aviation-system.git
    cd ais-aviation-system
    ```
 
 2. **Install dependencies**
-
    ```bash
    pnpm install
    ```
 
 3. **Set up environment variables**
-
    ```bash
    cp .env.example .env
    # Edit .env with your configuration
    ```
 
 4. **Set up the database**
-
    ```bash
    # Generate and run migrations
    pnpm db:push
-
+   
    # Seed initial data (airlines, airports, flights)
    npx tsx scripts/seed-data.mjs
    ```
 
 5. **Start development server**
-
    ```bash
    pnpm dev
    ```
@@ -140,32 +132,22 @@ ais-aviation-system/
 │   │   ├── logger.ts       # Logging service
 │   │   └── index.ts        # Server entry point
 │   │
-│   ├── routers/             # tRPC API routers (49 files)
+│   ├── routers/             # tRPC API routers
 │   │   ├── flights.ts      # Flight operations
 │   │   ├── bookings.ts     # Booking management
 │   │   ├── payments.ts     # Payment processing
 │   │   ├── admin.ts        # Admin operations
-│   │   ├── analytics.ts    # Analytics & reports
-│   │   ├── gates.ts        # Gate management
-│   │   ├── vouchers.ts     # Vouchers & credits
-│   │   ├── dcs.ts          # Departure Control System
-│   │   ├── disruptions.ts  # Flight disruptions
-│   │   └── ...             # 40+ more domain routers
+│   │   └── analytics.ts    # Analytics & reports
 │   │
-│   ├── services/            # Business logic (100 files)
+│   ├── services/            # Business logic services
 │   │   ├── flights.service.ts
 │   │   ├── bookings.service.ts
 │   │   ├── payments.service.ts
 │   │   ├── loyalty.service.ts
-│   │   ├── email.service.ts
-│   │   ├── sentry.service.ts
-│   │   └── ...             # 94+ more services
+│   │   └── email.service.ts
 │   │
 │   ├── db.ts               # Database client & queries
 │   ├── stripe.ts           # Stripe configuration
-│   ├── worker.ts           # Background job worker entry
-│   ├── queue/              # BullMQ job queue workers
-│   ├── jobs/               # Background job definitions
 │   └── webhooks/           # Webhook handlers
 │
 ├── drizzle/                 # Database schema & migrations
@@ -239,11 +221,11 @@ pnpm lint
 All database tables are defined in `drizzle/schema.ts` using Drizzle ORM:
 
 ```typescript
-import { mysqlTable, varchar, int, timestamp } from "drizzle-orm/mysql-core";
+import { mysqlTable, varchar, int, timestamp } from 'drizzle-orm/mysql-core';
 
-export const flights = mysqlTable("flights", {
-  id: int("id").primaryKey().autoincrement(),
-  flightNumber: varchar("flight_number", { length: 10 }).notNull(),
+export const flights = mysqlTable('flights', {
+  id: int('id').primaryKey().autoincrement(),
+  flightNumber: varchar('flight_number', { length: 10 }).notNull(),
   // ... more fields
 });
 ```
@@ -266,21 +248,23 @@ pnpm db:push
 Use Drizzle ORM for type-safe queries:
 
 ```typescript
-import { db } from "./db";
-import { flights } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { db } from './db';
+import { flights } from '../drizzle/schema';
+import { eq } from 'drizzle-orm';
 
 // Select
 const flight = await db.select().from(flights).where(eq(flights.id, 1));
 
 // Insert
 await db.insert(flights).values({
-  flightNumber: "AIS123",
+  flightNumber: 'AIS123',
   // ... other fields
 });
 
 // Update
-await db.update(flights).set({ status: "delayed" }).where(eq(flights.id, 1));
+await db.update(flights)
+  .set({ status: 'delayed' })
+  .where(eq(flights.id, 1));
 ```
 
 ### Seeding Data
@@ -292,32 +276,10 @@ npx tsx scripts/seed-data.mjs
 ```
 
 This creates:
-
-- 6 airlines (SV, MS, EK, QR, IY, WY)
-- 9 airports (RUH, JED, DXB, CAI, DOH, DMM, SAH, ADE, MCT)
-- 15 flights
-- 7 currencies (SAR, USD, EUR, AED, EGP, YER, OMR)
+- 5 airlines
+- 15 airports
+- 50+ flights
 - Admin user
-
-### Background Worker
-
-The system includes a background job worker for processing tasks asynchronously:
-
-```bash
-# Build the worker
-pnpm build   # Produces dist/index.js (server) and dist/worker.js (worker)
-
-# Start the worker (requires Redis)
-node dist/worker.js
-```
-
-The worker handles:
-
-- Email notifications (booking confirmation, cancellation)
-- Cancellation and refund processing
-- Push notification delivery
-- Price alert checking and notification
-- Inventory lock cleanup
 
 ---
 
@@ -329,18 +291,16 @@ All APIs are organized in `server/routers/` and exported via `routers.ts`:
 
 ```typescript
 // server/routers/flights.ts
-import { router, publicProcedure } from "../_core/trpc";
-import { z } from "zod";
+import { router, publicProcedure } from '../_core/trpc';
+import { z } from 'zod';
 
 export const flightsRouter = router({
   search: publicProcedure
-    .input(
-      z.object({
-        origin: z.string(),
-        destination: z.string(),
-        date: z.string(),
-      })
-    )
+    .input(z.object({
+      origin: z.string(),
+      destination: z.string(),
+      date: z.string(),
+    }))
     .query(async ({ input }) => {
       // Your logic here
       return await searchFlights(input);
@@ -371,11 +331,11 @@ const bookingSchema = z.object({
 Use tRPC error codes:
 
 ```typescript
-import { TRPCError } from "@trpc/server";
+import { TRPCError } from '@trpc/server';
 
 throw new TRPCError({
-  code: "BAD_REQUEST",
-  message: "Flight is fully booked",
+  code: 'BAD_REQUEST',
+  message: 'Flight is fully booked',
 });
 
 // Available codes: BAD_REQUEST, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, INTERNAL_SERVER_ERROR
@@ -386,13 +346,14 @@ throw new TRPCError({
 Protected procedures use middleware:
 
 ```typescript
-import { protectedProcedure } from "../_core/trpc";
+import { protectedProcedure } from '../_core/trpc';
 
 export const bookingsRouter = router({
-  myBookings: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.user.id; // Authenticated user
-    return await getMyBookings(userId);
-  }),
+  myBookings: protectedProcedure
+    .query(async ({ ctx }) => {
+      const userId = ctx.user.id; // Authenticated user
+      return await getMyBookings(userId);
+    }),
 });
 ```
 
@@ -424,7 +385,7 @@ function FlightSearch() {
   });
 
   if (isLoading) return <div>Loading...</div>;
-
+  
   return <FlightList flights={data} />;
 }
 ```
@@ -468,7 +429,7 @@ import { useTranslation } from 'react-i18next';
 
 function MyComponent() {
   const { t } = useTranslation();
-
+  
   return <h1>{t('welcome')}</h1>;
 }
 ```
@@ -493,14 +454,14 @@ pnpm test:watch
 Example test:
 
 ```typescript
-import { describe, it, expect } from "vitest";
-import { calculateFlightPrice } from "./pricing.service";
+import { describe, it, expect } from 'vitest';
+import { calculateFlightPrice } from './pricing.service';
 
-describe("calculateFlightPrice", () => {
-  it("should calculate correct price for economy class", () => {
+describe('calculateFlightPrice', () => {
+  it('should calculate correct price for economy class', () => {
     const price = calculateFlightPrice({
       basePrice: 500,
-      cabinClass: "economy",
+      cabinClass: 'economy',
     });
     expect(price).toBe(500);
   });
@@ -520,7 +481,6 @@ pnpm test:e2e:ui
 ### Test Coverage
 
 Aim for:
-
 - **Services**: 80%+ coverage
 - **Routers**: 70%+ coverage
 - **Critical paths**: 100% coverage (payments, bookings)
@@ -619,52 +579,6 @@ DEBUG=true
 2. Review test files for examples
 3. Search GitHub issues
 4. Contact the team via email
-
----
-
-## Docker Development
-
-### Development Environment
-
-```bash
-# Start MySQL + Redis + phpMyAdmin
-docker-compose up
-
-# Access phpMyAdmin at http://localhost:8080
-```
-
-### Production Environment
-
-```bash
-# Production lite
-docker-compose -f docker-compose.prod.yml up
-
-# Full production (with worker, Redis, SSL)
-docker-compose -f docker-compose.production.yml up
-```
-
-### Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-**Required:**
-
-- `DATABASE_URL` - MySQL connection string
-- `JWT_SECRET` - Secret for JWT token signing
-
-**Payment (required for booking flow):**
-
-- `STRIPE_SECRET_KEY` - Stripe API key
-- `STRIPE_WEBHOOK_SECRET` - Stripe webhook verification secret
-
-**Optional (with defaults):**
-
-- `REDIS_URL` - Redis connection (default: `redis://localhost:6379`)
-- `LOG_LEVEL` - Logging level (default: `info`)
-- `SENTRY_DSN` / `VITE_SENTRY_DSN` - Sentry error tracking
-- `DB_POOL_SIZE` - Database connection pool size
-
-See `.env.example` for the full list of 60+ configurable variables.
 
 ---
 

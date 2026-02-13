@@ -1,8 +1,8 @@
 import type { CookieOptions, Request } from "express";
 
-const _LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
-function _isIpAddress(host: string) {
+function isIpAddress(host: string) {
   // Basic IPv4 check and IPv6 presence detection.
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
   return host.includes(":");
@@ -44,16 +44,15 @@ export function getSessionCookieOptions(
   // - secure: Only send over HTTPS in production
   // - sameSite: 'lax' for better CSRF protection (use 'none' only if needed for cross-site)
   // - path: Cookie available for all routes
-
+  
+  const isProduction = process.env.NODE_ENV === "production";
   const isSecure = isSecureRequest(req);
-
+  
   return {
     httpOnly: true,
     path: "/",
-    // 'lax' allows cookies on top-level navigations (e.g. OAuth redirects) while
-    // blocking cross-site subrequests (CSRF protection). Only use 'none' if the
-    // app must be embedded in a cross-site iframe.
-    sameSite: "lax",
+    // Use 'lax' for better security, 'none' only if cross-site cookies are required
+    sameSite: isSecure ? "none" : "lax",
     secure: isSecure,
   };
 }

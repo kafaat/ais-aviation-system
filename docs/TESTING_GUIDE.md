@@ -99,7 +99,7 @@ Tests that use Stripe should use Stripe test mode keys and mock webhooks:
 
 ```typescript
 // In test setup
-vi.mock("../stripe", () => ({
+vi.mock('../stripe', () => ({
   stripe: {
     checkout: {
       sessions: {
@@ -116,7 +116,7 @@ OAuth tests should mock the OAuth server:
 
 ```typescript
 // Mock OAuth responses
-vi.mock("../_core/oauth", () => ({
+vi.mock('../_core/oauth', () => ({
   validateToken: vi.fn(() => Promise.resolve({ userId: 1 })),
 }));
 ```
@@ -146,7 +146,7 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-
+    
     services:
       mysql:
         image: mysql:8.0
@@ -155,17 +155,17 @@ jobs:
           MYSQL_DATABASE: ais_test
         ports:
           - 3306:3306
-
+    
     steps:
       - uses: actions/checkout@v3
       - uses: pnpm/action-setup@v2
       - uses: actions/setup-node@v3
         with:
-          node-version: "22"
-          cache: "pnpm"
-
+          node-version: '22'
+          cache: 'pnpm'
+      
       - run: pnpm install
-
+      
       - name: Run tests
         env:
           DATABASE_URL: mysql://root:root@localhost:3306/ais_test
@@ -184,7 +184,6 @@ jobs:
 ### "Invalid environment configuration"
 
 This error means required environment variables are missing. Check that:
-
 1. `.env.test` exists and has all required variables
 2. All required variables are set (see .env.example)
 3. Variable values meet validation requirements (e.g., URLs are valid)

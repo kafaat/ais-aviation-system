@@ -30,7 +30,7 @@ const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserI
 
 class OAuthService {
   constructor(private client: ReturnType<typeof axios.create>) {
-    console.info("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
     if (!ENV.oAuthServerUrl) {
       console.error(
         "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
@@ -39,22 +39,7 @@ class OAuthService {
   }
 
   private decodeState(state: string): string {
-    // Both atob (base64 decode) and URL parsing can throw on malformed input,
-    // so wrap everything in a single try-catch for a clean error message.
-    let redirectUri: string;
-    try {
-      redirectUri = atob(state);
-      const url = new URL(redirectUri);
-      if (
-        !["http:", "https:"].includes(url.protocol) ||
-        !url.pathname.endsWith("/api/oauth/callback")
-      ) {
-        throw new Error("Invalid redirect URI in OAuth state");
-      }
-    } catch {
-      throw new Error("Invalid redirect URI in OAuth state");
-    }
-
+    const redirectUri = atob(state);
     return redirectUri;
   }
 
@@ -133,7 +118,7 @@ class SDKServer {
    * @example
    * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
    */
-  exchangeCodeForToken(
+  async exchangeCodeForToken(
     code: string,
     state: string
   ): Promise<ExchangeTokenResponse> {
@@ -179,7 +164,7 @@ class SDKServer {
    * @example
    * const sessionToken = await sdk.createSessionToken(userInfo.openId);
    */
-  createSessionToken(
+  async createSessionToken(
     openId: string,
     options: { expiresInMs?: number; name?: string } = {}
   ): Promise<string> {
@@ -193,7 +178,7 @@ class SDKServer {
     );
   }
 
-  signSession(
+  async signSession(
     payload: SessionPayload,
     options: { expiresInMs?: number } = {}
   ): Promise<string> {
@@ -230,7 +215,7 @@ class SDKServer {
       if (
         !isNonEmptyString(openId) ||
         !isNonEmptyString(appId) ||
-        typeof name !== "string"
+        !isNonEmptyString(name)
       ) {
         console.warn("[Auth] Session payload missing required fields");
         return null;

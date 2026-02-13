@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  calculateCancellationFee,
-  getAllCancellationTiers,
-} from "./cancellation-fees.service";
+import { calculateCancellationFee, getAllCancellationTiers } from "./cancellation-fees.service";
 
 describe("Cancellation Fees Service", () => {
   const totalAmount = 100000; // 1000 SAR in cents

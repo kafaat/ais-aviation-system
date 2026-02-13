@@ -23,16 +23,16 @@ export function AdminRoute({ children }: AdminRouteProps) {
     );
   }
 
-  // Redirect to login if not authenticated
+  // Redirect to home if not authenticated
   if (!isAuthenticated || !user) {
-    return <Redirect to="/login" />;
-  }
-
-  // Redirect to home if not admin or super_admin
-  if (user.role !== "admin" && user.role !== "super_admin") {
     return <Redirect to="/" />;
   }
 
-  // Render children if user is admin or super_admin
+  // Redirect to home if not admin
+  if (user.role !== "admin") {
+    return <Redirect to="/" />;
+  }
+
+  // Render children if user is admin
   return <>{children}</>;
 }

@@ -33,7 +33,6 @@
 ### 3.3 إعداد متغيرات البيئة
 
 1. انسخ ملف `.env.example` إلى `.env.prod`:
-
    ```bash
    cp .env.example .env.prod
    ```
@@ -56,18 +55,15 @@
 ### 4.2 خطوات التشغيل
 
 1. **بناء وتشغيل الحاويات:**
-
    ```bash
    docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
    ```
-
    - `-f docker-compose.prod.yml`: يحدد ملف Compose الخاص بالإنتاج.
    - `--env-file .env.prod`: يحدد ملف متغيرات البيئة للإنتاج.
    - `--build`: يقوم ببناء الصور من جديد.
    - `-d`: يعمل في الخلفية.
 
 2. **تطبيق Migrations (إذا لزم الأمر):**
-
    ```bash
    docker compose -f docker-compose.prod.yml exec app pnpm db:push
    ```
@@ -99,7 +95,6 @@ sudo certbot --nginx -d your-domain.com
 ### 5.3 تكوين Nginx
 
 1. قم بإنشاء ملف تكوين جديد في `/etc/nginx/sites-available/ais`:
-
    ```nginx
    server {
        listen 80;
@@ -138,7 +133,6 @@ sudo certbot --nginx -d your-domain.com
    ```
 
 2. قم بتفعيل الموقع:
-
    ```bash
    sudo ln -s /etc/nginx/sites-available/ais /etc/nginx/sites-enabled/
    ```
@@ -167,13 +161,11 @@ docker compose -f docker-compose.prod.yml logs -f app
 لتحديث التطبيق إلى إصدار جديد:
 
 1. **سحب آخر التغييرات:**
-
    ```bash
    git pull origin main
    ```
 
 2. **إعادة بناء وتشغيل الحاويات:**
-
    ```bash
    docker compose -f docker-compose.prod.yml --env-file .env.prod up --build -d
    ```

@@ -104,11 +104,7 @@ describe("Flights Service", () => {
 
       vi.mocked(db.getFlightById).mockResolvedValue(mockFlight as any);
 
-      const result = await flightsService.checkFlightAvailability(
-        1,
-        "economy",
-        5
-      );
+      const result = await flightsService.checkFlightAvailability(1, "economy", 5);
 
       expect(result.available).toBe(true);
       expect(result.flight).toEqual(mockFlight);
@@ -123,11 +119,7 @@ describe("Flights Service", () => {
 
       vi.mocked(db.getFlightById).mockResolvedValue(mockFlight as any);
 
-      const result = await flightsService.checkFlightAvailability(
-        1,
-        "economy",
-        5
-      );
+      const result = await flightsService.checkFlightAvailability(1, "economy", 5);
 
       expect(result.available).toBe(false);
     });
