@@ -1,0 +1,446 @@
+/**
+ * Accessibility Styles
+ *
+ * Comprehensive CSS for accessibility features including:
+ * - Skip navigation links
+ * - High contrast mode enhancements
+ * - Font size scaling classes
+ * - Reduced motion overrides
+ * - Enhanced focus-visible indicators
+ * - Screen reader utilities
+ */
+
+/* ==========================================================================
+   Skip Navigation Links
+   ========================================================================== */
+
+.skip-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: transparent;
+  transform: translateY(-100%);
+  transition: transform 0.15s ease-in-out;
+  pointer-events: none;
+}
+
+.skip-nav:focus-within {
+  transform: translateY(0);
+  background: var(--background, #ffffff);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  pointer-events: auto;
+}
+
+.skip-nav__link {
+  display: inline-block;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--primary-foreground, #ffffff);
+  text-decoration: none;
+  white-space: nowrap;
+  background-color: var(--primary, #1d4ed8);
+  border: 2px solid transparent;
+  border-radius: 0.375rem;
+  outline: none;
+  opacity: 0;
+  transform: translateY(-0.5rem);
+  transition:
+    opacity 0.15s ease-in-out,
+    transform 0.15s ease-in-out;
+}
+
+.skip-nav__link:focus {
+  opacity: 1;
+  transform: translateY(0);
+  outline: 3px solid var(--ring, #3b82f6);
+  outline-offset: 2px;
+}
+
+.skip-nav__link:hover {
+  background-color: color-mix(in oklch, var(--primary, #1d4ed8) 90%, black);
+}
+
+.skip-nav__link:active {
+  background-color: color-mix(in oklch, var(--primary, #1d4ed8) 80%, black);
+}
+
+/* RTL support for skip navigation */
+[dir="rtl"] .skip-nav {
+  left: auto;
+  right: 0;
+}
+
+/* ==========================================================================
+   High Contrast Mode
+   ========================================================================== */
+
+.high-contrast {
+  /* Light mode high contrast overrides */
+  --foreground: oklch(0.05 0 0);
+  --card-foreground: oklch(0.05 0 0);
+  --popover-foreground: oklch(0.05 0 0);
+  --muted-foreground: oklch(0.25 0 0);
+  --border: oklch(0.15 0 0);
+  --input: oklch(0.15 0 0);
+}
+
+.high-contrast.dark {
+  /* Dark mode high contrast overrides */
+  --foreground: oklch(0.97 0 0);
+  --card-foreground: oklch(0.97 0 0);
+  --popover-foreground: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.8 0 0);
+  --border: oklch(0.85 0 0);
+  --input: oklch(0.85 0 0);
+}
+
+/* Enhanced borders in high contrast */
+.high-contrast *:not(svg):not(path):not(line):not(circle):not(rect) {
+  border-color: currentColor !important;
+}
+
+/* Stronger text contrast in high contrast mode */
+.high-contrast p,
+.high-contrast span,
+.high-contrast h1,
+.high-contrast h2,
+.high-contrast h3,
+.high-contrast h4,
+.high-contrast h5,
+.high-contrast h6,
+.high-contrast label,
+.high-contrast li,
+.high-contrast td,
+.high-contrast th,
+.high-contrast dt,
+.high-contrast dd {
+  color: var(--foreground) !important;
+}
+
+/* Interactive elements must be clearly distinguished */
+.high-contrast a,
+.high-contrast button:not(:disabled),
+.high-contrast [role="button"]:not([aria-disabled="true"]) {
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+
+/* High contrast focus rings */
+.high-contrast :focus-visible {
+  outline: 3px solid var(--foreground) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 1px var(--background) !important;
+}
+
+/* Ensure images and media have visible borders */
+.high-contrast img,
+.high-contrast video,
+.high-contrast svg:not([aria-hidden="true"]) {
+  outline: 1px solid var(--foreground);
+}
+
+/* Ensure form inputs have clear borders */
+.high-contrast input,
+.high-contrast textarea,
+.high-contrast select {
+  border: 2px solid var(--foreground) !important;
+}
+
+/* Ensure placeholder text is readable */
+.high-contrast ::placeholder {
+  color: var(--muted-foreground) !important;
+  opacity: 1 !important;
+}
+
+/* Ensure disabled states are visually distinct */
+.high-contrast :disabled,
+.high-contrast [aria-disabled="true"] {
+  opacity: 0.6 !important;
+  text-decoration: line-through !important;
+}
+
+/* ==========================================================================
+   Font Size Classes
+   ========================================================================== */
+
+.a11y-font-normal {
+  font-size: 100%;
+}
+
+.a11y-font-large {
+  font-size: 112.5%; /* 18px base from 16px */
+}
+
+.a11y-font-large input,
+.a11y-font-large textarea,
+.a11y-font-large select,
+.a11y-font-large button {
+  font-size: inherit;
+}
+
+.a11y-font-larger {
+  font-size: 125%; /* 20px base from 16px */
+}
+
+.a11y-font-larger input,
+.a11y-font-larger textarea,
+.a11y-font-larger select,
+.a11y-font-larger button {
+  font-size: inherit;
+}
+
+/* Ensure line height scales with font size for readability */
+.a11y-font-large body,
+.a11y-font-larger body {
+  line-height: 1.6;
+}
+
+/* ==========================================================================
+   Reduced Motion
+   ========================================================================== */
+
+.a11y-reduce-motion,
+.a11y-reduce-motion *,
+.a11y-reduce-motion *::before,
+.a11y-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Also respect system-level reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Enhanced Focus Indicators
+   ========================================================================== */
+
+.a11y-enhanced-focus :focus-visible {
+  outline: 3px solid var(--primary, #1d4ed8) !important;
+  outline-offset: 3px !important;
+  box-shadow:
+    0 0 0 2px var(--background, #ffffff),
+    0 0 0 5px var(--primary, #1d4ed8) !important;
+  border-radius: 2px;
+}
+
+/* Enhanced focus for buttons and links */
+.a11y-enhanced-focus button:focus-visible,
+.a11y-enhanced-focus [role="button"]:focus-visible,
+.a11y-enhanced-focus a:focus-visible {
+  outline: 3px solid var(--primary, #1d4ed8) !important;
+  outline-offset: 3px !important;
+  box-shadow:
+    0 0 0 2px var(--background, #ffffff),
+    0 0 0 5px var(--primary, #1d4ed8),
+    0 0 12px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Enhanced focus for form elements */
+.a11y-enhanced-focus input:focus-visible,
+.a11y-enhanced-focus textarea:focus-visible,
+.a11y-enhanced-focus select:focus-visible {
+  outline: 3px solid var(--primary, #1d4ed8) !important;
+  outline-offset: 1px !important;
+  box-shadow:
+    0 0 0 2px var(--background, #ffffff),
+    0 0 0 5px var(--primary, #1d4ed8),
+    inset 0 0 0 1px var(--primary, #1d4ed8) !important;
+}
+
+/* ==========================================================================
+   Screen Reader Utilities
+   ========================================================================== */
+
+/* Visually hidden but accessible to screen readers */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Make sr-only content visible on focus (for skip links, etc.) */
+.sr-only-focusable:focus,
+.sr-only-focusable:focus-within {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Announcer regions - invisible but present in the DOM */
+.a11y-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ==========================================================================
+   Accessibility Toolbar
+   ========================================================================== */
+
+.a11y-toolbar {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+[dir="rtl"] .a11y-toolbar {
+  right: auto;
+  left: 1rem;
+  align-items: flex-start;
+}
+
+.a11y-toolbar__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.25rem;
+  color: var(--primary-foreground, #ffffff);
+  background-color: var(--primary, #1d4ed8);
+  border: 2px solid transparent;
+  border-radius: 50%;
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.a11y-toolbar__toggle:hover {
+  transform: scale(1.05);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+.a11y-toolbar__toggle:focus-visible {
+  outline: 3px solid var(--ring, #3b82f6);
+  outline-offset: 2px;
+}
+
+.a11y-toolbar__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 14rem;
+  padding: 0.75rem;
+  background-color: var(--card, #ffffff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 0.75rem;
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+.a11y-toolbar__heading {
+  margin: 0 0 0.375rem;
+  padding-bottom: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted-foreground, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.a11y-toolbar__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--foreground, #111827);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.a11y-toolbar__item:hover {
+  background-color: var(--accent, #f3f4f6);
+}
+
+.a11y-toolbar__item:focus-visible {
+  outline: 2px solid var(--ring, #3b82f6);
+  outline-offset: -1px;
+}
+
+.a11y-toolbar__item--active {
+  background-color: color-mix(
+    in oklch,
+    var(--primary, #1d4ed8) 10%,
+    transparent
+  );
+  border-color: var(--primary, #1d4ed8);
+  color: var(--primary, #1d4ed8);
+}
+
+.a11y-toolbar__item-label {
+  flex: 1;
+  text-align: start;
+}
+
+.a11y-toolbar__item-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.a11y-toolbar__item-status {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Reduced motion disables toolbar animations */
+.a11y-reduce-motion .a11y-toolbar__toggle {
+  transition: none;
+}

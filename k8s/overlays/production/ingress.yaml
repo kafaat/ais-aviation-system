@@ -1,0 +1,119 @@
+---
+# AIS Aviation System - Production Ingress
+# Kubernetes Ingress resource for production environment
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ais-api-ingress
+  namespace: ais-production
+  labels:
+    app: ais-api
+    environment: production
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+
+    # Rate limiting for production
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    nginx.ingress.kubernetes.io/limit-rpm: "3000"
+
+    # CORS settings
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://ais-aviation.example.com"
+
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Permissions-Policy: camera=(), microphone=(), geolocation=()";
+
+    # SSL certificate (using cert-manager with production issuer)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+    # Enable HSTS
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ais-aviation.example.com
+        - www.ais-aviation.example.com
+      secretName: ais-production-tls
+  rules:
+    - host: ais-aviation.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ais-api
+                port:
+                  number: 80
+    - host: www.ais-aviation.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ais-api
+                port:
+                  number: 80
+
+---
+# Production resource quotas (higher limits)
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ais-production-quota
+  namespace: ais-production
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: "32Gi"
+    limits.cpu: "32"
+    limits.memory: "64Gi"
+    pods: "100"
+    services: "20"
+    secrets: "50"
+    configmaps: "50"
+
+---
+# Production limit range
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ais-production-limits
+  namespace: ais-production
+spec:
+  limits:
+    - default:
+        cpu: "2000m"
+        memory: "2Gi"
+      defaultRequest:
+        cpu: "500m"
+        memory: "512Mi"
+      type: Container
+
+---
+# Production priority class for critical workloads
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ais-production-critical
+value: 1000000
+globalDefault: false
+description: "Priority class for AIS production critical workloads"

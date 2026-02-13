@@ -1,0 +1,93 @@
+# Development Docker Compose
+# Use this for local development with hot-reload
+
+version: "3.8"
+
+services:
+  # MySQL Database for Development
+  mysql:
+    image: mysql:8.0
+    container_name: ais_dev_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ais_aviation_dev
+      MYSQL_USER: ais_dev
+      MYSQL_PASSWORD: ais_dev_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test:
+        ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis for Development (optional - for job queues)
+  redis:
+    image: redis:7-alpine
+    container_name: ais_dev_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # phpMyAdmin for database management (optional)
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: ais_dev_phpmyadmin
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: root
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+
+  # Auth Service (FastAPI - password-based authentication)
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: ais_dev_auth
+    environment:
+      DATABASE_URL: mysql+pymysql://ais_dev:ais_dev_password@mysql:3306/ais_aviation_dev
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      DEBUG: "true"
+      CORS_ORIGINS: "http://localhost:3000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/auth/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  mysql_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+
+# Usage:
+# 1. Start the services: docker-compose up -d
+# 2. Connect to MySQL: mysql://ais_dev:ais_dev_password@localhost:3306/ais_aviation_dev
+# 3. Access phpMyAdmin: http://localhost:8080
+# 4. Run the app: pnpm dev

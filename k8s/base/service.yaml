@@ -1,0 +1,45 @@
+---
+# AIS Aviation System - Kubernetes Service
+# This file is processed with envsubst during CI/CD
+# Required environment variables: NAMESPACE
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: ais-api
+  namespace: ${NAMESPACE}
+  labels:
+    app: ais-api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+spec:
+  type: ClusterIP
+  selector:
+    app: ais-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+      protocol: TCP
+  sessionAffinity: None
+
+---
+# Headless service for direct pod access (useful for debugging)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ais-api-headless
+  namespace: ${NAMESPACE}
+  labels:
+    app: ais-api
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: ais-api
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP

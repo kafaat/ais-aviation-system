@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1e40af" />
+    <title>Offline - AIS Aviation</title>
+    <style>
+      :root {
+        --primary: #1e40af;
+        --primary-light: #3b82f6;
+        --primary-dark: #1e3a8a;
+        --bg: #f0f4ff;
+        --card-bg: #ffffff;
+        --text: #1e293b;
+        --text-secondary: #64748b;
+        --border: #e2e8f0;
+        --accent: #dbeafe;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0c1222;
+          --card-bg: #1a2332;
+          --text: #f1f5f9;
+          --text-secondary: #94a3b8;
+          --border: #2d3a4d;
+          --accent: #1e3a5f;
+        }
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        overflow: hidden;
+      }
+
+      /* Animated background clouds */
+      .sky {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        z-index: 0;
+        pointer-events: none;
+      }
+
+      .cloud {
+        position: absolute;
+        background: var(--card-bg);
+        border-radius: 50%;
+        opacity: 0.15;
+      }
+
+      .cloud-1 {
+        width: 200px;
+        height: 60px;
+        top: 15%;
+        left: -200px;
+        animation: drift 35s linear infinite;
+      }
+
+      .cloud-2 {
+        width: 160px;
+        height: 50px;
+        top: 40%;
+        left: -160px;
+        animation: drift 45s linear infinite;
+        animation-delay: 8s;
+      }
+
+      .cloud-3 {
+        width: 240px;
+        height: 70px;
+        top: 70%;
+        left: -240px;
+        animation: drift 55s linear infinite;
+        animation-delay: 15s;
+      }
+
+      @keyframes drift {
+        from {
+          transform: translateX(0);
+        }
+        to {
+          transform: translateX(calc(100vw + 300px));
+        }
+      }
+
+      .container {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+        max-width: 440px;
+        width: 100%;
+        padding: 2.5rem 2rem;
+        background-color: var(--card-bg);
+        border-radius: 1.25rem;
+        box-shadow:
+          0 10px 25px -5px rgba(0, 0, 0, 0.1),
+          0 8px 10px -6px rgba(0, 0, 0, 0.06);
+        border: 1px solid var(--border);
+      }
+
+      /* Airplane icon with animation */
+      .plane-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 1.25rem;
+        color: var(--primary);
+        animation: hover 3s ease-in-out infinite;
+      }
+
+      .plane-icon svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      @keyframes hover {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-6px);
+        }
+      }
+
+      /* Connection status indicator */
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.875rem;
+        background-color: var(--accent);
+        border-radius: 9999px;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--primary);
+        margin-bottom: 1.25rem;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #ef4444;
+        animation: pulse-dot 2s ease-in-out infinite;
+      }
+
+      .status-dot.online {
+        background-color: #22c55e;
+        animation: none;
+      }
+
+      @keyframes pulse-dot {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 0.625rem;
+        color: var(--text);
+      }
+
+      .subtitle {
+        color: var(--text-secondary);
+        font-size: 0.9375rem;
+        line-height: 1.65;
+        margin-bottom: 1.75rem;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.75rem;
+        background-color: var(--primary);
+        color: #ffffff;
+        border: none;
+        border-radius: 0.625rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        width: 100%;
+      }
+
+      .btn:hover {
+        background-color: var(--primary-dark);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(30, 64, 175, 0.35);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      .btn svg {
+        width: 18px;
+        height: 18px;
+      }
+
+      .btn.loading svg {
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Divider */
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin: 1.5rem 0 1rem;
+      }
+
+      .divider::before,
+      .divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background-color: var(--border);
+      }
+
+      .divider span {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      /* Arabic section */
+      .arabic-section {
+        text-align: center;
+        direction: rtl;
+      }
+
+      .arabic-section h2 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: var(--text);
+      }
+
+      .arabic-section p {
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        line-height: 1.7;
+      }
+
+      /* Footer tip */
+      .tip {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        line-height: 1.5;
+      }
+
+      .tip strong {
+        color: var(--text);
+      }
+
+      /* RTL support for full page */
+      [dir="rtl"] .container {
+        direction: rtl;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Animated background -->
+    <div class="sky">
+      <div class="cloud cloud-1"></div>
+      <div class="cloud cloud-2"></div>
+      <div class="cloud cloud-3"></div>
+    </div>
+
+    <div class="container">
+      <!-- Airplane SVG icon -->
+      <div class="plane-icon">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5"
+          />
+        </svg>
+      </div>
+
+      <!-- Status badge -->
+      <div class="status-badge">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">No Connection</span>
+      </div>
+
+      <!-- English content -->
+      <h1 id="title-en">You're Offline</h1>
+      <p class="subtitle" id="desc-en">
+        It looks like you've lost your internet connection. Please check your
+        network settings and try again. Your booking drafts are saved and will
+        sync automatically when you reconnect.
+      </p>
+
+      <!-- Retry button -->
+      <button class="btn" id="retry-btn" onclick="retryConnection()">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182"
+          />
+        </svg>
+        <span id="retry-text">Try Again</span>
+      </button>
+
+      <!-- Divider with Arabic section -->
+      <div class="divider">
+        <span>العربية</span>
+      </div>
+
+      <div class="arabic-section">
+        <h2>غير متصل بالإنترنت</h2>
+        <p>
+          يبدو أنك فقدت الاتصال بالإنترنت. يرجى التحقق من إعدادات الشبكة
+          والمحاولة مرة أخرى. مسودات حجوزاتك محفوظة وستتم مزامنتها تلقائيًا عند
+          إعادة الاتصال.
+        </p>
+      </div>
+
+      <!-- Tip -->
+      <div class="tip" id="tip">
+        <strong>Tip:</strong> Install AIS Aviation as an app for a better
+        offline experience.
+      </div>
+    </div>
+
+    <script>
+      // Auto-retry when connection is restored
+      window.addEventListener("online", () => {
+        document.getElementById("status-dot").classList.add("online");
+        document.getElementById("status-text").textContent = "Reconnected";
+        document.getElementById("title-en").textContent = "Back Online!";
+        document.getElementById("desc-en").textContent =
+          "Your connection has been restored. Redirecting you back...";
+
+        // Short delay so the user sees the "reconnected" state
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      });
+
+      // Retry button with loading state
+      function retryConnection() {
+        const btn = document.getElementById("retry-btn");
+        const retryText = document.getElementById("retry-text");
+
+        btn.classList.add("loading");
+        retryText.textContent = "Checking...";
+
+        // Attempt a lightweight fetch to verify connectivity
+        fetch("/manifest.json", { cache: "no-store" })
+          .then(response => {
+            if (response.ok) {
+              window.location.reload();
+            } else {
+              showRetryFailed();
+            }
+          })
+          .catch(() => {
+            showRetryFailed();
+          });
+      }
+
+      function showRetryFailed() {
+        const btn = document.getElementById("retry-btn");
+        const retryText = document.getElementById("retry-text");
+
+        btn.classList.remove("loading");
+        retryText.textContent = "Still Offline";
+
+        setTimeout(() => {
+          retryText.textContent = "Try Again";
+        }, 2000);
+      }
+
+      // Periodic auto-retry every 30 seconds
+      setInterval(() => {
+        if (navigator.onLine) {
+          window.location.reload();
+        }
+      }, 30000);
+    </script>
+  </body>
+</html>

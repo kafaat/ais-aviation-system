@@ -1,0 +1,405 @@
+import jwt, { SignOptions } from "jsonwebtoken";
+import { TRPCError } from "@trpc/server";
+import { getDb } from "../db";
+import { refreshTokens, type InsertRefreshToken } from "../../drizzle/schema";
+import { eq, and, gt, lt } from "drizzle-orm";
+import { logger } from "../_core/logger";
+
+const JWT_SECRET: string = process.env.JWT_SECRET ?? "";
+if (!JWT_SECRET) {
+  throw new Error(
+    "JWT_SECRET environment variable is required. Set it in your .env file."
+  );
+}
+const ACCESS_TOKEN_EXPIRY = "15m" as string | number; // 15 minutes
+const REFRESH_TOKEN_EXPIRY = "7d" as string | number; // 7 days
+
+export interface TokenPayload {
+  userId: number;
+  email: string;
+  role: string;
+  type: "access" | "refresh";
+}
+
+export interface MobileLoginResponse {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number; // seconds
+  user: {
+    id: number;
+    name: string | null;
+    email: string | null;
+    role: string;
+  };
+}
+
+/**
+ * Generate JWT token
+ */
+function generateToken(
+  userId: number,
+  email: string,
+  role: string,
+  type: "access" | "refresh",
+  expiresIn: string | number
+): string {
+  const payload: TokenPayload = {
+    userId,
+    email,
+    role,
+    type,
+  };
+
+  const options: SignOptions = {
+    expiresIn: expiresIn as any,
+    issuer: "ais-aviation",
+    audience: "ais-mobile",
+  };
+
+  return jwt.sign(payload, JWT_SECRET, options);
+}
+
+/**
+ * Verify JWT token
+ */
+export function verifyToken(token: string): TokenPayload {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET, {
+      issuer: "ais-aviation",
+      audience: "ais-mobile",
+    }) as TokenPayload;
+
+    return payload;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Token expired",
+      });
+    }
+
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Invalid token",
+    });
+  }
+}
+
+/**
+ * Mobile login - returns access and refresh tokens
+ */
+export async function mobileLogin(
+  email: string,
+  password: string,
+  deviceInfo?: {
+    deviceType?: string;
+    os?: string;
+    appVersion?: string;
+  },
+  ipAddress?: string
+): Promise<MobileLoginResponse> {
+  // Authenticate user (implement your authentication logic)
+  const user = await authenticateUser(email, password);
+
+  if (!user) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Invalid credentials",
+    });
+  }
+
+  // Generate tokens
+  const accessToken = generateToken(
+    user.id,
+    user.email!,
+    user.role,
+    "access",
+    ACCESS_TOKEN_EXPIRY
+  );
+
+  const refreshToken = generateToken(
+    user.id,
+    user.email!,
+    user.role,
+    "refresh",
+    REFRESH_TOKEN_EXPIRY
+  );
+
+  // Store refresh token in database
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+
+  const refreshTokenData: InsertRefreshToken = {
+    userId: user.id,
+    token: refreshToken,
+    deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : undefined,
+    ipAddress,
+    expiresAt,
+  };
+
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+
+  await database.insert(refreshTokens).values(refreshTokenData);
+
+  logger.info(
+    {
+      userId: user.id,
+      email: user.email,
+    },
+    "Mobile login successful"
+  );
+
+  return {
+    accessToken,
+    refreshToken,
+    expiresIn: 900, // 15 minutes in seconds
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    },
+  };
+}
+
+/**
+ * Refresh access token using refresh token
+ */
+export async function refreshAccessToken(
+  refreshTokenString: string
+): Promise<{ accessToken: string; expiresIn: number }> {
+  // Verify refresh token
+  const payload = verifyToken(refreshTokenString);
+
+  if (payload.type !== "refresh") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid token type",
+    });
+  }
+
+  // Check if refresh token exists and is valid in database
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+
+  const tokenRecord = await database
+    .select()
+    .from(refreshTokens)
+    .where(
+      and(
+        eq(refreshTokens.token, refreshTokenString),
+        eq(refreshTokens.userId, payload.userId),
+        gt(refreshTokens.expiresAt, new Date())
+      )
+    )
+    .limit(1);
+
+  if (tokenRecord.length === 0) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Invalid or expired refresh token",
+    });
+  }
+
+  // Check if token is revoked
+  if (tokenRecord[0].revokedAt) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Refresh token has been revoked",
+    });
+  }
+
+  // Update last used timestamp
+  await database
+    .update(refreshTokens)
+    .set({ lastUsedAt: new Date() })
+    .where(eq(refreshTokens.token, refreshTokenString));
+
+  // Generate new access token
+  const accessToken = generateToken(
+    payload.userId,
+    payload.email,
+    payload.role,
+    "access",
+    ACCESS_TOKEN_EXPIRY
+  );
+
+  logger.info(
+    {
+      userId: payload.userId,
+    },
+    "Access token refreshed"
+  );
+
+  return {
+    accessToken,
+    expiresIn: 900, // 15 minutes
+  };
+}
+
+/**
+ * Revoke refresh token (logout)
+ */
+export async function revokeRefreshToken(
+  refreshTokenString: string
+): Promise<void> {
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+
+  await database
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(eq(refreshTokens.token, refreshTokenString));
+
+  logger.info({}, "Refresh token revoked");
+}
+
+/**
+ * Revoke all refresh tokens for a user (logout from all devices)
+ */
+export async function revokeAllUserTokens(userId: number): Promise<void> {
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+
+  await database
+    .update(refreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(eq(refreshTokens.userId, userId));
+
+  logger.info({ userId }, "All refresh tokens revoked for user");
+}
+
+/**
+ * Clean up expired refresh tokens (run as cron job)
+ */
+export async function cleanupExpiredTokens(): Promise<void> {
+  const database = await getDb();
+  if (!database) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database connection not available",
+    });
+  }
+
+  const result = await database
+    .delete(refreshTokens)
+    .where(lt(refreshTokens.expiresAt, new Date()));
+
+  const affectedRows = (result as any)[0]?.affectedRows || 0;
+  logger.info(
+    {
+      deletedCount: affectedRows,
+    },
+    "Expired refresh tokens cleaned up"
+  );
+}
+
+/**
+ * Authenticate user via auth service with DB fallback
+ */
+async function authenticateUser(
+  email: string,
+  password: string
+): Promise<{
+  id: number;
+  name: string | null;
+  email: string | null;
+  role: string;
+} | null> {
+  // Try auth service for password verification
+  try {
+    const { authServiceClient } = await import("./auth-service.client");
+    const result = await authServiceClient.verifyPassword(email, password);
+    if (result.success && result.user) {
+      return {
+        id: result.user.id,
+        name: result.user.name,
+        email: result.user.email,
+        role: result.user.role,
+      };
+    }
+  } catch {
+    // Auth service unavailable, fall through to direct DB lookup
+  }
+
+  // Fallback: direct DB lookup (development only, no password verification)
+  if (process.env.NODE_ENV !== "production") {
+    const database = await getDb();
+    if (!database) {
+      return null;
+    }
+
+    const user = await database.query.users?.findFirst({
+      where: (users, { eq }) => eq(users.email, email),
+    });
+
+    if (!user) {
+      return null;
+    }
+
+    logger.warn(
+      { email },
+      "Dev mode: mobile login without password verification"
+    );
+    return user;
+  }
+
+  return null;
+}
+
+/**
+ * Authenticate request (supports both Cookie and Bearer token)
+ */
+export function authenticateRequest(
+  authHeader?: string,
+  cookieToken?: string
+): TokenPayload {
+  // Try Bearer token first
+  let token: string | undefined;
+
+  if (authHeader?.startsWith("Bearer ")) {
+    token = authHeader.substring(7);
+  } else if (cookieToken) {
+    token = cookieToken;
+  }
+
+  if (!token) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "No authentication token provided",
+    });
+  }
+
+  // Verify token
+  const payload = verifyToken(token);
+
+  if (payload.type !== "access") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid token type",
+    });
+  }
+
+  return payload;
+}
