@@ -40,12 +40,8 @@ export default {
     // Subject should not end with period
     "subject-full-stop": [2, "never", "."],
 
-    // Subject should be sentence case
-    "subject-case": [
-      2,
-      "never",
-      ["sentence-case", "start-case", "pascal-case", "upper-case"],
-    ],
+    // Subject case - allow any case
+    "subject-case": [0],
 
     // Header max length
     "header-max-length": [2, "always", 100],

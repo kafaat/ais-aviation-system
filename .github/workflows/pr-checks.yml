@@ -36,10 +36,10 @@ jobs:
           # Disable WIP check
           disallowScopes: |
             release
-          # Subject pattern
-          subjectPattern: ^(?![A-Z]).+$
+          # Subject pattern - allow both uppercase and lowercase
+          subjectPattern: ^.+$
           subjectPatternError: |
-            The subject "{subject}" should start with a lowercase letter.
+            The subject "{subject}" cannot be empty.
 
   # =============================================================================
   # Size Label
