@@ -39,92 +39,95 @@ const stripeKey = process.env.STRIPE_SECRET_KEY || "";
 const hasRealStripeKey =
   stripeKey.startsWith("sk_test_") && stripeKey.length > 20;
 
-describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
-  let testBookingId: number;
-  // Generate unique 6-character references using timestamp last 3 digits + random
-  const uniqueRef = `T${Date.now().toString().slice(-3)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
-  const uniquePnr = `P${Date.now().toString().slice(-3)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
+describe.skipIf(!process.env.DATABASE_URL || !hasRealStripeKey)(
+  "Stripe Payment Integration",
+  () => {
+    let testBookingId: number;
+    // Generate unique 6-character references using timestamp last 3 digits + random
+    const uniqueRef = `T${Date.now().toString().slice(-3)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
+    const uniquePnr = `P${Date.now().toString().slice(-3)}${Math.random().toString(36).substring(2, 4).toUpperCase()}`;
 
-  beforeAll(async () => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    beforeAll(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
 
-    // Create test booking with unique reference
-    const bookingResult = await db.insert(bookings).values({
-      userId: 1,
-      flightId: 1,
-      bookingReference: uniqueRef,
-      pnr: uniquePnr,
-      status: "pending",
-      totalAmount: 50000, // 500 SAR
-      paymentStatus: "pending",
-      cabinClass: "economy",
-      numberOfPassengers: 1,
-      checkedIn: false,
+      // Create test booking with unique reference
+      const bookingResult = await db.insert(bookings).values({
+        userId: 1,
+        flightId: 1,
+        bookingReference: uniqueRef,
+        pnr: uniquePnr,
+        status: "pending",
+        totalAmount: 50000, // 500 SAR
+        paymentStatus: "pending",
+        cabinClass: "economy",
+        numberOfPassengers: 1,
+        checkedIn: false,
+      });
+
+      testBookingId = Number(bookingResult[0].insertId);
     });
 
-    testBookingId = Number(bookingResult[0].insertId);
-  });
+    afterAll(async () => {
+      // Clean up test data
+      const db = await getDb();
+      if (!db) return;
 
-  afterAll(async () => {
-    // Clean up test data
-    const db = await getDb();
-    if (!db) return;
-
-    try {
-      await db.delete(bookings).where(eq(bookings.id, testBookingId));
-    } catch (error) {
-      console.error("Error cleaning up test data:", error);
-    }
-  });
-
-  it("creates a Stripe checkout session successfully", async () => {
-    const { ctx } = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    const result = await caller.payments.createCheckoutSession({
-      bookingId: testBookingId,
+      try {
+        await db.delete(bookings).where(eq(bookings.id, testBookingId));
+      } catch (error) {
+        console.error("Error cleaning up test data:", error);
+      }
     });
 
-    expect(result).toHaveProperty("sessionId");
-    expect(result).toHaveProperty("url");
-    expect(result.sessionId).toMatch(/^cs_test_/);
-    expect(result.url).toContain("checkout.stripe.com");
-  });
+    it("creates a Stripe checkout session successfully", async () => {
+      const { ctx } = createAuthContext();
+      const caller = appRouter.createCaller(ctx);
 
-  it("prevents creating checkout session for already paid booking", async () => {
-    const db = await getDb();
-    if (!db) throw new Error("Database not available");
+      const result = await caller.payments.createCheckoutSession({
+        bookingId: testBookingId,
+      });
 
-    // Mark booking as paid
-    await db
-      .update(bookings)
-      .set({ paymentStatus: "paid" })
-      .where({ id: testBookingId });
+      expect(result).toHaveProperty("sessionId");
+      expect(result).toHaveProperty("url");
+      expect(result.sessionId).toMatch(/^cs_test_/);
+      expect(result.url).toContain("checkout.stripe.com");
+    });
 
-    const { ctx } = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
+    it("prevents creating checkout session for already paid booking", async () => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
 
-    await expect(
-      caller.payments.createCheckoutSession({ bookingId: testBookingId })
-    ).rejects.toThrow("already paid");
+      // Mark booking as paid
+      await db
+        .update(bookings)
+        .set({ paymentStatus: "paid" })
+        .where({ id: testBookingId });
 
-    // Reset for other tests
-    await db
-      .update(bookings)
-      .set({ paymentStatus: "pending" })
-      .where({ id: testBookingId });
-  });
+      const { ctx } = createAuthContext();
+      const caller = appRouter.createCaller(ctx);
 
-  it("prevents unauthorized access to booking", async () => {
-    const { ctx } = createAuthContext();
-    // Change user ID to simulate different user
-    ctx.user!.id = 999;
+      await expect(
+        caller.payments.createCheckoutSession({ bookingId: testBookingId })
+      ).rejects.toThrow("already paid");
 
-    const caller = appRouter.createCaller(ctx);
+      // Reset for other tests
+      await db
+        .update(bookings)
+        .set({ paymentStatus: "pending" })
+        .where({ id: testBookingId });
+    });
 
-    await expect(
-      caller.payments.createCheckoutSession({ bookingId: testBookingId })
-    ).rejects.toThrow("Access denied");
-  });
-});
+    it("prevents unauthorized access to booking", async () => {
+      const { ctx } = createAuthContext();
+      // Change user ID to simulate different user
+      ctx.user!.id = 999;
+
+      const caller = appRouter.createCaller(ctx);
+
+      await expect(
+        caller.payments.createCheckoutSession({ bookingId: testBookingId })
+      ).rejects.toThrow("Access denied");
+    });
+  }
+);

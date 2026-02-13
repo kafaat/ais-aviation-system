@@ -28,7 +28,7 @@ function createAuthenticatedContext(): TrpcContext {
   };
 }
 
-describe("Booking APIs", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Booking APIs", () => {
   const createdBookingIds: number[] = [];
 
   afterAll(async () => {

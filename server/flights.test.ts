@@ -13,7 +13,7 @@ function createMockContext(): TrpcContext {
   };
 }
 
-describe("Flight APIs", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Flight APIs", () => {
   it("should search for flights successfully", async () => {
     const ctx = createMockContext();
     const caller = appRouter.createCaller(ctx);

@@ -12,16 +12,20 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { savedPassengers } from "../../drizzle/schema";
 
-describe("Saved Passengers Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Saved Passengers Service", () => {
   const testUserId = 888888; // Use a high ID to avoid conflicts
 
   beforeAll(async () => {
     // Cleanup any existing test data before starting
     const db = await getDb();
     if (db) {
-      await db
-        .delete(savedPassengers)
-        .where(eq(savedPassengers.userId, testUserId));
+      try {
+        await db
+          .delete(savedPassengers)
+          .where(eq(savedPassengers.userId, testUserId));
+      } catch (error) {
+        console.error("Error during beforeAll cleanup:", error);
+      }
     }
   });
 
@@ -29,9 +33,13 @@ describe("Saved Passengers Service", () => {
     // Cleanup test data
     const db = await getDb();
     if (db) {
-      await db
-        .delete(savedPassengers)
-        .where(eq(savedPassengers.userId, testUserId));
+      try {
+        await db
+          .delete(savedPassengers)
+          .where(eq(savedPassengers.userId, testUserId));
+      } catch (error) {
+        console.error("Error during afterAll cleanup:", error);
+      }
     }
   });
 

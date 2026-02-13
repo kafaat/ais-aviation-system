@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import Stripe from "stripe";
+import { stripe } from "../stripe";
 import { getDb } from "../db";
 import { bookings, payments, users, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -12,10 +12,6 @@ import { notifyRefundProcessed } from "./notification.service";
  * Refunds Service
  * Business logic for refund-related operations
  */
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
-});
 
 export interface CreateRefundInput {
   bookingId: number;

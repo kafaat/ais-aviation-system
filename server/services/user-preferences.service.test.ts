@@ -12,16 +12,20 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { userPreferences } from "../../drizzle/schema";
 
-describe("User Preferences Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("User Preferences Service", () => {
   const testUserId = 999999; // Use a high ID to avoid conflicts
 
   beforeAll(async () => {
     // Cleanup any existing test data before starting
     const db = await getDb();
     if (db) {
-      await db
-        .delete(userPreferences)
-        .where(eq(userPreferences.userId, testUserId));
+      try {
+        await db
+          .delete(userPreferences)
+          .where(eq(userPreferences.userId, testUserId));
+      } catch (error) {
+        console.error("Error during beforeAll cleanup:", error);
+      }
     }
   });
 
@@ -29,9 +33,13 @@ describe("User Preferences Service", () => {
     // Cleanup test data
     const db = await getDb();
     if (db) {
-      await db
-        .delete(userPreferences)
-        .where(eq(userPreferences.userId, testUserId));
+      try {
+        await db
+          .delete(userPreferences)
+          .where(eq(userPreferences.userId, testUserId));
+      } catch (error) {
+        console.error("Error during afterAll cleanup:", error);
+      }
     }
   });
 

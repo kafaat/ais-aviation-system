@@ -19,7 +19,7 @@ import {
   DISCOUNT_TIERS,
 } from "./group-booking.service";
 
-describe("Group Booking Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Group Booking Service", () => {
   // Test data IDs
   let testFlightId: number;
   let testGroupBookingId: number;

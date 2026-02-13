@@ -7,7 +7,7 @@ import { getDb } from "../db";
 import { flights, bookings, users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
-describe("Flight Status Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Flight Status Service", () => {
   let testFlightId: number;
   let testBookingId: number;
   let testUserId: number;

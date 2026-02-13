@@ -10,7 +10,7 @@ import {
 import * as favoritesService from "./favorites.service";
 import { eq } from "drizzle-orm";
 
-describe("Favorites Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Favorites Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testOriginId: number;

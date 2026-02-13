@@ -1,10 +1,15 @@
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
+// Allow tests to run without STRIPE_SECRET_KEY in test environments
+if (!process.env.STRIPE_SECRET_KEY && process.env.NODE_ENV !== "test") {
   throw new Error("STRIPE_SECRET_KEY is not defined");
 }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+// Create a dummy stripe instance for test environments without STRIPE_SECRET_KEY
+const stripeKey =
+  process.env.STRIPE_SECRET_KEY || "sk_test_dummy_key_for_tests_only";
+
+export const stripe = new Stripe(stripeKey, {
   apiVersion: "2025-12-15.clover",
   typescript: true,
 });

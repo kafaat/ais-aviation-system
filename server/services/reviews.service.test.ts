@@ -11,7 +11,7 @@ import {
 import * as reviewsService from "./reviews.service";
 import { eq } from "drizzle-orm";
 
-describe("Reviews Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Reviews Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testFlightId: number;

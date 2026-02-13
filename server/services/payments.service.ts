@@ -3,7 +3,7 @@ import * as db from "../db";
 import { getDb } from "../db";
 import { payments } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
-import Stripe from "stripe";
+import { stripe } from "../stripe";
 import {
   trackPaymentInitiated,
   trackPaymentSuccess,
@@ -15,10 +15,6 @@ import {
  * Payments Service
  * Business logic for payment-related operations
  */
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
-});
 
 export interface CreateCheckoutSessionInput {
   bookingId: number;
