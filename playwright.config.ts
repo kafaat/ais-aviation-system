@@ -150,6 +150,6 @@ export default defineConfig({
   },
 
   /* Global setup and teardown */
-  globalSetup: undefined, // Can be set to './e2e/global-setup.ts'
-  globalTeardown: undefined, // Can be set to './e2e/global-teardown.ts'
+  globalSetup: "./e2e/global-setup.ts",
+  globalTeardown: undefined,
 });
