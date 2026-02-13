@@ -3,7 +3,7 @@ import React, {
   useContext,
   useState,
   useEffect,
-  ReactNode,
+  type ReactNode,
 } from "react";
 import { trpc } from "../lib/trpc";
 
@@ -40,7 +40,7 @@ export function CurrencyProvider({ children }: CurrencyProviderProps) {
   // Get currency from localStorage or default to SAR
   const [currency, setCurrencyState] = useState<SupportedCurrency>(() => {
     const saved = localStorage.getItem("preferredCurrency");
-    return (saved as SupportedCurrency) || "SAR";
+    return (saved as SupportedCurrency | null) || "SAR";
   });
 
   const [exchangeRate, setExchangeRate] = useState<number>(1.0);

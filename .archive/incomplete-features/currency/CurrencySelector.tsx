@@ -1,5 +1,5 @@
 import React from "react";
-import { useCurrency } from "../contexts/CurrencyContext";
+import { useCurrency } from "../CurrencyContext";
 import { trpc } from "../lib/trpc";
 import {
   Select,
@@ -28,7 +28,21 @@ export function CurrencySelector() {
     <div className="flex items-center gap-2">
       <Select
         value={currency}
-        onValueChange={value => setCurrency(value as any)}
+        onValueChange={value =>
+          setCurrency(
+            value as
+              | "SAR"
+              | "USD"
+              | "EUR"
+              | "GBP"
+              | "AED"
+              | "KWD"
+              | "BHD"
+              | "OMR"
+              | "QAR"
+              | "EGP"
+          )
+        }
       >
         <SelectTrigger className="w-[180px]">
           <SelectValue>
@@ -76,7 +90,24 @@ export function CompactCurrencySelector() {
   const { data: currencies } = trpc.currency.getSupportedCurrencies.useQuery();
 
   return (
-    <Select value={currency} onValueChange={value => setCurrency(value as any)}>
+    <Select
+      value={currency}
+      onValueChange={value =>
+        setCurrency(
+          value as
+            | "SAR"
+            | "USD"
+            | "EUR"
+            | "GBP"
+            | "AED"
+            | "KWD"
+            | "BHD"
+            | "OMR"
+            | "QAR"
+            | "EGP"
+        )
+      }
+    >
       <SelectTrigger className="w-[100px] h-9">
         <SelectValue>
           <div className="flex items-center gap-1">

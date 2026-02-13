@@ -10,12 +10,58 @@ import {
   type InsertSecurityEvent,
   type InsertIpBlacklist,
 } from "../../drizzle/schema-security";
-import { logger } from "../_core/unified-logger";
 
 /**
  * Account Lock Service
  * Handles account security, failed login tracking, and automatic account locking
  */
+
+// Simple logger fallback for archived code
+const logger = {
+  logAuth: (action: string, userId: number | undefined, data: any) => {
+    const maskedData = { ...data };
+    if (maskedData.email) {
+      maskedData.email = maskEmail(maskedData.email);
+    }
+    console.log(`[Auth] ${action}`, { userId, ...maskedData });
+  },
+  logSecurity: (message: string, severity: string, data: any) => {
+    const maskedData = { ...data };
+    if (maskedData.email) {
+      maskedData.email = maskEmail(maskedData.email);
+    }
+    if (maskedData.ipAddress) {
+      maskedData.ipAddress = maskIpAddress(maskedData.ipAddress);
+    }
+    console.log(`[Security][${severity}] ${message}`, maskedData);
+  },
+  info: (message: string, data?: any) => {
+    console.log(`[Info] ${message}`, data || "");
+  },
+};
+
+/**
+ * Mask email address for logging
+ */
+function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return "[MASKED_EMAIL]";
+  const [localPart, domain] = email.split("@");
+  if (!domain || localPart.length === 0) return "***@" + domain;
+  const maskedLocal =
+    localPart.length > 2 ? `${localPart.slice(0, 2)}***` : `${localPart[0]}***`;
+  return `${maskedLocal}@${domain}`;
+}
+
+/**
+ * Mask IP address for logging
+ */
+function maskIpAddress(ip: string): string {
+  const parts = ip.split(".");
+  if (parts.length === 4) {
+    return `${parts[0]}.${parts[1]}.***.***`;
+  }
+  return "[MASKED_IP]";
+}
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MINUTES = 30;

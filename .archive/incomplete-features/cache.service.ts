@@ -8,7 +8,7 @@ import Redis from "ioredis";
 let redis: Redis | null = null;
 
 /**
- * Initialize Redis connection
+ * Initialize Redis connection with connection pooling
  */
 export function initializeRedis(): void {
   const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
@@ -20,6 +20,11 @@ export function initializeRedis(): void {
         const delay = Math.min(times * 50, 2000);
         return delay;
       },
+      // Connection pooling settings
+      lazyConnect: false,
+      enableReadyCheck: true,
+      connectTimeout: 10000,
+      keepAlive: 30000,
     });
 
     redis.on("connect", () => {
