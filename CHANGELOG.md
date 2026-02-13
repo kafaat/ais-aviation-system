@@ -3,9 +3,11 @@
 ## What's Changed in v1.19.0
 
 ### Features
+
 - feat: add Intelligence Kernel (AAIP) - multi-agent autonomous platform (978c093)
 
 ### Bug Fixes
+
 - fix: register webhooks router, fix lint warnings, and improve type safety (b205d8f)
 - fix: improve type safety, fix lint warnings across routers, services, and tests (329aa29)
 - fix: clean up lint warnings in UI components, hooks, and test files (66ae539)
@@ -21,12 +23,11 @@
 - fix: remove unnecessary async from signSession in sdk.ts (fc4dcad)
 
 ### Other Changes
+
 - style: fix Prettier formatting in CHANGELOG.md (f0cb4a4)
 - Merge pull request #71 from kafaat/claude/fix-gaps-and-bugs-Tzdte (8356fed)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.18.0...v1.19.0
-
 
 ---
 

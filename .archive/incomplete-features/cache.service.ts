@@ -31,7 +31,7 @@ export function initializeRedis(): void {
       console.log("[Cache] Redis connected successfully");
     });
 
-    redis.on("error", (err) => {
+    redis.on("error", err => {
       console.error("[Cache] Redis error:", err);
     });
 

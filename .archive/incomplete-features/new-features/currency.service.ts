@@ -32,7 +32,7 @@ async function fetchWithRetry<T>(
       console.warn(
         `[Currency] Request failed, retrying... (${MAX_RETRY_ATTEMPTS - retries + 1}/${MAX_RETRY_ATTEMPTS})`
       );
-      await new Promise((resolve) =>
+      await new Promise(resolve =>
         setTimeout(resolve, RETRY_DELAY_MS * (MAX_RETRY_ATTEMPTS - retries + 1))
       );
       return fetchWithRetry(fn, retries - 1);
@@ -164,9 +164,11 @@ export async function getExchangeRate(
     setImmediate(() => {
       fetchLatestExchangeRates()
         .then(() => {
-          console.log("[Currency] Background rate update completed successfully");
+          console.log(
+            "[Currency] Background rate update completed successfully"
+          );
         })
-        .catch((err) => {
+        .catch(err => {
           console.error("[Currency] Background rate update failed:", err);
         });
     });
@@ -229,7 +231,7 @@ export function formatCurrency(
   amountInCents: number,
   currency: SupportedCurrency
 ): string {
-  const currencyInfo = SUPPORTED_CURRENCIES.find((c) => c.code === currency);
+  const currencyInfo = SUPPORTED_CURRENCIES.find(c => c.code === currency);
   if (!currencyInfo) throw new Error(`Unsupported currency: ${currency}`);
 
   const amount = amountInCents / 100;
@@ -253,7 +255,7 @@ export async function getAllExchangeRates() {
     .from(exchangeRates)
     .where(eq(exchangeRates.baseCurrency, "SAR"));
 
-  return rates.map((rate) => ({
+  return rates.map(rate => ({
     currency: rate.targetCurrency,
     rate: parseFloat(rate.rate),
     lastUpdated: rate.lastUpdated,
