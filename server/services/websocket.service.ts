@@ -1,6 +1,13 @@
 // Note: ws module is optional - WebSocket functionality will be disabled if not installed
-let WebSocketServer: any;
-let _WebSocket: any;
+import type { Server } from "http";
+import type WebSocket from "ws";
+
+// Conditional types for optional ws module
+type WebSocketServerType = typeof import("ws").WebSocketServer | null;
+type WebSocketType = typeof import("ws").WebSocket | null;
+
+let WebSocketServer: WebSocketServerType = null;
+let _WebSocket: WebSocketType = null;
 
 try {
   const ws = require("ws");
@@ -12,7 +19,6 @@ try {
   );
 }
 
-import type { Server } from "http";
 import { getDb } from "../db";
 import { flights } from "../../drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -45,7 +51,7 @@ export interface FlightStatusPayload {
 }
 
 interface ClientSubscription {
-  ws: any; // WebSocket type when ws module is available
+  ws: WebSocket; // WebSocket type when ws module is available
   flightIds: Set<number>;
 }
 
@@ -53,8 +59,8 @@ interface ClientSubscription {
  * WebSocket Service for real-time flight status updates
  */
 class WebSocketService {
-  private wss: any = null; // WebSocketServer when ws module is available
-  private clients: Map<any, ClientSubscription> = new Map(); // Map of WebSocket to ClientSubscription
+  private wss: InstanceType<NonNullable<WebSocketServerType>> | null = null;
+  private clients: Map<WebSocket, ClientSubscription> = new Map();
   private flightStatuses: Map<number, FlightStatusPayload> = new Map();
   private simulationInterval: ReturnType<typeof setInterval> | null = null;
   private isInitialized = false;
@@ -68,12 +74,19 @@ class WebSocketService {
       return;
     }
 
+    if (!WebSocketServer) {
+      console.warn(
+        "[WebSocket] WebSocketServer not available, skipping initialization"
+      );
+      return;
+    }
+
     this.wss = new WebSocketServer({
       server,
       path: "/ws/flight-status",
     });
 
-    this.wss.on("connection", (ws: any) => {
+    this.wss.on("connection", (ws: WebSocket) => {
       console.info("[WebSocket] Client connected");
 
       // Initialize client subscription
@@ -120,7 +133,7 @@ class WebSocketService {
    * Handle incoming client messages
    */
   private async handleClientMessage(
-    ws: any,
+    ws: WebSocket,
     message: { type: string; flightIds?: number[] }
   ): Promise<void> {
     const client = this.clients.get(ws);
@@ -218,7 +231,7 @@ class WebSocketService {
   /**
    * Send message to a specific client
    */
-  private sendToClient(ws: any, message: FlightStatusMessage): void {
+  private sendToClient(ws: WebSocket, message: FlightStatusMessage): void {
     if (ws.readyState === 1) {
       // WebSocket.OPEN = 1
       ws.send(JSON.stringify(message));

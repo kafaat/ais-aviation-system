@@ -90,6 +90,15 @@ vi.mock("../../../drizzle/schema", () => ({
   users: { id: "id", name: "name", email: "email" },
   airports: { id: "id", code: "code", city: "city" },
   airlines: { id: "id", name: "name", logo: "logo" },
+  notifications: {
+    id: "id",
+    userId: "userId",
+    type: "type",
+    title: "title",
+    message: "message",
+    read: "read",
+    createdAt: "createdAt",
+  },
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -98,6 +107,11 @@ vi.mock("drizzle-orm", () => ({
   desc: vi.fn(a => ({ type: "desc", a })),
   asc: vi.fn(a => ({ type: "asc", a })),
   sql: vi.fn((...args) => ({ type: "sql", args })),
+}));
+
+// Mock notification service
+vi.mock("../../services/notification.service", () => ({
+  createNotification: vi.fn().mockResolvedValue({ id: 1 }),
 }));
 
 // Mock TRPCError

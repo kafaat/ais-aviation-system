@@ -12,7 +12,13 @@
  * @date 2026-01-26
  */
 
-import { Queue, Worker, Job, QueueEvents } from "bullmq";
+import {
+  Queue,
+  Worker,
+  Job,
+  QueueEvents,
+  type ConnectionOptions,
+} from "bullmq";
 import { logger } from "../_core/logger";
 import { getDb } from "../db";
 import {
@@ -66,7 +72,11 @@ class QueueService {
   private queues: Map<QueueName, Queue> = new Map();
   private workers: Map<QueueName, Worker> = new Map();
   private queueEvents: Map<QueueName, QueueEvents> = new Map();
-  private connection: any;
+  private connection: ConnectionOptions = {
+    host: "localhost",
+    port: 6379,
+    maxRetriesPerRequest: null,
+  };
   private initialized: boolean = false;
 
   /**
@@ -210,8 +220,8 @@ class QueueService {
   async addJob(
     queueName: QueueName,
     jobName: string,
-    data: any,
-    options?: any
+    data: Record<string, unknown>,
+    options?: Record<string, unknown>
   ): Promise<Job | null> {
     const queue = this.getQueue(queueName);
     if (!queue) {
@@ -589,12 +599,16 @@ class QueueService {
             );
             mismatches++;
           }
-        } catch (stripeError: any) {
+        } catch (stripeError) {
+          const error =
+            stripeError instanceof Error
+              ? stripeError
+              : new Error(String(stripeError));
           logger.error(
             {
               bookingId: booking.id,
               paymentIntentId: booking.stripePaymentIntentId,
-              error: stripeError.message,
+              error: error.message,
             },
             "Reconciliation: Failed to fetch from Stripe"
           );

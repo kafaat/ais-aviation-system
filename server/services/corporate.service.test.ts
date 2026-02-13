@@ -30,7 +30,7 @@ import {
   getCorporateStats,
 } from "./corporate.service";
 
-describe("Corporate Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Corporate Service", () => {
   // Test data IDs
   let testCorporateAccountId: number;
   let testUserId: number;

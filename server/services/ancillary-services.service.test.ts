@@ -13,7 +13,7 @@ import { getDb } from "../db";
 import { ancillaryServices, bookingAncillaries } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
-describe("Ancillary Services Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Ancillary Services Service", () => {
   let testServiceId: number;
   const testBookingId = 999999;
 

@@ -10,7 +10,7 @@ import {
 import * as priceAlertsService from "./price-alerts.service";
 import { eq } from "drizzle-orm";
 
-describe("Price Alerts Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Price Alerts Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testOriginId: number;

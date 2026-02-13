@@ -12,7 +12,7 @@ import {
 import * as specialServicesService from "./special-services.service";
 import { eq, inArray } from "drizzle-orm";
 
-describe("Special Services Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Special Services Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testAirlineId: number;

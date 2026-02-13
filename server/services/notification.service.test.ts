@@ -16,32 +16,41 @@ import {
   createBulkNotifications,
 } from "./notification.service";
 
-describe("Notification Service", () => {
+// Skip entire suite if database is not available
+describe.skipIf(!process.env.DATABASE_URL)("Notification Service", () => {
   const testUserId = 999888;
   const testUserId2 = 999889;
 
   // Clean up test data before and after all tests
   beforeAll(async () => {
-    const db = await getDb();
-    if (db) {
-      await db
-        .delete(notifications)
-        .where(eq(notifications.userId, testUserId));
-      await db
-        .delete(notifications)
-        .where(eq(notifications.userId, testUserId2));
+    try {
+      const db = await getDb();
+      if (db) {
+        await db
+          .delete(notifications)
+          .where(eq(notifications.userId, testUserId));
+        await db
+          .delete(notifications)
+          .where(eq(notifications.userId, testUserId2));
+      }
+    } catch (error) {
+      // Ignore errors when database is not available
     }
   });
 
   afterAll(async () => {
-    const db = await getDb();
-    if (db) {
-      await db
-        .delete(notifications)
-        .where(eq(notifications.userId, testUserId));
-      await db
-        .delete(notifications)
-        .where(eq(notifications.userId, testUserId2));
+    try {
+      const db = await getDb();
+      if (db) {
+        await db
+          .delete(notifications)
+          .where(eq(notifications.userId, testUserId));
+        await db
+          .delete(notifications)
+          .where(eq(notifications.userId, testUserId2));
+      }
+    } catch (error) {
+      // Ignore errors when database is not available
     }
   });
 

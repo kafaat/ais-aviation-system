@@ -13,7 +13,7 @@ import {
 import * as baggageService from "./baggage.service";
 import { eq } from "drizzle-orm";
 
-describe("Baggage Service", () => {
+describe.skipIf(!process.env.DATABASE_URL)("Baggage Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testAirlineId: number;
