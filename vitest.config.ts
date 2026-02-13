@@ -40,9 +40,9 @@ export default defineConfig(({ mode }) => {
       env: {
         // Provide test environment variables
         VITE_APP_ID: env.VITE_APP_ID || "ais-aviation-system-test",
-        DATABASE_URL:
-          env.DATABASE_URL ||
-          "mysql://test:test@localhost:3306/ais_aviation_test",
+        // Only set DATABASE_URL if it's provided in environment
+        // This allows tests to skip when database is not available
+        ...(env.DATABASE_URL ? { DATABASE_URL: env.DATABASE_URL } : {}),
         JWT_SECRET: env.JWT_SECRET || "test-jwt-secret-key",
         OAUTH_SERVER_URL: env.OAUTH_SERVER_URL || "http://localhost:3000",
         OWNER_OPEN_ID: env.OWNER_OPEN_ID || "test-owner-open-id",
