@@ -19,7 +19,7 @@ const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
 /**
- * Fetch with retry logic
+ * Fetch with retry logic (exponential backoff)
  */
 async function fetchWithRetry<T>(
   fn: () => Promise<T>,
@@ -29,12 +29,13 @@ async function fetchWithRetry<T>(
     return await fn();
   } catch (error) {
     if (retries > 0) {
+      const attemptNumber = MAX_RETRY_ATTEMPTS - retries + 1;
       console.warn(
-        `[Currency] Request failed, retrying... (${MAX_RETRY_ATTEMPTS - retries + 1}/${MAX_RETRY_ATTEMPTS})`
+        `[Currency] Request failed, retrying... (${attemptNumber}/${MAX_RETRY_ATTEMPTS})`
       );
-      await new Promise(resolve =>
-        setTimeout(resolve, RETRY_DELAY_MS * (MAX_RETRY_ATTEMPTS - retries + 1))
-      );
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = RETRY_DELAY_MS * Math.pow(2, attemptNumber - 1);
+      await new Promise(resolve => setTimeout(resolve, delay));
       return fetchWithRetry(fn, retries - 1);
     }
     throw error;

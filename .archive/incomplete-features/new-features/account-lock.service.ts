@@ -46,6 +46,7 @@ const logger = {
 function maskEmail(email: string): string {
   const [localPart, domain] = email.split("@");
   if (!domain) return "[MASKED_EMAIL]";
+  if (!localPart || localPart.length === 0) return "***@" + domain;
   const maskedLocal =
     localPart.length > 2 ? `${localPart.slice(0, 2)}***` : `${localPart[0]}***`;
   return `${maskedLocal}@${domain}`;
@@ -57,7 +58,7 @@ function maskEmail(email: string): string {
 function maskIpAddress(ip: string): string {
   const parts = ip.split(".");
   if (parts.length === 4) {
-    return `${parts[0]}.${parts[1]}.***.***.***`;
+    return `${parts[0]}.${parts[1]}.***.***`;
   }
   return "[MASKED_IP]";
 }
