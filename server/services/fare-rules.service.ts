@@ -1108,20 +1108,22 @@ export async function getApplicableRules(
 
   // Route conditions: rule applies if its origin/dest is null (global) or matches
   if (originId !== undefined) {
-    baseConditions.push(
-      or(
-        isNull(fareRules.originAirportId),
-        eq(fareRules.originAirportId, originId)
-      )!
+    const originCondition = or(
+      isNull(fareRules.originAirportId),
+      eq(fareRules.originAirportId, originId)
     );
+    if (originCondition) {
+      baseConditions.push(originCondition);
+    }
   }
   if (destinationId !== undefined) {
-    baseConditions.push(
-      or(
-        isNull(fareRules.destinationAirportId),
-        eq(fareRules.destinationAirportId, destinationId)
-      )!
+    const destCondition = or(
+      isNull(fareRules.destinationAirportId),
+      eq(fareRules.destinationAirportId, destinationId)
     );
+    if (destCondition) {
+      baseConditions.push(destCondition);
+    }
   }
 
   return await db
@@ -1246,7 +1248,10 @@ export async function calculateFare(params: {
     if (!rulesByCategory[rule.ruleCategory]) {
       rulesByCategory[rule.ruleCategory] = [];
     }
-    rulesByCategory[rule.ruleCategory]!.push(rule);
+    const categoryRules = rulesByCategory[rule.ruleCategory];
+    if (categoryRules) {
+      categoryRules.push(rule);
+    }
   }
 
   // Step 5: Apply rules in defined category order
@@ -1908,7 +1913,7 @@ export async function validateRules(params: {
     message: string;
   }>;
 }> {
-  return validateBookingRules(params);
+  return await validateBookingRules(params);
 }
 
 // ============================================================================

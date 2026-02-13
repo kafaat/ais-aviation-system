@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+import { isDatabaseAvailable } from "./__tests__/test-db-helper";
+
+const dbAvailable = await isDatabaseAvailable();
 
 function createMockContext(): TrpcContext {
   return {
@@ -13,7 +16,7 @@ function createMockContext(): TrpcContext {
   };
 }
 
-describe("Flight APIs", () => {
+describe.skipIf(!dbAvailable)("Flight APIs", () => {
   it("should search for flights successfully", async () => {
     const ctx = createMockContext();
     const caller = appRouter.createCaller(ctx);

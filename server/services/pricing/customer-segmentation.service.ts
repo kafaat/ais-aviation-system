@@ -704,7 +704,7 @@ function calculatePriceSensitivity(
   if (confirmedBookings.length < 2) return 0.5;
 
   // Check variance in booking values (high variance = price sensitive)
-  const amounts = confirmedBookings.map(b => b.totalAmount!);
+  const amounts = confirmedBookings.map(b => b.totalAmount ?? 0);
   const mean = amounts.reduce((a, b) => a + b, 0) / amounts.length;
   const variance =
     amounts.reduce((sum, a) => sum + (a - mean) ** 2, 0) / amounts.length;

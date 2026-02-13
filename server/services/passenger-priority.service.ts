@@ -215,14 +215,22 @@ async function calculateLoyaltyScore(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   userId: number
 ): Promise<number> {
-  const [account] = await db
-    .select({ tier: loyaltyAccounts.tier })
-    .from(loyaltyAccounts)
-    .where(eq(loyaltyAccounts.userId, userId))
-    .limit(1);
+  try {
+    const [account] = await db
+      .select({ tier: loyaltyAccounts.tier })
+      .from(loyaltyAccounts)
+      .where(eq(loyaltyAccounts.userId, userId))
+      .limit(1);
 
-  if (!account) return ruleScore("loyalty_tier", "bronze");
-  return ruleScore("loyalty_tier", account.tier);
+    if (!account) return ruleScore("loyalty_tier", "bronze");
+    return ruleScore("loyalty_tier", account.tier);
+  } catch (error) {
+    console.error(
+      `[PassengerPriority] Failed to calculate loyalty score for userId=${userId}:`,
+      error
+    );
+    return 0;
+  }
 }
 
 /**
@@ -236,42 +244,50 @@ async function calculateFareClassScore(
   bookingId: number,
   flightId: number
 ): Promise<number> {
-  const [booking] = await db
-    .select({
-      cabinClass: bookings.cabinClass,
-      totalAmount: bookings.totalAmount,
-      numberOfPassengers: bookings.numberOfPassengers,
-    })
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
+  try {
+    const [booking] = await db
+      .select({
+        cabinClass: bookings.cabinClass,
+        totalAmount: bookings.totalAmount,
+        numberOfPassengers: bookings.numberOfPassengers,
+      })
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
 
-  if (!booking) return 0;
+    if (!booking) return 0;
 
-  if (booking.cabinClass === "business") {
-    return ruleScore("fare_class", "business");
+    if (booking.cabinClass === "business") {
+      return ruleScore("fare_class", "business");
+    }
+
+    // For economy, compare per-passenger price to the flight's listed economy price
+    const [flight] = await db
+      .select({ economyPrice: flights.economyPrice })
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .limit(1);
+
+    if (!flight) return ruleScore("fare_class", "economy_full");
+
+    const perPassengerPrice =
+      booking.numberOfPassengers > 0
+        ? booking.totalAmount / booking.numberOfPassengers
+        : booking.totalAmount;
+
+    // If the passenger paid >= 80% of the listed economy price, treat as full fare
+    if (perPassengerPrice >= flight.economyPrice * 0.8) {
+      return ruleScore("fare_class", "economy_full");
+    }
+
+    return ruleScore("fare_class", "economy_discount");
+  } catch (error) {
+    console.error(
+      `[PassengerPriority] Failed to calculate fare class score for bookingId=${bookingId}, flightId=${flightId}:`,
+      error
+    );
+    return 0;
   }
-
-  // For economy, compare per-passenger price to the flight's listed economy price
-  const [flight] = await db
-    .select({ economyPrice: flights.economyPrice })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (!flight) return ruleScore("fare_class", "economy_full");
-
-  const perPassengerPrice =
-    booking.numberOfPassengers > 0
-      ? booking.totalAmount / booking.numberOfPassengers
-      : booking.totalAmount;
-
-  // If the passenger paid >= 80% of the listed economy price, treat as full fare
-  if (perPassengerPrice >= flight.economyPrice * 0.8) {
-    return ruleScore("fare_class", "economy_full");
-  }
-
-  return ruleScore("fare_class", "economy_discount");
 }
 
 /**
@@ -284,49 +300,57 @@ async function calculateConnectionScore(
   bookingId: number,
   flightId: number
 ): Promise<number> {
-  // Check for multi-segment bookings
-  const segments = await db
-    .select({
-      segmentOrder: bookingSegments.segmentOrder,
-      flightId: bookingSegments.flightId,
-      departureDate: bookingSegments.departureDate,
-    })
-    .from(bookingSegments)
-    .where(eq(bookingSegments.bookingId, bookingId))
-    .orderBy(bookingSegments.segmentOrder);
+  try {
+    // Check for multi-segment bookings
+    const segments = await db
+      .select({
+        segmentOrder: bookingSegments.segmentOrder,
+        flightId: bookingSegments.flightId,
+        departureDate: bookingSegments.departureDate,
+      })
+      .from(bookingSegments)
+      .where(eq(bookingSegments.bookingId, bookingId))
+      .orderBy(bookingSegments.segmentOrder);
 
-  if (segments.length <= 1) {
-    return ruleScore("connection_risk", "direct");
-  }
+    if (segments.length <= 1) {
+      return ruleScore("connection_risk", "direct");
+    }
 
-  // Find the index of the current disrupted flight within the segments
-  const currentIdx = segments.findIndex(s => s.flightId === flightId);
+    // Find the index of the current disrupted flight within the segments
+    const currentIdx = segments.findIndex(s => s.flightId === flightId);
 
-  // If there is a subsequent segment, check if the connection is tight
-  if (currentIdx >= 0 && currentIdx < segments.length - 1) {
-    const currentSegment = segments[currentIdx];
-    const nextSegment = segments[currentIdx + 1];
+    // If there is a subsequent segment, check if the connection is tight
+    if (currentIdx >= 0 && currentIdx < segments.length - 1) {
+      const currentSegment = segments[currentIdx];
+      const nextSegment = segments[currentIdx + 1];
 
-    // Get arrival time of the current flight
-    const [currentFlight] = await db
-      .select({ arrivalTime: flights.arrivalTime })
-      .from(flights)
-      .where(eq(flights.id, currentSegment.flightId))
-      .limit(1);
+      // Get arrival time of the current flight
+      const [currentFlight] = await db
+        .select({ arrivalTime: flights.arrivalTime })
+        .from(flights)
+        .where(eq(flights.id, currentSegment.flightId))
+        .limit(1);
 
-    if (currentFlight) {
-      const arrivalMs = new Date(currentFlight.arrivalTime).getTime();
-      const nextDepartureMs = new Date(nextSegment.departureDate).getTime();
-      const layoverMinutes = (nextDepartureMs - arrivalMs) / (1000 * 60);
+      if (currentFlight) {
+        const arrivalMs = new Date(currentFlight.arrivalTime).getTime();
+        const nextDepartureMs = new Date(nextSegment.departureDate).getTime();
+        const layoverMinutes = (nextDepartureMs - arrivalMs) / (1000 * 60);
 
-      // Less than 90 minutes layover = tight connection
-      if (layoverMinutes < 90) {
-        return ruleScore("connection_risk", "tight_connection");
+        // Less than 90 minutes layover = tight connection
+        if (layoverMinutes < 90) {
+          return ruleScore("connection_risk", "tight_connection");
+        }
       }
     }
-  }
 
-  return ruleScore("connection_risk", "has_connection");
+    return ruleScore("connection_risk", "has_connection");
+  } catch (error) {
+    console.error(
+      `[PassengerPriority] Failed to calculate connection score for bookingId=${bookingId}, flightId=${flightId}:`,
+      error
+    );
+    return 0;
+  }
 }
 
 /**
@@ -338,55 +362,63 @@ async function calculateSpecialNeedsScore(
   passengerId: number,
   bookingId: number
 ): Promise<number> {
-  // Check special services for this passenger
-  const services = await db
-    .select({
-      serviceType: specialServices.serviceType,
-    })
-    .from(specialServices)
-    .where(
-      and(
-        eq(specialServices.passengerId, passengerId),
-        eq(specialServices.bookingId, bookingId),
-        ne(specialServices.status, "cancelled")
-      )
-    );
-
-  let score = 0;
-
-  for (const svc of services) {
-    if (svc.serviceType === "unaccompanied_minor") {
-      score = Math.max(
-        score,
-        ruleScore("special_needs", "unaccompanied_minor")
+  try {
+    // Check special services for this passenger
+    const services = await db
+      .select({
+        serviceType: specialServices.serviceType,
+      })
+      .from(specialServices)
+      .where(
+        and(
+          eq(specialServices.passengerId, passengerId),
+          eq(specialServices.bookingId, bookingId),
+          ne(specialServices.status, "cancelled")
+        )
       );
+
+    let score = 0;
+
+    for (const svc of services) {
+      if (svc.serviceType === "unaccompanied_minor") {
+        score = Math.max(
+          score,
+          ruleScore("special_needs", "unaccompanied_minor")
+        );
+      }
+      if (
+        svc.serviceType === "medical_assistance" ||
+        svc.serviceType === "wheelchair"
+      ) {
+        score = Math.max(score, ruleScore("special_needs", "medical"));
+      }
     }
-    if (
-      svc.serviceType === "medical_assistance" ||
-      svc.serviceType === "wheelchair"
-    ) {
-      score = Math.max(score, ruleScore("special_needs", "medical"));
+
+    // Check if passenger is elderly (65+) based on date of birth
+    const [passenger] = await db
+      .select({ dateOfBirth: passengers.dateOfBirth })
+      .from(passengers)
+      .where(eq(passengers.id, passengerId))
+      .limit(1);
+
+    if (passenger?.dateOfBirth) {
+      const now = new Date();
+      const dob = new Date(passenger.dateOfBirth);
+      const ageMs = now.getTime() - dob.getTime();
+      const ageYears = ageMs / (1000 * 60 * 60 * 24 * 365.25);
+      if (ageYears >= 65) {
+        score = Math.max(score, ruleScore("special_needs", "elderly"));
+      }
     }
+
+    return score;
+  } catch (error) {
+    console.error(
+      `[PassengerPriority] Failed to calculate special needs score for passengerId=${passengerId}, bookingId=${bookingId}:`,
+      error
+    );
+    return 0;
   }
-
-  // Check if passenger is elderly (65+) based on date of birth
-  const [passenger] = await db
-    .select({ dateOfBirth: passengers.dateOfBirth })
-    .from(passengers)
-    .where(eq(passengers.id, passengerId))
-    .limit(1);
-
-  if (passenger?.dateOfBirth) {
-    const now = new Date();
-    const dob = new Date(passenger.dateOfBirth);
-    const ageMs = now.getTime() - dob.getTime();
-    const ageYears = ageMs / (1000 * 60 * 60 * 24 * 365.25);
-    if (ageYears >= 65) {
-      score = Math.max(score, ruleScore("special_needs", "elderly"));
-    }
-  }
-
-  return score;
 }
 
 /**
@@ -398,28 +430,36 @@ async function calculateTimeSensitivityScore(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   flightId: number
 ): Promise<number> {
-  const [flight] = await db
-    .select({ departureTime: flights.departureTime })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
+  try {
+    const [flight] = await db
+      .select({ departureTime: flights.departureTime })
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .limit(1);
 
-  if (!flight) return 0;
+    if (!flight) return 0;
 
-  const now = new Date();
-  const departure = new Date(flight.departureTime);
+    const now = new Date();
+    const departure = new Date(flight.departureTime);
 
-  // Same calendar day check (UTC)
-  const sameDay =
-    now.getUTCFullYear() === departure.getUTCFullYear() &&
-    now.getUTCMonth() === departure.getUTCMonth() &&
-    now.getUTCDate() === departure.getUTCDate();
+    // Same calendar day check (UTC)
+    const sameDay =
+      now.getUTCFullYear() === departure.getUTCFullYear() &&
+      now.getUTCMonth() === departure.getUTCMonth() &&
+      now.getUTCDate() === departure.getUTCDate();
 
-  if (sameDay) {
-    return ruleScore("time_sensitivity", "same_day");
+    if (sameDay) {
+      return ruleScore("time_sensitivity", "same_day");
+    }
+
+    return 0;
+  } catch (error) {
+    console.error(
+      `[PassengerPriority] Failed to calculate time sensitivity score for flightId=${flightId}:`,
+      error
+    );
+    return 0;
   }
-
-  return 0;
 }
 
 /**
@@ -432,42 +472,50 @@ async function calculateBookingValueScore(
   bookingId: number,
   flightId: number
 ): Promise<number> {
-  // Get all confirmed/pending booking amounts for the same flight
-  const allBookings = await db
-    .select({ totalAmount: bookings.totalAmount })
-    .from(bookings)
-    .where(
-      and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
-    )
-    .orderBy(desc(bookings.totalAmount));
+  try {
+    // Get all confirmed/pending booking amounts for the same flight
+    const allBookings = await db
+      .select({ totalAmount: bookings.totalAmount })
+      .from(bookings)
+      .where(
+        and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
+      )
+      .orderBy(desc(bookings.totalAmount));
 
-  if (allBookings.length === 0) return 0;
+    if (allBookings.length === 0) return 0;
 
-  const [currentBooking] = await db
-    .select({ totalAmount: bookings.totalAmount })
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
+    const [currentBooking] = await db
+      .select({ totalAmount: bookings.totalAmount })
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
 
-  if (!currentBooking) return 0;
+    if (!currentBooking) return 0;
 
-  const currentAmount = currentBooking.totalAmount;
+    const currentAmount = currentBooking.totalAmount;
 
-  // Determine percentile rank (how many bookings have a lower or equal amount)
-  const rank =
-    allBookings.filter(b => b.totalAmount >= currentAmount).length /
-    allBookings.length;
+    // Determine percentile rank (how many bookings have a lower or equal amount)
+    const rank =
+      allBookings.filter(b => b.totalAmount >= currentAmount).length /
+      allBookings.length;
 
-  // rank <= 0.10 means top 10%
-  if (rank <= 0.1) {
-    return ruleScore("booking_value", "top_10_percent");
+    // rank <= 0.10 means top 10%
+    if (rank <= 0.1) {
+      return ruleScore("booking_value", "top_10_percent");
+    }
+    // rank <= 0.25 means top 25%
+    if (rank <= 0.25) {
+      return ruleScore("booking_value", "top_25_percent");
+    }
+
+    return 0;
+  } catch (error) {
+    console.error(
+      `[PassengerPriority] Failed to calculate booking value score for bookingId=${bookingId}, flightId=${flightId}:`,
+      error
+    );
+    return 0;
   }
-  // rank <= 0.25 means top 25%
-  if (rank <= 0.25) {
-    return ruleScore("booking_value", "top_25_percent");
-  }
-
-  return 0;
 }
 
 // ============================================================================
@@ -621,8 +669,12 @@ export async function rankPassengers(
     try {
       const score = await calculatePriorityScore(pax.id, pax.bookingId);
       scores.push(score);
-    } catch {
-      // Skip passengers that cannot be scored (edge cases)
+    } catch (error) {
+      // Skip passengers that cannot be scored (edge cases), but log the error
+      console.error(
+        `[PassengerPriority] Failed to score passengerId=${pax.id}, bookingId=${pax.bookingId}:`,
+        error
+      );
       continue;
     }
   }

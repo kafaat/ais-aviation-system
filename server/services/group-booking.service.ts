@@ -319,7 +319,13 @@ export async function approveGroupBooking(
 
   // Return updated booking
   const updated = await getGroupBookingById(id);
-  return updated!;
+  if (!updated) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Group booking not found after update",
+    });
+  }
+  return updated;
 }
 
 /**
@@ -368,7 +374,13 @@ export async function rejectGroupBooking(
 
   // Return updated booking
   const updated = await getGroupBookingById(id);
-  return updated!;
+  if (!updated) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Group booking not found after update",
+    });
+  }
+  return updated;
 }
 
 /**

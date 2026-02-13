@@ -29,8 +29,11 @@ import {
   getCorporateBookings,
   getCorporateStats,
 } from "./corporate.service";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Corporate Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Corporate Service", () => {
   // Test data IDs
   let testCorporateAccountId: number;
   let testUserId: number;

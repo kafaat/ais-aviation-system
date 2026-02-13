@@ -414,6 +414,8 @@ export async function createLoadPlan(flightId: number) {
     });
   }
 
+  const validAircraftTypeId = aircraftTypeId;
+
   // Determine compartment layout
   const isWidebody = aircraftData.totalSeats > 200;
   const layoutKey = isWidebody ? "widebody" : "narrowbody";
@@ -423,7 +425,7 @@ export async function createLoadPlan(flightId: number) {
   const compartments: CargoCompartment[] = layoutTemplate.map((tmpl, idx) => ({
     ...tmpl,
     id: nextPlanId * 100 + idx + 1,
-    aircraftTypeId: aircraftTypeId!,
+    aircraftTypeId: validAircraftTypeId,
     createdAt: new Date().toISOString(),
   }));
 
@@ -487,7 +489,7 @@ export async function createLoadPlan(flightId: number) {
 /**
  * Get the current detailed load plan for a flight.
  */
-export async function getLoadPlan(flightId: number) {
+export function getLoadPlan(flightId: number) {
   const stored = getStoredPlan(flightId);
   if (!stored) {
     return null;
@@ -498,7 +500,7 @@ export async function getLoadPlan(flightId: number) {
 /**
  * Assign an item (baggage, cargo, mail) to a specific compartment.
  */
-export async function assignCompartment(
+export function assignCompartment(
   flightId: number,
   itemId: number,
   compartmentId: number
@@ -566,7 +568,7 @@ export async function assignCompartment(
  * Optimize load distribution for CG balance.
  * Distributes unassigned items across compartments to achieve balanced loading.
  */
-export async function optimizeDistribution(flightId: number) {
+export function optimizeDistribution(flightId: number) {
   const stored = getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
@@ -859,7 +861,7 @@ export async function validateLoadPlan(flightId: number) {
  * Update bulk cargo weight for a specific compartment.
  * Adds or updates a cargo item in the specified compartment.
  */
-export async function updateBulkLoad(
+export function updateBulkLoad(
   flightId: number,
   compartmentCode: string,
   weight: number
@@ -992,7 +994,7 @@ export async function getCompartmentLayout(aircraftTypeId: number) {
 /**
  * Calculate ULD (Unit Load Device) requirements for the load plan.
  */
-export async function calculateULD(flightId: number) {
+export function calculateULD(flightId: number) {
   const stored = getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
@@ -1220,7 +1222,7 @@ export async function finalizeLoadPlan(flightId: number, userId: number) {
  * Amend a finalized load plan (LIR - Last Info Received).
  * Allows post-close changes such as offloading, adding last-minute items, or weight corrections.
  */
-export async function amendLoadPlan(
+export function amendLoadPlan(
   flightId: number,
   changes: Array<{
     action: "add" | "remove" | "update_weight" | "move";
@@ -1266,8 +1268,9 @@ export async function amendLoadPlan(
             message: "newItem is required for add action.",
           });
         }
+        const changeNewItem = change.newItem;
         const compartment = plan.compartments.find(
-          c => c.compartment.compartmentCode === change.newItem!.compartmentCode
+          c => c.compartment.compartmentCode === changeNewItem.compartmentCode
         );
         const newItem: LoadPlanItem = {
           id: stored.nextItemId++,

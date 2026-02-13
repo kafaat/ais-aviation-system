@@ -611,9 +611,14 @@ export async function calculateWeightAndBalance(input: {
 
   // Check cargo zones
   if (aircraft.cargoZones && cargoDistribution.length > 0) {
-    const zones: Array<{ zone: string; maxWeight: number }> = JSON.parse(
-      aircraft.cargoZones
-    );
+    let zones: Array<{ zone: string; maxWeight: number }> = [];
+    try {
+      zones = JSON.parse(aircraft.cargoZones);
+    } catch (_parseError) {
+      console.warn(
+        `Failed to parse cargoZones for aircraft type ${aircraft.code}: ${aircraft.cargoZones}`
+      );
+    }
     for (const cargo of cargoDistribution) {
       const zoneConfig = zones.find(z => z.zone === cargo.zone);
       if (zoneConfig && cargo.weight > zoneConfig.maxWeight) {
@@ -726,12 +731,32 @@ export async function getLoadPlan(flightId: number) {
 
   if (!plan) return null;
 
+  let parsedCargoDistribution: Array<{ zone: string; weight: number }> = [];
+  if (plan.cargoDistribution) {
+    try {
+      parsedCargoDistribution = JSON.parse(plan.cargoDistribution);
+    } catch (_parseError) {
+      console.warn(
+        `Failed to parse cargoDistribution for load plan ${plan.id}: ${plan.cargoDistribution}`
+      );
+    }
+  }
+
+  let parsedWarnings: string[] = [];
+  if (plan.warnings) {
+    try {
+      parsedWarnings = JSON.parse(plan.warnings);
+    } catch (_parseError) {
+      console.warn(
+        `Failed to parse warnings for load plan ${plan.id}: ${plan.warnings}`
+      );
+    }
+  }
+
   return {
     ...plan,
-    cargoDistribution: plan.cargoDistribution
-      ? JSON.parse(plan.cargoDistribution)
-      : [],
-    warnings: plan.warnings ? JSON.parse(plan.warnings) : [],
+    cargoDistribution: parsedCargoDistribution,
+    warnings: parsedWarnings,
   };
 }
 

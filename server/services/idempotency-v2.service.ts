@@ -176,16 +176,34 @@ export async function withIdempotency<T>(
     }
   } else {
     // 3. Insert new idempotency record
-    await db.insert(idempotencyRequests).values({
-      scope: opts.scope,
-      idempotencyKey: opts.key,
-      userId: opts.userId,
-      requestHash,
-      status: "STARTED",
-      expiresAt,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    //    Handle duplicate key race condition: another request may have inserted
+    //    between our SELECT and INSERT. In that case, re-read and handle as existing.
+    try {
+      await db.insert(idempotencyRequests).values({
+        scope: opts.scope,
+        idempotencyKey: opts.key,
+        userId: opts.userId,
+        requestHash,
+        status: "STARTED",
+        expiresAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    } catch (insertErr: any) {
+      // Duplicate key error (MySQL error 1062 / ER_DUP_ENTRY)
+      if (
+        insertErr.code === "ER_DUP_ENTRY" ||
+        insertErr.errno === 1062 ||
+        (insertErr.message && insertErr.message.includes("Duplicate entry"))
+      ) {
+        throw new AppError(
+          ErrorCode.IDEMPOTENCY_IN_PROGRESS,
+          "Operation already in progress (concurrent request)",
+          { scope: opts.scope, key: opts.key }
+        );
+      }
+      throw insertErr;
+    }
   }
 
   // 3. Execute operation

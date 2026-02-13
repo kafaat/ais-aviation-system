@@ -182,12 +182,16 @@ export async function enrollPassenger(
 
   enrollments.push(enrollment);
 
-  // Log the enrollment event
-  await logBiometricEvent(passengerId, "enrollment", null, {
-    biometricType,
-    confidence: 100,
-    processingTimeMs: 0,
-  });
+  // Log the enrollment event (non-critical: don't fail enrollment if logging fails)
+  try {
+    await logBiometricEvent(passengerId, "enrollment", null, {
+      biometricType,
+      confidence: 100,
+      processingTimeMs: 0,
+    });
+  } catch (err) {
+    console.error("Failed to log biometric enrollment event:", err);
+  }
 
   return enrollment;
 }
@@ -248,18 +252,22 @@ export async function verifyIdentity(
   const processingTimeMs = Date.now() - startTime;
   const verified = isMatch && confidence >= MIN_CONFIDENCE_THRESHOLD;
 
-  // Log verification event
-  await logBiometricEvent(
-    passengerId,
-    verified ? "verification_success" : "verification_failure",
-    gateId ?? null,
-    {
-      biometricType,
-      confidence,
-      processingTimeMs,
-      deviceId: deviceId ?? undefined,
-    }
-  );
+  // Log verification event (non-critical: don't fail verification if logging fails)
+  try {
+    await logBiometricEvent(
+      passengerId,
+      verified ? "verification_success" : "verification_failure",
+      gateId ?? null,
+      {
+        biometricType,
+        confidence,
+        processingTimeMs,
+        deviceId: deviceId ?? undefined,
+      }
+    );
+  } catch (err) {
+    console.error("Failed to log biometric verification event:", err);
+  }
 
   return {
     verified,
@@ -645,7 +653,7 @@ export function configureGate(input: {
  * Log a biometric event for audit purposes.
  * All biometric operations must be logged for compliance and security.
  */
-export function logBiometricEvent(
+export async function logBiometricEvent(
   passengerId: number,
   eventType: BiometricEventType,
   gateId: number | null,
@@ -656,7 +664,7 @@ export function logBiometricEvent(
     processingTimeMs?: number;
     deviceId?: string;
   }
-): BiometricEvent {
+): Promise<BiometricEvent> {
   const event: BiometricEvent = {
     id: nextEventId++,
     passengerId,

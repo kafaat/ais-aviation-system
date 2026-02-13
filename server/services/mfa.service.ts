@@ -98,7 +98,10 @@ function base32Decode(encoded: string): Buffer {
   for (let i = 0; i < cleaned.length; i++) {
     const idx = BASE32_ALPHABET.indexOf(cleaned[i]);
     if (idx === -1) {
-      throw new Error(`Invalid base32 character: ${cleaned[i]}`);
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Invalid base32 character: ${cleaned[i]}`,
+      });
     }
     value = (value << 5) | idx;
     bits += 5;
@@ -138,7 +141,10 @@ function encryptSecret(secret: string): string {
 function decryptSecret(encryptedData: string): string {
   const parts = encryptedData.split(":");
   if (parts.length !== 3) {
-    throw new Error("Invalid encrypted secret format");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Invalid encrypted secret format",
+    });
   }
 
   const iv = Buffer.from(parts[0], "hex");

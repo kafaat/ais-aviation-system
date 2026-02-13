@@ -17,12 +17,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.regular.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.regular.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
 
       // Try to access admin page
@@ -58,12 +54,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
 
       // Navigate to admin
@@ -86,12 +78,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
       await page.goto("/admin");
       await page.waitForLoadState("networkidle");
@@ -152,12 +140,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
       await page.goto("/admin");
       await page.waitForLoadState("networkidle");
@@ -325,12 +309,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
       await page.goto("/analytics");
       await page.waitForLoadState("networkidle");
@@ -396,12 +376,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
       await page.goto("/admin/refunds");
       await page.waitForLoadState("networkidle");
@@ -451,12 +427,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
       await page.goto("/admin/reports");
       await page.waitForLoadState("networkidle");
@@ -509,12 +481,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
       await page.goto("/admin");
       await page.waitForLoadState("networkidle");
@@ -568,12 +536,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
       await page.goto("/admin");
       await page.waitForLoadState("networkidle");
@@ -623,12 +587,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
       await page.goto("/admin");
       await page.waitForLoadState("networkidle");
@@ -670,12 +630,8 @@ test.describe("Admin Dashboard", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.admin.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.admin.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.admin.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
     });
 

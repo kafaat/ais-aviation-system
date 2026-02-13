@@ -562,31 +562,33 @@ export async function performCheckIn(
 
   // Assign seat if provided
   if (options.seatNumber) {
-    // Check seat is not already taken
-    const [seatTaken] = await db
-      .select({ id: passengers.id })
-      .from(passengers)
-      .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-      .where(
-        and(
-          eq(bookings.flightId, booking.flightId),
-          eq(passengers.seatNumber, options.seatNumber),
-          sql`${bookings.status} IN ('confirmed', 'completed')`
+    await db.transaction(async tx => {
+      // Check seat is not already taken
+      const [seatTaken] = await tx
+        .select({ id: passengers.id })
+        .from(passengers)
+        .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
+        .where(
+          and(
+            eq(bookings.flightId, booking.flightId),
+            eq(passengers.seatNumber, options.seatNumber!),
+            sql`${bookings.status} IN ('confirmed', 'completed')`
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (seatTaken) {
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: `Seat ${options.seatNumber} is already assigned to another passenger`,
-      });
-    }
+      if (seatTaken) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Seat ${options.seatNumber} is already assigned to another passenger`,
+        });
+      }
 
-    await db
-      .update(passengers)
-      .set({ seatNumber: options.seatNumber })
-      .where(eq(passengers.id, passengerId));
+      await tx
+        .update(passengers)
+        .set({ seatNumber: options.seatNumber! })
+        .where(eq(passengers.id, passengerId));
+    });
   }
 
   // Mark booking as checked in
@@ -667,35 +669,37 @@ export async function selectSeat(
       message: "Passenger not found for this booking",
     });
 
-  // Check seat availability on this flight
-  const [seatTaken] = await db
-    .select({ id: passengers.id })
-    .from(passengers)
-    .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        eq(bookings.flightId, booking.flightId),
-        eq(passengers.seatNumber, seatNumber),
-        sql`${bookings.status} IN ('confirmed', 'completed')`,
-        sql`${passengers.id} != ${passengerId}`
-      )
-    )
-    .limit(1);
-
-  if (seatTaken) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: `Seat ${seatNumber} is already taken`,
-    });
-  }
-
   const oldSeat = passenger.seatNumber;
 
-  // Update the seat assignment
-  await db
-    .update(passengers)
-    .set({ seatNumber })
-    .where(eq(passengers.id, passengerId));
+  // Check seat availability and assign atomically within a transaction
+  await db.transaction(async tx => {
+    const [seatTaken] = await tx
+      .select({ id: passengers.id })
+      .from(passengers)
+      .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
+      .where(
+        and(
+          eq(bookings.flightId, booking.flightId),
+          eq(passengers.seatNumber, seatNumber),
+          sql`${bookings.status} IN ('confirmed', 'completed')`,
+          sql`${passengers.id} != ${passengerId}`
+        )
+      )
+      .limit(1);
+
+    if (seatTaken) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: `Seat ${seatNumber} is already taken`,
+      });
+    }
+
+    // Update the seat assignment
+    await tx
+      .update(passengers)
+      .set({ seatNumber })
+      .where(eq(passengers.id, passengerId));
+  });
 
   // Track session
   await db.insert(kioskSessions).values({
@@ -1074,8 +1078,19 @@ export async function addAncillary(
 
   // Check cabin class restrictions
   if (service.applicableCabinClasses) {
-    const allowedClasses: string[] = JSON.parse(service.applicableCabinClasses);
-    if (!allowedClasses.includes(booking.cabinClass)) {
+    let allowedClasses: string[] = [];
+    try {
+      allowedClasses = JSON.parse(service.applicableCabinClasses);
+    } catch (_parseError) {
+      // If the stored JSON is malformed, skip cabin class restriction check
+      console.warn(
+        `Failed to parse applicableCabinClasses for service '${service.code}': ${service.applicableCabinClasses}`
+      );
+    }
+    if (
+      allowedClasses.length > 0 &&
+      !allowedClasses.includes(booking.cabinClass)
+    ) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: `Service '${service.name}' is not available for ${booking.cabinClass} class`,

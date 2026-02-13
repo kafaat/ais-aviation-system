@@ -4,6 +4,9 @@ import type { TrpcContext } from "./_core/context";
 import { bookings, type User } from "../drizzle/schema";
 import { getDb } from "./db";
 import { eq } from "drizzle-orm";
+import { isDatabaseAvailable } from "./__tests__/test-db-helper";
+
+const dbAvailable = await isDatabaseAvailable();
 
 function createAuthenticatedContext(): TrpcContext {
   const user: User = {
@@ -28,7 +31,7 @@ function createAuthenticatedContext(): TrpcContext {
   };
 }
 
-describe("Booking APIs", () => {
+describe.skipIf(!dbAvailable)("Booking APIs", () => {
   const createdBookingIds: number[] = [];
 
   afterAll(async () => {

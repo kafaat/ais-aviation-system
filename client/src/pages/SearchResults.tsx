@@ -96,9 +96,12 @@ export default function SearchResults() {
     }
   }, [location]);
 
-  const { data: flights, isLoading } = trpc.flights.search.useQuery(params!, {
-    enabled: !!params,
-  });
+  const { data: flights, isLoading } = trpc.flights.search.useQuery(
+    params ?? { originId: 0, destinationId: 0, departureDate: new Date() },
+    {
+      enabled: !!params,
+    }
+  );
 
   // Get user's favorites to check if route is favorited
   const { data: favorites, refetch: refetchFavorites } =

@@ -8,6 +8,7 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, ne, inArray, gte, lte, desc } from "drizzle-orm";
 import { createNotification } from "./notification.service";
+import { TRPCError } from "@trpc/server";
 
 // ============================================================================
 // IROPS (Irregular Operations) Types
@@ -129,7 +130,11 @@ const iropsActionsStore: Map<number, IROPSAction> = new Map();
  */
 export async function getActiveIROPSDisruptions(): Promise<IROPSEvent[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get active disruptions from the DB
   const dbDisruptions = await db
@@ -242,7 +247,11 @@ export async function createDisruptionEvent(
   }
 ): Promise<IROPSEvent> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Verify flight exists
   const [flight] = await db
@@ -257,7 +266,8 @@ export async function createDisruptionEvent(
     .where(eq(flights.id, flightId))
     .limit(1);
 
-  if (!flight) throw new Error("Flight not found");
+  if (!flight)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
 
   // Also create a record in the existing flightDisruptions table for compatibility
   const mappedType = type === "equipment_change" ? "diversion" : type;
@@ -270,29 +280,34 @@ export async function createDisruptionEvent(
           ? "severe"
           : "moderate";
 
-  const [result] = await db.insert(flightDisruptions).values({
-    flightId,
-    type: mappedType,
-    reason: details.reason,
-    severity: mappedSeverity,
-    originalDepartureTime: flight.departureTime,
-    delayMinutes: details.delayMinutes || null,
-    status: "active",
-    createdBy: details.createdBy || null,
-  });
+  // Wrap insert + flight status update in a transaction for atomicity
+  const result = await db.transaction(async tx => {
+    const [insertResult] = await tx.insert(flightDisruptions).values({
+      flightId,
+      type: mappedType,
+      reason: details.reason,
+      severity: mappedSeverity,
+      originalDepartureTime: flight.departureTime,
+      delayMinutes: details.delayMinutes || null,
+      status: "active",
+      createdBy: details.createdBy || null,
+    });
 
-  // Update flight status for cancellations
-  if (type === "cancellation") {
-    await db
-      .update(flights)
-      .set({ status: "cancelled" })
-      .where(eq(flights.id, flightId));
-  } else if (type === "delay") {
-    await db
-      .update(flights)
-      .set({ status: "delayed" })
-      .where(eq(flights.id, flightId));
-  }
+    // Update flight status for cancellations
+    if (type === "cancellation") {
+      await tx
+        .update(flights)
+        .set({ status: "cancelled" })
+        .where(eq(flights.id, flightId));
+    } else if (type === "delay") {
+      await tx
+        .update(flights)
+        .set({ status: "delayed" })
+        .where(eq(flights.id, flightId));
+    }
+
+    return insertResult;
+  });
 
   // Compute impact
   const impact = await computeFlightImpact(db, flightId);
@@ -348,7 +363,11 @@ export async function getDisruptionImpact(flightId: number): Promise<{
   economyClassPassengers: number;
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const impact = await computeFlightImpact(db, flightId);
 
@@ -415,7 +434,11 @@ export async function getAffectedPassengers(flightId: number): Promise<
   }>
 > {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get all active bookings for this flight
   const affectedBookings = await db
@@ -535,7 +558,11 @@ export async function autoTriggerProtection(flightId: number): Promise<{
   actions: IROPSAction[];
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const affectedPax = await getAffectedPassengers(flightId);
   const actions: IROPSAction[] = [];
@@ -701,7 +728,11 @@ export async function getRecoveryMetrics(dateRange: {
   end: Date;
 }): Promise<RecoveryMetrics> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get all disruptions in the date range from the DB
   const disruptions = await db
@@ -795,7 +826,11 @@ export async function sendMassNotification(
   failedCount: number;
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get all affected bookings and their user IDs
   const affectedBookings = await db
@@ -831,7 +866,11 @@ export async function sendMassNotification(
         { flightId, flightNumber }
       );
       notificationsSent++;
-    } catch {
+    } catch (err) {
+      console.error(
+        `Failed to send IROPS notification to user ${userId}:`,
+        err
+      );
       failedCount++;
     }
   }
@@ -880,7 +919,11 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
   }>
 > {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get the disrupted flight details
   const [flight] = await db
@@ -1054,7 +1097,11 @@ export async function escalateDisruption(
   if (!event) {
     // Try to find in the DB disruptions
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [dbDisruption] = await db
       .select()
@@ -1062,7 +1109,11 @@ export async function escalateDisruption(
       .where(eq(flightDisruptions.id, disruptionId))
       .limit(1);
 
-    if (!dbDisruption) throw new Error("IROPS event not found");
+    if (!dbDisruption)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "IROPS event not found",
+      });
 
     // Create an in-memory event from DB disruption
     const impact = await computeFlightImpact(db, dbDisruption.flightId);
@@ -1137,7 +1188,11 @@ export async function escalateDisruption(
  */
 export async function resolveIROPSEvent(eventId: number): Promise<IROPSEvent> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const event = iropsEventsStore.get(eventId);
   const now = new Date();
@@ -1176,7 +1231,11 @@ export async function resolveIROPSEvent(eventId: number): Promise<IROPSEvent> {
     .where(eq(flightDisruptions.id, eventId))
     .limit(1);
 
-  if (!dbDisruption) throw new Error("IROPS event not found");
+  if (!dbDisruption)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "IROPS event not found",
+    });
 
   return {
     id: dbDisruption.id,
@@ -1206,7 +1265,11 @@ export async function getIROPSEventDetail(eventId: number): Promise<{
   impact: Awaited<ReturnType<typeof getDisruptionImpact>>;
 } | null> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   let event = iropsEventsStore.get(eventId);
 

@@ -27,7 +27,7 @@ export type IdempotencyStatus = "STARTED" | "COMPLETED" | "FAILED";
 /**
  * Calculate request hash from payload
  */
-function calculateRequestHash(payload: any): string {
+function calculateRequestHash(payload: unknown): string {
   const payloadString = JSON.stringify(payload);
   return crypto.createHash("sha256").update(payloadString).digest("hex");
 }
@@ -40,11 +40,11 @@ export async function checkIdempotency(
   scope: IdempotencyScope,
   idempotencyKey: string,
   userId?: number,
-  requestPayload?: any
+  requestPayload?: unknown
 ): Promise<{
   exists: boolean;
   status?: IdempotencyStatus;
-  response?: any;
+  response?: unknown;
   error?: string;
 }> {
   // Build query conditions
@@ -108,7 +108,7 @@ export async function checkIdempotency(
 export async function createIdempotencyRecord(
   scope: IdempotencyScope,
   idempotencyKey: string,
-  requestPayload: any,
+  requestPayload: unknown,
   userId?: number,
   ttlSeconds: number = 86400 // 24 hours default
 ): Promise<boolean> {
@@ -142,12 +142,13 @@ export async function createIdempotencyRecord(
     );
 
     return true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Check if it's a duplicate key error
+    const errCode = (error as { code?: string }).code;
     if (
-      error.code === "ER_DUP_ENTRY" ||
-      error.code === "23505" ||
-      error.code === "23000"
+      errCode === "ER_DUP_ENTRY" ||
+      errCode === "23505" ||
+      errCode === "23000"
     ) {
       logger.info(
         {
@@ -171,7 +172,7 @@ export async function createIdempotencyRecord(
 export async function completeIdempotencyRecord(
   scope: IdempotencyScope,
   idempotencyKey: string,
-  response: any,
+  response: unknown,
   userId?: number
 ): Promise<void> {
   const conditions = [
@@ -257,7 +258,7 @@ export async function failIdempotencyRecord(
 export async function withIdempotency<T>(
   scope: IdempotencyScope,
   idempotencyKey: string,
-  requestPayload: any,
+  requestPayload: unknown,
   fn: () => Promise<T>,
   userId?: number,
   ttlSeconds?: number
@@ -350,12 +351,12 @@ export async function withIdempotency<T>(
     await completeIdempotencyRecord(scope, idempotencyKey, result, userId);
 
     return result;
-  } catch (error: any) {
+  } catch (error: unknown) {
     // 5. Mark as failed
     await failIdempotencyRecord(
       scope,
       idempotencyKey,
-      error.message || "Unknown error",
+      error instanceof Error ? error.message : "Unknown error",
       userId
     );
 
@@ -379,7 +380,8 @@ export async function cleanupExpiredIdempotencyRecords(): Promise<void> {
     .delete(idempotencyRequests)
     .where(lt(idempotencyRequests.expiresAt, now));
 
-  const affectedRows = (result as any)[0]?.affectedRows || 0;
+  const affectedRows =
+    (result as unknown as [{ affectedRows?: number }])[0]?.affectedRows || 0;
   logger.info(
     {
       deletedCount: affectedRows,

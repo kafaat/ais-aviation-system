@@ -399,7 +399,18 @@ export async function explainQueryJson(
     const resultArray = result as unknown as Array<Array<{ EXPLAIN: string }>>;
     const rows = resultArray[0] ?? [];
     if (rows[0]?.EXPLAIN) {
-      return JSON.parse(rows[0].EXPLAIN);
+      try {
+        return JSON.parse(rows[0].EXPLAIN) as Record<string, unknown>;
+      } catch {
+        log.error(
+          {
+            event: "explain_json_parse_failed",
+            raw: rows[0].EXPLAIN.substring(0, 200),
+          },
+          "Failed to parse EXPLAIN JSON output"
+        );
+        return null;
+      }
     }
     return null;
   } catch (error) {

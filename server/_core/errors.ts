@@ -10,7 +10,7 @@ export interface APIError {
   message: string;
   correlationId: string;
   retryable: boolean;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 /**
@@ -98,7 +98,7 @@ export function createAPIError(
   code: ErrorCode,
   message: string,
   correlationId?: string,
-  details?: any
+  details?: Record<string, unknown>
 ): APIError {
   return {
     code,
@@ -112,11 +112,14 @@ export function createAPIError(
 /**
  * Transform any error to standardized API error
  */
-export function transformError(error: any, correlationId?: string): APIError {
+export function transformError(
+  error: unknown,
+  correlationId?: string
+): APIError {
   const cid = correlationId || uuidv4();
 
-  // Handle our custom API errors
-  if (error.code && Object.values(ErrorCode).includes(error.code)) {
+  // Handle our custom AppError
+  if (error instanceof AppError) {
     return {
       code: error.code,
       message: error.message,
@@ -134,7 +137,26 @@ export function transformError(error: any, correlationId?: string): APIError {
       message: error.message,
       correlationId: cid,
       retryable: RETRYABLE_ERRORS.has(code),
-      details: error.cause,
+      details: error.cause ? { cause: String(error.cause) } : undefined,
+    };
+  }
+
+  // Handle errors with code property (from throwAPIError)
+  if (
+    error instanceof Error &&
+    "code" in error &&
+    Object.values(ErrorCode).includes((error as { code: ErrorCode }).code)
+  ) {
+    const typedErr = error as Error & {
+      code: ErrorCode;
+      details?: Record<string, unknown>;
+    };
+    return {
+      code: typedErr.code,
+      message: typedErr.message,
+      correlationId: cid,
+      retryable: RETRYABLE_ERRORS.has(typedErr.code),
+      details: typedErr.details,
     };
   }
 
@@ -144,7 +166,10 @@ export function transformError(error: any, correlationId?: string): APIError {
     message: "An unexpected error occurred",
     correlationId: cid,
     retryable: false,
-    details: process.env.NODE_ENV === "development" ? error.message : undefined,
+    details:
+      process.env.NODE_ENV === "development" && error instanceof Error
+        ? { message: error.message }
+        : undefined,
   };
 }
 
@@ -155,7 +180,7 @@ export class AppError extends Error {
   constructor(
     public code: ErrorCode,
     message: string,
-    public details?: any
+    public details?: Record<string, unknown>
   ) {
     super(message);
     this.name = "AppError";
@@ -169,19 +194,16 @@ export class AppError extends Error {
 export function throwAPIError(
   code: ErrorCode,
   message: string,
-  details?: any
+  details?: Record<string, unknown>
 ): never {
-  const error: any = new Error(message);
-  error.code = code;
-  error.details = details;
-  throw error;
+  throw new AppError(code, message, details);
 }
 
 /**
  * Common error creators
  */
 export const Errors = {
-  validationError: (message: string, details?: any) =>
+  validationError: (message: string, details?: Record<string, unknown>) =>
     throwAPIError(ErrorCode.VALIDATION_ERROR, message, details),
 
   unauthorized: (message: string = "Unauthorized") =>
@@ -228,7 +250,7 @@ export const Errors = {
   paymentProcessing: (message: string = "Payment is being processed") =>
     throwAPIError(ErrorCode.PAYMENT_PROCESSING, message),
 
-  providerError: (message: string, details?: any) =>
+  providerError: (message: string, details?: Record<string, unknown>) =>
     throwAPIError(ErrorCode.PROVIDER_ERROR, message, details),
 
   providerTimeout: (message: string = "Provider request timed out") =>
@@ -244,7 +266,7 @@ export const Errors = {
 /**
  * Error response formatter for HTTP/REST endpoints
  */
-export function formatErrorResponse(error: any, correlationId?: string) {
+export function formatErrorResponse(error: unknown, correlationId?: string) {
   const apiError = transformError(error, correlationId);
 
   return {

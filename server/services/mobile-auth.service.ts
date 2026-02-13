@@ -109,9 +109,10 @@ export async function mobileLogin(
   }
 
   // Generate tokens
+  const userEmail = user.email ?? "";
   const accessToken = generateToken(
     user.id,
-    user.email!,
+    userEmail,
     user.role,
     "access",
     ACCESS_TOKEN_EXPIRY
@@ -119,7 +120,7 @@ export async function mobileLogin(
 
   const refreshToken = generateToken(
     user.id,
-    user.email!,
+    userEmail,
     user.role,
     "refresh",
     REFRESH_TOKEN_EXPIRY

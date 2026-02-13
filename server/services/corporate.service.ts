@@ -118,7 +118,13 @@ export async function createCorporateAccount(
   }
 
   const created = await getCorporateAccountById(insertId);
-  return created!;
+  if (!created) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Failed to retrieve created corporate account",
+    });
+  }
+  return created;
 }
 
 /**
@@ -222,7 +228,14 @@ export async function activateCorporateAccount(
     })
     .where(eq(corporateAccounts.id, id));
 
-  return (await getCorporateAccountById(id))!;
+  const updated = await getCorporateAccountById(id);
+  if (!updated) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Corporate account not found after update",
+    });
+  }
+  return updated;
 }
 
 /**
@@ -257,7 +270,14 @@ export async function suspendCorporateAccount(
     })
     .where(eq(corporateAccounts.id, id));
 
-  return (await getCorporateAccountById(id))!;
+  const updated = await getCorporateAccountById(id);
+  if (!updated) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Corporate account not found after update",
+    });
+  }
+  return updated;
 }
 
 /**
@@ -302,7 +322,14 @@ export async function updateCorporateAccount(
     .set(updateData)
     .where(eq(corporateAccounts.id, id));
 
-  return (await getCorporateAccountById(id))!;
+  const result = await getCorporateAccountById(id);
+  if (!result) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Corporate account not found after update",
+    });
+  }
+  return result;
 }
 
 // ============================================================================

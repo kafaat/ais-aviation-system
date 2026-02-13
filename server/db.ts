@@ -4,6 +4,7 @@ import {
   desc,
   eq,
   gte,
+  inArray,
   lte,
   sql,
   gt,
@@ -687,19 +688,36 @@ export async function getBookingsByUserId(userId: number) {
     .where(and(eq(bookings.userId, userId), isNull(bookings.deletedAt)))
     .orderBy(desc(bookings.createdAt));
 
-  // Fetch passengers for each booking
-  const bookingsWithPassengers = await Promise.all(
-    result.map(async booking => {
-      const bookingPassengers = await db
-        .select()
-        .from(passengers)
-        .where(eq(passengers.bookingId, booking.id));
-      return {
-        ...booking,
-        passengers: bookingPassengers,
-      };
-    })
-  );
+  // Fetch all passengers for all bookings in a single query
+  if (result.length === 0) {
+    return [];
+  }
+
+  const bookingIds = result.map(b => b.id);
+  const allPassengers = await db
+    .select()
+    .from(passengers)
+    .where(inArray(passengers.bookingId, bookingIds));
+
+  // Group passengers by bookingId
+  const passengersByBookingId = new Map<
+    number,
+    (typeof allPassengers)[number][]
+  >();
+  for (const passenger of allPassengers) {
+    const existing = passengersByBookingId.get(passenger.bookingId);
+    if (existing) {
+      existing.push(passenger);
+    } else {
+      passengersByBookingId.set(passenger.bookingId, [passenger]);
+    }
+  }
+
+  // Map grouped passengers onto bookings
+  const bookingsWithPassengers = result.map(booking => ({
+    ...booking,
+    passengers: passengersByBookingId.get(booking.id) ?? [],
+  }));
 
   return bookingsWithPassengers;
 }

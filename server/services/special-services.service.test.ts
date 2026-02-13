@@ -11,8 +11,11 @@ import {
 } from "../../drizzle/schema";
 import * as specialServicesService from "./special-services.service";
 import { eq, inArray } from "drizzle-orm";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Special Services Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Special Services Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testAirlineId: number;

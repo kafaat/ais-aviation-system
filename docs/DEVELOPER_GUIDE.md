@@ -539,10 +539,46 @@ Aim for:
 
 ### Database
 
-1. **Use transactions** for multi-step operations
-2. **Add indexes** for frequently queried fields
-3. **Validate data** before database operations
-4. **Soft deletes** for important data (bookings, payments)
+1. **Use transactions** for multi-step operations:
+
+```typescript
+// CORRECT: Atomic multi-step operation
+const database = await getDb();
+await database.transaction(async (tx) => {
+  await tx.update(bookings).set({ status: "cancelled" }).where(eq(bookings.id, bookingId));
+  await tx.update(flights).set({
+    economyAvailable: sql`${flights.economyAvailable} + ${passengers}`,
+  }).where(eq(flights.id, flightId));
+});
+
+// WRONG: Separate operations can leave inconsistent state
+await db.update(bookings).set({ status: "cancelled" }).where(...);
+await db.update(flights).set({ economyAvailable: sql`...` }).where(...); // May fail!
+```
+
+2. **Avoid N+1 queries** - fetch related data in batch:
+
+```typescript
+// CORRECT: Batch fetch with inArray
+const bookingIds = bookings.map(b => b.id);
+const allPassengers = await db
+  .select()
+  .from(passengers)
+  .where(inArray(passengers.bookingId, bookingIds));
+
+// WRONG: N+1 query pattern
+for (const booking of bookings) {
+  const pax = await db
+    .select()
+    .from(passengers)
+    .where(eq(passengers.bookingId, booking.id));
+}
+```
+
+3. **Add indexes** for frequently queried fields
+4. **Validate data** before database operations
+5. **Soft deletes** for important data (bookings, payments)
+6. **Use TRPCError** (not plain Error) in all service functions
 
 ### Security
 
@@ -551,6 +587,7 @@ Aim for:
 3. **Use parameterized queries** (Drizzle handles this)
 4. **Rate limiting** on public endpoints
 5. **HTTPS only** in production
+6. **Wrap JSON.parse** in try-catch with safe fallbacks
 
 ### Performance
 
@@ -559,6 +596,7 @@ Aim for:
 3. **Caching** for frequently accessed data
 4. **Lazy loading** for images and routes
 5. **Code splitting** in frontend
+6. **Batch queries** instead of N+1 (use `inArray`)
 
 ---
 

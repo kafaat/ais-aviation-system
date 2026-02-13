@@ -2,23 +2,14 @@ import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import { getDb } from "../db";
 import { payments } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
-import Stripe from "stripe";
+import { eq, and } from "drizzle-orm";
 import {
   trackPaymentInitiated,
   trackPaymentSuccess,
   trackPaymentFailed,
   trackBookingCompleted,
 } from "./metrics.service";
-
-/**
- * Payments Service
- * Business logic for payment-related operations
- */
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
-});
+import { stripe } from "../stripe";
 
 export interface CreateCheckoutSessionInput {
   bookingId: number;
@@ -164,6 +155,7 @@ export async function handlePaymentSuccess(
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
+    // Update the specific payment record for this session, not all payments for the booking
     await database
       .update(payments)
       .set({
@@ -171,7 +163,12 @@ export async function handlePaymentSuccess(
         transactionId: paymentIntentId,
         updatedAt: new Date(),
       })
-      .where(eq(payments.bookingId, bookingId));
+      .where(
+        and(
+          eq(payments.bookingId, bookingId),
+          eq(payments.transactionId, sessionId)
+        )
+      );
 
     await db.updateBookingStatus(bookingId, "confirmed");
 
@@ -224,13 +221,19 @@ export async function handlePaymentFailure(sessionId: string) {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
+    // Update the specific payment record for this session, not all payments for the booking
     await database
       .update(payments)
       .set({
         status: "failed",
         updatedAt: new Date(),
       })
-      .where(eq(payments.bookingId, bookingId));
+      .where(
+        and(
+          eq(payments.bookingId, bookingId),
+          eq(payments.transactionId, sessionId)
+        )
+      );
 
     // Track payment failure event for metrics
     if (booking && userId) {

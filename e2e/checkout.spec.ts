@@ -98,12 +98,8 @@ test.describe("Checkout Flow", () => {
         await page
           .getByLabel(/البريد الإلكتروني|Email/i)
           .fill(testUsers.regular.email);
-        await page
-          .getByLabel(/كلمة المرور|Password/i)
-          .fill(testUsers.regular.password);
-        await page
-          .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-          .click();
+        await page.locator("input#password").fill(testUsers.regular.password);
+        await page.locator('[data-testid="login-submit"]').click();
         await page.waitForURL(/\/booking/, { timeout: 10000 });
       }
     });

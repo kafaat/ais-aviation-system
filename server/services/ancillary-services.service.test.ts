@@ -12,8 +12,11 @@ import {
 import { getDb } from "../db";
 import { ancillaryServices, bookingAncillaries } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Ancillary Services Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Ancillary Services Service", () => {
   let testServiceId: number;
   const testBookingId = 999999;
 

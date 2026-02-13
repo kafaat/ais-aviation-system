@@ -11,6 +11,9 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
 
+  /* Global timeout: abort entire test suite after 15 minutes in CI */
+  globalTimeout: process.env.CI ? 15 * 60 * 1000 : undefined,
+
   /* Global timeout for each test */
   timeout: 60 * 1000,
 
@@ -147,6 +150,6 @@ export default defineConfig({
   },
 
   /* Global setup and teardown */
-  globalSetup: undefined, // Can be set to './e2e/global-setup.ts'
-  globalTeardown: undefined, // Can be set to './e2e/global-teardown.ts'
+  globalSetup: "./e2e/global-setup.ts",
+  globalTeardown: undefined,
 });

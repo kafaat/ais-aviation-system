@@ -20,7 +20,11 @@ export class StripeProvider implements PaymentProvider {
 
   private getClient(): Stripe {
     if (!this.client) {
-      this.client = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      const stripeKey = process.env.STRIPE_SECRET_KEY;
+      if (!stripeKey) {
+        throw new Error("STRIPE_SECRET_KEY environment variable is not set");
+      }
+      this.client = new Stripe(stripeKey, {
         apiVersion: "2025-12-15.clover",
       });
     }

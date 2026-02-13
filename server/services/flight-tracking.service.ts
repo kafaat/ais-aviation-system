@@ -10,6 +10,7 @@
  * @module services/flight-tracking.service
  */
 
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { flightTracking, flights, airports } from "../../drizzle/schema";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
@@ -82,7 +83,10 @@ export async function getFlightTrackingByNumber(
 ): Promise<FlightTrackingData | null> {
   const database = await getDb();
   if (!database) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   // Find the flight
@@ -192,7 +196,10 @@ export async function getFlightTrackingById(
 ): Promise<FlightTrackingData | null> {
   const database = await getDb();
   if (!database) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const flightResult = await database
@@ -232,7 +239,10 @@ export async function recordFlightPosition(data: {
 }): Promise<{ id: number }> {
   const database = await getDb();
   if (!database) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const result = await database.insert(flightTracking).values({
@@ -270,7 +280,10 @@ export async function getActiveFlights(): Promise<
 > {
   const database = await getDb();
   if (!database) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   // Get flights that are not completed or cancelled and have recent tracking data

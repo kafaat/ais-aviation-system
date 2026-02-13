@@ -14,8 +14,8 @@ test.describe("Security Features", () => {
     // Attempt to login with wrong password 5 times
     for (let i = 0; i < 5; i++) {
       await page.getByLabel("البريد الإلكتروني").fill("test@example.com");
-      await page.getByLabel("كلمة المرور").fill("wrongpassword");
-      await page.getByRole("button", { name: "تسجيل الدخول" }).click();
+      await page.locator("input#password").fill("wrongpassword");
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Wait for error message
       await page.waitForSelector('[data-testid="error-message"]');
@@ -23,8 +23,8 @@ test.describe("Security Features", () => {
 
     // 6th attempt should show account locked message
     await page.getByLabel("البريد الإلكتروني").fill("test@example.com");
-    await page.getByLabel("كلمة المرور").fill("wrongpassword");
-    await page.getByRole("button", { name: "تسجيل الدخول" }).click();
+    await page.locator("input#password").fill("wrongpassword");
+    await page.locator('[data-testid="login-submit"]').click();
 
     // Verify account locked message
     await expect(page.getByText(/تم قفل الحساب/)).toBeVisible();

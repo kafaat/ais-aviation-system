@@ -128,7 +128,11 @@ export async function generateAgreementReference(
   prefix: "CS" | "IL"
 ): Promise<string> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const year = new Date().getFullYear();
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -208,7 +212,11 @@ export async function createCodeshareAgreement(
 ) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     // Validate airlines are different
     if (input.marketingAirlineId === input.operatingAirlineId) {
@@ -306,7 +314,11 @@ export async function updateCodeshareAgreement(
 ) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     // Get current agreement
     const [existing] = await db
@@ -389,7 +401,11 @@ export async function updateCodeshareAgreement(
 export async function getCodeshareAgreement(id: number) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const result = await db
       .select({
@@ -441,7 +457,13 @@ export async function getCodeshareAgreement(id: number) {
     const agreement = result[0];
     return {
       ...agreement,
-      routes: agreement.routes ? JSON.parse(agreement.routes) : [],
+      routes: (() => {
+        try {
+          return agreement.routes ? JSON.parse(agreement.routes) : [];
+        } catch {
+          return [];
+        }
+      })(),
     };
   } catch (error) {
     if (error instanceof TRPCError) throw error;
@@ -463,7 +485,11 @@ export async function listCodeshareAgreements(
 ) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const conditions = [];
 
@@ -544,7 +570,11 @@ export async function listCodeshareAgreements(
 export async function activateCodeshareAgreement(id: number) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [agreement] = await db
       .select()
@@ -612,7 +642,12 @@ export async function activateCodeshareAgreement(id: number) {
 
     // Validate routes when scope is specific_routes
     if (agreement.routeScope === "specific_routes") {
-      const routes = agreement.routes ? JSON.parse(agreement.routes) : [];
+      let routes: Array<{ originId: number; destinationId: number }> = [];
+      try {
+        routes = agreement.routes ? JSON.parse(agreement.routes) : [];
+      } catch {
+        /* malformed JSON, treat as empty */
+      }
       if (routes.length === 0) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -653,7 +688,11 @@ export async function activateCodeshareAgreement(id: number) {
 export async function terminateCodeshareAgreement(id: number, reason: string) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [agreement] = await db
       .select()
@@ -713,7 +752,11 @@ export async function terminateCodeshareAgreement(id: number, reason: string) {
 export async function getCodeshareFlights(marketingAirlineId: number) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const now = new Date();
 
@@ -811,10 +854,18 @@ export async function getCodeshareFlights(marketingAirlineId: number) {
 
         // Check route scope
         if (agreement.routeScope === "specific_routes" && agreement.routes) {
-          const allowedRoutes = JSON.parse(agreement.routes) as Array<{
+          let allowedRoutes: Array<{
             originId: number;
             destinationId: number;
-          }>;
+          }> = [];
+          try {
+            allowedRoutes = JSON.parse(agreement.routes) as Array<{
+              originId: number;
+              destinationId: number;
+            }>;
+          } catch {
+            /* malformed JSON, treat as empty */
+          }
           const routeAllowed = allowedRoutes.some(
             r =>
               r.originId === flight.origin.id &&
@@ -862,7 +913,11 @@ export async function calculateRevenueShare(
 ): Promise<RevenueShareResult> {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [agreement] = await db
       .select()
@@ -975,7 +1030,11 @@ export async function createInterlineAgreement(
 ) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     // Validate airlines are different
     if (input.airline1Id === input.airline2Id) {
@@ -1077,7 +1136,11 @@ export async function updateInterlineAgreement(
 ) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [existing] = await db
       .select()
@@ -1157,7 +1220,11 @@ export async function updateInterlineAgreement(
 export async function getInterlineAgreement(id: number) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const result = await db
       .select({
@@ -1223,7 +1290,11 @@ export async function listInterlineAgreements(
 ) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const conditions = [];
 
@@ -1303,7 +1374,11 @@ export async function listInterlineAgreements(
 export async function activateInterlineAgreement(id: number) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [agreement] = await db
       .select()
@@ -1385,7 +1460,11 @@ export async function activateInterlineAgreement(id: number) {
 export async function terminateInterlineAgreement(id: number, reason: string) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [agreement] = await db
       .select()
@@ -1448,7 +1527,11 @@ export async function checkInterlineEligibility(
 ) {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     if (airline1Id === airline2Id) {
       return {
@@ -1537,7 +1620,11 @@ export async function calculateProrateShare(
 ): Promise<ProrateShareResult> {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [agreement] = await db
       .select()
@@ -1657,7 +1744,11 @@ export async function getPartnerAirlines(
 ): Promise<PartnerAirline[]> {
   try {
     const db = await getDb();
-    if (!db) throw new Error("Database not available");
+    if (!db)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const now = new Date();
     const partners: PartnerAirline[] = [];

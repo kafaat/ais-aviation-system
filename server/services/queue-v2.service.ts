@@ -14,6 +14,7 @@
  */
 
 import { Queue, Worker, Job } from "bullmq";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { stripeEvents, bookings } from "../../drizzle/schema";
 import { eq, and, lt } from "drizzle-orm";
@@ -376,7 +377,10 @@ export function startWebhookRetryWorker(): Worker {
 
       const db = await getDb();
       if (!db) {
-        throw new Error("Database not available");
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
       }
 
       const { eventId } = job.data;
@@ -422,7 +426,19 @@ export function startWebhookRetryWorker(): Worker {
         const { stripeWebhookServiceV2 } =
           await import("./stripe-webhook-v2.service");
 
-        const eventData = JSON.parse(event.data);
+        let eventData: unknown;
+        try {
+          eventData = JSON.parse(event.data);
+        } catch {
+          console.error(
+            `[Worker] Event ${eventId} has invalid JSON data, skipping`
+          );
+          await db
+            .update(stripeEvents)
+            .set({ error: "Invalid JSON in event data" })
+            .where(eq(stripeEvents.id, eventId));
+          return;
+        }
         await db.transaction(async tx => {
           await stripeWebhookServiceV2.processEvent(tx, {
             id: event.id,
@@ -507,7 +523,10 @@ async function runReconciliation(_data: ReconciliationJobData): Promise<void> {
 
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   // Find unprocessed events from last 24 hours

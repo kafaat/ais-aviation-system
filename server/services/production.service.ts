@@ -7,6 +7,7 @@
  * - Health metrics collection
  */
 
+import { TRPCError } from "@trpc/server";
 import { type Server } from "http";
 
 // ============================================================================
@@ -75,9 +76,10 @@ export async function withCircuitBreaker<T>(
 
   // Reject if circuit is open
   if (state.state === CircuitState.OPEN) {
-    throw new Error(
-      `Circuit breaker OPEN for ${serviceName}. Service unavailable.`
-    );
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: `Circuit breaker OPEN for ${serviceName}. Service unavailable.`,
+    });
   }
 
   try {
@@ -141,7 +143,12 @@ export function withTimeout<T>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      reject(
+        new TRPCError({
+          code: "TIMEOUT",
+          message: `${label} timed out after ${timeoutMs}ms`,
+        })
+      );
     }, timeoutMs);
 
     fn()
