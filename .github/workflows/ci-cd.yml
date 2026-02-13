@@ -339,6 +339,28 @@ jobs:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
         run: pnpm exec drizzle-kit push --force
 
+      - name: Setup Python for auth service
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install auth service dependencies
+        run: pip install -r auth-service/requirements.txt
+
+      - name: Start auth service
+        env:
+          DATABASE_URL: mysql+pymysql://root:test_password@127.0.0.1:3306/ais_test
+          JWT_SECRET: test-secret-key-for-ci
+          PORT: 8000
+          DEBUG: true
+        run: |
+          cd auth-service
+          uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/auth-service.log 2>&1 &
+          echo "AUTH_PID=$!" >> $GITHUB_ENV
+          sleep 5
+          curl -sf http://localhost:8000/auth/health || (cat /tmp/auth-service.log && exit 1)
+          echo "::notice::Auth service started successfully"
+
       - name: Build application
         env:
           VITE_APP_ID: ais-aviation-system-test
@@ -357,6 +379,7 @@ jobs:
           OWNER_OPEN_ID: test-owner-open-id
           BUILT_IN_FORGE_API_URL: https://api.example.com
           BUILT_IN_FORGE_API_KEY: test-forge-api-key
+          AUTH_SERVICE_URL: http://localhost:8000
         run: |
           # Quick server smoke test: start, wait, check it's alive
           node dist/index.js > /tmp/server.log 2>&1 &
@@ -385,6 +408,7 @@ jobs:
           OWNER_OPEN_ID: test-owner-open-id
           BUILT_IN_FORGE_API_URL: https://api.example.com
           BUILT_IN_FORGE_API_KEY: test-forge-api-key
+          AUTH_SERVICE_URL: http://localhost:8000
           CI: true
           E2E_BASE_URL: http://localhost:3000
         run: pnpm run test:e2e --project=chromium
