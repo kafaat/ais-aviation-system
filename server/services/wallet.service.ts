@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { wallets, walletTransactions } from "../../drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 
 /**
  * Get or create a wallet for a user
@@ -82,27 +82,37 @@ export async function topUpWallet(
     });
   }
 
-  const newBalance = wallet.balance + amount;
+  const result = await db.transaction(async tx => {
+    // Atomic balance update using SQL arithmetic to prevent lost updates
+    await tx
+      .update(wallets)
+      .set({ balance: sql`${wallets.balance} + ${amount}` })
+      .where(eq(wallets.id, wallet.id));
 
-  // Update wallet balance
-  await db
-    .update(wallets)
-    .set({ balance: newBalance })
-    .where(eq(wallets.id, wallet.id));
+    // Read back the updated balance
+    const [updated] = await tx
+      .select({ balance: wallets.balance })
+      .from(wallets)
+      .where(eq(wallets.id, wallet.id))
+      .limit(1);
+    const newBalance = updated.balance;
 
-  // Record transaction
-  await db.insert(walletTransactions).values({
-    walletId: wallet.id,
-    userId,
-    type: "top_up",
-    amount,
-    balanceAfter: newBalance,
-    description,
-    stripePaymentIntentId,
-    status: "completed",
+    // Record transaction inside same tx
+    await tx.insert(walletTransactions).values({
+      walletId: wallet.id,
+      userId,
+      type: "top_up",
+      amount,
+      balanceAfter: newBalance,
+      description,
+      stripePaymentIntentId,
+      status: "completed",
+    });
+
+    return { balance: newBalance, transactionAmount: amount };
   });
 
-  return { balance: newBalance, transactionAmount: amount };
+  return result;
 }
 
 /**
@@ -136,6 +146,7 @@ export async function payFromWallet(
     });
   }
 
+  // Preliminary balance check (authoritative check is inside the transaction)
   if (wallet.balance < amount) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -143,25 +154,49 @@ export async function payFromWallet(
     });
   }
 
-  const newBalance = wallet.balance - amount;
+  const result = await db.transaction(async tx => {
+    // Atomic deduct with SQL-level balance check to prevent race conditions
+    const updateResult = await tx
+      .update(wallets)
+      .set({ balance: sql`${wallets.balance} - ${amount}` })
+      .where(
+        and(eq(wallets.id, wallet.id), sql`${wallets.balance} >= ${amount}`)
+      );
 
-  await db
-    .update(wallets)
-    .set({ balance: newBalance })
-    .where(eq(wallets.id, wallet.id));
+    // Check if update was applied (balance was sufficient)
+    const affectedRows = (
+      updateResult as unknown as [{ affectedRows: number }]
+    )[0].affectedRows;
+    if (affectedRows === 0) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Insufficient wallet balance",
+      });
+    }
 
-  await db.insert(walletTransactions).values({
-    walletId: wallet.id,
-    userId,
-    type: "payment",
-    amount: -amount,
-    balanceAfter: newBalance,
-    description,
-    bookingId,
-    status: "completed",
+    // Read back the updated balance
+    const [updated] = await tx
+      .select({ balance: wallets.balance })
+      .from(wallets)
+      .where(eq(wallets.id, wallet.id))
+      .limit(1);
+    const newBalance = updated.balance;
+
+    await tx.insert(walletTransactions).values({
+      walletId: wallet.id,
+      userId,
+      type: "payment",
+      amount: -amount,
+      balanceAfter: newBalance,
+      description,
+      bookingId,
+      status: "completed",
+    });
+
+    return { balance: newBalance, amountPaid: amount };
   });
 
-  return { balance: newBalance, amountPaid: amount };
+  return result;
 }
 
 /**
@@ -188,25 +223,36 @@ export async function refundToWallet(
 
   const wallet = await getOrCreateWallet(userId);
 
-  const newBalance = wallet.balance + amount;
+  const result = await db.transaction(async tx => {
+    // Atomic balance update using SQL arithmetic to prevent lost updates
+    await tx
+      .update(wallets)
+      .set({ balance: sql`${wallets.balance} + ${amount}` })
+      .where(eq(wallets.id, wallet.id));
 
-  await db
-    .update(wallets)
-    .set({ balance: newBalance })
-    .where(eq(wallets.id, wallet.id));
+    // Read back the updated balance
+    const [updated] = await tx
+      .select({ balance: wallets.balance })
+      .from(wallets)
+      .where(eq(wallets.id, wallet.id))
+      .limit(1);
+    const newBalance = updated.balance;
 
-  await db.insert(walletTransactions).values({
-    walletId: wallet.id,
-    userId,
-    type: "refund",
-    amount,
-    balanceAfter: newBalance,
-    description,
-    bookingId,
-    status: "completed",
+    await tx.insert(walletTransactions).values({
+      walletId: wallet.id,
+      userId,
+      type: "refund",
+      amount,
+      balanceAfter: newBalance,
+      description,
+      bookingId,
+      status: "completed",
+    });
+
+    return { balance: newBalance, amountRefunded: amount };
   });
 
-  return { balance: newBalance, amountRefunded: amount };
+  return result;
 }
 
 /**

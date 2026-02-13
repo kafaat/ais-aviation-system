@@ -425,15 +425,28 @@ export async function generateETicketForPassenger(
 
   const airlineName = airline?.name || "Unknown Airline";
 
-  // Generate ticket number if not exists
-  const ticketNumber = passenger.ticketNumber || generateTicketNumber();
-
-  // Update passenger with ticket number
-  if (!passenger.ticketNumber) {
-    await database
-      .update(passengers)
-      .set({ ticketNumber })
-      .where(eq(passengers.id, passenger.id));
+  // Generate ticket number if not exists, using a transaction to avoid
+  // race conditions where concurrent requests both see null and write
+  // different ticket numbers
+  let ticketNumber = passenger.ticketNumber;
+  if (!ticketNumber) {
+    ticketNumber = generateTicketNumber();
+    await database.transaction(async tx => {
+      // Re-read inside transaction to check if another request already set it
+      const [current] = await tx
+        .select({ ticketNumber: passengers.ticketNumber })
+        .from(passengers)
+        .where(eq(passengers.id, passenger.id))
+        .limit(1);
+      if (current?.ticketNumber) {
+        ticketNumber = current.ticketNumber;
+      } else {
+        await tx
+          .update(passengers)
+          .set({ ticketNumber })
+          .where(eq(passengers.id, passenger.id));
+      }
+    });
   }
 
   // Generate PDF

@@ -510,7 +510,7 @@ async function computeElasticityFromHistory(
     .filter(d => d.finalPrice > 0 && d.occupancyRate)
     .map(d => ({
       lnPrice: Math.log(d.finalPrice),
-      lnDemand: Math.log(Math.max(0.01, parseFloat(d.occupancyRate!))),
+      lnDemand: Math.log(Math.max(0.01, parseFloat(d.occupancyRate ?? "0"))),
     }));
 
   if (points.length < MIN_ELASTICITY_SAMPLES) {

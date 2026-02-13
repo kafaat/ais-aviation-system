@@ -2,20 +2,12 @@ import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 import { getDb } from "../db";
 import { bookings, payments, users, flights } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
 import { trackRefundIssued } from "./metrics.service";
 import { notifyRefundProcessed } from "./notification.service";
-
-/**
- * Refunds Service
- * Business logic for refund-related operations
- */
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-12-15.clover",
-});
+import { stripe } from "../stripe";
 
 export interface CreateRefundInput {
   bookingId: number;
@@ -133,16 +125,39 @@ export async function createRefund(input: CreateRefundInput) {
 
     const refund = await stripe.refunds.create(refundParams);
 
+    const isFullRefund = refund.amount === booking.totalAmount;
+
     // Update booking status
     await database
       .update(bookings)
       .set({
-        paymentStatus:
-          refund.amount === booking.totalAmount ? "refunded" : "paid",
-        status:
-          refund.amount === booking.totalAmount ? "cancelled" : booking.status,
+        paymentStatus: isFullRefund ? "refunded" : "paid",
+        status: isFullRefund ? "cancelled" : booking.status,
       })
       .where(eq(bookings.id, input.bookingId));
+
+    // Restore seats to flight availability on full refund
+    if (isFullRefund && booking.status === "confirmed") {
+      if (booking.cabinClass === "business") {
+        await database
+          .update(flights)
+          .set({
+            businessAvailable: sql`${flights.businessAvailable} + ${booking.numberOfPassengers}`,
+          })
+          .where(eq(flights.id, booking.flightId));
+      } else {
+        await database
+          .update(flights)
+          .set({
+            economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
+          })
+          .where(eq(flights.id, booking.flightId));
+      }
+
+      console.info(
+        `[Refund] Restored ${booking.numberOfPassengers} ${booking.cabinClass} seat(s) to flight ${booking.flightId}`
+      );
+    }
 
     // Update payment record
     const paymentResult = await database
@@ -155,8 +170,7 @@ export async function createRefund(input: CreateRefundInput) {
       await database
         .update(payments)
         .set({
-          status:
-            refund.amount === booking.totalAmount ? "refunded" : "completed",
+          status: isFullRefund ? "refunded" : "completed",
         })
         .where(eq(payments.id, paymentResult[0].id));
     }

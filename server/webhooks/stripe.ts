@@ -550,7 +550,10 @@ async function handlePaymentIntentSucceeded(
     return;
   }
 
-  // Update if still pending
+  // Update booking status if still pending (fallback for checkout.session.completed).
+  // IMPORTANT: Seat deduction is handled EXCLUSIVELY by handleCheckoutSessionCompleted
+  // to prevent double-deduction race conditions when both events arrive simultaneously.
+  // This handler only updates booking status as a safety net.
   if (booking.status === "pending") {
     await tx
       .update(bookings)
@@ -562,77 +565,14 @@ async function handlePaymentIntentSucceeded(
       })
       .where(eq(bookings.id, parseInt(bookingId)));
 
-    // Deduct seats from flight availability
-    if (booking.cabinClass === "business") {
-      await tx
-        .update(flights)
-        .set({
-          businessAvailable: sql`GREATEST(${flights.businessAvailable} - ${booking.numberOfPassengers}, 0)`,
-        })
-        .where(eq(flights.id, booking.flightId));
-    } else {
-      await tx
-        .update(flights)
-        .set({
-          economyAvailable: sql`GREATEST(${flights.economyAvailable} - ${booking.numberOfPassengers}, 0)`,
-        })
-        .where(eq(flights.id, booking.flightId));
-    }
-
     log.info(
       {
         event: "booking_confirmed_via_pi",
         bookingId,
         paymentIntentId: pi.id,
-        seatsDeducted: booking.numberOfPassengers,
       },
-      `Booking ${bookingId} confirmed via payment_intent, deducted ${booking.numberOfPassengers} ${booking.cabinClass} seat(s)`
+      `Booking ${bookingId} confirmed via payment_intent (seats deducted by checkout handler)`
     );
-
-    // Convert inventory lock to booking (mark lock as converted)
-    try {
-      const [activeLock] = await tx
-        .select({ id: inventoryLocks.id })
-        .from(inventoryLocks)
-        .where(
-          and(
-            eq(inventoryLocks.flightId, booking.flightId),
-            eq(inventoryLocks.userId, booking.userId),
-            eq(inventoryLocks.cabinClass, booking.cabinClass),
-            eq(inventoryLocks.status, "active")
-          )
-        )
-        .limit(1);
-
-      if (activeLock) {
-        await tx
-          .update(inventoryLocks)
-          .set({
-            status: "converted",
-            releasedAt: new Date(),
-          })
-          .where(eq(inventoryLocks.id, activeLock.id));
-
-        log.info(
-          {
-            event: "inventory_lock_converted",
-            lockId: activeLock.id,
-            bookingId,
-          },
-          `Converted inventory lock ${activeLock.id} for booking ${bookingId}`
-        );
-      }
-    } catch (lockErr) {
-      // Lock conversion failure should not break payment confirmation
-      log.warn(
-        {
-          event: "inventory_lock_conversion_failed",
-          bookingId,
-          error: lockErr,
-        },
-        `Failed to convert inventory lock for booking ${bookingId} - non-critical`
-      );
-    }
   }
 }
 
@@ -812,6 +752,39 @@ async function handleChargeRefunded(
       updatedAt: new Date(),
     })
     .where(eq(bookings.id, parseInt(bookingId)));
+
+  // Restore seats to flight availability when a full refund cancels the booking
+  if (
+    isFullRefund &&
+    (previousStatus === "confirmed" || booking.paymentStatus === "paid")
+  ) {
+    if (booking.cabinClass === "business") {
+      await tx
+        .update(flights)
+        .set({
+          businessAvailable: sql`${flights.businessAvailable} + ${booking.numberOfPassengers}`,
+        })
+        .where(eq(flights.id, booking.flightId));
+    } else {
+      await tx
+        .update(flights)
+        .set({
+          economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
+        })
+        .where(eq(flights.id, booking.flightId));
+    }
+
+    log.info(
+      {
+        event: "seats_restored",
+        bookingId,
+        flightId: booking.flightId,
+        cabinClass: booking.cabinClass,
+        seatsRestored: booking.numberOfPassengers,
+      },
+      `Restored ${booking.numberOfPassengers} ${booking.cabinClass} seat(s) to flight ${booking.flightId} after full refund`
+    );
+  }
 
   // Record status history (bookingStatusHistory has the full enum including "refunded")
   await tx.insert(bookingStatusHistory).values({

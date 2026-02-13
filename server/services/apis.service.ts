@@ -531,10 +531,17 @@ export async function getAPISRequirements(
   const reqRows = (rows as unknown as Array<Array<Record<string, unknown>>>)[0];
   if (reqRows && reqRows.length > 0) {
     const req = reqRows[0];
+    let requiredFields: string[];
+    try {
+      requiredFields = JSON.parse(req["required_fields"] as string) as string[];
+    } catch {
+      requiredFields = DEFAULT_REQUIRED_FIELDS;
+    }
+
     return {
       originCountry,
       destinationCountry,
-      requiredFields: JSON.parse(req["required_fields"] as string) as string[],
+      requiredFields,
       submissionDeadlineMinutes: req["submission_deadline_minutes"] as number,
       format: req["format"] as APISMessageFormat,
       source: "database" as const,

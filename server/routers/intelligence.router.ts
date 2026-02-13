@@ -84,7 +84,7 @@ export const intelligenceRouter = router({
     .input(contextInput)
     .query(async ({ input, ctx }) => {
       const context = buildContext(input, ctx.user?.id);
-      return intelligenceKernel.generateBriefing(context);
+      return await intelligenceKernel.generateBriefing(context);
     }),
 
   /**
@@ -94,7 +94,7 @@ export const intelligenceRouter = router({
     .input(contextInput)
     .query(async ({ input, ctx }) => {
       const context = buildContext(input, ctx.user?.id);
-      return intelligenceKernel.getEconomicsAnalysis(context);
+      return await intelligenceKernel.getEconomicsAnalysis(context);
     }),
 
   /**
@@ -104,7 +104,7 @@ export const intelligenceRouter = router({
     .input(fraudAssessInput)
     .query(async ({ input, ctx }) => {
       const context = buildContext({ timeHorizon: "realtime" }, ctx.user?.id);
-      return intelligenceKernel.assessBookingFraud(
+      return await intelligenceKernel.assessBookingFraud(
         input.bookingId,
         input.userId,
         context
@@ -118,7 +118,10 @@ export const intelligenceRouter = router({
     .input(delayPredictInput)
     .query(async ({ input, ctx }) => {
       const context = buildContext({ timeHorizon: "realtime" }, ctx.user?.id);
-      return intelligenceKernel.predictFlightDelay(input.flightId, context);
+      return await intelligenceKernel.predictFlightDelay(
+        input.flightId,
+        context
+      );
     }),
 
   /**
@@ -128,7 +131,7 @@ export const intelligenceRouter = router({
     .input(contextInput)
     .query(async ({ input, ctx }) => {
       const context = buildContext(input, ctx.user?.id);
-      return intelligenceKernel.getDisruptionForecast(context);
+      return await intelligenceKernel.getDisruptionForecast(context);
     }),
 
   /**

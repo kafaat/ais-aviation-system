@@ -1,4 +1,5 @@
 import { eq, and } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   ancillaryServices,
@@ -17,7 +18,11 @@ import {
  */
 export async function getAvailableAncillaries(category?: string) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const conditions = [eq(ancillaryServices.available, true)];
   if (category) {
@@ -35,7 +40,11 @@ export async function getAvailableAncillaries(category?: string) {
  */
 export async function getAncillaryById(id: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const results = await db
     .select()
@@ -51,7 +60,11 @@ export async function getAncillaryById(id: number) {
  */
 export async function createAncillaryService(data: InsertAncillaryService) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [result] = await db.insert(ancillaryServices).values(data);
   return Number((result as any).insertId);
@@ -65,7 +78,11 @@ export async function updateAncillaryService(
   data: Partial<InsertAncillaryService>
 ) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   await db
     .update(ancillaryServices)
@@ -80,7 +97,11 @@ export async function updateAncillaryService(
  */
 export async function deactivateAncillaryService(id: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   await db
     .update(ancillaryServices)
@@ -101,12 +122,24 @@ export async function addAncillaryToBooking(data: {
   metadata?: any;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get ancillary service details
   const service = await getAncillaryById(data.ancillaryServiceId);
-  if (!service) throw new Error("Ancillary service not found");
-  if (!service.available) throw new Error("Ancillary service not available");
+  if (!service)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Ancillary service not found",
+    });
+  if (!service.available)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Ancillary service not available",
+    });
 
   const quantity = data.quantity || 1;
   const totalPrice = service.price * quantity;
@@ -135,7 +168,11 @@ export async function addAncillaryToBooking(data: {
  */
 export async function getBookingAncillaries(bookingId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const results = await db
     .select({
@@ -187,7 +224,11 @@ export async function calculateAncillariesTotalCost(
  */
 export async function removeAncillaryFromBooking(ancillaryId: number) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   await db
     .update(bookingAncillaries)
@@ -206,7 +247,11 @@ export async function getAncillariesByCategory(params: {
   airlineId?: number;
 }) {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   let services = await db
     .select()
@@ -244,7 +289,11 @@ export async function getAncillariesByCategory(params: {
  */
 export async function seedAncillaryServices() {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const services: InsertAncillaryService[] = [
     // Baggage

@@ -10,8 +10,11 @@ import {
 } from "../../drizzle/schema";
 import * as reviewsService from "./reviews.service";
 import { eq } from "drizzle-orm";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Reviews Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Reviews Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testFlightId: number;

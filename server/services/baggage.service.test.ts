@@ -12,8 +12,11 @@ import {
 } from "../../drizzle/schema";
 import * as baggageService from "./baggage.service";
 import { eq } from "drizzle-orm";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Baggage Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Baggage Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testAirlineId: number;

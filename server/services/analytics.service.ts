@@ -3,6 +3,7 @@
  * Provides business intelligence and KPIs for admin dashboard
  */
 
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { bookings, flights, airports } from "../../drizzle/schema";
 import { sql, and, gte, lte, eq, desc } from "drizzle-orm";
@@ -44,7 +45,10 @@ export async function getKPIMetrics(
 ): Promise<KPIMetrics> {
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const dateFilter =
@@ -113,7 +117,10 @@ export async function getRevenueOverTime(
 ): Promise<RevenueDataPoint[]> {
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const startDate = new Date();
@@ -150,7 +157,10 @@ export async function getPopularDestinations(
 ): Promise<PopularDestination[]> {
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const popularDests = await db
@@ -186,7 +196,10 @@ export async function getBookingTrends(
 ): Promise<BookingTrend[]> {
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const startDate = new Date();
@@ -216,7 +229,10 @@ export async function getBookingTrends(
 export async function getFlightOccupancyDetails() {
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const occupancyDetails = await db
@@ -288,7 +304,10 @@ export async function getAncillaryMetrics(
 ): Promise<AncillaryMetrics> {
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const { bookingAncillaries, ancillaryServices: _ancillaryServices } =
@@ -363,7 +382,10 @@ export async function getAncillaryRevenueByCategory(): Promise<
 > {
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const { bookingAncillaries, ancillaryServices } =
@@ -407,7 +429,10 @@ export async function getPopularAncillaries(
 ): Promise<PopularAncillary[]> {
   const db = await getDb();
   if (!db) {
-    throw new Error("Database not available");
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
   }
 
   const { bookingAncillaries, ancillaryServices } =

@@ -13,6 +13,7 @@
  */
 
 import { Queue, Worker, Job, QueueEvents } from "bullmq";
+import { TRPCError } from "@trpc/server";
 import { logger } from "../_core/logger";
 import { getDb } from "../db";
 import {
@@ -418,7 +419,10 @@ class QueueService {
 
     const db = await getDb();
     if (!db) {
-      throw new Error("Database not available");
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
     }
 
     try {
@@ -506,7 +510,10 @@ class QueueService {
 
     const db = await getDb();
     if (!db) {
-      throw new Error("Database not available");
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
     }
 
     try {
@@ -623,10 +630,20 @@ class QueueService {
 
         // Schedule retries for unprocessed events
         for (const event of unprocessedEvents) {
+          let payload: unknown;
+          try {
+            payload = JSON.parse(event.data);
+          } catch {
+            logger.error(
+              { eventId: event.id },
+              "Failed to parse event data JSON, skipping retry"
+            );
+            continue;
+          }
           await this.scheduleWebhookRetry({
             eventId: event.id,
             eventType: event.type,
-            payload: JSON.parse(event.data),
+            payload,
           });
         }
       }
@@ -673,7 +690,10 @@ class QueueService {
 
     const db = await getDb();
     if (!db) {
-      throw new Error("Database not available");
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
     }
 
     try {

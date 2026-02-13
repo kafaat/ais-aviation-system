@@ -15,8 +15,11 @@ import {
   airports,
 } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Booking with Ancillaries Integration", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Booking with Ancillaries Integration", () => {
   let testServiceId: number;
   let testBookingId: number;
   let testUserId: number;

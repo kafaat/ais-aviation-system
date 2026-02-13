@@ -151,5 +151,5 @@ export async function triggerReconciliation(options?: {
   console.info(
     `[ReconciliationWorker] Manual reconciliation triggered: ${job.id}`
   );
-  return job.id!;
+  return job.id ?? "";
 }

@@ -146,7 +146,7 @@ export const stripeWebhookServiceV2 = {
   /**
    * Process event within transaction
    */
-  async processEvent(tx: any, event: Stripe.Event): Promise<void> {
+  processEvent(tx: any, event: Stripe.Event): Promise<void> {
     switch (event.type) {
       case "checkout.session.completed":
         return this.onCheckoutSessionCompleted(
@@ -185,7 +185,7 @@ export const stripeWebhookServiceV2 = {
 
       default:
         console.info(`[Webhook] Unhandled event type: ${event.type}`);
-        return; // Ignore unknown events safely
+        return Promise.resolve(); // Ignore unknown events safely
     }
   },
 

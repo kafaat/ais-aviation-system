@@ -733,11 +733,16 @@ export async function getFlightSeatMap(
     if (!cabinMap.has(seat.cabinClass)) {
       cabinMap.set(seat.cabinClass, new Map());
     }
-    const rowMap = cabinMap.get(seat.cabinClass)!;
-    if (!rowMap.has(seat.row)) {
-      rowMap.set(seat.row, []);
+    const rowMap = cabinMap.get(seat.cabinClass);
+    if (rowMap) {
+      if (!rowMap.has(seat.row)) {
+        rowMap.set(seat.row, []);
+      }
+      const rowSeats = rowMap.get(seat.row);
+      if (rowSeats) {
+        rowSeats.push(flightSeat);
+      }
     }
-    rowMap.get(seat.row)!.push(flightSeat);
   }
 
   // Build structured cabins array in order
@@ -745,13 +750,13 @@ export async function getFlightSeatMap(
   const cabins = cabinOrder
     .filter(cc => cabinMap.has(cc))
     .map(cabinClass => {
-      const rowMap = cabinMap.get(cabinClass)!;
+      const rowMap = cabinMap.get(cabinClass) ?? new Map();
       const rowNumbers = Array.from(rowMap.keys()).sort((a, b) => a - b);
       return {
         cabinClass,
         rows: rowNumbers.map(rowNum => ({
           row: rowNum,
-          seats: rowMap.get(rowNum)!,
+          seats: rowMap.get(rowNum) ?? [],
         })),
       };
     });
@@ -1541,10 +1546,16 @@ export async function generateBoardingPass(
   }
 
   // Get booking for PNR
+  if (!seat.bookingId) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "No booking associated with this seat assignment",
+    });
+  }
   const [booking] = await db
     .select()
     .from(bookings)
-    .where(eq(bookings.id, seat.bookingId!))
+    .where(eq(bookings.id, seat.bookingId))
     .limit(1);
 
   if (!booking) {
@@ -1748,7 +1759,8 @@ export async function getCheckInStatus(
     if (!classTotals.has(cls)) {
       classTotals.set(cls, { total: 0, checkedIn: 0 });
     }
-    const entry = classTotals.get(cls)!;
+    const entry = classTotals.get(cls);
+    if (!entry) continue;
 
     const statCount = Number(stat.cnt);
     if (stat.status === "occupied" || stat.status === "checked_in") {
@@ -1947,7 +1959,10 @@ export async function getSeatPricing(
         seatNumbers: [],
       });
     }
-    tierMap.get(key)!.seatNumbers.push(seat.seatNumber);
+    const tier = tierMap.get(key);
+    if (tier) {
+      tier.seatNumbers.push(seat.seatNumber);
+    }
   }
 
   return Array.from(tierMap.values()).map(t => ({

@@ -18,25 +18,7 @@ export async function createPriceLock(
       message: "Database not available",
     });
 
-  // Check for existing active lock
-  const [existing] = await db
-    .select()
-    .from(priceLocks)
-    .where(
-      and(
-        eq(priceLocks.userId, userId),
-        eq(priceLocks.flightId, flightId),
-        eq(priceLocks.cabinClass, cabinClass),
-        eq(priceLocks.status, "active")
-      )
-    )
-    .limit(1);
-
-  if (existing) {
-    return { lock: existing, alreadyExists: true };
-  }
-
-  // Get current flight price
+  // Get current flight price (read-only, safe outside transaction)
   const [flight] = await db
     .select({
       economyPrice: flights.economyPrice,
@@ -69,24 +51,46 @@ export async function createPriceLock(
     now.getTime() + LOCK_DURATION_HOURS * 60 * 60 * 1000
   );
 
-  const [result] = await db.insert(priceLocks).values({
-    userId,
-    flightId,
-    cabinClass,
-    lockedPrice: price,
-    originalPrice: price,
-    lockFee: LOCK_FEE_CENTS,
-    status: "active",
-    expiresAt,
+  // Use a transaction to atomically check-then-insert, preventing duplicate
+  // active locks from concurrent requests
+  return await db.transaction(async tx => {
+    // Check for existing active lock inside the transaction
+    const [existing] = await tx
+      .select()
+      .from(priceLocks)
+      .where(
+        and(
+          eq(priceLocks.userId, userId),
+          eq(priceLocks.flightId, flightId),
+          eq(priceLocks.cabinClass, cabinClass),
+          eq(priceLocks.status, "active")
+        )
+      )
+      .limit(1);
+
+    if (existing) {
+      return { lock: existing, alreadyExists: true };
+    }
+
+    const [result] = await tx.insert(priceLocks).values({
+      userId,
+      flightId,
+      cabinClass,
+      lockedPrice: price,
+      originalPrice: price,
+      lockFee: LOCK_FEE_CENTS,
+      status: "active",
+      expiresAt,
+    });
+
+    const [lock] = await tx
+      .select()
+      .from(priceLocks)
+      .where(eq(priceLocks.id, result.insertId))
+      .limit(1);
+
+    return { lock, alreadyExists: false };
   });
-
-  const [lock] = await db
-    .select()
-    .from(priceLocks)
-    .where(eq(priceLocks.id, result.insertId))
-    .limit(1);
-
-  return { lock, alreadyExists: false };
 }
 
 export async function getUserPriceLocks(userId: number) {
@@ -157,10 +161,45 @@ export async function usePriceLock(lockId: number, bookingId: number) {
       message: "Database not available",
     });
 
-  await db
-    .update(priceLocks)
-    .set({ status: "used", bookingId })
-    .where(eq(priceLocks.id, lockId));
+  // Validate the lock is active before marking as used, inside a transaction
+  // to prevent race conditions with concurrent use or expiration
+  await db.transaction(async tx => {
+    const [lock] = await tx
+      .select({ status: priceLocks.status, expiresAt: priceLocks.expiresAt })
+      .from(priceLocks)
+      .where(eq(priceLocks.id, lockId))
+      .limit(1);
+
+    if (!lock) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Price lock not found",
+      });
+    }
+
+    if (lock.status !== "active") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Price lock is ${lock.status}, cannot be used`,
+      });
+    }
+
+    if (lock.expiresAt < new Date()) {
+      await tx
+        .update(priceLocks)
+        .set({ status: "expired" })
+        .where(eq(priceLocks.id, lockId));
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Price lock has expired",
+      });
+    }
+
+    await tx
+      .update(priceLocks)
+      .set({ status: "used", bookingId })
+      .where(eq(priceLocks.id, lockId));
+  });
 }
 
 export async function getActiveLockForFlight(

@@ -93,7 +93,7 @@ export default function Home() {
     const segmentsData = validSegments.map(s => ({
       originId: s.originId,
       destinationId: s.destinationId,
-      departureDate: s.departureDate!.toISOString(),
+      departureDate: (s.departureDate as Date).toISOString(),
     }));
 
     const params = new URLSearchParams({

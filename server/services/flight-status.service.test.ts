@@ -6,8 +6,11 @@ import {
 import { getDb } from "../db";
 import { flights, bookings, users } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Flight Status Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Flight Status Service", () => {
   let testFlightId: number;
   let testBookingId: number;
   let testUserId: number;

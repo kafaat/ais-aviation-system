@@ -12,6 +12,8 @@
  * - Report generation for SLA compliance history
  */
 
+import { TRPCError } from "@trpc/server";
+
 // ============================================================================
 // Types and Interfaces
 // ============================================================================

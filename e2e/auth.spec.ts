@@ -16,10 +16,8 @@ test.describe("Authentication", () => {
     test("should display login form correctly", async ({ page }) => {
       // Check form elements are present
       await expect(page.getByLabel(/البريد الإلكتروني|Email/i)).toBeVisible();
-      await expect(page.getByLabel(/كلمة المرور|Password/i)).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-      ).toBeVisible();
+      await expect(page.locator("input#password")).toBeVisible();
+      await expect(page.locator('[data-testid="login-submit"]')).toBeVisible();
 
       // Check "forgot password" link exists
       await expect(
@@ -39,14 +37,10 @@ test.describe("Authentication", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.regular.password);
+      await page.locator("input#password").fill(testUsers.regular.password);
 
       // Submit form
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Wait for navigation away from login page
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
@@ -63,12 +57,10 @@ test.describe("Authentication", () => {
     test("should show error for invalid email format", async ({ page }) => {
       // Enter invalid email
       await page.getByLabel(/البريد الإلكتروني|Email/i).fill("invalid-email");
-      await page.getByLabel(/كلمة المرور|Password/i).fill("password123");
+      await page.locator("input#password").fill("password123");
 
       // Try to submit
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Check for validation error
       await expect(
@@ -83,12 +75,10 @@ test.describe("Authentication", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
-      await page.getByLabel(/كلمة المرور|Password/i).fill("wrongpassword");
+      await page.locator("input#password").fill("wrongpassword");
 
       // Submit form
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Wait for error message
       await page.waitForSelector('[data-testid="error-message"]', {
@@ -108,12 +98,10 @@ test.describe("Authentication", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill("nonexistent@example.com");
-      await page.getByLabel(/كلمة المرور|Password/i).fill("password123");
+      await page.locator("input#password").fill("password123");
 
       // Submit form
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Wait for error message
       await page.waitForSelector('[data-testid="error-message"]', {
@@ -130,9 +118,7 @@ test.describe("Authentication", () => {
 
     test("should require both email and password", async ({ page }) => {
       // Try to submit empty form
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator('[data-testid="login-submit"]').click();
 
       // Check for required field errors
       const emailRequired = await page
@@ -146,7 +132,7 @@ test.describe("Authentication", () => {
     });
 
     test("should mask password input", async ({ page }) => {
-      const passwordInput = page.getByLabel(/كلمة المرور|Password/i);
+      const passwordInput = page.locator("input#password");
       await expect(passwordInput).toHaveAttribute("type", "password");
 
       // Check for show/hide password toggle if exists
@@ -173,7 +159,7 @@ test.describe("Authentication", () => {
       await expect(page.getByLabel(/الاسم الأول|First name/i)).toBeVisible();
       await expect(page.getByLabel(/اسم العائلة|Last name/i)).toBeVisible();
       await expect(page.getByLabel(/البريد الإلكتروني|Email/i)).toBeVisible();
-      await expect(page.getByLabel(/كلمة المرور|Password/i)).toBeVisible();
+      await expect(page.locator("input#password")).toBeVisible();
       await expect(
         page.getByLabel(/تأكيد كلمة المرور|Confirm password/i)
       ).toBeVisible();
@@ -201,7 +187,7 @@ test.describe("Authentication", () => {
         await passwordFields.nth(1).fill("SecurePassword123!");
       } else {
         await page
-          .getByLabel(/كلمة المرور|Password/i)
+          .locator('input[type="password"]')
           .first()
           .fill("SecurePassword123!");
       }
@@ -339,12 +325,8 @@ test.describe("Authentication", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.regular.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.regular.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
     });
 
@@ -403,12 +385,8 @@ test.describe("Authentication", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.regular.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.regular.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
 
       // Refresh page
@@ -432,12 +410,8 @@ test.describe("Authentication", () => {
       await page
         .getByLabel(/البريد الإلكتروني|Email/i)
         .fill(testUsers.regular.email);
-      await page
-        .getByLabel(/كلمة المرور|Password/i)
-        .fill(testUsers.regular.password);
-      await page
-        .getByRole("button", { name: /تسجيل الدخول|Login|Sign in/i })
-        .click();
+      await page.locator("input#password").fill(testUsers.regular.password);
+      await page.locator('[data-testid="login-submit"]').click();
       await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 10000 });
 
       // Try to navigate to login page

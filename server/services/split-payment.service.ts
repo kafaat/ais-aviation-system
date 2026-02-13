@@ -536,6 +536,8 @@ export async function processPayerPayment(
 
 /**
  * Mark a split payment as paid (called from webhook)
+ * Uses a transaction to atomically mark the split as paid, check if all splits
+ * are paid, and update the booking status if so.
  */
 export async function markSplitPaid(
   splitId: number,
@@ -544,35 +546,51 @@ export async function markSplitPaid(
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  await db
-    .update(paymentSplits)
-    .set({
-      status: "paid",
-      stripePaymentIntentId: paymentIntentId,
-      paidAt: new Date(),
-    })
-    .where(eq(paymentSplits.id, splitId));
+  await db.transaction(async tx => {
+    // Mark this split as paid
+    await tx
+      .update(paymentSplits)
+      .set({
+        status: "paid",
+        stripePaymentIntentId: paymentIntentId,
+        paidAt: new Date(),
+      })
+      .where(eq(paymentSplits.id, splitId));
 
-  // Check if all splits are paid
-  const [split] = await db
-    .select()
-    .from(paymentSplits)
-    .where(eq(paymentSplits.id, splitId))
-    .limit(1);
+    // Re-fetch the split to get its bookingId
+    const [split] = await tx
+      .select()
+      .from(paymentSplits)
+      .where(eq(paymentSplits.id, splitId))
+      .limit(1);
 
-  if (split) {
-    const allPaid = await checkAllPaid(split.bookingId);
-    if (allPaid) {
-      // Update booking status to confirmed
-      await db
-        .update(bookings)
-        .set({
-          paymentStatus: "paid",
-          status: "confirmed",
-        })
-        .where(eq(bookings.id, split.bookingId));
+    if (split) {
+      // Check if all active splits for this booking are now paid
+      const activeSplits = await tx
+        .select()
+        .from(paymentSplits)
+        .where(
+          and(
+            eq(paymentSplits.bookingId, split.bookingId),
+            sql`${paymentSplits.status} NOT IN ('cancelled', 'expired')`
+          )
+        );
+
+      const allPaid =
+        activeSplits.length > 0 && activeSplits.every(s => s.status === "paid");
+
+      if (allPaid) {
+        // Update booking status to confirmed
+        await tx
+          .update(bookings)
+          .set({
+            paymentStatus: "paid",
+            status: "confirmed",
+          })
+          .where(eq(bookings.id, split.bookingId));
+      }
     }
-  }
+  });
 }
 
 /**

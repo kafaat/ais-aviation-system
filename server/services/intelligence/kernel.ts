@@ -278,7 +278,7 @@ export class IntelligenceKernel {
   /**
    * Assess fraud for a specific booking
    */
-  async assessBookingFraud(
+  assessBookingFraud(
     bookingId: number,
     userId: number,
     context: IntelligenceContext
@@ -289,21 +289,21 @@ export class IntelligenceKernel {
   /**
    * Predict delay for a specific flight
    */
-  async predictFlightDelay(flightId: number, context: IntelligenceContext) {
+  predictFlightDelay(flightId: number, context: IntelligenceContext) {
     return operationsAgent.predictDelay(flightId, context);
   }
 
   /**
    * Get disruption forecast
    */
-  async getDisruptionForecast(context: IntelligenceContext) {
+  getDisruptionForecast(context: IntelligenceContext) {
     return operationsAgent.forecastDisruptions(context);
   }
 
   /**
    * Get economics analysis
    */
-  async getEconomicsAnalysis(context: IntelligenceContext) {
+  getEconomicsAnalysis(context: IntelligenceContext) {
     return economicsAgent.analyze(context);
   }
 
@@ -358,7 +358,7 @@ export class IntelligenceKernel {
   // Private Helpers
   // ============================================================================
 
-  private async runWithTimeout<T>(
+  private runWithTimeout<T>(
     fn: () => Promise<T>,
     timeoutMs: number
   ): Promise<T> {

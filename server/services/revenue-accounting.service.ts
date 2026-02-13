@@ -6,6 +6,7 @@
  * All monetary amounts are in SAR cents (100 = 1 SAR).
  */
 
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   bookings,
@@ -207,7 +208,11 @@ export async function recordRevenueEntry(
   amount: number
 ): Promise<RevenueEntry> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [booking] = await db
     .select({
@@ -221,7 +226,10 @@ export async function recordRevenueEntry(
     .where(eq(bookings.id, bookingId));
 
   if (!booking) {
-    throw new Error(`Booking ${bookingId} not found`);
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `Booking ${bookingId} not found`,
+    });
   }
 
   const [flight] = await db
@@ -285,7 +293,11 @@ export async function calculateDeferredRevenue(): Promise<{
   items: DeferredRevenueItem[];
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const now = new Date();
 
@@ -334,7 +346,11 @@ export async function calculateRecognizedRevenue(
   endDate?: Date
 ): Promise<{ total: number; byDay: Array<{ date: string; amount: number }> }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const conditions = [
     eq(bookings.status, "confirmed"),
@@ -385,7 +401,11 @@ export async function getRevenueByRoute(
   endDate?: Date
 ): Promise<RouteRevenue[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Need to alias airports for origin and destination
   const conditions = [
@@ -482,7 +502,11 @@ export async function getRevenueByClass(
   endDate?: Date
 ): Promise<ClassRevenue[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const conditions = [
     sql`${bookings.status} != 'cancelled'`,
@@ -536,7 +560,11 @@ export async function getRevenueByChannel(
   endDate?: Date
 ): Promise<ChannelRevenue[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const { corporateBookings } = await import("../../drizzle/schema");
   const { agentBookings } = await import("../../drizzle/schema");
@@ -644,7 +672,11 @@ export async function getAncillaryRevenue(
   breakdown: AncillaryRevenueBreakdown[];
 }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const dateFilter =
     startDate && endDate
@@ -700,7 +732,11 @@ export async function calculateYield(
   flightId: number
 ): Promise<YieldAnalysis | null> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const [flight] = await db
     .select({
@@ -777,7 +813,11 @@ export async function getYieldAnalysis(
   limit: number = 20
 ): Promise<YieldAnalysis[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const conditions = [
     sql`${bookings.status} != 'cancelled'`,
@@ -871,7 +911,11 @@ export async function generateRevenueReport(
   _generatedBy: number
 ): Promise<GeneratedReport> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const periodStart = new Date(year, month - 1, 1);
   const periodEnd = new Date(year, month, 0, 23, 59, 59, 999);
@@ -981,7 +1025,11 @@ export async function getRefundImpact(
   endDate?: Date
 ): Promise<RefundImpact> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const refundConditions = [eq(payments.status, "refunded")];
   const bookingConditions: ReturnType<typeof eq>[] = [];
@@ -1056,7 +1104,11 @@ export async function getRevenueDashboard(
   endDate?: Date
 ): Promise<RevenueOverview> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   const conditions = [
     sql`${bookings.status} != 'cancelled'`,
@@ -1210,7 +1262,11 @@ export async function getReports(
   limit: number = 12
 ): Promise<GeneratedReport[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
 
   // Get months that have booking data
   const monthlyData = await db

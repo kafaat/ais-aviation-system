@@ -9,8 +9,11 @@ import {
 } from "../../drizzle/schema";
 import * as priceAlertsService from "./price-alerts.service";
 import { eq } from "drizzle-orm";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Price Alerts Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Price Alerts Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testOriginId: number;

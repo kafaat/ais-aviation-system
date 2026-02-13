@@ -32,23 +32,25 @@ export async function setAutoCheckIn(userId: number, enabled: boolean) {
     });
   }
 
-  const existing = await database
-    .select()
-    .from(userPreferences)
-    .where(eq(userPreferences.userId, userId))
-    .limit(1);
+  await database.transaction(async tx => {
+    const existing = await tx
+      .select()
+      .from(userPreferences)
+      .where(eq(userPreferences.userId, userId))
+      .limit(1);
 
-  if (existing.length > 0) {
-    await database
-      .update(userPreferences)
-      .set({ autoCheckIn: enabled })
-      .where(eq(userPreferences.userId, userId));
-  } else {
-    await database.insert(userPreferences).values({
-      userId,
-      autoCheckIn: enabled,
-    });
-  }
+    if (existing.length > 0) {
+      await tx
+        .update(userPreferences)
+        .set({ autoCheckIn: enabled })
+        .where(eq(userPreferences.userId, userId));
+    } else {
+      await tx.insert(userPreferences).values({
+        userId,
+        autoCheckIn: enabled,
+      });
+    }
+  });
 
   return { autoCheckIn: enabled };
 }

@@ -55,7 +55,11 @@ export async function createNotification(
 ): Promise<{ id: number }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [result] = await database.insert(notifications).values({
       userId,
@@ -66,7 +70,14 @@ export async function createNotification(
       isRead: false,
     });
 
-    const insertId = (result as any).insertId;
+    const insertId = (result as any)?.insertId;
+
+    if (insertId == null) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to retrieve notification ID after insert",
+      });
+    }
 
     console.info(
       `[Notification] Created notification ${insertId} for user ${userId}: ${type}`
@@ -120,7 +131,11 @@ export async function getUserNotifications(
 ) {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const { limit = 20, offset = 0, type, unreadOnly = false } = options;
 
@@ -173,7 +188,11 @@ export async function markAsRead(
 ): Promise<{ success: boolean }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     // Verify notification belongs to user
     const [notification] = await database
@@ -227,7 +246,11 @@ export async function markAllAsRead(
 ): Promise<{ count: number }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const result = await database
       .update(notifications)
@@ -264,7 +287,11 @@ export async function deleteNotification(
 ): Promise<{ success: boolean }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     // Verify notification belongs to user
     const [notification] = await database
@@ -314,7 +341,11 @@ export async function getUnreadCount(
 ): Promise<{ count: number }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const [result] = await database
       .select({ count: count() })
@@ -341,7 +372,11 @@ export async function deleteAllNotifications(
 ): Promise<{ count: number }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const result = await database
       .delete(notifications)
@@ -370,7 +405,7 @@ export async function deleteAllNotifications(
 /**
  * Create a booking confirmation notification
  */
-export async function notifyBookingConfirmed(
+export function notifyBookingConfirmed(
   userId: number,
   bookingReference: string,
   flightNumber: string,
@@ -393,7 +428,7 @@ export async function notifyBookingConfirmed(
 /**
  * Create a flight status update notification
  */
-export async function notifyFlightStatusUpdate(
+export function notifyFlightStatusUpdate(
   userId: number,
   flightNumber: string,
   status: string,
@@ -419,7 +454,7 @@ export async function notifyFlightStatusUpdate(
 /**
  * Create a payment notification
  */
-export async function notifyPaymentReceived(
+export function notifyPaymentReceived(
   userId: number,
   amount: number,
   bookingReference: string,
@@ -443,7 +478,7 @@ export async function notifyPaymentReceived(
 /**
  * Create a refund notification
  */
-export async function notifyRefundProcessed(
+export function notifyRefundProcessed(
   userId: number,
   amount: number,
   bookingReference: string
@@ -465,7 +500,7 @@ export async function notifyRefundProcessed(
 /**
  * Create a promotional notification
  */
-export async function notifyPromotion(
+export function notifyPromotion(
   userId: number,
   title: string,
   message: string,
@@ -481,7 +516,7 @@ export async function notifyPromotion(
 /**
  * Create a system notification
  */
-export async function notifySystem(
+export function notifySystem(
   userId: number,
   title: string,
   message: string,
@@ -493,7 +528,7 @@ export async function notifySystem(
 /**
  * Create a check-in reminder notification
  */
-export async function notifyCheckInReminder(
+export function notifyCheckInReminder(
   userId: number,
   flightNumber: string,
   departureTime: Date,
@@ -517,7 +552,7 @@ export async function notifyCheckInReminder(
 /**
  * Create a miles earned notification
  */
-export async function notifyMilesEarned(
+export function notifyMilesEarned(
   userId: number,
   milesEarned: number,
   newBalance: number,
@@ -549,7 +584,11 @@ export async function createBulkNotifications(
 ): Promise<{ count: number }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const notificationValues = userIds.map(userId => ({
       userId,
@@ -585,7 +624,11 @@ export async function cleanupOldNotifications(
 ): Promise<{ count: number }> {
   try {
     const database = await getDb();
-    if (!database) throw new Error("Database not available");
+    if (!database)
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Database not available",
+      });
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOld);

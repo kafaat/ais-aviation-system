@@ -793,7 +793,7 @@ function calculateEngagementMetrics(
 
   // Users who made bookings
   const _usersWithBookings = new Set(
-    bookingEvents.filter(e => e.userId).map(e => e.userId!)
+    bookingEvents.filter(e => e.userId).map(e => e.userId ?? 0)
   );
 
   return {

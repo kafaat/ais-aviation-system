@@ -2,6 +2,7 @@ import helmet from "helmet";
 import { doubleCsrf } from "csrf-csrf";
 import type { Express, Request, Response, NextFunction } from "express";
 import { logger } from "../_core/logger";
+import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 
 // Generate a random CSRF secret if none is provided.
@@ -277,7 +278,10 @@ export function validateSecurityConfiguration(): void {
   if (issues.length > 0) {
     logger.warn({ issues }, "Security configuration issues detected");
     if (process.env.NODE_ENV === "production") {
-      throw new Error(`Security configuration errors: ${issues.join(", ")}`);
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Security configuration errors: ${issues.join(", ")}`,
+      });
     }
   } else {
     logger.info({}, "Security configuration validated successfully");

@@ -14,6 +14,7 @@
 
 import crypto from "crypto";
 import jwt, { SignOptions } from "jsonwebtoken";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { refreshTokens, users } from "../../drizzle/schema";
 import { eq, and, lt, isNull } from "drizzle-orm";
@@ -32,7 +33,10 @@ const REFRESH_TOKEN_EXPIRES_DAYS = parseInt(
 
 // Fail fast if JWT_SECRET is missing in production
 if (!JWT_SECRET && process.env.NODE_ENV === "production") {
-  throw new Error("JWT_SECRET environment variable is required in production");
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "JWT_SECRET environment variable is required in production",
+  });
 }
 
 // Warn if REFRESH_TOKEN_PEPPER is missing
@@ -254,47 +258,74 @@ export const mobileAuthServiceV2 = {
       );
     }
 
-    // 1. Verify refresh token
-    const verified = await this.verifyRefreshToken(refreshToken);
-    if (!verified) {
-      throw new AppError(
-        ErrorCode.UNAUTHORIZED,
-        "Invalid or expired refresh token"
-      );
-    }
+    const tokenHash = hashRefreshToken(refreshToken);
 
-    // 2. Get user
-    const user = await db.query.users.findFirst({
-      where: (t, { eq }) => eq(t.id, verified.userId),
+    // Use a transaction to atomically verify, revoke, and create new token
+    // This prevents a race condition where the same refresh token is used concurrently
+    const result = await db.transaction(async tx => {
+      // 1. Verify refresh token within the transaction
+      const record = await tx.query.refreshTokens.findFirst({
+        where: (t, { and, eq, gt, isNull }) =>
+          and(
+            eq(t.token, tokenHash),
+            gt(t.expiresAt, new Date()),
+            isNull(t.revokedAt)
+          ),
+      });
+
+      if (!record) {
+        throw new AppError(
+          ErrorCode.UNAUTHORIZED,
+          "Invalid or expired refresh token"
+        );
+      }
+
+      // 2. Get user
+      const user = await tx.query.users.findFirst({
+        where: (t, { eq }) => eq(t.id, record.userId),
+      });
+
+      if (!user) {
+        throw new AppError(ErrorCode.UNAUTHORIZED, "User not found");
+      }
+
+      // 3. Revoke old refresh token (token rotation)
+      await tx
+        .update(refreshTokens)
+        .set({
+          revokedAt: new Date(),
+        })
+        .where(eq(refreshTokens.id, record.id));
+
+      // 4. Create new refresh token (inline to use transaction)
+      const newToken = generateSecureToken();
+      const newTokenHash = hashRefreshToken(newToken);
+      const expiresAt = calculateRefreshTokenExpiry();
+
+      await tx.insert(refreshTokens).values({
+        userId: user.id,
+        token: newTokenHash,
+        expiresAt,
+        deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : null,
+        ipAddress: deviceInfo?.ipAddress || null,
+        createdAt: new Date(),
+      });
+
+      return { user, newToken };
     });
 
-    if (!user) {
-      throw new AppError(ErrorCode.UNAUTHORIZED, "User not found");
-    }
-
-    // 3. Revoke old refresh token (token rotation)
-    await db
-      .update(refreshTokens)
-      .set({
-        revokedAt: new Date(),
-      })
-      .where(eq(refreshTokens.id, verified.tokenId));
-
-    // 4. Create new refresh token
-    const newRefreshToken = await this.createRefreshToken(user.id, deviceInfo);
-
-    // 5. Generate new access token
+    // 5. Generate new access token (outside transaction, no DB needed)
     const accessToken = this.generateAccessToken({
-      id: user.id,
-      email: user.email,
-      role: user.role,
+      id: result.user.id,
+      email: result.user.email,
+      role: result.user.role,
     });
 
-    console.info(`[Auth] Refreshed tokens for user ${user.id}`);
+    console.info(`[Auth] Refreshed tokens for user ${result.user.id}`);
 
     return {
       accessToken,
-      refreshToken: newRefreshToken,
+      refreshToken: result.newToken,
       expiresIn: 900, // 15 minutes in seconds
     };
   },

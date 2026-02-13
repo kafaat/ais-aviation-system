@@ -182,7 +182,14 @@ export async function exportBookingsData(
     )
     .where(and(...conditions))
     .orderBy(desc(bookings.createdAt))
+    // Hard limit to prevent excessive memory usage in export queries
     .limit(50000);
+
+  if (results.length === 50000) {
+    console.warn(
+      "[DataWarehouse] exportBookingsData result count equals the 50000 limit — results may be truncated"
+    );
+  }
 
   const data = formatExportData(
     results,
@@ -316,7 +323,14 @@ export async function exportFlightsData(
     )
     .where(and(...conditions))
     .orderBy(desc(flights.departureTime))
+    // Hard limit to prevent excessive memory usage in export queries
     .limit(50000);
+
+  if (results.length === 50000) {
+    console.warn(
+      "[DataWarehouse] exportFlightsData result count equals the 50000 limit — results may be truncated"
+    );
+  }
 
   const processedRows = results.map(row => {
     const totalSeats = (row.economySeats || 0) + (row.businessSeats || 0);
@@ -568,7 +582,14 @@ export async function exportCustomerData(
     )
     .groupBy(users.id, users.role, users.createdAt, users.lastSignedIn)
     .orderBy(desc(sql`COUNT(DISTINCT ${bookings.id})`))
+    // Hard limit to prevent excessive memory usage in export queries
     .limit(50000);
+
+  if (results.length === 50000) {
+    console.warn(
+      "[DataWarehouse] exportCustomerData result count equals the 50000 limit — results may be truncated"
+    );
+  }
 
   const headers = [
     "anonymizedUserId",
@@ -829,7 +850,10 @@ export async function createExportJob(
         result = await exportOperationalData(options);
         break;
       default:
-        throw new Error(`Unknown export type: ${exportType}`);
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Unknown export type: ${exportType}`,
+        });
     }
 
     const extension = format === "jsonl" ? "jsonl" : format;
@@ -1086,7 +1110,10 @@ function formatExportData<T>(
     case "jsonl":
       return formatJSONLines(rows, headers, rowMapper);
     default:
-      throw new Error(`Unsupported export format: ${format}`);
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Unsupported export format: ${format}`,
+      });
   }
 }
 

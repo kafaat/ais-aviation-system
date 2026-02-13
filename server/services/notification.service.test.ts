@@ -15,8 +15,11 @@ import {
   notifyPaymentReceived,
   createBulkNotifications,
 } from "./notification.service";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Notification Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Notification Service", () => {
   const testUserId = 999888;
   const testUserId2 = 999889;
 

@@ -9,8 +9,11 @@ import {
 } from "../../drizzle/schema";
 import * as favoritesService from "./favorites.service";
 import { eq } from "drizzle-orm";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("Favorites Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("Favorites Service", () => {
   let db: Awaited<ReturnType<typeof getDb>>;
   let testUserId: number;
   let testOriginId: number;

@@ -255,7 +255,7 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [lint, test]
-    timeout-minutes: 30
+    timeout-minutes: 20
     continue-on-error: true # E2E tests are aspirational; don't block the pipeline
 
     services:
@@ -339,6 +339,48 @@ jobs:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
         run: pnpm exec drizzle-kit push --force
 
+      - name: Setup Python for auth service
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install auth service dependencies
+        run: pip install -r auth-service/requirements.txt
+
+      - name: Start auth service
+        env:
+          DATABASE_URL: mysql+pymysql://root:test_password@127.0.0.1:3306/ais_test
+          JWT_SECRET: test-secret-key-for-ci
+          PORT: 8000
+          DEBUG: true
+        run: |
+          cd auth-service
+          uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/auth-service.log 2>&1 &
+          echo "AUTH_PID=$!" >> $GITHUB_ENV
+          sleep 5
+          curl -sf http://localhost:8000/auth/health || (cat /tmp/auth-service.log && exit 1)
+          echo "::notice::Auth service started successfully"
+
+      - name: Seed E2E test users
+        run: |
+          # Register users via auth service (creates DB rows with passwordHash)
+          curl -sf -X POST http://localhost:8000/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"test.user@example.com","password":"TestPassword123!","name":"Test User"}' || true
+          curl -sf -X POST http://localhost:8000/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"admin@ais-aviation.com","password":"AdminPassword123!","name":"Admin User"}' || true
+          # Promote admin user role
+          mysql -h 127.0.0.1 -P 3306 -u root -ptest_password ais_test -e "
+            UPDATE users SET role='admin' WHERE email='admin@ais-aviation.com';
+          "
+          echo "::notice::E2E test users seeded"
+
+      - name: Seed flight data
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+        run: node scripts/seed-data.mjs
+
       - name: Build application
         env:
           VITE_APP_ID: ais-aviation-system-test
@@ -357,6 +399,7 @@ jobs:
           OWNER_OPEN_ID: test-owner-open-id
           BUILT_IN_FORGE_API_URL: https://api.example.com
           BUILT_IN_FORGE_API_KEY: test-forge-api-key
+          AUTH_SERVICE_URL: http://localhost:8000
         run: |
           # Quick server smoke test: start, wait, check it's alive
           node dist/index.js > /tmp/server.log 2>&1 &
@@ -385,6 +428,7 @@ jobs:
           OWNER_OPEN_ID: test-owner-open-id
           BUILT_IN_FORGE_API_URL: https://api.example.com
           BUILT_IN_FORGE_API_KEY: test-forge-api-key
+          AUTH_SERVICE_URL: http://localhost:8000
           CI: true
           E2E_BASE_URL: http://localhost:3000
         run: pnpm run test:e2e --project=chromium
