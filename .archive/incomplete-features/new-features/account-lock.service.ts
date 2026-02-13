@@ -44,9 +44,9 @@ const logger = {
  * Mask email address for logging
  */
 function maskEmail(email: string): string {
+  if (!email || !email.includes("@")) return "[MASKED_EMAIL]";
   const [localPart, domain] = email.split("@");
-  if (!domain) return "[MASKED_EMAIL]";
-  if (!localPart || localPart.length === 0) return "***@" + domain;
+  if (!domain || localPart.length === 0) return "***@" + domain;
   const maskedLocal =
     localPart.length > 2 ? `${localPart.slice(0, 2)}***` : `${localPart[0]}***`;
   return `${maskedLocal}@${domain}`;
