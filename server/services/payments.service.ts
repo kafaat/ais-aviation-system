@@ -3,22 +3,13 @@ import * as db from "../db";
 import { getDb } from "../db";
 import { payments } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
-import Stripe from "stripe";
 import {
   trackPaymentInitiated,
   trackPaymentSuccess,
   trackPaymentFailed,
   trackBookingCompleted,
 } from "./metrics.service";
-
-/**
- * Payments Service
- * Business logic for payment-related operations
- */
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2025-12-15.clover",
-});
+import { stripe } from "../stripe";
 
 export interface CreateCheckoutSessionInput {
   bookingId: number;

@@ -15,17 +15,7 @@ import {
   recordStatusChange,
   type BookingStatus,
 } from "./booking-state-machine.service";
-
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new TRPCError({
-    code: "INTERNAL_SERVER_ERROR",
-    message: "STRIPE_SECRET_KEY environment variable is required",
-  });
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2025-12-15.clover",
-});
+import { stripe } from "../stripe";
 
 /**
  * Verify Stripe webhook signature

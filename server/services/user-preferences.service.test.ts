@@ -11,8 +11,11 @@ import {
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { userPreferences } from "../../drizzle/schema";
+import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
-describe("User Preferences Service", () => {
+const dbAvailable = await isDatabaseAvailable();
+
+describe.skipIf(!dbAvailable)("User Preferences Service", () => {
   const testUserId = 999999; // Use a high ID to avoid conflicts
 
   beforeAll(async () => {

@@ -7,15 +7,7 @@ import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
 import { trackRefundIssued } from "./metrics.service";
 import { notifyRefundProcessed } from "./notification.service";
-
-/**
- * Refunds Service
- * Business logic for refund-related operations
- */
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", {
-  apiVersion: "2025-12-15.clover",
-});
+import { stripe } from "../stripe";
 
 export interface CreateRefundInput {
   bookingId: number;
