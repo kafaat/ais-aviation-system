@@ -132,9 +132,12 @@
    `overridden`/`overriddenBy`/`overrideReason`/`overriddenAt`/`supersededBy`
    - `tenantId`، ودالة `overrideAgentDecision` + راوتر
      `agentGovernance.overrideDecision` (white-box correction).
-3. ⏭️ **تالٍ — حارس عزل مستأجر في `ai-guardrails.service.ts`**: يمنع تسرّب السياق
-   عبر المستأجرين (مرتبط بأساس تعدد المستأجرين P0).
-4. ⏭️ **تالٍ — تصنيف أفعال الوكلاء** (auto-safe / requires-approval) كأول بوابة حوكمة.
+3. ✅ **مُنفَّذ — حارس عزل مستأجر في `ai-guardrails.service.ts`**:
+   `assertTenantScopedContext` + `filterContextByTenant` يمنعان تسرّب سياق
+   شركة طيران إلى prompt شركة أخرى (يُستدعى قبل تجميع السياق) + اختبارات.
+4. ✅ **مُنفَّذ — تصنيف أفعال الوكلاء** (`classifyAgentAction` /
+   `requiresApproval` في `agent-governance.service.ts`): أفعال المال/المخزون/
+   مسار الرحلة = `requires-approval`؛ الإشعار/الاقتراح = `auto-safe` + اختبارات.
 
 > **مُنفَّذ أيضاً (اقتصاديات المقعد):** `seat-economics.service.ts` +
 > راوتر `seatEconomics` (admin) يحسب لكل مقعد: الإيراد (السعر الأساسي + الخدمات

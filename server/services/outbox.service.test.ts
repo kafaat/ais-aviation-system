@@ -4,6 +4,7 @@ import {
   processEvents,
   relayOutbox,
   recordEvent,
+  loggingPublisher,
   type OutboxPublisher,
 } from "./outbox.service";
 import type { OutboxEvent } from "../../drizzle/schema";
@@ -88,5 +89,11 @@ describe("relayOutbox", () => {
     const result = await relayOutbox(publisher as never);
     expect(result).toEqual({ published: 0, failed: 0 });
     expect(publisher).not.toHaveBeenCalled();
+  });
+});
+
+describe("loggingPublisher", () => {
+  it("publishes (logs) without throwing", async () => {
+    await expect(loggingPublisher(event(1))).resolves.toBeUndefined();
   });
 });

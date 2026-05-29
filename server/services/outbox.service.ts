@@ -158,3 +158,24 @@ export async function relayOutbox(
 
   return { published: publishedIds.length, failed: failed.length };
 }
+
+/**
+ * Default publisher used until a real bus (Kafka/NATS) is wired. It logs the
+ * event so the relay is exercised end-to-end and swapping in a real publisher
+ * later is a one-line change.
+ */
+export const loggingPublisher: OutboxPublisher = event => {
+  console.info(
+    `[outbox] publish ${event.eventType} (${event.eventId}) ` +
+      `aggregate=${event.aggregateType}:${event.aggregateId} tenant=${event.tenantId ?? "-"}`
+  );
+  return Promise.resolve();
+};
+
+/** Convenience entry point for the cron/worker tick. */
+export async function runOutboxRelay(): Promise<{
+  published: number;
+  failed: number;
+}> {
+  return await relayOutbox(loggingPublisher);
+}

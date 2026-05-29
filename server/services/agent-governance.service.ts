@@ -132,7 +132,38 @@ export async function getAiCostBreakdown(
 }
 
 // ---------------------------------------------------------------------------
-// 2. White-box agent decisions (override / rollback)
+// 2. Agent action governance (approval gates)
+// ---------------------------------------------------------------------------
+
+export type AgentActionClass = "auto-safe" | "requires-approval";
+
+/**
+ * Actions that mutate money, inventory, or a customer's itinerary must NOT be
+ * executed autonomously — they require human approval. Everything else
+ * (notify/suggest/analyze) is auto-safe. This is the first governance gate for
+ * "always-on" agents on a mission-critical system.
+ */
+const REQUIRES_APPROVAL = new Set<string>([
+  "price_change",
+  "booking_cancel",
+  "booking_rebook",
+  "refund",
+  "overbooking",
+  "compensation",
+  "voucher_issue",
+  "credit_issue",
+]);
+
+export function classifyAgentAction(actionType: string): AgentActionClass {
+  return REQUIRES_APPROVAL.has(actionType) ? "requires-approval" : "auto-safe";
+}
+
+export function requiresApproval(actionType: string): boolean {
+  return classifyAgentAction(actionType) === "requires-approval";
+}
+
+// ---------------------------------------------------------------------------
+// 3. White-box agent decisions (override / rollback)
 // ---------------------------------------------------------------------------
 
 /**

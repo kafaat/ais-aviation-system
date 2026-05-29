@@ -4,6 +4,8 @@ import {
   getAiCostBreakdown,
   overrideAgentDecision,
   recordAiUsage,
+  classifyAgentAction,
+  requiresApproval,
 } from "./agent-governance.service";
 
 vi.mock("../db");
@@ -99,5 +101,27 @@ describe("overrideAgentDecision", () => {
         supersededBy: 6,
       })
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("classifyAgentAction / requiresApproval", () => {
+  it("flags money/inventory/itinerary actions as requires-approval", () => {
+    for (const a of [
+      "price_change",
+      "booking_cancel",
+      "refund",
+      "overbooking",
+      "compensation",
+    ]) {
+      expect(classifyAgentAction(a)).toBe("requires-approval");
+      expect(requiresApproval(a)).toBe(true);
+    }
+  });
+
+  it("treats notify/suggest/analyze as auto-safe", () => {
+    for (const a of ["notify", "suggest", "analyze", "summarize", "unknown"]) {
+      expect(classifyAgentAction(a)).toBe("auto-safe");
+      expect(requiresApproval(a)).toBe(false);
+    }
   });
 });

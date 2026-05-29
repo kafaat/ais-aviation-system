@@ -6,7 +6,10 @@
  * - Content filtering (inappropriate content detection)
  * - Message length validation
  * - Rate limiting awareness
+ * - Tenant-isolation guard for AI context
  */
+
+import { TRPCError } from "@trpc/server";
 
 // ============================================================================
 // PII Patterns
@@ -184,6 +187,45 @@ export function sanitizeResponse(response: string): string {
   // Mask any PII that might have leaked into the response
   const { masked } = maskPII(response);
   return masked;
+}
+
+/**
+ * Tenant-isolation guard for the AI layer.
+ *
+ * In a multi-tenant SaaS, any context/memory fed into a prompt MUST belong to
+ * the requesting tenant — otherwise one airline's data could leak into another
+ * airline's AI responses (a worse breach than a leaked DB row). Call this
+ * before assembling prompt context.
+ *
+ * Rules: no requesting tenant (single-tenant / platform) => allowed; a context
+ * item with no tenant (legacy/global) => allowed; a mismatched tenant => blocked.
+ */
+export function assertTenantScopedContext(
+  itemTenantId: number | null | undefined,
+  requestTenantId: number | null | undefined
+): void {
+  if (requestTenantId == null) return;
+  if (itemTenantId != null && itemTenantId !== requestTenantId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Cross-tenant AI context blocked",
+    });
+  }
+}
+
+/**
+ * Drop any context items that don't belong to the requesting tenant before
+ * they reach the model. Returns the input unchanged when there is no tenant
+ * context (single-tenant mode).
+ */
+export function filterContextByTenant<T extends { tenantId?: number | null }>(
+  items: T[],
+  requestTenantId: number | null | undefined
+): T[] {
+  if (requestTenantId == null) return items;
+  return items.filter(
+    item => item.tenantId == null || item.tenantId === requestTenantId
+  );
 }
 
 /**

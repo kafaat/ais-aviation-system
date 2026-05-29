@@ -140,8 +140,11 @@ Monolith أحادي المستأجر** (single-tenant). للتحوّل إلى **
     إعادة محاولة (attempts/maxAttempts → `failed`).
   - **ناشر قابل للاستبدال** (`OutboxPublisher`) — تبنّي Kafka/NATS لاحقاً =
     تبديل الناشر فقط، دون تغيير المنتِجين.
-- ⏭️ **المتبقّي:** ربط الـ relay بمؤقّت (cron/worker) + ناشر Kafka/NATS فعلي +
-  تعميم `recordEvent` على أحداث الحجز/الدفع/الاسترداد ضمن معاملاتها.
+- ✅ **الـ relay موصول بمؤقّت:** `relayOutboxEvents` يعمل كل دقيقة في
+  `cron.service.ts` عبر `runOutboxRelay` + ناشر افتراضي (`loggingPublisher`)
+  قابل للاستبدال بـ Kafka/NATS.
+- ⏭️ **المتبقّي:** ناشر Kafka/NATS فعلي + تعميم `recordEvent` على أحداث
+  الحجز/الدفع/الاسترداد ضمن معاملاتها.
 - **Temporal** لتنسيق العمليات الطويلة الحرجة:
   - `BookingWorkflow` (hold → pay → ticket → confirm، مع timeouts/compensation).
   - `RefundWorkflow`, `IROPSWorkflow` (rebooking + hotel + compensation EU261),
