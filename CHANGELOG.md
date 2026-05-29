@@ -3,6 +3,7 @@
 ## What's Changed in v1.19.1
 
 ### Bug Fixes
+
 - fix: critical bug fixes and comprehensive type safety improvements (1fb5014)
 - fix: comprehensive review - service bugs, type safety, docs update (a8f4b1e)
 - fix: comprehensive service audit - transactions, validation, performance (2880c00)
@@ -16,12 +17,11 @@
 - fix(e2e): seed test users before E2E tests to fix login timeouts (0008a50)
 
 ### Other Changes
+
 - merge: resolve CHANGELOG.md conflict with main (9c83bdb)
 - Merge pull request #73 from kafaat/claude/fix-gaps-and-bugs-Tzdte (2e46df2)
 
-
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.19.0...v1.19.1
-
 
 ---
 
