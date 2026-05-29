@@ -115,12 +115,18 @@ Monolith أحادي المستأجر** (single-tenant). للتحوّل إلى **
 - ✅ `tenant.service.ts` (إنشاء/جلب/قائمة/تحقق نشاط المستأجر).
 - ✅ `aiGatewayLog` / `agentDecisions` يحملان `tenantId` (عزل الطبقة الذكية).
 
+**التقدّم الإضافي:**
+
+- ✅ `tenantId` (+فهرس) على الجداول المعاملاتية الأساسية: `flights`, `bookings`,
+  `passengers`, `payments` (هجرة `0008`، nullable للتوافق الرجعي).
+- ✅ **Tenant-scope helpers** (`tenant-scope.service.ts`): `tenantCondition`
+  (null-safe ومدرك للترحيل) + `strictTenantCondition` + `tenantStamp` + اختبارات،
+  ومطبّقة فعلياً في مسار `getFlightEconomics` (يمرّر `ctx.tenantId`).
+
 **المتبقّي في هذه المرحلة:**
 
-- ⏭️ إضافة `tenantId` للجداول المعاملاتية (bookings, flights, payments, ...)
-  - ترحيل بيانات + فهارس مركّبة.
-- ⏭️ **Tenant-scoped query wrapper** يحقن `eq(table.tenantId, ctx.tenantId)`
-  افتراضياً (بدل الفرض اليدوي).
+- ⏭️ Backfill بيانات `tenantId` ثم التشديد إلى NOT NULL + `strictTenantCondition`.
+- ⏭️ تعميم `tenantCondition` على بقية مسارات القراءة/الكتابة (تدريجياً لكل راوتر).
 - ⏭️ اشتقاق المستأجر من subdomain/API-key على البوابة + اختبارات عزل لكل جدول.
 - **النتيجة المستهدفة:** أول شركتي طيران تعملان بمعزل تام على نفس النشر.
 

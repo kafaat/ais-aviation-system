@@ -162,6 +162,8 @@ export const flights = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     flightNumber: varchar("flightNumber", { length: 10 }).notNull(),
     airlineId: int("airlineId").notNull(),
+    // Tenant (airline) that owns this flight. Nullable during migration.
+    tenantId: int("tenantId"),
     originId: int("originId").notNull(),
     destinationId: int("destinationId").notNull(),
     departureTime: timestamp("departureTime").notNull(),
@@ -189,6 +191,7 @@ export const flights = mysqlTable(
     departureTimeIdx: index("departure_time_idx").on(table.departureTime),
     routeIdx: index("route_idx").on(table.originId, table.destinationId),
     airlineIdx: index("airline_idx").on(table.airlineId),
+    tenantIdx: index("flights_tenant_idx").on(table.tenantId),
     statusIdx: index("status_idx").on(table.status),
     // Composite index for common search pattern: route + date + status
     routeDateStatusIdx: index("route_date_status_idx").on(
@@ -210,6 +213,8 @@ export const bookings = mysqlTable(
   "bookings",
   {
     id: int("id").autoincrement().primaryKey(),
+    // Tenant (airline) this booking belongs to. Nullable during migration.
+    tenantId: int("tenantId"),
     userId: int("userId").notNull(),
     flightId: int("flightId").notNull(),
     bookingReference: varchar("bookingReference", { length: 6 })
@@ -249,6 +254,7 @@ export const bookings = mysqlTable(
   table => ({
     userIdIdx: index("user_id_idx").on(table.userId),
     pnrIdx: index("pnr_idx").on(table.pnr),
+    tenantIdx: index("bookings_tenant_idx").on(table.tenantId),
     // Index for flight-based queries (flight manifest, seat availability)
     flightIdIdx: index("bookings_flight_id_idx").on(table.flightId),
     // Index for status filtering (admin panels, reports)
@@ -305,6 +311,8 @@ export const passengers = mysqlTable(
   "passengers",
   {
     id: int("id").autoincrement().primaryKey(),
+    // Tenant (airline) this passenger belongs to. Nullable during migration.
+    tenantId: int("tenantId"),
     bookingId: int("bookingId").notNull(),
     type: mysqlEnum("type", ["adult", "child", "infant"])
       .default("adult")
@@ -327,6 +335,7 @@ export const passengers = mysqlTable(
     ),
     // Index for passport lookups (identity verification)
     passportIdx: index("passengers_passport_idx").on(table.passportNumber),
+    tenantIdx: index("passengers_tenant_idx").on(table.tenantId),
     // Composite index for name search (customer lookup)
     nameIdx: index("passengers_name_idx").on(table.lastName, table.firstName),
     // Index for passenger type filtering (pricing calculations)
@@ -396,6 +405,8 @@ export const payments = mysqlTable(
   "payments",
   {
     id: int("id").autoincrement().primaryKey(),
+    // Tenant (airline) this payment belongs to. Nullable during migration.
+    tenantId: int("tenantId"),
     bookingId: int("bookingId").notNull(),
     amount: int("amount").notNull(), // Amount in SAR cents
     currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
@@ -437,6 +448,7 @@ export const payments = mysqlTable(
   table => ({
     bookingIdIdx: index("booking_id_idx").on(table.bookingId),
     idempotencyKeyIdx: index("idempotency_key_idx").on(table.idempotencyKey),
+    tenantIdx: index("payments_tenant_idx").on(table.tenantId),
     // Index for status filtering (reconciliation, reports)
     statusIdx: index("payments_status_idx").on(table.status),
     // Index for Stripe payment intent lookups

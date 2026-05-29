@@ -20,6 +20,7 @@
 
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
+import { tenantCondition } from "./tenant-scope.service";
 import {
   bookings,
   passengers,
@@ -385,7 +386,8 @@ export interface FlightEconomics {
  * "paid"); refunded/failed/pending bookings are excluded.
  */
 export async function getFlightEconomics(
-  flightId: number
+  flightId: number,
+  opts: { tenantId?: number | null } = {}
 ): Promise<FlightEconomics> {
   const db = await getDbOrThrow();
 
@@ -393,7 +395,12 @@ export async function getFlightEconomics(
     .select({ id: bookings.id })
     .from(bookings)
     .where(
-      and(eq(bookings.flightId, flightId), eq(bookings.paymentStatus, "paid"))
+      and(
+        eq(bookings.flightId, flightId),
+        eq(bookings.paymentStatus, "paid"),
+        // Tenant isolation (no-op when the caller has no tenant context).
+        tenantCondition(bookings.tenantId, opts.tenantId)
+      )
     );
 
   let seatCount = 0;

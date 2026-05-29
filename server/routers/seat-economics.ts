@@ -55,7 +55,9 @@ export const seatEconomicsRouter = router({
       },
     })
     .input(z.object({ flightId: z.number().int().positive() }))
-    .query(async ({ input }) => {
-      return await getFlightEconomics(input.flightId);
+    .query(async ({ input, ctx }) => {
+      return await getFlightEconomics(input.flightId, {
+        tenantId: ctx.tenantId,
+      });
     }),
 });
