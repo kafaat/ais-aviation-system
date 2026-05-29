@@ -91,6 +91,7 @@ import { agentGovernanceRouter } from "./routers/agent-governance";
 
 // Revenue & finance
 import { seatEconomicsRouter } from "./routers/seat-economics";
+import { priceQuoteRouter } from "./routers/price-quote";
 
 // Webhook handlers
 import { webhooksRouter } from "./routers/webhooks";
@@ -205,6 +206,7 @@ export const appRouter = router({
   intelligence: intelligenceRouter,
   agentGovernance: agentGovernanceRouter,
   seatEconomics: seatEconomicsRouter,
+  priceQuote: priceQuoteRouter,
 
   // Webhook handlers
   webhooks: webhooksRouter,
