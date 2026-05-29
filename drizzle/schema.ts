@@ -13,6 +13,37 @@ import {
 } from "drizzle-orm/mysql-core";
 
 /**
+ * Tenants = the airlines onboarded onto the AIS SaaS platform. This is the
+ * foundation of multi-tenancy: every user (and, progressively, every
+ * transactional row) is scoped to a tenant. Nullable links keep the system
+ * backward-compatible during the single-tenant -> multi-tenant migration.
+ */
+export const tenants = mysqlTable(
+  "tenants",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    // Short stable identifier used in subdomains / API keys, e.g. "sv", "xy".
+    slug: varchar("slug", { length: 64 }).notNull().unique(),
+    name: varchar("name", { length: 255 }).notNull(),
+    // Optional IATA airline code for the tenant.
+    airlineCode: varchar("airlineCode", { length: 3 }),
+    status: mysqlEnum("status", ["active", "suspended", "pending"])
+      .default("active")
+      .notNull(),
+    contactEmail: varchar("contactEmail", { length: 320 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    slugIdx: uniqueIndex("tenants_slug_idx").on(table.slug),
+    statusIdx: index("tenants_status_idx").on(table.status),
+  })
+);
+
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = typeof tenants.$inferInsert;
+
+/**
  * Core user table backing auth flow.
  */
 export const users = mysqlTable(
@@ -20,6 +51,9 @@ export const users = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     openId: varchar("openId", { length: 64 }).notNull().unique(),
+    // Tenant (airline) this user belongs to. Nullable until tenancy is fully
+    // rolled out; platform/super-admin users may legitimately have no tenant.
+    tenantId: int("tenantId"),
     name: text("name"),
     email: varchar("email", { length: 320 }),
     loginMethod: varchar("loginMethod", { length: 64 }),
@@ -44,6 +78,8 @@ export const users = mysqlTable(
     emailIdx: index("users_email_idx").on(table.email),
     // Index for role-based queries (admin panels, RBAC)
     roleIdx: index("users_role_idx").on(table.role),
+    // Index for tenant-scoped user queries
+    tenantIdx: index("users_tenant_idx").on(table.tenantId),
     // Index for user listing sorted by creation date
     createdAtIdx: index("users_created_at_idx").on(table.createdAt),
     // Composite index for role + createdAt (admin user listing with filters)

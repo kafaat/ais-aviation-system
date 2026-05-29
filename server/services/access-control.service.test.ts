@@ -7,6 +7,7 @@ import {
   assertSplitOwnership,
   assertPassengerOwnership,
   assertModificationOwnership,
+  assertTenant,
 } from "./access-control.service";
 
 vi.mock("../db");
@@ -114,6 +115,29 @@ describe("access-control.service — tenant isolation", () => {
       await expect(assertModificationOwnership(2, 42)).rejects.toMatchObject({
         code: "FORBIDDEN",
       });
+    });
+  });
+
+  describe("assertTenant", () => {
+    it("allows when tenants match", () => {
+      expect(() => assertTenant(7, 7)).not.toThrow();
+    });
+
+    it("rejects when tenants differ", () => {
+      expect(() => assertTenant(7, 8)).toThrow();
+    });
+
+    it("rejects a caller with no tenant accessing tenant data", () => {
+      expect(() => assertTenant(7, null)).toThrow();
+    });
+
+    it("allows legacy/unassigned (null) resource tenant through", () => {
+      expect(() => assertTenant(null, 8)).not.toThrow();
+    });
+
+    it("lets admins cross tenants", () => {
+      vi.mocked(rbac.isAdmin).mockReturnValue(true);
+      expect(() => assertTenant(7, 8, "admin")).not.toThrow();
     });
   });
 });

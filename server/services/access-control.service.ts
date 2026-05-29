@@ -164,6 +164,34 @@ export async function assertModificationOwnership(
 }
 
 /**
+ * Assert that a resource belonging to `resourceTenantId` may be accessed by a
+ * caller scoped to `ctxTenantId`. This is the tenant-isolation counterpart to
+ * the per-user ownership checks above: it prevents one airline's users from
+ * touching another airline's data.
+ *
+ * Rules:
+ *  - Admins (isAdmin(role)) bypass — platform support can cross tenants.
+ *  - A null resource tenant (legacy/unassigned data) is allowed through so the
+ *    single-tenant -> multi-tenant migration doesn't break existing rows.
+ *  - Otherwise the caller's tenant must match the resource's tenant; a caller
+ *    with no tenant context is rejected.
+ */
+export function assertTenant(
+  resourceTenantId: number | null | undefined,
+  ctxTenantId: number | null | undefined,
+  userRole?: string
+): void {
+  if (userRole && isAdmin(userRole)) return;
+  if (resourceTenantId == null) return;
+  if (ctxTenantId == null || ctxTenantId !== resourceTenantId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Cross-tenant access denied",
+    });
+  }
+}
+
+/**
  * Convenience boolean check (does not throw) for places that need conditional
  * logic rather than an exception.
  */
