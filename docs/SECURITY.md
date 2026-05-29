@@ -75,21 +75,68 @@ User → OAuth Server (Manus) → JWT Token → Backend Validation → Access Gr
 export const publicProcedure = t.procedure;
 
 // Protected endpoint
-export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.user) {
-    throw new TRPCError({ code: "UNAUTHORIZED" });
+    throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
   }
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-// Admin endpoint
-export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
-  if (!ctx.user.isAdmin) {
-    throw new TRPCError({ code: "FORBIDDEN" });
+// Admin endpoint — role-based via isAdmin() (server/services/rbac.service.ts)
+export const adminProcedure = t.procedure.use(({ ctx, next }) => {
+  if (!ctx.user || !isAdmin(ctx.user.role)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
   }
-  return next();
+  return next({ ctx: { ...ctx, user: ctx.user } });
 });
 ```
+
+### Resource Ownership & Tenant Isolation
+
+`protectedProcedure` only guarantees that **a** user is authenticated — it does
+**not** guarantee the caller owns the resource referenced by their input. Any
+endpoint that accepts a resource ID from the client (`bookingId`, `splitId`,
+`passengerId`, `modificationId`, …) and then reads/mutates by that ID **must**
+verify ownership, otherwise it is vulnerable to IDOR (Insecure Direct Object
+Reference) and cross-tenant data leakage.
+
+Ownership checks are centralized in
+[`server/services/access-control.service.ts`](../server/services/access-control.service.ts):
+
+| Helper                                                       | Use when the input is a… | Behavior                                         |
+| ------------------------------------------------------------ | ------------------------ | ------------------------------------------------ |
+| `assertBookingOwnership(bookingId, userId, role?)`           | booking ID               | `NOT_FOUND` if missing, `FORBIDDEN` if not owner |
+| `assertSplitOwnership(splitId, userId, role?)`               | split-payment ID         | resolves split → booking → owner                 |
+| `assertPassengerOwnership(passengerId, userId, role?)`       | passenger ID             | resolves passenger → booking → owner             |
+| `assertModificationOwnership(modificationId, userId, role?)` | modification ID          | checks `bookingModifications.userId`             |
+| `isBookingOwnedBy(bookingId, userId)`                        | boolean check            | non-throwing variant                             |
+
+Admins (per `isAdmin(role)`) bypass the ownership check so support staff can
+service any tenant.
+
+**Required pattern:**
+
+```typescript
+getStatus: protectedProcedure
+  .input(z.object({ bookingId: z.number() }))
+  .query(async ({ input, ctx }) => {
+    // Reject access to bookings the caller does not own (admins bypass)
+    await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+    return await service.getSplitPaymentStatus(input.bookingId);
+  });
+```
+
+Endpoints currently protected by these helpers include refunds
+(`checkRefundable`, `calculateCancellationFee`), split payments (`getStatus`,
+`sendRequest`, `resendRequest`, `sendAllRequests`, `cancelSplit`, `cancelAll`,
+`checkAllPaid`), baggage (`register`, `getBookingBaggage`,
+`getPassengerBaggage`), and booking modifications (`getDetails`). Bookings,
+payments, wallet, saved-passengers, price-alerts, notifications and favorites
+enforce ownership inline by scoping every query to `ctx.user.id`.
+
+> **Review rule:** when adding any `protectedProcedure` that takes a resource ID
+> as input, add the matching `assert*Ownership` call (or scope the query to
+> `ctx.user.id`) before touching the resource.
 
 ### Session Management
 

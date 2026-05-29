@@ -7,6 +7,10 @@ import {
 } from "../_core/trpc";
 import * as baggageService from "../services/baggage.service";
 import { TRPCError } from "@trpc/server";
+import {
+  assertBookingOwnership,
+  assertPassengerOwnership,
+} from "../services/access-control.service";
 
 // Baggage status enum for validation
 const baggageStatusEnum = z.enum([
@@ -85,7 +89,21 @@ export const baggageRouter = router({
         specialHandling: z.string().max(255).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // Ownership check: only register baggage on your own booking (IDOR)
+      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
+      // Ensure the passenger actually belongs to this booking
+      const passengerBookingId = await assertPassengerOwnership(
+        input.passengerId,
+        ctx.user.id,
+        ctx.user.role
+      );
+      if (passengerBookingId !== input.bookingId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Passenger does not belong to the specified booking",
+        });
+      }
       try {
         const baggage = await baggageService.registerBaggage({
           bookingId: input.bookingId,
@@ -100,6 +118,7 @@ export const baggageRouter = router({
           baggage,
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         const message =
           error instanceof Error ? error.message : "Failed to register baggage";
         throw new TRPCError({
@@ -119,11 +138,14 @@ export const baggageRouter = router({
         bookingId: z.number(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Ownership check: prevent reading another user's baggage (IDOR)
+      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
       try {
         const baggage = await baggageService.getBookingBaggage(input.bookingId);
         return baggage;
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         const message =
           error instanceof Error ? error.message : "Failed to get baggage";
         throw new TRPCError({
@@ -143,13 +165,20 @@ export const baggageRouter = router({
         passengerId: z.number(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Ownership check: passenger must belong to a booking owned by caller (IDOR)
+      await assertPassengerOwnership(
+        input.passengerId,
+        ctx.user.id,
+        ctx.user.role
+      );
       try {
         const baggage = await baggageService.getPassengerBaggage(
           input.passengerId
         );
         return baggage;
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         const message =
           error instanceof Error ? error.message : "Failed to get baggage";
         throw new TRPCError({

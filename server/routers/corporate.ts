@@ -380,7 +380,34 @@ export const corporateRouter = router({
         message: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Authorization: caller must be system admin OR an admin of the SAME
+      // corporate account the target member belongs to (tenant isolation).
+      const target = await corporateService.getCorporateUserById(
+        input.corporateUserId
+      );
+      if (!target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Corporate user not found",
+        });
+      }
+      const isSystemAdmin = ctx.user.role === "admin";
+      if (!isSystemAdmin) {
+        const userAccount = await corporateService.getUserCorporateAccount(
+          ctx.user.id
+        );
+        const isAccountAdmin =
+          userAccount?.id === target.corporateAccountId &&
+          userAccount?.role === "admin";
+        if (!isAccountAdmin) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You do not have access to this corporate account",
+          });
+        }
+      }
+
       await corporateService.removeUserFromCorporate(input.corporateUserId);
       return {
         success: true,
@@ -416,7 +443,34 @@ export const corporateRouter = router({
         message: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      // Authorization: caller must be system admin OR an admin of the SAME
+      // corporate account the target member belongs to (tenant isolation).
+      const target = await corporateService.getCorporateUserById(
+        input.corporateUserId
+      );
+      if (!target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Corporate user not found",
+        });
+      }
+      const isSystemAdmin = ctx.user.role === "admin";
+      if (!isSystemAdmin) {
+        const userAccount = await corporateService.getUserCorporateAccount(
+          ctx.user.id
+        );
+        const isAccountAdmin =
+          userAccount?.id === target.corporateAccountId &&
+          userAccount?.role === "admin";
+        if (!isAccountAdmin) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "You do not have access to this corporate account",
+          });
+        }
+      }
+
       const corporateUser = await corporateService.updateCorporateUserRole(
         input.corporateUserId,
         input.role

@@ -15,6 +15,7 @@ import { getDb } from "../db";
 import { bookings, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { auditRefund } from "../services/audit.service";
+import { assertBookingOwnership } from "../services/access-control.service";
 
 /**
  * Admin-only procedure
@@ -193,7 +194,9 @@ export const refundsRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID to check") }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Ownership check: prevent leaking other users' booking status (IDOR)
+      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
       return await refundsService.isBookingRefundable(input.bookingId);
     }),
 
@@ -213,13 +216,16 @@ export const refundsRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db)
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Database not available",
         });
+
+      // Ownership check: prevent leaking other users' fare/flight details (IDOR)
+      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
 
       // Get booking details
       const [booking] = await db

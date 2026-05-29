@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import * as modificationService from "../services/booking-modification.service";
+import { assertModificationOwnership } from "../services/access-control.service";
 
 /**
  * Booking Modifications Router
@@ -51,7 +52,13 @@ export const modificationsRouter = router({
    */
   getDetails: protectedProcedure
     .input(z.object({ modificationId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      // Ownership check: prevent reading another user's modification (IDOR)
+      await assertModificationOwnership(
+        input.modificationId,
+        ctx.user.id,
+        ctx.user.role
+      );
       return await modificationService.getModificationDetails(
         input.modificationId
       );
