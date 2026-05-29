@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { TRPCError } from "@trpc/server";
+import { recordEvent } from "./outbox.service";
 
 /**
  * E-Ticket PDF Generation Service
@@ -445,6 +446,18 @@ export async function generateETicketForPassenger(
           .update(passengers)
           .set({ ticketNumber })
           .where(eq(passengers.id, passenger.id));
+        // Emit the ticket-issued domain event in the same transaction.
+        await recordEvent(tx, {
+          aggregateType: "booking",
+          aggregateId: bookingId,
+          eventType: "ETicketIssued",
+          payload: {
+            bookingId,
+            bookingReference: booking.bookingReference,
+            passengerId: passenger.id,
+            ticketNumber,
+          },
+        });
       }
     });
   }
