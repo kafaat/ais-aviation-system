@@ -123,12 +123,24 @@
 
 ## مكاسب قريبة المدى (Quick Wins)
 
-1. **`tenantId` + `feature` في `aiGatewayLog`** الآن → يفتح فوراً محاسبة التكلفة
-   ويغلق خطر خلط البيانات في التحليلات.
-2. **حقول override/rollback في `agentDecisions`** → سجلّ قرارات قابل للتصحيح.
-3. **حارس عزل مستأجر في `ai-guardrails.service.ts`** → يمنع تسرّب السياق عبر
-   المستأجرين قبل أي توسّع.
-4. **تصنيف أفعال الوكلاء** (auto-safe / requires-approval) كأول بوابة حوكمة.
+1. ✅ **مُنفَّذ — `tenantId` + `feature` في `aiGatewayLog`**: أُضيف العمودان
+   (+ فهرسة + هجرة `0006`)، وخدمة `agent-governance.service.ts`
+   (`recordAiUsage` / `getAiCostBreakdown`) تنسب كل سنت لمستأجر/ميزة، والـ
+   `intelligence/gateway.ts` يُمرّر `tenantId`/`feature` ويحفظ كل استدعاء.
+   راوتر `agentGovernance.getAiCostBreakdown` (admin).
+2. ✅ **مُنفَّذ — حقول override/rollback في `agentDecisions`**: أُضيفت
+   `overridden`/`overriddenBy`/`overrideReason`/`overriddenAt`/`supersededBy`
+   - `tenantId`، ودالة `overrideAgentDecision` + راوتر
+     `agentGovernance.overrideDecision` (white-box correction).
+3. ⏭️ **تالٍ — حارس عزل مستأجر في `ai-guardrails.service.ts`**: يمنع تسرّب السياق
+   عبر المستأجرين (مرتبط بأساس تعدد المستأجرين P0).
+4. ⏭️ **تالٍ — تصنيف أفعال الوكلاء** (auto-safe / requires-approval) كأول بوابة حوكمة.
+
+> **مُنفَّذ أيضاً (اقتصاديات المقعد):** `seat-economics.service.ts` +
+> راوتر `seatEconomics` (admin) يحسب لكل مقعد: الإيراد (السعر الأساسي + الخدمات
+> الإضافية − الخصومات) مقابل التكلفة (رسوم الدفع التقديرية + عمولة الوكيل) =
+> **صافي المساهمة لكل مقعد**، مع تجميع على مستوى الرحلة. توزيع دقيق بالسنت
+> (largest-remainder) واختبارات وحدة كاملة.
 
 ---
 

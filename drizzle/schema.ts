@@ -5170,6 +5170,15 @@ export const agentDecisions = mysqlTable(
     reasoning: json("reasoning"),
     recommendations: json("recommendations"),
     errors: json("errors"),
+    // Tenant attribution (per-airline isolation of agent decisions).
+    tenantId: int("tenantId"),
+    // White-box governance: a human can override/roll back an agent decision,
+    // and we keep an auditable trail of who did it, why, and what replaced it.
+    overridden: boolean("overridden").default(false).notNull(),
+    overriddenBy: int("overriddenBy"),
+    overrideReason: text("overrideReason"),
+    overriddenAt: timestamp("overriddenAt"),
+    supersededBy: int("supersededBy"), // id of the decision that replaces this one
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
@@ -5177,6 +5186,8 @@ export const agentDecisions = mysqlTable(
     requestIdIdx: index("agent_dec_request_idx").on(table.requestId),
     statusIdx: index("agent_dec_status_idx").on(table.status),
     createdIdx: index("agent_dec_created_idx").on(table.createdAt),
+    tenantIdx: index("agent_dec_tenant_idx").on(table.tenantId),
+    overriddenIdx: index("agent_dec_overridden_idx").on(table.overridden),
   })
 );
 
@@ -5268,6 +5279,11 @@ export const aiGatewayLog = mysqlTable(
     agentId: varchar("agentId", { length: 100 }),
     modelId: varchar("modelId", { length: 100 }).notNull(),
     taskType: varchar("taskType", { length: 50 }),
+    // Tenant attribution (per-airline cost accounting in a multi-tenant SaaS).
+    // Nullable for system/unattributed calls; required once tenancy lands.
+    tenantId: int("tenantId"),
+    // Product feature the call is billed to (e.g. "ai-chat", "ai-pricing").
+    feature: varchar("feature", { length: 100 }),
     inputTokens: int("inputTokens"),
     outputTokens: int("outputTokens"),
     costUsd: decimal("costUsd", { precision: 10, scale: 6 }),
@@ -5280,6 +5296,8 @@ export const aiGatewayLog = mysqlTable(
     agentIdx: index("ai_gw_agent_idx").on(table.agentId),
     modelIdx: index("ai_gw_model_idx").on(table.modelId),
     createdIdx: index("ai_gw_created_idx").on(table.createdAt),
+    tenantIdx: index("ai_gw_tenant_idx").on(table.tenantId),
+    featureIdx: index("ai_gw_feature_idx").on(table.feature),
   })
 );
 
