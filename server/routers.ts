@@ -93,6 +93,9 @@ import { agentGovernanceRouter } from "./routers/agent-governance";
 import { seatEconomicsRouter } from "./routers/seat-economics";
 import { priceQuoteRouter } from "./routers/price-quote";
 
+// Travel documents
+import { boardingPassRouter } from "./routers/boarding-pass";
+
 // Webhook handlers
 import { webhooksRouter } from "./routers/webhooks";
 
@@ -207,6 +210,7 @@ export const appRouter = router({
   agentGovernance: agentGovernanceRouter,
   seatEconomics: seatEconomicsRouter,
   priceQuote: priceQuoteRouter,
+  boardingPass: boardingPassRouter,
 
   // Webhook handlers
   webhooks: webhooksRouter,

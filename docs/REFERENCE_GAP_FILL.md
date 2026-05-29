@@ -8,21 +8,21 @@
 
 ## 1. خريطة: عناصر المرجع → حالتها في AIS
 
-| عنصر المرجع                                     | الحالة في AIS                               | الإجراء                                            |
-| ----------------------------------------------- | ------------------------------------------- | -------------------------------------------------- |
-| **Pricing Service** (seat+bundle−loyalty=total) | تسعير موجود لكن **لا Quote موحّد للعميل**   | ✅ **سُدّ الآن** — `price-quote.service.ts`        |
-| Redis cache للتسعير + hit/miss metrics          | `redis-cache` + `metrics` موجودان           | 🟡 موجود (يمكن ربط مقاييس hit/miss للتسعير لاحقاً) |
-| Kafka لإبطال الـ cache + Event-driven           | لا Kafka (BullMQ فقط)                       | ⏭️ **المرحلة 1** في خطة الـ SaaS (Outbox+Kafka)    |
-| Saga (Orchestration) للحجز                      | FSM يدوي (`booking-state-machine`)          | ⏭️ **المرحلة 1** (Temporal)                        |
-| IATA NDC / ONE Order (Offer/Order)              | جداول `ndcOffers`/`ndcOrders` + راوتر `ndc` | 🟢 موجود جزئياً                                    |
-| GDS Abstraction (Amadeus/Sabre)                 | `gds.service` + راوتر `gds`                 | 🟢 موجود                                           |
-| WebSocket/SSE تحديثات فورية                     | `websocket.service` + `ws`                  | 🟢 موجود                                           |
-| Loyalty & Wallet                                | `loyalty` + `wallet` + tiers/miles          | 🟢 موجود                                           |
-| Baggage tracking                                | `baggage` + `baggageTracking`               | 🟢 موجود                                           |
-| Prometheus/Observability                        | `metrics` + APM + Sentry                    | 🟢 موجود (ينقص OTel tracing — المرحلة 2)           |
-| API Gateway (Rate limit/Quotas)                 | Nginx + rate-limit middleware               | ⏭️ **المرحلة 1/2** (APISIX)                        |
-| Zero Trust / OIDC / mTLS                        | JWT + FastAPI auth                          | ⏭️ **المرحلة 2** (Keycloak)                        |
-| Offline boarding pass (JWT/PKPass)              | eticket/boarding موجود                      | 🟡 توقيع JWT للـ offline يمكن تعزيزه لاحقاً        |
+| عنصر المرجع                                     | الحالة في AIS                               | الإجراء                                              |
+| ----------------------------------------------- | ------------------------------------------- | ---------------------------------------------------- |
+| **Pricing Service** (seat+bundle−loyalty=total) | تسعير موجود لكن **لا Quote موحّد للعميل**   | ✅ **سُدّ الآن** — `price-quote.service.ts`          |
+| Redis cache للتسعير + hit/miss metrics          | `redis-cache` + `metrics` موجودان           | 🟡 موجود (يمكن ربط مقاييس hit/miss للتسعير لاحقاً)   |
+| Kafka لإبطال الـ cache + Event-driven           | لا Kafka (BullMQ فقط)                       | ⏭️ **المرحلة 1** في خطة الـ SaaS (Outbox+Kafka)      |
+| Saga (Orchestration) للحجز                      | FSM يدوي (`booking-state-machine`)          | ⏭️ **المرحلة 1** (Temporal)                          |
+| IATA NDC / ONE Order (Offer/Order)              | جداول `ndcOffers`/`ndcOrders` + راوتر `ndc` | 🟢 موجود جزئياً                                      |
+| GDS Abstraction (Amadeus/Sabre)                 | `gds.service` + راوتر `gds`                 | 🟢 موجود                                             |
+| WebSocket/SSE تحديثات فورية                     | `websocket.service` + `ws`                  | 🟢 موجود                                             |
+| Loyalty & Wallet                                | `loyalty` + `wallet` + tiers/miles          | 🟢 موجود                                             |
+| Baggage tracking                                | `baggage` + `baggageTracking`               | 🟢 موجود                                             |
+| Prometheus/Observability                        | `metrics` + APM + Sentry                    | 🟢 موجود (ينقص OTel tracing — المرحلة 2)             |
+| API Gateway (Rate limit/Quotas)                 | Nginx + rate-limit middleware               | ⏭️ **المرحلة 1/2** (APISIX)                          |
+| Zero Trust / OIDC / mTLS                        | JWT + FastAPI auth                          | ⏭️ **المرحلة 2** (Keycloak)                          |
+| Offline boarding pass (JWT/PKPass)              | eticket/boarding (QR نصّي غير موقّع)        | ✅ **سُدّ الآن** — بطاقة صعود موقّعة + تحقّق offline |
 
 **الخلاصة:** معظم قدرات المرجع موجودة فعلاً في AIS. الفجوة الوظيفية الحقيقية
 والقابلة للسدّ فوراً كانت **Price Quote موحّد للعميل**. الفجوات الكبرى المتبقية
@@ -49,6 +49,19 @@
 
 > **لماذا public؟** عرض السعر جزء من اكتشاف الرحلات قبل تسجيل الدخول؛ المستوى
 > والأميال مدخلات اختيارية «ماذا‑لو» بلا آثار جانبية.
+
+### 2.1 ما سُدّ الآن: بطاقة صعود موقّعة (Signed Boarding Pass)
+
+AIS كان يُصدر QR **نصّياً غير موقّع** (`PNR|ticket|name`) — قابل للتزوير وغير
+قابل للتحقّق. أُضيف:
+
+- **`boarding-pass.service.ts`**: `signBoardingPass` / `verifyBoardingPass`
+  (JWT HS256، issuer/audience مثبّتان، صلاحية 48س) — التحقّق **نقي/يعمل offline**
+  على بوابة الصعود دون قاعدة بيانات؛ و`issueBoardingPass` (مدعوم بقاعدة البيانات،
+  يفرض ملكية الحجز عبر `access-control` وأن الراكب يخصّ الحجز، وأن الحجز مدفوع).
+- **راوتر `boardingPass`**: `issue` (محمي) و`verify` (public لأجهزة البوابة).
+- **6 اختبارات**: round-trip، رفض التلاعب بالتوقيع، رفض سرّ مختلف، رفض منتهية،
+  رفض توكن لا يحمل issuer/audience البطاقة، تثبيت issuer/audience.
 
 ---
 
