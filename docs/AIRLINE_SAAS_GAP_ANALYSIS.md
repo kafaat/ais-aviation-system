@@ -130,11 +130,21 @@ Monolith أحادي المستأجر** (single-tenant). للتحوّل إلى **
 - ⏭️ اشتقاق المستأجر من subdomain/API-key على البوابة + اختبارات عزل لكل جدول.
 - **النتيجة المستهدفة:** أول شركتي طيران تعملان بمعزل تام على نفس النشر.
 
-### المرحلة 1 — العمود الفقري للأحداث + التنسيق (P0/P1، 6–10 أسابيع)
+### المرحلة 1 — العمود الفقري للأحداث + التنسيق (P0/P1، 6–10 أسابيع) — 🟡 بدأت
 
-- **Outbox Pattern:** جدول `outbox` يُكتب في نفس معاملة العمل، وناشر يدفع إلى
-  **Kafka/NATS** (يحلّ مشكلة الاتساق dual-write). يبني على `history`/`ledger`
-  الموجودة.
+- ✅ **Outbox Pattern (منفّذ):** جدول `outbox` (هجرة `0009`) +
+  `outbox.service.ts`:
+  - `recordEvent(tx, event)` يُكتب **داخل معاملة العمل** (مطبّق فعلياً في
+    `overrideAgentDecision` → حدث `AgentDecisionOverridden`).
+  - `relayOutbox(publisher)` + `processEvents` (نواة نقية مُختبَرة) + سياسة
+    إعادة محاولة (attempts/maxAttempts → `failed`).
+  - **ناشر قابل للاستبدال** (`OutboxPublisher`) — تبنّي Kafka/NATS لاحقاً =
+    تبديل الناشر فقط، دون تغيير المنتِجين.
+- ⏭️ **المتبقّي:** ربط الـ relay بمؤقّت (cron/worker) + ناشر Kafka/NATS فعلي +
+  تعميم `recordEvent` على أحداث الحجز/الدفع/الاسترداد ضمن معاملاتها.
+- **Temporal** لتنسيق العمليات الطويلة الحرجة:
+  - `BookingWorkflow` (hold → pay → ticket → confirm، مع timeouts/compensation).
+  - `RefundWorkflow`, `IROPSWorkflow` (rebooking + hotel + compensation EU261),
 - **Temporal** لتنسيق العمليات الطويلة الحرجة:
   - `BookingWorkflow` (hold → pay → ticket → confirm، مع timeouts/compensation).
   - `RefundWorkflow`, `IROPSWorkflow` (rebooking + hotel + compensation EU261),

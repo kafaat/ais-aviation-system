@@ -23,11 +23,15 @@ function mockDb(rows: unknown[]) {
   q.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
     Promise.resolve(rows).then(res, rej);
 
-  const dbObj = {
+  const dbObj: Record<string, unknown> = {
     select: vi.fn(() => q),
     insert: vi.fn(() => q),
     update: vi.fn(() => q),
   };
+  // transaction(cb) runs the callback with a tx exposing the same builders.
+  dbObj.transaction = vi.fn((cb: (tx: unknown) => Promise<unknown>) =>
+    cb(dbObj)
+  );
   return dbObj as unknown as Awaited<ReturnType<typeof db.getDb>>;
 }
 

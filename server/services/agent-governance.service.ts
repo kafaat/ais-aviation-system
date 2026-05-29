@@ -15,6 +15,7 @@ import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { aiGatewayLog, agentDecisions } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
+import { recordEvent } from "./outbox.service";
 
 // ---------------------------------------------------------------------------
 // 1. AI cost attribution
@@ -164,14 +165,29 @@ export async function overrideAgentDecision(
     });
   }
 
-  await db
-    .update(agentDecisions)
-    .set({
-      overridden: true,
-      overriddenBy: input.overriddenBy,
-      overrideReason: input.reason,
-      overriddenAt: new Date(),
-      supersededBy: input.supersededBy ?? null,
-    })
-    .where(eq(agentDecisions.id, decisionId));
+  // Persist the override and emit a domain event in one transaction (outbox).
+  await db.transaction(async tx => {
+    await tx
+      .update(agentDecisions)
+      .set({
+        overridden: true,
+        overriddenBy: input.overriddenBy,
+        overrideReason: input.reason,
+        overriddenAt: new Date(),
+        supersededBy: input.supersededBy ?? null,
+      })
+      .where(eq(agentDecisions.id, decisionId));
+
+    await recordEvent(tx, {
+      aggregateType: "agentDecision",
+      aggregateId: decisionId,
+      eventType: "AgentDecisionOverridden",
+      payload: {
+        decisionId,
+        overriddenBy: input.overriddenBy,
+        reason: input.reason,
+        supersededBy: input.supersededBy ?? null,
+      },
+    });
+  });
 }

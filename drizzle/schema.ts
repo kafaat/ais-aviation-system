@@ -5351,3 +5351,45 @@ export const aiGatewayLog = mysqlTable(
 
 export type AIGatewayLogEntry = typeof aiGatewayLog.$inferSelect;
 export type InsertAIGatewayLog = typeof aiGatewayLog.$inferInsert;
+
+/**
+ * Transactional Outbox — the foundation for event-driven messaging.
+ *
+ * Domain events are written to this table IN THE SAME DB TRANSACTION as the
+ * business change, then a relay publishes pending rows to the message bus
+ * (Kafka/NATS) and marks them published. This guarantees no lost or phantom
+ * events (solves the dual-write problem). Until a real bus is wired, the relay
+ * uses a pluggable publisher, so adopting Kafka later is just swapping it.
+ */
+export const outbox = mysqlTable(
+  "outbox",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    // Stable event identifier (UUID) for idempotent publishing/consumption.
+    eventId: varchar("eventId", { length: 64 }).notNull().unique(),
+    aggregateType: varchar("aggregateType", { length: 64 }).notNull(),
+    aggregateId: varchar("aggregateId", { length: 64 }).notNull(),
+    eventType: varchar("eventType", { length: 100 }).notNull(),
+    // Tenant attribution (per-airline event streams in the SaaS model).
+    tenantId: int("tenantId"),
+    payload: json("payload").notNull(),
+    status: mysqlEnum("status", ["pending", "published", "failed"])
+      .default("pending")
+      .notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    lastError: text("lastError"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    publishedAt: timestamp("publishedAt"),
+  },
+  table => ({
+    statusIdx: index("outbox_status_idx").on(table.status, table.createdAt),
+    aggregateIdx: index("outbox_aggregate_idx").on(
+      table.aggregateType,
+      table.aggregateId
+    ),
+    tenantIdx: index("outbox_tenant_idx").on(table.tenantId),
+  })
+);
+
+export type OutboxEvent = typeof outbox.$inferSelect;
+export type InsertOutboxEvent = typeof outbox.$inferInsert;
