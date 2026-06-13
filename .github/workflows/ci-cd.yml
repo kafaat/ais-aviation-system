@@ -379,7 +379,9 @@ jobs:
       - name: Seed flight data
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
-        run: node scripts/seed-data.mjs
+        # Use tsx so the script's `../drizzle/schema.js` import resolves to the
+        # TypeScript source (no compiled .js exists). Plain `node` cannot.
+        run: pnpm exec tsx scripts/seed-data.mjs
 
       - name: Build application
         env:
