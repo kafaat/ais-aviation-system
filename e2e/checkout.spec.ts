@@ -79,8 +79,14 @@ test.describe("Checkout Flow", () => {
         // Verify flight details are shown
         const hasFlightDetails =
           (await page.locator('[data-testid="flight-summary"]').isVisible()) ||
-          (await page.getByText(/تفاصيل الرحلة|Flight details/i).isVisible()) ||
-          (await page.getByText(/الرياض|جدة/i).isVisible());
+          (await page
+            .getByText(/تفاصيل الرحلة|Flight details/i)
+            .first()
+            .isVisible()) ||
+          (await page
+            .getByText(/الرياض|جدة/i)
+            .first()
+            .isVisible());
 
         expect(hasFlightDetails).toBeTruthy();
       }
@@ -113,6 +119,7 @@ test.describe("Checkout Flow", () => {
         (await page.getByLabel(/الاسم الأول|First name/i).isVisible()) ||
         (await page
           .getByText(/بيانات المسافر|Passenger information/i)
+          .first()
           .isVisible());
 
       expect(hasPassengerForm).toBeTruthy();
@@ -162,8 +169,12 @@ test.describe("Checkout Flow", () => {
         const hasValidationError =
           (await page
             .getByText(/الاسم الأول مطلوب|First name is required/i)
+            .first()
             .isVisible()) ||
-          (await page.getByText(/مطلوب|required/i).isVisible()) ||
+          (await page
+            .getByText(/مطلوب|required/i)
+            .first()
+            .isVisible()) ||
           (await page.locator('[aria-invalid="true"]').isVisible());
 
         expect(hasValidationError).toBeTruthy();
@@ -189,6 +200,7 @@ test.describe("Checkout Flow", () => {
         const hasError =
           (await page
             .getByText(/رقم الجواز غير صالح|Invalid passport/i)
+            .first()
             .isVisible()) ||
           (await passportInput.evaluate(
             el => el.getAttribute("aria-invalid") === "true"
@@ -259,8 +271,14 @@ test.describe("Checkout Flow", () => {
         const hasReview =
           (await page.locator('[data-testid="booking-review"]').isVisible()) ||
           (await page.locator('[data-testid="booking-summary"]').isVisible()) ||
-          (await page.getByText(/مراجعة الحجز|Review booking/i).isVisible()) ||
-          (await page.getByText(/الملخص|Summary/i).isVisible());
+          (await page
+            .getByText(/مراجعة الحجز|Review booking/i)
+            .first()
+            .isVisible()) ||
+          (await page
+            .getByText(/الملخص|Summary/i)
+            .first()
+            .isVisible());
 
         expect(hasReview).toBeTruthy();
       }
@@ -270,7 +288,10 @@ test.describe("Checkout Flow", () => {
       // Look for total price display
       const totalPrice =
         (await page.locator('[data-testid="total-price"]').isVisible()) ||
-        (await page.getByText(/المجموع|Total|الإجمالي/i).isVisible());
+        (await page
+          .getByText(/المجموع|Total|الإجمالي/i)
+          .first()
+          .isVisible());
 
       expect(totalPrice).toBeTruthy();
     });
@@ -305,9 +326,16 @@ test.describe("Checkout Flow", () => {
           .isVisible()) ||
         (await page
           .getByText(/خدمات إضافية|Additional services/i)
+          .first()
           .isVisible()) ||
-        (await page.getByText(/الأمتعة|Baggage|حقائب/i).isVisible()) ||
-        (await page.getByText(/الوجبات|Meals/i).isVisible());
+        (await page
+          .getByText(/الأمتعة|Baggage|حقائب/i)
+          .first()
+          .isVisible()) ||
+        (await page
+          .getByText(/الوجبات|Meals/i)
+          .first()
+          .isVisible());
 
       // Ancillaries may not always be visible
       if (hasAncillaries) {
@@ -336,6 +364,7 @@ test.describe("Checkout Flow", () => {
         // Verify baggage was added
         const hasBaggageSelected = await page
           .getByText(/تم إضافة|Added|Selected/i)
+          .first()
           .isVisible();
         expect(hasBaggageSelected).toBeTruthy();
       }
@@ -453,6 +482,7 @@ test.describe("Checkout Flow", () => {
         (await page.getByLabel(/رقم البطاقة|Card number/i).isVisible()) ||
         (await page
           .getByText(/معلومات الدفع|Payment information/i)
+          .first()
           .isVisible());
 
       // Payment may redirect to Stripe, so this is expected
@@ -501,6 +531,7 @@ test.describe("Checkout Flow", () => {
               .isVisible()) ||
             (await page
               .getByText(/تم الحجز بنجاح|Booking confirmed/i)
+              .first()
               .isVisible()) ||
             page.url().includes("confirmation") ||
             page.url().includes("success");
@@ -542,6 +573,7 @@ test.describe("Checkout Flow", () => {
           const hasError =
             (await page
               .getByText(/فشل الدفع|Payment failed|Declined|رفض/i)
+              .first()
               .isVisible()) ||
             (await page.locator('[data-testid="payment-error"]').isVisible());
 
@@ -564,8 +596,14 @@ test.describe("Checkout Flow", () => {
         (await page
           .locator('[data-testid="booking-confirmation"]')
           .isVisible()) ||
-        (await page.getByText(/تم الحجز|Booking confirmed/i).isVisible()) ||
-        (await page.getByText(/رقم الحجز|Booking reference/i).isVisible());
+        (await page
+          .getByText(/تم الحجز|Booking confirmed/i)
+          .first()
+          .isVisible()) ||
+        (await page
+          .getByText(/رقم الحجز|Booking reference/i)
+          .first()
+          .isVisible());
 
       if (hasConfirmation) {
         // Check for booking reference
@@ -598,13 +636,17 @@ test.describe("Checkout Flow", () => {
       // Check for flight details
       const hasFlightInfo =
         (await page.locator('[data-testid="flight-info"]').isVisible()) ||
-        (await page.getByText(/تفاصيل الرحلة|Flight details/i).isVisible());
+        (await page
+          .getByText(/تفاصيل الرحلة|Flight details/i)
+          .first()
+          .isVisible());
 
       // Check for passenger info
       const hasPassengerInfo =
         (await page.locator('[data-testid="passenger-info"]').isVisible()) ||
         (await page
           .getByText(/معلومات المسافر|Passenger information/i)
+          .first()
           .isVisible());
 
       expect(hasFlightInfo || hasPassengerInfo).toBeTruthy();
@@ -624,7 +666,10 @@ test.describe("Checkout Flow", () => {
 
         // Check for success message
         const hasSentMessage =
-          (await page.getByText(/تم الإرسال|Email sent/i).isVisible()) ||
+          (await page
+            .getByText(/تم الإرسال|Email sent/i)
+            .first()
+            .isVisible()) ||
           (await page.locator("[data-sonner-toast]").isVisible());
 
         expect(hasSentMessage).toBeTruthy();
@@ -782,6 +827,7 @@ test.describe("Checkout Flow", () => {
             .isVisible()) ||
           (await page
             .getByText(/تم الحجز بنجاح|Booking confirmed/i)
+            .first()
             .isVisible()) ||
           page.url().includes("confirmation") ||
           page.url().includes("success");

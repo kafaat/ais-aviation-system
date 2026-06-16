@@ -49,6 +49,7 @@ test.describe("Authentication", () => {
       const isLoggedIn =
         (await page
           .getByRole("link", { name: /الملف الشخصي|Profile/i })
+          .first()
           .isVisible()) ||
         (await page.locator('[data-testid="user-menu"]').isVisible());
       expect(isLoggedIn).toBeTruthy();
@@ -123,9 +124,11 @@ test.describe("Authentication", () => {
       // Check for required field errors
       const emailRequired = await page
         .getByText(/البريد الإلكتروني مطلوب|Email is required/i)
+        .first()
         .isVisible();
       const passwordRequired = await page
         .getByText(/كلمة المرور مطلوبة|Password is required/i)
+        .first()
         .isVisible();
 
       expect(emailRequired || passwordRequired).toBeTruthy();
@@ -214,6 +217,7 @@ test.describe("Authentication", () => {
         (await page.url().includes("/")) ||
         (await page
           .getByText(/تم إنشاء الحساب بنجاح|Account created/i)
+          .first()
           .isVisible());
 
       expect(isSuccessful).toBeTruthy();
@@ -267,6 +271,7 @@ test.describe("Authentication", () => {
         .getByText(
           /كلمة المرور ضعيفة|كلمة المرور قصيرة|Password is too weak|Password must be/i
         )
+        .first()
         .isVisible();
 
       expect(hasWeakPasswordError).toBeTruthy();
@@ -372,6 +377,7 @@ test.describe("Authentication", () => {
       const isOnLogin = page.url().includes("/login");
       const showsUnauthorized = await page
         .getByText(/غير مصرح|يرجى تسجيل الدخول|Please login|Unauthorized/i)
+        .first()
         .isVisible();
 
       expect(isOnLogin || showsUnauthorized).toBeTruthy();
@@ -397,6 +403,7 @@ test.describe("Authentication", () => {
       const isLoggedIn =
         (await page
           .getByRole("link", { name: /الملف الشخصي|Profile/i })
+          .first()
           .isVisible()) ||
         (await page.locator('[data-testid="user-menu"]').isVisible());
       expect(isLoggedIn).toBeTruthy();

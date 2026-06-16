@@ -29,6 +29,7 @@ test.describe("Admin Dashboard", () => {
       const isRestricted =
         (await page
           .getByText(/غير مصرح|Unauthorized|Access denied/i)
+          .first()
           .isVisible()) || !page.url().includes("/admin");
 
       expect(isRestricted).toBeTruthy();
@@ -41,7 +42,10 @@ test.describe("Admin Dashboard", () => {
       // Should redirect to login
       const isRedirected =
         page.url().includes("/login") ||
-        (await page.getByText(/يرجى تسجيل الدخول|Please login/i).isVisible());
+        (await page
+          .getByText(/يرجى تسجيل الدخول|Please login/i)
+          .first()
+          .isVisible());
 
       expect(isRedirected).toBeTruthy();
     });
@@ -65,7 +69,10 @@ test.describe("Admin Dashboard", () => {
       // Should be on admin page
       const isOnAdmin =
         page.url().includes("/admin") ||
-        (await page.getByText(/لوحة التحكم|Dashboard|Admin/i).isVisible());
+        (await page
+          .getByText(/لوحة التحكم|Dashboard|Admin/i)
+          .first()
+          .isVisible());
 
       expect(isOnAdmin).toBeTruthy();
     });
@@ -91,7 +98,10 @@ test.describe("Admin Dashboard", () => {
         (await page
           .getByRole("heading", { name: /لوحة التحكم|Admin Dashboard/i })
           .isVisible()) ||
-        (await page.getByText(/لوحة التحكم الإدارية|Admin panel/i).isVisible());
+        (await page
+          .getByText(/لوحة التحكم الإدارية|Admin panel/i)
+          .first()
+          .isVisible());
 
       expect(hasHeader).toBeTruthy();
     });
@@ -107,9 +117,18 @@ test.describe("Admin Dashboard", () => {
       // Alternatively, check for specific stats
       const hasStats =
         count > 0 ||
-        (await page.getByText(/إجمالي الرحلات|Total flights/i).isVisible()) ||
-        (await page.getByText(/الحجوزات|Bookings/i).isVisible()) ||
-        (await page.getByText(/الإيرادات|Revenue/i).isVisible());
+        (await page
+          .getByText(/إجمالي الرحلات|Total flights/i)
+          .first()
+          .isVisible()) ||
+        (await page
+          .getByText(/الحجوزات|Bookings/i)
+          .first()
+          .isVisible()) ||
+        (await page
+          .getByText(/الإيرادات|Revenue/i)
+          .first()
+          .isVisible());
 
       expect(hasStats).toBeTruthy();
     });
@@ -121,12 +140,15 @@ test.describe("Admin Dashboard", () => {
       const hasNav =
         (await page
           .getByRole("link", { name: /التحليلات|Analytics/i })
+          .first()
           .isVisible()) ||
         (await page
           .getByRole("link", { name: /الاسترداد|Refunds/i })
+          .first()
           .isVisible()) ||
         (await page
           .getByRole("link", { name: /التقارير|Reports/i })
+          .first()
           .isVisible());
 
       expect(hasNav).toBeTruthy();
@@ -274,7 +296,10 @@ test.describe("Admin Dashboard", () => {
 
         // Check for validation errors
         const hasError =
-          (await page.getByText(/مطلوب|Required/i).isVisible()) ||
+          (await page
+            .getByText(/مطلوب|Required/i)
+            .first()
+            .isVisible()) ||
           (await page.locator('[aria-invalid="true"]').isVisible());
 
         expect(hasError).toBeTruthy();
@@ -319,7 +344,10 @@ test.describe("Admin Dashboard", () => {
     test("should display analytics page", async ({ page }) => {
       const hasAnalytics =
         page.url().includes("/analytics") ||
-        (await page.getByText(/التحليلات|Analytics/i).isVisible());
+        (await page
+          .getByText(/التحليلات|Analytics/i)
+          .first()
+          .isVisible());
 
       expect(hasAnalytics).toBeTruthy();
     });
@@ -330,7 +358,10 @@ test.describe("Admin Dashboard", () => {
         (await page.locator('[data-testid="revenue-chart"]').isVisible()) ||
         (await page.locator("canvas").isVisible()) ||
         (await page.locator("svg.recharts-surface").isVisible()) ||
-        (await page.getByText(/الإيرادات|Revenue/i).isVisible());
+        (await page
+          .getByText(/الإيرادات|Revenue/i)
+          .first()
+          .isVisible());
 
       expect(hasCharts).toBeTruthy();
     });
@@ -340,8 +371,12 @@ test.describe("Admin Dashboard", () => {
         (await page.locator('[data-testid="booking-stats"]').isVisible()) ||
         (await page
           .getByText(/إحصائيات الحجوزات|Booking statistics/i)
+          .first()
           .isVisible()) ||
-        (await page.getByText(/عدد الحجوزات|Number of bookings/i).isVisible());
+        (await page
+          .getByText(/عدد الحجوزات|Number of bookings/i)
+          .first()
+          .isVisible());
 
       expect(hasBookingStats).toBeTruthy();
     });
@@ -386,7 +421,10 @@ test.describe("Admin Dashboard", () => {
     test("should display refunds page", async ({ page }) => {
       const hasRefunds =
         page.url().includes("/refunds") ||
-        (await page.getByText(/الاسترداد|Refunds/i).isVisible());
+        (await page
+          .getByText(/الاسترداد|Refunds/i)
+          .first()
+          .isVisible());
 
       expect(hasRefunds).toBeTruthy();
     });
@@ -396,6 +434,7 @@ test.describe("Admin Dashboard", () => {
         (await page.locator('[data-testid="pending-refunds"]').isVisible()) ||
         (await page
           .getByText(/طلبات الاسترداد|Refund requests/i)
+          .first()
           .isVisible()) ||
         (await page.locator('table, [role="table"]').isVisible());
 
@@ -437,16 +476,28 @@ test.describe("Admin Dashboard", () => {
     test("should display reports page", async ({ page }) => {
       const hasReports =
         page.url().includes("/reports") ||
-        (await page.getByText(/التقارير|Reports/i).isVisible());
+        (await page
+          .getByText(/التقارير|Reports/i)
+          .first()
+          .isVisible());
 
       expect(hasReports).toBeTruthy();
     });
 
     test("should show available report types", async ({ page }) => {
       const hasReportTypes =
-        (await page.getByText(/تقرير المبيعات|Sales report/i).isVisible()) ||
-        (await page.getByText(/تقرير الرحلات|Flights report/i).isVisible()) ||
-        (await page.getByText(/تقرير الحجوزات|Bookings report/i).isVisible()) ||
+        (await page
+          .getByText(/تقرير المبيعات|Sales report/i)
+          .first()
+          .isVisible()) ||
+        (await page
+          .getByText(/تقرير الرحلات|Flights report/i)
+          .first()
+          .isVisible()) ||
+        (await page
+          .getByText(/تقرير الحجوزات|Bookings report/i)
+          .first()
+          .isVisible()) ||
         (await page.locator('[data-testid="report-type-select"]').isVisible());
 
       expect(hasReportTypes).toBeTruthy();
@@ -608,7 +659,10 @@ test.describe("Admin Dashboard", () => {
         // Should show confirmation dialog
         const hasConfirmation =
           (await page.locator('[role="alertdialog"]').isVisible()) ||
-          (await page.getByText(/هل أنت متأكد|Are you sure/i).isVisible());
+          (await page
+            .getByText(/هل أنت متأكد|Are you sure/i)
+            .first()
+            .isVisible());
 
         expect(hasConfirmation).toBeTruthy();
 
@@ -642,8 +696,10 @@ test.describe("Admin Dashboard", () => {
 
       // Page should still be functional even if some data fails to load
       const isPageFunctional =
-        (await page.getByText(/لوحة التحكم|Dashboard/i).isVisible()) ||
-        page.url().includes("/admin");
+        (await page
+          .getByText(/لوحة التحكم|Dashboard/i)
+          .first()
+          .isVisible()) || page.url().includes("/admin");
 
       expect(isPageFunctional).toBeTruthy();
     });
@@ -669,7 +725,10 @@ test.describe("Admin Dashboard", () => {
 
           // Should show error
           const hasError =
-            (await page.getByText(/خطأ|Error/i).isVisible()) ||
+            (await page
+              .getByText(/خطأ|Error/i)
+              .first()
+              .isVisible()) ||
             (await page.locator("[data-sonner-toast]").isVisible()) ||
             (await page.locator('[aria-invalid="true"]').isVisible());
 
