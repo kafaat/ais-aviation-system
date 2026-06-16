@@ -12,16 +12,21 @@
  */
 import { test as base, expect } from "@playwright/test";
 
-// Matches CONSENT_STORAGE_KEY / CONSENT_VERSION in
-// client/src/components/CookieConsent.tsx.
+// Must match the StoredConsent shape, CONSENT_STORAGE_KEY and CONSENT_VERSION
+// in client/src/components/CookieConsent.tsx. getStoredConsent() requires the
+// top-level `version` field to equal CONSENT_VERSION and a nested `preferences`
+// object; otherwise it treats consent as absent and shows the banner.
 const CONSENT_STORAGE_KEY = "ais_cookie_consent";
-const CONSENT_VERSION = 1;
+const CONSENT_VERSION = "1.0";
 
 const dismissedConsent = JSON.stringify({
-  essential: true,
-  marketing: false,
-  analytics: false,
-  consentVersion: CONSENT_VERSION,
+  version: CONSENT_VERSION,
+  preferences: {
+    essential: true,
+    analytics: false,
+    marketing: false,
+    preferences: false,
+  },
   timestamp: new Date().toISOString(),
 });
 
