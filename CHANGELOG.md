@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.20.2
+
+### Bug Fixes
+- fix(build): pin pnpm and verify production-only Docker images (7ba8942)
+- fix(build): compile frontend in production mode after installing build tools (6b9026d)
+- fix(build): resolve PR90 Dockerfile conflict with main v1.20.1 (c91752c)
+
+### Other Changes
+- test(build): supply isolated webhook settings for production boot smoke (ce9f3c1)
+- style: format build regression test and generated release changelog (923ed90)
+- test(docker): consolidate pinning and runtime checks from PR89 (647be14)
+- test(docker): distinguish production peers from root development dependencies (be922c7)
+- Merge pull request #90 from kafaat/fix/ais-docker-pnpm-20260906 (cd050ce)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.1...v1.20.2
+
+
+---
+
 ## What's Changed in v1.20.1
 
 ### Bug Fixes
