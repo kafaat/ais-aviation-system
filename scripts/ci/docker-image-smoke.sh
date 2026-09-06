@@ -34,11 +34,11 @@ docker run --rm --network none --entrypoint sh ais-build-check:migrator -ec '
   test "$(pnpm config get shamefully-hoist)" = true
   test -s drizzle/migrations/meta/_journal.json
   ./node_modules/.bin/drizzle-kit --version
-' | tee "$evidence_dir/migrator-cli.log"
+' 2>&1 | tee "$evidence_dir/migrator-cli.log"
 
 # Fail when the runtime only works because build tools were copied into it.
 docker run --rm --network none --entrypoint node ais-build-check:runner --input-type=module -e '
-  import { accessSync } from "node:fs";
+  import { accessSync, readFileSync } from "node:fs";
   import { createRequire } from "node:module";
   import assert from "node:assert/strict";
   const require = createRequire(import.meta.url);
@@ -46,11 +46,20 @@ docker run --rm --network none --entrypoint node ais-build-check:runner --input-
   assert.equal(process.getuid(), 1001);
   assert.equal(process.env.NODE_ENV, "production");
   for (const name of ["express", "mysql2", "drizzle-orm"]) require.resolve(name);
-  for (const name of ["vite", "typescript", "drizzle-kit"]) {
-    assert.throws(() => require.resolve(name), { code: "MODULE_NOT_FOUND" });
+  // Assert the installation mode, not absence of a package also needed as a peer.
+  // The locked @trpc/server production dependency itself depends on TypeScript.
+  const modules = readFileSync("node_modules/.modules.yaml", "utf8");
+  const included = modules.match(/^included:\r?\n((?:[ \t]+[^\r\n]*\r?\n)+)/m)?.[1];
+  assert.ok(included, "pnpm installation metadata must contain included flags");
+  assert.match(included, /^  dependencies: true\r?$/m, "Runtime dependencies must be installed");
+  assert.match(included, /^  devDependencies: false\r?$/m, "Root devDependencies must be excluded");
+  for (const name of ["vite", "drizzle-kit"]) {
+    assert.throws(() => require.resolve(name), { code: "MODULE_NOT_FOUND" }, `Build-only dependency leaked: ${name}`);
   }
+  const trpc = require("@trpc/server/package.json");
+  console.log(`Runtime peer: TypeScript ${require("typescript/package.json").version}; @trpc/server requires ${trpc.peerDependencies.typescript}`);
   console.log("PASS: non-root runtime, compiled artifacts, production-only dependencies");
-' | tee "$evidence_dir/runtime-artifacts.log"
+' 2>&1 | tee "$evidence_dir/runtime-artifacts.log"
 
 # Keep negative pinning coverage in this canonical Docker check (formerly PR #89).
 negative_context="$(mktemp -d)"
