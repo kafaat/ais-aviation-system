@@ -3,8 +3,6 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer, type UserConfig } from "vite";
-import viteConfig from "../../vite.config";
 
 export async function setupVite(app: Express, server: Server) {
   const serverOptions = {
@@ -13,15 +11,12 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
-  // viteConfig may be a function (from defineConfig with callback) - resolve it
-  const resolvedConfig: UserConfig =
-    typeof viteConfig === "function"
-      ? await viteConfig({ mode: "development", command: "serve" })
-      : viteConfig;
-
+  // Keep build-time packages out of the production module graph. Vite loads
+  // its config (and its plugins) only when the development server is requested.
+  const { createServer: createViteServer } = await import("vite");
   const vite = await createViteServer({
-    ...resolvedConfig,
-    configFile: false,
+    configFile: path.resolve(import.meta.dirname, "../..", "vite.config.ts"),
+    mode: "development",
     server: serverOptions,
     appType: "custom",
   });
