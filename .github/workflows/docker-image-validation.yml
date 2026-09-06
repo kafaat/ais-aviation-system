@@ -1,0 +1,99 @@
+name: Production Docker Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+    paths:
+      - Dockerfile.prod
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/docker-image-validation.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build and validate production images (no push)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Build production image
+        run: docker build --progress=plain -f Dockerfile.prod --target runner -t ais-verify:runner .
+
+      - name: Build migration image
+        run: docker build --progress=plain -f Dockerfile.prod --target migrator -t ais-verify:migrator .
+
+      - name: Verify production dependency boundary offline
+        run: |
+          docker run --rm --network none --entrypoint node ais-verify:runner --input-type=commonjs -e '
+            const assert = require("node:assert/strict");
+            const fs = require("node:fs");
+            assert.equal(process.getuid(), 1001);
+            assert.equal(process.env.NODE_ENV, "production");
+            for (const path of ["dist/index.js", "dist/worker.js", "dist/public/index.html"]) {
+              assert.ok(fs.existsSync(path), `Missing runtime artifact: ${path}`);
+            }
+            for (const dependency of ["express", "mysql2", "drizzle-orm"]) {
+              require.resolve(dependency);
+            }
+            for (const dependency of ["drizzle-kit", "vite", "typescript"]) {
+              assert.throws(() => require.resolve(dependency), { code: "MODULE_NOT_FOUND" });
+            }
+            console.log("PASS: non-root runtime, built artifacts, production-only dependencies");
+          '
+
+      - name: Verify pinned migrator tooling offline
+        run: |
+          docker run --rm --network none --entrypoint node ais-verify:migrator --input-type=commonjs -e '
+            const assert = require("node:assert/strict");
+            const fs = require("node:fs");
+            const { execFileSync } = require("node:child_process");
+            const { packageManager } = require("./package.json");
+            assert.equal(process.getuid(), 1001);
+            assert.match(packageManager, /^pnpm@\d+\.\d+\.\d+$/);
+            const actual = execFileSync("pnpm", ["--version"], { encoding: "utf8" }).trim();
+            assert.equal(actual, packageManager.slice(5));
+            for (const path of ["drizzle/meta/_journal.json", "drizzle.config.ts"]) {
+              assert.ok(fs.existsSync(path), `Missing migration artifact: ${path}`);
+            }
+            execFileSync("./node_modules/.bin/drizzle-kit", ["--version"], { stdio: "inherit" });
+            console.log(`PASS: ${packageManager}, non-root migrator, local CLI without network`);
+          '
+
+      - name: Reject a floating package-manager version
+        shell: bash
+        run: |
+          set -euo pipefail
+          context="$(mktemp -d)"
+          trap 'rm -rf "$context"' EXIT
+          cp Dockerfile.prod package.json pnpm-lock.yaml "$context/"
+          node --input-type=commonjs -e '
+            const fs = require("node:fs");
+            const path = process.argv[1];
+            const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
+            manifest.packageManager = "pnpm@latest";
+            fs.writeFileSync(path, JSON.stringify(manifest));
+          ' "$context/package.json"
+          if docker build --progress=plain -f "$context/Dockerfile.prod" --target tooling "$context" > "$context/build.log" 2>&1; then
+            echo "::error::The tooling stage accepted an unpinned package manager"
+            exit 1
+          fi
+          grep -F 'Error: packageManager must pin pnpm@x.y.z' "$context/build.log"
+          echo "PASS: floating pnpm rejected before package-manager installation"
+
+      - name: Record tested source and local image IDs
+        run: |
+          git rev-parse HEAD
+          docker image inspect ais-verify:runner ais-verify:migrator --format '{{.Id}}'
