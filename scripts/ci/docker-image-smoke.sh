@@ -5,7 +5,11 @@ cd "$(dirname "$0")/../.."
 evidence_dir="${EVIDENCE_DIR:-/tmp/ais-docker-build-evidence}"
 mkdir -p "$evidence_dir"
 container=""
+negative_context=""
 cleanup() {
+  if [[ -n "$negative_context" ]]; then
+    rm -rf "$negative_context"
+  fi
   if [[ -n "$container" ]]; then
     docker logs "$container" > "$evidence_dir/runtime.log" 2>&1 || true
     docker rm -f "$container" >/dev/null 2>&1 || true
@@ -39,9 +43,36 @@ docker run --rm --network none --entrypoint node ais-build-check:runner --input-
   import assert from "node:assert/strict";
   const require = createRequire(import.meta.url);
   for (const file of ["dist/index.js", "dist/worker.js", "dist/public/index.html"]) accessSync(file);
-  assert.throws(() => require.resolve("vite"), { code: "MODULE_NOT_FOUND" });
-  console.log("PASS: compiled artifacts present; Vite absent from runtime dependencies");
+  assert.equal(process.getuid(), 1001);
+  assert.equal(process.env.NODE_ENV, "production");
+  for (const name of ["express", "mysql2", "drizzle-orm"]) require.resolve(name);
+  for (const name of ["vite", "typescript", "drizzle-kit"]) {
+    assert.throws(() => require.resolve(name), { code: "MODULE_NOT_FOUND" });
+  }
+  console.log("PASS: non-root runtime, compiled artifacts, production-only dependencies");
 ' | tee "$evidence_dir/runtime-artifacts.log"
+
+# Keep negative pinning coverage in this canonical Docker check (formerly PR #89).
+negative_context="$(mktemp -d)"
+cp Dockerfile.prod package.json pnpm-lock.yaml .npmrc "$negative_context/"
+for invalid in floating missing; do
+  node --input-type=commonjs -e '
+    const fs = require("node:fs");
+    const manifest = JSON.parse(fs.readFileSync("package.json", "utf8"));
+    if (process.argv[2] === "floating") manifest.packageManager = "pnpm@latest";
+    else delete manifest.packageManager;
+    fs.writeFileSync(process.argv[1], JSON.stringify(manifest));
+  ' "$negative_context/package.json" "$invalid"
+  if docker build --progress=plain --file "$negative_context/Dockerfile.prod" \
+    --target toolchain "$negative_context" > "$evidence_dir/reject-$invalid.log" 2>&1; then
+    echo "FAIL: package-manager guard accepted $invalid version" >&2
+    exit 1
+  fi
+  grep -F 'Error: packageManager must pin pnpm@x.y.z' "$evidence_dir/reject-$invalid.log"
+done
+rm -rf "$negative_context"
+negative_context=""
+echo 'PASS: floating and missing package-manager versions rejected before installation'
 
 # No external network, real payment keys or databases. This checks image boot and
 # static serving, NOT readiness, DB migrations, authentication or financial correctness.

@@ -10,10 +10,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 FROM base AS toolchain
 WORKDIR /app
 COPY package.json pnpm-lock.yaml .npmrc ./
-RUN PNPM_SPEC="$(node -p 'require("./package.json").packageManager')" && \
-    echo "$PNPM_SPEC" | grep -Eq '^pnpm@[0-9]+\.[0-9]+\.[0-9]+$' && \
-    npm install --global "$PNPM_SPEC" && \
-    test "$(pnpm --version)" = "${PNPM_SPEC#pnpm@}"
+RUN node -e 'if (!/^pnpm@\d+\.\d+\.\d+$/.test(require("./package.json").packageManager ?? "")) throw new Error("packageManager must pin pnpm@x.y.z")' && \
+    npm install --global "$(node -p 'require("./package.json").packageManager')" && \
+    test "$(pnpm --version)" = "$(node -p 'require("./package.json").packageManager.slice(5)')"
 
 # Install build tools as well as runtime dependencies.
 FROM toolchain AS deps
@@ -32,7 +31,7 @@ FROM toolchain AS prod-deps
 RUN pnpm install --frozen-lockfile --prod
 
 # Migration image (includes drizzle-kit for running database migrations)
-# Build with: docker build --target migrator -t app-migrator .
+# Build with: docker build -f Dockerfile.prod --target migrator -t app-migrator .
 FROM deps AS migrator
 WORKDIR /app
 COPY drizzle ./drizzle
