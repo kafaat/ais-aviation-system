@@ -9,35 +9,37 @@ permissions:
   contents: read
 
 jobs:
-  workspace:
+  recovery:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - name: Export tracked source (no credentials or runtime secrets)
+      - name: Recover saved Git blob without executing its contents
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p /tmp/ais-workspace
-          git archive --format=zip --output=/tmp/ais-workspace/source.zip HEAD
-          git rev-parse HEAD > /tmp/ais-workspace/SOURCE_SHA.txt
-          sha256sum /tmp/ais-workspace/source.zip > /tmp/ais-workspace/SHA256SUMS
+          mkdir -p /tmp/ais-recovered
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, urllib.request, zlib
+          sha = '0e9011c160e7b3ee0c0bd819b12eaeb467e3e820'
+          url = 'https://api.github.com/repos/kafaat/ais-aviation-system/git/blobs/' + sha
+          req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              blob = json.load(response)
+          content = base64.b64decode(blob['content'])
+          assert hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest() == sha
+          root = pathlib.Path('/tmp/ais-recovered')
+          (root / 'saved-blob.txt').write_bytes(content)
+          try:
+              decoded = zlib.decompress(base64.b64decode(content))
+              (root / 'recovered-payload.txt').write_bytes(decoded)
+              print('Recovered bytes:', len(decoded))
+          except Exception as error:
+              (root / 'recovery-error.txt').write_text(str(error))
+              print('Saved raw blob; decoding requires review:', error)
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: ais-remediation-source
-          path: /tmp/ais-workspace/
+          name: ais-recovered-payload
+          path: /tmp/ais-recovered/
           retention-days: 7
-          if-no-files-found: error
-      - name: Install pinned package manager
-        run: npm install --global pnpm@10.28.2
-      - name: Install locked dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Export dependency workspace
-        run: tar -czf /tmp/ais-node-modules.tgz node_modules
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: ais-remediation-dependencies
-          path: /tmp/ais-node-modules.tgz
-          retention-days: 1
-          compression-level: 0
           if-no-files-found: error
