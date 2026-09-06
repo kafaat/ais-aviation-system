@@ -9,7 +9,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import { getDb } from "../db";
 import { outbox, type OutboxEvent } from "../../drizzle/schema";
@@ -21,6 +21,11 @@ type DbOrTx = Pick<MySql2Database<typeof schema>, "insert">;
 
 const DEFAULT_RELAY_LIMIT = 100;
 const DEFAULT_MAX_ATTEMPTS = 5;
+/**
+ * A row claimed (`processing`) longer than this is assumed orphaned by a
+ * crashed worker and becomes claimable again.
+ */
+export const OUTBOX_CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
 
 export interface NewEvent {
   aggregateType: string;
@@ -66,7 +71,22 @@ function getDbOrThrow() {
   return db;
 }
 
-/** Oldest pending events first (FIFO), capped at `limit`. */
+/**
+ * Condition for rows a relay worker may claim: pending, or `processing` rows
+ * whose claim is older than {@link OUTBOX_CLAIM_TIMEOUT_MS} (orphaned).
+ */
+function claimableCondition(maxAttempts: number, now: Date) {
+  const staleBefore = new Date(now.getTime() - OUTBOX_CLAIM_TIMEOUT_MS);
+  return and(
+    or(
+      eq(outbox.status, "pending"),
+      and(eq(outbox.status, "processing"), lt(outbox.lockedAt, staleBefore))
+    ),
+    lt(outbox.attempts, maxAttempts)
+  );
+}
+
+/** Oldest claimable events first (FIFO), capped at `limit`. Read-only peek. */
 export async function getPendingEvents(
   limit = DEFAULT_RELAY_LIMIT,
   maxAttempts = DEFAULT_MAX_ATTEMPTS
@@ -75,9 +95,54 @@ export async function getPendingEvents(
   return await db
     .select()
     .from(outbox)
-    .where(and(eq(outbox.status, "pending"), lt(outbox.attempts, maxAttempts)))
+    .where(claimableCondition(maxAttempts, new Date()))
     .orderBy(asc(outbox.createdAt))
     .limit(limit);
+}
+
+/**
+ * Atomically CLAIM a batch of events for this worker.
+ *
+ * Runs `SELECT ... FOR UPDATE SKIP LOCKED` + `UPDATE status='processing'` in
+ * one transaction, so concurrent relay instances (multiple app replicas, cron
+ * overlap) each get a disjoint set of rows and no event is published twice.
+ * Rows left in `processing` by a crashed worker are reclaimed after
+ * {@link OUTBOX_CLAIM_TIMEOUT_MS}.
+ */
+export async function claimPendingEvents(
+  limit = DEFAULT_RELAY_LIMIT,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS
+): Promise<OutboxEvent[]> {
+  const db = getDbOrThrow();
+  const now = new Date();
+
+  return await db.transaction(async tx => {
+    const rows = await tx
+      .select()
+      .from(outbox)
+      .where(claimableCondition(maxAttempts, now))
+      .orderBy(asc(outbox.createdAt))
+      .limit(limit)
+      .for("update", { skipLocked: true });
+
+    if (rows.length === 0) return [];
+
+    await tx
+      .update(outbox)
+      .set({ status: "processing", lockedAt: now })
+      .where(
+        inArray(
+          outbox.id,
+          rows.map(r => r.id)
+        )
+      );
+
+    return rows.map(r => ({
+      ...r,
+      status: "processing" as const,
+      lockedAt: now,
+    }));
+  });
 }
 
 export async function markPublished(ids: number[]): Promise<void> {
@@ -85,7 +150,7 @@ export async function markPublished(ids: number[]): Promise<void> {
   const db = getDbOrThrow();
   await db
     .update(outbox)
-    .set({ status: "published", publishedAt: new Date() })
+    .set({ status: "published", publishedAt: new Date(), lockedAt: null })
     .where(inArray(outbox.id, ids));
 }
 
@@ -95,12 +160,14 @@ export async function markFailed(
   maxAttempts = DEFAULT_MAX_ATTEMPTS
 ): Promise<void> {
   const db = getDbOrThrow();
-  // Increment attempts; flip to 'failed' once attempts reach the cap.
+  // Increment attempts and release the claim; flip to 'failed' once attempts
+  // reach the cap, otherwise back to 'pending' for the next relay tick.
   await db
     .update(outbox)
     .set({
       attempts: sql`${outbox.attempts} + 1`,
       lastError: error.slice(0, 1000),
+      lockedAt: null,
       status: sql`CASE WHEN ${outbox.attempts} + 1 >= ${maxAttempts} THEN 'failed' ELSE 'pending' END`,
     })
     .where(eq(outbox.id, id));
@@ -138,15 +205,16 @@ export async function processEvents(
 }
 
 /**
- * Fetch pending events, publish them, and persist the outcome. Intended to be
- * invoked periodically (cron/worker). Returns counts for observability.
+ * Claim pending events, publish them, and persist the outcome. Intended to be
+ * invoked periodically (cron/worker) and safe to run on several instances at
+ * once (see {@link claimPendingEvents}). Returns counts for observability.
  */
 export async function relayOutbox(
   publisher: OutboxPublisher,
   opts: { limit?: number; maxAttempts?: number } = {}
 ): Promise<{ published: number; failed: number }> {
   const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
-  const events = await getPendingEvents(opts.limit, maxAttempts);
+  const events = await claimPendingEvents(opts.limit, maxAttempts);
   if (events.length === 0) return { published: 0, failed: 0 };
 
   const { publishedIds, failed } = await processEvents(events, publisher);

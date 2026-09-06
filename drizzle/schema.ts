@@ -5373,12 +5373,22 @@ export const outbox = mysqlTable(
     // Tenant attribution (per-airline event streams in the SaaS model).
     tenantId: int("tenantId"),
     payload: json("payload").notNull(),
-    status: mysqlEnum("status", ["pending", "published", "failed"])
+    // 'processing' = claimed by a relay worker (prevents double-publish when
+    // several app instances run the relay concurrently).
+    status: mysqlEnum("status", [
+      "pending",
+      "processing",
+      "published",
+      "failed",
+    ])
       .default("pending")
       .notNull(),
     attempts: int("attempts").default(0).notNull(),
     lastError: text("lastError"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
+    // When the row was claimed; stale claims (worker crashed) are reclaimed
+    // after OUTBOX_CLAIM_TIMEOUT.
+    lockedAt: timestamp("lockedAt"),
     publishedAt: timestamp("publishedAt"),
   },
   table => ({

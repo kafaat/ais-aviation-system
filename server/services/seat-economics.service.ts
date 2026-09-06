@@ -411,8 +411,13 @@ export async function getFlightEconomics(
   let netContribution = 0;
   let currency = "SAR";
 
-  for (const b of bookingRows) {
-    const econ = await getBookingSeatEconomics(b.id);
+  // Per-booking economics are independent → fetch them concurrently so
+  // latency doesn't grow linearly with the number of bookings on the flight.
+  const economics = await Promise.all(
+    bookingRows.map(b => getBookingSeatEconomics(b.id))
+  );
+
+  for (const econ of economics) {
     currency = econ.currency;
     seatCount += econ.summary.seatCount;
     gross += econ.summary.gross;

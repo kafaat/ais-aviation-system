@@ -75,20 +75,106 @@ describe("recordEvent", () => {
   });
 });
 
+/**
+ * Minimal fake of the drizzle handle used by the relay: a transaction whose
+ * SELECT ... FOR UPDATE SKIP LOCKED returns `rows`, plus top-level update()
+ * so markPublished/markFailed can be observed.
+ */
+function fakeDb(rows: OutboxEvent[]) {
+  const forUpdate = vi.fn(() => Promise.resolve(rows));
+  const selectChain: Record<string, unknown> = {};
+  for (const m of ["from", "where", "orderBy", "limit"]) {
+    selectChain[m] = () => selectChain;
+  }
+  selectChain.for = forUpdate;
+
+  const txSets: unknown[] = [];
+  const txWhere = vi.fn(() => Promise.resolve());
+  const txUpdate = vi.fn(() => ({
+    set: (v: unknown) => {
+      txSets.push(v);
+      return { where: txWhere };
+    },
+  }));
+
+  const rootSets: unknown[] = [];
+  const rootWhere = vi.fn(() => Promise.resolve());
+  const rootUpdate = vi.fn(() => ({
+    set: (v: unknown) => {
+      rootSets.push(v);
+      return { where: rootWhere };
+    },
+  }));
+
+  const handle = {
+    transaction: vi.fn(
+      async (fn: (tx: unknown) => Promise<unknown>) =>
+        await fn({ select: () => selectChain, update: txUpdate })
+    ),
+    update: rootUpdate,
+  };
+  vi.mocked(db.getDb).mockReturnValue(handle as never);
+  return { handle, forUpdate, txUpdate, txSets, rootUpdate, rootSets };
+}
+
 describe("relayOutbox", () => {
   it("is a no-op when there are no pending events", async () => {
-    // getPendingEvents -> db.select()...limit() resolves to []
-    const chain: Record<string, unknown> = {};
-    for (const m of ["from", "where", "orderBy"]) chain[m] = () => chain;
-    chain.limit = () => Promise.resolve([]);
-    vi.mocked(db.getDb).mockReturnValue({
-      select: () => chain,
-    } as never);
+    const { txUpdate, rootUpdate } = fakeDb([]);
 
     const publisher = vi.fn();
     const result = await relayOutbox(publisher as never);
     expect(result).toEqual({ published: 0, failed: 0 });
     expect(publisher).not.toHaveBeenCalled();
+    // Nothing to claim → no status writes at all.
+    expect(txUpdate).not.toHaveBeenCalled();
+    expect(rootUpdate).not.toHaveBeenCalled();
+  });
+
+  it("claims rows (SKIP LOCKED + status=processing) before publishing", async () => {
+    const { forUpdate, txUpdate, txSets, rootSets } = fakeDb([
+      event(1),
+      event(2),
+    ]);
+
+    const order: string[] = [];
+    txUpdate.mockImplementation(() => {
+      order.push("claim");
+      return {
+        set: (v: unknown) => {
+          txSets.push(v);
+          return { where: () => Promise.resolve() };
+        },
+      };
+    });
+    const publisher: OutboxPublisher = async e => {
+      order.push(`publish:${e.id}`);
+    };
+
+    const result = await relayOutbox(publisher);
+
+    expect(result).toEqual({ published: 2, failed: 0 });
+    // Row-level lock with SKIP LOCKED so concurrent relays get disjoint sets.
+    expect(forUpdate).toHaveBeenCalledWith("update", { skipLocked: true });
+    // Claim happens once, inside the tx, and strictly BEFORE any publish.
+    expect(order).toEqual(["claim", "publish:1", "publish:2"]);
+    expect(txSets[0]).toMatchObject({ status: "processing" });
+    expect((txSets[0] as { lockedAt: unknown }).lockedAt).toBeInstanceOf(Date);
+    // Successful publish releases the claim.
+    expect(rootSets[0]).toMatchObject({ status: "published", lockedAt: null });
+  });
+
+  it("releases the claim on failure so the event can be retried", async () => {
+    const { rootSets } = fakeDb([event(7)]);
+    const publisher: OutboxPublisher = async () => {
+      throw new Error("bus down");
+    };
+
+    const result = await relayOutbox(publisher);
+
+    expect(result).toEqual({ published: 0, failed: 1 });
+    const failedSet = rootSets[0] as Record<string, unknown>;
+    expect(failedSet.lockedAt).toBeNull();
+    expect(failedSet.lastError).toBe("bus down");
   });
 });
 

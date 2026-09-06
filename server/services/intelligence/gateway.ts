@@ -152,6 +152,21 @@ export class AIGateway {
           { requestId, agentId: request.agentId, cached: true },
           "Gateway cache hit"
         );
+        // Persist the hit too (0 tokens / $0) so per-tenant/feature call
+        // counts stay accurate — cache hits are still AI-feature usage.
+        void recordAiUsage({
+          requestId,
+          modelId: cached.modelUsed,
+          agentId: request.agentId,
+          taskType: request.taskType,
+          tenantId: request.tenantId ?? null,
+          feature: request.feature ?? null,
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          latencyMs: Date.now() - startTime,
+          cached: true,
+        });
         return { ...cached, cached: true, requestId };
       }
     }

@@ -74,10 +74,14 @@ export function computePriceQuote(input: PriceQuoteInput): PriceQuote {
   const currency = input.currency ?? "SAR";
   const baseFare = Math.max(0, Math.round(input.baseFare));
 
-  const ancillariesTotal = input.ancillaries.reduce(
-    (sum, a) => sum + Math.max(0, a.price),
-    0
-  );
+  // Normalize line items (non-negative, whole cents) so the returned breakdown
+  // always sums to `ancillariesTotal` — a negative/fractional price is clamped
+  // in BOTH the line item and the total, never silently in just one of them.
+  const ancillaries: QuoteAncillary[] = input.ancillaries.map(a => ({
+    ...a,
+    price: Math.max(0, Math.round(a.price)),
+  }));
+  const ancillariesTotal = ancillaries.reduce((sum, a) => sum + a.price, 0);
   const subtotal = baseFare + ancillariesTotal;
 
   const tier = input.loyaltyTier ?? null;
@@ -95,7 +99,7 @@ export function computePriceQuote(input: PriceQuoteInput): PriceQuote {
   return {
     currency,
     baseFare,
-    ancillaries: input.ancillaries,
+    ancillaries,
     ancillariesTotal,
     subtotal,
     loyaltyTier: tier,

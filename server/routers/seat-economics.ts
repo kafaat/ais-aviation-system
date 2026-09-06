@@ -50,7 +50,7 @@ export const seatEconomicsRouter = router({
         tags: ["Seat Economics", "Admin"],
         summary: "Aggregate seat economics for a flight",
         description:
-          "Sum revenue, cost, and net contribution across all paid/confirmed/checked-in/boarded/completed bookings on a flight, including average net contribution per seat.",
+          "Sum revenue, cost, and net contribution across all bookings on a flight whose payment has been captured (paymentStatus = paid; pending/failed/refunded bookings are excluded), including average net contribution per seat.",
         protect: true,
       },
     })

@@ -80,7 +80,26 @@ describe("computePriceQuote", () => {
       })
     );
     expect(q.ancillariesTotal).toBe(0);
+    // The returned breakdown must agree with the total: the bad line item is
+    // clamped to 0, not echoed back as -500.
+    expect(q.ancillaries).toEqual([{ id: 1, name: "Bad", price: 0 }]);
     expect(q.milesDiscount).toBe(0);
     expect(q.total).toBe(50000);
+  });
+
+  it("returned ancillary line items always sum to ancillariesTotal", () => {
+    const q = computePriceQuote(
+      base({
+        ancillaries: [
+          { id: 1, name: "Bag", price: 1999.6 }, // fractional → rounded
+          { id: 2, name: "Meal", price: -100 }, // negative → clamped
+          { id: 3, name: "Seat", price: 3000 },
+        ],
+      })
+    );
+    const lineSum = q.ancillaries.reduce((s, a) => s + a.price, 0);
+    expect(lineSum).toBe(q.ancillariesTotal);
+    expect(q.ancillariesTotal).toBe(2000 + 0 + 3000);
+    expect(q.ancillaries.map(a => a.price)).toEqual([2000, 0, 3000]);
   });
 });
