@@ -6,7 +6,23 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+
+/** Parse an .xlsx buffer back into { sheetNames, cells-per-sheet } for assertions. */
+async function readWorkbook(buffer: Buffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const sheetNames = workbook.worksheets.map(ws => ws.name);
+  const cellText = (name: string) => {
+    const ws = workbook.getWorksheet(name);
+    const values: string[] = [];
+    ws?.eachRow(row => {
+      row.eachCell(cell => values.push(String(cell.value ?? "")));
+    });
+    return values.join(" ");
+  };
+  return { sheetNames, cellText };
+}
 
 // Mock the database
 vi.mock("../db", () => ({
@@ -290,9 +306,9 @@ describe("Report Export Service", () => {
         expect(buffer.length).toBeGreaterThan(0);
 
         // Verify it's a valid Excel file by reading it
-        const workbook = XLSX.read(buffer, { type: "buffer" });
-        expect(workbook.SheetNames).toContain("Summary");
-        expect(workbook.SheetNames).toContain("Bookings");
+        const workbook = await readWorkbook(buffer);
+        expect(workbook.sheetNames).toContain("Summary");
+        expect(workbook.sheetNames).toContain("Bookings");
       });
 
       it("should include summary statistics", async () => {
@@ -310,12 +326,8 @@ describe("Report Export Service", () => {
         );
 
         const buffer = await exportBookingsToExcel({});
-        const workbook = XLSX.read(buffer, { type: "buffer" });
-        const summarySheet = workbook.Sheets["Summary"];
-
-        // Convert sheet to JSON to check content
-        const data = XLSX.utils.sheet_to_json(summarySheet, { header: 1 });
-        const flatData = data.flat().join(" ");
+        const workbook = await readWorkbook(buffer);
+        const flatData = workbook.cellText("Summary");
 
         expect(flatData).toContain("AIS Aviation System");
         expect(flatData).toContain("Bookings Report");
@@ -340,9 +352,9 @@ describe("Report Export Service", () => {
 
         expect(buffer).toBeInstanceOf(Buffer);
 
-        const workbook = XLSX.read(buffer, { type: "buffer" });
-        expect(workbook.SheetNames).toContain("Summary");
-        expect(workbook.SheetNames).toContain("Daily Revenue");
+        const workbook = await readWorkbook(buffer);
+        expect(workbook.sheetNames).toContain("Summary");
+        expect(workbook.sheetNames).toContain("Daily Revenue");
       });
     });
 
@@ -365,8 +377,8 @@ describe("Report Export Service", () => {
 
         expect(buffer).toBeInstanceOf(Buffer);
 
-        const workbook = XLSX.read(buffer, { type: "buffer" });
-        expect(workbook.SheetNames).toContain("Flights");
+        const workbook = await readWorkbook(buffer);
+        expect(workbook.sheetNames).toContain("Flights");
       });
     });
 
@@ -389,9 +401,9 @@ describe("Report Export Service", () => {
 
         expect(buffer).toBeInstanceOf(Buffer);
 
-        const workbook = XLSX.read(buffer, { type: "buffer" });
-        expect(workbook.SheetNames).toContain("Summary");
-        expect(workbook.SheetNames).toContain("Refunds");
+        const workbook = await readWorkbook(buffer);
+        expect(workbook.sheetNames).toContain("Summary");
+        expect(workbook.sheetNames).toContain("Refunds");
       });
     });
   });

@@ -274,6 +274,14 @@ jobs:
             echo -e "$NEW_CHANGELOG" > CHANGELOG.md
           fi
 
+      # The generated markdown must satisfy the repo's Prettier config, otherwise
+      # every PR branched from main afterwards fails the Lint job on CHANGELOG.md
+      # (happened on v1.19.1 and v1.20.1). Use the project's own Prettier version.
+      - name: Format CHANGELOG.md with Prettier
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm exec prettier --write CHANGELOG.md
+
       - name: Commit version bump
         run: |
           git add package.json CHANGELOG.md

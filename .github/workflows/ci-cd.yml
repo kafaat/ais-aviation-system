@@ -793,6 +793,10 @@ jobs:
     environment:
       name: production
       url: ${{ vars.PRODUCTION_URL }}
+    # Exposed so downstream jobs can tell "deployed" apart from "skipped
+    # because no cluster is configured" (both end in job success).
+    outputs:
+      deployed: ${{ steps.kube-config.outputs.configured }}
     env:
       DEPLOY_ENV: production
     steps:
@@ -1020,12 +1024,21 @@ jobs:
     name: Post-Deployment Monitoring
     runs-on: ubuntu-latest
     needs: deploy-production
-    if: success()
+    # Only monitor when a deployment actually happened. When no
+    # PRODUCTION_KUBECONFIG/PRODUCTION_URL is configured the deploy job
+    # succeeds with every step skipped, and probing an empty URL turned
+    # every push to main red (status "000").
+    if: >-
+      success() &&
+      needs.deploy-production.outputs.deployed == 'true' &&
+      vars.PRODUCTION_URL != ''
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Monitor error rates for 5 minutes
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
         run: |
           echo "Monitoring deployment for anomalies..."
 
@@ -1035,7 +1048,8 @@ jobs:
           FAILURES=0
 
           while [ $(($(date +%s) - START_TIME)) -lt $DURATION ]; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }}/api/trpc/health.check || echo "000")
+            # Public liveness probe (health.check is admin-only and would 401).
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${PRODUCTION_URL%/}/api/rest/health/live" || echo "000")
 
             if [ "$HTTP_STATUS" != "200" ]; then
               echo "Health check failed with status: $HTTP_STATUS"

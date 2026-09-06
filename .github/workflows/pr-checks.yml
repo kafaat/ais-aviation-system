@@ -129,7 +129,15 @@ jobs:
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, Unlicense, WTFPL, BlueOak-1.0.0, Python-2.0
+          # MPL-2.0: lightningcss (build-time, via tailwindcss/vite; file-level copyleft, no
+          # effect on the app). CC-BY-4.0: caniuse-lite browser data. Zlib / MITNFA: pako,
+          # bowser dual-license expressions. All were already in the tree before the
+          # policy existed; the check only evaluates packages whose version changed.
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, Unlicense, WTFPL, BlueOak-1.0.0, Python-2.0, MPL-2.0, CC-BY-4.0, Zlib, MITNFA
+          # robust-predicates and big-integer (via exceljs > unzipper) are Unlicense, but
+          # ClearlyDefined reports them as "LicenseRef-scancode-public-domain AND Unlicense",
+          # which no SPDX allow-list can match.
+          allow-dependencies-licenses: pkg:npm/robust-predicates, pkg:npm/big-integer
 
   # =============================================================================
   # Check PR Checklist
