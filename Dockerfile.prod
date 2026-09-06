@@ -22,6 +22,7 @@ RUN pnpm install --frozen-lockfile
 
 # Build the application
 FROM deps AS builder
+ENV NODE_ENV=production
 WORKDIR /app
 COPY . .
 RUN pnpm build
