@@ -5,12 +5,18 @@ FROM node:22-alpine AS base
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 ais
 
-# Install dependencies
-FROM base AS deps
+# One package-manager installation for build and production dependencies.
+# Read the exact version from the project manifest; never resolve pnpm@latest.
+FROM base AS tooling
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && \
-    pnpm install --frozen-lockfile --prod=false
+RUN node -e 'if (!/^pnpm@\d+\.\d+\.\d+$/.test(require("./package.json").packageManager ?? "")) throw new Error("packageManager must pin pnpm@x.y.z")' && \
+    npm install --global "$(node -p 'require("./package.json").packageManager')" && \
+    test "$(pnpm --version)" = "$(node -p 'require("./package.json").packageManager.slice(5)')"
+
+# Build tooling belongs here, not in the final production image.
+FROM tooling AS deps
+RUN NODE_ENV=development pnpm install --frozen-lockfile
 
 # Build the application
 FROM deps AS builder
@@ -18,21 +24,18 @@ WORKDIR /app
 COPY . .
 RUN pnpm build
 
-# Production dependencies only
-FROM base AS prod-deps
-WORKDIR /app
-COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm && \
-    pnpm install --frozen-lockfile --prod
+# Production dependencies only, using the same pinned package manager.
+FROM tooling AS prod-deps
+RUN pnpm install --frozen-lockfile --prod
 
 # Migration image (includes drizzle-kit for running database migrations)
-# Build with: docker build --target migrator -t app-migrator .
+# Build with: docker build -f Dockerfile.prod --target migrator -t app-migrator .
 FROM deps AS migrator
 WORKDIR /app
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./
 USER ais
-CMD ["npx", "drizzle-kit", "migrate"]
+CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
 
 # Production image
 FROM base AS runner
