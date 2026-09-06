@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.20.1
+
+### Bug Fixes
+
+- fix(docker): pin pnpm from manifest and validate production images before merge (d1903c9)
+
+### Other Changes
+
+- style: format generated v1.20.0 changelog without weakening CI (a6dc74a)
+- Merge pull request #89 from kafaat/fix/docker-pnpm-pinning-20260906 (32e6769)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.0...v1.20.1
+
+---
+
 ## What's Changed in v1.20.0
 
 ### Features

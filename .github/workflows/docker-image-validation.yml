@@ -1,0 +1,44 @@
+name: Production Docker Validation
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+    paths:
+      - Dockerfile.prod
+      - package.json
+      - pnpm-lock.yaml
+      - .npmrc
+      - server/_core/**
+      - scripts/ci/docker-image-smoke.sh
+      - .github/workflows/docker-image-validation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build and validate production images (no push)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Build, validate and boot the production-only images
+        run: bash scripts/ci/docker-image-smoke.sh
+      - name: Upload build evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: docker-build-evidence
+          path: /tmp/ais-docker-build-evidence/
+          retention-days: 14
+          if-no-files-found: error
