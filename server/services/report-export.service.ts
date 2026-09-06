@@ -16,7 +16,22 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
+
+/**
+ * Build an .xlsx buffer from named sheets given as arrays-of-arrays.
+ * (exceljs replaced SheetJS `xlsx`, whose last npm release 0.18.5 carries
+ * unfixed prototype-pollution and ReDoS advisories.)
+ */
+async function buildXlsxBuffer(
+  sheets: Array<{ name: string; rows: unknown[][] }>
+): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  for (const sheet of sheets) {
+    workbook.addWorksheet(sheet.name).addRows(sheet.rows);
+  }
+  return Buffer.from(await workbook.xlsx.writeBuffer());
+}
 
 // ============================================================================
 // Types
@@ -661,20 +676,10 @@ export async function exportBookingsToExcel(
     ]),
   ];
 
-  // Create workbook
-  const wb = XLSX.utils.book_new();
-
-  // Add summary sheet
-  const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-  XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
-
-  // Add detail sheet
-  const detailWs = XLSX.utils.aoa_to_sheet(detailData);
-  XLSX.utils.book_append_sheet(wb, detailWs, "Bookings");
-
-  // Generate buffer
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  return Buffer.from(buffer);
+  return buildXlsxBuffer([
+    { name: "Summary", rows: summaryData },
+    { name: "Bookings", rows: detailData },
+  ]);
 }
 
 /**
@@ -775,15 +780,10 @@ export async function exportRevenueToExcel(
     ]),
   ];
 
-  // Create workbook
-  const wb = XLSX.utils.book_new();
-  const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-  XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
-  const detailWs = XLSX.utils.aoa_to_sheet(detailData);
-  XLSX.utils.book_append_sheet(wb, detailWs, "Daily Revenue");
-
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  return Buffer.from(buffer);
+  return buildXlsxBuffer([
+    { name: "Summary", rows: summaryData },
+    { name: "Daily Revenue", rows: detailData },
+  ]);
 }
 
 /**
@@ -914,15 +914,10 @@ export async function exportFlightPerformanceToExcel(
     ]),
   ];
 
-  // Create workbook
-  const wb = XLSX.utils.book_new();
-  const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-  XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
-  const detailWs = XLSX.utils.aoa_to_sheet(detailData);
-  XLSX.utils.book_append_sheet(wb, detailWs, "Flights");
-
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  return Buffer.from(buffer);
+  return buildXlsxBuffer([
+    { name: "Summary", rows: summaryData },
+    { name: "Flights", rows: detailData },
+  ]);
 }
 
 // ============================================================================
@@ -1122,15 +1117,10 @@ export async function exportRefundsToExcel(
     ]),
   ];
 
-  // Create workbook
-  const wb = XLSX.utils.book_new();
-  const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-  XLSX.utils.book_append_sheet(wb, summaryWs, "Summary");
-  const detailWs = XLSX.utils.aoa_to_sheet(detailData);
-  XLSX.utils.book_append_sheet(wb, detailWs, "Refunds");
-
-  const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-  return Buffer.from(buffer);
+  return buildXlsxBuffer([
+    { name: "Summary", rows: summaryData },
+    { name: "Refunds", rows: detailData },
+  ]);
 }
 
 /**
