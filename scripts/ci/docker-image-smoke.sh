@@ -21,7 +21,7 @@ for target in runner migrator; do
     2>&1 | tee "$evidence_dir/build-$target.log"
   docker image inspect "ais-build-check:$target" > "$evidence_dir/image-$target.json"
   test "$(docker run --rm --network none --entrypoint id "ais-build-check:$target" -u)" = 1001
- done
+done
 
 # Check the installed CLI, not a tool fetched by npx on demand.
 docker run --rm --network none --entrypoint sh ais-build-check:migrator -ec '
@@ -50,6 +50,9 @@ container="$(docker run -d --network none --no-healthcheck \
   -e NODE_ENV=production -e PORT=3000 \
   -e VITE_APP_ID=ais-image-smoke -e OWNER_OPEN_ID=image-smoke \
   -e JWT_SECRET=image-smoke-only-not-a-deployment-key \
+  -e REFRESH_TOKEN_PEPPER=image-smoke-only-not-a-deployment-pepper \
+  -e STRIPE_SECRET_KEY=sk_test_image_smoke_placeholder_not_real \
+  -e STRIPE_WEBHOOK_SECRET=whsec_image_smoke_placeholder_not_real \
   -e DATABASE_URL=mysql://image:image@127.0.0.1:3306/image_smoke \
   -e OAUTH_SERVER_URL=http://127.0.0.1:8000 \
   -e AUTH_SERVICE_URL=http://127.0.0.1:8000 \
