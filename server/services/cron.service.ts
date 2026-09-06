@@ -47,25 +47,67 @@ export async function cleanupExpiredLocks() {
   }
 }
 
+const scheduledTasks: Array<{ stop: () => void | Promise<void> }> = [];
+const runningJobs = new Set<string>();
+
 /**
- * Initialize and start all cron jobs
+ * Run a cron tick with an in-process re-entrancy guard: if the previous tick
+ * of the same job is still running (slow DB, large outbox backlog), skip this
+ * tick instead of stacking overlapping runs.
+ */
+async function runGuarded(name: string, job: () => Promise<void>) {
+  if (runningJobs.has(name)) {
+    logger.warn({ job: name }, "Previous cron tick still running; skipping");
+    return;
+  }
+  runningJobs.add(name);
+  try {
+    logger.debug({}, `Running cron job: ${name}`);
+    await job();
+  } finally {
+    runningJobs.delete(name);
+  }
+}
+
+/**
+ * Initialize and start all cron jobs.
+ *
+ * Call this from ONE process only (the background worker, see
+ * server/worker.ts) — not from every web replica — so periodic work such as
+ * the outbox relay is not multiplied by the number of app instances.
+ * Idempotent: a second call is a no-op.
  */
 export function startCronJobs() {
+  if (scheduledTasks.length > 0) {
+    logger.warn({}, "Cron jobs already started; ignoring duplicate call");
+    return;
+  }
   logger.info({}, "Starting cron jobs...");
 
   // Clean up expired locks every 5 minutes
-  cron.schedule("*/5 * * * *", async () => {
-    logger.debug({}, "Running cron job: cleanupExpiredLocks");
-    await cleanupExpiredLocks();
-  });
+  scheduledTasks.push(
+    cron.schedule("*/5 * * * *", () =>
+      runGuarded("cleanupExpiredLocks", cleanupExpiredLocks)
+    )
+  );
 
   // Relay transactional-outbox events every minute
-  cron.schedule("* * * * *", async () => {
-    logger.debug({}, "Running cron job: relayOutboxEvents");
-    await relayOutboxEvents();
-  });
+  scheduledTasks.push(
+    cron.schedule("* * * * *", () =>
+      runGuarded("relayOutboxEvents", relayOutboxEvents)
+    )
+  );
 
   logger.info({}, "Cron jobs started successfully");
+}
+
+/** Stop all scheduled cron jobs (graceful shutdown). */
+export async function stopCronJobs() {
+  if (scheduledTasks.length === 0) return;
+  logger.info({}, "Stopping cron jobs...");
+  for (const task of scheduledTasks.splice(0)) {
+    await task.stop();
+  }
 }
 
 /**
