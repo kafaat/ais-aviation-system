@@ -13,6 +13,37 @@ import {
 } from "drizzle-orm/mysql-core";
 
 /**
+ * Tenants = the airlines onboarded onto the AIS SaaS platform. This is the
+ * foundation of multi-tenancy: every user (and, progressively, every
+ * transactional row) is scoped to a tenant. Nullable links keep the system
+ * backward-compatible during the single-tenant -> multi-tenant migration.
+ */
+export const tenants = mysqlTable(
+  "tenants",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    // Short stable identifier used in subdomains / API keys, e.g. "sv", "xy".
+    slug: varchar("slug", { length: 64 }).notNull().unique(),
+    name: varchar("name", { length: 255 }).notNull(),
+    // Optional IATA airline code for the tenant.
+    airlineCode: varchar("airlineCode", { length: 3 }),
+    status: mysqlEnum("status", ["active", "suspended", "pending"])
+      .default("active")
+      .notNull(),
+    contactEmail: varchar("contactEmail", { length: 320 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    slugIdx: uniqueIndex("tenants_slug_idx").on(table.slug),
+    statusIdx: index("tenants_status_idx").on(table.status),
+  })
+);
+
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = typeof tenants.$inferInsert;
+
+/**
  * Core user table backing auth flow.
  */
 export const users = mysqlTable(
@@ -20,6 +51,9 @@ export const users = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     openId: varchar("openId", { length: 64 }).notNull().unique(),
+    // Tenant (airline) this user belongs to. Nullable until tenancy is fully
+    // rolled out; platform/super-admin users may legitimately have no tenant.
+    tenantId: int("tenantId"),
     name: text("name"),
     email: varchar("email", { length: 320 }),
     loginMethod: varchar("loginMethod", { length: 64 }),
@@ -44,6 +78,8 @@ export const users = mysqlTable(
     emailIdx: index("users_email_idx").on(table.email),
     // Index for role-based queries (admin panels, RBAC)
     roleIdx: index("users_role_idx").on(table.role),
+    // Index for tenant-scoped user queries
+    tenantIdx: index("users_tenant_idx").on(table.tenantId),
     // Index for user listing sorted by creation date
     createdAtIdx: index("users_created_at_idx").on(table.createdAt),
     // Composite index for role + createdAt (admin user listing with filters)
@@ -126,6 +162,8 @@ export const flights = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     flightNumber: varchar("flightNumber", { length: 10 }).notNull(),
     airlineId: int("airlineId").notNull(),
+    // Tenant (airline) that owns this flight. Nullable during migration.
+    tenantId: int("tenantId"),
     originId: int("originId").notNull(),
     destinationId: int("destinationId").notNull(),
     departureTime: timestamp("departureTime").notNull(),
@@ -153,6 +191,7 @@ export const flights = mysqlTable(
     departureTimeIdx: index("departure_time_idx").on(table.departureTime),
     routeIdx: index("route_idx").on(table.originId, table.destinationId),
     airlineIdx: index("airline_idx").on(table.airlineId),
+    tenantIdx: index("flights_tenant_idx").on(table.tenantId),
     statusIdx: index("status_idx").on(table.status),
     // Composite index for common search pattern: route + date + status
     routeDateStatusIdx: index("route_date_status_idx").on(
@@ -174,6 +213,8 @@ export const bookings = mysqlTable(
   "bookings",
   {
     id: int("id").autoincrement().primaryKey(),
+    // Tenant (airline) this booking belongs to. Nullable during migration.
+    tenantId: int("tenantId"),
     userId: int("userId").notNull(),
     flightId: int("flightId").notNull(),
     bookingReference: varchar("bookingReference", { length: 6 })
@@ -213,6 +254,7 @@ export const bookings = mysqlTable(
   table => ({
     userIdIdx: index("user_id_idx").on(table.userId),
     pnrIdx: index("pnr_idx").on(table.pnr),
+    tenantIdx: index("bookings_tenant_idx").on(table.tenantId),
     // Index for flight-based queries (flight manifest, seat availability)
     flightIdIdx: index("bookings_flight_id_idx").on(table.flightId),
     // Index for status filtering (admin panels, reports)
@@ -269,6 +311,8 @@ export const passengers = mysqlTable(
   "passengers",
   {
     id: int("id").autoincrement().primaryKey(),
+    // Tenant (airline) this passenger belongs to. Nullable during migration.
+    tenantId: int("tenantId"),
     bookingId: int("bookingId").notNull(),
     type: mysqlEnum("type", ["adult", "child", "infant"])
       .default("adult")
@@ -291,6 +335,7 @@ export const passengers = mysqlTable(
     ),
     // Index for passport lookups (identity verification)
     passportIdx: index("passengers_passport_idx").on(table.passportNumber),
+    tenantIdx: index("passengers_tenant_idx").on(table.tenantId),
     // Composite index for name search (customer lookup)
     nameIdx: index("passengers_name_idx").on(table.lastName, table.firstName),
     // Index for passenger type filtering (pricing calculations)
@@ -360,6 +405,8 @@ export const payments = mysqlTable(
   "payments",
   {
     id: int("id").autoincrement().primaryKey(),
+    // Tenant (airline) this payment belongs to. Nullable during migration.
+    tenantId: int("tenantId"),
     bookingId: int("bookingId").notNull(),
     amount: int("amount").notNull(), // Amount in SAR cents
     currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
@@ -401,6 +448,7 @@ export const payments = mysqlTable(
   table => ({
     bookingIdIdx: index("booking_id_idx").on(table.bookingId),
     idempotencyKeyIdx: index("idempotency_key_idx").on(table.idempotencyKey),
+    tenantIdx: index("payments_tenant_idx").on(table.tenantId),
     // Index for status filtering (reconciliation, reports)
     statusIdx: index("payments_status_idx").on(table.status),
     // Index for Stripe payment intent lookups
@@ -5170,6 +5218,15 @@ export const agentDecisions = mysqlTable(
     reasoning: json("reasoning"),
     recommendations: json("recommendations"),
     errors: json("errors"),
+    // Tenant attribution (per-airline isolation of agent decisions).
+    tenantId: int("tenantId"),
+    // White-box governance: a human can override/roll back an agent decision,
+    // and we keep an auditable trail of who did it, why, and what replaced it.
+    overridden: boolean("overridden").default(false).notNull(),
+    overriddenBy: int("overriddenBy"),
+    overrideReason: text("overrideReason"),
+    overriddenAt: timestamp("overriddenAt"),
+    supersededBy: int("supersededBy"), // id of the decision that replaces this one
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   table => ({
@@ -5177,6 +5234,8 @@ export const agentDecisions = mysqlTable(
     requestIdIdx: index("agent_dec_request_idx").on(table.requestId),
     statusIdx: index("agent_dec_status_idx").on(table.status),
     createdIdx: index("agent_dec_created_idx").on(table.createdAt),
+    tenantIdx: index("agent_dec_tenant_idx").on(table.tenantId),
+    overriddenIdx: index("agent_dec_overridden_idx").on(table.overridden),
   })
 );
 
@@ -5268,6 +5327,11 @@ export const aiGatewayLog = mysqlTable(
     agentId: varchar("agentId", { length: 100 }),
     modelId: varchar("modelId", { length: 100 }).notNull(),
     taskType: varchar("taskType", { length: 50 }),
+    // Tenant attribution (per-airline cost accounting in a multi-tenant SaaS).
+    // Nullable for system/unattributed calls; required once tenancy lands.
+    tenantId: int("tenantId"),
+    // Product feature the call is billed to (e.g. "ai-chat", "ai-pricing").
+    feature: varchar("feature", { length: 100 }),
     inputTokens: int("inputTokens"),
     outputTokens: int("outputTokens"),
     costUsd: decimal("costUsd", { precision: 10, scale: 6 }),
@@ -5280,8 +5344,62 @@ export const aiGatewayLog = mysqlTable(
     agentIdx: index("ai_gw_agent_idx").on(table.agentId),
     modelIdx: index("ai_gw_model_idx").on(table.modelId),
     createdIdx: index("ai_gw_created_idx").on(table.createdAt),
+    tenantIdx: index("ai_gw_tenant_idx").on(table.tenantId),
+    featureIdx: index("ai_gw_feature_idx").on(table.feature),
   })
 );
 
 export type AIGatewayLogEntry = typeof aiGatewayLog.$inferSelect;
 export type InsertAIGatewayLog = typeof aiGatewayLog.$inferInsert;
+
+/**
+ * Transactional Outbox — the foundation for event-driven messaging.
+ *
+ * Domain events are written to this table IN THE SAME DB TRANSACTION as the
+ * business change, then a relay publishes pending rows to the message bus
+ * (Kafka/NATS) and marks them published. This guarantees no lost or phantom
+ * events (solves the dual-write problem). Until a real bus is wired, the relay
+ * uses a pluggable publisher, so adopting Kafka later is just swapping it.
+ */
+export const outbox = mysqlTable(
+  "outbox",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    // Stable event identifier (UUID) for idempotent publishing/consumption.
+    eventId: varchar("eventId", { length: 64 }).notNull().unique(),
+    aggregateType: varchar("aggregateType", { length: 64 }).notNull(),
+    aggregateId: varchar("aggregateId", { length: 64 }).notNull(),
+    eventType: varchar("eventType", { length: 100 }).notNull(),
+    // Tenant attribution (per-airline event streams in the SaaS model).
+    tenantId: int("tenantId"),
+    payload: json("payload").notNull(),
+    // 'processing' = claimed by a relay worker (prevents double-publish when
+    // several app instances run the relay concurrently).
+    status: mysqlEnum("status", [
+      "pending",
+      "processing",
+      "published",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    lastError: text("lastError"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    // When the row was claimed; stale claims (worker crashed) are reclaimed
+    // after OUTBOX_CLAIM_TIMEOUT.
+    lockedAt: timestamp("lockedAt"),
+    publishedAt: timestamp("publishedAt"),
+  },
+  table => ({
+    statusIdx: index("outbox_status_idx").on(table.status, table.createdAt),
+    aggregateIdx: index("outbox_aggregate_idx").on(
+      table.aggregateType,
+      table.aggregateId
+    ),
+    tenantIdx: index("outbox_tenant_idx").on(table.tenantId),
+  })
+);
+
+export type OutboxEvent = typeof outbox.$inferSelect;
+export type InsertOutboxEvent = typeof outbox.$inferInsert;

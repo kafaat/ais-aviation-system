@@ -321,6 +321,7 @@ export default function Home() {
                           <SelectTrigger
                             className="h-12"
                             aria-labelledby="origin-label"
+                            data-testid="home-origin-select"
                           >
                             <SelectValue
                               placeholder={t("home.search.selectCity")}
@@ -357,6 +358,7 @@ export default function Home() {
                           <SelectTrigger
                             className="h-12"
                             aria-labelledby="destination-label"
+                            data-testid="home-destination-select"
                           >
                             <SelectValue
                               placeholder={t("home.search.selectCity")}
@@ -392,6 +394,7 @@ export default function Home() {
                               variant="outline"
                               className="w-full h-12 justify-start text-left font-normal"
                               aria-labelledby="date-label"
+                              data-testid="home-date-trigger"
                             >
                               {departureDate ? (
                                 format(departureDate, "PPP", {
@@ -427,6 +430,7 @@ export default function Home() {
                         size="lg"
                         className="flex-1 h-14 text-lg font-semibold shadow-lg"
                         disabled={!originId || !destinationId || !departureDate}
+                        data-testid="home-search-button"
                       >
                         {t("home.search.searchFlights")}
                       </Button>

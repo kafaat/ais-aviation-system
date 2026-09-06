@@ -10,6 +10,12 @@ export type TrpcContext = {
   res: CreateExpressContextOptions["res"];
   user: User | null;
   authMethod: "cookie" | "bearer" | null;
+  /**
+   * Tenant (airline) the request belongs to, derived from the authenticated
+   * user. Null for anonymous requests or platform users without a tenant.
+   * Use with assertTenant() to enforce per-tenant data isolation.
+   */
+  tenantId: number | null;
 };
 
 /**
@@ -103,5 +109,6 @@ export async function createContext(
     res: opts.res,
     user,
     authMethod,
+    tenantId: user?.tenantId ?? null,
   };
 }

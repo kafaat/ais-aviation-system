@@ -30,6 +30,7 @@
     "workers": "tsx server/queue/workers/index.ts",
     "docs:generate": "tsx scripts/generate-openapi.ts",
     "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test e2e/ci-smoke.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",

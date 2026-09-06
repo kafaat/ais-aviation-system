@@ -18,6 +18,7 @@
 import { invokeLLM, type Message, type InvokeResult } from "../../_core/llm";
 import { cacheService } from "../cache.service";
 import { createServiceLogger } from "../../_core/logger";
+import { recordAiUsage } from "../agent-governance.service";
 
 const log = createServiceLogger("intelligence:gateway");
 
@@ -52,6 +53,10 @@ export interface GatewayRequest {
   maxLatencyMs?: number;
   cacheKey?: string;
   cacheTtlSeconds?: number;
+  /** Airline tenant this call is billed to (per-tenant AI cost attribution). */
+  tenantId?: number;
+  /** Product feature the call belongs to, e.g. "ai-chat", "ai-pricing". */
+  feature?: string;
 }
 
 export interface GatewayResponse {
@@ -147,6 +152,21 @@ export class AIGateway {
           { requestId, agentId: request.agentId, cached: true },
           "Gateway cache hit"
         );
+        // Persist the hit too (0 tokens / $0) so per-tenant/feature call
+        // counts stay accurate — cache hits are still AI-feature usage.
+        void recordAiUsage({
+          requestId,
+          modelId: cached.modelUsed,
+          agentId: request.agentId,
+          taskType: request.taskType,
+          tenantId: request.tenantId ?? null,
+          feature: request.feature ?? null,
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          latencyMs: Date.now() - startTime,
+          cached: true,
+        });
         return { ...cached, cached: true, requestId };
       }
     }
@@ -173,8 +193,21 @@ export class AIGateway {
         (inputTokens / 1000) * model.costPer1kInput +
         (outputTokens / 1000) * model.costPer1kOutput;
 
-      // Track metrics
+      // Track metrics (in-memory) + persist for per-tenant cost attribution
       this.trackUsage(model.id, totalCost, latencyMs);
+      void recordAiUsage({
+        requestId,
+        modelId: model.id,
+        agentId: request.agentId,
+        taskType: request.taskType,
+        tenantId: request.tenantId ?? null,
+        feature: request.feature ?? null,
+        inputTokens,
+        outputTokens,
+        costUsd: totalCost,
+        latencyMs,
+        cached: false,
+      });
 
       const response: GatewayResponse = {
         requestId,

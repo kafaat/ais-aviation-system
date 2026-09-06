@@ -8,6 +8,7 @@
 import { TRPCError } from "@trpc/server";
 import { eq, desc, and, sql, count } from "drizzle-orm";
 import { getDb } from "../db";
+import { withCircuitBreaker } from "./production.service";
 import {
   notificationHistory,
   smsLogs,
@@ -169,35 +170,34 @@ class TwilioSMSProvider implements SMSProvider {
     }
 
     try {
-      const response = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Messages.json`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Authorization: `Basic ${Buffer.from(`${this.accountSid}:${this.authToken}`).toString("base64")}`,
-          },
-          body: new URLSearchParams({
-            To: message.to,
-            From: this.fromNumber,
-            Body: message.body,
-          }),
+      // Circuit breaker: a reachable Twilio (incl. API error responses) does
+      // not trip the breaker; only network failures do. When OPEN, calls
+      // fast-fail instead of hanging, and we degrade to an error result.
+      return await withCircuitBreaker("sms-twilio", async () => {
+        const response = await fetch(
+          `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Messages.json`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+              Authorization: `Basic ${Buffer.from(`${this.accountSid}:${this.authToken}`).toString("base64")}`,
+            },
+            body: new URLSearchParams({
+              To: message.to,
+              From: this.fromNumber,
+              Body: message.body,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          return { success: true, messageId: data.sid };
         }
-      );
-
-      const data = await response.json();
-
-      if (response.ok) {
-        return {
-          success: true,
-          messageId: data.sid,
-        };
-      }
-
-      return {
-        success: false,
-        error: data.message || "Twilio API error",
-      };
+        // Twilio responded with an error -> reachable, business error.
+        return { success: false, error: data.message || "Twilio API error" };
+      });
     } catch (error) {
       return {
         success: false,

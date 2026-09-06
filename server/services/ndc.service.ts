@@ -1,6 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { eq, and, gte, lte, desc, asc, lt, sql } from "drizzle-orm";
 import { getDb, generateBookingReference } from "../db";
+import { canTransitionTo, type NdcOrderStatus } from "./ndc-order-state";
+import { recordEvent } from "./outbox.service";
 import {
   ndcOffers,
   ndcOrders,
@@ -59,15 +61,8 @@ export type NdcOfferStatus =
   | "ordered"
   | "cancelled";
 
-/** NDC order status */
-export type NdcOrderStatus =
-  | "pending"
-  | "confirmed"
-  | "ticketed"
-  | "partially_ticketed"
-  | "changed"
-  | "cancelled"
-  | "refunded";
+/** NDC order status (canonical definition lives in the state machine). */
+export type { NdcOrderStatus };
 
 /** Flight segment within an NDC offer */
 export interface NdcSegment {
@@ -508,6 +503,28 @@ async function resolveOrderUserId(
 // ============================================================================
 // Core NDC Service Functions
 // ============================================================================
+
+/**
+ * Emit an NDC order lifecycle event to the transactional outbox (best-effort:
+ * a logging/relay failure must never break the order operation).
+ */
+async function emitNdcOrderEvent(
+  db: Parameters<typeof recordEvent>[0],
+  orderId: string,
+  eventType: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  try {
+    await recordEvent(db, {
+      aggregateType: "ndcOrder",
+      aggregateId: orderId,
+      eventType,
+      payload,
+    });
+  } catch (err) {
+    console.error(`[ndc] failed to emit ${eventType} for ${orderId}`, err);
+  }
+}
 
 /**
  * NDC AirShopping: Search available flights and create priced offers.
@@ -1023,6 +1040,13 @@ export async function createOrder(
     .set({ status: "ordered", updatedAt: now })
     .where(eq(ndcOffers.id, offer.id));
 
+  await emitNdcOrderEvent(db, orderId, "NdcOrderCreated", {
+    orderId,
+    offerId: params.offerId,
+    totalAmount: offer.totalPrice,
+    currency: offer.currency,
+  });
+
   // Resolve airline for the response
   const airlineResults = await db
     .select({ id: airlines.id, code: airlines.code, name: airlines.name })
@@ -1180,9 +1204,8 @@ export async function cancelOrder(
     });
   }
 
-  // Validate cancellable status
-  const nonCancellableStatuses: NdcOrderStatus[] = ["cancelled", "refunded"];
-  if (nonCancellableStatuses.includes(order.status)) {
+  // Validate cancellable status via the order state machine.
+  if (!canTransitionTo(order.status, "cancelled")) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: `NDC order cannot be cancelled. Current status: ${order.status}`,
@@ -1212,6 +1235,11 @@ export async function cancelOrder(
       updatedAt: now,
     })
     .where(eq(ndcOrders.id, order.id));
+
+  await emitNdcOrderEvent(db, orderId, "NdcOrderCancelled", {
+    orderId,
+    reason: cancelReason,
+  });
 
   // Cancel the linked internal booking if it exists
   if (order.bookingId) {
@@ -1535,6 +1563,11 @@ export async function changeOrder(
       updatedAt: now,
     })
     .where(eq(ndcOrders.id, order.id));
+
+  await emitNdcOrderEvent(db, orderId, "NdcOrderChanged", {
+    orderId,
+    totalAmount: updatedAmount,
+  });
 
   return getOrder(orderId);
 }

@@ -80,6 +80,7 @@ const IROPSCommandCenter = lazy(
   () => import("./pages/admin/IROPSCommandCenter")
 );
 const RevenueAccounting = lazy(() => import("./pages/admin/RevenueAccounting"));
+const SeatEconomics = lazy(() => import("./pages/admin/SeatEconomics"));
 const SLADashboard = lazy(() => import("./pages/admin/SLADashboard"));
 const CompensationManagement = lazy(
   () => import("./pages/admin/CompensationManagement")
@@ -433,6 +434,13 @@ function Router() {
             <AdminRoute>
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <RevenueAccounting />
+              </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/seat-economics">
+            <AdminRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <SeatEconomics />
               </Suspense>
             </AdminRoute>
           </Route>

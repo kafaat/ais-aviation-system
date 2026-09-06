@@ -33,6 +33,7 @@ import {
   scheduleReconciliation,
   scheduleCleanupJobs,
 } from "./services/queue-v2.service";
+import { startCronJobs, stopCronJobs } from "./services/cron.service";
 
 const log = createServiceLogger("worker");
 
@@ -93,6 +94,11 @@ async function initialize(): Promise<void> {
     );
   }
 
+  // 7. Start node-cron jobs (outbox relay, inventory-lock cleanup).
+  //    Runs in the worker only so a single process drives periodic work.
+  log.info({}, "Starting cron jobs...");
+  startCronJobs();
+
   log.info({}, "Worker process started successfully - processing jobs");
 }
 
@@ -115,6 +121,10 @@ async function shutdown(signal: string): Promise<void> {
   }, 30_000);
 
   try {
+    // 0. Stop cron schedulers so no new ticks start during shutdown
+    log.info({}, "Stopping cron jobs...");
+    await stopCronJobs();
+
     // 1. Stop V2 workers (stop accepting new jobs, finish in-progress ones)
     log.info({}, "Stopping V2 workers...");
     await stopV2Workers();

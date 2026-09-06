@@ -87,6 +87,14 @@ import { suggestionsRouter } from "./routers/suggestions";
 
 // Intelligence Platform (AAIP)
 import { intelligenceRouter } from "./routers/intelligence.router";
+import { agentGovernanceRouter } from "./routers/agent-governance";
+
+// Revenue & finance
+import { seatEconomicsRouter } from "./routers/seat-economics";
+import { priceQuoteRouter } from "./routers/price-quote";
+
+// Travel documents
+import { boardingPassRouter } from "./routers/boarding-pass";
 
 // Webhook handlers
 import { webhooksRouter } from "./routers/webhooks";
@@ -199,6 +207,10 @@ export const appRouter = router({
 
   // Intelligence Platform (AAIP)
   intelligence: intelligenceRouter,
+  agentGovernance: agentGovernanceRouter,
+  seatEconomics: seatEconomicsRouter,
+  priceQuote: priceQuoteRouter,
+  boardingPass: boardingPassRouter,
 
   // Webhook handlers
   webhooks: webhooksRouter,

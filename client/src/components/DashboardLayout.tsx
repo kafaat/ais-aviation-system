@@ -244,6 +244,12 @@ const adminMenuItems: MenuItem[] = [
     adminOnly: true,
   },
   {
+    icon: BarChart3,
+    labelKey: "nav.seatEconomics",
+    path: "/admin/seat-economics",
+    adminOnly: true,
+  },
+  {
     icon: FileSpreadsheet,
     labelKey: "nav.bspReporting",
     path: "/admin/bsp-reporting",

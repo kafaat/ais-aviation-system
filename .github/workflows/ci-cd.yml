@@ -417,7 +417,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run E2E tests
+      - name: Run E2E smoke tests
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
           REDIS_URL: redis://127.0.0.1:6379
@@ -433,7 +433,7 @@ jobs:
           AUTH_SERVICE_URL: http://localhost:8000
           CI: true
           E2E_BASE_URL: http://localhost:3000
-        run: pnpm run test:e2e --project=chromium
+        run: pnpm run test:e2e:smoke --project=chromium
 
       - name: Upload E2E test results
         if: always()

@@ -521,6 +521,31 @@ export async function getUserCorporateAccount(
  * @param corporateUserId - Corporate user record ID
  * @returns Updated corporate user record
  */
+/**
+ * Get a corporate user record by its ID.
+ * Used for authorization checks (resolve which corporate account a member
+ * record belongs to before allowing mutations).
+ */
+export async function getCorporateUserById(
+  corporateUserId: number
+): Promise<CorporateUser | null> {
+  const db = await getDb();
+  if (!db) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
+
+  const [row] = await db
+    .select()
+    .from(corporateUsers)
+    .where(eq(corporateUsers.id, corporateUserId))
+    .limit(1);
+
+  return row ?? null;
+}
+
 export async function removeUserFromCorporate(
   corporateUserId: number
 ): Promise<void> {

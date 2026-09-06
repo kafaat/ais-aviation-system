@@ -16,6 +16,7 @@ import {
   type BookingStatus,
 } from "./booking-state-machine.service";
 import { stripe } from "../stripe";
+import { recordEvent } from "./outbox.service";
 
 /**
  * Verify Stripe webhook signature
@@ -311,6 +312,20 @@ async function handlePaymentIntentSucceeded(
       description: `Payment for booking ${booking.bookingReference}`,
       transactionDate: new Date(),
     });
+
+    // Emit a domain event in the same transaction (transactional outbox).
+    await recordEvent(tx, {
+      aggregateType: "booking",
+      aggregateId: booking.id,
+      eventType: "PaymentConfirmed",
+      payload: {
+        bookingId: booking.id,
+        bookingReference: booking.bookingReference,
+        amount: paymentIntent.amount,
+        currency: paymentIntent.currency.toUpperCase(),
+        paymentIntentId: paymentIntent.id,
+      },
+    });
   });
 
   // Record status change (audit log, outside transaction since it uses its own DB connection)
@@ -467,6 +482,20 @@ async function handleChargeRefunded(event: Stripe.Event): Promise<void> {
       stripeRefundId: charge.refunds?.data[0]?.id,
       description: `${isFullRefund ? "Full" : "Partial"} refund for booking ${booking.bookingReference}`,
       transactionDate: new Date(),
+    });
+
+    // Emit a domain event in the same transaction (transactional outbox).
+    await recordEvent(tx, {
+      aggregateType: "booking",
+      aggregateId: booking.id,
+      eventType: isFullRefund ? "BookingRefunded" : "BookingPartiallyRefunded",
+      payload: {
+        bookingId: booking.id,
+        bookingReference: booking.bookingReference,
+        amountRefunded: charge.amount_refunded,
+        currency: charge.currency.toUpperCase(),
+        chargeId: charge.id,
+      },
     });
   });
 
