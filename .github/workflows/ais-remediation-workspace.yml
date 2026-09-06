@@ -9,43 +9,119 @@ permissions:
   contents: read
 
 jobs:
-  recovery:
+  verify:
+    if: github.ref == 'refs/heads/fix/ais-p0-remediation-20260906'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      EVIDENCE: /tmp/ais-p0-verification
     steps:
-      - name: Recover and verify saved patch parts without executing them
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: 647be14a4f170a7eec78f813d5afa81454e8b713
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify and apply the complete candidate to its exact base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$EVIDENCE"
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, subprocess, urllib.request, zlib
+          url = 'https://api.github.com/repos/kafaat/ais-aviation-system/contents/.github/ais-p0-candidate.patch.b64?ref=89168a0fd8470b387d972cca34a0d62ae0bc1ecf'
+          request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+          with urllib.request.urlopen(request, timeout=30) as response:
+              data = json.load(response)
+          transport = base64.b64decode(data['content'])
+          decoder = zlib.decompressobj()
+          patch = decoder.decompress(base64.b64decode(transport, validate=True), 100000)
+          assert decoder.eof and not decoder.unconsumed_tail and not decoder.unused_data, 'Incomplete recovery payload'
+          assert len(patch) == 35968
+          assert hashlib.sha256(patch).hexdigest() == 'a7be0cc57a3c60319382a395b72d3e01cd2b30cb66fbd3a52ce3cd428a93b180'
+          path = pathlib.Path(os.environ['EVIDENCE']) / 'candidate.patch'
+          path.write_bytes(patch)
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == '647be14a4f170a7eec78f813d5afa81454e8b713'
+          subprocess.run(['git', 'apply', '--index', '--whitespace=error-all', str(path)], check=True)
+          tree = subprocess.check_output(['git', 'write-tree'], text=True).strip()
+          assert tree == 'c0d5e65e41a24084ffb8d6b04f873b7c08be0391', tree
+          (path.parent / 'candidate-tree.txt').write_text(tree + '\n')
+          print('PASS: complete patch digest and final Git tree verified')
+          PY
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+      - name: Install locked Node dependencies
+        run: |
+          npm install --global pnpm@10.28.2
+          pnpm install --frozen-lockfile --ignore-scripts
+      - name: Check formatting, lint and TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --check . 2>&1 | tee "$EVIDENCE/prettier.log"
+          pnpm lint 2>&1 | tee "$EVIDENCE/eslint.log"
+          pnpm check 2>&1 | tee "$EVIDENCE/typescript.log"
+      - name: Run payment and password boundary regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec vitest run server/__tests__/p0/payment-auth-boundaries.test.ts server/_core/production-build.test.ts 2>&1 | tee "$EVIDENCE/typescript-boundaries.log"
+      - name: Run actual auth HTTP, bcrypt and configuration regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/ais-auth-verify
+          /tmp/ais-auth-verify/bin/pip install -r auth-service/requirements.txt > "$EVIDENCE/python-install.log" 2>&1
+          /tmp/ais-auth-verify/bin/python -m unittest discover -s auth-service/tests -p 'test_*.py' -v 2>&1 | tee "$EVIDENCE/python-boundaries.log"
+      - name: Prepare exact integration objects without updating any branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 - <<'PY'
-          import base64, hashlib, json, os, pathlib, urllib.request, zlib
-          root = pathlib.Path('/tmp/ais-p0-recovery')
-          root.mkdir()
-          shas = ['fc6a681d2b1e026d7b6e0784bf5e2c72cf404dd0', '67c03b7e87c0efdcaca994891550c3c5232e5ae6', '7a8129bbf22e7b8c20691ef97910b702a666b336']
-          parts = []
-          for index, sha in enumerate(shas):
-              req = urllib.request.Request('https://api.github.com/repos/kafaat/ais-aviation-system/git/blobs/' + sha, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+          import json, os, pathlib, subprocess, urllib.request
+          root = pathlib.Path(os.environ['EVIDENCE'])
+          api = 'https://api.github.com/repos/kafaat/ais-aviation-system/'
+          def request(path, data=None):
+              req = urllib.request.Request(api + path, data=None if data is None else json.dumps(data).encode(), headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'}, method='GET' if data is None else 'POST')
               with urllib.request.urlopen(req, timeout=30) as response:
-                  blob = json.load(response)
-              content = base64.b64decode(blob['content'])
-              actual = hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest()
-              if actual != sha:
-                  raise ValueError('Git blob integrity mismatch')
-              (root / ('part-' + str(index) + '.txt')).write_bytes(content)
-              parts.append(content)
-          encoded = b''.join(parts)
-          decoder = zlib.decompressobj()
-          decoded = decoder.decompress(base64.b64decode(encoded, validate=True), 5000000)
-          if not decoder.eof or decoder.unconsumed_tail or decoder.unused_data:
-              raise ValueError('Incomplete, oversized or trailing recovery payload')
-          (root / 'recovered-payload.txt').write_bytes(decoded)
-          (root / 'manifest.json').write_text(json.dumps({'source_blobs': shas, 'decoded_bytes': len(decoded), 'sha256': hashlib.sha256(decoded).hexdigest()}, indent=2))
-          print('Verified saved payload bytes:', len(decoded))
+                  return json.load(response)
+          parent = '647be14a4f170a7eec78f813d5afa81454e8b713'
+          main = 'df80964320605640581c24c863a820fe122b6b7c'
+          expected = 'c0d5e65e41a24084ffb8d6b04f873b7c08be0391'
+          assert request('git/ref/heads/main')['object']['sha'] == main, 'main advanced; review required'
+          assert request('git/ref/heads/fix/ais-docker-pnpm-20260906')['object']['sha'] == parent, 'PR branch advanced; review required'
+          subprocess.run(['git', 'diff', '--exit-code'], check=True)
+          assert subprocess.check_output(['git', 'write-tree'], text=True).strip() == expected
+          paths = subprocess.check_output(['git', 'diff', '--cached', '--name-only', '-z']).decode().strip('\0').split('\0')
+          entries = []
+          for path in paths:
+              entry = subprocess.check_output(['git', 'ls-files', '--stage', '--', path], text=True).strip()
+              if not entry:
+                  entries.append({'path': path, 'mode': '100644', 'type': 'blob', 'sha': None})
+                  continue
+              mode, sha, rest = entry.split(' ', 2)
+              content = subprocess.check_output(['git', 'cat-file', 'blob', sha]).decode('utf-8')
+              entries.append({'path': path, 'mode': mode, 'type': 'blob', 'content': content})
+          tree = request('git/trees', {'base_tree': 'cf3dbae0deba4efe660253448a277d590ccc5992', 'tree': entries})['sha']
+          assert tree == expected, 'Remote tree differs'
+          commit = request('git/commits', {'message': 'fix(security): contain unverified payments and enforce password authentication\n\nIntegrate main v1.20.1; consolidate Docker checks; require explicit auth settings and verify HTTP boundaries. No branch update or deployment from this job.', 'tree': tree, 'parents': [parent, main]})
+          result = {'commit_sha': commit['sha'], 'tree': tree, 'parents': [parent, main], 'branch_updated': False, 'deployment_performed': False}
+          (root / 'prepared-commit.json').write_text(json.dumps(result, indent=2) + '\n')
+          print(json.dumps(result, indent=2))
           PY
+      - name: Export tested candidate source
+        if: always()
+        run: |
+          if test "$(git write-tree)" = c0d5e65e41a24084ffb8d6b04f873b7c08be0391; then
+            git archive --format=zip --output="$EVIDENCE/source.zip" c0d5e65e41a24084ffb8d6b04f873b7c08be0391
+            sha256sum "$EVIDENCE/source.zip" > "$EVIDENCE/SHA256SUMS"
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: ais-p0-recovered-parts
-          path: /tmp/ais-p0-recovery/
-          retention-days: 7
+          name: ais-p0-candidate-verification
+          path: /tmp/ais-p0-verification/
+          retention-days: 14
           if-no-files-found: error
