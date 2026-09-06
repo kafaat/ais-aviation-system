@@ -1,27 +1,51 @@
 name: AIS Remediation Workspace
+
 on:
   push:
     branches: [fix/ais-p0-remediation-20260906]
     paths: [.github/workflows/ais-remediation-workspace.yml]
+
 permissions:
   contents: read
+
 jobs:
-  snapshot:
-    runs-on: ubuntu-latest
+  recovery:
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: 2b6d780e86a8dcb1962b51d3d72f27276fb4f84b
-          persist-credentials: false
-      - run: |
-          mkdir -p /tmp/ais-main
-          git archive --format=zip --output=/tmp/ais-main/source.zip HEAD
-          git rev-parse HEAD > /tmp/ais-main/SOURCE_SHA.txt
-          sha256sum /tmp/ais-main/source.zip > /tmp/ais-main/SHA256SUMS
+      - name: Recover and verify saved patch parts without executing them
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, os, pathlib, urllib.request, zlib
+          root = pathlib.Path('/tmp/ais-p0-recovery')
+          root.mkdir()
+          shas = ['fc6a681d2b1e026d7b6e0784bf5e2c72cf404dd0', '67c03b7e87c0efdcaca994891550c3c5232e5ae6', '7a8129bbf22e7b8c20691ef97910b702a666b336']
+          parts = []
+          for index, sha in enumerate(shas):
+              req = urllib.request.Request('https://api.github.com/repos/kafaat/ais-aviation-system/git/blobs/' + sha, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  blob = json.load(response)
+              content = base64.b64decode(blob['content'])
+              actual = hashlib.sha1(b'blob ' + str(len(content)).encode() + b'\0' + content).hexdigest()
+              if actual != sha:
+                  raise ValueError('Git blob integrity mismatch')
+              (root / ('part-' + str(index) + '.txt')).write_bytes(content)
+              parts.append(content)
+          encoded = b''.join(parts)
+          decoder = zlib.decompressobj()
+          decoded = decoder.decompress(base64.b64decode(encoded, validate=True), 5000000)
+          if not decoder.eof or decoder.unconsumed_tail or decoder.unused_data:
+              raise ValueError('Incomplete, oversized or trailing recovery payload')
+          (root / 'recovered-payload.txt').write_bytes(decoded)
+          (root / 'manifest.json').write_text(json.dumps({'source_blobs': shas, 'decoded_bytes': len(decoded), 'sha256': hashlib.sha256(decoded).hexdigest()}, indent=2))
+          print('Verified saved payload bytes:', len(decoded))
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
         with:
-          name: ais-main-snapshot
-          path: /tmp/ais-main/
+          name: ais-p0-recovered-parts
+          path: /tmp/ais-p0-recovery/
           retention-days: 7
           if-no-files-found: error
