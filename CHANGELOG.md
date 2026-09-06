@@ -1,5 +1,52 @@
 # Changelog
 
+## What's Changed in v1.20.0
+
+### Features
+- feat(revenue+ai): per-seat economics + AI cost attribution & decision overrides (198cdbc)
+- feat(saas): multi-tenancy foundation (Phase 0) + seat-economics/AI-cost dashboard (846e7d3)
+- feat(saas): tenant-scope core tables + migration-aware query helpers (Phase 0 step 2) (f4d553d)
+- feat(pricing): customer-facing price quote (reference gap-fill) + mapping doc (17384b0)
+- feat(boarding-pass): cryptographically signed, offline-verifiable boarding pass (aaf99cd)
+- feat(events): transactional outbox — event-driven foundation (Phase 1) (57a1340)
+- feat: implement the safe, infra-free batch of remaining gaps (8c9c426)
+- feat(ndc): formal ONE Order state machine + lifecycle domain events (6ba7de6)
+- feat(events): emit transactional outbox events on payment, refund & ticketing (1f8d311)
+
+### Bug Fixes
+- fix(security): enforce tenant isolation on ID-based endpoints + sync docs (1eb6c6e)
+- fix(seed): add canonical db:seed script and fix node→tsx invocation (eabb582)
+- fix(review): address Copilot findings on outbox, AI usage, price quote, seat economics (acf350b)
+- fix(worker): start cron jobs (outbox relay, lock cleanup) in the worker process (1c4f59f)
+
+### Code Refactoring
+- refactor(resilience): protect auth-service client with the circuit breaker + tests (bcf57a5)
+
+### Documentation
+- docs: add Airline SaaS gap analysis & phased architecture proposal (93318fe)
+- docs: add AI agent operations & development ideas (inspired by PilotDeck) (231c090)
+- docs: add full-project gap audit (security, data, airline domain, FE/testing/CI) (c399a4f)
+- docs: fix markdown escaping of table names in gap audit (0d56d6a)
+
+### Maintenance
+- ci: run E2E seed script with tsx so the schema import resolves (93463a3)
+- chore: merge main (#80 E2E hardening) into project-exploration branch (16bf543)
+- chore: merge main (#80 E2E hardening) into project-exploration branch (aeaa677)
+- ci: upgrade semantic PR action to node24-compatible version (d826442)
+
+### Other Changes
+- style: apply prettier formatting to CHANGELOG.md (bacb343)
+- test(e2e): fix Playwright strict-mode violations in visibility probes (#80) (6e59a32)
+- test(ci): run stable e2e smoke coverage in github actions (1adc221)
+- test(ci): add dedicated playwright smoke script (a46574e)
+- Merge pull request #87 from kafaat/copilot/fix-github-actions-job (dc5c656)
+
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.19.1...v1.20.0
+
+
+---
+
 ## What's Changed in v1.19.1
 
 ### Bug Fixes
