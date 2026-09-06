@@ -14,9 +14,13 @@ afterEach(() => {
 
 describe("production build boundary", () => {
   it("does not eagerly import development-only packages in either entry point", async () => {
-    const pkg = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
+    const pkg = JSON.parse(
+      readFileSync(path.join(root, "package.json"), "utf8")
+    );
     const devOnly = new Set(
-      Object.keys(pkg.devDependencies).filter(name => !(name in pkg.dependencies))
+      Object.keys(pkg.devDependencies).filter(
+        name => !(name in pkg.dependencies)
+      )
     );
     const result = await build({
       absWorkingDir: root,
