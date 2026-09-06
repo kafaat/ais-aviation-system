@@ -26,7 +26,6 @@ test.describe("CI smoke coverage", () => {
 
   test("home renders the current one-way search controls", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
 
     await expect(page.locator("#hero-title")).toBeVisible();
     await expect(page.getByTestId("home-origin-select")).toBeVisible();
@@ -42,7 +41,6 @@ test.describe("CI smoke coverage", () => {
 
   test("login renders the combined authentication form", async ({ page }) => {
     await page.goto("/login");
-    await page.waitForLoadState("networkidle");
 
     await expect(page.getByLabel(/email|البريد الإلكتروني/i)).toBeVisible();
     await expect(page.locator("input#password")).toBeVisible();
