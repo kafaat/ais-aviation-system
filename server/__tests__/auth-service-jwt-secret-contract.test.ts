@@ -3,24 +3,15 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const repoRoot = resolve(import.meta.dirname, "../..");
-const authConfig = readFileSync(
-  resolve(repoRoot, "auth-service/config.py"),
-  "utf8"
-);
-const compose = readFileSync(
-  resolve(repoRoot, "docker-compose.yml"),
-  "utf8"
-);
+const authConfig = readFileSync(resolve(repoRoot, "auth-service/config.py"), "utf8");
+const compose = readFileSync(resolve(repoRoot, "docker-compose.yml"), "utf8");
 
-const insecurePlaceholder =
-  "your-super-secret-jwt-key-change-this-in-production";
+const insecurePlaceholder = "your-super-secret-jwt-key-change-this-in-production";
 
 describe("auth-service JWT signing secret contract", () => {
   it("has no usable JWT secret default in the auth service", () => {
     expect(authConfig).toContain("JWT_SECRET: str\n");
-    expect(authConfig).not.toContain(
-      `JWT_SECRET: str = "${insecurePlaceholder}"`
-    );
+    expect(authConfig).not.toContain(`JWT_SECRET: str = "${insecurePlaceholder}"`);
   });
 
   it("rejects short and known placeholder secrets", () => {
