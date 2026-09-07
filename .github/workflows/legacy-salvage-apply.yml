@@ -19,37 +19,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-      - name: Apply narrowly reviewed changes
+      - name: Apply narrowly reviewed change
         run: |
           python3 - <<'PY'
           from pathlib import Path
           path = Path('server/services/stripe-webhook-v2.service.ts')
           text = path.read_text()
-
-          old = 'import Stripe from "stripe";\nimport { getDb } from "../db";\n'
-          new = 'import Stripe from "stripe";\nimport { getDb } from "../db";\nimport type { MySql2Database } from "drizzle-orm/mysql2";\nimport * as schema from "../../drizzle/schema";\n'
-          assert text.count(old) == 1
-          text = text.replace(old, new, 1)
-
-          anchor = 'import { queueBookingConfirmationEmail } from "./queue-v2.service";\n\n'
-          tx_type = 'type DbTransaction = Parameters<\n  Parameters<MySql2Database<typeof schema>["transaction"]>[0]\n>[0];\n\n'
-          assert text.count(anchor) == 1
-          text = text.replace(anchor, anchor + tx_type, 1)
-
           old = '''    } catch (err: any) {\n      console.error(`[Webhook] Signature verification failed:`, err.message);\n      throw new Error(`Signature verification failed: ${err.message}`);\n    }'''
           new = '''    } catch (err) {\n      const error = err instanceof Error ? err : new Error(String(err));\n      console.error("[Webhook] Signature verification failed:", error.message);\n      throw new Error("Signature verification failed");\n    }'''
           assert text.count(old) == 1
-          text = text.replace(old, new, 1)
-
-          count = text.count('tx: any')
-          assert count >= 6, count
-          text = text.replace('tx: any', 'tx: DbTransaction')
-          text = text.replace('(t: any, { eq }: any)', '(t, { eq })')
-          path.write_text(text)
+          path.write_text(text.replace(old, new, 1))
 
           test = Path('server/__tests__/legacy-salvage/stripe-webhook-v2-boundaries.test.ts')
           test.parent.mkdir(parents=True, exist_ok=True)
-          test.write_text('''import { readFileSync } from "node:fs";\nimport { describe, expect, it } from "vitest";\n\nconst source = readFileSync(\n  new URL("../../services/stripe-webhook-v2.service.ts", import.meta.url),\n  "utf8"\n);\n\ndescribe("Stripe webhook v2 legacy-salvage boundaries", () => {\n  it("does not expose provider signature error details", () => {\n    expect(source).toContain('throw new Error("Signature verification failed");');\n    expect(source).not.toContain("Signature verification failed: ${err.message}");\n  });\n\n  it("uses a typed database transaction boundary", () => {\n    expect(source).toContain("type DbTransaction = Parameters<");\n    expect(source).not.toMatch(/\\btx:\\s*any\\b/);\n  });\n});\n''')
+          test.write_text('''import { readFileSync } from "node:fs";\nimport { describe, expect, it } from "vitest";\n\nconst source = readFileSync(\n  new URL("../../services/stripe-webhook-v2.service.ts", import.meta.url),\n  "utf8"\n);\n\ndescribe("Stripe webhook v2 legacy-salvage boundaries", () => {\n  it("does not expose provider signature error details", () => {\n    expect(source).toContain('throw new Error("Signature verification failed");');\n    expect(source).not.toContain("Signature verification failed: ${err.message}");\n  });\n});\n''')
           PY
       - name: Install locked tooling and format
         run: |
@@ -66,5 +49,5 @@ jobs:
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add server/services/stripe-webhook-v2.service.ts server/__tests__/legacy-salvage/stripe-webhook-v2-boundaries.test.ts
-          git commit -m 'fix(webhooks): salvage typed transaction and error boundary from legacy PR72'
+          git commit -m 'fix(webhooks): sanitize Stripe signature verification failures'
           git push origin HEAD:fix/legacy-salvage-stripe-webhook-20260907
