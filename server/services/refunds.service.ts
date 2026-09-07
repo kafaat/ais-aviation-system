@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 import { getDb } from "../db";
 import { bookings, payments, users, flights } from "../../drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
 import { trackRefundIssued } from "./metrics.service";
@@ -330,9 +330,43 @@ export async function createRefund(
   }
 }
 
-export async function getRefundDetails(refundId: string) {
+export async function getRefundDetails(
+  refundId: string,
+  actor: RefundActor
+) {
   try {
     const refund = await stripe.refunds.retrieve(refundId);
+
+    if (actor.role !== "admin") {
+      const paymentIntentId =
+        typeof refund.payment_intent === "string"
+          ? refund.payment_intent
+          : refund.payment_intent?.id;
+
+      if (!paymentIntentId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Refund not found" });
+      }
+
+      const database = await getDb();
+      if (!database) throw new Error("Database not available");
+
+      const [ownedBooking] = await database
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(
+          and(
+            eq(bookings.stripePaymentIntentId, paymentIntentId),
+            eq(bookings.userId, actor.id)
+          )
+        )
+        .limit(1);
+
+      if (!ownedBooking) {
+        // Do not disclose whether a refund exists for another account.
+        throw new TRPCError({ code: "NOT_FOUND", message: "Refund not found" });
+      }
+    }
+
     return {
       id: refund.id,
       amount: refund.amount,
@@ -341,6 +375,9 @@ export async function getRefundDetails(refundId: string) {
       created: refund.created,
     };
   } catch (error) {
+    if (error instanceof TRPCError) {
+      throw error;
+    }
     if (error instanceof Stripe.errors.StripeError) {
       throw new TRPCError({
         code: "BAD_REQUEST",
