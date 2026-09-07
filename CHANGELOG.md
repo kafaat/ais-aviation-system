@@ -1,5 +1,27 @@
 # Changelog
 
+## What's Changed in v1.20.4
+
+### Bug Fixes
+
+- fix(prod): use public liveness probe for container health (32f37fa)
+- fix(prod): align compose healthcheck with public liveness probe (5a7ae44)
+- fix(prod): use public liveness probe on all API replicas (e1d33d0)
+
+### Maintenance
+
+- ci: add hard production readiness gates (b770c24)
+
+### Other Changes
+
+- style(prod): preserve Prettier formatting for health probe change (91dd4e8)
+- test(prod): guard all production healthcheck surfaces (237664e)
+- Merge pull request #93 from kafaat/fix/main-production-gates-20260907 (3ad6f86)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.3...v1.20.4
+
+---
+
 ## What's Changed in v1.20.3
 
 ### Bug Fixes
