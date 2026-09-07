@@ -8,8 +8,8 @@ import {
 } from "../_core/trpc";
 import { stripe } from "../stripe";
 import { getDb } from "../db";
-import { bookings } from "../../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { bookings, bookingModifications } from "../../drizzle/schema";
+import { and, eq } from "drizzle-orm";
 import { auditPayment } from "../services/audit.service";
 import * as paymentHistoryService from "../services/payment-history.service";
 import {
@@ -230,14 +230,19 @@ export const paymentsRouter = router({
     }),
 
   /**
-   * Create checkout for booking modification (date change / upgrade)
+   * Create checkout for a persisted booking modification (date change / upgrade).
+   * The client identifies the modification but never supplies the amount: the
+   * authoritative charge comes from booking_modifications.totalCost.
    */
   createModificationCheckout: protectedProcedure
     .input(
       z.object({
-        bookingId: z.number().describe("Booking ID"),
-        modificationId: z.number().describe("Modification request ID"),
-        amount: z.number().describe("Amount to charge in SAR cents"),
+        bookingId: z.number().int().positive().describe("Booking ID"),
+        modificationId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Modification request ID"),
         provider: providerEnum.optional().default("stripe"),
       })
     )
@@ -249,13 +254,17 @@ export const paymentsRouter = router({
           message: "Database not available",
         });
 
-      const bookingResult = await database
+      const [bookingData] = await database
         .select()
         .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
+        .where(
+          and(
+            eq(bookings.id, input.bookingId),
+            eq(bookings.userId, ctx.user.id)
+          )
+        )
         .limit(1);
 
-      const bookingData = bookingResult[0];
       if (!bookingData) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -263,10 +272,43 @@ export const paymentsRouter = router({
         });
       }
 
-      if (bookingData.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+      // Collapse ID, booking and user authority into one lookup. A mismatched
+      // modification is indistinguishable from a missing one and cannot leak
+      // another passenger's modification existence.
+      const [modification] = await database
+        .select()
+        .from(bookingModifications)
+        .where(
+          and(
+            eq(bookingModifications.id, input.modificationId),
+            eq(bookingModifications.bookingId, input.bookingId),
+            eq(bookingModifications.userId, ctx.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!modification) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Modification request not found",
+        });
       }
 
+      if (modification.status !== "pending") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Only pending modification requests can be paid",
+        });
+      }
+
+      if (modification.totalCost <= 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This modification does not require a positive payment",
+        });
+      }
+
+      const authoritativeAmount = modification.totalCost;
       const appBaseUrl =
         ctx.req.headers.origin ||
         process.env.VITE_APP_URL ||
@@ -285,7 +327,7 @@ export const paymentsRouter = router({
                   name: `Booking Modification - ${bookingData.bookingReference}`,
                   description: `Modification #${input.modificationId}`,
                 },
-                unit_amount: input.amount,
+                unit_amount: authoritativeAmount,
               },
               quantity: 1,
             },
@@ -294,11 +336,13 @@ export const paymentsRouter = router({
           success_url: `${appBaseUrl}/my-bookings?modification=success&session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${appBaseUrl}/my-bookings?modification=cancelled`,
           customer_email: ctx.user.email || undefined,
+          client_reference_id: ctx.user.id.toString(),
           metadata: {
             bookingId: input.bookingId.toString(),
             modificationId: input.modificationId.toString(),
             userId: ctx.user.id.toString(),
             type: "modification",
+            authoritativeAmount: authoritativeAmount.toString(),
           },
         });
 
@@ -312,7 +356,7 @@ export const paymentsRouter = router({
       const result = await createCheckoutWithProvider(providerId, {
         bookingId: input.bookingId,
         userId: ctx.user.id,
-        amount: input.amount,
+        amount: authoritativeAmount,
         currency: "SAR",
         customerEmail: ctx.user.email || undefined,
         customerName: ctx.user.name || undefined,
@@ -324,7 +368,9 @@ export const paymentsRouter = router({
         metadata: {
           bookingId: input.bookingId.toString(),
           modificationId: input.modificationId.toString(),
+          userId: ctx.user.id.toString(),
           type: "modification",
+          authoritativeAmount: authoritativeAmount.toString(),
         },
       });
 
