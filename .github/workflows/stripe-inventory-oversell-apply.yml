@@ -1,0 +1,61 @@
+name: Apply Stripe Inventory Oversell Guard
+
+on:
+  push:
+    branches: [fix/stripe-inventory-oversell-guard-20260908]
+    paths: [.github/workflows/stripe-inventory-oversell-apply.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: fix/stripe-inventory-oversell-guard-20260908
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+      - name: Setup pnpm
+        run: npm install --global pnpm@10.28.2
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Apply guarded inventory decrement
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('server/webhooks/stripe.ts')
+          text = path.read_text()
+          text = text.replace('import { eq, and, sql } from "drizzle-orm";', 'import { eq, and, gte, sql } from "drizzle-orm";')
+          marker = '''function isDuplicateEntryError(err: unknown): boolean {\n  return (\n    typeof err === "object" &&\n    err !== null &&\n    "code" in err &&\n    (err.code === "ER_DUP_ENTRY" ||\n      err.code === "23505" ||\n      err.code === "23000")\n  );\n}\n'''
+          helper = marker + '''\n/** Extract affected-row count from Drizzle/MySQL update results. */\nfunction getAffectedRows(result: unknown): number {\n  if (Array.isArray(result)) {\n    const first = result[0];\n    if (first && typeof first === "object" && "affectedRows" in first) {\n      return Number((first as { affectedRows?: number }).affectedRows ?? 0);\n    }\n  }\n  if (result && typeof result === "object" && "rowsAffected" in result) {\n    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);\n  }\n  return 0;\n}\n'''
+          if marker not in text:
+              raise SystemExit('duplicate-entry helper marker not found')
+          text = text.replace(marker, helper, 1)
+          old = '''  // 6. Deduct seats from flight availability\n  if (previousStatus !== "confirmed") {\n    if (booking.cabinClass === "business") {\n      await tx\n        .update(flights)\n        .set({\n          businessAvailable: sql`GREATEST(${flights.businessAvailable} - ${booking.numberOfPassengers}, 0)`,\n        })\n        .where(eq(flights.id, booking.flightId));\n    } else {\n      await tx\n        .update(flights)\n        .set({\n          economyAvailable: sql`GREATEST(${flights.economyAvailable} - ${booking.numberOfPassengers}, 0)`,\n        })\n        .where(eq(flights.id, booking.flightId));\n    }\n\n    log.info(\n'''
+          new = '''  // 6. Deduct seats from flight availability. The predicate is the\n  // concurrency boundary: if another writer consumed the last seats first,\n  // affectedRows is zero and the surrounding payment transaction rolls back.\n  if (previousStatus !== "confirmed") {\n    const seatUpdate =\n      booking.cabinClass === "business"\n        ? await tx\n            .update(flights)\n            .set({\n              businessAvailable: sql`${flights.businessAvailable} - ${booking.numberOfPassengers}`,\n            })\n            .where(\n              and(\n                eq(flights.id, booking.flightId),\n                gte(flights.businessAvailable, booking.numberOfPassengers)\n              )\n            )\n        : await tx\n            .update(flights)\n            .set({\n              economyAvailable: sql`${flights.economyAvailable} - ${booking.numberOfPassengers}`,\n            })\n            .where(\n              and(\n                eq(flights.id, booking.flightId),\n                gte(flights.economyAvailable, booking.numberOfPassengers)\n              )\n            );\n\n    if (getAffectedRows(seatUpdate) !== 1) {\n      throw new Error(\n        `Insufficient ${booking.cabinClass} inventory for booking ${bookingId}`\n      );\n    }\n\n    log.info(\n'''
+          if old not in text:
+              raise SystemExit('seat deduction block not found')
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+
+          test = Path('server/webhooks/stripe.inventory-oversell.test.ts')
+          test.write_text('''import { describe, expect, it } from "vitest";\nimport { readFileSync } from "node:fs";\n\ndescribe("Stripe inventory oversell boundary", () => {\n  const source = readFileSync(new URL("./stripe.ts", import.meta.url), "utf8");\n\n  it("never clamps an overdrawn inventory decrement to zero", () => {\n    expect(source).not.toContain("GREATEST(${flights.businessAvailable}");\n    expect(source).not.toContain("GREATEST(${flights.economyAvailable}");\n  });\n\n  it("guards both cabins and fails when no inventory row was reserved", () => {\n    expect(source).toContain("gte(flights.businessAvailable, booking.numberOfPassengers)");\n    expect(source).toContain("gte(flights.economyAvailable, booking.numberOfPassengers)");\n    expect(source).toContain("getAffectedRows(seatUpdate) !== 1");\n    expect(source).toContain("Insufficient ${booking.cabinClass} inventory");\n  });\n});\n''')
+          PY
+      - name: Format and verify
+        run: |
+          pnpm exec prettier --write server/webhooks/stripe.ts server/webhooks/stripe.inventory-oversell.test.ts
+          pnpm exec prettier --check server/webhooks/stripe.ts server/webhooks/stripe.inventory-oversell.test.ts
+          pnpm check
+          pnpm exec vitest run server/webhooks/stripe.inventory-oversell.test.ts server/webhooks/stripe.signature-boundary.test.ts server/webhooks/stripe.single-authority.test.ts
+      - name: Commit verified change
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add server/webhooks/stripe.ts server/webhooks/stripe.inventory-oversell.test.ts
+          git commit -m "fix(inventory): fail closed on Stripe seat oversell"
+          git push origin HEAD:fix/stripe-inventory-oversell-guard-20260908
