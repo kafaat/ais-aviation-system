@@ -69,20 +69,27 @@ beforeEach(() => {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     innerJoin: vi.fn().mockReturnThis(),
+    for: vi.fn().mockReturnThis(),
     limit: mocks.limit,
   };
   mocks.limit
     .mockResolvedValueOnce([booking])
     .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])
+    .mockResolvedValueOnce([booking])
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([]);
   mocks.update.mockReturnValue({
     set: () => ({ where: vi.fn().mockResolvedValue([{ affectedRows: 1 }]) }),
   });
-  mocks.getDb.mockResolvedValue({
+  const database = {
     select: () => query,
     update: mocks.update,
-  });
+    transaction: vi.fn(),
+  };
+  database.transaction.mockImplementation(
+    async (callback: (tx: typeof database) => unknown) => callback(database)
+  );
+  mocks.getDb.mockResolvedValue(database);
   mocks.calculateFee.mockReturnValue({ refundAmount: 8000 });
   mocks.listRefunds.mockImplementation(() => ({
     async *[Symbol.asyncIterator]() {
