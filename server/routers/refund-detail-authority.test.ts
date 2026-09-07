@@ -14,7 +14,9 @@ describe("refund detail authority boundary", () => {
   it("binds non-admin refund reads to payment intent and booking owner", () => {
     const source = readFileSync("server/services/refunds.service.ts", "utf8");
 
-    expect(source).toContain("getRefundDetails(refundId: string, actor: RefundActor)");
+    expect(source).toContain(
+      "getRefundDetails(refundId: string, actor: RefundActor)"
+    );
     expect(source).toContain('actor.role !== "admin"');
     expect(source).toContain("refund.payment_intent");
     expect(source).toContain("bookings.stripePaymentIntentId");
