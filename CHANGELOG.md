@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.20.12
+
+### Bug Fixes
+
+- fix(inventory): fail closed on Stripe seat oversell (8e643a1)
+
+### Maintenance
+
+- ci: apply Stripe inventory oversell guard (9ef9bf0)
+- chore(ci): remove temporary Stripe inventory applicator (6e43220)
+
+### Other Changes
+
+- Merge pull request #104 from kafaat/fix/stripe-inventory-oversell-guard-20260908 (4aa57b5)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.11...v1.20.12
+
+---
+
 ## What's Changed in v1.20.11
 
 ### Bug Fixes
