@@ -330,10 +330,7 @@ export async function createRefund(
   }
 }
 
-export async function getRefundDetails(
-  refundId: string,
-  actor: RefundActor
-) {
+export async function getRefundDetails(refundId: string, actor: RefundActor) {
   try {
     const refund = await stripe.refunds.retrieve(refundId);
 
