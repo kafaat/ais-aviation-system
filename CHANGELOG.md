@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.20.13
+
+### Bug Fixes
+
+- fix(inventory): make group booking approval atomic (1e96ad2)
+
+### Maintenance
+
+- ci: apply group booking inventory atomicity (4e1ab0c)
+- chore(ci): remove temporary group booking applicator (5b24fce)
+
+### Other Changes
+
+- Merge pull request #105 from kafaat/fix/group-booking-inventory-atomicity-20260908 (ce98c4e)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.12...v1.20.13
+
+---
+
 ## What's Changed in v1.20.12
 
 ### Bug Fixes
