@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.20.9
+
+### Bug Fixes
+
+- fix(webhooks): sanitize Stripe signature verification failures (e13056a)
+
+### Maintenance
+
+- ci: apply reviewed legacy webhook salvage (fda7eb6)
+- ci: narrow legacy salvage to signature error boundary (ed63362)
+- chore: remove temporary legacy salvage workflow (ee3ff57)
+
+### Other Changes
+
+- Merge pull request #100 from kafaat/fix/legacy-salvage-stripe-webhook-20260907 (e8bbed0)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.8...v1.20.9
+
+---
+
 ## What's Changed in v1.20.8
 
 ### Bug Fixes
