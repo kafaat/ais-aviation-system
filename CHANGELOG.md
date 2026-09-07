@@ -1,5 +1,15 @@
 # Changelog
 
+## What's Changed in v1.20.8
+
+### Bug Fixes
+
+- fix(auth): fail closed on weak or missing JWT signing secret (f1f9501)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.7...v1.20.8
+
+---
+
 ## What's Changed in v1.20.7
 
 ### Bug Fixes
