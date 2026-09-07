@@ -1,171 +1,138 @@
-/**
- * Self-Service Kiosk Router
- *
- * Public endpoints for kiosk passenger interactions:
- * - Passenger authentication (booking ref + last name)
- * - Check-in data retrieval
- * - Check-in processing
- * - Seat selection
- * - Boarding pass printing
- * - Bag tag printing
- * - Ancillary service purchase
- *
- * Admin endpoints for kiosk device management:
- * - Device listing and registration
- * - Device status monitoring
- * - Usage analytics
- */
+/** Self-Service Kiosk Router */
 
 import { z } from "zod";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as kioskService from "../services/kiosk.service";
+import {
+  assertPassengerInKioskCapability,
+  issueSelfServiceCapability,
+  verifySelfServiceCapability,
+} from "../services/self-service-capability.service";
+
+const capabilityInput = z.string().min(32).max(4096);
+
+function kioskCapability(token: string) {
+  return verifySelfServiceCapability(token, "kiosk-session");
+}
 
 export const kioskRouter = router({
-  // ========================================================================
-  // Public Kiosk Endpoints (passenger-facing)
-  // ========================================================================
-
-  /**
-   * Authenticate passenger at kiosk using booking reference and last name.
-   * Returns session info, booking details, and passenger list.
-   */
   authenticate: publicProcedure
     .input(
       z.object({
-        bookingRef: z
-          .string()
-          .min(1, "Booking reference is required")
-          .max(6, "Booking reference must be at most 6 characters"),
-        lastName: z
-          .string()
-          .min(1, "Last name is required")
-          .max(100, "Last name is too long"),
+        bookingRef: z.string().min(1).max(6),
+        lastName: z.string().min(1).max(100),
       })
     )
     .mutation(async ({ input }) => {
-      return await kioskService.authenticatePassenger(
+      const result = await kioskService.authenticatePassenger(
         input.bookingRef,
         input.lastName
       );
+      const capabilityToken = issueSelfServiceCapability({
+        kind: "kiosk-session",
+        bookingId: result.bookingId,
+        sessionId: result.sessionId,
+        passengerIds: result.passengers.map(passenger => passenger.id),
+      });
+      return { ...result, capabilityToken };
     }),
 
-  /**
-   * Get all check-in data for kiosk display (flight, passengers, seats, ancillaries).
-   */
   getCheckInData: publicProcedure
-    .input(
-      z.object({
-        bookingId: z.number().positive(),
-      })
-    )
+    .input(z.object({ capabilityToken: capabilityInput }))
     .query(async ({ input }) => {
-      return await kioskService.getCheckInData(input.bookingId);
+      const capability = kioskCapability(input.capabilityToken);
+      return await kioskService.getCheckInData(capability.bookingId);
     }),
 
-  /**
-   * Process kiosk check-in for a specific passenger.
-   */
   checkIn: publicProcedure
     .input(
       z.object({
-        bookingId: z.number().positive(),
+        capabilityToken: capabilityInput,
         passengerId: z.number().positive(),
         seatNumber: z.string().max(5).optional(),
         baggageCount: z.number().nonnegative().optional(),
       })
     )
     .mutation(async ({ input }) => {
+      const capability = kioskCapability(input.capabilityToken);
+      assertPassengerInKioskCapability(capability, input.passengerId);
       return await kioskService.performCheckIn(
-        input.bookingId,
+        capability.bookingId,
         input.passengerId,
-        {
-          seatNumber: input.seatNumber,
-          baggageCount: input.baggageCount,
-        }
+        { seatNumber: input.seatNumber, baggageCount: input.baggageCount }
       );
     }),
 
-  /**
-   * Select or change seat at kiosk for a passenger.
-   */
   selectSeat: publicProcedure
     .input(
       z.object({
-        bookingId: z.number().positive(),
+        capabilityToken: capabilityInput,
         passengerId: z.number().positive(),
         seatNumber: z.string().min(1).max(5),
       })
     )
     .mutation(async ({ input }) => {
+      const capability = kioskCapability(input.capabilityToken);
+      assertPassengerInKioskCapability(capability, input.passengerId);
       return await kioskService.selectSeat(
-        input.bookingId,
+        capability.bookingId,
         input.passengerId,
         input.seatNumber
       );
     }),
 
-  /**
-   * Generate boarding pass data for kiosk printing.
-   */
   printBoardingPass: publicProcedure
     .input(
       z.object({
-        bookingId: z.number().positive(),
+        capabilityToken: capabilityInput,
         passengerId: z.number().positive(),
       })
     )
     .mutation(async ({ input }) => {
+      const capability = kioskCapability(input.capabilityToken);
+      assertPassengerInKioskCapability(capability, input.passengerId);
       return await kioskService.printBoardingPass(
-        input.bookingId,
+        capability.bookingId,
         input.passengerId
       );
     }),
 
-  /**
-   * Generate bag tag data for kiosk printing.
-   */
   printBagTag: publicProcedure
     .input(
       z.object({
-        bookingId: z.number().positive(),
+        capabilityToken: capabilityInput,
         passengerId: z.number().positive(),
         bagCount: z.number().min(1).max(10),
       })
     )
     .mutation(async ({ input }) => {
+      const capability = kioskCapability(input.capabilityToken);
+      assertPassengerInKioskCapability(capability, input.passengerId);
       return await kioskService.printBagTag(
-        input.bookingId,
+        capability.bookingId,
         input.passengerId,
         input.bagCount
       );
     }),
 
-  /**
-   * Add an ancillary service at the kiosk (extra baggage, meal, lounge, etc.).
-   */
   addAncillary: publicProcedure
     .input(
       z.object({
-        bookingId: z.number().positive(),
+        capabilityToken: capabilityInput,
         serviceType: z.string().min(1).max(50),
         passengerId: z.number().positive(),
       })
     )
     .mutation(async ({ input }) => {
+      const capability = kioskCapability(input.capabilityToken);
+      assertPassengerInKioskCapability(capability, input.passengerId);
       return await kioskService.addAncillary(
-        input.bookingId,
+        capability.bookingId,
         input.serviceType,
         input.passengerId
       );
     }),
 
-  // ========================================================================
-  // Admin Kiosk Management Endpoints
-  // ========================================================================
-
-  /**
-   * Get all kiosk devices, optionally filtered by airport or status.
-   */
   getDevices: adminProcedure
     .input(
       z
@@ -175,13 +142,10 @@ export const kioskRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
-      return await kioskService.getKioskDevices(input ?? undefined);
-    }),
+    .query(async ({ input }) =>
+      kioskService.getKioskDevices(input ?? undefined)
+    ),
 
-  /**
-   * Register a new kiosk device at an airport.
-   */
   registerDevice: adminProcedure
     .input(
       z.object({
@@ -194,8 +158,8 @@ export const kioskRouter = router({
         hasPayment: z.boolean().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      return await kioskService.registerKiosk(
+    .mutation(async ({ input }) =>
+      kioskService.registerKiosk(
         input.airportId,
         input.terminal,
         input.location,
@@ -205,12 +169,9 @@ export const kioskRouter = router({
           hasScanner: input.hasScanner,
           hasPayment: input.hasPayment,
         }
-      );
-    }),
+      )
+    ),
 
-  /**
-   * Get kiosk usage analytics for an airport within a date range.
-   */
   getAnalytics: adminProcedure
     .input(
       z.object({
@@ -219,23 +180,14 @@ export const kioskRouter = router({
         to: z.date(),
       })
     )
-    .query(async ({ input }) => {
-      return await kioskService.getKioskAnalytics(input.airportId, {
+    .query(async ({ input }) =>
+      kioskService.getKioskAnalytics(input.airportId, {
         from: input.from,
         to: input.to,
-      });
-    }),
-
-  /**
-   * Get health and status for a specific kiosk device.
-   */
-  getDeviceStatus: adminProcedure
-    .input(
-      z.object({
-        kioskId: z.number().positive(),
       })
-    )
-    .query(async ({ input }) => {
-      return await kioskService.getKioskStatus(input.kioskId);
-    }),
+    ),
+
+  getDeviceStatus: adminProcedure
+    .input(z.object({ kioskId: z.number().positive() }))
+    .query(async ({ input }) => kioskService.getKioskStatus(input.kioskId)),
 });
