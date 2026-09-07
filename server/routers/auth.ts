@@ -73,7 +73,8 @@ async function authenticateWithPassword(
 } | null> {
   const { authServiceClient } = await import("../services/auth-service.client");
 
-  // Try auth service first (handles password verification with bcrypt)
+  // Password verification is mandatory in every environment. A rejected
+  // credential or an unavailable auth service must never become a DB-only login.
   const authResult = await authServiceClient.verifyPassword(email, password);
   if (authResult.success && authResult.user) {
     return {
@@ -82,38 +83,6 @@ async function authenticateWithPassword(
       email: authResult.user.email,
       role: authResult.user.role,
       openId: authResult.user.openId,
-    };
-  }
-
-  // Fallback: direct DB lookup for development (no password verification)
-  if (process.env.NODE_ENV !== "production") {
-    const db = await getDb();
-    if (!db) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Database not available",
-      });
-    }
-
-    const user = await db.query.users.findFirst({
-      where: (t, { eq }) => eq(t.email, email),
-    });
-
-    if (!user) {
-      return null;
-    }
-
-    logger.warn(
-      { email },
-      "Dev mode: accepting login without password verification"
-    );
-
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      openId: user.openId,
     };
   }
 

@@ -56,13 +56,20 @@ export const refundsRouter = router({
         reason: z.string().optional().describe("Reason for refund request"),
         amount: z
           .number()
+          .int()
+          .positive()
           .optional()
-          .describe(
-            "Requested refund amount (optional, calculated automatically if not provided)"
-          ),
+          .describe("Admin-only refund override in integer cents"),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if (input.amount !== undefined && ctx.user.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only admins can override the refund amount",
+        });
+      }
+
       // Get booking reference for audit
       const db = await getDb();
       if (!db)
@@ -77,12 +84,15 @@ export const refundsRouter = router({
         .where(eq(bookings.id, input.bookingId))
         .limit(1);
 
-      const result = await refundsService.createRefund({
-        bookingId: input.bookingId,
-        userId: ctx.user.id,
-        reason: input.reason,
-        amount: input.amount,
-      });
+      const result = await refundsService.createRefund(
+        {
+          bookingId: input.bookingId,
+          userId: ctx.user.id,
+          reason: input.reason,
+          amount: input.amount,
+        },
+        ctx.user
+      );
 
       // Audit log: Refund completed
       await auditRefund(
@@ -121,7 +131,12 @@ export const refundsRouter = router({
         bookingId: z.number().describe("Booking ID"),
         userId: z.number().describe("User ID who owns the booking"),
         reason: z.string().optional().describe("Refund reason"),
-        amount: z.number().optional().describe("Override refund amount"),
+        amount: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Override refund amount in integer cents"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -139,7 +154,7 @@ export const refundsRouter = router({
         .where(eq(bookings.id, input.bookingId))
         .limit(1);
 
-      const result = await refundsService.createRefund(input);
+      const result = await refundsService.createRefund(input, ctx.user);
 
       // Audit log: Admin refund completed
       await auditRefund(

@@ -7,7 +7,6 @@ import {
   router,
 } from "../_core/trpc";
 import { stripe } from "../stripe";
-import * as db from "../db";
 import { getDb } from "../db";
 import { bookings } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -387,7 +386,8 @@ export const paymentsRouter = router({
     }),
 
   /**
-   * Create payment record (legacy - for non-Stripe payments)
+   * Retired legacy payment endpoint. Keep the contract to return an explicit
+   * error to old clients; only provider-verified flows may settle a payment.
    */
   create: protectedProcedure
     .meta({
@@ -395,9 +395,9 @@ export const paymentsRouter = router({
         method: "POST",
         path: "/payments",
         tags: ["Payments"],
-        summary: "Create payment (legacy)",
+        summary: "Create payment (legacy, disabled)",
         description:
-          "Create a payment record for non-Stripe payment methods. Legacy endpoint.",
+          "Disabled: direct payment creation cannot prove collection of funds. Use /payments/checkout and the provider-verified payment flow.",
         protect: true,
       },
     })
@@ -417,45 +417,14 @@ export const paymentsRouter = router({
         status: z.string(),
       })
     )
-    .mutation(async ({ ctx, input }) => {
-      const booking = await db.getBookingByIdWithDetails(input.bookingId);
-      const bookingReference =
-        booking?.bookingReference || `booking-${input.bookingId}`;
-
-      const paymentResult = await db.createPayment({
-        bookingId: input.bookingId,
-        amount: input.amount,
-        currency: "SAR",
-        method: input.method,
-        status: "pending",
-        transactionId: null,
+    .mutation(() => {
+      // Authentication, ownership, or an admin role is not proof of payment.
+      // Do not create records, confirm bookings, or emit success audit events.
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Legacy payment creation is disabled. Use payments.createCheckoutSession.",
       });
-
-      const paymentId = Number(paymentResult[0].insertId);
-
-      const transactionId = `TXN-${Date.now()}-${Math.random()
-        .toString(36)
-        .substring(7)}`;
-
-      await db.updatePaymentStatus(paymentId, "completed", transactionId);
-      await db.updateBookingStatus(input.bookingId, "confirmed");
-
-      await auditPayment(
-        input.bookingId,
-        bookingReference,
-        input.amount,
-        "PAYMENT_SUCCESS",
-        ctx.user.id,
-        transactionId,
-        ctx.req.ip,
-        ctx.req.headers["x-request-id"] as string
-      );
-
-      return {
-        paymentId,
-        transactionId,
-        status: "completed",
-      };
     }),
 
   /**
