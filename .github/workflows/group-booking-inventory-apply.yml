@@ -1,0 +1,57 @@
+name: Apply Group Booking Inventory Atomicity
+
+on:
+  push:
+    branches: [fix/group-booking-inventory-atomicity-20260908]
+    paths: [.github/workflows/group-booking-inventory-apply.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: fix/group-booking-inventory-atomicity-20260908
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+      - run: npm install --global pnpm@10.28.2
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Apply atomic guarded approval
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('server/services/group-booking.service.ts')
+          text = path.read_text()
+          text = text.replace('import { eq, desc, and, sql, SQL } from "drizzle-orm";', 'import { eq, desc, and, gte, sql, SQL } from "drizzle-orm";')
+          insert_after = '''export const DISCOUNT_TIERS = {\n  SMALL: { min: 10, max: 19, discount: 5 }, // 5% discount\n  MEDIUM: { min: 20, max: 49, discount: 10 }, // 10% discount\n  LARGE: { min: 50, max: Infinity, discount: 15 }, // 15% discount\n} as const;\n'''
+          helper = insert_after + '''\nfunction getAffectedRows(result: unknown): number {\n  if (Array.isArray(result)) {\n    const first = result[0];\n    if (first && typeof first === "object" && "affectedRows" in first) {\n      return Number((first as { affectedRows?: number }).affectedRows ?? 0);\n    }\n  }\n  if (result && typeof result === "object" && "rowsAffected" in result) {\n    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);\n  }\n  return 0;\n}\n'''
+          if insert_after not in text:
+              raise SystemExit('discount marker not found')
+          text = text.replace(insert_after, helper, 1)
+          start = text.index('export async function approveGroupBooking(')
+          end = text.index('/**\n * Reject a group booking request', start)
+          replacement = '''export async function approveGroupBooking(\n  id: number,\n  discountPercent: number,\n  adminUserId: number\n): Promise<GroupBooking> {\n  const db = await getDb();\n  if (!db) {\n    throw new TRPCError({\n      code: "INTERNAL_SERVER_ERROR",\n      message: "Database not available",\n    });\n  }\n\n  return db.transaction(async tx => {\n    const [booking] = await tx\n      .select()\n      .from(groupBookings)\n      .where(eq(groupBookings.id, id))\n      .limit(1);\n\n    if (!booking) {\n      throw new TRPCError({\n        code: "NOT_FOUND",\n        message: "Group booking request not found",\n      });\n    }\n\n    if (booking.status !== "pending") {\n      throw new TRPCError({\n        code: "BAD_REQUEST",\n        message: `Cannot approve a ${booking.status} group booking`,\n      });\n    }\n\n    const [flightData] = await tx\n      .select()\n      .from(flights)\n      .where(eq(flights.id, booking.flightId))\n      .limit(1);\n\n    if (!flightData) {\n      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });\n    }\n\n    const cabinClass = booking.cabinClass ?? "economy";\n    const pricePerSeat =\n      cabinClass === "economy"\n        ? flightData.economyPrice\n        : flightData.businessPrice;\n    const basePrice = pricePerSeat * booking.groupSize;\n    const discountAmount = Math.round(basePrice * (discountPercent / 100));\n    const totalPrice = basePrice - discountAmount;\n\n    const seatUpdate =\n      cabinClass === "economy"\n        ? await tx\n            .update(flights)\n            .set({\n              economyAvailable: sql`${flights.economyAvailable} - ${booking.groupSize}`,\n            })\n            .where(\n              and(\n                eq(flights.id, booking.flightId),\n                gte(flights.economyAvailable, booking.groupSize)\n              )\n            )\n        : await tx\n            .update(flights)\n            .set({\n              businessAvailable: sql`${flights.businessAvailable} - ${booking.groupSize}`,\n            })\n            .where(\n              and(\n                eq(flights.id, booking.flightId),\n                gte(flights.businessAvailable, booking.groupSize)\n              )\n            );\n\n    if (getAffectedRows(seatUpdate) !== 1) {\n      throw new TRPCError({\n        code: "BAD_REQUEST",\n        message: `Not enough ${cabinClass} seats available`,\n      });\n    }\n\n    const bookingUpdate = await tx\n      .update(groupBookings)\n      .set({\n        status: "confirmed",\n        discountPercent: String(discountPercent),\n        totalPrice,\n        approvedBy: adminUserId,\n        approvedAt: new Date(),\n        updatedAt: new Date(),\n      })\n      .where(\n        and(eq(groupBookings.id, id), eq(groupBookings.status, "pending"))\n      );\n\n    if (getAffectedRows(bookingUpdate) !== 1) {\n      throw new TRPCError({\n        code: "CONFLICT",\n        message: "Group booking was already processed",\n      });\n    }\n\n    const [updated] = await tx\n      .select()\n      .from(groupBookings)\n      .where(eq(groupBookings.id, id))\n      .limit(1);\n\n    if (!updated) {\n      throw new TRPCError({\n        code: "NOT_FOUND",\n        message: "Group booking not found after update",\n      });\n    }\n    return updated;\n  });\n}\n\n'''
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text)
+
+          Path('server/services/group-booking.inventory-atomicity.test.ts').write_text('''import { describe, expect, it } from "vitest";\nimport { readFileSync } from "node:fs";\n\ndescribe("group booking inventory atomicity", () => {\n  const source = readFileSync(\n    new URL("./group-booking.service.ts", import.meta.url),\n    "utf8"\n  );\n\n  it("commits seat reservation and approval in one transaction", () => {\n    expect(source).toContain("return db.transaction(async tx =>");\n    expect(source).toContain("gte(flights.economyAvailable, booking.groupSize)");\n    expect(source).toContain("gte(flights.businessAvailable, booking.groupSize)");\n    expect(source).toContain("getAffectedRows(seatUpdate) !== 1");\n  });\n\n  it("guards the pending-to-confirmed transition against concurrent approvals", () => {\n    expect(source).toContain('eq(groupBookings.status, "pending")');\n    expect(source).toContain("getAffectedRows(bookingUpdate) !== 1");\n  });\n});\n''')
+          PY
+      - name: Verify
+        run: |
+          pnpm exec prettier --write server/services/group-booking.service.ts server/services/group-booking.inventory-atomicity.test.ts
+          pnpm exec prettier --check server/services/group-booking.service.ts server/services/group-booking.inventory-atomicity.test.ts
+          pnpm check
+          pnpm exec vitest run server/services/group-booking.inventory-atomicity.test.ts
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add server/services/group-booking.service.ts server/services/group-booking.inventory-atomicity.test.ts
+          git commit -m "fix(inventory): make group booking approval atomic"
+          git push origin HEAD:fix/group-booking-inventory-atomicity-20260908
