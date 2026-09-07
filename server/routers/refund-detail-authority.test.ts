@@ -34,8 +34,8 @@ describe("refund detail authority boundary", () => {
     const block = source.slice(start, end);
 
     expect(block.indexOf("if (!ownedBooking)")).toBeGreaterThan(-1);
-    expect(block.indexOf("return {", block.indexOf("if (!ownedBooking)"))).toBeGreaterThan(
-      block.indexOf("if (!ownedBooking)")
-    );
+    expect(
+      block.indexOf("return {", block.indexOf("if (!ownedBooking)"))
+    ).toBeGreaterThan(block.indexOf("if (!ownedBooking)"));
   });
 });
