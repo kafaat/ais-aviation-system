@@ -1,5 +1,27 @@
 # Changelog
 
+## What's Changed in v1.20.6
+
+### Bug Fixes
+
+- fix(refunds): enforce cumulative refund accounting and idempotency (64ec639)
+- fix(refunds): recover provider-success retries before balance guard (1704786)
+
+### Maintenance
+
+- chore: add one-shot refund formatter (0c14996)
+- chore: remove one-shot refund formatter (ab45388)
+
+### Other Changes
+
+- test(refunds): cover cumulative balance and provider idempotency (1e2e898)
+- style(refunds): apply repository prettier (59fec15)
+- Merge pull request #96 from kafaat/fix/refund-cumulative-idempotency-20260907 (9f01703)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.5...v1.20.6
+
+---
+
 ## What's Changed in v1.20.5
 
 ### Bug Fixes
