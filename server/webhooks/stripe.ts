@@ -102,7 +102,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
       `Signature verification failed: ${errMessage}`
     );
     return res.status(400).json({
-      error: `Signature verification failed: ${errMessage}`,
+      error: "Signature verification failed",
       retryable: false,
     });
   }
