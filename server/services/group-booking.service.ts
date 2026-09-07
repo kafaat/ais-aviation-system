@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, desc, and, sql, SQL } from "drizzle-orm";
+import { eq, desc, and, gte, sql, SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   groupBookings,
@@ -21,6 +21,19 @@ export const DISCOUNT_TIERS = {
   MEDIUM: { min: 20, max: 49, discount: 10 }, // 10% discount
   LARGE: { min: 50, max: Infinity, discount: 15 }, // 15% discount
 } as const;
+
+function getAffectedRows(result: unknown): number {
+  if (Array.isArray(result)) {
+    const first = result[0];
+    if (first && typeof first === "object" && "affectedRows" in first) {
+      return Number((first as { affectedRows?: number }).affectedRows ?? 0);
+    }
+  }
+  if (result && typeof result === "object" && "rowsAffected" in result) {
+    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);
+  }
+  return 0;
+}
 
 export interface CreateGroupBookingInput {
   organizerName: string;
@@ -232,100 +245,113 @@ export async function approveGroupBooking(
     });
   }
 
-  // Get the group booking
-  const booking = await getGroupBookingById(id);
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Group booking request not found",
-    });
-  }
+  return db.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(groupBookings)
+      .where(eq(groupBookings.id, id))
+      .limit(1);
 
-  if (booking.status !== "pending") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Cannot approve a ${booking.status} group booking`,
-    });
-  }
+    if (!booking) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Group booking request not found",
+      });
+    }
 
-  // Get flight pricing and availability
-  const flight = await db
-    .select()
-    .from(flights)
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
+    if (booking.status !== "pending") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Cannot approve a ${booking.status} group booking`,
+      });
+    }
 
-  if (flight.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Flight not found",
-    });
-  }
+    const [flightData] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, booking.flightId))
+      .limit(1);
 
-  const flightData = flight[0];
-  const cabinClass = booking.cabinClass ?? "economy";
+    if (!flightData) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    }
 
-  // Re-check seat availability before approving
-  const availableSeats =
-    cabinClass === "economy"
-      ? flightData.economyAvailable
-      : flightData.businessAvailable;
+    const cabinClass = booking.cabinClass ?? "economy";
+    const pricePerSeat =
+      cabinClass === "economy"
+        ? flightData.economyPrice
+        : flightData.businessPrice;
+    const basePrice = pricePerSeat * booking.groupSize;
+    const discountAmount = Math.round(basePrice * (discountPercent / 100));
+    const totalPrice = basePrice - discountAmount;
 
-  if (availableSeats < booking.groupSize) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Not enough ${cabinClass} seats available. Only ${availableSeats} seats remaining, but ${booking.groupSize} are needed.`,
-    });
-  }
+    const seatUpdate =
+      cabinClass === "economy"
+        ? await tx
+            .update(flights)
+            .set({
+              economyAvailable: sql`${flights.economyAvailable} - ${booking.groupSize}`,
+            })
+            .where(
+              and(
+                eq(flights.id, booking.flightId),
+                gte(flights.economyAvailable, booking.groupSize)
+              )
+            )
+        : await tx
+            .update(flights)
+            .set({
+              businessAvailable: sql`${flights.businessAvailable} - ${booking.groupSize}`,
+            })
+            .where(
+              and(
+                eq(flights.id, booking.flightId),
+                gte(flights.businessAvailable, booking.groupSize)
+              )
+            );
 
-  // Calculate total price with discount using the correct cabin class price
-  const pricePerSeat =
-    cabinClass === "economy"
-      ? flightData.economyPrice
-      : flightData.businessPrice;
-  const basePrice = pricePerSeat * booking.groupSize;
-  const discountAmount = Math.round(basePrice * (discountPercent / 100));
-  const totalPrice = basePrice - discountAmount;
+    if (getAffectedRows(seatUpdate) !== 1) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Not enough ${cabinClass} seats available`,
+      });
+    }
 
-  // Update the group booking
-  await db
-    .update(groupBookings)
-    .set({
-      status: "confirmed",
-      discountPercent: String(discountPercent),
-      totalPrice,
-      approvedBy: adminUserId,
-      approvedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(groupBookings.id, id));
-
-  // Decrement the flight's available seats
-  if (cabinClass === "economy") {
-    await db
-      .update(flights)
+    const bookingUpdate = await tx
+      .update(groupBookings)
       .set({
-        economyAvailable: sql`${flights.economyAvailable} - ${booking.groupSize}`,
+        status: "confirmed",
+        discountPercent: String(discountPercent),
+        totalPrice,
+        approvedBy: adminUserId,
+        approvedAt: new Date(),
+        updatedAt: new Date(),
       })
-      .where(eq(flights.id, booking.flightId));
-  } else {
-    await db
-      .update(flights)
-      .set({
-        businessAvailable: sql`${flights.businessAvailable} - ${booking.groupSize}`,
-      })
-      .where(eq(flights.id, booking.flightId));
-  }
+      .where(
+        and(eq(groupBookings.id, id), eq(groupBookings.status, "pending"))
+      );
 
-  // Return updated booking
-  const updated = await getGroupBookingById(id);
-  if (!updated) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Group booking not found after update",
-    });
-  }
-  return updated;
+    if (getAffectedRows(bookingUpdate) !== 1) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Group booking was already processed",
+      });
+    }
+
+    const [updated] = await tx
+      .select()
+      .from(groupBookings)
+      .where(eq(groupBookings.id, id))
+      .limit(1);
+
+    if (!updated) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Group booking not found after update",
+      });
+    }
+    return updated;
+  });
 }
 
 /**
