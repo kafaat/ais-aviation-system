@@ -27,7 +27,7 @@ import {
   bookingStatusHistory,
   inventoryLocks,
 } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { sendBookingConfirmation } from "../services/email.service";
 import { awardMilesForBooking } from "../services/loyalty.service";
 import { generateETicketForPassenger } from "../services/eticket.service";
@@ -55,6 +55,20 @@ function isDuplicateEntryError(err: unknown): boolean {
       err.code === "23505" ||
       err.code === "23000")
   );
+}
+
+/** Extract affected-row count from Drizzle/MySQL update results. */
+function getAffectedRows(result: unknown): number {
+  if (Array.isArray(result)) {
+    const first = result[0];
+    if (first && typeof first === "object" && "affectedRows" in first) {
+      return Number((first as { affectedRows?: number }).affectedRows ?? 0);
+    }
+  }
+  if (result && typeof result === "object" && "rowsAffected" in result) {
+    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);
+  }
+  return 0;
 }
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -409,22 +423,39 @@ async function handleCheckoutSessionCompleted(
     });
   }
 
-  // 6. Deduct seats from flight availability
+  // 6. Deduct seats from flight availability. The predicate is the
+  // concurrency boundary: if another writer consumed the last seats first,
+  // affectedRows is zero and the surrounding payment transaction rolls back.
   if (previousStatus !== "confirmed") {
-    if (booking.cabinClass === "business") {
-      await tx
-        .update(flights)
-        .set({
-          businessAvailable: sql`GREATEST(${flights.businessAvailable} - ${booking.numberOfPassengers}, 0)`,
-        })
-        .where(eq(flights.id, booking.flightId));
-    } else {
-      await tx
-        .update(flights)
-        .set({
-          economyAvailable: sql`GREATEST(${flights.economyAvailable} - ${booking.numberOfPassengers}, 0)`,
-        })
-        .where(eq(flights.id, booking.flightId));
+    const seatUpdate =
+      booking.cabinClass === "business"
+        ? await tx
+            .update(flights)
+            .set({
+              businessAvailable: sql`${flights.businessAvailable} - ${booking.numberOfPassengers}`,
+            })
+            .where(
+              and(
+                eq(flights.id, booking.flightId),
+                gte(flights.businessAvailable, booking.numberOfPassengers)
+              )
+            )
+        : await tx
+            .update(flights)
+            .set({
+              economyAvailable: sql`${flights.economyAvailable} - ${booking.numberOfPassengers}`,
+            })
+            .where(
+              and(
+                eq(flights.id, booking.flightId),
+                gte(flights.economyAvailable, booking.numberOfPassengers)
+              )
+            );
+
+    if (getAffectedRows(seatUpdate) !== 1) {
+      throw new Error(
+        `Insufficient ${booking.cabinClass} inventory for booking ${bookingId}`
+      );
     }
 
     log.info(
