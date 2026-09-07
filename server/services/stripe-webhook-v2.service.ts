@@ -57,9 +57,10 @@ export const stripeWebhookServiceV2 = {
         opts.signature,
         webhookSecret
       );
-    } catch (err: any) {
-      console.error(`[Webhook] Signature verification failed:`, err.message);
-      throw new Error(`Signature verification failed: ${err.message}`);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      console.error("[Webhook] Signature verification failed:", error.message);
+      throw new Error("Signature verification failed");
     }
 
     const db = await getDb();
