@@ -102,7 +102,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
       `Signature verification failed: ${errMessage}`
     );
     return res.status(400).json({
-      error: `Signature verification failed: ${errMessage}`,
+      error: "Signature verification failed",
       retryable: false,
     });
   }
@@ -192,7 +192,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
     // 4. Process event in transaction
     await db.transaction(async tx => {
-      await processEvent(tx, event);
+      await processStripeEvent(tx, event);
 
       // Mark as processed only on success
       await tx
@@ -263,7 +263,7 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 /**
  * Process event within transaction
  */
-async function processEvent(
+export async function processStripeEvent(
   tx: DatabaseTransaction,
   event: Stripe.Event
 ): Promise<void> {
