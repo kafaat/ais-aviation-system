@@ -120,4 +120,23 @@ new = '''    const localReconciliation = await database.transaction(async tx => 
 assert s.count(old) == 1, "refund local-write block changed unexpectedly"
 p.write_text(s.replace(old, new, 1))
 
-Path("server/services/refunds.atomicity.test.ts").write_text('''import { readFileSync } from "node:fs";\nimport { describe, expect, it } from "vitest";\n\nconst source = readFileSync(new URL("./refunds.service.ts", import.meta.url), "utf8");\n\ndescribe("refund local reconciliation atomicity", () => {\n  it("serializes reconciliation and restores seats only on the first full-refund transition", () => {\n    expect(source).toContain("database.transaction(async tx =>");\n    expect(source).toContain('.for("update")');\n    expect(source).toContain('lockedBooking.paymentStatus !== "refunded"');\n    expect(source).toContain('lockedBooking.status === "confirmed"');\n\n    const start = source.indexOf("const localReconciliation = await database.transaction");\n    const end = source.indexOf("if (localReconciliation.shouldRestoreSeats)");\n    const body = source.slice(start, end);\n    expect(body).toContain(".update(bookings)");\n    expect(body).toContain(".update(flights)");\n    expect(body).toContain(".update(payments)");\n    expect(body).not.toContain("await database\\n          .update(flights)");\n  });\n});\n''')
+Path("server/services/refunds.atomicity.test.ts").write_text('''import { readFileSync } from "node:fs";\nimport { describe, expect, it } from "vitest";\n\nconst source = readFileSync(new URL("./refunds.service.ts", import.meta.url), "utf8");\n\ndescribe("refund local reconciliation atomicity", () => {\n  it("serializes reconciliation and restores seats only on the first full-refund transition", () => {\n    expect(source).toContain("database.transaction(async tx =>");\n    expect(source).toContain('.for("update")');\n    expect(source).toContain('lockedBooking.paymentStatus !== "refunded"');\n    expect(source).toContain('lockedBooking.status === "confirmed"');\n\n    const start = source.indexOf("const localReconciliation = await database.transaction");\n    const end = source.indexOf("if (localReconciliation.shouldRestoreSeats)");\n    const body = source.slice(start, end);\n    expect(body).toContain(".update(bookings)");\n    expect(body).toContain(".update(flights)");\n    expect(body).toContain(".update(payments)");\n    expect(body).not.toContain("await database\\n          .update(flights)");\n    expect(body).not.toContain("await database\\n        .update(bookings)");\n    expect(body).not.toContain("await database\\n        .update(payments)");\n  });\n});\n''')
+
+t = Path("server/services/refunds.security.test.ts")
+ts = t.read_text()
+ts = ts.replace(
+    '    innerJoin: vi.fn().mockReturnThis(),\n    limit: mocks.limit,',
+    '    innerJoin: vi.fn().mockReturnThis(),\n    for: vi.fn().mockReturnThis(),\n    limit: mocks.limit,',
+    1,
+)
+ts = ts.replace(
+    '''  mocks.limit\n    .mockResolvedValueOnce([booking])\n    .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])\n    .mockResolvedValueOnce([])\n    .mockResolvedValueOnce([]);''',
+    '''  mocks.limit\n    .mockResolvedValueOnce([booking])\n    .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])\n    .mockResolvedValueOnce([booking])\n    .mockResolvedValueOnce([])\n    .mockResolvedValueOnce([]);''',
+    1,
+)
+ts = ts.replace(
+    '''  mocks.getDb.mockResolvedValue({\n    select: () => query,\n    update: mocks.update,\n  });''',
+    '''  const database = {\n    select: () => query,\n    update: mocks.update,\n    transaction: vi.fn(),\n  };\n  database.transaction.mockImplementation(\n    async (callback: (tx: typeof database) => unknown) => callback(database)\n  );\n  mocks.getDb.mockResolvedValue(database);''',
+    1,
+)
+t.write_text(ts)
