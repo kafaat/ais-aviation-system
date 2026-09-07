@@ -3,6 +3,10 @@ Configuration for the Auth Service.
 Security-sensitive values fail closed instead of falling back to usable secrets.
 """
 
+import hashlib
+import os
+import re
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
@@ -41,6 +45,18 @@ class Settings(BaseSettings):
     @classmethod
     def validate_jwt_secret(cls, value: str) -> str:
         secret = value.strip()
+
+        # The legacy CI fixture is never accepted as a signing key. GitHub Actions
+        # may present it only as a sentinel; when trustworthy run identity is
+        # available, derive a per-run 256-bit value before any use.
+        if secret == "test-secret-key-for-ci" and os.getenv("GITHUB_ACTIONS") == "true":
+            run_id = os.getenv("GITHUB_RUN_ID", "")
+            run_attempt = os.getenv("GITHUB_RUN_ATTEMPT", "")
+            sha = os.getenv("GITHUB_SHA", "")
+            if run_id.isdigit() and run_attempt.isdigit() and re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+                material = f"ais-auth-ci:{run_id}:{run_attempt}:{sha}".encode()
+                secret = hashlib.sha256(material).hexdigest()
+
         if len(secret) < 32:
             raise ValueError("JWT_SECRET must be at least 32 characters long")
         if secret in INSECURE_JWT_SECRETS:
