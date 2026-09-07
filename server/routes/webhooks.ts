@@ -2,6 +2,10 @@
  * Legacy /webhooks router kept as a thin compatibility wrapper.
  * All Stripe processing is delegated to the canonical handler used by
  * /api/stripe/webhook so there is only one financial state machine.
+ *
+ * IMPORTANT: keep this router mounted before any global express.json()
+ * middleware. Stripe signature verification requires the unparsed raw
+ * request body, and this route intentionally installs express.raw().
  */
 
 import express, { Request, Response, Router } from "express";
