@@ -1,0 +1,160 @@
+name: Apply Refund Detail Authority Fix
+on:
+  push:
+    branches: [fix/refund-detail-ownership-20260907]
+    paths: [.github/workflows/refund-detail-authority-fix.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: fix/refund-detail-ownership-20260907
+          fetch-depth: 0
+      - name: Apply exact scoped changes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('server/routers/refunds.ts')
+          s = p.read_text()
+          old = '''  getDetails: protectedProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/refunds/{refundId}",
+        tags: ["Refunds"],
+        summary: "Get refund details",
+        description:
+          "Retrieve detailed information about a specific refund including status, amount, and processing history.",
+        protect: true,
+      },
+    })
+    .input(z.object({ refundId: z.string().describe("Refund ID") }))
+    .query(async ({ input }) => {
+      return await refundsService.getRefundDetails(input.refundId);
+    }),
+'''
+          new = '''  getDetails: protectedProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/refunds/{refundId}",
+        tags: ["Refunds"],
+        summary: "Get refund details",
+        description:
+          "Retrieve detailed information about a specific refund including status, amount, and processing history.",
+        protect: true,
+      },
+    })
+    .input(z.object({ refundId: z.string().min(1).describe("Refund ID") }))
+    .query(async ({ input, ctx }) => {
+      return await refundsService.getRefundDetails(input.refundId, ctx.user);
+    }),
+'''
+          if s.count(old) != 1:
+              raise SystemExit('refund getDetails block did not match exactly once')
+          p.write_text(s.replace(old, new))
+
+          p = Path('server/services/refunds.service.ts')
+          s = p.read_text()
+          old = '''export async function getRefundDetails(refundId: string) {
+  try {
+    const refund = await stripe.refunds.retrieve(refundId);
+    return {
+      id: refund.id,
+      amount: refund.amount,
+      status: refund.status,
+      reason: refund.reason,
+      created: refund.created,
+    };
+'''
+          new = '''export async function getRefundDetails(
+  refundId: string,
+  actor: RefundActor
+) {
+  try {
+    const refund = await stripe.refunds.retrieve(refundId);
+
+    if (actor.role !== "admin") {
+      const paymentIntentId =
+        typeof refund.payment_intent === "string"
+          ? refund.payment_intent
+          : refund.payment_intent?.id;
+      if (!paymentIntentId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Refund not found" });
+      }
+
+      const database = await getDb();
+      if (!database) throw new Error("Database not available");
+      const [ownedBooking] = await database
+        .select({ id: bookings.id })
+        .from(bookings)
+        .where(
+          sql`${bookings.stripePaymentIntentId} = ${paymentIntentId} AND ${bookings.userId} = ${actor.id}`
+        )
+        .limit(1);
+      if (!ownedBooking) {
+        // Do not disclose whether a refund ID belongs to another account.
+        throw new TRPCError({ code: "NOT_FOUND", message: "Refund not found" });
+      }
+    }
+
+    return {
+      id: refund.id,
+      amount: refund.amount,
+      status: refund.status,
+      reason: refund.reason,
+      created: refund.created,
+    };
+'''
+          if s.count(old) != 1:
+              raise SystemExit('refund service block did not match exactly once')
+          p.write_text(s.replace(old, new))
+          PY
+      - name: Add regression guard
+        run: |
+          cat > server/routers/refund-detail-authority.test.ts <<'EOF'
+          import { describe, expect, it } from "vitest";
+          import { readFileSync } from "node:fs";
+
+          describe("refund detail authority boundary", () => {
+            it("passes the authenticated actor into refund detail lookup", () => {
+              const source = readFileSync("server/routers/refunds.ts", "utf8");
+              const block = source.slice(source.indexOf("getDetails: protectedProcedure"), source.indexOf("checkRefundable: protectedProcedure"));
+              expect(block).toContain("getRefundDetails(input.refundId, ctx.user)");
+              expect(block).toContain("async ({ input, ctx })");
+            });
+
+            it("binds non-admin refund reads to payment intent and booking owner", () => {
+              const source = readFileSync("server/services/refunds.service.ts", "utf8");
+              const start = source.indexOf("export async function getRefundDetails(");
+              const end = source.indexOf("export async function isBookingRefundable", start);
+              const block = source.slice(start, end);
+              expect(block).toContain('actor.role !== "admin"');
+              expect(block).toContain("refund.payment_intent");
+              expect(block).toContain("bookings.stripePaymentIntentId");
+              expect(block).toContain("bookings.userId");
+              expect(block).toContain("actor.id");
+              expect(block).toContain('code: "NOT_FOUND"');
+            });
+          });
+          EOF
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.x'
+      - run: npm install --global pnpm@10.28.2 && pnpm install --frozen-lockfile --ignore-scripts
+      - name: Format and verify scoped tests
+        run: |
+          pnpm exec prettier --write server/routers/refunds.ts server/services/refunds.service.ts server/routers/refund-detail-authority.test.ts
+          pnpm exec vitest run server/routers/refund-detail-authority.test.ts
+          pnpm check
+      - name: Commit exact result
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add server/routers/refunds.ts server/services/refunds.service.ts server/routers/refund-detail-authority.test.ts
+          git commit -m 'fix(refunds): enforce ownership on refund detail reads'
+          git push origin HEAD:fix/refund-detail-ownership-20260907
