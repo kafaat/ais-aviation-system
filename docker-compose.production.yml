@@ -69,7 +69,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost:3000/api/trpc/health.check",
+          "http://localhost:3000/api/trpc/health.live",
         ]
       interval: 30s
       timeout: 10s
@@ -120,7 +120,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost:3000/api/trpc/health.check",
+          "http://localhost:3000/api/trpc/health.live",
         ]
       interval: 30s
       timeout: 10s
@@ -171,7 +171,7 @@ services:
           "--quiet",
           "--tries=1",
           "--spider",
-          "http://localhost:3000/api/trpc/health.check",
+          "http://localhost:3000/api/trpc/health.live",
         ]
       interval: 30s
       timeout: 10s
