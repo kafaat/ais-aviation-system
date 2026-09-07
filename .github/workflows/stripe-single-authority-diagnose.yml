@@ -1,0 +1,65 @@
+name: Diagnose PR101 test failure
+
+on:
+  push:
+    branches: [fix/stripe-webhook-single-authority-20260907]
+    paths: [.github/workflows/stripe-single-authority-diagnose.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: ais_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - name: Prepare database
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+        run: pnpm exec drizzle-kit push --force
+      - name: Run exact coverage command and capture output
+        id: tests
+        continue-on-error: true
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          STRIPE_WEBHOOK_SECRET: whsec_mock_secret
+        run: |
+          set -o pipefail
+          pnpm run test:coverage 2>&1 | tee /tmp/pr101-test-output.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr101-test-output
+          path: /tmp/pr101-test-output.log
+          retention-days: 3
+          if-no-files-found: error
+      - name: Preserve failure semantics
+        if: steps.tests.outcome != 'success'
+        run: exit 1
