@@ -143,17 +143,12 @@ jobs:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
         run: pnpm exec drizzle-kit push --force
 
-      - name: Generate ephemeral JWT signing secret
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-
       - name: Run tests with coverage
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
           STRIPE_SECRET_KEY: sk_test_mock_key
           STRIPE_WEBHOOK_SECRET: whsec_mock_secret
         run: pnpm run test:coverage
@@ -254,7 +249,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # =============================================================================
-  # STAGE 4: E2EE Tests
+  # STAGE 4: E2E Tests
   # =============================================================================
   e2e:
     name: E2E Tests
@@ -352,18 +347,13 @@ jobs:
       - name: Install auth service dependencies
         run: pip install -r auth-service/requirements.txt
 
-      - name: Generate ephemeral JWT signing secret
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-
       - name: Start auth service
         env:
-          DATABASE_URL: ysqmal+pymysql://root:test_password@127.0.0.1:3306/ais_test
+          DATABASE_URL: mysql+pymysql://root:test_password@127.0.0.1:3306/ais_test
+          JWT_SECRET: test-secret-key-for-ci
           PORT: 8000
           DEBUG: true
-      run: |
+        run: |
           cd auth-service
           uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/auth-service.log 2>&1 &
           echo "AUTH_PID=$!" >> $GITHUB_ENV
@@ -388,7 +378,7 @@ jobs:
 
       - name: Seed flight data
         env:
-          DATABASE_URL: ysql://root:test_password@127.0.0.1:3306/ais_test
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
         # db:seed runs the script under tsx so its `../drizzle/schema.js`
         # import resolves to the TypeScript source (no compiled .js exists).
         run: pnpm run db:seed
@@ -400,9 +390,10 @@ jobs:
 
       - name: Verify server can start
         env:
-          DATABASE_URL: ysql://root:test_password@127.0.0.1:3306/ais_test
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
           STRIPE_SECRET_KEY: sk_test_mock_key
           STRIPE_WEBHOOK_SECRET: whsec_mock_secret
           VITE_APP_ID: ais-aviation-system-test
@@ -431,6 +422,7 @@ jobs:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test
+          JWT_SECRET: test-secret-key-for-ci
           STRIPE_SECRET_KEY: sk_test_mock_key
           STRIPE_WEBHOOK_SECRET: whsec_mock_secret
           VITE_APP_ID: ais-aviation-system-test
@@ -468,10 +460,691 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f test-results/results.json ]; then
             TOTAL=$(cat test-results/results.json | jq -r '.stats.total // 0')
-            PASSED$=$(cat test-results/results.json | jq -r '.stats.expected // 0')
+            PASSED=$(cat test-results/results.json | jq -r '.stats.expected // 0')
             FAILED=$(cat test-results/results.json | jq -r '.stats.unexpected // 0')
             SKIPPED=$(cat test-results/results.json | jq -r '.stats.skipped // 0')
             echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
             echo "| Total | ${TOTAL} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Passed | ${PASSEß^øåÈZ®Ëkºwµç
+            echo "| Passed | ${PASSED} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Failed | ${FAILED} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Skipped | ${SKIPPED} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "E2E test results not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # =============================================================================
+  # STAGE 5: Build Application
+  # =============================================================================
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [lint, test, security]
+    if: ${{ !cancelled() && needs.lint.result == 'success' && needs.test.result == 'success' }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha_short: ${{ steps.sha.outputs.sha_short }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get short SHA
+        id: sha
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ steps.sha.outputs.sha_short }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        run: pnpm run build
+        env:
+          NODE_ENV: production
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            dist/
+          retention-days: 7
+
+  # =============================================================================
+  # STAGE 5: Build and Push Docker Image
+  # =============================================================================
+  docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build-push.outputs.digest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image
+        id: build-push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.prod
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ needs.build.outputs.version }}
+
+      - name: Build and push migrator image (for database migrations)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.prod
+          target: migrator
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 30
+
+      - name: Scan Docker image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}
+          format: "table"
+          exit-code: "0"
+          severity: "CRITICAL,HIGH"
+
+  # =============================================================================
+  # STAGE 6: Deploy to Staging
+  # =============================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, docker]
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    env:
+      DEPLOY_ENV: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.29.0"
+
+      - name: Configure kubectl
+        id: staging-kube-config
+        run: |
+          if [ -z "${{ secrets.STAGING_KUBECONFIG }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::warning::STAGING_KUBECONFIG secret is not set. Skipping Kubernetes deployment."
+          else
+            mkdir -p ~/.kube
+            echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify cluster connectivity
+        if: steps.staging-kube-config.outputs.configured == 'true'
+        run: |
+          if ! kubectl cluster-info --request-timeout=10s 2>/dev/null; then
+            echo "::error::Cannot connect to Kubernetes cluster. Check STAGING_KUBECONFIG secret."
+            exit 1
+          fi
+
+      - name: Create deployment namespace
+        if: steps.staging-kube-config.outputs.configured == 'true'
+        run: |
+          kubectl create namespace ais-staging --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create/Update secrets
+        if: steps.staging-kube-config.outputs.configured == 'true'
+        run: |
+          kubectl create secret generic ais-secrets \
+            --namespace=ais-staging \
+            --from-literal=DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}" \
+            --from-literal=JWT_SECRET="${{ secrets.STAGING_JWT_SECRET }}" \
+            --from-literal=STRIPE_SECRET_KEY="${{ secrets.STAGING_STRIPE_SECRET_KEY }}" \
+            --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}" \
+            --from-literal=REDIS_URL="${{ secrets.STAGING_REDIS_URL }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Run database migrations
+        if: steps.staging-kube-config.outputs.configured == 'true'
+        run: |
+          kubectl run db-migrate-${{ github.run_id }} \
+            --namespace=ais-staging \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }} \
+            --restart=Never \
+            --rm \
+            --wait \
+            --timeout=300s \
+            --env="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" \
+            --command -- npx drizzle-kit migrate
+
+      - name: Deploy to Kubernetes
+        if: steps.staging-kube-config.outputs.configured == 'true'
+        run: |
+          export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export NAMESPACE="ais-staging"
+          export REPLICAS="2"
+          envsubst < k8s/base/deployment.yaml | kubectl apply -f -
+          envsubst < k8s/base/service.yaml | kubectl apply -f -
+          envsubst < k8s/overlays/staging/ingress.yaml | kubectl apply -f -
+
+      - name: Wait for rollout
+        if: steps.staging-kube-config.outputs.configured == 'true'
+        run: |
+          kubectl rollout status deployment/ais-api \
+            --namespace=ais-staging \
+            --timeout=300s
+
+      - name: Run smoke tests
+        if: steps.staging-kube-config.outputs.configured == 'true'
+        id: smoke-tests
+        run: |
+          chmod +x ./scripts/smoke-tests.sh
+          ./scripts/smoke-tests.sh ${{ vars.STAGING_URL }}
+
+      - name: Rollback on failure
+        if: failure() && steps.staging-kube-config.outputs.configured == 'true' && steps.smoke-tests.outcome == 'failure'
+        run: |
+          echo "Smoke tests failed, initiating rollback..."
+          kubectl rollout undo deployment/ais-api --namespace=ais-staging
+          kubectl rollout status deployment/ais-api --namespace=ais-staging --timeout=180s
+          echo "Rollback completed"
+          exit 1
+
+      - name: Notify deployment success
+        if: success() && vars.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Staging Deployment Success",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Staging Deployment Successful* :white_check_mark:\n*Commit:* `${{ github.sha }}`\n*Branch:* `${{ github.ref_name }}`\n*URL:* ${{ vars.STAGING_URL }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Notify deployment failure
+        if: failure() && vars.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Staging Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Staging Deployment Failed* :x:\n*Commit:* `${{ github.sha }}`\n*Branch:* `${{ github.ref_name }}`\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # =============================================================================
+  # STAGE 7: Deploy to Production (with approval)
+  # =============================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+    # Exposed so downstream jobs can tell "deployed" apart from "skipped
+    # because no cluster is configured" (both end in job success).
+    outputs:
+      deployed: ${{ steps.kube-config.outputs.configured }}
+    env:
+      DEPLOY_ENV: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.29.0"
+
+      - name: Configure kubectl
+        id: kube-config
+        run: |
+          if [ -z "${{ secrets.PRODUCTION_KUBECONFIG }}" ]; then
+            echo "configured=false" >> $GITHUB_OUTPUT
+            echo "::warning::PRODUCTION_KUBECONFIG secret is not set. Skipping Kubernetes deployment."
+          else
+            mkdir -p ~/.kube
+            echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
+            chmod 600 ~/.kube/config
+            echo "configured=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify cluster connectivity
+        if: steps.kube-config.outputs.configured == 'true'
+        run: |
+          if ! kubectl cluster-info --request-timeout=10s 2>/dev/null; then
+            echo "::error::Cannot connect to Kubernetes cluster. Check PRODUCTION_KUBECONFIG secret."
+            exit 1
+          fi
+
+      - name: Create deployment namespace
+        if: steps.kube-config.outputs.configured == 'true'
+        run: |
+          kubectl create namespace ais-production --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create/Update secrets
+        if: steps.kube-config.outputs.configured == 'true'
+        run: |
+          kubectl create secret generic ais-secrets \
+            --namespace=ais-production \
+            --from-literal=DATABASE_URL="${{ secrets.PRODUCTION_DATABASE_URL }}" \
+            --from-literal=JWT_SECRET="${{ secrets.PRODUCTION_JWT_SECRET }}" \
+            --from-literal=STRIPE_SECRET_KEY="${{ secrets.PRODUCTION_STRIPE_SECRET_KEY }}" \
+            --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.PRODUCTION_STRIPE_WEBHOOK_SECRET }}" \
+            --from-literal=REDIS_URL="${{ secrets.PRODUCTION_REDIS_URL }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Backup database before migration
+        if: steps.kube-config.outputs.configured == 'true' && vars.ENABLE_DB_BACKUP == 'true'
+        continue-on-error: true
+        run: |
+          echo "Creating database backup before migration..."
+          kubectl run db-backup-${{ github.run_id }} \
+            --namespace=ais-production \
+            --image=mysql:8.0 \
+            --restart=Never \
+            --rm \
+            --wait \
+            --timeout=600s \
+            --env="MYSQL_PWD=${{ secrets.PRODUCTION_DB_PASSWORD }}" \
+            --command -- sh -c "mysqldump -h ${{ secrets.PRODUCTION_DB_HOST }} -u ${{ secrets.PRODUCTION_DB_USER }} ${{ secrets.PRODUCTION_DB_NAME }} > /tmp/backup.sql && echo 'Backup completed'"
+
+      - name: Run database migrations
+        if: steps.kube-config.outputs.configured == 'true'
+        run: |
+          kubectl run db-migrate-${{ github.run_id }} \
+            --namespace=ais-production \
+            --image=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }} \
+            --restart=Never \
+            --rm \
+            --wait \
+            --timeout=300s \
+            --env="DATABASE_URL=${{ secrets.PRODUCTION_DATABASE_URL }}" \
+            --command -- npx drizzle-kit migrate
+
+      - name: Save current deployment for rollback
+        if: steps.kube-config.outputs.configured == 'true'
+        id: save-current
+        run: |
+          CURRENT_IMAGE=$(kubectl get deployment ais-api -n ais-production -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "none")
+          echo "current_image=${CURRENT_IMAGE}" >> $GITHUB_OUTPUT
+          kubectl get deployment ais-api -n ais-production -o yaml > /tmp/current-deployment.yaml 2>/dev/null || true
+
+      - name: Deploy to Kubernetes (Blue-Green)
+        if: steps.kube-config.outputs.configured == 'true'
+        run: |
+          export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export NAMESPACE="ais-production"
+          export REPLICAS="3"
+
+          # Deploy new version
+          envsubst < k8s/base/deployment.yaml | kubectl apply -f -
+
+          # Wait for new pods to be ready
+          kubectl rollout status deployment/ais-api \
+            --namespace=ais-production \
+            --timeout=300s
+
+      - name: Run pre-switch health checks
+        if: steps.kube-config.outputs.configured == 'true'
+        id: health-check
+        run: |
+          # Get new pod IPs and verify health
+          NEW_PODS=$(kubectl get pods -n ais-production -l app=ais-api -o jsonpath='{.items[*].status.podIP}')
+          for POD_IP in $NEW_PODS; do
+            echo "Checking health of pod at $POD_IP..."
+            kubectl run health-check-$(head /dev/urandom | tr -dc a-z0-9 | head -c 6) \
+              --rm -i --restart=Never \
+              --image=curlimages/curl:latest \
+              --namespace=ais-production \
+              -- curl -sf http://$POD_IP:3000/api/trpc/health.check || exit 1
+          done
+          echo "All health checks passed"
+
+      - name: Switch traffic to new deployment
+        if: steps.kube-config.outputs.configured == 'true'
+        run: |
+          export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export NAMESPACE="ais-production"
+          envsubst < k8s/base/service.yaml | kubectl apply -f -
+          envsubst < k8s/overlays/production/ingress.yaml | kubectl apply -f -
+
+      - name: Run smoke tests
+        if: steps.kube-config.outputs.configured == 'true'
+        id: smoke-tests
+        run: |
+          chmod +x ./scripts/smoke-tests.sh
+          ./scripts/smoke-tests.sh ${{ vars.PRODUCTION_URL }}
+
+      - name: Run E2E tests (critical paths)
+        if: steps.kube-config.outputs.configured == 'true'
+        id: e2e-tests
+        continue-on-error: true
+        run: |
+          if [ -f ./scripts/e2e-critical.sh ]; then
+            chmod +x ./scripts/e2e-critical.sh
+            ./scripts/e2e-critical.sh ${{ vars.PRODUCTION_URL }}
+          else
+            echo "E2E critical tests script not found, skipping..."
+          fi
+
+      - name: Rollback on failure
+        if: failure() && steps.kube-config.outputs.configured == 'true' && (steps.smoke-tests.outcome == 'failure' || steps.health-check.outcome == 'failure')
+        run: |
+          echo "Deployment verification failed, initiating rollback..."
+
+          if [ "${{ steps.save-current.outputs.current_image }}" != "none" ]; then
+            kubectl set image deployment/ais-api \
+              ais-api=${{ steps.save-current.outputs.current_image }} \
+              --namespace=ais-production
+            kubectl rollout status deployment/ais-api \
+              --namespace=ais-production \
+              --timeout=180s
+            echo "Rollback completed to: ${{ steps.save-current.outputs.current_image }}"
+          else
+            kubectl rollout undo deployment/ais-api --namespace=ais-production
+            kubectl rollout status deployment/ais-api --namespace=ais-production --timeout=180s
+          fi
+
+          exit 1
+
+      - name: Create deployment record
+        if: success() && steps.kube-config.outputs.configured == 'true'
+        run: |
+          echo "Recording successful deployment..."
+          kubectl annotate deployment ais-api \
+            --namespace=ais-production \
+            --overwrite \
+            kubernetes.io/change-cause="Deployed ${{ github.sha }} at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Notify deployment success
+        if: success() && vars.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Production Deployment Success",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Production Deployment Successful* :rocket:\n*Version:* `${{ needs.build.outputs.version }}`\n*Commit:* `${{ github.sha }}`\n*URL:* ${{ vars.PRODUCTION_URL }}\n*Deployed by:* ${{ github.actor }}"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Notify deployment failure
+        if: failure() && vars.SLACK_WEBHOOK_URL != ''
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Production Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Production Deployment Failed* :rotating_light:\n*Commit:* `${{ github.sha }}`\n*Run:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\n*Action Required:* Check logs and verify rollback status"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  # =============================================================================
+  # STAGE 8: Post-Deployment Monitoring
+  # =============================================================================
+  post-deploy-monitoring:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    # Only monitor when a deployment actually happened. When no
+    # PRODUCTION_KUBECONFIG/PRODUCTION_URL is configured the deploy job
+    # succeeds with every step skipped, and probing an empty URL turned
+    # every push to main red (status "000").
+    if: >-
+      success() &&
+      needs.deploy-production.outputs.deployed == 'true' &&
+      vars.PRODUCTION_URL != ''
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Monitor error rates for 5 minutes
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          echo "Monitoring deployment for anomalies..."
+
+          START_TIME=$(date +%s)
+          DURATION=300  # 5 minutes
+          CHECK_INTERVAL=30
+          FAILURES=0
+
+          while [ $(($(date +%s) - START_TIME)) -lt $DURATION ]; do
+            # Public liveness probe (health.check is admin-only and would 401).
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${PRODUCTION_URL%/}/api/rest/health/live" || echo "000")
+
+            if [ "$HTTP_STATUS" != "200" ]; then
+              echo "Health check failed with status: $HTTP_STATUS"
+              FAILURES=$((FAILURES + 1))
+            else
+              echo "Health check passed at $(date)"
+            fi
+
+            if [ "${FAILURES}" -gt 3 ]; then
+              echo "Multiple health check failures detected!"
+              exit 1
+            fi
+
+            sleep $CHECK_INTERVAL
+          done
+
+          echo "Post-deployment monitoring completed successfully"
+
+      - name: Trigger synthetic tests
+        if: vars.DATADOG_API_KEY != ''
+        continue-on-error: true
+        run: |
+          curl -X POST "https://api.datadoghq.com/api/v1/synthetics/tests/trigger" \
+            -H "Content-Type: application/json" \
+            -H "DD-API-KEY: ${{ vars.DATADOG_API_KEY }}" \
+            -H "DD-APPLICATION-KEY: ${{ vars.DATADOG_APP_KEY }}" \
+            -d '{"tests": [{"public_id": "${{ vars.DATADOG_SYNTHETIC_TEST_ID }}"}]}'
+
+  # =============================================================================
+  # Docker Compose Deployment (Alternative to K8s)
+  # =============================================================================
+  deploy-docker-compose:
+    name: Deploy via Docker Compose
+    runs-on: ubuntu-latest
+    needs: [build, docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.DEPLOYMENT_METHOD == 'docker-compose'
+    environment:
+      name: production-docker
+      url: ${{ vars.PRODUCTION_URL }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}
+        run: |
+          # Copy docker-compose file
+          scp docker-compose.production.yml ${DEPLOY_USER}@${DEPLOY_HOST}:~/ais-aviation/
+
+          # Execute deployment
+          ssh ${DEPLOY_USER}@${DEPLOY_HOST} << ENDSSH
+            cd ~/ais-aviation
+
+            # Pull latest images
+            docker pull ${IMAGE_TAG}
+
+            # Update image tag in environment
+            export IMAGE_TAG=${IMAGE_TAG}
+
+            # Rolling update with zero downtime
+            docker-compose -f docker-compose.production.yml up -d --no-deps api1
+            sleep 15
+            docker-compose -f docker-compose.production.yml up -d --no-deps api2
+            sleep 15
+            docker-compose -f docker-compose.production.yml up -d --no-deps api3
+
+            # Cleanup old images
+            docker image prune -f
+
+            echo "Deployment completed"
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          for i in {1..10}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }}/api/trpc/health.check)
+            if [ "$HTTP_STATUS" == "200" ]; then
+              echo "Deployment verified successfully"
+              exit 0
+            fi
+            echo "Waiting for service to be ready... (attempt $i)"
+            sleep 10
+          done
+          echo "Deployment verification failed"
+          exit 1
