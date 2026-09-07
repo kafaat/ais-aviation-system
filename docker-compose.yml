@@ -64,7 +64,8 @@ services:
     container_name: ais_dev_auth
     environment:
       DATABASE_URL: mysql+pymysql://ais_dev:ais_dev_password@mysql:3306/ais_aviation_dev
-      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      # Compose must fail before startup if no explicit signing secret is supplied.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set to a strong unique value of at least 32 characters}
       DEBUG: "true"
       CORS_ORIGINS: "http://localhost:3000"
     ports:
@@ -87,7 +88,8 @@ volumes:
     driver: local
 
 # Usage:
-# 1. Start the services: docker-compose up -d
-# 2. Connect to MySQL: mysql://ais_dev:ais_dev_password@localhost:3306/ais_aviation_dev
-# 3. Access phpMyAdmin: http://localhost:8080
-# 4. Run the app: pnpm dev
+# 1. Export a strong JWT secret: export JWT_SECRET="$(openssl rand -hex 32)"
+# 2. Start the services: docker-compose up -d
+# 3. Connect to MySQL: mysql://ais_dev:ais_dev_password@localhost:3306/ais_aviation_dev
+# 4. Access phpMyAdmin: http://localhost:8080
+# 5. Run the app: pnpm dev
