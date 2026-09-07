@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.20.3
+
+### Bug Fixes
+
+- fix(security): close auth and financial authority bypasses with regression tests (08f166b)
+- fix(security): route booking checkout through provider and format tests (4cbe6a9)
+
+### Maintenance
+
+- build(deps): update dependencies, fix post-deploy CI gate and changelog formatting (#91) (5788af7)
+
+### Other Changes
+
+- test(security): remove one-off preflight and keep regression mocks warning-free (3a49594)
+- Merge pull request #92 from kafaat/fix/ais-security-boundaries-20260907 (73f6636)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.2...v1.20.3
+
+---
+
 ## What's Changed in v1.20.2
 
 ### Bug Fixes
