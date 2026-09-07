@@ -89,7 +89,6 @@ export function ModifyBookingDialog({
           createModificationCheckout.mutate({
             bookingId: booking.id,
             modificationId: data.modificationId,
-            amount: data.totalCost,
             provider: selectedProvider as Parameters<
               typeof createModificationCheckout.mutate
             >[0]["provider"],
@@ -122,7 +121,6 @@ export function ModifyBookingDialog({
       createModificationCheckout.mutate({
         bookingId: booking.id,
         modificationId: data.modificationId,
-        amount: data.totalCost,
         provider: selectedProvider as Parameters<
           typeof createModificationCheckout.mutate
         >[0]["provider"],
