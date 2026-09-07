@@ -2,274 +2,159 @@ import { z } from "zod";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as bagDropService from "../services/bag-drop.service";
 import { TRPCError } from "@trpc/server";
+import { verifyBoardingPass } from "../services/boarding-pass.service";
+import {
+  issueSelfServiceCapability,
+  verifySelfServiceCapability,
+} from "../services/self-service-capability.service";
 
-/**
- * Bag Drop Router
- * Handles automated self-service bag drop kiosk operations:
- * weigh bags, pay excess fees, print tags, and confirm bag drop.
- */
+const capabilityInput = z.string().min(32).max(4096);
+
+function bagSession(token: string) {
+  return verifySelfServiceCapability(token, "bag-drop-session");
+}
+
 export const bagDropRouter = router({
   /**
-   * Initiate a bag drop session for a booking and passenger.
-   * Public - kiosk terminals call this after boarding pass scan.
-   */
-  initiate: publicProcedure
-    .input(
-      z.object({
-        bookingId: z.number().int().positive(),
-        passengerId: z.number().int().positive(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        const session = await bagDropService.initiateBagDrop(
-          input.bookingId,
-          input.passengerId
-        );
-        return { success: true, session };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to initiate bag drop session";
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
-      }
-    }),
-
-  /**
-   * Scan a boarding pass barcode to identify the passenger.
-   * Public - kiosk barcode scanner calls this.
+   * Verify a cryptographically signed boarding pass and issue a short-lived
+   * admission capability. Raw booking/passenger identifiers are never accepted
+   * as authority for self-service bag drop.
    */
   scanPass: publicProcedure
-    .input(
-      z.object({
-        barcode: z.string().min(1).max(100),
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        const result = await bagDropService.scanBoardingPass(input.barcode);
-        return { success: true, ...result };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to scan boarding pass";
-        throw new TRPCError({ code: "BAD_REQUEST", message });
+    .input(z.object({ boardingPassToken: z.string().min(32).max(8192) }))
+    .mutation(({ input }) => {
+      const verified = verifyBoardingPass(input.boardingPassToken);
+      if (!verified.valid) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: verified.reason });
       }
+      const capabilityToken = issueSelfServiceCapability({
+        kind: "bag-drop-admission",
+        bookingId: verified.data.bookingId,
+        passengerId: verified.data.passengerId,
+      });
+      return {
+        success: true,
+        bookingId: verified.data.bookingId,
+        passengerId: verified.data.passengerId,
+        passengerName: verified.data.passengerName,
+        flightNumber: verified.data.flightNumber,
+        cabinClass: verified.data.cabinClass,
+        capabilityToken,
+      };
     }),
 
-  /**
-   * Record a bag weight for an active session.
-   * Public - kiosk scale sends weight data.
-   */
+  initiate: publicProcedure
+    .input(z.object({ capabilityToken: capabilityInput }))
+    .mutation(async ({ input }) => {
+      const admission = verifySelfServiceCapability(
+        input.capabilityToken,
+        "bag-drop-admission"
+      );
+      const session = await bagDropService.initiateBagDrop(
+        admission.bookingId,
+        admission.passengerId
+      );
+      const sessionToken = issueSelfServiceCapability({
+        kind: "bag-drop-session",
+        bookingId: admission.bookingId,
+        passengerId: admission.passengerId,
+        sessionId: session.id,
+      });
+      return { success: true, session, sessionToken };
+    }),
+
   weighBag: publicProcedure
     .input(
       z.object({
-        sessionId: z.number().int().positive(),
-        weight: z.number().int().positive(), // weight in grams
+        sessionToken: capabilityInput,
+        weight: z.number().int().positive(),
       })
     )
-    .mutation(async ({ input }) => {
-      try {
-        const result = await bagDropService.weighBag(
-          input.sessionId,
-          input.weight
-        );
-        return { success: true, ...result };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error ? error.message : "Failed to weigh bag";
-        throw new TRPCError({ code: "BAD_REQUEST", message });
-      }
+    .mutation(({ input }) => {
+      const capability = bagSession(input.sessionToken);
+      const result = bagDropService.weighBag(capability.sessionId, input.weight);
+      return { success: true, ...result };
     }),
 
-  /**
-   * Check baggage allowance for a booking and passenger.
-   * Public - kiosk displays allowance info.
-   */
   checkAllowance: publicProcedure
-    .input(
-      z.object({
-        bookingId: z.number().int().positive(),
-        passengerId: z.number().int().positive(),
-      })
-    )
+    .input(z.object({ sessionToken: capabilityInput }))
     .query(async ({ input }) => {
-      try {
-        const result = await bagDropService.checkBagAllowance(
-          input.bookingId,
-          input.passengerId
-        );
-        return result;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to check bag allowance";
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
-      }
+      const capability = bagSession(input.sessionToken);
+      return bagDropService.checkBagAllowance(
+        capability.bookingId,
+        capability.passengerId
+      );
     }),
 
-  /**
-   * Calculate excess baggage fee for a given total weight.
-   * Public - kiosk shows fee before payment.
-   */
   calculateFee: publicProcedure
     .input(
       z.object({
-        bookingId: z.number().int().positive(),
-        totalWeight: z.number().int().positive(), // total weight in grams
+        sessionToken: capabilityInput,
+        totalWeight: z.number().int().positive(),
       })
     )
     .query(async ({ input }) => {
-      try {
-        const result = await bagDropService.calculateExcessFee(
-          input.bookingId,
-          input.totalWeight
-        );
-        return result;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to calculate excess fee";
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
-      }
+      const capability = bagSession(input.sessionToken);
+      return bagDropService.calculateExcessFee(
+        capability.bookingId,
+        input.totalWeight
+      );
     }),
 
   /**
-   * Process payment for excess baggage.
-   * Public - kiosk payment terminal triggers this.
+   * Fail closed until an authenticated PSP/device callback exists. A browser or
+   * kiosk must never be able to mark an excess-baggage charge as paid merely by
+   * supplying an amount.
    */
   processPayment: publicProcedure
-    .input(
-      z.object({
-        sessionId: z.number().int().positive(),
-        amount: z.number().int().nonnegative(), // amount in SAR cents
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        const result = await bagDropService.processPayment(
-          input.sessionId,
-          input.amount
-        );
-        return { success: true, ...result };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error ? error.message : "Failed to process payment";
-        throw new TRPCError({ code: "BAD_REQUEST", message });
-      }
+    .input(z.object({ sessionToken: capabilityInput }))
+    .mutation(({ input }) => {
+      bagSession(input.sessionToken);
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Self-service excess-baggage payment settlement is disabled until a verified payment-provider callback is integrated",
+      });
     }),
 
-  /**
-   * Print a bag tag for a specific bag in the session.
-   * Public - kiosk printer triggers this.
-   */
   printTag: publicProcedure
     .input(
       z.object({
-        sessionId: z.number().int().positive(),
+        sessionToken: capabilityInput,
         bagNumber: z.number().int().positive(),
       })
     )
     .mutation(async ({ input }) => {
-      try {
-        const tag = await bagDropService.printBagTag(
-          input.sessionId,
-          input.bagNumber
-        );
-        return { success: true, tag };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error ? error.message : "Failed to print bag tag";
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
-      }
+      const capability = bagSession(input.sessionToken);
+      const tag = await bagDropService.printBagTag(
+        capability.sessionId,
+        input.bagNumber
+      );
+      return { success: true, tag };
     }),
 
-  /**
-   * Confirm that all bags have been dropped onto the belt.
-   * Public - kiosk confirms bag acceptance.
-   */
   confirm: publicProcedure
-    .input(
-      z.object({
-        sessionId: z.number().int().positive(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      try {
-        const result = await bagDropService.confirmBagDrop(input.sessionId);
-        return { success: true, ...result };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error ? error.message : "Failed to confirm bag drop";
-        throw new TRPCError({ code: "BAD_REQUEST", message });
-      }
+    .input(z.object({ sessionToken: capabilityInput }))
+    .mutation(({ input }) => {
+      const capability = bagSession(input.sessionToken);
+      const result = bagDropService.confirmBagDrop(capability.sessionId);
+      return { success: true, ...result };
     }),
 
-  // =================== Admin Endpoints ===================
-
-  /**
-   * Admin: Get all bag drop units, optionally filtered by airport.
-   */
   getUnits: adminProcedure
     .input(
       z
-        .object({
-          airportId: z.number().int().positive().optional(),
-        })
+        .object({ airportId: z.number().int().positive().optional() })
         .optional()
     )
-    .query(({ input }) => {
-      try {
-        const units = bagDropService.getAllBagDropUnits(input?.airportId);
-        return { units };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to get bag drop units";
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
-      }
-    }),
+    .query(({ input }) => ({
+      units: bagDropService.getAllBagDropUnits(input?.airportId),
+    })),
 
-  /**
-   * Admin: Get health/status of a specific bag drop unit.
-   */
   getUnitStatus: adminProcedure
-    .input(
-      z.object({
-        unitId: z.number().int().positive(),
-      })
-    )
-    .query(async ({ input }) => {
-      try {
-        const result = await bagDropService.getBagDropStatus(input.unitId);
-        return result;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to get bag drop unit status";
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
-      }
-    }),
+    .input(z.object({ unitId: z.number().int().positive() }))
+    .query(async ({ input }) => bagDropService.getBagDropStatus(input.unitId)),
 
-  /**
-   * Admin: Get bag drop analytics for an airport within a date range.
-   */
   getAnalytics: adminProcedure
     .input(
       z.object({
@@ -278,23 +163,10 @@ export const bagDropRouter = router({
         endDate: z.string().datetime(),
       })
     )
-    .query(async ({ input }) => {
-      try {
-        const result = await bagDropService.getBagDropAnalytics(
-          input.airportId,
-          {
-            start: new Date(input.startDate),
-            end: new Date(input.endDate),
-          }
-        );
-        return result;
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to get bag drop analytics";
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
-      }
-    }),
+    .query(async ({ input }) =>
+      bagDropService.getBagDropAnalytics(input.airportId, {
+        start: new Date(input.startDate),
+        end: new Date(input.endDate),
+      })
+    ),
 });
