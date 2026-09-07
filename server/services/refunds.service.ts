@@ -13,14 +13,42 @@ export interface CreateRefundInput {
   bookingId: number;
   userId: number;
   reason?: string;
-  amount?: number; // Optional: partial refund amount in cents
+  amount?: number; // Admin-only override in integer cents
+}
+
+export interface RefundActor {
+  id: number;
+  role: string;
 }
 
 /**
- * Create a refund for a booking
+ * Create a refund for a booking. Actor must come from the authenticated context,
+ * never from request input; userId identifies the booking owner, not authority.
  */
-export async function createRefund(input: CreateRefundInput) {
+export async function createRefund(
+  input: CreateRefundInput,
+  actor: RefundActor
+) {
   try {
+    if (!actor || (actor.role !== "admin" && actor.id !== input.userId)) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+    }
+
+    if (input.amount !== undefined) {
+      if (actor.role !== "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only admins can override the refund amount",
+        });
+      }
+      if (!Number.isSafeInteger(input.amount) || input.amount <= 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Refund amount must be a positive safe integer in cents",
+        });
+      }
+    }
+
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
@@ -39,7 +67,7 @@ export async function createRefund(input: CreateRefundInput) {
       });
     }
 
-    // Verify ownership (admin can refund any booking)
+    // The declared owner must match even for an authenticated admin.
     if (booking.userId !== input.userId) {
       throw new TRPCError({
         code: "FORBIDDEN",
@@ -93,21 +121,20 @@ export async function createRefund(input: CreateRefundInput) {
       flight.departureTime
     );
 
-    // Determine refund amount
-    let refundAmount: number;
-    if (input.amount) {
-      // Admin override: use specified amount
-      refundAmount = input.amount;
-    } else {
-      // Use calculated amount based on cancellation policy
-      refundAmount = feeCalculation.refundAmount;
-    }
+    // Only the authenticated admin above may replace the policy amount.
+    const refundAmount = input.amount ?? feeCalculation.refundAmount;
 
-    // Check if refund is possible
-    if (refundAmount <= 0) {
+    // Validate both overrides and calculated amounts before contacting Stripe.
+    if (
+      !Number.isSafeInteger(booking.totalAmount) ||
+      !Number.isSafeInteger(refundAmount) ||
+      refundAmount <= 0 ||
+      refundAmount > booking.totalAmount
+    ) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "No refund available for this booking (flight has departed)",
+        message:
+          "Refund amount must be positive integer cents within the booking total",
       });
     }
 

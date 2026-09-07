@@ -124,7 +124,7 @@ export default function BookingPage() {
     id: flightId,
   });
   const createBooking = trpc.bookings.create.useMutation();
-  const createPayment = trpc.payments.create.useMutation();
+  const createCheckout = trpc.payments.createCheckoutSession.useMutation();
   const savePassengerMutation = trpc.savedPassengers.add.useMutation();
 
   // Get user preferences for SMS phone number
@@ -319,12 +319,14 @@ export default function BookingPage() {
           selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
       });
 
-      // Process payment
-      await createPayment.mutateAsync({
+      // Redirect to the provider; creating a booking is not payment proof.
+      const checkout = await createCheckout.mutateAsync({
         bookingId: booking.bookingId,
-        amount: booking.totalAmount,
-        method: "card",
+        provider: "stripe",
       });
+      if (!checkout.url) {
+        throw new Error(t("common.error"));
+      }
 
       // Save passengers that are marked for future use
       for (const p of passengers) {
@@ -343,8 +345,8 @@ export default function BookingPage() {
         }
       }
 
-      toast.success(t("common.success"));
-      navigate(`/my-bookings`);
+      // Confirmation is handled only after provider-verified settlement.
+      window.location.assign(checkout.url);
     } catch (error: { message?: string } | unknown) {
       const errorMessage =
         error instanceof Error ? error.message : t("common.error");
@@ -1180,10 +1182,10 @@ export default function BookingPage() {
                   onClick={handleSubmit}
                   className="w-full shadow-lg"
                   size="lg"
-                  disabled={createBooking.isPending || createPayment.isPending}
+                  disabled={createBooking.isPending || createCheckout.isPending}
                 >
                   <CreditCard className="h-5 w-5 mr-2" aria-hidden="true" />
-                  {createBooking.isPending || createPayment.isPending
+                  {createBooking.isPending || createCheckout.isPending
                     ? t("booking.processing")
                     : t("booking.completeBooking")}
                 </Button>
@@ -1193,7 +1195,7 @@ export default function BookingPage() {
                   variant="outline"
                   className="w-full"
                   size="lg"
-                  disabled={createBooking.isPending || createPayment.isPending}
+                  disabled={createBooking.isPending || createCheckout.isPending}
                 >
                   <Split className="h-5 w-5 mr-2" aria-hidden="true" />
                   {t("splitPayment.splitWithOthers")}
