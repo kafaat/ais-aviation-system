@@ -1,0 +1,52 @@
+name: Apply Waitlist Inventory Atomicity
+on:
+  push:
+    branches: [fix/waitlist-inventory-atomicity-20260908]
+    paths: [.github/workflows/waitlist-inventory-apply.yml]
+permissions:
+  contents: write
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with: {ref: fix/waitlist-inventory-atomicity-20260908, fetch-depth: 0}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22.x'}
+      - run: npm install --global pnpm@10.28.2
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Apply guarded offers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('server/services/waitlist.service.ts'); s=p.read_text()
+          s=s.replace('import { eq, and, desc, asc, sql } from "drizzle-orm";', 'import { eq, and, desc, asc, gte, sql } from "drizzle-orm";')
+          marker='''/**\n * Waitlist Service\n * Handles waitlist operations for fully booked flights\n */\n'''
+          helper=marker+'''\nfunction getAffectedRows(result: unknown): number {\n  if (Array.isArray(result)) {\n    const first = result[0];\n    if (first && typeof first === "object" && "affectedRows" in first) {\n      return Number((first as { affectedRows?: number }).affectedRows ?? 0);\n    }\n  }\n  if (result && typeof result === "object" && "rowsAffected" in result) {\n    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);\n  }\n  return 0;\n}\n'''
+          if marker not in s: raise SystemExit('marker missing')
+          s=s.replace(marker,helper,1)
+          old_e='''          await tx\n            .update(waitlist)\n            .set({\n              status: "offered",\n              offeredAt: new Date(),\n              offerExpiresAt: expiresAt,\n            })\n            .where(eq(waitlist.id, entry.id));\n\n          // Temporarily hold seats by decrementing availability\n          remainingEconomy -= entry.seats;\n          await tx\n            .update(flights)\n            .set({\n              economyAvailable: sql`${flights.economyAvailable} - ${entry.seats}`,\n            })\n            .where(eq(flights.id, flightId));\n'''
+          new_e='''          const seatUpdate = await tx\n            .update(flights)\n            .set({\n              economyAvailable: sql`${flights.economyAvailable} - ${entry.seats}`,\n            })\n            .where(\n              and(\n                eq(flights.id, flightId),\n                gte(flights.economyAvailable, entry.seats)\n              )\n            );\n          if (getAffectedRows(seatUpdate) !== 1) {\n            throw new Error("Inventory changed while processing economy waitlist");\n          }\n\n          const offerUpdate = await tx\n            .update(waitlist)\n            .set({\n              status: "offered",\n              offeredAt: new Date(),\n              offerExpiresAt: expiresAt,\n            })\n            .where(\n              and(eq(waitlist.id, entry.id), eq(waitlist.status, "waiting"))\n            );\n          if (getAffectedRows(offerUpdate) !== 1) {\n            throw new Error("Waitlist entry was concurrently processed");\n          }\n\n          remainingEconomy -= entry.seats;\n'''
+          old_b=old_e.replace('remainingEconomy','remainingBusiness').replace('economyAvailable','businessAvailable')
+          new_b=new_e.replace('remainingEconomy','remainingBusiness').replace('economyAvailable','businessAvailable').replace('economy waitlist','business waitlist')
+          if old_e not in s: raise SystemExit('economy block missing')
+          s=s.replace(old_e,new_e,1)
+          if old_b not in s: raise SystemExit('business block missing')
+          s=s.replace(old_b,new_b,1)
+          p.write_text(s)
+          Path('server/services/waitlist.inventory-atomicity.test.ts').write_text('''import { describe, expect, it } from "vitest";\nimport { readFileSync } from "node:fs";\n\ndescribe("waitlist inventory atomicity", () => {\n  const source = readFileSync(new URL("./waitlist.service.ts", import.meta.url), "utf8");\n  it("guards seat reservation and the waiting-to-offered transition", () => {\n    expect(source).toContain("gte(flights.economyAvailable, entry.seats)");\n    expect(source).toContain("gte(flights.businessAvailable, entry.seats)");\n    expect(source).toContain('eq(waitlist.status, "waiting")');\n    expect(source).toContain("getAffectedRows(seatUpdate) !== 1");\n    expect(source).toContain("getAffectedRows(offerUpdate) !== 1");\n  });\n});\n''')
+          PY
+      - name: Verify
+        run: |
+          pnpm exec prettier --write server/services/waitlist.service.ts server/services/waitlist.inventory-atomicity.test.ts
+          pnpm exec prettier --check server/services/waitlist.service.ts server/services/waitlist.inventory-atomicity.test.ts
+          pnpm check
+          pnpm exec vitest run server/services/waitlist.inventory-atomicity.test.ts
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add server/services/waitlist.service.ts server/services/waitlist.inventory-atomicity.test.ts
+          git commit -m "fix(inventory): make waitlist offers atomic"
+          git push origin HEAD:fix/waitlist-inventory-atomicity-20260908
