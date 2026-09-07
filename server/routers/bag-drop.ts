@@ -146,9 +146,7 @@ export const bagDropRouter = router({
 
   getUnits: adminProcedure
     .input(
-      z
-        .object({ airportId: z.number().int().positive().optional() })
-        .optional()
+      z.object({ airportId: z.number().int().positive().optional() }).optional()
     )
     .query(({ input }) => ({
       units: bagDropService.getAllBagDropUnits(input?.airportId),
