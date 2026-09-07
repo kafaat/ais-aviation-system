@@ -1,5 +1,31 @@
 # Changelog
 
+## What's Changed in v1.20.7
+
+### Bug Fixes
+
+- fix(refunds): bind refund detail reads to authenticated owner (519b35d)
+- fix(refunds): pass authenticated actor into detail lookup (ffaec51)
+
+### Maintenance
+
+- chore: apply scoped refund detail authority fix (77cdf76)
+- chore: remove failed temporary refund fix workflow (ca7a6a5)
+
+### Other Changes
+
+- test(refunds): guard refund detail ownership boundary (6c7cc09)
+- style(refunds): format refund authority regression guard (d214228)
+- style(refunds): format refund detail authority service (91b79f7)
+- style(refunds): match repository prettier output (41c1824)
+- test(refunds): simplify refund detail authority guard (78a9938)
+- style(refunds): wrap authority assertion for prettier (3eebd6f)
+- Merge pull request #98 from kafaat/fix/refund-detail-ownership-20260907 (49f8076)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.6...v1.20.7
+
+---
+
 ## What's Changed in v1.20.6
 
 ### Bug Fixes
