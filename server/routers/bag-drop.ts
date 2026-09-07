@@ -72,7 +72,10 @@ export const bagDropRouter = router({
     )
     .mutation(({ input }) => {
       const capability = bagSession(input.sessionToken);
-      const result = bagDropService.weighBag(capability.sessionId, input.weight);
+      const result = bagDropService.weighBag(
+        capability.sessionId,
+        input.weight
+      );
       return { success: true, ...result };
     }),
 
