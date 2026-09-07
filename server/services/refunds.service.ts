@@ -205,49 +205,74 @@ export async function createRefund(
     const cumulativeRefundedAmount = sumRefundAmounts(refundsAfterOperation);
     const isFullRefund = cumulativeRefundedAmount >= booking.totalAmount;
 
-    await database
-      .update(bookings)
-      .set({
-        paymentStatus: isFullRefund ? "refunded" : "paid",
-        status: isFullRefund ? "cancelled" : booking.status,
-      })
-      .where(eq(bookings.id, input.bookingId));
+    const localReconciliation = await database.transaction(async tx => {
+      // Stripe idempotency protects provider money movement. Serialize the
+      // corresponding local transition so seat restoration is exactly-once.
+      const [lockedBooking] = await tx
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, input.bookingId))
+        .for("update")
+        .limit(1);
 
-    if (isFullRefund && booking.status === "confirmed") {
-      if (booking.cabinClass === "business") {
-        await database
-          .update(flights)
-          .set({
-            businessAvailable: sql`${flights.businessAvailable} + ${booking.numberOfPassengers}`,
-          })
-          .where(eq(flights.id, booking.flightId));
-      } else {
-        await database
-          .update(flights)
-          .set({
-            economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
-          })
-          .where(eq(flights.id, booking.flightId));
+      if (!lockedBooking) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found during refund reconciliation",
+        });
       }
 
-      console.info(
-        `[Refund] Restored ${booking.numberOfPassengers} ${booking.cabinClass} seat(s) to flight ${booking.flightId}`
-      );
-    }
+      const shouldRestoreSeats =
+        isFullRefund &&
+        lockedBooking.paymentStatus !== "refunded" &&
+        lockedBooking.status === "confirmed";
 
-    const paymentResult = await database
-      .select()
-      .from(payments)
-      .where(eq(payments.bookingId, input.bookingId))
-      .limit(1);
-
-    if (paymentResult[0]) {
-      await database
-        .update(payments)
+      await tx
+        .update(bookings)
         .set({
-          status: isFullRefund ? "refunded" : "completed",
+          paymentStatus: isFullRefund ? "refunded" : "paid",
+          status: isFullRefund ? "cancelled" : lockedBooking.status,
         })
-        .where(eq(payments.id, paymentResult[0].id));
+        .where(eq(bookings.id, input.bookingId));
+
+      if (shouldRestoreSeats) {
+        if (lockedBooking.cabinClass === "business") {
+          await tx
+            .update(flights)
+            .set({
+              businessAvailable: sql`${flights.businessAvailable} + ${lockedBooking.numberOfPassengers}`,
+            })
+            .where(eq(flights.id, lockedBooking.flightId));
+        } else {
+          await tx
+            .update(flights)
+            .set({
+              economyAvailable: sql`${flights.economyAvailable} + ${lockedBooking.numberOfPassengers}`,
+            })
+            .where(eq(flights.id, lockedBooking.flightId));
+        }
+      }
+
+      const [payment] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.bookingId, input.bookingId))
+        .limit(1);
+
+      if (payment) {
+        await tx
+          .update(payments)
+          .set({ status: isFullRefund ? "refunded" : "completed" })
+          .where(eq(payments.id, payment.id));
+      }
+
+      return { shouldRestoreSeats, lockedBooking };
+    });
+
+    if (localReconciliation.shouldRestoreSeats) {
+      console.info(
+        `[Refund] Restored ${localReconciliation.lockedBooking.numberOfPassengers} ${localReconciliation.lockedBooking.cabinClass} seat(s) to flight ${localReconciliation.lockedBooking.flightId}`
+      );
     }
 
     trackRefundIssued({
