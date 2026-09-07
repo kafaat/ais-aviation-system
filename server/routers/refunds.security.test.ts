@@ -43,7 +43,7 @@ beforeEach(() => {
     select: () => ({
       from: () => ({
         where: () => ({
-          limit: async () => [{ bookingReference: "TEST01" }],
+          limit: vi.fn().mockResolvedValue([{ bookingReference: "TEST01" }]),
         }),
       }),
     }),

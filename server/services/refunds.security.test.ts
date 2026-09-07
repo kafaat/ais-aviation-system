@@ -57,11 +57,13 @@ beforeEach(() => {
     update: mocks.update,
   });
   mocks.calculateFee.mockReturnValue({ refundAmount: 8000 });
-  mocks.refund.mockImplementation(async ({ amount }: { amount: number }) => ({
-    id: "re_test",
-    amount,
-    status: "succeeded",
-  }));
+  mocks.refund.mockImplementation(({ amount }: { amount: number }) =>
+    Promise.resolve({
+      id: "re_test",
+      amount,
+      status: "succeeded",
+    })
+  );
 });
 
 function expectNoFinancialWrites() {
