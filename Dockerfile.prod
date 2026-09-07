@@ -59,9 +59,10 @@ ENV NODE_ENV=production
 # Security: Run as non-root user
 USER ais
 
-# Health check
+# Health check must use the unauthenticated liveness probe. The comprehensive
+# health.check procedure is admin-only and would mark healthy containers unhealthy.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "fetch('http://localhost:3000/api/trpc/health.check').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://localhost:3000/api/trpc/health.live').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
 
 # Start the application
 CMD ["node", "dist/index.js"]

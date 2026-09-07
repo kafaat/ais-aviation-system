@@ -1,0 +1,92 @@
+name: Production Gates
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-gates-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  migration-replay:
+    name: Migration Replay
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: ais_migration_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@v4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Replay committed migrations on an empty database
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
+        run: pnpm run db:migrate
+      - name: Verify migration result matches the declared schema
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
+        run: |
+          pnpm exec drizzle-kit check
+
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@v4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Reject high or critical dependency vulnerabilities
+        run: pnpm audit --audit-level=high
+
+  docker-contract:
+    name: Docker Production Contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production and migrator images
+        run: |
+          docker build -f Dockerfile.prod --target runner -t ais-production-gate:runner .
+          docker build -f Dockerfile.prod --target migrator -t ais-production-gate:migrator .
+      - name: Verify migrator is self-contained
+        run: |
+          docker run --rm --network none --entrypoint sh ais-production-gate:migrator -ec \
+            'test -x ./node_modules/.bin/drizzle-kit && ./node_modules/.bin/drizzle-kit --version >/dev/null'
+      - name: Verify all production healthchecks use the public liveness procedure
+        run: |
+          healthcheck="$(docker inspect --format '{{json .Config.Healthcheck.Test}}' ais-production-gate:runner)"
+          echo "$healthcheck"
+          grep -q '/api/trpc/health.live' <<<"$healthcheck"
+
+          for file in Dockerfile.prod docker-compose.prod.yml docker-compose.production.yml; do
+            if grep -q '/api/trpc/health.check' "$file"; then
+              echo "admin-only health.check must not be used by production probes: $file" >&2
+              exit 1
+            fi
+          done
+
+          grep -q '/api/trpc/health.live' docker-compose.prod.yml
+          test "$(grep -c '/api/trpc/health.live' docker-compose.production.yml)" -eq 3
