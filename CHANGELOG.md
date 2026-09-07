@@ -1,5 +1,15 @@
 # Changelog
 
+## What's Changed in v1.20.10
+
+### Bug Fixes
+
+- fix(webhooks): consolidate stripe processing on one authority (#101) (3f54f29)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.9...v1.20.10
+
+---
+
 ## What's Changed in v1.20.9
 
 ### Bug Fixes
