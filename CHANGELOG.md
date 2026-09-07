@@ -1,5 +1,36 @@
 # Changelog
 
+## What's Changed in v1.20.5
+
+### Bug Fixes
+
+- fix(payments): derive modification checkout amount server-side (24b8bd6)
+- fix(client): stop sending modification payment amount (4f5dc25)
+
+### Maintenance
+
+- ci: format self-service security slice once (a2f01a2)
+- ci: remove one-time self-service formatter (272825d)
+
+### Other Changes
+
+- security: add scoped self-service capability tokens (b8b53e6)
+- security: bind kiosk actions to authenticated capability (9a49d94)
+- security: require signed admission and session scopes for bag drop (ae8f0cd)
+- test: prove self-service capability isolation (706744e)
+- test: lock kiosk and bag-drop authority boundaries (aff70c6)
+- style: format bag-drop security boundary (0ccc150)
+- style: format self-service boundary tests (284368b)
+- style: format self-service capability service (dac7a28)
+- style: apply repository formatter to bag-drop boundary (618ad91)
+- Merge pull request #94 from kafaat/fix/self-service-capability-boundary-20260907 (a0f06a2)
+- test: lock modification checkout price authority (9952049)
+- Merge pull request #95 from kafaat/fix/modification-checkout-authority-20260907 (ebdaa7b)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.4...v1.20.5
+
+---
+
 ## What's Changed in v1.20.4
 
 ### Bug Fixes
