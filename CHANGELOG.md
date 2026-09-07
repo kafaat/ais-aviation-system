@@ -1,5 +1,15 @@
 # Changelog
 
+## What's Changed in v1.20.11
+
+### Bug Fixes
+
+- fix(refunds): make local reconciliation atomic (#102) (b01469d)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.10...v1.20.11
+
+---
+
 ## What's Changed in v1.20.10
 
 ### Bug Fixes
