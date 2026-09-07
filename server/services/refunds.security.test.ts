@@ -6,12 +6,24 @@ const mocks = vi.hoisted(() => ({
   limit: vi.fn(),
   update: vi.fn(),
   refund: vi.fn(),
+  listRefunds: vi.fn(),
   calculateFee: vi.fn(),
+  refundsState: [] as Array<{
+    id: string;
+    amount: number;
+    status: string;
+    metadata: Record<string, string>;
+  }>,
 }));
 
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
 vi.mock("../stripe", () => ({
-  stripe: { refunds: { create: mocks.refund } },
+  stripe: {
+    refunds: {
+      create: mocks.refund,
+      list: mocks.listRefunds,
+    },
+  },
 }));
 vi.mock("./email.service", () => ({ sendRefundConfirmation: vi.fn() }));
 vi.mock("./cancellation-fees.service", () => ({
@@ -36,8 +48,23 @@ const booking = {
   bookingReference: "TEST01",
 };
 
+function refundRecord(
+  id: string,
+  amount: number,
+  metadata: Record<string, string> = {}
+) {
+  return {
+    id,
+    amount,
+    status: "succeeded",
+    metadata,
+  };
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.refundsState.length = 0;
+
   const query = {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
@@ -57,12 +84,19 @@ beforeEach(() => {
     update: mocks.update,
   });
   mocks.calculateFee.mockReturnValue({ refundAmount: 8000 });
-  mocks.refund.mockImplementation(({ amount }: { amount: number }) =>
-    Promise.resolve({
-      id: "re_test",
-      amount,
-      status: "succeeded",
-    })
+  mocks.listRefunds.mockImplementation(() => ({
+    async *[Symbol.asyncIterator]() {
+      for (const refund of mocks.refundsState) {
+        yield refund;
+      }
+    },
+  }));
+  mocks.refund.mockImplementation(
+    async ({ amount, metadata }: { amount: number; metadata: Record<string, string> }) => {
+      const refund = refundRecord("re_test", amount, metadata);
+      mocks.refundsState.push(refund);
+      return refund;
+    }
   );
 });
 
@@ -154,21 +188,75 @@ describe("refund amount validation", () => {
     const result = await createRefund(input, owner);
 
     expect(result.amount).toBe(8000);
-    expect(mocks.refund).toHaveBeenCalledWith({
-      payment_intent: "pi_test",
-      amount: 8000,
-      reason: "requested_by_customer",
-    });
+    expect(result.cumulativeRefundedAmount).toBe(8000);
+    expect(result.remainingRefundableAmount).toBe(2000);
+    expect(mocks.refund).toHaveBeenCalledWith(
+      {
+        payment_intent: "pi_test",
+        amount: 8000,
+        reason: "requested_by_customer",
+        metadata: {
+          bookingId: "10",
+          refundOperationId: "booking-10-refund-8000",
+        },
+      },
+      { idempotencyKey: "booking-10-refund-8000" }
+    );
   });
 
   it("allows a valid override from the authenticated admin", async () => {
     const result = await createRefund({ ...input, amount: 10000 }, admin);
 
     expect(result.amount).toBe(10000);
-    expect(mocks.refund).toHaveBeenCalledWith({
-      payment_intent: "pi_test",
-      amount: 10000,
-      reason: "requested_by_customer",
+    expect(result.cumulativeRefundedAmount).toBe(10000);
+    expect(result.remainingRefundableAmount).toBe(0);
+    expect(mocks.refund).toHaveBeenCalledWith(
+      {
+        payment_intent: "pi_test",
+        amount: 10000,
+        reason: "requested_by_customer",
+        metadata: {
+          bookingId: "10",
+          refundOperationId: "booking-10-refund-10000",
+        },
+      },
+      { idempotencyKey: "booking-10-refund-10000" }
+    );
+  });
+
+  it("rejects a refund that exceeds the provider-confirmed remaining balance", async () => {
+    mocks.refundsState.push(refundRecord("re_prior", 3000));
+
+    await expect(createRefund(input, owner)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringContaining("remaining refundable balance of 7000"),
     });
+
+    expect(mocks.refund).not.toHaveBeenCalled();
+  });
+
+  it("uses cumulative provider refunds to detect a full refund", async () => {
+    mocks.refundsState.push(refundRecord("re_prior", 2000));
+
+    const result = await createRefund(input, owner);
+
+    expect(result.amount).toBe(8000);
+    expect(result.cumulativeRefundedAmount).toBe(10000);
+    expect(result.remainingRefundableAmount).toBe(0);
+  });
+
+  it("recovers the same provider operation without issuing money twice", async () => {
+    mocks.refundsState.push(
+      refundRecord("re_existing", 8000, {
+        bookingId: "10",
+        refundOperationId: "booking-10-refund-8000",
+      })
+    );
+
+    const result = await createRefund(input, owner);
+
+    expect(result.refundId).toBe("re_existing");
+    expect(result.cumulativeRefundedAmount).toBe(8000);
+    expect(mocks.refund).not.toHaveBeenCalled();
   });
 });
