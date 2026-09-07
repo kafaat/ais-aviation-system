@@ -29,9 +29,7 @@ vi.mock("../services/rbac.service", () => ({
 
 function context(role: "user" | "admin" | null = "user"): TrpcContext {
   return {
-    user: role
-      ? ({ id: 1, role } as NonNullable<TrpcContext["user"]>)
-      : null,
+    user: role ? ({ id: 1, role } as NonNullable<TrpcContext["user"]>) : null,
     authMethod: role ? "bearer" : null,
     tenantId: null,
     req: { headers: {}, ip: "127.0.0.1" } as TrpcContext["req"],
