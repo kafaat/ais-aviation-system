@@ -75,12 +75,18 @@ jobs:
         run: |
           docker run --rm --network none --entrypoint sh ais-production-gate:migrator -ec \
             'test -x ./node_modules/.bin/drizzle-kit && ./node_modules/.bin/drizzle-kit --version >/dev/null'
-      - name: Verify production healthcheck uses the public liveness procedure
+      - name: Verify all production healthchecks use the public liveness procedure
         run: |
           healthcheck="$(docker inspect --format '{{json .Config.Healthcheck.Test}}' ais-production-gate:runner)"
           echo "$healthcheck"
           grep -q '/api/trpc/health.live' <<<"$healthcheck"
-          if grep -q '/api/trpc/health.check' <<<"$healthcheck"; then
-            echo 'admin-only health.check must not be used as the container healthcheck' >&2
-            exit 1
-          fi
+
+          for file in Dockerfile.prod docker-compose.prod.yml docker-compose.production.yml; do
+            if grep -q '/api/trpc/health.check' "$file"; then
+              echo "admin-only health.check must not be used by production probes: $file" >&2
+              exit 1
+            fi
+          done
+
+          grep -q '/api/trpc/health.live' docker-compose.prod.yml
+          test "$(grep -c '/api/trpc/health.live' docker-compose.production.yml)" -eq 3
