@@ -63,7 +63,9 @@ export function issueSelfServiceCapability(
   });
 }
 
-export function verifySelfServiceCapability<K extends SelfServiceCapability["kind"]>(
+export function verifySelfServiceCapability<
+  K extends SelfServiceCapability["kind"],
+>(
   token: string,
   expectedKind: K,
   opts: { secret?: string } = {}
