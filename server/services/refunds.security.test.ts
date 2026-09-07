@@ -92,7 +92,13 @@ beforeEach(() => {
     },
   }));
   mocks.refund.mockImplementation(
-    async ({ amount, metadata }: { amount: number; metadata: Record<string, string> }) => {
+    async ({
+      amount,
+      metadata,
+    }: {
+      amount: number;
+      metadata: Record<string, string>;
+    }) => {
       const refund = refundRecord("re_test", amount, metadata);
       mocks.refundsState.push(refund);
       return refund;

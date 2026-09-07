@@ -25,7 +25,9 @@ function isActiveRefund(refund: Stripe.Refund): boolean {
   return refund.status !== "failed" && refund.status !== "canceled";
 }
 
-async function listActiveRefunds(paymentIntentId: string): Promise<Stripe.Refund[]> {
+async function listActiveRefunds(
+  paymentIntentId: string
+): Promise<Stripe.Refund[]> {
   const activeRefunds: Stripe.Refund[] = [];
 
   for await (const refund of stripe.refunds.list({
@@ -144,9 +146,12 @@ export async function createRefund(
       });
     }
 
-    const existingRefunds = await listActiveRefunds(booking.stripePaymentIntentId);
+    const existingRefunds = await listActiveRefunds(
+      booking.stripePaymentIntentId
+    );
     const alreadyRefundedAmount = sumRefundAmounts(existingRefunds);
-    const remainingRefundableAmount = booking.totalAmount - alreadyRefundedAmount;
+    const remainingRefundableAmount =
+      booking.totalAmount - alreadyRefundedAmount;
 
     // Same booking + same amount maps to one provider operation. Check this before
     // the remaining-balance guard so a provider-success/local-failure retry can
@@ -381,7 +386,9 @@ export async function isBookingRefundable(bookingId: number): Promise<{
       return { refundable: false, reason: "No payment intent found" };
     }
 
-    const activeRefunds = await listActiveRefunds(booking.stripePaymentIntentId);
+    const activeRefunds = await listActiveRefunds(
+      booking.stripePaymentIntentId
+    );
     if (sumRefundAmounts(activeRefunds) >= booking.totalAmount) {
       return { refundable: false, reason: "Booking is already fully refunded" };
     }
