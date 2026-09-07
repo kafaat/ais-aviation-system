@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 
 describe("self-service router authority boundaries", () => {
   const kiosk = readFileSync(new URL("./kiosk.ts", import.meta.url), "utf8");
-  const bagDrop = readFileSync(new URL("./bag-drop.ts", import.meta.url), "utf8");
+  const bagDrop = readFileSync(
+    new URL("./bag-drop.ts", import.meta.url),
+    "utf8"
+  );
 
   it("does not accept raw kiosk booking identifiers after authentication", () => {
     expect(kiosk).toContain("capabilityToken");
