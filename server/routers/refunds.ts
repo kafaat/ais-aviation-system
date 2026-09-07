@@ -188,9 +188,9 @@ export const refundsRouter = router({
         protect: true,
       },
     })
-    .input(z.object({ refundId: z.string().describe("Refund ID") }))
-    .query(async ({ input }) => {
-      return await refundsService.getRefundDetails(input.refundId);
+    .input(z.object({ refundId: z.string().min(1).describe("Refund ID") }))
+    .query(async ({ input, ctx }) => {
+      return await refundsService.getRefundDetails(input.refundId, ctx.user);
     }),
 
   /**
