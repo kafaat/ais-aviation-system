@@ -1,17 +1,25 @@
 """
 Configuration for the Auth Service.
-Reads from environment variables with sensible defaults.
+Security-sensitive values fail closed instead of falling back to usable secrets.
 """
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
+
+INSECURE_JWT_SECRETS = {
+    "your-super-secret-jwt-key-change-this-in-production",
+    "test-jwt-secret-key",
+    "test-secret-key-for-ci",
+}
 
 
 class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "mysql+pymysql://root:password@localhost:3306/ais_aviation"
 
-    # JWT
-    JWT_SECRET: str = "your-super-secret-jwt-key-change-this-in-production"
+    # JWT: required in every environment. There is deliberately no usable default.
+    JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
@@ -28,6 +36,16 @@ class Settings(BaseSettings):
 
     # Owner (auto-admin)
     OWNER_EMAIL: str = ""
+
+    @field_validator("JWT_SECRET")
+    @classmethod
+    def validate_jwt_secret(cls, value: str) -> str:
+        secret = value.strip()
+        if len(secret) < 32:
+            raise ValueError("JWT_SECRET must be at least 32 characters long")
+        if secret in INSECURE_JWT_SECRETS:
+            raise ValueError("JWT_SECRET must not use a known placeholder value")
+        return secret
 
     class Config:
         env_file = ".env"
