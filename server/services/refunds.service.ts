@@ -75,7 +75,6 @@ export async function createRefund(
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
-    // Get booking details
     const bookingResult = await database
       .select()
       .from(bookings)
@@ -90,7 +89,6 @@ export async function createRefund(
       });
     }
 
-    // The declared owner must match even for an authenticated admin.
     if (booking.userId !== input.userId) {
       throw new TRPCError({
         code: "FORBIDDEN",
@@ -98,7 +96,6 @@ export async function createRefund(
       });
     }
 
-    // Check if booking is paid
     if (booking.paymentStatus !== "paid") {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -106,7 +103,6 @@ export async function createRefund(
       });
     }
 
-    // Get payment intent ID
     if (!booking.stripePaymentIntentId) {
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -114,7 +110,6 @@ export async function createRefund(
       });
     }
 
-    // Get flight details to calculate cancellation fee
     const flightResult = await database
       .select()
       .from(flights)
@@ -129,16 +124,13 @@ export async function createRefund(
       });
     }
 
-    // Calculate cancellation fee based on time until departure
     const feeCalculation = calculateCancellationFee(
       booking.totalAmount,
       flight.departureTime
     );
 
-    // Only the authenticated admin above may replace the policy amount.
     const refundAmount = input.amount ?? feeCalculation.refundAmount;
 
-    // Validate both overrides and calculated amounts before contacting Stripe.
     if (
       !Number.isSafeInteger(booking.totalAmount) ||
       !Number.isSafeInteger(refundAmount) ||
@@ -152,28 +144,13 @@ export async function createRefund(
       });
     }
 
-    // Stripe is the external source of truth for previously issued refunds. This
-    // protects old bookings and retries even when local booking state is stale.
     const existingRefunds = await listActiveRefunds(booking.stripePaymentIntentId);
     const alreadyRefundedAmount = sumRefundAmounts(existingRefunds);
     const remainingRefundableAmount = booking.totalAmount - alreadyRefundedAmount;
 
-    if (remainingRefundableAmount <= 0) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Booking payment has already been fully refunded",
-      });
-    }
-
-    if (refundAmount > remainingRefundableAmount) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Refund amount exceeds the remaining refundable balance of ${remainingRefundableAmount} cents`,
-      });
-    }
-
-    // Same booking + same amount maps to one provider operation. Metadata lets a
-    // retry recover a provider-success/local-failure without issuing money twice.
+    // Same booking + same amount maps to one provider operation. Check this before
+    // the remaining-balance guard so a provider-success/local-failure retry can
+    // reconcile state without trying to issue money again.
     const refundOperationId = `booking-${input.bookingId}-refund-${refundAmount}`;
     const existingOperationRefund = existingRefunds.find(
       refund => refund.metadata?.refundOperationId === refundOperationId
@@ -183,6 +160,20 @@ export async function createRefund(
     if (existingOperationRefund) {
       refund = existingOperationRefund;
     } else {
+      if (remainingRefundableAmount <= 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Booking payment has already been fully refunded",
+        });
+      }
+
+      if (refundAmount > remainingRefundableAmount) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Refund amount exceeds the remaining refundable balance of ${remainingRefundableAmount} cents`,
+        });
+      }
+
       const refundParams: Stripe.RefundCreateParams = {
         payment_intent: booking.stripePaymentIntentId,
         amount: refundAmount,
@@ -203,15 +194,12 @@ export async function createRefund(
       });
     }
 
-    // Re-read provider state after create/recovery. Full-refund semantics are
-    // cumulative, not based on the amount of only the latest refund.
     const refundsAfterOperation = await listActiveRefunds(
       booking.stripePaymentIntentId
     );
     const cumulativeRefundedAmount = sumRefundAmounts(refundsAfterOperation);
     const isFullRefund = cumulativeRefundedAmount >= booking.totalAmount;
 
-    // Update booking status
     await database
       .update(bookings)
       .set({
@@ -220,7 +208,6 @@ export async function createRefund(
       })
       .where(eq(bookings.id, input.bookingId));
 
-    // Restore seats to flight availability on full refund
     if (isFullRefund && booking.status === "confirmed") {
       if (booking.cabinClass === "business") {
         await database
@@ -243,7 +230,6 @@ export async function createRefund(
       );
     }
 
-    // Update payment record
     const paymentResult = await database
       .select()
       .from(payments)
@@ -259,7 +245,6 @@ export async function createRefund(
         .where(eq(payments.id, paymentResult[0].id));
     }
 
-    // Track refund issued event for metrics
     trackRefundIssued({
       userId: input.userId,
       bookingId: input.bookingId,
@@ -268,7 +253,6 @@ export async function createRefund(
       reason: input.reason,
     });
 
-    // Send refund confirmation email
     try {
       const [bookingDetails] = await database
         .select({
@@ -300,10 +284,8 @@ export async function createRefund(
       }
     } catch (emailError) {
       console.error("[Refund] Error sending confirmation email:", emailError);
-      // Don't fail the refund if email fails
     }
 
-    // Send in-app refund notification
     try {
       await notifyRefundProcessed(
         booking.userId,
@@ -312,7 +294,6 @@ export async function createRefund(
       );
     } catch (notifError) {
       console.error("[Refund] Error sending in-app notification:", notifError);
-      // Don't fail the refund if notification fails
     }
 
     return {
@@ -344,9 +325,6 @@ export async function createRefund(
   }
 }
 
-/**
- * Get refund details
- */
 export async function getRefundDetails(refundId: string) {
   try {
     const refund = await stripe.refunds.retrieve(refundId);
@@ -372,9 +350,6 @@ export async function getRefundDetails(refundId: string) {
   }
 }
 
-/**
- * Check if booking is refundable
- */
 export async function isBookingRefundable(bookingId: number): Promise<{
   refundable: boolean;
   reason?: string;
