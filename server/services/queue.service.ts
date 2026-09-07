@@ -453,11 +453,10 @@ class QueueService {
         "Re-processing Stripe event"
       );
 
-      const { stripeWebhookServiceV2 } =
-        await import("./stripe-webhook-v2.service");
+      const { processStripeEvent } = await import("../webhooks/stripe");
 
       await db.transaction(async tx => {
-        await stripeWebhookServiceV2.processEvent(tx, stripeEvent as any);
+        await processStripeEvent(tx, stripeEvent);
 
         await tx
           .update(stripeEvents)

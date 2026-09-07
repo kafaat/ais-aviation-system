@@ -423,8 +423,7 @@ export function startWebhookRetryWorker(): Worker {
           return;
         }
 
-        const { stripeWebhookServiceV2 } =
-          await import("./stripe-webhook-v2.service");
+        const { processStripeEvent } = await import("../webhooks/stripe");
 
         let eventData: unknown;
         try {
@@ -440,11 +439,11 @@ export function startWebhookRetryWorker(): Worker {
           return;
         }
         await db.transaction(async tx => {
-          await stripeWebhookServiceV2.processEvent(tx, {
+          await processStripeEvent(tx, {
             id: event.id,
             type: event.type,
             data: { object: eventData },
-          } as any);
+          } as Parameters<typeof processStripeEvent>[1]);
 
           await tx
             .update(stripeEvents)
