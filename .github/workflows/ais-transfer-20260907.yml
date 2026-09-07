@@ -1,0 +1,35 @@
+name: AIS source transfer (temporary, no deployment)
+on:
+  push:
+    branches: [transfer/ais-remediation-20260907-684809bc]
+permissions:
+  contents: write
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Read transfer payload
+        uses: actions/checkout@v4
+        with:
+          path: transport
+          persist-credentials: false
+      - name: Read immutable main and its history
+        uses: actions/checkout@v4
+        with:
+          ref: 5788af7ce9e946a0318171f8849d7f2b5edb44bd
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify archive, preserve main and upload Git objects only
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python ../transport/.ais-transfer/materialize.py
+      - name: Retain transfer verification
+        uses: actions/upload-artifact@v4
+        with:
+          name: ais-source-transfer-verification
+          path: ${{ runner.temp }}/ais-source-transfer.json
+          if-no-files-found: error
+          retention-days: 14
