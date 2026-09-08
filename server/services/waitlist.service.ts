@@ -7,13 +7,26 @@ import {
   airports,
   airlines,
 } from "../../drizzle/schema";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, gte, sql } from "drizzle-orm";
 import { createNotification } from "./notification.service";
 
 /**
  * Waitlist Service
  * Handles waitlist operations for fully booked flights
  */
+
+function getAffectedRows(result: unknown): number {
+  if (Array.isArray(result)) {
+    const first = result[0];
+    if (first && typeof first === "object" && "affectedRows" in first) {
+      return Number((first as { affectedRows?: number }).affectedRows ?? 0);
+    }
+  }
+  if (result && typeof result === "object" && "rowsAffected" in result) {
+    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);
+  }
+  return 0;
+}
 
 /**
  * Get the next priority number for a waitlist entry
@@ -235,23 +248,38 @@ export async function processWaitlist(flightId: number): Promise<{
           const expiresAt = new Date();
           expiresAt.setHours(expiresAt.getHours() + 24);
 
-          await tx
+          const seatUpdate = await tx
+            .update(flights)
+            .set({
+              economyAvailable: sql`${flights.economyAvailable} - ${entry.seats}`,
+            })
+            .where(
+              and(
+                eq(flights.id, flightId),
+                gte(flights.economyAvailable, entry.seats)
+              )
+            );
+          if (getAffectedRows(seatUpdate) !== 1) {
+            throw new Error(
+              "Inventory changed while processing economy waitlist"
+            );
+          }
+
+          const offerUpdate = await tx
             .update(waitlist)
             .set({
               status: "offered",
               offeredAt: new Date(),
               offerExpiresAt: expiresAt,
             })
-            .where(eq(waitlist.id, entry.id));
+            .where(
+              and(eq(waitlist.id, entry.id), eq(waitlist.status, "waiting"))
+            );
+          if (getAffectedRows(offerUpdate) !== 1) {
+            throw new Error("Waitlist entry was concurrently processed");
+          }
 
-          // Temporarily hold seats by decrementing availability
           remainingEconomy -= entry.seats;
-          await tx
-            .update(flights)
-            .set({
-              economyAvailable: sql`${flights.economyAvailable} - ${entry.seats}`,
-            })
-            .where(eq(flights.id, flightId));
           offeredCount++;
           notifications.push({
             userId: entry.userId,
@@ -284,23 +312,38 @@ export async function processWaitlist(flightId: number): Promise<{
           const expiresAt = new Date();
           expiresAt.setHours(expiresAt.getHours() + 24);
 
-          await tx
+          const seatUpdate = await tx
+            .update(flights)
+            .set({
+              businessAvailable: sql`${flights.businessAvailable} - ${entry.seats}`,
+            })
+            .where(
+              and(
+                eq(flights.id, flightId),
+                gte(flights.businessAvailable, entry.seats)
+              )
+            );
+          if (getAffectedRows(seatUpdate) !== 1) {
+            throw new Error(
+              "Inventory changed while processing business waitlist"
+            );
+          }
+
+          const offerUpdate = await tx
             .update(waitlist)
             .set({
               status: "offered",
               offeredAt: new Date(),
               offerExpiresAt: expiresAt,
             })
-            .where(eq(waitlist.id, entry.id));
+            .where(
+              and(eq(waitlist.id, entry.id), eq(waitlist.status, "waiting"))
+            );
+          if (getAffectedRows(offerUpdate) !== 1) {
+            throw new Error("Waitlist entry was concurrently processed");
+          }
 
-          // Temporarily hold seats by decrementing availability
           remainingBusiness -= entry.seats;
-          await tx
-            .update(flights)
-            .set({
-              businessAvailable: sql`${flights.businessAvailable} - ${entry.seats}`,
-            })
-            .where(eq(flights.id, flightId));
           offeredCount++;
           notifications.push({
             userId: entry.userId,
