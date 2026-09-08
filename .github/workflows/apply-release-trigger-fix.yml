@@ -1,0 +1,57 @@
+name: Apply release trigger fix
+
+on:
+  push:
+    branches:
+      - fix/release-deployment-trigger-20260908
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: fix/release-deployment-trigger-20260908
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - name: Apply correction
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/release.yml')
+          text = workflow.read_text()
+          old = '''  trigger-deployment:\n    name: Trigger Deployment\n    needs: [version, release]\n    runs-on: ubuntu-latest\n    if: github.event.inputs.prerelease != 'true'\n    steps:\n      - name: Trigger deployment workflow\n        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # v3\n        with:\n          # Use DEPLOYMENT_PAT if available, fall back to GITHUB_TOKEN\n          token: ${{ secrets.DEPLOYMENT_PAT || secrets.GITHUB_TOKEN }}\n          event-type: release-deployment\n          client-payload: '{\"version\": \"${{ needs.version.outputs.new_version }}\", \"ref\": \"v${{ needs.version.outputs.new_version }}\"}'\n\n      - name: Deployment trigger note\n        if: failure()\n        run: |\n          echo \"::notice::Deployment trigger skipped. To enable automatic deployment triggers, add a PAT with repo scope as DEPLOYMENT_PAT secret.\"\n'''
+          new = '''  trigger-deployment:\n    name: Trigger Deployment\n    needs: [version, release]\n    runs-on: ubuntu-latest\n    if: github.event.inputs.prerelease != 'true'\n    steps:\n      - name: Detect deployment credential\n        id: deployment-credential\n        env:\n          DEPLOYMENT_PAT: ${{ secrets.DEPLOYMENT_PAT }}\n        run: |\n          if [ -n \"$DEPLOYMENT_PAT\" ]; then\n            echo \"configured=true\" >> \"$GITHUB_OUTPUT\"\n          else\n            echo \"configured=false\" >> \"$GITHUB_OUTPUT\"\n            echo \"::notice::Automatic deployment trigger is not configured; release publication remains successful.\"\n          fi\n\n      - name: Trigger deployment workflow\n        if: steps.deployment-credential.outputs.configured == 'true'\n        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # v3\n        with:\n          token: ${{ secrets.DEPLOYMENT_PAT }}\n          event-type: release-deployment\n          client-payload: '{\"version\": \"${{ needs.version.outputs.new_version }}\", \"ref\": \"v${{ needs.version.outputs.new_version }}\"}'\n'''
+          if old not in text:
+              raise SystemExit('release trigger block did not match expected baseline')
+          workflow.write_text(text.replace(old, new))
+
+          test = Path('server/__tests__/ci-workflow-hardening.test.ts')
+          t = test.read_text()
+          marker = '''  it("does not allow literal fail-open jobs or high-severity audit bypasses", () => {'''
+          if marker not in t:
+              raise SystemExit('test insertion marker missing')
+          insertion = '''  it("does not fall back to GITHUB_TOKEN for optional release deployment dispatch", () => {\n    const text = readFileSync(join(workflowDir, "release.yml"), "utf8");\n    expect(text).not.toContain(\n      "secrets.DEPLOYMENT_PAT || secrets.GITHUB_TOKEN"\n    );\n    expect(text).toContain("DEPLOYMENT_PAT: ${{ secrets.DEPLOYMENT_PAT }}");\n    expect(text).toContain(\n      "if: steps.deployment-credential.outputs.configured == 'true'"\n    );\n    expect(text).toContain("token: ${{ secrets.DEPLOYMENT_PAT }}");\n  });\n\n'''
+          t = t.replace(marker, insertion + marker)
+          test.write_text(t)
+          PY
+      - name: Verify focused contract
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec prettier --write .github/workflows/release.yml server/__tests__/ci-workflow-hardening.test.ts
+          pnpm exec vitest run server/__tests__/ci-workflow-hardening.test.ts
+          git diff --check
+      - name: Commit final correction and remove helper
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-release-trigger-fix.yml
+          git add .github/workflows/release.yml server/__tests__/ci-workflow-hardening.test.ts
+          git commit -m "fix(release): skip unconfigured deployment dispatch"
+          git push origin HEAD:fix/release-deployment-trigger-20260908
