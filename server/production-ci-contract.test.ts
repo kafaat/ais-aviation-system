@@ -15,8 +15,12 @@ describe("production CI deployment contract", () => {
   });
 
   it("fails closed when the critical production E2E script is missing", () => {
-    expect(workflow).toContain('echo "::error::E2E critical tests script not found"');
+    expect(workflow).toContain(
+      'echo "::error::E2E critical tests script not found"'
+    );
     expect(workflow).toContain("exit 1");
-    expect(workflow).not.toContain("E2E critical tests script not found, skipping");
+    expect(workflow).not.toContain(
+      "E2E critical tests script not found, skipping"
+    );
   });
 });
