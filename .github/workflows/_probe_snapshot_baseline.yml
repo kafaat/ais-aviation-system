@@ -1,0 +1,56 @@
+name: Probe reconstructed migration snapshot
+
+on:
+  push:
+    branches:
+      - fix/migration-snapshot-baseline-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - run: pnpm install --frozen-lockfile
+      - name: Reconstruct latest snapshot in workspace
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          legacy_path = Path('drizzle/legacy-migrations/meta/0000_snapshot.json')
+          current_path = Path('drizzle/meta/0012_snapshot.json')
+          legacy = json.loads(legacy_path.read_text())
+          current = json.loads(current_path.read_text())
+          merged = dict(legacy)
+          for key, value in current.items():
+              if key != 'tables':
+                  merged[key] = value
+          merged['tables'] = {**legacy.get('tables', {}), **current.get('tables', {})}
+          current_path.write_text(json.dumps(merged, indent=2) + '\n')
+          print('legacy tables:', len(legacy.get('tables', {})))
+          print('authoritative tables:', len(current.get('tables', {})))
+          print('merged tables:', len(merged.get('tables', {})))
+          PY
+      - name: Generate probe delta
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/probe_only
+        run: pnpm exec drizzle-kit generate --name=snapshot_probe
+      - name: Report generated delta
+        run: |
+          set -euo pipefail
+          file="$(ls drizzle/0013_*.sql)"
+          echo "generated=$file"
+          echo "create_tables=$(grep -c '^CREATE TABLE' "$file" || true)"
+          echo "alter_tables=$(grep -c '^ALTER TABLE' "$file" || true)"
+          echo "create_indexes=$(grep -c '^CREATE INDEX' "$file" || true)"
+          wc -l -c "$file"
+          echo '--- SQL START ---'
+          sed -n '1,220p' "$file"
+          echo '--- SQL END TAIL ---'
+          tail -n 120 "$file"
