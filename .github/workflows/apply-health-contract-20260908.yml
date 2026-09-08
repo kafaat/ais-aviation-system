@@ -1,0 +1,83 @@
+name: Apply Health Contract 20260908
+
+on:
+  push:
+    branches:
+      - fix/production-health-contract-20260908
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: fix/production-health-contract-20260908
+      - name: Apply minimal health contract changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          k8s = Path('k8s/base/deployment.yaml')
+          text = k8s.read_text()
+          text = text.replace('prometheus.io/path: "/metrics"', 'prometheus.io/path: "/api/metrics"')
+          old = 'path: /api/trpc/health.check'
+          positions = [i for i in range(len(text)) if text.startswith(old, i)]
+          if len(positions) != 3:
+              raise SystemExit(f'expected exactly 3 K8s health.check probes, found {len(positions)}')
+          text = text.replace(old, 'path: /api/trpc/health.live', 2)
+          text = text.replace(old, 'path: /api/trpc/health.ready', 1)
+          k8s.write_text(text)
+
+          smoke = Path('scripts/smoke-tests.sh')
+          text = smoke.read_text()
+          text = text.replace('$BASE_URL/api/trpc/health.check', '$BASE_URL/api/trpc/health.live')
+          marker = '''    test_endpoint "Health Check" \\
+        "$BASE_URL/api/trpc/health.live" \\
+        "200"\n'''
+          replacement = '''    test_endpoint "Liveness Check" \\
+        "$BASE_URL/api/trpc/health.live" \\
+        "200"\n\n    test_endpoint "Readiness Check" \\
+        "$BASE_URL/api/trpc/health.ready" \\
+        "200"\n'''
+          if marker not in text:
+              raise SystemExit('smoke health test marker not found')
+          text = text.replace(marker, replacement, 1)
+          text = text.replace('Health Check Response', 'Liveness Response')
+          smoke.write_text(text)
+
+          e2e = Path('scripts/e2e-critical.sh')
+          text = e2e.read_text()
+          db_marker = '''test_database_connectivity() {\n    local response=$(curl -sf --max-time $TIMEOUT \\
+        "$BASE_URL/api/trpc/health.check" 2>/dev/null)'''
+          db_replacement = '''test_database_connectivity() {\n    local response=$(curl -sf --max-time $TIMEOUT \\
+        "$BASE_URL/api/trpc/health.ready" 2>/dev/null)'''
+          if db_marker not in text:
+              raise SystemExit('e2e database health marker not found')
+          text = text.replace(db_marker, db_replacement, 1)
+          text = text.replace('"(ok|healthy)"', '"(ok|healthy|ready)"', 1)
+          text = text.replace('$BASE_URL/api/trpc/health.check', '$BASE_URL/api/trpc/health.live')
+          e2e.write_text(text)
+
+          test = Path('server/production-health-contract.test.ts')
+          test.write_text('''import { readFileSync } from "node:fs";\nimport { describe, expect, it } from "vitest";\n\nconst deployment = readFileSync("k8s/base/deployment.yaml", "utf8");\nconst smoke = readFileSync("scripts/smoke-tests.sh", "utf8");\nconst criticalE2e = readFileSync("scripts/e2e-critical.sh", "utf8");\n\ndescribe("production health contract", () => {\n  it("uses public Kubernetes liveness/readiness and metrics endpoints", () => {\n    expect(deployment).toContain('prometheus.io/path: "/api/metrics"');\n    expect(deployment.match(/path: \/api\/trpc\/health\.live/g)).toHaveLength(2);\n    expect(deployment.match(/path: \/api\/trpc\/health\.ready/g)).toHaveLength(1);\n    expect(deployment).not.toContain("/api/trpc/health.check");\n  });\n\n  it("keeps deployment smoke surfaces off the admin-only health procedure", () => {\n    expect(smoke).toContain("/api/trpc/health.live");\n    expect(smoke).toContain("/api/trpc/health.ready");\n    expect(smoke).not.toContain("/api/trpc/health.check");\n\n    expect(criticalE2e).toContain("/api/trpc/health.live");\n    expect(criticalE2e).toContain("/api/trpc/health.ready");\n    expect(criticalE2e).not.toContain("/api/trpc/health.check");\n  });\n});\n''')
+          PY
+      - name: Verify focused contract
+        run: |
+          bash -n scripts/smoke-tests.sh
+          bash -n scripts/e2e-critical.sh
+          pnpm install --frozen-lockfile
+          pnpm exec prettier --write server/production-health-contract.test.ts k8s/base/deployment.yaml
+          pnpm exec vitest run server/production-health-contract.test.ts
+      - name: Commit and remove helper
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/apply-health-contract-20260908.yml
+          git add k8s/base/deployment.yaml scripts/smoke-tests.sh scripts/e2e-critical.sh server/production-health-contract.test.ts
+          git commit -m 'fix(ci): align production health contract'
+          git push origin HEAD:fix/production-health-contract-20260908
