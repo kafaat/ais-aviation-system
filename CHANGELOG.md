@@ -1,5 +1,33 @@
 # Changelog
 
+## What's Changed in v1.20.19
+
+### Bug Fixes
+
+- fix(tenancy): bind booking writes and cancellation to tenant (6daa109)
+- fix(tenancy): enforce booking tenant boundary and passenger ownership (1f0560c)
+
+### Maintenance
+
+- ci(production): fail closed on deployment verification (40a20b5)
+- ci: format PR120 with repository prettier (86728f1)
+- ci(tenancy): retrigger checks after bot formatting (b537482)
+- ci(tenancy): establish authoritative verification head (ef2ad42)
+
+### Other Changes
+
+- test(ci): guard production deployment fail-closed contract (7c5727e)
+- style(ci): format production deployment contract test (f730cea)
+- Merge pull request #119 from kafaat/fix/production-ci-fail-closed-20260908 (759f987)
+- test(tenancy): guard booking tenant boundary (3d6acc3)
+- style(tenancy): format booking boundary slice (4f9aba0)
+- test(tenancy): retrigger booking boundary gates (fe75ed2)
+- Merge pull request #120 from kafaat/fix/booking-tenant-boundary-20260908 (2fa2826)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.18...v1.20.19
+
+---
+
 ## What's Changed in v1.20.18
 
 ### Bug Fixes
