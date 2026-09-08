@@ -1,5 +1,28 @@
 # Changelog
 
+## What's Changed in v1.20.17
+
+### Bug Fixes
+
+- fix(migrations): make Drizzle journal authoritative (b7fdf60)
+- fix(ci): align Docker smoke with authoritative migration root (1c5a4d6)
+
+### Maintenance
+
+- chore(migrations): preserve legacy migration archive bytes (e2ea30a)
+- chore(ci): temporarily format PR115 with pinned Prettier (11af8e6)
+- chore(ci): remove temporary PR115 formatter (1bef350)
+
+### Other Changes
+
+- style(migrations): format journal parity guard (7dd3775)
+- style(migrations): apply pinned Prettier output (7f7feac)
+- Merge pull request #115 from kafaat/fix/migration-journal-parity-20260908 (ba645d9)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.16...v1.20.17
+
+---
+
 ## What's Changed in v1.20.16
 
 ### Bug Fixes
