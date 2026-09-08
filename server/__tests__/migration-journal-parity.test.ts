@@ -16,7 +16,9 @@ describe("Drizzle migration journal parity", () => {
     const executableSql = readdirSync(drizzleDir)
       .filter((name) => /^\d{4}_.+\.sql$/.test(name))
       .sort();
-    const journalSql = journal.entries.map((entry) => `${entry.tag}.sql`).sort();
+    const journalSql = journal.entries
+      .map((entry) => `${entry.tag}.sql`)
+      .sort();
 
     expect(executableSql).toEqual(journalSql);
     expect(new Set(journal.entries.map((entry) => entry.tag)).size).toBe(
@@ -28,7 +30,10 @@ describe("Drizzle migration journal parity", () => {
   });
 
   it("uses only the authoritative drizzle root for executable migrations", () => {
-    const config = readFileSync(resolve(repoRoot, "drizzle.config.ts"), "utf8");
+    const config = readFileSync(
+      resolve(repoRoot, "drizzle.config.ts"),
+      "utf8",
+    );
 
     expect(config).toContain('out: "./drizzle"');
     expect(existsSync(resolve(drizzleDir, "migrations"))).toBe(false);
