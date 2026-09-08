@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.20.20
+
+### Bug Fixes
+
+- fix(ci): enforce public health probe topology (25ef77e)
+- fix(ci): align topology guard with current deployment contract (d9f899d)
+
+### Other Changes
+
+- Merge pull request #121 from kafaat/fix/health-topology-20260909 (19cb2f3)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.19...v1.20.20
+
+---
+
 ## What's Changed in v1.20.19
 
 ### Bug Fixes
