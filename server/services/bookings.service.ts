@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as db from "../db";
 import { getDb } from "../db";
 import { bookings, flights } from "../../drizzle/schema";
@@ -41,12 +41,22 @@ export interface SelectedAncillary {
 
 export interface CreateBookingInput {
   userId: number;
+  tenantId?: number | null;
   flightId: number;
   cabinClass: "economy" | "business";
   passengers: Passenger[];
-  sessionId: string; // For inventory locking
-  lockId?: number; // If lock already exists
+  sessionId: string;
+  lockId?: number;
   ancillaries?: SelectedAncillary[];
+}
+
+function assertTenantMatch(
+  rowTenantId: number | null,
+  tenantId: number | null | undefined
+) {
+  if (tenantId != null && rowTenantId !== tenantId) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  }
 }
 
 /**
@@ -54,7 +64,20 @@ export interface CreateBookingInput {
  */
 export async function createBooking(input: CreateBookingInput) {
   try {
-    // Validate passport expiry dates (must be valid at least 6 months after departure)
+    if (input.tenantId != null) {
+      const database = await getDb();
+      if (!database) throw new Error("Database not available");
+      const [flightTenant] = await database
+        .select({ tenantId: flights.tenantId })
+        .from(flights)
+        .where(eq(flights.id, input.flightId))
+        .limit(1);
+
+      if (!flightTenant || flightTenant.tenantId !== input.tenantId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+      }
+    }
+
     const flightForValidation = await db.getFlightById(input.flightId);
     if (flightForValidation) {
       const minExpiry = new Date(flightForValidation.departureTime);
@@ -73,7 +96,6 @@ export async function createBooking(input: CreateBookingInput) {
       }
     }
 
-    // Verify or create inventory lock (prevents double-booking)
     let lockId = input.lockId;
     if (lockId) {
       const lockValid = await verifyLock(lockId, input.sessionId);
@@ -84,7 +106,6 @@ export async function createBooking(input: CreateBookingInput) {
         });
       }
     } else {
-      // No lock provided - create one to prevent double-booking during checkout
       const lock = await createInventoryLock(
         input.flightId,
         input.passengers.length,
@@ -95,7 +116,6 @@ export async function createBooking(input: CreateBookingInput) {
       lockId = lock.lockId;
     }
 
-    // Check flight availability
     const { available, flight } = await checkFlightAvailability(
       input.flightId,
       input.cabinClass,
@@ -110,13 +130,9 @@ export async function createBooking(input: CreateBookingInput) {
     }
 
     if (!flight) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Flight not found",
-      });
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
     }
 
-    // Calculate total amount with dynamic pricing and passenger type discounts
     const pricingResult = await calculateFlightPrice(
       flight,
       input.cabinClass,
@@ -133,12 +149,11 @@ export async function createBooking(input: CreateBookingInput) {
       );
     }
 
-    // Generate booking reference and PNR
     const bookingReference = db.generateBookingReference();
     const pnr = db.generateBookingReference();
 
-    // Create booking
     const bookingResult = await db.createBooking({
+      ...(input.tenantId == null ? {} : { tenantId: input.tenantId }),
       userId: input.userId,
       flightId: input.flightId,
       bookingReference,
@@ -149,7 +164,6 @@ export async function createBooking(input: CreateBookingInput) {
       numberOfPassengers: input.passengers.length,
     });
 
-    // Get the inserted booking ID from the result
     const bookingId =
       (bookingResult as any).insertId || bookingResult[0]?.insertId;
 
@@ -160,8 +174,8 @@ export async function createBooking(input: CreateBookingInput) {
       });
     }
 
-    // Create passengers
     const passengersData = input.passengers.map(p => ({
+      ...(input.tenantId == null ? {} : { tenantId: input.tenantId }),
       bookingId,
       type: p.type,
       title: p.title,
@@ -174,7 +188,6 @@ export async function createBooking(input: CreateBookingInput) {
 
     await db.createPassengers(passengersData);
 
-    // Add ancillary services if provided
     if (input.ancillaries && input.ancillaries.length > 0) {
       const { addAncillaryToBooking } =
         await import("./ancillary-services.service");
@@ -188,7 +201,6 @@ export async function createBooking(input: CreateBookingInput) {
       }
     }
 
-    // Track booking started event for metrics
     trackBookingStarted({
       userId: input.userId,
       sessionId: input.sessionId,
@@ -199,7 +211,6 @@ export async function createBooking(input: CreateBookingInput) {
       totalAmount,
     });
 
-    // Send in-app notification for booking creation
     try {
       await createNotification(
         input.userId,
@@ -218,29 +229,19 @@ export async function createBooking(input: CreateBookingInput) {
         "[Booking] Error sending booking creation notification:",
         notifError
       );
-      // Don't fail the booking if notification fails
     }
 
-    // Convert inventory lock to booking
     if (lockId) {
       try {
         await convertLockToBooking(lockId);
       } catch (lockError) {
         console.error("[Booking] Failed to convert inventory lock:", lockError);
-        // Don't fail the booking if lock conversion fails
       }
     }
 
-    return {
-      bookingId,
-      bookingReference,
-      pnr,
-      totalAmount,
-    };
+    return { bookingId, bookingReference, pnr, totalAmount };
   } catch (error) {
-    if (error instanceof TRPCError) {
-      throw error;
-    }
+    if (error instanceof TRPCError) throw error;
     console.error("Error creating booking:", error);
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -249,9 +250,6 @@ export async function createBooking(input: CreateBookingInput) {
   }
 }
 
-/**
- * Get user bookings
- */
 export async function getUserBookings(userId: number) {
   try {
     return await db.getBookingsByUserId(userId);
@@ -264,33 +262,27 @@ export async function getUserBookings(userId: number) {
   }
 }
 
-/**
- * Get booking by ID
- */
-export async function getBookingById(bookingId: number, userId: number) {
+export async function getBookingById(
+  bookingId: number,
+  userId: number,
+  tenantId?: number | null
+) {
   try {
     const booking = await db.getBookingByIdWithDetails(bookingId);
 
     if (!booking) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Booking not found",
-      });
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
     }
 
-    // Verify ownership
+    assertTenantMatch(booking.tenantId, tenantId);
+
     if (booking.userId !== userId) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Access denied",
-      });
+      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
     }
 
     return booking;
   } catch (error) {
-    if (error instanceof TRPCError) {
-      throw error;
-    }
+    if (error instanceof TRPCError) throw error;
     console.error("Error getting booking:", error);
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -299,13 +291,13 @@ export async function getBookingById(bookingId: number, userId: number) {
   }
 }
 
-/**
- * Cancel booking
- * Uses a database transaction to atomically update booking status and restore seats
- */
-export async function cancelBooking(bookingId: number, userId: number) {
+export async function cancelBooking(
+  bookingId: number,
+  userId: number,
+  tenantId?: number | null
+) {
   try {
-    const booking = await getBookingById(bookingId, userId);
+    const booking = await getBookingById(bookingId, userId, tenantId);
 
     if (booking.status === "cancelled") {
       throw new TRPCError({
@@ -324,36 +316,44 @@ export async function cancelBooking(bookingId: number, userId: number) {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
-    // Atomically cancel booking and restore seats in a single transaction
     await database.transaction(async tx => {
-      // Update booking status
+      const bookingWhere =
+        tenantId == null
+          ? eq(bookings.id, bookingId)
+          : and(eq(bookings.id, bookingId), eq(bookings.tenantId, tenantId));
+
       await tx
         .update(bookings)
         .set({ status: "cancelled", updatedAt: new Date() })
-        .where(eq(bookings.id, bookingId));
+        .where(bookingWhere);
 
-      // If booking was confirmed (seats were deducted on payment), restore them
       if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
-        const cabinClass = booking.cabinClass as "economy" | "business";
-        if (cabinClass === "business") {
+        const flightWhere =
+          tenantId == null
+            ? eq(flights.id, booking.flightId)
+            : and(
+                eq(flights.id, booking.flightId),
+                eq(flights.tenantId, tenantId)
+              );
+
+        if (booking.cabinClass === "business") {
           await tx
             .update(flights)
             .set({
               businessAvailable: sql`${flights.businessAvailable} + ${booking.numberOfPassengers}`,
             })
-            .where(eq(flights.id, booking.flightId));
+            .where(flightWhere);
         } else {
           await tx
             .update(flights)
             .set({
               economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
             })
-            .where(eq(flights.id, booking.flightId));
+            .where(flightWhere);
         }
       }
     });
 
-    // Track booking cancellation event for metrics
     trackBookingCancelled({
       userId,
       bookingId,
@@ -365,9 +365,7 @@ export async function cancelBooking(bookingId: number, userId: number) {
 
     return { success: true };
   } catch (error) {
-    if (error instanceof TRPCError) {
-      throw error;
-    }
+    if (error instanceof TRPCError) throw error;
     console.error("Error cancelling booking:", error);
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
