@@ -27,6 +27,19 @@ import { createServiceLogger } from "../_core/logger";
 
 const log = createServiceLogger("travel-agent");
 
+function getAffectedRows(result: unknown): number {
+  if (Array.isArray(result)) {
+    const first = result[0];
+    if (first && typeof first === "object" && "affectedRows" in first) {
+      return Number((first as { affectedRows?: number }).affectedRows ?? 0);
+    }
+  }
+  if (result && typeof result === "object" && "rowsAffected" in result) {
+    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);
+  }
+  return 0;
+}
+
 // ============ Types ============
 
 export interface RegisterAgentInput {
@@ -465,104 +478,104 @@ export async function createAgentBooking(
     });
   }
 
-  // Get flight details
-  const [flight] = await db
-    .select()
-    .from(flights)
-    .where(eq(flights.id, input.flightId));
+  return db.transaction(async tx => {
+    const [flight] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, input.flightId));
 
-  if (!flight) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-  }
+    if (!flight) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    }
 
-  // Check availability
-  const availableSeats =
-    input.cabinClass === "economy"
-      ? flight.economyAvailable
-      : flight.businessAvailable;
+    const seatCount = input.passengers.length;
+    const pricePerSeat =
+      input.cabinClass === "economy"
+        ? flight.economyPrice
+        : flight.businessPrice;
+    const totalAmount = pricePerSeat * seatCount;
+    const commissionRate = parseFloat(String(agent.commissionRate));
+    const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
+    const bookingReference = generateBookingReference();
+    const pnr = generateBookingReference();
 
-  if (availableSeats < input.passengers.length) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Not enough seats available",
+    const seatUpdate =
+      input.cabinClass === "economy"
+        ? await tx
+            .update(flights)
+            .set({
+              economyAvailable: sql`${flights.economyAvailable} - ${seatCount}`,
+            })
+            .where(
+              and(
+                eq(flights.id, input.flightId),
+                gte(flights.economyAvailable, seatCount)
+              )
+            )
+        : await tx
+            .update(flights)
+            .set({
+              businessAvailable: sql`${flights.businessAvailable} - ${seatCount}`,
+            })
+            .where(
+              and(
+                eq(flights.id, input.flightId),
+                gte(flights.businessAvailable, seatCount)
+              )
+            );
+
+    if (getAffectedRows(seatUpdate) !== 1) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Not enough seats available",
+      });
+    }
+
+    const bookingResult = await tx.insert(bookings).values({
+      userId: 0,
+      flightId: input.flightId,
+      bookingReference,
+      pnr,
+      status: "pending",
+      totalAmount,
+      cabinClass: input.cabinClass,
+      numberOfPassengers: seatCount,
     });
-  }
+    const bookingId =
+      (bookingResult as unknown as { insertId?: number }).insertId ??
+      Number(
+        (bookingResult as unknown as Array<{ insertId?: number }>)[0]?.insertId
+      );
 
-  // Calculate price
-  const pricePerSeat =
-    input.cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
-  const totalAmount = pricePerSeat * input.passengers.length;
+    if (!bookingId) {
+      throw new Error("Failed to create agent booking");
+    }
 
-  // Calculate commission
-  const commissionRate = parseFloat(String(agent.commissionRate));
-  const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
+    await tx.insert(agentBookings).values({
+      agentId,
+      bookingId,
+      commissionRate: String(commissionRate),
+      commissionAmount,
+      bookingAmount: totalAmount,
+      externalReference: input.externalReference,
+    });
 
-  // Generate booking reference
-  const bookingReference = generateBookingReference();
-  const pnr = generateBookingReference();
-
-  // Create booking (using a placeholder user ID for agent bookings)
-  const bookingResult = await db.insert(bookings).values({
-    userId: 0, // System user for agent bookings
-    flightId: input.flightId,
-    bookingReference,
-    pnr,
-    status: "pending",
-    totalAmount,
-    cabinClass: input.cabinClass,
-    numberOfPassengers: input.passengers.length,
-  });
-
-  const bookingId =
-    (bookingResult as any).insertId || bookingResult[0]?.insertId;
-
-  // Create agent booking record
-  await db.insert(agentBookings).values({
-    agentId,
-    bookingId,
-    commissionRate: String(commissionRate),
-    commissionAmount,
-    bookingAmount: totalAmount,
-    externalReference: input.externalReference,
-  });
-
-  // Update agent statistics
-  await db
-    .update(travelAgents)
-    .set({
-      totalBookings: sql`${travelAgents.totalBookings} + 1`,
-      totalRevenue: sql`${travelAgents.totalRevenue} + ${totalAmount}`,
-      totalCommission: sql`${travelAgents.totalCommission} + ${commissionAmount}`,
-    })
-    .where(eq(travelAgents.id, agentId));
-
-  // Update flight availability
-  if (input.cabinClass === "economy") {
-    await db
-      .update(flights)
+    await tx
+      .update(travelAgents)
       .set({
-        economyAvailable: sql`${flights.economyAvailable} - ${input.passengers.length}`,
+        totalBookings: sql`${travelAgents.totalBookings} + 1`,
+        totalRevenue: sql`${travelAgents.totalRevenue} + ${totalAmount}`,
+        totalCommission: sql`${travelAgents.totalCommission} + ${commissionAmount}`,
       })
-      .where(eq(flights.id, input.flightId));
-  } else {
-    await db
-      .update(flights)
-      .set({
-        businessAvailable: sql`${flights.businessAvailable} - ${input.passengers.length}`,
-      })
-      .where(eq(flights.id, input.flightId));
-  }
+      .where(eq(travelAgents.id, agentId));
 
-  log.info(
-    { agentId, bookingId, commission: commissionAmount },
-    "Agent booking created"
-  );
+    log.info(
+      { agentId, bookingId, commission: commissionAmount },
+      "Agent booking created"
+    );
 
-  return {
-    bookingId,
-    bookingReference,
-    commission: commissionAmount,
-  };
+    return { bookingId, bookingReference, commission: commissionAmount };
+  });
 }
 
 /**
