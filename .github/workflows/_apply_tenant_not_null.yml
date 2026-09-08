@@ -2,6 +2,9 @@ name: Apply tenant not-null boundary
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - fix/tenant-operational-not-null-20260909
 
 permissions:
   contents: write
