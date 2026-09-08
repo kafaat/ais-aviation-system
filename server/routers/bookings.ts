@@ -6,14 +6,20 @@ import * as db from "../db";
 import { auditBookingChange } from "../services/audit.service";
 import { createNotification } from "../services/notification.service";
 
+function assertTenantMatch(
+  rowTenantId: number | null,
+  tenantId: number | null | undefined
+) {
+  if (tenantId != null && rowTenantId !== tenantId) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  }
+}
+
 /**
  * Bookings Router
  * Handles all booking-related operations
  */
 export const bookingsRouter = router({
-  /**
-   * Create a new booking
-   */
   create: protectedProcedure
     .meta({
       openapi: {
@@ -78,6 +84,7 @@ export const bookingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const result = await bookingsService.createBooking({
         userId: ctx.user.id,
+        tenantId: ctx.tenantId,
         flightId: input.flightId,
         cabinClass: input.cabinClass,
         passengers: input.passengers,
@@ -86,7 +93,6 @@ export const bookingsRouter = router({
         ancillaries: input.ancillaries,
       });
 
-      // Audit log: Booking created
       await auditBookingChange(
         result.bookingId,
         result.bookingReference,
@@ -107,9 +113,6 @@ export const bookingsRouter = router({
       return result;
     }),
 
-  /**
-   * Get user's bookings
-   */
   myBookings: protectedProcedure
     .meta({
       openapi: {
@@ -126,9 +129,6 @@ export const bookingsRouter = router({
       return await bookingsService.getUserBookings(ctx.user.id);
     }),
 
-  /**
-   * Get booking by PNR
-   */
   getByPNR: protectedProcedure
     .meta({
       openapi: {
@@ -145,13 +145,11 @@ export const bookingsRouter = router({
     .query(async ({ ctx, input }) => {
       const booking = await db.getBookingByPNR(input.pnr);
       if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
       }
 
-      // Verify ownership
+      assertTenantMatch(booking.tenantId, ctx.tenantId);
+
       if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
@@ -159,9 +157,6 @@ export const bookingsRouter = router({
       return booking;
     }),
 
-  /**
-   * Get booking passengers
-   */
   getPassengers: protectedProcedure
     .meta({
       openapi: {
@@ -176,25 +171,23 @@ export const bookingsRouter = router({
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
     .query(async ({ ctx, input }) => {
-      // First verify booking ownership
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
       if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
       }
+
+      assertTenantMatch(booking.tenantId, ctx.tenantId);
 
       if (booking.userId !== ctx.user.id && ctx.user.role !== "admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
       }
 
-      return await db.getPassengersByBookingId(input.bookingId);
+      const passengerRows = await db.getPassengersByBookingId(input.bookingId);
+      return ctx.tenantId == null
+        ? passengerRows
+        : passengerRows.filter(row => row.tenantId === ctx.tenantId);
     }),
 
-  /**
-   * Cancel booking
-   */
   cancel: protectedProcedure
     .meta({
       openapi: {
@@ -210,15 +203,15 @@ export const bookingsRouter = router({
     .input(z.object({ bookingId: z.number().describe("Booking ID to cancel") }))
     .output(z.object({ success: z.boolean(), message: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
-      // Get booking details before cancellation for audit
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
+      if (booking) assertTenantMatch(booking.tenantId, ctx.tenantId);
 
       const result = await bookingsService.cancelBooking(
         input.bookingId,
-        ctx.user.id
+        ctx.user.id,
+        ctx.tenantId
       );
 
-      // Audit log: Booking cancelled
       if (booking) {
         await auditBookingChange(
           input.bookingId,
@@ -232,7 +225,6 @@ export const bookingsRouter = router({
           ctx.req.headers["x-request-id"] as string
         );
 
-        // Send in-app notification for booking cancellation
         try {
           await createNotification(
             ctx.user.id,
@@ -246,7 +238,6 @@ export const bookingsRouter = router({
             }
           );
         } catch (_notifError) {
-          // Don't fail the cancellation if notification fails
           console.error(
             "[Booking] Error sending cancellation notification:",
             _notifError
@@ -257,9 +248,6 @@ export const bookingsRouter = router({
       return result;
     }),
 
-  /**
-   * Check-in for a flight
-   */
   checkIn: protectedProcedure
     .meta({
       openapi: {
@@ -287,14 +275,12 @@ export const bookingsRouter = router({
     )
     .output(z.object({ success: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
-      // Verify booking ownership
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
       if (!booking) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
       }
+
+      assertTenantMatch(booking.tenantId, ctx.tenantId);
 
       if (booking.userId !== ctx.user.id) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
@@ -307,31 +293,56 @@ export const bookingsRouter = router({
         });
       }
 
-      // Update seat assignments
       const database = await db.getDb();
-      if (!database)
+      if (!database) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Database not available",
         });
-
-      const { passengers, bookings } = await import("../../drizzle/schema");
-      const { eq } = await import("drizzle-orm");
-
-      for (const assignment of input.seatAssignments) {
-        await database
-          .update(passengers)
-          .set({ seatNumber: assignment.seatNumber })
-          .where(eq(passengers.id, assignment.passengerId));
       }
 
-      // Mark booking as checked in
+      const { passengers, bookings } = await import("../../drizzle/schema");
+      const { and, eq } = await import("drizzle-orm");
+
+      for (const assignment of input.seatAssignments) {
+        const passengerWhere =
+          ctx.tenantId == null
+            ? and(
+                eq(passengers.id, assignment.passengerId),
+                eq(passengers.bookingId, input.bookingId)
+              )
+            : and(
+                eq(passengers.id, assignment.passengerId),
+                eq(passengers.bookingId, input.bookingId),
+                eq(passengers.tenantId, ctx.tenantId)
+              );
+
+        const updated = await database
+          .update(passengers)
+          .set({ seatNumber: assignment.seatNumber })
+          .where(passengerWhere);
+
+        if (updated[0].affectedRows !== 1) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Passenger does not belong to this booking",
+          });
+        }
+      }
+
+      const bookingWhere =
+        ctx.tenantId == null
+          ? eq(bookings.id, input.bookingId)
+          : and(
+              eq(bookings.id, input.bookingId),
+              eq(bookings.tenantId, ctx.tenantId)
+            );
+
       await database
         .update(bookings)
         .set({ checkedIn: true })
-        .where(eq(bookings.id, input.bookingId));
+        .where(bookingWhere);
 
-      // Audit log: Booking checked in
       await auditBookingChange(
         input.bookingId,
         booking.bookingReference,
