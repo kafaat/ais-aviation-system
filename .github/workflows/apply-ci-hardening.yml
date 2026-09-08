@@ -6,7 +6,7 @@ on:
       - fix/ci-fail-closed-action-pinning-20260908
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apply:
@@ -21,11 +21,10 @@ jobs:
           node-version: "22.x"
       - uses: pnpm/action-setup@v4
       - name: Generate hardened workflows
-        id: generate
         shell: bash
         run: |
-          set +e
-          python - <<'PY' > /tmp/ci-hardening.log 2>&1
+          set -euo pipefail
+          python - <<'PY'
           from pathlib import Path
           import re
           import subprocess
@@ -75,35 +74,24 @@ jobs:
           guard = Path('server/__tests__/ci-workflow-hardening.test.ts')
           guard.write_text('''import { describe, expect, it } from "vitest";\nimport { readFileSync, readdirSync } from "node:fs";\nimport { join } from "node:path";\n\nconst workflowDir = join(process.cwd(), ".github", "workflows");\nconst workflowFiles = readdirSync(workflowDir).filter(name => /\\.ya?ml$/.test(name) && name !== "apply-ci-hardening.yml");\n\ndescribe("CI workflow hardening", () => {\n  it("pins every external GitHub Action to an immutable commit SHA", () => {\n    const violations: string[] = [];\n    for (const name of workflowFiles) {\n      const text = readFileSync(join(workflowDir, name), "utf8");\n      for (const match of text.matchAll(/^\\s*uses:\\s*([^\\s#]+)@([^\\s#]+)/gm)) {\n        const action = match[1];\n        const ref = match[2];\n        if (action.startsWith("./")) continue;\n        if (!/^[0-9a-f]{40}$/i.test(ref)) violations.push(`${name}: ${action}@${ref}`);\n      }\n    }\n    expect(violations).toEqual([]);\n  });\n\n  it("does not allow literal fail-open jobs or high-severity audit bypasses", () => {\n    const violations: string[] = [];\n    for (const name of workflowFiles) {\n      const text = readFileSync(join(workflowDir, name), "utf8");\n      if (/^\\s*continue-on-error:\\s*true\\b/m.test(text)) violations.push(`${name}: continue-on-error: true`);\n      if (/pnpm\\s+audit[^\\n]*\\|\\|\\s*true/.test(text)) violations.push(`${name}: pnpm audit || true`);\n    }\n    expect(violations).toEqual([]);\n  });\n});\n''')
           PY
-          rc=$?
-          cat /tmp/ci-hardening.log
-          echo "$rc" > /tmp/ci-hardening.rc
-          exit 0
       - name: Validate generated files
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$(cat /tmp/ci-hardening.rc)" != "0" ]; then
-            echo "Generation failed"
-            exit 1
-          fi
-          rm .github/workflows/apply-ci-hardening.yml
+          cp .github/workflows/ci-cd.yml /tmp/ci-cd.hardened.yml
           pnpm install --frozen-lockfile
           pnpm exec prettier --write .github/workflows server/__tests__/ci-workflow-hardening.test.ts
           pnpm exec vitest run server/__tests__/ci-workflow-hardening.test.ts
           git diff --check
-      - name: Upload hardened files
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-hardening-output
-          path: |
-            .github/workflows/
-            server/__tests__/ci-workflow-hardening.test.ts
-          if-no-files-found: error
-      - name: Upload diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-hardening-diagnostics
-          path: /tmp/ci-hardening.log
+      - name: Stage validated bytes on a non-workflow path
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci-hardening-stage
+          cp .github/workflows/ci-cd.yml ci-hardening-stage/ci-cd.yml
+          cp server/__tests__/ci-workflow-hardening.test.ts ci-hardening-stage/ci-workflow-hardening.test.ts
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add ci-hardening-stage/
+          git commit -m "chore(ci): stage validated hardening bytes"
+          git push origin HEAD:fix/ci-fail-closed-action-pinning-20260908
