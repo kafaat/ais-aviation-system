@@ -1,0 +1,53 @@
+name: Measure migration database states
+
+on:
+  push:
+    branches:
+      - fix/migration-snapshot-baseline-20260909
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - run: pnpm install --frozen-lockfile
+      - name: Create measurement databases
+        run: |
+          mysql -h127.0.0.1 -uroot -ptest_password -e 'CREATE DATABASE authoritative; CREATE DATABASE legacy;'
+      - name: Apply authoritative Drizzle history
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/authoritative
+        run: pnpm run db:migrate
+      - name: Apply legacy production baseline
+        run: mysql -h127.0.0.1 -uroot -ptest_password legacy < drizzle/legacy-migrations/0000_daily_mauler.sql
+      - name: Report database states
+        run: |
+          echo '=== authoritative count ==='
+          mysql -N -h127.0.0.1 -uroot -ptest_password -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='authoritative' AND table_name NOT LIKE '__drizzle%';"
+          echo '=== legacy count ==='
+          mysql -N -h127.0.0.1 -uroot -ptest_password -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='legacy' AND table_name NOT LIKE '__drizzle%';"
+          echo '=== authoritative only ==='
+          mysql -N -h127.0.0.1 -uroot -ptest_password -e "SELECT table_name FROM information_schema.tables WHERE table_schema='authoritative' AND table_name NOT LIKE '__drizzle%' AND table_name NOT IN (SELECT table_name FROM information_schema.tables WHERE table_schema='legacy') ORDER BY table_name;"
+          echo '=== legacy only ==='
+          mysql -N -h127.0.0.1 -uroot -ptest_password -e "SELECT table_name FROM information_schema.tables WHERE table_schema='legacy' AND table_name NOT LIKE '__drizzle%' AND table_name NOT IN (SELECT table_name FROM information_schema.tables WHERE table_schema='authoritative') ORDER BY table_name;"
+          echo '=== common ==='
+          mysql -N -h127.0.0.1 -uroot -ptest_password -e "SELECT COUNT(*) FROM information_schema.tables a JOIN information_schema.tables l ON a.table_name=l.table_name WHERE a.table_schema='authoritative' AND l.table_schema='legacy' AND a.table_name NOT LIKE '__drizzle%';"
