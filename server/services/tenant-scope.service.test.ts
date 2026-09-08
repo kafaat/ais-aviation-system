@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { bookings } from "../../drizzle/schema";
 import {
-  tenantCondition,
+  legacyTenantCondition,
   strictTenantCondition,
+  tenantCondition,
   tenantStamp,
 } from "./tenant-scope.service";
 
@@ -13,9 +14,14 @@ describe("tenant-scope helpers", () => {
       expect(tenantCondition(bookings.tenantId, undefined)).toBeUndefined();
     });
 
-    it("returns a SQL condition when a tenant is present", () => {
-      const cond = tenantCondition(bookings.tenantId, 7);
-      expect(cond).toBeDefined();
+    it("returns a strict SQL condition when a tenant is present", () => {
+      expect(tenantCondition(bookings.tenantId, 7)).toBeDefined();
+    });
+  });
+
+  describe("legacyTenantCondition", () => {
+    it("is explicitly available only for migration compatibility", () => {
+      expect(legacyTenantCondition(bookings.tenantId, 7)).toBeDefined();
     });
   });
 
