@@ -29,7 +29,7 @@ spec:
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "3000"
-        prometheus.io/path: "/metrics"
+        prometheus.io/path: "/api/metrics"
     spec:
       serviceAccountName: ais-api
       terminationGracePeriodSeconds: 30
@@ -87,30 +87,30 @@ spec:
               cpu: "2000m"
               memory: "2Gi"
 
-          # Startup probe - allows app to warm up
+          # Startup probe - process is alive while dependencies may still warm up.
           startupProbe:
             httpGet:
-              path: /api/trpc/health.check
+              path: /api/trpc/health.live
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 5
             failureThreshold: 30
 
-          # Liveness probe - restarts unhealthy pods
+          # Liveness probe - restarts unhealthy processes without requiring admin auth.
           livenessProbe:
             httpGet:
-              path: /api/trpc/health.check
+              path: /api/trpc/health.live
               port: 3000
             initialDelaySeconds: 0
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
 
-          # Readiness probe - controls traffic routing
+          # Readiness probe - only routes traffic after dependencies are ready.
           readinessProbe:
             httpGet:
-              path: /api/trpc/health.check
+              path: /api/trpc/health.ready
               port: 3000
             initialDelaySeconds: 0
             periodSeconds: 5
