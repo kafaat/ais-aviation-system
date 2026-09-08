@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.20.18
+
+### Bug Fixes
+
+- fix(release): skip unconfigured deployment dispatch (adcd5c5)
+
+### Maintenance
+
+- chore(ci): stage release trigger fix (33aae5c)
+- chore(ci): remove release trigger helper (29f10eb)
+
+### Other Changes
+
+- test(release): guard optional deployment dispatch (dcec42f)
+- Merge pull request #117 from kafaat/fix/release-deployment-trigger-20260908 (7b3993c)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.17...v1.20.18
+
+---
+
 ## What's Changed in v1.20.17
 
 ### Bug Fixes
