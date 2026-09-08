@@ -35,7 +35,7 @@ jobs:
       - name: Generate authoritative migration
         env:
           DATABASE_URL: mysql://ais:ais@127.0.0.1:3306/ais
-        run: pnpm db:generate -- --name operational_uniqueness
+        run: pnpm exec drizzle-kit generate --name operational_uniqueness
       - name: Add regression contract
         run: |
           cat > server/services/operational-uniqueness.test.ts <<'EOF'
