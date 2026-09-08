@@ -51,14 +51,12 @@ jobs:
       - name: Check commits for release triggers
         id: check
         run: |
-          # For manual workflow dispatch, always release
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_release=true" >> $GITHUB_OUTPUT
             echo "release_type=${{ github.event.inputs.release_type }}" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Get commits since last tag
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LAST_TAG" ]; then
             COMMITS=$(git log --oneline)
@@ -66,7 +64,6 @@ jobs:
             COMMITS=$(git log ${LAST_TAG}..HEAD --oneline)
           fi
 
-          # Determine release type from conventional commits
           RELEASE_TYPE="none"
 
           if echo "$COMMITS" | grep -qE "^[a-f0-9]+ (feat|feature)(\(.+\))?!:"; then
@@ -107,23 +104,18 @@ jobs:
       - name: Calculate new version
         id: version
         run: |
-          # Get current version from package.json
           CURRENT_VERSION=$(jq -r '.version' package.json)
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
-          # If custom version is provided, use it
           if [ -n "${{ github.event.inputs.custom_version }}" ]; then
             NEW_VERSION="${{ github.event.inputs.custom_version }}"
             echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          # Parse current version
           MAJOR=$(echo $CURRENT_VERSION | cut -d. -f1)
           MINOR=$(echo $CURRENT_VERSION | cut -d. -f2)
           PATCH=$(echo $CURRENT_VERSION | cut -d. -f3 | cut -d- -f1)
-
-          # Increment based on release type
           RELEASE_TYPE="${{ needs.check-release.outputs.release_type }}"
 
           case $RELEASE_TYPE in
@@ -142,8 +134,6 @@ jobs:
           esac
 
           NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-
-          # Add prerelease suffix if requested
           if [ "${{ github.event.inputs.prerelease }}" = "true" ]; then
             NEW_VERSION="${NEW_VERSION}-rc.$(date +%Y%m%d%H%M)"
           fi
@@ -168,17 +158,13 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Get last tag
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-          # Generate changelog content
           if [ -z "$LAST_TAG" ]; then
             COMMITS=$(git log --pretty=format:"- %s (%h)" --reverse)
           else
             COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
           fi
 
-          # Categorize commits
           FEATURES=$(echo "$COMMITS" | grep -E "^- (feat|feature)" || true)
           FIXES=$(echo "$COMMITS" | grep -E "^- (fix|bugfix)" || true)
           PERF=$(echo "$COMMITS" | grep -E "^- perf" || true)
@@ -187,43 +173,18 @@ jobs:
           REFACTOR=$(echo "$COMMITS" | grep -E "^- refactor" || true)
           OTHER=$(echo "$COMMITS" | grep -vE "^- (feat|feature|fix|bugfix|perf|docs|chore|build|ci|refactor)" || true)
 
-          # Build changelog
           CHANGELOG="## What's Changed in v${{ needs.version.outputs.new_version }}\n\n"
-
-          if [ -n "$FEATURES" ]; then
-            CHANGELOG+="### Features\n$FEATURES\n\n"
-          fi
-
-          if [ -n "$FIXES" ]; then
-            CHANGELOG+="### Bug Fixes\n$FIXES\n\n"
-          fi
-
-          if [ -n "$PERF" ]; then
-            CHANGELOG+="### Performance Improvements\n$PERF\n\n"
-          fi
-
-          if [ -n "$REFACTOR" ]; then
-            CHANGELOG+="### Code Refactoring\n$REFACTOR\n\n"
-          fi
-
-          if [ -n "$DOCS" ]; then
-            CHANGELOG+="### Documentation\n$DOCS\n\n"
-          fi
-
-          if [ -n "$CHORE" ]; then
-            CHANGELOG+="### Maintenance\n$CHORE\n\n"
-          fi
-
-          if [ -n "$OTHER" ]; then
-            CHANGELOG+="### Other Changes\n$OTHER\n\n"
-          fi
-
-          # Add comparison link
+          if [ -n "$FEATURES" ]; then CHANGELOG+="### Features\n$FEATURES\n\n"; fi
+          if [ -n "$FIXES" ]; then CHANGELOG+="### Bug Fixes\n$FIXES\n\n"; fi
+          if [ -n "$PERF" ]; then CHANGELOG+="### Performance Improvements\n$PERF\n\n"; fi
+          if [ -n "$REFACTOR" ]; then CHANGELOG+="### Code Refactoring\n$REFACTOR\n\n"; fi
+          if [ -n "$DOCS" ]; then CHANGELOG+="### Documentation\n$DOCS\n\n"; fi
+          if [ -n "$CHORE" ]; then CHANGELOG+="### Maintenance\n$CHORE\n\n"; fi
+          if [ -n "$OTHER" ]; then CHANGELOG+="### Other Changes\n$OTHER\n\n"; fi
           if [ -n "$LAST_TAG" ]; then
             CHANGELOG+="\n**Full Changelog**: https://github.com/${{ github.repository }}/compare/${LAST_TAG}...v${{ needs.version.outputs.new_version }}"
           fi
 
-          # Save to output (escape for multiline)
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -265,18 +226,13 @@ jobs:
       - name: Update CHANGELOG.md
         run: |
           NEW_CHANGELOG="# Changelog\n\n${{ needs.changelog.outputs.changelog }}\n\n"
-
           if [ -f CHANGELOG.md ]; then
-            # Append new changelog to existing, after header
             EXISTING=$(tail -n +3 CHANGELOG.md)
             echo -e "$NEW_CHANGELOG\n---\n\n$EXISTING" > CHANGELOG.md
           else
             echo -e "$NEW_CHANGELOG" > CHANGELOG.md
           fi
 
-      # The generated markdown must satisfy the repo's Prettier config, otherwise
-      # every PR branched from main afterwards fails the Lint job on CHANGELOG.md
-      # (happened on v1.19.1 and v1.20.1). Use the project's own Prettier version.
       - name: Format CHANGELOG.md with Prettier
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
@@ -329,8 +285,8 @@ jobs:
 
   # =============================================================================
   # Trigger Deployment (Optional)
-  # Note: Requires a PAT with repo scope stored as DEPLOYMENT_PAT secret
-  # GITHUB_TOKEN doesn't have permission for repository-dispatch
+  # An explicit DEPLOYMENT_PAT is required. Release publication must not fail
+  # merely because optional deployment dispatch is intentionally unconfigured.
   # =============================================================================
   trigger-deployment:
     name: Trigger Deployment
@@ -338,15 +294,22 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.inputs.prerelease != 'true'
     steps:
+      - name: Detect deployment credential
+        id: deployment-credential
+        env:
+          DEPLOYMENT_PAT: ${{ secrets.DEPLOYMENT_PAT }}
+        run: |
+          if [ -n "$DEPLOYMENT_PAT" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Automatic deployment trigger is not configured; release publication remains successful."
+          fi
+
       - name: Trigger deployment workflow
+        if: steps.deployment-credential.outputs.configured == 'true'
         uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # v3
         with:
-          # Use DEPLOYMENT_PAT if available, fall back to GITHUB_TOKEN
-          token: ${{ secrets.DEPLOYMENT_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.DEPLOYMENT_PAT }}
           event-type: release-deployment
           client-payload: '{"version": "${{ needs.version.outputs.new_version }}", "ref": "v${{ needs.version.outputs.new_version }}"}'
-
-      - name: Deployment trigger note
-        if: failure()
-        run: |
-          echo "::notice::Deployment trigger skipped. To enable automatic deployment triggers, add a PAT with repo scope as DEPLOYMENT_PAT secret."
