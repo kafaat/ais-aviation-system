@@ -28,11 +28,24 @@ for target in runner migrator; do
 done
 
 # Check the installed CLI, not a tool fetched by npx on demand.
+# The authoritative Drizzle root is ./drizzle; PR #115 deliberately archives the
+# stale parallel drizzle/migrations tree under drizzle/legacy-migrations.
 docker run --rm --network none --entrypoint sh ais-build-check:migrator -ec '
   expected="$(node -p '\''require("./package.json").packageManager.split("@")[1]'\'')"
-  test "$(pnpm --version)" = "$expected"
-  test "$(pnpm config get shamefully-hoist)" = true
-  test -s drizzle/migrations/meta/_journal.json
+  actual="$(pnpm --version)"
+  if [ "$actual" != "$expected" ]; then
+    echo "FAIL: migrator pnpm version $actual != pinned $expected" >&2
+    exit 1
+  fi
+  hoist="$(pnpm config get shamefully-hoist)"
+  if [ "$hoist" != true ]; then
+    echo "FAIL: migrator requires shamefully-hoist=true, got $hoist" >&2
+    exit 1
+  fi
+  if [ ! -s drizzle/meta/_journal.json ]; then
+    echo "FAIL: authoritative migration journal missing at drizzle/meta/_journal.json" >&2
+    exit 1
+  fi
   ./node_modules/.bin/drizzle-kit --version
 ' 2>&1 | tee "$evidence_dir/migrator-cli.log"
 
