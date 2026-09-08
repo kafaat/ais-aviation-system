@@ -402,7 +402,6 @@ jobs:
           BUILT_IN_FORGE_API_KEY: test-forge-api-key
           AUTH_SERVICE_URL: http://localhost:8000
         run: |
-          # Quick server smoke test: start, wait, check it's alive
           node dist/index.js > /tmp/server.log 2>&1 &
           SERVER_PID=$!
           sleep 10
@@ -624,7 +623,7 @@ jobs:
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}
           format: "table"
-          exit-code: "0"
+          exit-code: "1"
           severity: "CRITICAL,HIGH"
 
   # =============================================================================
@@ -792,8 +791,6 @@ jobs:
     environment:
       name: production
       url: ${{ vars.PRODUCTION_URL }}
-    # Exposed so downstream jobs can tell "deployed" apart from "skipped
-    # because no cluster is configured" (both end in job success).
     outputs:
       deployed: ${{ steps.kube-config.outputs.configured }}
     env:
@@ -892,11 +889,7 @@ jobs:
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-production"
           export REPLICAS="3"
-
-          # Deploy new version
           envsubst < k8s/base/deployment.yaml | kubectl apply -f -
-
-          # Wait for new pods to be ready
           kubectl rollout status deployment/ais-api \
             --namespace=ais-production \
             --timeout=300s
@@ -905,7 +898,6 @@ jobs:
         if: steps.kube-config.outputs.configured == 'true'
         id: health-check
         run: |
-          # Get new pod IPs and verify health
           NEW_PODS=$(kubectl get pods -n ais-production -l app=ais-api -o jsonpath='{.items[*].status.podIP}')
           for POD_IP in $NEW_PODS; do
             echo "Checking health of pod at $POD_IP..."
@@ -913,7 +905,7 @@ jobs:
               --rm -i --restart=Never \
               --image=curlimages/curl:latest \
               --namespace=ais-production \
-              -- curl -sf http://$POD_IP:3000/api/trpc/health.check || exit 1
+              -- curl -sf http://$POD_IP:3000/api/trpc/health.live || exit 1
           done
           echo "All health checks passed"
 
@@ -940,17 +932,14 @@ jobs:
             chmod +x ./scripts/e2e-critical.sh
             ./scripts/e2e-critical.sh ${{ vars.PRODUCTION_URL }}
           else
-            echo "E2E critical tests script not found, skipping..."
+            echo "::error::E2E critical tests script not found"
+            exit 1
           fi
 
-      # Traffic is already switched by this point, so every post-switch
-      # verification step must be able to trigger the rollback. E2E is included
-      # since it stopped being continue-on-error.
       - name: Rollback on failure
         if: failure() && steps.kube-config.outputs.configured == 'true' && (steps.smoke-tests.outcome == 'failure' || steps.health-check.outcome == 'failure' || steps.e2e-tests.outcome == 'failure')
         run: |
           echo "Deployment verification failed, initiating rollback..."
-
           if [ "${{ steps.save-current.outputs.current_image }}" != "none" ]; then
             kubectl set image deployment/ais-api \
               ais-api=${{ steps.save-current.outputs.current_image }} \
@@ -963,7 +952,6 @@ jobs:
             kubectl rollout undo deployment/ais-api --namespace=ais-production
             kubectl rollout status deployment/ais-api --namespace=ais-production --timeout=180s
           fi
-
           exit 1
 
       - name: Create deployment record
@@ -1024,10 +1012,6 @@ jobs:
     name: Post-Deployment Monitoring
     runs-on: ubuntu-latest
     needs: deploy-production
-    # Only monitor when a deployment actually happened. When no
-    # PRODUCTION_KUBECONFIG/PRODUCTION_URL is configured the deploy job
-    # succeeds with every step skipped, and probing an empty URL turned
-    # every push to main red (status "000").
     if: >-
       success() &&
       needs.deploy-production.outputs.deployed == 'true' &&
@@ -1041,31 +1025,24 @@ jobs:
           PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
         run: |
           echo "Monitoring deployment for anomalies..."
-
           START_TIME=$(date +%s)
-          DURATION=300  # 5 minutes
+          DURATION=300
           CHECK_INTERVAL=30
           FAILURES=0
-
           while [ $(($(date +%s) - START_TIME)) -lt $DURATION ]; do
-            # Public liveness probe (health.check is admin-only and would 401).
             HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${PRODUCTION_URL%/}/api/rest/health/live" || echo "000")
-
             if [ "$HTTP_STATUS" != "200" ]; then
               echo "Health check failed with status: $HTTP_STATUS"
               FAILURES=$((FAILURES + 1))
             else
               echo "Health check passed at $(date)"
             fi
-
             if [ "${FAILURES}" -gt 3 ]; then
               echo "Multiple health check failures detected!"
               exit 1
             fi
-
             sleep $CHECK_INTERVAL
           done
-
           echo "Post-deployment monitoring completed successfully"
 
       - name: Trigger synthetic tests
@@ -1108,36 +1085,24 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           IMAGE_TAG: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}
         run: |
-          # Copy docker-compose file
           scp docker-compose.production.yml ${DEPLOY_USER}@${DEPLOY_HOST}:~/ais-aviation/
-
-          # Execute deployment
           ssh ${DEPLOY_USER}@${DEPLOY_HOST} << ENDSSH
             cd ~/ais-aviation
-
-            # Pull latest images
             docker pull ${IMAGE_TAG}
-
-            # Update image tag in environment
             export IMAGE_TAG=${IMAGE_TAG}
-
-            # Rolling update with zero downtime
             docker-compose -f docker-compose.production.yml up -d --no-deps api1
             sleep 15
             docker-compose -f docker-compose.production.yml up -d --no-deps api2
             sleep 15
             docker-compose -f docker-compose.production.yml up -d --no-deps api3
-
-            # Cleanup old images
             docker image prune -f
-
             echo "Deployment completed"
           ENDSSH
 
       - name: Verify deployment
         run: |
           for i in {1..10}; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }}/api/trpc/health.check)
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }}/api/trpc/health.live)
             if [ "$HTTP_STATUS" == "200" ]; then
               echo "Deployment verified successfully"
               exit 0
