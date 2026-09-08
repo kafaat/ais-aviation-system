@@ -330,7 +330,7 @@ export const passengers = mysqlTable(
   table => ({
     bookingIdIdx: index("booking_id_idx").on(table.bookingId),
     // Index for ticket number lookups (e-ticket verification)
-    ticketNumberIdx: index("passengers_ticket_number_idx").on(
+    ticketNumberIdx: uniqueIndex("passengers_ticket_number_uq").on(
       table.ticketNumber
     ),
     // Index for passport lookups (identity verification)
@@ -5167,7 +5167,7 @@ export const seatInventory = mysqlTable(
   table => ({
     seatInvFlightIdx: index("seat_inv_flight_idx").on(table.flightId),
     seatInvSeatMapIdx: index("seat_inv_seat_map_idx").on(table.seatMapId),
-    seatInvSeatNumberIdx: index("seat_inv_seat_number_idx").on(
+    seatInvSeatNumberIdx: uniqueIndex("seat_inv_flight_seat_uq").on(
       table.flightId,
       table.seatNumber
     ),
