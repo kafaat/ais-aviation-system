@@ -31,11 +31,11 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.x"
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Replay committed migrations on an empty database
@@ -48,15 +48,73 @@ jobs:
         run: |
           pnpm exec drizzle-kit check
 
+  previous-release-upgrade:
+    name: Previous Release Upgrade Replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: ais_upgrade_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - name: Resolve previous release
+        id: previous
+        shell: bash
+        run: |
+          set -euo pipefail
+          PREVIOUS_TAG="$(git tag --merged HEAD --sort=-version:refname | head -n 1)"
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "No previous release tag is reachable from this candidate" >&2
+            exit 1
+          fi
+          echo "tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "Testing upgrade from $PREVIOUS_TAG to $GITHUB_SHA"
+      - name: Materialize previous release
+        run: git worktree add --detach /tmp/ais-previous-release "${{ steps.previous.outputs.tag }}"
+      - name: Install previous-release dependencies
+        working-directory: /tmp/ais-previous-release
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build database at previous release
+        working-directory: /tmp/ais-previous-release
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
+        run: pnpm run db:migrate
+      - name: Install current dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Upgrade previous-release database with current migrations
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
+        run: pnpm run db:migrate
+      - name: Verify upgraded database matches current schema
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
+        run: pnpm exec drizzle-kit check
+
   dependency-audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22.x"
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Reject high or critical dependency vulnerabilities
@@ -66,7 +124,7 @@ jobs:
     name: Docker Production Contract
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
       - name: Build production and migrator images
         run: |
           docker build -f Dockerfile.prod --target runner -t ais-production-gate:runner .
