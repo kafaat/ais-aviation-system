@@ -26,6 +26,18 @@ describe("CI workflow hardening", () => {
     expect(violations).toEqual([]);
   });
 
+  it("does not fall back to GITHUB_TOKEN for optional release deployment dispatch", () => {
+    const text = readFileSync(join(workflowDir, "release.yml"), "utf8");
+    expect(text).not.toContain(
+      "secrets.DEPLOYMENT_PAT || secrets.GITHUB_TOKEN"
+    );
+    expect(text).toContain("DEPLOYMENT_PAT: ${{ secrets.DEPLOYMENT_PAT }}");
+    expect(text).toContain(
+      "if: steps.deployment-credential.outputs.configured == 'true'"
+    );
+    expect(text).toContain("token: ${{ secrets.DEPLOYMENT_PAT }}");
+  });
+
   it("does not allow literal fail-open jobs or high-severity audit bypasses", () => {
     const violations: string[] = [];
     for (const name of workflowFiles) {
