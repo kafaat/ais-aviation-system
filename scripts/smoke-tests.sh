@@ -157,8 +157,8 @@ run_smoke_tests() {
     echo "=============================================="
     echo ""
 
-    # Wait for service to be available
-    if ! wait_for_service "$BASE_URL/api/trpc/health.check"; then
+    # Wait for the process to be alive through the public liveness contract.
+    if ! wait_for_service "$BASE_URL/api/trpc/health.live"; then
         log_error "Service not available. Aborting smoke tests."
         exit 1
     fi
@@ -167,36 +167,36 @@ run_smoke_tests() {
     echo "--- Health & Infrastructure Tests ---"
     echo ""
 
-    # Health check endpoint
-    test_endpoint "Health Check" \
-        "$BASE_URL/api/trpc/health.check" \
+    # Public liveness endpoint
+    test_endpoint "Liveness Check" \
+        "$BASE_URL/api/trpc/health.live" \
         "200"
 
-    # Health check response content
-    test_response_contains "Health Check Response" \
-        "$BASE_URL/api/trpc/health.check" \
+    test_response_contains "Liveness Response" \
+        "$BASE_URL/api/trpc/health.live" \
         "result"
 
-    # Health check response time
-    test_response_time "Health Check Response Time" \
-        "$BASE_URL/api/trpc/health.check" \
+    test_response_time "Liveness Response Time" \
+        "$BASE_URL/api/trpc/health.live" \
         "1000"
+
+    # Public readiness endpoint validates dependencies without admin credentials.
+    test_endpoint "Readiness Check" \
+        "$BASE_URL/api/trpc/health.ready" \
+        "200"
 
     echo ""
     echo "--- API Endpoint Tests ---"
     echo ""
 
-    # Root/Frontend endpoint
     test_endpoint "Frontend Root" \
         "$BASE_URL/" \
         "200"
 
-    # API is mounted
     test_endpoint "tRPC API Root" \
         "$BASE_URL/api/trpc" \
         "200"
 
-    # Flights search endpoint (public)
     test_endpoint "Flights API Available" \
         "$BASE_URL/api/trpc/flights.search?input=%7B%22json%22%3A%7B%7D%7D" \
         "200"
@@ -205,12 +205,10 @@ run_smoke_tests() {
     echo "--- Security Tests ---"
     echo ""
 
-    # Protected endpoint returns 401 without auth
     test_endpoint "Auth Protection (Bookings)" \
         "$BASE_URL/api/trpc/bookings.list" \
         "401"
 
-    # Admin endpoint returns 401/403 without auth
     test_endpoint "Admin Protection" \
         "$BASE_URL/api/trpc/admin.users" \
         "401"
@@ -219,21 +217,18 @@ run_smoke_tests() {
     echo "--- Performance Tests ---"
     echo ""
 
-    # Response time for main page
     test_response_time "Frontend Load Time" \
         "$BASE_URL/" \
         "3000"
 
-    # API response time
     test_response_time "API Response Time" \
-        "$BASE_URL/api/trpc/health.check" \
+        "$BASE_URL/api/trpc/health.live" \
         "500"
 
     echo ""
     echo "--- Static Assets Tests ---"
     echo ""
 
-    # Check if static assets are served (with proper cache headers)
     test_endpoint "Static Assets Available" \
         "$BASE_URL/assets/" \
         "200"
@@ -263,15 +258,11 @@ run_smoke_tests() {
 # Main
 # =============================================================================
 
-# Validate BASE_URL
 if [ -z "$BASE_URL" ]; then
     log_error "Usage: $0 <base_url>"
     log_error "Example: $0 https://staging.ais-aviation.example.com"
     exit 1
 fi
 
-# Remove trailing slash from URL
 BASE_URL="${BASE_URL%/}"
-
-# Run the tests
 run_smoke_tests
