@@ -64,19 +64,21 @@ function assertTenantMatch(
  */
 export async function createBooking(input: CreateBookingInput) {
   try {
-    if (input.tenantId != null) {
-      const database = await getDb();
-      if (!database) throw new Error("Database not available");
-      const [flightTenant] = await database
-        .select({ tenantId: flights.tenantId })
-        .from(flights)
-        .where(eq(flights.id, input.flightId))
-        .limit(1);
+    const database = await getDb();
+    if (!database) throw new Error("Database not available");
+    const [flightTenant] = await database
+      .select({ tenantId: flights.tenantId })
+      .from(flights)
+      .where(eq(flights.id, input.flightId))
+      .limit(1);
 
-      if (!flightTenant || flightTenant.tenantId !== input.tenantId) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-      }
+    if (!flightTenant || flightTenant.tenantId == null) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
     }
+    if (input.tenantId != null && flightTenant.tenantId !== input.tenantId) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    }
+    const effectiveTenantId = flightTenant.tenantId;
 
     const flightForValidation = await db.getFlightById(input.flightId);
     if (flightForValidation) {
@@ -153,7 +155,7 @@ export async function createBooking(input: CreateBookingInput) {
     const pnr = db.generateBookingReference();
 
     const bookingResult = await db.createBooking({
-      ...(input.tenantId == null ? {} : { tenantId: input.tenantId }),
+      tenantId: effectiveTenantId,
       userId: input.userId,
       flightId: input.flightId,
       bookingReference,
@@ -175,7 +177,7 @@ export async function createBooking(input: CreateBookingInput) {
     }
 
     const passengersData = input.passengers.map(p => ({
-      ...(input.tenantId == null ? {} : { tenantId: input.tenantId }),
+      tenantId: effectiveTenantId,
       bookingId,
       type: p.type,
       title: p.title,

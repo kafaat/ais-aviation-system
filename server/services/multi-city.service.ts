@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import * as db from "../db";
 import {
   bookingSegments,
@@ -287,6 +287,26 @@ export async function createMultiCityBooking(
   }
 
   try {
+    const segmentFlightIds = [
+      ...new Set(input.segments.map(segment => segment.flightId)),
+    ];
+    const tenantRows = await database
+      .select({ id: flights.id, tenantId: flights.tenantId })
+      .from(flights)
+      .where(inArray(flights.id, segmentFlightIds));
+    const tenantIds = new Set(tenantRows.map(row => row.tenantId));
+    if (
+      tenantRows.length !== segmentFlightIds.length ||
+      tenantIds.size !== 1 ||
+      tenantRows[0]?.tenantId == null
+    ) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "All itinerary segments must belong to the same tenant",
+      });
+    }
+    const tenantId = tenantRows[0].tenantId;
+
     // Validate and calculate pricing (before transaction to avoid holding locks)
     const priceResult = await calculateMultiCityPrice(
       input.segments.map(s => ({
@@ -306,6 +326,7 @@ export async function createMultiCityBooking(
       // Create the main booking record
       // For multi-city, we use the first segment's flight as the primary flightId
       const bookingResult = await tx.insert(bookings).values({
+        tenantId,
         userId: input.userId,
         flightId: input.segments[0].flightId, // Primary flight (first segment)
         bookingReference,
@@ -353,6 +374,7 @@ export async function createMultiCityBooking(
 
       // Create passengers within the same transaction
       const passengersData = input.passengers.map(p => ({
+        tenantId,
         bookingId,
         type: p.type,
         title: p.title,

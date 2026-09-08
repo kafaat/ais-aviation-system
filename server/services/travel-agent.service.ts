@@ -484,7 +484,7 @@ export async function createAgentBooking(
       .from(flights)
       .where(eq(flights.id, input.flightId));
 
-    if (!flight) {
+    if (!flight || flight.tenantId == null) {
       throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
     }
 
@@ -532,6 +532,7 @@ export async function createAgentBooking(
     }
 
     const bookingResult = await tx.insert(bookings).values({
+      tenantId: flight.tenantId,
       userId: 0,
       flightId: input.flightId,
       bookingReference,

@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, and, gte, lte, desc, asc, lt, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, lt, sql, inArray } from "drizzle-orm";
 import { getDb, generateBookingReference } from "../db";
 import { canTransitionTo, type NdcOrderStatus } from "./ndc-order-state";
 import { recordEvent } from "./outbox.service";
@@ -946,10 +946,37 @@ export async function createOrder(
 
   // Determine userId (from params or default to system user 0)
   const userId = params.userId ?? 0;
+  const offerSegments = safeParseJson<NdcSegment[]>(offer.segments, []);
+  const offerFlightIds = [
+    ...new Set(offerSegments.map(segment => segment.flightId)),
+  ];
+  if (offerFlightIds.length === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "NDC offer has no flights",
+    });
+  }
+  const tenantRows = await db
+    .select({ id: flights.id, tenantId: flights.tenantId })
+    .from(flights)
+    .where(inArray(flights.id, offerFlightIds));
+  const tenantIds = new Set(tenantRows.map(row => row.tenantId));
+  if (
+    tenantRows.length !== offerFlightIds.length ||
+    tenantIds.size !== 1 ||
+    tenantRows[0]?.tenantId == null
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "NDC offer flights must belong to one tenant",
+    });
+  }
+  const tenantId = tenantRows[0].tenantId;
 
   const [bookingResult] = await db.insert(bookings).values({
+    tenantId,
     userId,
-    flightId: safeParseJson<NdcSegment[]>(offer.segments, [])[0]?.flightId ?? 0,
+    flightId: offerFlightIds[0],
     bookingReference,
     pnr,
     status: "pending",
@@ -971,6 +998,7 @@ export async function createOrder(
 
   // Create passenger records in the bookings system
   const passengerRecords = params.passengers.map(p => ({
+    tenantId,
     bookingId,
     type: p.type,
     title: p.title,

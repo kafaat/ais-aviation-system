@@ -213,8 +213,8 @@ export const bookings = mysqlTable(
   "bookings",
   {
     id: int("id").autoincrement().primaryKey(),
-    // Tenant (airline) this booking belongs to. Nullable during migration.
-    tenantId: int("tenantId"),
+    // Tenant (airline) this booking belongs to. Operational rows are always tenant-bound.
+    tenantId: int("tenantId").notNull(),
     userId: int("userId").notNull(),
     flightId: int("flightId").notNull(),
     bookingReference: varchar("bookingReference", { length: 6 })
@@ -311,8 +311,8 @@ export const passengers = mysqlTable(
   "passengers",
   {
     id: int("id").autoincrement().primaryKey(),
-    // Tenant (airline) this passenger belongs to. Nullable during migration.
-    tenantId: int("tenantId"),
+    // Tenant (airline) this passenger belongs to. Operational rows are always tenant-bound.
+    tenantId: int("tenantId").notNull(),
     bookingId: int("bookingId").notNull(),
     type: mysqlEnum("type", ["adult", "child", "infant"])
       .default("adult")

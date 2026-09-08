@@ -36,6 +36,7 @@ export interface RebookAncillary {
 }
 
 export interface RebookData {
+  tenantId: number;
   originalBookingId: number;
   originalBookingRef: string;
   cabinClass: "economy" | "business";
@@ -71,6 +72,7 @@ export async function getRebookData(
   const bookingResult = await database
     .select({
       id: bookings.id,
+      tenantId: bookings.tenantId,
       bookingReference: bookings.bookingReference,
       userId: bookings.userId,
       flightId: bookings.flightId,
@@ -168,7 +170,12 @@ export async function getRebookData(
       )
     );
 
+  if (booking.tenantId == null) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  }
+
   return {
+    tenantId: booking.tenantId,
     originalBookingId: booking.id,
     originalBookingRef: booking.bookingReference,
     cabinClass: booking.cabinClass as "economy" | "business",
@@ -288,7 +295,7 @@ export async function quickRebook(
     .where(and(eq(flights.id, newFlightId), eq(flights.status, "scheduled")))
     .limit(1);
 
-  if (!newFlight) {
+  if (!newFlight || newFlight.tenantId !== rebookData.tenantId) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Selected flight not found or not available",
@@ -327,6 +334,7 @@ export async function quickRebook(
   // Create new booking, passengers, ancillaries, and update seats atomically
   const newBookingId = await database.transaction(async tx => {
     const bookingResult = await tx.insert(bookings).values({
+      tenantId: rebookData.tenantId,
       userId,
       flightId: newFlightId,
       bookingReference,
@@ -343,6 +351,7 @@ export async function quickRebook(
     // Copy passengers to new booking
     for (const passenger of rebookData.passengers) {
       await tx.insert(passengers).values({
+        tenantId: rebookData.tenantId,
         bookingId: insertedBookingId,
         type: passenger.type,
         title: passenger.title,
