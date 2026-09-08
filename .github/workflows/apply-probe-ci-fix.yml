@@ -1,0 +1,48 @@
+name: Apply probe CI fix
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'fix/production-probe-topology-20260908'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.head_ref }}
+      - name: Apply exact probe replacements
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/ci-cd.yml')
+          text = path.read_text()
+
+          expected_admin_probes = text.count('/api/trpc/health.check')
+          if expected_admin_probes != 2:
+              raise SystemExit(f'expected exactly 2 CI health.check probes, found {expected_admin_probes}')
+
+          text = text.replace('/api/trpc/health.check', '/api/trpc/health.ready')
+          text = text.replace('/api/rest/health/live', '/api/trpc/health.live')
+          path.write_text(text)
+          PY
+
+          grep -q '/api/trpc/health.ready' .github/workflows/ci-cd.yml
+          grep -q '/api/trpc/health.live' .github/workflows/ci-cd.yml
+          ! grep -q '/api/trpc/health.check' .github/workflows/ci-cd.yml
+      - name: Commit correction and remove helper
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-probe-ci-fix.yml
+          git add .github/workflows/ci-cd.yml
+          git commit -m "fix(ci): align deployment health probes"
+          git push origin HEAD:${{ github.head_ref }}

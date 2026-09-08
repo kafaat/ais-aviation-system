@@ -133,13 +133,24 @@ jobs:
         run: |
           docker run --rm --network none --entrypoint sh ais-production-gate:migrator -ec \
             'test -x ./node_modules/.bin/drizzle-kit && ./node_modules/.bin/drizzle-kit --version >/dev/null'
-      - name: Verify all production healthchecks use the public liveness procedure
+      - name: Verify production probe topology
         run: |
+          set -euo pipefail
+
           healthcheck="$(docker inspect --format '{{json .Config.Healthcheck.Test}}' ais-production-gate:runner)"
           echo "$healthcheck"
           grep -q '/api/trpc/health.live' <<<"$healthcheck"
 
-          for file in Dockerfile.prod docker-compose.prod.yml docker-compose.production.yml; do
+          probe_files=(
+            Dockerfile.prod
+            docker-compose.prod.yml
+            docker-compose.production.yml
+            k8s/base/deployment.yaml
+            scripts/smoke-tests.sh
+            scripts/e2e-critical.sh
+            .github/workflows/ci-cd.yml
+          )
+          for file in "${probe_files[@]}"; do
             if grep -q '/api/trpc/health.check' "$file"; then
               echo "admin-only health.check must not be used by production probes: $file" >&2
               exit 1
@@ -148,3 +159,17 @@ jobs:
 
           grep -q '/api/trpc/health.live' docker-compose.prod.yml
           test "$(grep -c '/api/trpc/health.live' docker-compose.production.yml)" -eq 3
+
+          test "$(grep -c 'path: /api/trpc/health.live' k8s/base/deployment.yaml)" -eq 2
+          test "$(grep -c 'path: /api/trpc/health.ready' k8s/base/deployment.yaml)" -eq 1
+          grep -q 'prometheus.io/path: "/api/metrics"' k8s/base/deployment.yaml
+
+          grep -q '/api/trpc/health.live' scripts/smoke-tests.sh
+          grep -q '/api/trpc/health.ready' scripts/smoke-tests.sh
+          grep -q '/api/trpc/health.live' scripts/e2e-critical.sh
+          grep -q '/api/trpc/health.ready' scripts/e2e-critical.sh
+
+          test "$(grep -c '/api/trpc/health.ready' .github/workflows/ci-cd.yml)" -ge 2
+          grep -q '/api/trpc/health.live' .github/workflows/ci-cd.yml
+
+          bash -n scripts/smoke-tests.sh scripts/e2e-critical.sh
