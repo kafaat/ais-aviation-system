@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.20.21
+
+### Bug Fixes
+
+- fix(pwa): keep one service worker authority (3a4aa9f)
+- fix(pwa): reference shipped manifest assets (e6ca5fe)
+
+### Other Changes
+
+- test(pwa): guard single service worker authority (802ad86)
+- Merge pull request #123 from kafaat/fix/pwa-single-authority-20260909 (7c6945c)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.20...v1.20.21
+
+---
+
 ## What's Changed in v1.20.20
 
 ### Bug Fixes
