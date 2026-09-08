@@ -1,5 +1,26 @@
 # Changelog
 
+## What's Changed in v1.20.16
+
+### Bug Fixes
+
+- fix(tenancy): make tenant query scope strict by default (8cf5ec3)
+
+### Maintenance
+
+- ci(migrations): test previous-release upgrades (f8b60c8)
+- ci: fail closed and pin external actions (#109) (97cf0ae)
+
+### Other Changes
+
+- Merge pull request #108 from kafaat/fix/migration-upgrade-parity-20260908 (4cdb6b4)
+- test(tenancy): cover strict default and legacy compatibility (b646734)
+- Merge pull request #110 from kafaat/fix/tenant-strict-default-20260908 (719667f)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.15...v1.20.16
+
+---
+
 ## What's Changed in v1.20.15
 
 ### Bug Fixes
