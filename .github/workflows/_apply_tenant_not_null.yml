@@ -41,6 +41,8 @@ jobs:
           t.write_text('''import { readFileSync } from "node:fs";\nimport { describe, expect, it } from "vitest";\n\nconst schema = readFileSync("drizzle/schema.ts", "utf8");\n\ndescribe("operational tenant nullability contract", () => {\n  it("requires bookings and passengers to carry a tenant id", () => {\n    const bookingBlock = schema.slice(\n      schema.indexOf('export const bookings = mysqlTable('),\n      schema.indexOf('export type Booking =')\n    );\n    const passengerBlock = schema.slice(\n      schema.indexOf('export const passengers = mysqlTable('),\n      schema.indexOf('export type Passenger =')\n    );\n\n    expect(bookingBlock).toContain('tenantId: int("tenantId").notNull()');\n    expect(passengerBlock).toContain('tenantId: int("tenantId").notNull()');\n  });\n});\n''')
           PY
       - name: Generate Drizzle migration metadata
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_generate_only
         run: pnpm run db:generate
       - name: Format and verify
         run: |
