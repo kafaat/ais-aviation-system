@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
+// Every workflow is scanned. There is deliberately no exemption list: a name
+// the guard skips would be a way to reintroduce an unpinned action or a
+// fail-open job without the test noticing.
 const workflowDir = join(process.cwd(), ".github", "workflows");
-const workflowFiles = readdirSync(workflowDir).filter(
-  name => /\.ya?ml$/.test(name) && name !== "apply-ci-hardening.yml"
+const workflowFiles = readdirSync(workflowDir).filter(name =>
+  /\.ya?ml$/.test(name)
 );
 
 describe("CI workflow hardening", () => {

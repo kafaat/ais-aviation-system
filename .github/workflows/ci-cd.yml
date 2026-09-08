@@ -943,8 +943,11 @@ jobs:
             echo "E2E critical tests script not found, skipping..."
           fi
 
+      # Traffic is already switched by this point, so every post-switch
+      # verification step must be able to trigger the rollback. E2E is included
+      # since it stopped being continue-on-error.
       - name: Rollback on failure
-        if: failure() && steps.kube-config.outputs.configured == 'true' && (steps.smoke-tests.outcome == 'failure' || steps.health-check.outcome == 'failure')
+        if: failure() && steps.kube-config.outputs.configured == 'true' && (steps.smoke-tests.outcome == 'failure' || steps.health-check.outcome == 'failure' || steps.e2e-tests.outcome == 'failure')
         run: |
           echo "Deployment verification failed, initiating rollback..."
 
