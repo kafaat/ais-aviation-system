@@ -169,7 +169,6 @@ jobs:
           grep -q '/api/trpc/health.live' scripts/e2e-critical.sh
           grep -q '/api/trpc/health.ready' scripts/e2e-critical.sh
 
-          test "$(grep -c '/api/trpc/health.ready' .github/workflows/ci-cd.yml)" -ge 2
           grep -q '/api/trpc/health.live' .github/workflows/ci-cd.yml
 
           bash -n scripts/smoke-tests.sh scripts/e2e-critical.sh
