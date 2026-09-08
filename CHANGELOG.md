@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.20.15
+
+### Bug Fixes
+
+- fix(inventory): make waitlist offers atomic (5dace59)
+
+### Maintenance
+
+- ci: apply waitlist inventory atomicity (2aa2452)
+- chore(ci): remove temporary waitlist applicator (490eba4)
+
+### Other Changes
+
+- Merge pull request #107 from kafaat/fix/waitlist-inventory-atomicity-20260908 (51c8323)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.14...v1.20.15
+
+---
+
 ## What's Changed in v1.20.14
 
 ### Bug Fixes

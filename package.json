@@ -1,6 +1,6 @@
 {
   "name": "ais-web-app",
-  "version": "1.20.14",
+  "version": "1.20.15",
   "type": "module",
   "license": "MIT",
   "scripts": {
