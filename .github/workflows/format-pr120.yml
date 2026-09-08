@@ -1,0 +1,33 @@
+name: Format PR120
+
+on:
+  push:
+    branches:
+      - fix/booking-tenant-boundary-20260908
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/booking-tenant-boundary-20260908
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.x
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - run: pnpm install --frozen-lockfile
+      - name: Format changed files
+        run: pnpm exec prettier --write server/bookings.tenant-boundary.test.ts server/routers/bookings.ts
+      - name: Commit formatting and remove helper
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/format-pr120.yml
+          git add server/bookings.tenant-boundary.test.ts server/routers/bookings.ts
+          git commit -m 'style(tenancy): format booking boundary slice'
+          git push origin HEAD:fix/booking-tenant-boundary-20260908
