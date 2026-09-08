@@ -38,7 +38,9 @@ jobs:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/authoritative
         run: pnpm run db:migrate
       - name: Apply legacy production baseline
-        run: mysql -h127.0.0.1 -uroot -ptest_password legacy < drizzle/legacy-migrations/0000_daily_mauler.sql
+        run: |
+          sed '/^--> statement-breakpoint$/d' drizzle/legacy-migrations/0000_daily_mauler.sql > /tmp/legacy.sql
+          mysql -h127.0.0.1 -uroot -ptest_password legacy < /tmp/legacy.sql
       - name: Report database states
         run: |
           echo '=== authoritative count ==='
