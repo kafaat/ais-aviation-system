@@ -1,0 +1,88 @@
+name: Apply CI hardening
+
+on:
+  push:
+    branches:
+      - fix/ci-fail-closed-action-pinning-20260908
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Harden workflows and add regression guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          workflow_dir = Path('.github/workflows')
+          helper_name = 'apply-ci-hardening.yml'
+
+          def resolve_action(action: str, ref: str) -> str:
+              if re.fullmatch(r'[0-9a-fA-F]{40}', ref):
+                  return ref.lower()
+              parts = action.split('/')
+              if len(parts) < 2:
+                  raise SystemExit(f'Unsupported external action: {action}@{ref}')
+              repo = '/'.join(parts[:2])
+              remote = f'https://github.com/{repo}.git'
+              specs = [f'refs/tags/{ref}', f'refs/tags/{ref}^{{}}', f'refs/heads/{ref}']
+              output = subprocess.check_output(['git', 'ls-remote', remote, *specs], text=True)
+              rows = [line.split('\t', 1) for line in output.splitlines() if '\t' in line]
+              peeled = next((sha for sha, name in rows if name.endswith('^{}')), None)
+              head = next((sha for sha, name in rows if name == f'refs/heads/{ref}'), None)
+              tag = next((sha for sha, name in rows if name == f'refs/tags/{ref}'), None)
+              sha = peeled or head or tag
+              if not sha or not re.fullmatch(r'[0-9a-fA-F]{40}', sha):
+                  raise SystemExit(f'Could not resolve {action}@{ref} to a commit SHA')
+              return sha.lower()
+
+          uses_re = re.compile(r'^(?P<indent>\s*uses:\s*)(?P<action>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_./-]+)?)@(?P<ref>[^\s#]+)(?P<tail>.*)$', re.M)
+
+          for path in sorted(workflow_dir.glob('*.y*ml')):
+              if path.name == helper_name:
+                  continue
+              text = path.read_text()
+              text = text.replace('run: pnpm audit --audit-level=high || true', 'run: pnpm audit --audit-level=high')
+              text = re.sub(r'^\s*continue-on-error:\s*true(?:\s*#.*)?\n', '', text, flags=re.M)
+
+              def pin(match: re.Match[str]) -> str:
+                  action = match.group('action')
+                  ref = match.group('ref')
+                  sha = resolve_action(action, ref)
+                  tail = match.group('tail')
+                  if re.fullmatch(r'[0-9a-fA-F]{40}', ref):
+                      return match.group(0)
+                  # Keep the human-readable version/ref as an audit comment.
+                  comment = f' # {ref}'
+                  if tail.strip().startswith('#'):
+                      comment = ' ' + tail.strip()
+                  return f"{match.group('indent')}{action}@{sha}{comment}"
+
+              text = uses_re.sub(pin, text)
+              path.write_text(text)
+
+          guard = Path('server/__tests__/ci-workflow-hardening.test.ts')
+          guard.write_text('''import { describe, expect, it } from "vitest";\nimport { readFileSync, readdirSync } from "node:fs";\nimport { join } from "node:path";\n\nconst workflowDir = join(process.cwd(), ".github", "workflows");\nconst workflowFiles = readdirSync(workflowDir).filter(name => /\\.ya?ml$/.test(name));\n\ndescribe("CI workflow hardening", () => {\n  it("pins every external GitHub Action to an immutable commit SHA", () => {\n    const violations: string[] = [];\n    for (const name of workflowFiles) {\n      const text = readFileSync(join(workflowDir, name), "utf8");\n      for (const match of text.matchAll(/^\\s*uses:\\s*([^\\s#]+)@([^\\s#]+)/gm)) {\n        const action = match[1];\n        const ref = match[2];\n        if (action.startsWith("./")) continue;\n        if (!/^[0-9a-f]{40}$/i.test(ref)) violations.push(`${name}: ${action}@${ref}`);\n      }\n    }\n    expect(violations).toEqual([]);\n  });\n\n  it("does not allow literal fail-open jobs or high-severity audit bypasses", () => {\n    const violations: string[] = [];\n    for (const name of workflowFiles) {\n      const text = readFileSync(join(workflowDir, name), "utf8");\n      if (/^\\s*continue-on-error:\\s*true\\b/m.test(text)) violations.push(`${name}: continue-on-error: true`);\n      if (/pnpm\\s+audit[^\\n]*\\|\\|\\s*true/.test(text)) violations.push(`${name}: pnpm audit || true`);\n    }\n    expect(violations).toEqual([]);\n  });\n});\n''')
+          PY
+
+          rm .github/workflows/apply-ci-hardening.yml
+          pnpm install --frozen-lockfile
+          pnpm exec prettier --write .github/workflows server/__tests__/ci-workflow-hardening.test.ts
+          pnpm exec vitest run server/__tests__/ci-workflow-hardening.test.ts
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows server/__tests__/ci-workflow-hardening.test.ts
+          git commit -m "ci: fail closed and pin external actions"
+          git push origin HEAD:fix/ci-fail-closed-action-pinning-20260908
