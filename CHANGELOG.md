@@ -1,5 +1,15 @@
 # Changelog
 
+## What's Changed in v1.20.14
+
+### Bug Fixes
+
+- fix(inventory): make agent booking creation atomic (#106) (36c05c1)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.13...v1.20.14
+
+---
+
 ## What's Changed in v1.20.13
 
 ### Bug Fixes
