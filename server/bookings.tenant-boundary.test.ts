@@ -7,6 +7,7 @@ const serviceSource = readFileSync(
   "utf8"
 );
 
+// Contract: booking-domain tenant isolation must fail closed.
 describe("booking tenant boundary", () => {
   it("stamps tenant identity onto booking and passenger writes", () => {
     expect(serviceSource).toContain("tenantId?: number | null");
