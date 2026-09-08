@@ -145,7 +145,10 @@ export const bookingsRouter = router({
     .query(async ({ ctx, input }) => {
       const booking = await db.getBookingByPNR(input.pnr);
       if (!booking) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       assertTenantMatch(booking.tenantId, ctx.tenantId);
@@ -173,7 +176,10 @@ export const bookingsRouter = router({
     .query(async ({ ctx, input }) => {
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
       if (!booking) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       assertTenantMatch(booking.tenantId, ctx.tenantId);
@@ -277,7 +283,10 @@ export const bookingsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
       if (!booking) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
       }
 
       assertTenantMatch(booking.tenantId, ctx.tenantId);
