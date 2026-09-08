@@ -1,0 +1,57 @@
+name: Apply tenant not-null boundary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+        with:
+          ref: fix/tenant-operational-not-null-20260909
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Make booking tenant columns non-null and add regression contract
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('drizzle/schema.ts')
+          s = p.read_text()
+          old1 = '''    // Tenant (airline) this booking belongs to. Nullable during migration.\n    tenantId: int("tenantId"),'''
+          new1 = '''    // Tenant (airline) this booking belongs to. Operational rows are always tenant-bound.\n    tenantId: int("tenantId").notNull(),'''
+          old2 = '''    // Tenant (airline) this passenger belongs to. Nullable during migration.\n    tenantId: int("tenantId"),'''
+          new2 = '''    // Tenant (airline) this passenger belongs to. Operational rows are always tenant-bound.\n    tenantId: int("tenantId").notNull(),'''
+          if s.count(old1) != 1 or s.count(old2) != 1:
+              raise SystemExit('expected tenant schema anchors not found exactly once')
+          p.write_text(s.replace(old1, new1).replace(old2, new2))
+
+          t = Path('server/__tests__/tenant-operational-not-null-contract.test.ts')
+          t.write_text('''import { readFileSync } from "node:fs";\nimport { describe, expect, it } from "vitest";\n\nconst schema = readFileSync("drizzle/schema.ts", "utf8");\n\ndescribe("operational tenant nullability contract", () => {\n  it("requires bookings and passengers to carry a tenant id", () => {\n    const bookingBlock = schema.slice(\n      schema.indexOf('export const bookings = mysqlTable('),\n      schema.indexOf('export type Booking =')\n    );\n    const passengerBlock = schema.slice(\n      schema.indexOf('export const passengers = mysqlTable('),\n      schema.indexOf('export type Passenger =')\n    );\n\n    expect(bookingBlock).toContain('tenantId: int("tenantId").notNull()');\n    expect(passengerBlock).toContain('tenantId: int("tenantId").notNull()');\n  });\n});\n''')
+          PY
+      - name: Generate Drizzle migration metadata
+        run: pnpm run db:generate
+      - name: Format and verify
+        run: |
+          pnpm exec prettier --write drizzle/schema.ts server/__tests__/tenant-operational-not-null-contract.test.ts drizzle/meta/_journal.json
+          pnpm exec prettier --check drizzle/schema.ts server/__tests__/tenant-operational-not-null-contract.test.ts
+          pnpm check
+          pnpm exec vitest run server/__tests__/tenant-operational-not-null-contract.test.ts server/__tests__/migration-journal-parity.test.ts
+          git diff --check
+      - name: Commit generated slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add drizzle/schema.ts drizzle/*.sql drizzle/meta server/__tests__/tenant-operational-not-null-contract.test.ts
+          git commit -m "fix(tenancy): require operational tenant ids"
+          git push origin HEAD:fix/tenant-operational-not-null-20260909
