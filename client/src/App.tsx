@@ -7,6 +7,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { FlightCompareProvider } from "./contexts/FlightCompareContext";
 import { AccessibilityProvider } from "./contexts/AccessibilityContext";
 import { AdminRoute } from "./components/AdminRoute";
+import { ProtectedRoute } from "./components/ProtectedRoute";
 import { PageLoadingFallback } from "./components/PageLoadingFallback";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { CookieConsent } from "./components/CookieConsent";
@@ -213,9 +214,11 @@ function Router() {
             </Suspense>
           </Route>
           <Route path="/my-bookings">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <MyBookings />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <MyBookings />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/check-in">
             <Suspense fallback={<PageLoadingFallback variant="form" />}>
@@ -223,9 +226,11 @@ function Router() {
             </Suspense>
           </Route>
           <Route path="/profile">
-            <Suspense fallback={<PageLoadingFallback variant="form" />}>
-              <Profile />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="form" />}>
+                <Profile />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/loyalty">
             <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
@@ -233,14 +238,18 @@ function Router() {
             </Suspense>
           </Route>
           <Route path="/favorites">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <FavoritesPage />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <FavoritesPage />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/price-alerts">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <PriceAlerts />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <PriceAlerts />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/compare">
             <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
@@ -253,19 +262,25 @@ function Router() {
             </Suspense>
           </Route>
           <Route path="/saved-passengers">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <SavedPassengers />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <SavedPassengers />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/notifications">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <Notifications />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <Notifications />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/my-waitlist">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <MyWaitlist />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <MyWaitlist />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/multi-city">
             <Suspense fallback={<PageLoadingFallback variant="search" />}>
@@ -278,14 +293,18 @@ function Router() {
             </Suspense>
           </Route>
           <Route path="/rebook/:bookingId">
-            <Suspense fallback={<PageLoadingFallback variant="form" />}>
-              <RebookPage />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="form" />}>
+                <RebookPage />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/payment-history">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <PaymentHistory />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <PaymentHistory />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
 
           <Route path="/ai-chat">
@@ -531,14 +550,18 @@ function Router() {
 
           {/* Corporate pages */}
           <Route path="/corporate">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <CorporateDashboard />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <CorporateDashboard />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/corporate/bookings">
-            <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
-              <CorporateBookings />
-            </Suspense>
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <CorporateBookings />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
 
           {/* Error/utility pages */}
