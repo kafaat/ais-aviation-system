@@ -126,7 +126,7 @@ export const bookingsRouter = router({
       },
     })
     .query(async ({ ctx }) => {
-      return await bookingsService.getUserBookings(ctx.user.id);
+      return await bookingsService.getUserBookings(ctx.user.id, ctx.tenantId);
     }),
 
   getByPNR: protectedProcedure
