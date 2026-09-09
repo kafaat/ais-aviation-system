@@ -44,7 +44,11 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
-        return value.replace("mysql://", "mysql+pymysql://", 1)
+        # Rewrite only a bare scheme. "pymysql://" also contains "mysql://",
+        # so substring replacement corrupts already qualified SQLAlchemy URLs.
+        if value.startswith("mysql://"):
+            return "mysql+pymysql://" + value[len("mysql://"):]
+        return value
 
     @field_validator("JWT_SECRET")
     @classmethod
