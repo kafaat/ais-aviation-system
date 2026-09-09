@@ -108,6 +108,7 @@ export function transactionMemory(seed: Record<string, any[]>) {
           list.push({
             id: insertId + index,
             refundedAmount: 0,
+            settlementStatus: "applied",
             seatsReserved: false,
             status: "pending",
             paymentStatus: "pending",

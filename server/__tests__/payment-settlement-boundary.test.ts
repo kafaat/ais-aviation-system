@@ -260,17 +260,73 @@ describe("verified payment settlement", () => {
     ]);
     expect(fixture.rows("wallets")[0].balance).toBe(150000);
   });
-  it("rolls back financial state when seats cannot be reserved", async () => {
+  it("retains verified funds for review when seats cannot be reserved, without confirming or repeating the charge", async () => {
     fixture.rows("flights")[0].economyAvailable = 0;
+    await event("checkout.session.completed", payment());
+    await event("checkout.session.completed", payment());
+    expect(fixture.rows("payment_receipts")).toHaveLength(1);
+    expect(fixture.rows("payment_receipts")[0].settlementStatus).toBe(
+      "review_required"
+    );
+    await expect(payFromWallet(9, 7)).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    expect(fixture.rows("wallets")[0].balance).toBe(150000);
+    expect(fixture.rows("financial_ledger")).toHaveLength(1);
+    expect(fixture.rows("outbox").map(row => row.eventType)).toEqual([
+      "payment.settlement_review_required",
+    ]);
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      status: "pending",
+      seatsReserved: false,
+      paymentStatus: "pending",
+    });
+  });
+  it("records a late collection against a cancelled booking for review", async () => {
+    fixture.rows("bookings")[0].status = "cancelled";
+    await event("checkout.session.completed", payment());
+    expect(fixture.rows("payment_receipts")[0].settlementStatus).toBe(
+      "review_required"
+    );
+    expect(fixture.rows("bookings")[0].status).toBe("cancelled");
+    expect(fixture.rows("flights")[0].economyAvailable).toBe(5);
+  });
+  it("refunds a duplicate collection without cancelling the valid paid booking", async () => {
+    await event("checkout.session.completed", payment());
+    await event(
+      "checkout.session.completed",
+      payment(undefined, 100000, "pi_extra")
+    );
+    expect(fixture.rows("payment_receipts")[1].settlementStatus).toBe(
+      "review_required"
+    );
+    await event("charge.refunded", {
+      id: "ch_extra",
+      payment_intent: "pi_extra",
+      amount: 100000,
+      amount_refunded: 100000,
+      currency: "sar",
+    });
+    expect(fixture.rows("payment_receipts")[1].settlementStatus).toBe(
+      "review_refunded"
+    );
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      status: "confirmed",
+      seatsReserved: true,
+      paymentStatus: "paid",
+    });
+    expect(fixture.rows("flights")[0].economyAvailable).toBe(4);
+  });
+  it("rolls back review receipts if their durable review event cannot be recorded", async () => {
+    fixture.rows("flights")[0].economyAvailable = 0;
+    fixture.failInsert("outbox");
     await expect(
       event("checkout.session.completed", payment())
-    ).rejects.toThrow("Insufficient");
+    ).rejects.toThrow("Injected insert failure");
     expect(fixture.rows("payment_receipts")).toHaveLength(0);
     expect(fixture.rows("financial_ledger")).toHaveLength(0);
   });
-});
 
-describe("wallet funding and atomic booking creation", () => {
   it("creates a pending Checkout without minting balance; verified replay credits once", async () => {
     const result = await topUpWallet(9, 10000, "Top-up");
     expect(result.status).toBe("pending");

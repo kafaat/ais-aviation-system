@@ -11,6 +11,11 @@ import { getDb } from "../db";
 import { bookings, bookingModifications } from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
 import { auditPayment } from "../services/audit.service";
+import { assertNoCollectionReview } from "../services/booking-settlement.service";
+import {
+  listSettlementReviews,
+  requestSettlementReviewRefund,
+} from "../services/settlement-review.service";
 import * as paymentHistoryService from "../services/payment-history.service";
 import {
   getAllProviderInfo,
@@ -38,6 +43,40 @@ const providerEnum = z.enum([
  * Handles all payment-related operations with multi-provider support
  */
 export const paymentsRouter = router({
+  settlementReviews: adminProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/admin/payments/settlement-reviews",
+        tags: ["Payments", "Admin"],
+        summary: "List collected payments awaiting settlement review",
+        protect: true,
+      },
+    })
+    .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
+    .query(({ input }) => listSettlementReviews(input.limit)),
+  refundSettlementReview: adminProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/admin/payments/settlement-reviews/{paymentIntentId}/refund",
+        tags: ["Payments", "Admin"],
+        summary: "Request refund of an unsettled collection",
+        protect: true,
+      },
+    })
+    .input(
+      z.object({ paymentIntentId: z.string().regex(/^pi_[A-Za-z0-9_]+$/) })
+    )
+    .output(
+      z.object({
+        state: z.enum(["awaiting_webhook", "refunded"]),
+        refundId: z.string().nullable(),
+      })
+    )
+    .mutation(({ input, ctx }) =>
+      requestSettlementReviewRefund(input.paymentIntentId, ctx.user.id)
+    ),
   /**
    * Get all available payment providers
    */
@@ -116,6 +155,7 @@ export const paymentsRouter = router({
       }
 
       // Check if already paid
+      await assertNoCollectionReview(database, bookingData.id);
       if (
         bookingData.status !== "pending" ||
         bookingData.paymentStatus === "paid"
@@ -323,6 +363,7 @@ export const paymentsRouter = router({
       }
 
       const authoritativeAmount = modification.totalCost;
+      await assertNoCollectionReview(database, bookingData.id);
       const appBaseUrl =
         ctx.req.headers.origin ||
         process.env.VITE_APP_URL ||

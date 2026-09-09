@@ -15,6 +15,7 @@ import {
   InsertPaymentSplit,
 } from "../../drizzle/schema";
 import { sendSplitPaymentRequest } from "./email.service";
+import { assertNoCollectionReview } from "./booking-settlement.service";
 import * as crypto from "crypto";
 
 // ============================================================================
@@ -493,6 +494,7 @@ export async function processPayerPayment(
   }
 
   // Create Stripe checkout session
+  await assertNoCollectionReview(db, booking.id);
   const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
   const session = await stripe.checkout.sessions.create({

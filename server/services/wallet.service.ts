@@ -8,7 +8,10 @@ import {
   financialLedger,
 } from "../../drizzle/schema";
 import { stripe } from "../stripe";
-import { confirmFundedBooking } from "./booking-settlement.service";
+import {
+  confirmFundedBooking,
+  assertNoCollectionReview,
+} from "./booking-settlement.service";
 import { eq, sql, and, inArray } from "drizzle-orm";
 
 /**
@@ -79,17 +82,15 @@ export async function topUpWallet(
   if (!db) throw new Error("Database unavailable");
   const wallet = await getOrCreateWallet(userId);
   if (wallet.status !== "active") throw new Error("Wallet is not active");
-  const [request] = await db
-    .insert(walletTransactions)
-    .values({
-      walletId: wallet.id,
-      userId,
-      type: "top_up",
-      amount,
-      balanceAfter: wallet.balance,
-      description,
-      status: "pending",
-    });
+  const [request] = await db.insert(walletTransactions).values({
+    walletId: wallet.id,
+    userId,
+    type: "top_up",
+    amount,
+    balanceAfter: wallet.balance,
+    description,
+    status: "pending",
+  });
   const metadata = {
     type: "wallet_topup",
     topUpId: String(request.insertId),
@@ -154,6 +155,7 @@ export async function payFromWallet(userId: number, bookingId: number) {
       return { balance: existing.balanceAfter, amountPaid: -existing.amount };
     if (booking.status !== "pending" || booking.paymentStatus === "paid")
       throw new Error("Booking is not payable");
+    await assertNoCollectionReview(tx, bookingId);
     const shares = await tx
       .select()
       .from(paymentSplits)
@@ -194,28 +196,24 @@ export async function payFromWallet(userId: number, bookingId: number) {
     if (deduction.affectedRows !== 1)
       throw new Error("Wallet payment conflict");
     await confirmFundedBooking(tx, booking);
-    await tx
-      .insert(walletTransactions)
-      .values({
-        walletId: wallet.id,
-        userId,
-        bookingId,
-        type: "payment",
-        amount: -amount,
-        balanceAfter: wallet.balance - amount,
-        description: `Booking ${booking.bookingReference}`,
-        status: "completed",
-      });
-    await tx
-      .insert(financialLedger)
-      .values({
-        bookingId,
-        userId,
-        type: "charge",
-        amount: (amount / 100).toFixed(2),
-        currency: "SAR",
-        description: "Wallet booking settlement",
-      });
+    await tx.insert(walletTransactions).values({
+      walletId: wallet.id,
+      userId,
+      bookingId,
+      type: "payment",
+      amount: -amount,
+      balanceAfter: wallet.balance - amount,
+      description: `Booking ${booking.bookingReference}`,
+      status: "completed",
+    });
+    await tx.insert(financialLedger).values({
+      bookingId,
+      userId,
+      type: "charge",
+      amount: (amount / 100).toFixed(2),
+      currency: "SAR",
+      description: "Wallet booking settlement",
+    });
     return { balance: wallet.balance - amount, amountPaid: amount };
   });
 }

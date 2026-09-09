@@ -105,3 +105,13 @@ Reference: https://github.com/mcampa/trpc-to-openapi . Its stock HTTP adapter mu
 - Legacy receipt import remains read-only by default. Writing requires an explicit maintenance-window flag after payment/refund/webhook writers have stopped; the importer rechecks the locked booking against the provider snapshot and reports existing/changed rows accurately. The flag is an operator assertion, not automatic verification that external writers have stopped.
 
 Validation: 15 financial boundary cases pass, including new booking/wallet lock-order assertions. The transactional double records lock calls but does not simulate MySQL deadlocks. Live contention is covered by the subsequent CI acceptance gate, which must actually run before operational closure.
+
+
+## Slice 9 — preserve collected funds requiring review
+
+- Append migration 0017 with explicit applied/review_required/review_refunded receipt state and a review reason. A verified booking collection that cannot reserve inventory, arrives after cancellation, duplicates an already funded booking or conflicts with an active split plan is retained in the receipt, payment history and ledger, with a durable review event. It does not confirm the booking. Fully funded splits that encounter inventory failure mark their funding receipts for review.
+- Expected inventory/state errors are distinguished from database/outbox failures. Technical failures still roll back and remain retryable; a failure to save the review event also rolls back its receipt and ledger.
+- Checkout, split checkout and wallet spending reject bookings with an outstanding review. Platform administrators can list reviews and request a provider refund through documented routes. Repeated operator requests use identical Stripe parameters and a stable key. Provider acknowledgement leaves the review open; only a verified refund webhook closes it. Refunding a reviewed duplicate cannot cancel or release the valid paid booking.
+- Receipt replay validates immutable purpose/target/amount/currency. Remove absent-receipt locking reads that could hold MySQL gap locks; same-purchase owner locks and the unique receipt key remain authoritative.
+
+Validation: 23 affected payment/operator cases pass. Tests cover late/cancelled and inventory-starved collections, duplicate refund isolation, review-event rollback, blocked repeat wallet payment, administrator permissions and provider retry identity. Provider HTTP is mocked. Unsupported/mismatched purchases and stale modification/top-up state still remain retryable errors in the durable Stripe-event inbox; this slice does not fabricate automatic reconciliation for every business case. Administrative review is exposed through tRPC/REST/Swagger; no dedicated new dashboard was added.

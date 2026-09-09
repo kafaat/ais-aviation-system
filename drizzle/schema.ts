@@ -1233,6 +1233,14 @@ export const paymentReceipts = mysqlTable("payment_receipts", {
   amount: int("amount").notNull(),
   currency: varchar("currency", { length: 3 }).notNull(),
   refundedAmount: int("refundedAmount").default(0).notNull(),
+  settlementStatus: mysqlEnum("settlementStatus", [
+    "applied",
+    "review_required",
+    "review_refunded",
+  ])
+    .default("applied")
+    .notNull(),
+  settlementError: varchar("settlementError", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
