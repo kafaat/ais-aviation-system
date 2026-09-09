@@ -1,0 +1,215 @@
+name: Build schema reconciliation migration
+
+on:
+  push:
+    branches:
+      - fix/migration-snapshot-baseline-20260909
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: startsWith(github.event.head_commit.message, 'chore(ci):')
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -ptest_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+        with:
+          ref: fix/migration-snapshot-baseline-20260909
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - run: pnpm install --frozen-lockfile
+      - name: Generate legacy and authoritative deltas
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/generate_only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a drizzle/meta /tmp/original-meta
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          legacy = json.loads(Path('drizzle/legacy-migrations/meta/0000_snapshot.json').read_text())
+          current = json.loads(Path('drizzle/meta/0012_snapshot.json').read_text())
+          merged = dict(current)
+          merged['tables'] = {**legacy.get('tables', {}), **current.get('tables', {})}
+          Path('drizzle/meta/0012_snapshot.json').write_text(json.dumps(merged, indent=2) + '\n')
+          PY
+          pnpm exec drizzle-kit generate --name=legacy_reconcile_probe
+          cp drizzle/0013_legacy_reconcile_probe.sql /tmp/legacy-delta.sql
+          rm -rf drizzle/meta
+          cp -a /tmp/original-meta drizzle/meta
+          rm -f drizzle/0013_legacy_reconcile_probe.sql
+          pnpm exec drizzle-kit generate --name=schema_reconcile
+          cp drizzle/0013_schema_reconcile.sql /tmp/authoritative-delta.sql
+      - name: Build idempotent reconciliation SQL
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          BP = '--> statement-breakpoint'
+          sources = [Path('/tmp/authoritative-delta.sql'), Path('/tmp/legacy-delta.sql')]
+
+          def split_sql(text):
+              return [s.strip() for s in text.split(BP) if s.strip()]
+
+          statements = []
+          seen = set()
+          for src in sources:
+              for stmt in split_sql(src.read_text()):
+                  norm = re.sub(r'\s+', ' ', stmt).strip()
+                  if norm not in seen:
+                      seen.add(norm)
+                      statements.append(stmt)
+
+          def quote_sql(s):
+              return s.replace('\\', '\\\\').replace("'", "''")
+
+          def conditional(query, ddl):
+              q = quote_sql(query)
+              d = quote_sql(ddl.rstrip(';'))
+              return [
+                  f"SET @ais_reconcile_sql = IF(({q}) = 0, '{d}', 'SELECT 1');",
+                  'PREPARE ais_reconcile_stmt FROM @ais_reconcile_sql;',
+                  'EXECUTE ais_reconcile_stmt;',
+                  'DEALLOCATE PREPARE ais_reconcile_stmt;',
+              ]
+
+          output = []
+          unknown = []
+          for stmt in statements:
+              s = stmt.strip()
+              if s.startswith('CREATE TABLE '):
+                  output.append(s.replace('CREATE TABLE ', 'CREATE TABLE IF NOT EXISTS ', 1).rstrip(';') + ';')
+                  continue
+
+              m = re.match(r'CREATE (UNIQUE )?INDEX `([^`]+)` ON `([^`]+)` (.+);?$', s, re.S)
+              if m:
+                  unique, idx, table, rest = m.groups()
+                  ddl = f"CREATE {'UNIQUE ' if unique else ''}INDEX `{idx}` ON `{table}` {rest.rstrip(';')}"
+                  query = f"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='{table}' AND index_name='{idx}'"
+                  output.extend(conditional(query, ddl))
+                  continue
+
+              m = re.match(r'DROP INDEX `([^`]+)` ON `([^`]+)`;?$', s, re.S)
+              if m:
+                  idx, table = m.groups()
+                  query = f"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='{table}' AND index_name='{idx}'"
+                  q = quote_sql(query)
+                  d = quote_sql(f"DROP INDEX `{idx}` ON `{table}`")
+                  output.extend([
+                      f"SET @ais_reconcile_sql = IF(({q}) > 0, '{d}', 'SELECT 1');",
+                      'PREPARE ais_reconcile_stmt FROM @ais_reconcile_sql;',
+                      'EXECUTE ais_reconcile_stmt;',
+                      'DEALLOCATE PREPARE ais_reconcile_stmt;',
+                  ])
+                  continue
+
+              m = re.match(r'ALTER TABLE `([^`]+)` ADD `([^`]+)` (.+);?$', s, re.S)
+              if m:
+                  table, column, rest = m.groups()
+                  ddl = f"ALTER TABLE `{table}` ADD `{column}` {rest.rstrip(';')}"
+                  query = f"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='{table}' AND column_name='{column}'"
+                  output.extend(conditional(query, ddl))
+                  continue
+
+              m = re.match(r'ALTER TABLE `([^`]+)` ADD CONSTRAINT `([^`]+)` UNIQUE\((.+)\);?$', s, re.S)
+              if m:
+                  table, constraint, cols = m.groups()
+                  ddl = f"ALTER TABLE `{table}` ADD CONSTRAINT `{constraint}` UNIQUE({cols})"
+                  query = f"SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name='{table}' AND constraint_name='{constraint}'"
+                  output.extend(conditional(query, ddl))
+                  continue
+
+              if re.match(r'ALTER TABLE `[^`]+` MODIFY COLUMN ', s, re.S):
+                  output.append(s.rstrip(';') + ';')
+                  continue
+
+              unknown.append(s)
+
+          if unknown:
+              print('UNSUPPORTED DDL:')
+              for u in unknown:
+                  print('---')
+                  print(u)
+              raise SystemExit(f'{len(unknown)} unsupported DDL statements')
+
+          rendered = f'\n{BP}\n'.join(output) + '\n'
+          path = Path('drizzle/0013_schema_reconcile.sql')
+          path.write_text(rendered)
+          print('source statements:', len(statements))
+          print('rendered statements:', len(output))
+          print('bytes:', path.stat().st_size)
+          PY
+      - name: Verify fresh and legacy convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mysql -h127.0.0.1 -uroot -ptest_password -e 'CREATE DATABASE fresh; CREATE DATABASE legacy_upgrade;'
+          DATABASE_URL=mysql://root:test_password@127.0.0.1:3306/fresh pnpm run db:migrate
+          cat > /tmp/drizzle-legacy.config.ts <<'EOF'
+          import { defineConfig } from 'drizzle-kit';
+          export default defineConfig({ schema: './drizzle/schema.ts', out: './drizzle/legacy-migrations', dialect: 'mysql', dbCredentials: { url: process.env.DATABASE_URL! } });
+          EOF
+          DATABASE_URL=mysql://root:test_password@127.0.0.1:3306/legacy_upgrade pnpm exec drizzle-kit migrate --config=/tmp/drizzle-legacy.config.ts
+          DATABASE_URL=mysql://root:test_password@127.0.0.1:3306/legacy_upgrade pnpm run db:migrate
+          for db in fresh legacy_upgrade; do
+            count=$(mysql -N -h127.0.0.1 -uroot -ptest_password -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db' AND table_name NOT LIKE '__drizzle%';")
+            echo "$db tables=$count"
+            test "$count" -eq 108
+            for t in tenants outbox seat_inventory fare_classes ndc_orders security_events; do
+              present=$(mysql -N -h127.0.0.1 -uroot -ptest_password -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$db' AND table_name='$t';")
+              test "$present" -eq 1
+            done
+          done
+          DATABASE_URL=mysql://root:test_password@127.0.0.1:3306/fresh pnpm run db:migrate
+          DATABASE_URL=mysql://root:test_password@127.0.0.1:3306/legacy_upgrade pnpm run db:migrate
+          DATABASE_URL=mysql://root:test_password@127.0.0.1:3306/fresh pnpm exec drizzle-kit check
+      - name: Add migration parity regression test
+        run: |
+          cat > server/__tests__/migration-schema-reconciliation.test.ts <<'EOF'
+          import { readFileSync } from 'node:fs';
+          import { describe, expect, it } from 'vitest';
+
+          describe('migration schema reconciliation contract', () => {
+            it('keeps the authoritative snapshot at the full schema table count', () => {
+              const snapshot = JSON.parse(readFileSync('drizzle/meta/0013_snapshot.json', 'utf8')) as { tables: Record<string, unknown> };
+              expect(Object.keys(snapshot.tables)).toHaveLength(108);
+            });
+
+            it('keeps the reconciliation migration non-destructive', () => {
+              const sql = readFileSync('drizzle/0013_schema_reconcile.sql', 'utf8');
+              expect(sql).not.toMatch(/DROP TABLE|DROP COLUMN/i);
+              expect(sql).toContain('CREATE TABLE IF NOT EXISTS');
+              expect(sql).toContain('information_schema.columns');
+            });
+          });
+          EOF
+          pnpm exec prettier --write drizzle/meta/_journal.json server/__tests__/migration-schema-reconciliation.test.ts
+          pnpm exec vitest run server/__tests__/migration-schema-reconciliation.test.ts server/__tests__/migration-journal-parity.test.ts
+          pnpm check
+          git diff --check
+      - name: Commit reconciliation
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add drizzle/0013_schema_reconcile.sql drizzle/meta/_journal.json drizzle/meta/0013_snapshot.json server/__tests__/migration-schema-reconciliation.test.ts
+          git commit -m 'fix(migrations): reconcile executable schema history'
+          git push origin HEAD:fix/migration-snapshot-baseline-20260909
