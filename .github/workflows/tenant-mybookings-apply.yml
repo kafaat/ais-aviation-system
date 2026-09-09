@@ -2,8 +2,7 @@ name: Apply Tenant MyBookings Scope
 
 on:
   push:
-    branches:
-      - fix/tenant-mybookings-scope-20260909
+    branches: [fix/tenant-mybookings-scope-20260909]
 
 permissions:
   contents: write
@@ -16,87 +15,56 @@ jobs:
         with:
           ref: fix/tenant-mybookings-scope-20260909
           fetch-depth: 0
-
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22.x"
-
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
-
       - name: Apply tenant SQL scope
-        shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str) -> None:
+          def replace_once(path, old, new):
               p = Path(path)
               text = p.read_text()
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected one match, found {count}")
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: expected one match, found {text.count(old)}")
               p.write_text(text.replace(old, new, 1))
-
-          replace_once(
-              "server/db.ts",
-              "export async function getBookingsByUserId(userId: number) {\n  const db = await getDb();\n  if (!db) return [];\n",
-              "export async function getBookingsByUserId(\n  userId: number,\n  tenantId?: number | null\n) {\n  const db = await getDb();\n  if (!db) return [];\n\n  const bookingWhere =\n    tenantId == null\n      ? and(eq(bookings.userId, userId), isNull(bookings.deletedAt))\n      : and(\n          eq(bookings.userId, userId),\n          eq(bookings.tenantId, tenantId),\n          isNull(bookings.deletedAt)\n        );\n"
-          )
-          replace_once(
-              "server/db.ts",
-              ".where(and(eq(bookings.userId, userId), isNull(bookings.deletedAt)))\n    .orderBy(desc(bookings.createdAt));",
-              ".where(bookingWhere)\n    .orderBy(desc(bookings.createdAt));"
-          )
-          replace_once(
-              "server/db.ts",
-              "  const allPassengers = await db\n    .select()\n    .from(passengers)\n    .where(inArray(passengers.bookingId, bookingIds));",
-              "  const passengerWhere =\n    tenantId == null\n      ? inArray(passengers.bookingId, bookingIds)\n      : and(\n          inArray(passengers.bookingId, bookingIds),\n          eq(passengers.tenantId, tenantId)\n        );\n\n  const allPassengers = await db\n    .select()\n    .from(passengers)\n    .where(passengerWhere);"
-          )
-          replace_once(
-              "server/services/bookings.service.ts",
-              "export async function getUserBookings(userId: number) {\n  try {\n    return await db.getBookingsByUserId(userId);",
-              "export async function getUserBookings(\n  userId: number,\n  tenantId?: number | null\n) {\n  try {\n    return await db.getBookingsByUserId(userId, tenantId);"
-          )
-          replace_once(
-              "server/routers/bookings.ts",
-              "      return await bookingsService.getUserBookings(ctx.user.id);",
-              "      return await bookingsService.getUserBookings(\n        ctx.user.id,\n        ctx.tenantId\n      );"
-          )
-
-          Path("server/services/bookings.tenant-scope.test.ts").write_text(r'''import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
-describe("my bookings tenant isolation contract", () => {
-  it("threads tenant context from the router into SQL-scoped booking and passenger queries", () => {
-    const root = process.cwd();
-    const router = readFileSync(join(root, "server/routers/bookings.ts"), "utf8");
-    const service = readFileSync(join(root, "server/services/bookings.service.ts"), "utf8");
-    const db = readFileSync(join(root, "server/db.ts"), "utf8");
-
-    expect(router).toContain("ctx.tenantId");
-    expect(service).toContain("db.getBookingsByUserId(userId, tenantId)");
-    expect(db).toContain("eq(bookings.tenantId, tenantId)");
-    expect(db).toContain("eq(passengers.tenantId, tenantId)");
-    expect(db).toContain(".where(bookingWhere)");
-    expect(db).toContain(".where(passengerWhere)");
-  });
-});
-''')
+          replace_once("server/db.ts", "export async function getBookingsByUserId(userId: number) {\n  const db = await getDb();\n  if (!db) return [];\n", "export async function getBookingsByUserId(\n  userId: number,\n  tenantId?: number | null\n) {\n  const db = await getDb();\n  if (!db) return [];\n\n  const bookingWhere =\n    tenantId == null\n      ? and(eq(bookings.userId, userId), isNull(bookings.deletedAt))\n      : and(\n          eq(bookings.userId, userId),\n          eq(bookings.tenantId, tenantId),\n          isNull(bookings.deletedAt)\n        );\n")
+          replace_once("server/db.ts", ".where(and(eq(bookings.userId, userId), isNull(bookings.deletedAt)))\n    .orderBy(desc(bookings.createdAt));", ".where(bookingWhere)\n    .orderBy(desc(bookings.createdAt));")
+          replace_once("server/db.ts", "  const allPassengers = await db\n    .select()\n    .from(passengers)\n    .where(inArray(passengers.bookingId, bookingIds));", "  const passengerWhere =\n    tenantId == null\n      ? inArray(passengers.bookingId, bookingIds)\n      : and(\n          inArray(passengers.bookingId, bookingIds),\n          eq(passengers.tenantId, tenantId)\n        );\n\n  const allPassengers = await db\n    .select()\n    .from(passengers)\n    .where(passengerWhere);")
+          replace_once("server/services/bookings.service.ts", "export async function getUserBookings(userId: number) {\n  try {\n    return await db.getBookingsByUserId(userId);", "export async function getUserBookings(\n  userId: number,\n  tenantId?: number | null\n) {\n  try {\n    return await db.getBookingsByUserId(userId, tenantId);")
+          replace_once("server/routers/bookings.ts", "      return await bookingsService.getUserBookings(ctx.user.id);", "      return await bookingsService.getUserBookings(\n        ctx.user.id,\n        ctx.tenantId\n      );")
+          test_lines = [
+              'import { describe, expect, it } from "vitest";',
+              'import { readFileSync } from "node:fs";',
+              'import { join } from "node:path";',
+              '',
+              'describe("my bookings tenant isolation contract", () => {',
+              '  it("threads tenant context into SQL-scoped booking and passenger queries", () => {',
+              '    const root = process.cwd();',
+              '    const router = readFileSync(join(root, "server/routers/bookings.ts"), "utf8");',
+              '    const service = readFileSync(join(root, "server/services/bookings.service.ts"), "utf8");',
+              '    const db = readFileSync(join(root, "server/db.ts"), "utf8");',
+              '    expect(router).toContain("ctx.tenantId");',
+              '    expect(service).toContain("db.getBookingsByUserId(userId, tenantId)");',
+              '    expect(db).toContain("eq(bookings.tenantId, tenantId)");',
+              '    expect(db).toContain("eq(passengers.tenantId, tenantId)");',
+              '    expect(db).toContain(".where(bookingWhere)");',
+              '    expect(db).toContain(".where(passengerWhere)");',
+              '  });',
+              '});',
+              ''
+          ]
+          Path("server/services/bookings.tenant-scope.test.ts").write_text("\n".join(test_lines))
           PY
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Format and verify
+      - name: Verify slice
         run: |
+          pnpm install --frozen-lockfile
           pnpm exec prettier --write server/db.ts server/services/bookings.service.ts server/routers/bookings.ts server/services/bookings.tenant-scope.test.ts
           pnpm run check
           pnpm exec vitest run server/services/bookings.tenant-scope.test.ts
-
-      - name: Commit verified slice and remove applicator
-        shell: bash
+      - name: Commit verified slice
         run: |
           set -euo pipefail
           rm .github/workflows/tenant-mybookings-apply.yml
