@@ -212,6 +212,54 @@ describe("verified payment settlement", () => {
     });
     expect(fixture.rows("flights")[0].economyAvailable).toBe(5);
   });
+  it("locks refund owners before receipts and uses current reads for all booking receipts", async () => {
+    await event("checkout.session.completed", payment());
+    fixture.lockedTables.length = 0;
+    await event("charge.refunded", {
+      id: "ch_lock",
+      payment_intent: "pi_1",
+      amount: 100000,
+      amount_refunded: 100000,
+      currency: "sar",
+    });
+    expect(fixture.lockedTables.slice(0, 2)).toEqual([
+      "bookings",
+      "payment_receipts",
+    ]);
+    expect(
+      fixture.lockedTables.filter(name => name === "payment_receipts")
+    ).toHaveLength(2);
+  });
+  it("locks top-up request and wallet before its refund receipt", async () => {
+    await fixture.db
+      .insert((await import("../../drizzle/schema")).walletTransactions)
+      .values({
+        id: 10,
+        walletId: 1,
+        userId: 9,
+        type: "top_up",
+        amount: 10000,
+        status: "pending",
+      });
+    await event(
+      "checkout.session.completed",
+      payment({ type: "wallet_topup", topUpId: "10", userId: "9" }, 10000)
+    );
+    fixture.lockedTables.length = 0;
+    await event("charge.refunded", {
+      id: "ch_wallet",
+      payment_intent: "pi_1",
+      amount: 10000,
+      amount_refunded: 10000,
+      currency: "sar",
+    });
+    expect(fixture.lockedTables.slice(0, 3)).toEqual([
+      "wallet_transactions",
+      "wallets",
+      "payment_receipts",
+    ]);
+    expect(fixture.rows("wallets")[0].balance).toBe(150000);
+  });
   it("rolls back financial state when seats cannot be reserved", async () => {
     fixture.rows("flights")[0].economyAvailable = 0;
     await expect(

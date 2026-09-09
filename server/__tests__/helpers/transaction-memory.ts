@@ -40,6 +40,7 @@ export function transactionMemory(seed: Record<string, any[]>) {
       .every(Boolean);
   }
   let failTable: string | null = null;
+  const lockedTables: string[] = [];
   const db: any = {
     transaction: async (fn: any) => {
       const before = structuredClone(data);
@@ -82,7 +83,10 @@ export function transactionMemory(seed: Record<string, any[]>) {
           limit = n;
           return chain;
         },
-        for: () => chain,
+        for: () => {
+          lockedTables.push(getTableName(table));
+          return chain;
+        },
         orderBy: () => chain,
         then: (resolve: any, reject: any) =>
           Promise.resolve().then(result).then(resolve, reject),
@@ -131,6 +135,7 @@ export function transactionMemory(seed: Record<string, any[]>) {
   };
   return {
     db,
+    lockedTables,
     rows: (name: string) => data[name] || [],
     failInsert: (name: string) => {
       failTable = name;

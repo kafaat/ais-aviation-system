@@ -7,6 +7,11 @@ import { bookings, paymentReceipts } from "../drizzle/schema";
 const db = getDb();
 if (!db) throw new Error("Database unavailable");
 const write = process.argv.includes("--write-receipts");
+if (write && !process.argv.includes("--writers-stopped")) {
+  throw new Error(
+    "Receipt baselining requires a maintenance window: stop payment/refund/webhook writers, then pass --writers-stopped. Read-only mode remains available."
+  );
+}
 const candidates = await db
   .select()
   .from(bookings)
@@ -35,33 +40,45 @@ for (const booking of candidates) {
     continue;
   }
   const refundBaseline = charge.amount_refunded;
-  if (write)
-    await db.transaction(async tx => {
-      await tx
-        .select()
-        .from(bookings)
-        .where(eq(bookings.id, booking.id))
-        .for("update");
-      const [existing] = await tx
-        .select()
-        .from(paymentReceipts)
-        .where(eq(paymentReceipts.paymentIntentId, id))
-        .limit(1);
-      if (!existing)
-        await tx.insert(paymentReceipts).values({
-          paymentIntentId: id,
-          kind: "booking",
-          bookingId: booking.id,
-          targetId: booking.id,
-          userId: booking.userId,
-          amount: payment.amount_received,
-          currency: "SAR",
-          refundedAmount: refundBaseline,
-        });
-    });
+  const action = write
+    ? await db.transaction(async tx => {
+        const [current] = await tx
+          .select()
+          .from(bookings)
+          .where(eq(bookings.id, booking.id))
+          .for("update");
+        if (
+          !current ||
+          current.stripePaymentIntentId !== id ||
+          current.userId !== booking.userId ||
+          current.totalAmount !== booking.totalAmount
+        ) {
+          return "manual_review_booking_changed";
+        }
+        const [existing] = await tx
+          .select()
+          .from(paymentReceipts)
+          .where(eq(paymentReceipts.paymentIntentId, id))
+          .limit(1)
+          .for("update");
+        if (existing) return "existing_receipt_unchanged";
+        if (!existing)
+          await tx.insert(paymentReceipts).values({
+            paymentIntentId: id,
+            kind: "booking",
+            bookingId: booking.id,
+            targetId: booking.id,
+            userId: booking.userId,
+            amount: payment.amount_received,
+            currency: "SAR",
+            refundedAmount: refundBaseline,
+          });
+        return "receipt_baselined";
+      })
+    : "verified_candidate";
   report.push({
     bookingId: booking.id,
-    action: write ? "receipt_baselined" : "verified_candidate",
+    action,
     amount: payment.amount_received,
     refundedAmount: refundBaseline,
     inventoryReviewRequired: true,

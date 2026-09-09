@@ -97,3 +97,11 @@ References: https://v4.vitest.dev/guide/migration , https://docs.sentry.io/platf
 Validation: five regression cases pass, including real loopback HTTP requests and complete application route/document generation. They prove transport behavior with a supplied test context; existing session/MFA tests separately cover credential verification. MySQL, provider calls and actual production credentials are not exercised by these tests. This slice resolves the REST compatibility limitation recorded in slice 6.
 
 Reference: https://github.com/mcampa/trpc-to-openapi . Its stock HTTP adapter mutates coercion flags; AIS deliberately uses its own transport boundary and only the supported documentation generator.
+
+
+## Slice 8 — collection/refund lock ordering and legacy baseline safety
+
+- Refunds discover an immutable receipt reference without locking, then lock its booking or top-up request/wallet before a current receipt read, matching collection order. All booking receipts used to decide full refund are current locking reads, avoiding a stale repeatable-read snapshot.
+- Legacy receipt import remains read-only by default. Writing requires an explicit maintenance-window flag after payment/refund/webhook writers have stopped; the importer rechecks the locked booking against the provider snapshot and reports existing/changed rows accurately. The flag is an operator assertion, not automatic verification that external writers have stopped.
+
+Validation: 15 financial boundary cases pass, including new booking/wallet lock-order assertions. The transactional double records lock calls but does not simulate MySQL deadlocks. Live contention is covered by the subsequent CI acceptance gate, which must actually run before operational closure.

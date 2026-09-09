@@ -352,6 +352,48 @@ export async function settleVerifiedRefund(
     eventId: string;
   }
 ) {
+  // Discovery is non-locking. Acquire the same owner locks as collection
+  // (booking -> receipt, or top-up request -> wallet -> receipt), then reread
+  // the receipt with a current locking read. Never hold receipt while waiting
+  // on an owner: that inverts collection's lock order and can deadlock.
+  const [hint] = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(eq(paymentReceipts.paymentIntentId, input.paymentIntentId))
+    .limit(1);
+  if (!hint)
+    throw new Error(
+      "Refund collection not yet reconciled; retry after payment receipt"
+    );
+  let ownerBooking;
+  let ownerWallet;
+  if (hint.kind === "wallet_topup") {
+    const [request] = await tx
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.id, hint.targetId))
+      .limit(1)
+      .for("update");
+    if (!request || request.type !== "top_up" || request.userId !== hint.userId)
+      throw new Error("Missing wallet top-up owner");
+    [ownerWallet] = await tx
+      .select()
+      .from(wallets)
+      .where(eq(wallets.id, request.walletId))
+      .limit(1)
+      .for("update");
+    if (!ownerWallet || ownerWallet.userId !== hint.userId)
+      throw new Error("Refund wallet missing");
+  } else if (hint.bookingId) {
+    [ownerBooking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, hint.bookingId))
+      .limit(1)
+      .for("update");
+    if (!ownerBooking || ownerBooking.userId !== hint.userId)
+      throw new Error("Refund booking missing");
+  }
   const [receipt] = await tx
     .select()
     .from(paymentReceipts)
@@ -387,18 +429,7 @@ export async function settleVerifiedRefund(
     description: "Verified refund delta",
   });
   if (receipt.kind === "wallet_topup") {
-    const [request] = await tx
-      .select()
-      .from(walletTransactions)
-      .where(eq(walletTransactions.id, receipt.targetId))
-      .limit(1);
-    if (!request) throw new Error("Missing wallet top-up");
-    const [wallet] = await tx
-      .select()
-      .from(wallets)
-      .where(eq(wallets.id, request.walletId))
-      .limit(1)
-      .for("update");
+    const wallet = ownerWallet!;
     const balance = wallet.balance - delta;
     await tx
       .update(wallets)
@@ -414,13 +445,7 @@ export async function settleVerifiedRefund(
       stripePaymentIntentId: input.paymentIntentId,
     });
   } else if (receipt.bookingId && receipt.kind !== "modification") {
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, receipt.bookingId))
-      .limit(1)
-      .for("update");
-    if (!booking) throw new Error("Refund booking missing");
+    const booking = ownerBooking!;
     const receipts = await tx
       .select()
       .from(paymentReceipts)
@@ -429,7 +454,8 @@ export async function settleVerifiedRefund(
           eq(paymentReceipts.bookingId, booking.id),
           inArray(paymentReceipts.kind, ["booking", "split_payment"])
         )
-      );
+      )
+      .for("update");
     const allRefunded =
       receipts.length > 0 && receipts.every(r => r.amount === r.refundedAmount);
     if (allRefunded) {
