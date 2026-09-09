@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.20.25
+
+### Bug Fixes
+
+- fix(tenant): scope booking seat economics reads (8c543d0)
+- fix(tenant): bind seat economics router to tenant (f479cf4)
+
+### Other Changes
+
+- test(tenant): guard seat economics tenant boundary (638e517)
+- Merge pull request #127 from kafaat/fix/tenant-seat-economics-booking-20260909 (f27f61a)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.24...v1.20.25
+
+---
+
 ## What's Changed in v1.20.24
 
 ### Bug Fixes
