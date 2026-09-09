@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.20.24
+
+### Bug Fixes
+
+- fix(tenant): fail closed without tenant context (37f0477)
+
+### Other Changes
+
+- test(tenant): require fail-closed helpers (4f8ae3b)
+- Merge pull request #126 from kafaat/fix/tenant-seat-economics-boundary-20260909 (750f0b6)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.23...v1.20.24
+
+---
+
 ## What's Changed in v1.20.23
 
 ### Bug Fixes
