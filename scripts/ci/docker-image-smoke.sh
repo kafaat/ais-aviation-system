@@ -27,33 +27,43 @@ for target in runner migrator; do
   test "$(docker run --rm --network none --entrypoint id "ais-build-check:$target" -u)" = 1001
   docker run --rm --network none --entrypoint sh "ais-build-check:$target" -ec '
     test ! -e /usr/local/lib/node_modules/npm
+    test ! -e /usr/local/lib/node_modules/pnpm
+    test ! -e /app/node_modules/pnpm
     ! command -v npm
     ! command -v npx
+    ! command -v pnpm
+    ! command -v pnpx
     node --version
-  ' 2>&1 | tee "$evidence_dir/no-npm-$target.log"
+  ' 2>&1 | tee "$evidence_dir/no-installers-$target.log"
 done
 
 # Check the installed CLI, not a tool fetched by npx on demand.
 # The authoritative Drizzle root is ./drizzle; PR #115 deliberately archives the
 # stale parallel drizzle/migrations tree under drizzle/legacy-migrations.
 docker run --rm --network none --entrypoint sh ais-build-check:migrator -ec '
-  expected="$(node -p '\''require("./package.json").packageManager.split("@")[1]'\'')"
-  actual="$(pnpm --version)"
-  if [ "$actual" != "$expected" ]; then
-    echo "FAIL: migrator pnpm version $actual != pinned $expected" >&2
-    exit 1
-  fi
-  hoist="$(pnpm config get shamefully-hoist)"
-  if [ "$hoist" != true ]; then
-    echo "FAIL: migrator requires shamefully-hoist=true, got $hoist" >&2
-    exit 1
-  fi
   if [ ! -s drizzle/meta/_journal.json ]; then
     echo "FAIL: authoritative migration journal missing at drizzle/meta/_journal.json" >&2
     exit 1
   fi
   ./node_modules/.bin/drizzle-kit --version
 ' 2>&1 | tee "$evidence_dir/migrator-cli.log"
+
+# Exercise the actual guarded entrypoint and serializer without contacting a DB.
+# Verify the installed dependency tree was created with the pinned build tool;
+# the deployed image must not need that installer to run its migration code.
+docker run --rm --network none --entrypoint node ais-build-check:migrator \
+  --import tsx --input-type=module -e '
+  import assert from "node:assert/strict";
+  import { readFileSync } from "node:fs";
+  import { runMigration } from "./scripts/db/migrate.ts";
+  import { assertSnapshotMatchesSchema } from "./scripts/db/snapshot-check.ts";
+  const { packageManager } = JSON.parse(readFileSync("package.json", "utf8"));
+  const modules = readFileSync("node_modules/.modules.yaml", "utf8");
+  assert.ok(modules.split(/\r?\n/).includes(`packageManager: ${packageManager}`));
+  assert.equal(typeof runMigration, "function");
+  await assertSnapshotMatchesSchema();
+  console.log("PASS: pinned dependency installation and guarded migrator work without installers");
+' 2>&1 | tee "$evidence_dir/migrator-entrypoint.log"
 
 # Fail when the runtime only works because build tools were copied into it.
 docker run --rm --network none --entrypoint node ais-build-check:runner --input-type=module -e '

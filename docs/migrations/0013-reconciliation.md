@@ -55,8 +55,9 @@ Use the candidate's migrator image and a database account with metadata read
 access for the first two steps. Do not put credentials in a report or commit.
 
 1. Back up the database and retain the previous release and current journal.
-2. Run `pnpm db:preflight` with DATABASE_URL set. This reads schema/journal and
-   aggregate conflict counts; it does not execute DDL or change journal rows.
+2. Run `node --import tsx scripts/db/migrate.ts preflight` with DATABASE_URL set.
+   This reads schema/journal and aggregate conflict counts; it does not execute
+   DDL or change journal rows.
 3. If MIGRATION_DATABASE_DRIFT or MIGRATION_HISTORY_MISMATCH appears, stop.
    Inventory the existing objects against the last applied snapshot and 0013.
    Databases previously provisioned by push or legacy SQL must be reconciled from
@@ -66,7 +67,15 @@ access for the first two steps. Do not put credentials in a report or commit.
 4. If NULL/unique conflicts appear, resolve them through a separately reviewed
    data repair, then repeat preflight. No automatic deduplication is provided.
 5. With application writes stopped and a successful preflight, run
-   `pnpm db:migrate`, followed by `pnpm db:verify` before restarting writers.
+   `node --import tsx scripts/db/migrate.ts migrate`, followed by
+   `node --import tsx scripts/db/migrate.ts verify` before restarting writers.
+
+The deployed images contain no npm/npx or pnpm installers. The migrator retains
+local tsx and Drizzle, and its offline image check loads the guarded entrypoint
+and verifies all schema exports. In a development checkout, the equivalent
+`pnpm db:preflight`, `pnpm db:migrate` and `pnpm db:verify` shortcuts remain available.
+Both final images must pass the HIGH/CRITICAL Trivy gate in pull requests and
+the publishing workflow. Security reports are retained with Docker build evidence.
 
 ## Verification and future migrations
 
