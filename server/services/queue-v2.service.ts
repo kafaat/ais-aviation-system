@@ -14,6 +14,7 @@
  */
 
 import { Queue, Worker, Job } from "bullmq";
+import { redisConnectionOptions } from "../queue/redis-config";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { stripeEvents, bookings } from "../../drizzle/schema";
@@ -23,24 +24,16 @@ import { eq, and, lt } from "drizzle-orm";
 // CONFIGURATION
 // ============================================================================
 
-const REDIS_HOST = process.env.REDIS_HOST || "localhost";
-const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379");
-const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined;
-
-const redisConnection = {
-  host: REDIS_HOST,
-  port: REDIS_PORT,
-  password: REDIS_PASSWORD,
-  maxRetriesPerRequest: null, // Required for BullMQ
-};
+const redisConnection = redisConnectionOptions();
 
 // ============================================================================
 // QUEUE DEFINITIONS
 // ============================================================================
 
 // Email queue
-export const emailQueue = new Queue("ais:emails", {
+export const emailQueue = new Queue("emails", {
   connection: redisConnection,
+  prefix: "ais",
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -58,8 +51,9 @@ export const emailQueue = new Queue("ais:emails", {
 });
 
 // Webhook retry queue
-export const webhookRetryQueue = new Queue("ais:webhook-retry", {
+export const webhookRetryQueue = new Queue("webhook-retry", {
   connection: redisConnection,
+  prefix: "ais",
   defaultJobOptions: {
     attempts: 5,
     backoff: {
@@ -77,8 +71,9 @@ export const webhookRetryQueue = new Queue("ais:webhook-retry", {
 });
 
 // Scheduled jobs queue (reconciliation, cleanup, etc.)
-export const scheduledQueue = new Queue("ais:scheduled", {
+export const scheduledQueue = new Queue("scheduled", {
   connection: redisConnection,
+  prefix: "ais",
   defaultJobOptions: {
     attempts: 3,
     backoff: {
@@ -299,7 +294,7 @@ export function startEmailWorker(): Worker {
   }
 
   emailWorker = new Worker<EmailJobData>(
-    "ais:emails",
+    "emails",
     async (job: Job<EmailJobData>) => {
       console.info(`[Worker] Processing email job: ${job.name} (${job.id})`);
 
@@ -346,6 +341,7 @@ export function startEmailWorker(): Worker {
     },
     {
       connection: redisConnection,
+      prefix: "ais",
       concurrency: 5,
     }
   );
@@ -371,7 +367,7 @@ export function startWebhookRetryWorker(): Worker {
   }
 
   webhookRetryWorker = new Worker<WebhookRetryJobData>(
-    "ais:webhook-retry",
+    "webhook-retry",
     async (job: Job<WebhookRetryJobData>) => {
       console.info(`[Worker] Processing webhook retry: ${job.data.eventId}`);
 
@@ -468,6 +464,7 @@ export function startWebhookRetryWorker(): Worker {
     },
     {
       connection: redisConnection,
+      prefix: "ais",
       concurrency: 3,
     }
   );
@@ -485,7 +482,7 @@ export function startScheduledWorker(): Worker {
   }
 
   scheduledWorker = new Worker<ReconciliationJobData | CleanupJobData>(
-    "ais:scheduled",
+    "scheduled",
     async (job: Job<ReconciliationJobData | CleanupJobData>) => {
       console.info(
         `[Worker] Processing scheduled job: ${job.name} (${job.id})`
@@ -506,6 +503,7 @@ export function startScheduledWorker(): Worker {
     },
     {
       connection: redisConnection,
+      prefix: "ais",
       concurrency: 1, // Run one at a time
     }
   );

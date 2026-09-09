@@ -46,7 +46,7 @@ jobs:
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
         run: |
-          pnpm exec drizzle-kit check
+          pnpm run db:verify
 
   previous-release-upgrade:
     name: Previous Release Upgrade Replay
@@ -104,7 +104,7 @@ jobs:
       - name: Verify upgraded database matches current schema
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
-        run: pnpm exec drizzle-kit check
+        run: pnpm run db:verify
 
   dependency-audit:
     name: Dependency Audit

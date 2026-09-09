@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm";
 import { drizzle, MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
+import { readFileSync } from "node:fs";
 import * as schema from "../drizzle/schema";
 import {
   InsertUser,
@@ -81,12 +82,17 @@ export function getPool(): mysql.Pool | null {
       _pool = mysql.createPool({
         host: url.hostname,
         port: parseInt(url.port || "3306", 10),
-        user: url.username,
-        password: url.password,
+        user: decodeURIComponent(url.username),
+        password: decodeURIComponent(url.password),
         database: url.pathname.slice(1), // Remove leading /
         ssl:
           url.searchParams.get("ssl") === "true"
-            ? { rejectUnauthorized: false }
+            ? {
+                rejectUnauthorized: true,
+                ...(process.env.DB_SSL_CA_FILE
+                  ? { ca: readFileSync(process.env.DB_SSL_CA_FILE, "utf8") }
+                  : {}),
+              }
             : undefined,
         ...POOL_CONFIG,
       });

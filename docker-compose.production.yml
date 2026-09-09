@@ -33,6 +33,22 @@ services:
       retries: 3
       start_period: 40s
 
+  # Apply the exact image's committed migrations before any application writer.
+  migrator:
+    image: ${MIGRATOR_IMAGE_TAG:-ghcr.io/kafaat/ais-aviation-system-migrator:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: migrator
+    environment:
+      - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - ais_network
+    restart: "no"
+
   # API Server - Replica 1
   api1:
     image: ${IMAGE_TAG:-ghcr.io/kafaat/ais-aviation-system:latest}
@@ -42,6 +58,10 @@ services:
     container_name: ais_api_1
     environment:
       - NODE_ENV=production
+      - VITE_APP_ID=${VITE_APP_ID:-ais-aviation-system}
+      - BUILT_IN_FORGE_API_URL=${BUILT_IN_FORGE_API_URL:-}
+      - BUILT_IN_FORGE_API_KEY=${BUILT_IN_FORGE_API_KEY:-}
+      - REFRESH_TOKEN_PEPPER=${REFRESH_TOKEN_PEPPER:-}
       - PORT=3000
       - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
       - REDIS_URL=redis://redis:6379
@@ -49,11 +69,13 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - JWT_SECRET=${JWT_SECRET}
       - CSRF_SECRET=${CSRF_SECRET}
-      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
+      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL:-http://localhost:3000}
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
       - AUTH_SERVICE_URL=http://auth-service:8000
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       redis:
@@ -93,6 +115,10 @@ services:
     container_name: ais_api_2
     environment:
       - NODE_ENV=production
+      - VITE_APP_ID=${VITE_APP_ID:-ais-aviation-system}
+      - BUILT_IN_FORGE_API_URL=${BUILT_IN_FORGE_API_URL:-}
+      - BUILT_IN_FORGE_API_KEY=${BUILT_IN_FORGE_API_KEY:-}
+      - REFRESH_TOKEN_PEPPER=${REFRESH_TOKEN_PEPPER:-}
       - PORT=3000
       - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
       - REDIS_URL=redis://redis:6379
@@ -100,11 +126,13 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - JWT_SECRET=${JWT_SECRET}
       - CSRF_SECRET=${CSRF_SECRET}
-      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
+      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL:-http://localhost:3000}
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
       - AUTH_SERVICE_URL=http://auth-service:8000
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       redis:
@@ -144,6 +172,10 @@ services:
     container_name: ais_api_3
     environment:
       - NODE_ENV=production
+      - VITE_APP_ID=${VITE_APP_ID:-ais-aviation-system}
+      - BUILT_IN_FORGE_API_URL=${BUILT_IN_FORGE_API_URL:-}
+      - BUILT_IN_FORGE_API_KEY=${BUILT_IN_FORGE_API_KEY:-}
+      - REFRESH_TOKEN_PEPPER=${REFRESH_TOKEN_PEPPER:-}
       - PORT=3000
       - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
       - REDIS_URL=redis://redis:6379
@@ -151,11 +183,13 @@ services:
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - JWT_SECRET=${JWT_SECRET}
       - CSRF_SECRET=${CSRF_SECRET}
-      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL}
+      - OAUTH_SERVER_URL=${OAUTH_SERVER_URL:-http://localhost:3000}
       - OWNER_OPEN_ID=${OWNER_OPEN_ID}
       - FRONTEND_URL=${FRONTEND_URL}
       - AUTH_SERVICE_URL=http://auth-service:8000
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       redis:
@@ -278,8 +312,18 @@ services:
       dockerfile: Dockerfile.prod
     container_name: ais_worker
     command: node dist/worker.js
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ais-worker-ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 40s
     environment:
       - NODE_ENV=production
+      - VITE_APP_ID=${VITE_APP_ID:-ais-aviation-system}
+      - BUILT_IN_FORGE_API_URL=${BUILT_IN_FORGE_API_URL:-}
+      - BUILT_IN_FORGE_API_KEY=${BUILT_IN_FORGE_API_KEY:-}
+      - REFRESH_TOKEN_PEPPER=${REFRESH_TOKEN_PEPPER:-}
       - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}
       - REDIS_URL=redis://redis:6379
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
@@ -289,6 +333,8 @@ services:
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASSWORD=${EMAIL_PASSWORD}
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       redis:
@@ -307,6 +353,7 @@ services:
 
   # Auth Service (FastAPI)
   auth-service:
+    image: ${AUTH_IMAGE_TAG:-ghcr.io/kafaat/ais-aviation-system-auth:latest}
     build:
       context: ./auth-service
       dockerfile: Dockerfile
@@ -317,6 +364,8 @@ services:
       - OWNER_EMAIL=${OWNER_EMAIL}
       - CORS_ORIGINS=${FRONTEND_URL}
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
     networks:

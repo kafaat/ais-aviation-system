@@ -26,8 +26,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "reconcile": "tsx server/jobs/reconciliation.job.ts",
-    "workers": "tsx server/queue/workers/index.ts",
+    "reconcile": "tsx scripts/run-reconciliation.ts",
+    "workers": "tsx server/worker.ts",
     "docs:generate": "tsx scripts/generate-openapi.ts",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test e2e/ci-smoke.spec.ts",
@@ -37,7 +37,8 @@
     "test:e2e:report": "playwright show-report",
     "test:e2e:codegen": "playwright codegen",
     "test:e2e:install": "playwright install --with-deps",
-    "prepare": "git config core.hooksPath .hooks || true"
+    "prepare": "git config core.hooksPath .hooks || true",
+    "db:verify": "tsx scripts/verify-database-schema.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

@@ -10,6 +10,7 @@
 
 import { Queue, QueueOptions } from "bullmq";
 import IORedis from "ioredis";
+import { redisConnectionOptions } from "./redis-config";
 import { createServiceLogger } from "../_core/logger";
 
 // Create queue-specific logger
@@ -62,7 +63,8 @@ export function getRedisConnection(): IORedis | null {
   }
 
   try {
-    connection = new IORedis(redisUrl, {
+    connection = new IORedis({
+      ...redisConnectionOptions(),
       maxRetriesPerRequest: null, // Required for BullMQ
       enableReadyCheck: false,
       retryStrategy: times => {

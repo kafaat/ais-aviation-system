@@ -43,6 +43,19 @@ export const tenants = mysqlTable(
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = typeof tenants.$inferInsert;
 
+/** Encrypted TOTP settings; shared by setup and the login challenge. */
+export const mfaSettings = mysqlTable("mfa_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  secret: text("secret").notNull(),
+  isEnabled: boolean("isEnabled").default(false).notNull(),
+  backupCodes: text("backupCodes").notNull(),
+  enabledAt: timestamp("enabledAt"),
+  lastUsedAt: timestamp("lastUsedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 /**
  * Core user table backing auth flow.
  */

@@ -7,7 +7,7 @@ from typing import Generator
 
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from passlib.context import CryptContext
 
@@ -28,8 +28,7 @@ from schemas import (
 engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create tables only if they don't already exist (safe for shared DB)
-Base.metadata.create_all(bind=engine, checkfirst=True)
+# Schema creation and upgrades are owned exclusively by the Drizzle migrator.
 
 # ---------------------------------------------------------------------------
 # Password hashing
@@ -143,8 +142,12 @@ def verify_password(body: VerifyPasswordRequest, db: Session = Depends(get_db)):
 
 
 @app.get("/auth/health", response_model=HealthResponse)
-def health_check():
-    """Health-check endpoint."""
+def health_check(db: Session = Depends(get_db)):
+    """Readiness requires the shared database to accept queries."""
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
     return HealthResponse(
         status="healthy",
         service=settings.APP_NAME,

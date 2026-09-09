@@ -92,6 +92,13 @@
       "when": 1768258690954,
       "tag": "0012_big_bastion",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1788973464395,
+      "tag": "0013_complete_declared_schema",
+      "breakpoints": true
     }
   ]
 }

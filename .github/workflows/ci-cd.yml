@@ -141,7 +141,11 @@ jobs:
       - name: Run database migrations
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
-        run: pnpm exec drizzle-kit push --force
+        run: pnpm run db:migrate
+      - name: Verify migrated schema
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+        run: pnpm run db:verify
 
       - name: Run tests with coverage
         env:
@@ -336,7 +340,11 @@ jobs:
       - name: Run database migrations
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
-        run: pnpm exec drizzle-kit push --force
+        run: pnpm run db:migrate
+      - name: Verify migrated schema
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+        run: pnpm run db:verify
 
       - name: Setup Python for auth service
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -604,6 +612,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push auth service image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./auth-service
+          file: ./auth-service/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}
+
       - name: Generate SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
@@ -687,6 +703,8 @@ jobs:
             --namespace=ais-staging \
             --from-literal=DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.STAGING_JWT_SECRET }}" \
+            --from-literal=CSRF_SECRET="${{ secrets.STAGING_CSRF_SECRET }}" \
+            --from-literal=AUTH_SERVICE_URL="http://ais-auth:8000" \
             --from-literal=STRIPE_SECRET_KEY="${{ secrets.STAGING_STRIPE_SECRET_KEY }}" \
             --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}" \
             --from-literal=REDIS_URL="${{ secrets.STAGING_REDIS_URL }}" \
@@ -709,8 +727,10 @@ jobs:
         if: steps.staging-kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-staging"
           export REPLICAS="2"
+          envsubst < k8s/base/background.yaml | kubectl apply -f -
           envsubst < k8s/base/deployment.yaml | kubectl apply -f -
           envsubst < k8s/base/service.yaml | kubectl apply -f -
           envsubst < k8s/overlays/staging/ingress.yaml | kubectl apply -f -
@@ -843,6 +863,8 @@ jobs:
             --namespace=ais-production \
             --from-literal=DATABASE_URL="${{ secrets.PRODUCTION_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.PRODUCTION_JWT_SECRET }}" \
+            --from-literal=CSRF_SECRET="${{ secrets.PRODUCTION_CSRF_SECRET }}" \
+            --from-literal=AUTH_SERVICE_URL="http://ais-auth:8000" \
             --from-literal=STRIPE_SECRET_KEY="${{ secrets.PRODUCTION_STRIPE_SECRET_KEY }}" \
             --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.PRODUCTION_STRIPE_WEBHOOK_SECRET }}" \
             --from-literal=REDIS_URL="${{ secrets.PRODUCTION_REDIS_URL }}" \
@@ -887,8 +909,10 @@ jobs:
         if: steps.kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-production"
           export REPLICAS="3"
+          envsubst < k8s/base/background.yaml | kubectl apply -f -
           envsubst < k8s/base/deployment.yaml | kubectl apply -f -
           kubectl rollout status deployment/ais-api \
             --namespace=ais-production \
@@ -913,6 +937,7 @@ jobs:
         if: steps.kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-production"
           envsubst < k8s/base/service.yaml | kubectl apply -f -
           envsubst < k8s/overlays/production/ingress.yaml | kubectl apply -f -
@@ -1088,13 +1113,15 @@ jobs:
           scp docker-compose.production.yml ${DEPLOY_USER}@${DEPLOY_HOST}:~/ais-aviation/
           ssh ${DEPLOY_USER}@${DEPLOY_HOST} << ENDSSH
             cd ~/ais-aviation
-            docker pull ${IMAGE_TAG}
+            set -e
             export IMAGE_TAG=${IMAGE_TAG}
-            docker-compose -f docker-compose.production.yml up -d --no-deps api1
-            sleep 15
-            docker-compose -f docker-compose.production.yml up -d --no-deps api2
-            sleep 15
-            docker-compose -f docker-compose.production.yml up -d --no-deps api3
+            export MIGRATOR_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }}
+            export AUTH_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}
+            docker compose -f docker-compose.production.yml pull api1 api2 api3 worker auth-service migrator
+            docker compose -f docker-compose.production.yml up -d --wait mysql redis
+            docker compose -f docker-compose.production.yml run --rm --no-deps migrator
+            docker compose -f docker-compose.production.yml up -d --no-deps --wait auth-service
+            docker compose -f docker-compose.production.yml up -d --no-deps --wait worker api1 api2 api3
             docker image prune -f
             echo "Deployment completed"
           ENDSSH
@@ -1102,7 +1129,7 @@ jobs:
       - name: Verify deployment
         run: |
           for i in {1..10}; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }}/api/trpc/health.live)
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }}/api/trpc/health.ready)
             if [ "$HTTP_STATUS" == "200" ]; then
               echo "Deployment verified successfully"
               exit 0

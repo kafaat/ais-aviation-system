@@ -18,6 +18,7 @@
  */
 
 import "dotenv/config";
+import { writeFileSync, rmSync } from "node:fs";
 import { getDb, closePool } from "./db";
 import { createServiceLogger } from "./_core/logger";
 import {
@@ -36,6 +37,7 @@ import {
 import { startCronJobs, stopCronJobs } from "./services/cron.service";
 
 const log = createServiceLogger("worker");
+rmSync("/tmp/ais-worker-ready", { force: true });
 
 let isShuttingDown = false;
 
@@ -50,13 +52,9 @@ async function initialize(): Promise<void> {
   log.info({}, "Initializing database connection...");
   const db = await getDb();
   if (!db) {
-    log.warn(
-      {},
-      "Database connection not available - some jobs may fail at runtime"
-    );
-  } else {
-    log.info({}, "Database connection established");
+    throw new Error("Database connection is required by the worker");
   }
+  await db.execute("SELECT 1");
 
   // 2. Initialize Redis connection
   log.info({}, "Initializing Redis connection...");
@@ -68,6 +66,7 @@ async function initialize(): Promise<void> {
     );
     process.exit(1);
   }
+  await redis.ping();
   log.info({}, "Redis connection established");
 
   // 3. Initialize queues and schedule recurring jobs
@@ -100,6 +99,7 @@ async function initialize(): Promise<void> {
   startCronJobs();
 
   log.info({}, "Worker process started successfully - processing jobs");
+  writeFileSync("/tmp/ais-worker-ready", String(process.pid));
 }
 
 // ============================================================================
@@ -113,6 +113,7 @@ async function shutdown(signal: string): Promise<void> {
   }
 
   isShuttingDown = true;
+  rmSync("/tmp/ais-worker-ready", { force: true });
   log.info({ signal }, `Received ${signal}, starting graceful shutdown...`);
 
   const shutdownTimeout = setTimeout(() => {

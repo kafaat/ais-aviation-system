@@ -6,7 +6,7 @@ import { z } from "zod";
  */
 const envSchema = z.object({
   // App Configuration
-  VITE_APP_ID: z.string().min(1, "VITE_APP_ID is required"),
+  VITE_APP_ID: z.string().min(1).default("ais-aviation-system"),
 
   // Database
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid URL"),
@@ -23,15 +23,13 @@ const envSchema = z.object({
     .url("AUTH_SERVICE_URL must be a valid URL")
     .optional()
     .default("http://localhost:8000"),
-  OWNER_OPEN_ID: z.string().min(1, "OWNER_OPEN_ID is required"),
+  OWNER_OPEN_ID: z.string().default(""),
 
   // Built-in Forge API
   BUILT_IN_FORGE_API_URL: z
-    .string()
-    .url("BUILT_IN_FORGE_API_URL must be a valid URL"),
-  BUILT_IN_FORGE_API_KEY: z
-    .string()
-    .min(1, "BUILT_IN_FORGE_API_KEY is required"),
+    .union([z.string().url(), z.literal("")])
+    .default(""),
+  BUILT_IN_FORGE_API_KEY: z.string().default(""),
 
   // Node Environment
   NODE_ENV: z
