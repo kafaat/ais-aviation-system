@@ -626,6 +626,14 @@ jobs:
           exit-code: "1"
           severity: "CRITICAL,HIGH"
 
+      - name: Scan migrator image for vulnerabilities
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }}
+          format: "table"
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+
   # =============================================================================
   # STAGE 6: Deploy to Staging
   # =============================================================================

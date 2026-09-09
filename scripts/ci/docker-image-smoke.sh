@@ -25,6 +25,12 @@ for target in runner migrator; do
     2>&1 | tee "$evidence_dir/build-$target.log"
   docker image inspect "ais-build-check:$target" > "$evidence_dir/image-$target.json"
   test "$(docker run --rm --network none --entrypoint id "ais-build-check:$target" -u)" = 1001
+  docker run --rm --network none --entrypoint sh "ais-build-check:$target" -ec '
+    test ! -e /usr/local/lib/node_modules/npm
+    ! command -v npm
+    ! command -v npx
+    node --version
+  ' 2>&1 | tee "$evidence_dir/no-npm-$target.log"
 done
 
 # Check the installed CLI, not a tool fetched by npx on demand.

@@ -33,7 +33,35 @@ jobs:
         with:
           persist-credentials: false
       - name: Build, validate and boot the production-only images
+        id: images
         run: bash scripts/ci/docker-image-smoke.sh
+      - name: Reject high or critical vulnerabilities in the runtime image
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297
+        with:
+          image-ref: ais-build-check:runner
+          format: json
+          output: /tmp/ais-docker-build-evidence/trivy-runner.json
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+      - name: Reject high or critical vulnerabilities in the migrator image
+        if: ${{ !cancelled() && steps.images.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297
+        with:
+          image-ref: ais-build-check:migrator
+          format: json
+          output: /tmp/ais-docker-build-evidence/trivy-migrator.json
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+      - name: Summarize image security findings
+        if: ${{ !cancelled() && steps.images.outcome == 'success' }}
+        run: |
+          for target in runner migrator; do
+            report="/tmp/ais-docker-build-evidence/trivy-$target.json"
+            echo "Image: $target"
+            jq -r '.Results[] | .Target as $target | .Vulnerabilities[]? |
+              [$target, .PkgPath, .PkgName, .InstalledVersion, .VulnerabilityID, .Severity, .FixedVersion] | @tsv' "$report"
+            jq '[.Results[] | .Vulnerabilities[]?] | length' "$report"
+          done
       - name: Upload build evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
