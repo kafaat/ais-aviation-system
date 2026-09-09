@@ -1,0 +1,86 @@
+name: Apply Tenant Booking Read Scope
+
+on:
+  push:
+    branches: [fix/tenant-booking-read-scope-20260909]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: fix/tenant-booking-read-scope-20260909
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+      - name: Apply SQL tenant scope
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def once(path, old, new):
+              p = Path(path); text = p.read_text(); n = text.count(old)
+              if n != 1: raise SystemExit(f"{path}: expected one match, found {n}: {old[:60]}")
+              p.write_text(text.replace(old, new, 1))
+
+          once("server/db.ts",
+               "export async function getBookingByPNR(pnr: string) {",
+               "export async function getBookingByPNR(\n  pnr: string,\n  tenantId?: number | null\n) {")
+          once("server/db.ts",
+               ".where(and(eq(bookings.pnr, pnr), isNull(bookings.deletedAt)))",
+               ".where(\n      tenantId == null\n        ? and(eq(bookings.pnr, pnr), isNull(bookings.deletedAt))\n        : and(\n            eq(bookings.pnr, pnr),\n            eq(bookings.tenantId, tenantId),\n            isNull(bookings.deletedAt)\n          )\n    )")
+          once("server/db.ts",
+               "export async function getBookingByIdWithDetails(id: number) {",
+               "export async function getBookingByIdWithDetails(\n  id: number,\n  tenantId?: number | null\n) {")
+          once("server/db.ts",
+               ".where(and(eq(bookings.id, id), isNull(bookings.deletedAt)))",
+               ".where(\n      tenantId == null\n        ? and(eq(bookings.id, id), isNull(bookings.deletedAt))\n        : and(\n            eq(bookings.id, id),\n            eq(bookings.tenantId, tenantId),\n            isNull(bookings.deletedAt)\n          )\n    )")
+          once("server/db.ts",
+               "export async function getPassengersByBookingId(bookingId: number) {",
+               "export async function getPassengersByBookingId(\n  bookingId: number,\n  tenantId?: number | null\n) {")
+          once("server/db.ts",
+               ".where(eq(passengers.bookingId, bookingId));",
+               ".where(\n      tenantId == null\n        ? eq(passengers.bookingId, bookingId)\n        : and(\n            eq(passengers.bookingId, bookingId),\n            eq(passengers.tenantId, tenantId)\n          )\n    );")
+
+          p = Path("server/routers/bookings.ts"); text = p.read_text()
+          if text.count("db.getBookingByPNR(input.pnr)") != 1: raise SystemExit("PNR call count changed")
+          text = text.replace("db.getBookingByPNR(input.pnr)", "db.getBookingByPNR(input.pnr, ctx.tenantId)")
+          count = text.count("db.getBookingByIdWithDetails(input.bookingId)")
+          if count < 2: raise SystemExit(f"expected booking lookups, found {count}")
+          text = text.replace("db.getBookingByIdWithDetails(input.bookingId)", "db.getBookingByIdWithDetails(input.bookingId, ctx.tenantId)")
+          if text.count("db.getPassengersByBookingId(input.bookingId)") != 1: raise SystemExit("passenger call count changed")
+          text = text.replace("db.getPassengersByBookingId(input.bookingId)", "db.getPassengersByBookingId(input.bookingId, ctx.tenantId)")
+          old = "      const passengerRows = await db.getPassengersByBookingId(input.bookingId, ctx.tenantId);\n      return ctx.tenantId == null\n        ? passengerRows\n        : passengerRows.filter(row => row.tenantId === ctx.tenantId);"
+          new = "      return await db.getPassengersByBookingId(\n        input.bookingId,\n        ctx.tenantId\n      );"
+          if old not in text: raise SystemExit("post-fetch passenger filter shape changed")
+          p.write_text(text.replace(old, new, 1))
+
+          once("server/services/bookings.service.ts",
+               "const booking = await db.getBookingByIdWithDetails(bookingId);",
+               "const booking = await db.getBookingByIdWithDetails(bookingId, tenantId);")
+
+          Path("server/services/bookings.tenant-read-scope.test.ts").write_text('''import { describe, expect, it } from "vitest";\nimport { readFileSync } from "node:fs";\nimport { join } from "node:path";\n\ndescribe("booking tenant read scope contract", () => {\n  it("scopes PNR, booking-id, and passenger reads in SQL", () => {\n    const root = process.cwd();\n    const router = readFileSync(join(root, "server/routers/bookings.ts"), "utf8");\n    const service = readFileSync(join(root, "server/services/bookings.service.ts"), "utf8");\n    const db = readFileSync(join(root, "server/db.ts"), "utf8");\n    expect(router).toContain("db.getBookingByPNR(input.pnr, ctx.tenantId)");\n    expect(router).toContain("db.getBookingByIdWithDetails(input.bookingId, ctx.tenantId)");\n    expect(router).toContain("db.getPassengersByBookingId(\\n        input.bookingId,\\n        ctx.tenantId");\n    expect(service).toContain("db.getBookingByIdWithDetails(bookingId, tenantId)");\n    expect(db).toContain("eq(bookings.tenantId, tenantId)");\n    expect(db).toContain("eq(passengers.tenantId, tenantId)");\n    expect(router).not.toContain("passengerRows.filter(row => row.tenantId === ctx.tenantId)");\n  });\n});\n''')
+          PY
+      - name: Verify slice
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec prettier --write server/db.ts server/routers/bookings.ts server/services/bookings.service.ts server/services/bookings.tenant-read-scope.test.ts
+          pnpm run check
+          pnpm exec vitest run server/services/bookings.tenant-read-scope.test.ts server/services/bookings.tenant-scope.test.ts
+      - name: Commit verified slice
+        run: |
+          set -euo pipefail
+          rm .github/workflows/tenant-booking-read-scope-apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix(tenant): scope booking read paths"
+          git push origin HEAD:fix/tenant-booking-read-scope-20260909
