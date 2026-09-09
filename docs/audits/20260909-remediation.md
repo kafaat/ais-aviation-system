@@ -25,3 +25,11 @@ Live MySQL/Docker are unavailable locally. Package installation failed on contai
 - F13/F14: image/supply-chain follow-up, honest operational capabilities and durable event handling.
 
 Repository protection settings and production credentials are external to this source revision. They must be reported independently of source fixes.
+
+## Slice 2 — tenant and request boundaries
+
+- F02: `isAdmin` now means platform administration only. `airlineAdminProcedure` requires a matching assigned tenant. Airline booking reads filter by tenant; flight availability updates carry a tenant predicate. Unscoped audit/metrics, financial overrides and platform mutations reject airline admins. Unassigned resources no longer pass the default tenant assertion.
+- F06: preserve Redis denial instead of deriving an allowed result from zero remaining quota. Redis errors reach the bounded fallback. Strict checks execute inside each tRPC procedure, including dotted paths, REST adapters and batch members. Network identity uses Express's explicitly configured trusted proxies; arbitrary forwarding headers are ignored.
+- F11: API and unclassified dynamic responses use network-only/no-store. The new service-worker cache version removes old AIS caches on activation, and session cleanup requests private-cache removal. API response headers prohibit HTTP caching as well.
+
+Validation: 92 tests in ten affected test files passed; TypeScript passed. Tests exercise actual HTTP 429 for dotted/batched procedures, both tenant rows under a generated SQL predicate, rejection before DB access, Redis denial propagation, and the real service-worker code refusing a previous user's cached response. Live multi-tenant DB/Redis and browser lifecycle verification remain part of acceptance.

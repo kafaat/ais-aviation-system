@@ -872,22 +872,26 @@ export async function createFlight(data: InsertFlight) {
 export async function updateFlightAvailability(
   flightId: number,
   cabinClass: string,
-  seats: number
+  seats: number,
+  tenantId?: number
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  if (cabinClass === "economy") {
-    await db
-      .update(flights)
-      .set({ economyAvailable: seats, updatedAt: new Date() })
-      .where(eq(flights.id, flightId));
-  } else {
-    await db
-      .update(flights)
-      .set({ businessAvailable: seats, updatedAt: new Date() })
-      .where(eq(flights.id, flightId));
-  }
+  const [result] = await db
+    .update(flights)
+    .set(
+      cabinClass === "economy"
+        ? { economyAvailable: seats, updatedAt: new Date() }
+        : { businessAvailable: seats, updatedAt: new Date() }
+    )
+    .where(
+      and(
+        eq(flights.id, flightId),
+        tenantId == null ? undefined : eq(flights.tenantId, tenantId)
+      )
+    );
+  return result.affectedRows > 0;
 }
 
 // Helper function to generate unique booking reference

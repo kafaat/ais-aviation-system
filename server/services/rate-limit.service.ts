@@ -261,7 +261,7 @@ class RateLimitService {
         windowSeconds
       );
 
-      const count = limit - result.remaining;
+      const count = result.allowed ? limit - result.remaining : limit + 1;
 
       return {
         count,

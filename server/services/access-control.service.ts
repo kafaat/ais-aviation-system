@@ -171,8 +171,7 @@ export async function assertModificationOwnership(
  *
  * Rules:
  *  - Admins (isAdmin(role)) bypass — platform support can cross tenants.
- *  - A null resource tenant (legacy/unassigned data) is allowed through so the
- *    single-tenant -> multi-tenant migration doesn't break existing rows.
+ *  - Unassigned resources require platform administration or explicit migration tooling.
  *  - Otherwise the caller's tenant must match the resource's tenant; a caller
  *    with no tenant context is rejected.
  */
@@ -182,7 +181,12 @@ export function assertTenant(
   userRole?: string
 ): void {
   if (userRole && isAdmin(userRole)) return;
-  if (resourceTenantId == null) return;
+  if (resourceTenantId == null) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Resource tenant required",
+    });
+  }
   if (ctxTenantId == null || ctxTenantId !== resourceTenantId) {
     throw new TRPCError({
       code: "FORBIDDEN",

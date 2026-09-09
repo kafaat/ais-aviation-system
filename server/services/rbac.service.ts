@@ -215,10 +215,10 @@ export function createRBACMiddleware(requiredRoles: UserRole[]) {
 }
 
 /**
- * Helper to check if user is admin (any admin role)
+ * Platform administrators may cross tenant boundaries. Airline admins may not.
  */
 export function isAdmin(userRole: string): boolean {
-  const adminRoles: UserRole[] = ["admin", "super_admin", "airline_admin"];
+  const adminRoles: UserRole[] = ["admin", "super_admin"];
   return adminRoles.includes(userRole as UserRole);
 }
 

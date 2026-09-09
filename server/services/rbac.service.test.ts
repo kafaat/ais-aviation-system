@@ -68,7 +68,7 @@ describe("RBAC Service", () => {
     it("should return true for admin roles", () => {
       expect(isAdmin("admin")).toBe(true);
       expect(isAdmin("super_admin")).toBe(true);
-      expect(isAdmin("airline_admin")).toBe(true);
+      expect(isAdmin("airline_admin")).toBe(false);
     });
 
     it("should return false for non-admin roles", () => {

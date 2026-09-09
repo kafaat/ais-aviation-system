@@ -14,10 +14,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { handleStripeWebhook } from "../webhooks/stripe";
 import { webhookLimiter } from "./rateLimiter";
-import {
-  createUserRateLimitMiddleware,
-  createStrictRateLimitMiddleware,
-} from "./middleware/user-rate-limit.middleware";
+import { createUserRateLimitMiddleware } from "./middleware/user-rate-limit.middleware";
 import {
   sentryErrorMiddleware,
   errorResponseMiddleware,
@@ -63,6 +60,19 @@ async function startServer() {
   startSystemMetricsCollection(15000);
 
   const app = express();
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
+  // Configure trusted proxy addresses/CIDRs explicitly; never trust arbitrary headers.
+  if (process.env.TRUSTED_PROXIES) {
+    app.set(
+      "trust proxy",
+      process.env.TRUSTED_PROXIES.split(",")
+        .map(value => value.trim())
+        .filter(Boolean)
+    );
+  }
   const server = createServer(app);
 
   // Stripe webhook MUST be registered BEFORE express.json() to preserve raw body
@@ -247,14 +257,7 @@ async function startServer() {
     }
   });
 
-  // Auth endpoints get stricter rate limiting
-  app.use("/api/trpc/auth", createStrictRateLimitMiddleware("auth"));
-
-  // Payment endpoints get stricter rate limiting
-  app.use("/api/trpc/payments", createStrictRateLimitMiddleware("payment"));
-
-  // Booking creation gets stricter rate limiting
-  app.use("/api/trpc/bookings", createStrictRateLimitMiddleware("booking"));
+  // Sensitive procedure limits run inside tRPC, including every batch member.
 
   // tRPC API with per-user rate limiting
   // Uses user ID for authenticated users, IP for anonymous users

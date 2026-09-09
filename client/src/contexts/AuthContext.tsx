@@ -109,6 +109,10 @@ function storeTokens(
 }
 
 function clearStoredTokens() {
+  if (typeof navigator !== "undefined")
+    navigator.serviceWorker?.controller?.postMessage({
+      type: "CLEAR_PRIVATE_DATA",
+    });
   try {
     localStorage.removeItem(AUTH_STORAGE_KEYS.ACCESS_TOKEN);
     localStorage.removeItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);

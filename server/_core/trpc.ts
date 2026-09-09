@@ -4,6 +4,7 @@ import superjson from "superjson";
 import type { OpenApiMeta } from "trpc-openapi";
 import type { TrpcContext } from "./context";
 import { isAdmin } from "../services/rbac.service";
+import { enforceProcedureRateLimit } from "./middleware/procedure-rate-limit";
 
 /**
  * Initialize tRPC with OpenAPI metadata support
@@ -21,7 +22,10 @@ const t = initTRPC.context<TrpcContext>().meta<OpenApiMeta>().create({
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+export const publicProcedure = t.procedure.use(async ({ ctx, path, next }) => {
+  await enforceProcedureRateLimit(ctx, path);
+  return next();
+});
 
 const requireUser = t.middleware(opts => {
   const { ctx, next } = opts;
@@ -38,9 +42,9 @@ const requireUser = t.middleware(opts => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+export const protectedProcedure = publicProcedure.use(requireUser);
 
-export const adminProcedure = t.procedure.use(
+export const adminProcedure = protectedProcedure.use(
   t.middleware(opts => {
     const { ctx, next } = opts;
 
@@ -56,3 +60,20 @@ export const adminProcedure = t.procedure.use(
     });
   })
 );
+
+/** Use only for operations whose queries and writes carry tenant predicates. */
+export const airlineAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!isAdmin(ctx.user.role) && ctx.user.role !== "airline_admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+  }
+  if (
+    !isAdmin(ctx.user.role) &&
+    (ctx.user.tenantId == null || ctx.tenantId !== ctx.user.tenantId)
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Valid tenant context required",
+    });
+  }
+  return next({ ctx });
+});
