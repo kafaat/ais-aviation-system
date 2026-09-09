@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.20.23
+
+### Bug Fixes
+
+- fix(tenant): scope my bookings queries (2f2fef9)
+
+### Maintenance
+
+- chore(ci): apply tenant my-bookings scope slice (3739de3)
+- chore(ci): fix tenant slice applicator (201cdd2)
+
+### Other Changes
+
+- Merge pull request #125 from kafaat/fix/tenant-mybookings-scope-20260909 (13de499)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.22...v1.20.23
+
+---
+
 ## What's Changed in v1.20.22
 
 ### Bug Fixes
