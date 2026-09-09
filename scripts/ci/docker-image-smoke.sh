@@ -60,8 +60,9 @@ docker run --rm --network none --entrypoint node ais-build-check:migrator \
   import { runMigration } from "./scripts/db/migrate.ts";
   import { assertSnapshotMatchesSchema } from "./scripts/db/snapshot-check.ts";
   const { packageManager } = JSON.parse(readFileSync("package.json", "utf8"));
-  const modules = readFileSync("node_modules/.modules.yaml", "utf8");
-  assert.ok(modules.split(/\r?\n/).includes(`packageManager: ${packageManager}`));
+  // pnpm 10.34 writes JSON (valid YAML) to the historical .modules.yaml path.
+  const modules = JSON.parse(readFileSync("node_modules/.modules.yaml", "utf8"));
+  assert.equal(modules.packageManager, packageManager);
   assert.equal(typeof runMigration, "function");
   await assertSnapshotMatchesSchema();
   console.log("PASS: pinned dependency installation and guarded migrator work without installers");
@@ -79,11 +80,11 @@ docker run --rm --network none --entrypoint node ais-build-check:runner --input-
   for (const name of ["express", "mysql2", "drizzle-orm"]) require.resolve(name);
   // Assert the installation mode, not absence of a package also needed as a peer.
   // The locked @trpc/server production dependency itself depends on TypeScript.
-  const modules = readFileSync("node_modules/.modules.yaml", "utf8");
-  const included = modules.match(/^included:\r?\n((?:[ \t]+[^\r\n]*\r?\n)+)/m)?.[1];
+  const modules = JSON.parse(readFileSync("node_modules/.modules.yaml", "utf8"));
+  const included = modules.included;
   assert.ok(included, "pnpm installation metadata must contain included flags");
-  assert.match(included, /^  dependencies: true\r?$/m, "Runtime dependencies must be installed");
-  assert.match(included, /^  devDependencies: false\r?$/m, "Root devDependencies must be excluded");
+  assert.equal(included.dependencies, true, "Runtime dependencies must be installed");
+  assert.equal(included.devDependencies, false, "Root devDependencies must be excluded");
   for (const name of ["vite", "drizzle-kit"]) {
     assert.throws(() => require.resolve(name), { code: "MODULE_NOT_FOUND" }, `Build-only dependency leaked: ${name}`);
   }
