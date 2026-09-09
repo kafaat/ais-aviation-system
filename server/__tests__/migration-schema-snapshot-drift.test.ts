@@ -36,7 +36,8 @@ function migrationCreatedTables(): string[] {
   const sqlFiles = readdirSync(drizzleDir)
     .filter(name => /^\d{4}_.+\.sql$/.test(name))
     .sort();
-  const pattern = /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+[`"]?([A-Za-z0-9_]+)[`"]?/gi;
+  const pattern =
+    /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+[`"]?([A-Za-z0-9_]+)[`"]?/gi;
   for (const file of sqlFiles) {
     const sql = readFileSync(join(drizzleDir, file), "utf8");
     for (const match of sql.matchAll(pattern)) names.push(match[1]);
@@ -66,7 +67,10 @@ describe("Drizzle schema/snapshot authority", () => {
       createHistoryMissingFromSchema: difference(migrations, schema),
     };
 
-    expect(report, `Drizzle authority drift:\n${JSON.stringify(report, null, 2)}`).toEqual(
+    expect(
+      report,
+      `Drizzle authority drift:\n${JSON.stringify(report, null, 2)}`
+    ).toEqual(
       expect.objectContaining({
         schemaMissingFromSnapshot: [],
         snapshotMissingFromSchema: [],
