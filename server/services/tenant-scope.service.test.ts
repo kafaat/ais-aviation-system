@@ -9,9 +9,13 @@ import {
 
 describe("tenant-scope helpers", () => {
   describe("tenantCondition", () => {
-    it("returns undefined when there is no tenant context", () => {
-      expect(tenantCondition(bookings.tenantId, null)).toBeUndefined();
-      expect(tenantCondition(bookings.tenantId, undefined)).toBeUndefined();
+    it("fails closed when there is no tenant context", () => {
+      expect(() => tenantCondition(bookings.tenantId, null)).toThrow(
+        "Tenant context required"
+      );
+      expect(() => tenantCondition(bookings.tenantId, undefined)).toThrow(
+        "Tenant context required"
+      );
     });
 
     it("returns a strict SQL condition when a tenant is present", () => {
@@ -22,12 +26,15 @@ describe("tenant-scope helpers", () => {
   describe("legacyTenantCondition", () => {
     it("is explicitly available only for migration compatibility", () => {
       expect(legacyTenantCondition(bookings.tenantId, 7)).toBeDefined();
+      expect(legacyTenantCondition(bookings.tenantId, null)).toBeUndefined();
     });
   });
 
   describe("strictTenantCondition", () => {
-    it("returns undefined with no tenant context", () => {
-      expect(strictTenantCondition(bookings.tenantId, null)).toBeUndefined();
+    it("fails closed with no tenant context", () => {
+      expect(() => strictTenantCondition(bookings.tenantId, null)).toThrow(
+        "Tenant context required"
+      );
     });
 
     it("returns a SQL condition with a tenant", () => {
@@ -36,9 +43,9 @@ describe("tenant-scope helpers", () => {
   });
 
   describe("tenantStamp", () => {
-    it("is empty (no stamp) without a tenant", () => {
-      expect(tenantStamp(null)).toEqual({});
-      expect(tenantStamp(undefined)).toEqual({});
+    it("fails closed without a tenant", () => {
+      expect(() => tenantStamp(null)).toThrow("Tenant context required");
+      expect(() => tenantStamp(undefined)).toThrow("Tenant context required");
     });
 
     it("stamps the tenant id when present", () => {
