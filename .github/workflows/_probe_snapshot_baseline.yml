@@ -33,6 +33,6 @@ jobs:
           echo "drop_statements=$(grep -Ec '^DROP (TABLE|INDEX)| DROP ' "$file" || true)"
           echo '=== ALTER statements ==='
           grep '^ALTER TABLE' "$file" || true
-          echo '=== CREATE table names ==='
-          grep '^CREATE TABLE' "$file" | sed -E 's/^CREATE TABLE `([^`]+)`.*/\1/' || true
+          echo '=== DROP statements ==='
+          grep -E '^DROP (TABLE|INDEX)| DROP ' "$file" || true
           wc -l -c "$file"
