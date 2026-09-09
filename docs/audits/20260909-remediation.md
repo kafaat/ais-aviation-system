@@ -160,3 +160,18 @@ credentials. The restore runner rejects production configuration.
 Local boundary and configuration checks are separate from live Docker evidence;
 CI must execute the new restore gate before it is reported as passed. See
 [backup restore acceptance](../BACKUP_RESTORE_ACCEPTANCE.md) for scope and limits.
+
+## Pull-request runtime image vulnerability gate
+
+Production Docker Validation now scans the same locally built runner image that
+passes the non-root/artifact/HTTP checks. Trivy scans OS and application packages,
+fails on HIGH/CRITICAL vulnerabilities including unfixed findings, and preserves
+its JSON report with the image inspection/source evidence even when the scan
+fails. The existing post-push deployment image scan remains in place because a
+later registry build can resolve different base image/package bytes. This new gate
+does not certify migrator/auth image vulnerabilities or registry/deployment state.
+
+Local validation for these follow-ups: eight executable backup boundary tests,
+two restore configuration rejection probes, six affected Vitest tests, TypeScript,
+Python compilation and workflow YAML/Prettier checks passed. Docker is unavailable
+locally; the new live restore and image scan results must be read from CI.
