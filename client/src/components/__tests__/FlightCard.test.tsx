@@ -5,7 +5,7 @@
  * including airline details, times, pricing, and user interactions.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { FlightCard, type FlightData } from "../FlightCard";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -215,7 +215,9 @@ describe("FlightCard", () => {
   });
 
   describe("Favorite Functionality", () => {
-    let onAddToFavorites: ReturnType<typeof vi.fn>;
+    let onAddToFavorites: Mock<
+      NonNullable<React.ComponentProps<typeof FlightCard>["onAddToFavorites"]>
+    >;
 
     beforeEach(() => {
       onAddToFavorites = vi.fn();
@@ -301,7 +303,9 @@ describe("FlightCard", () => {
   });
 
   describe("Share Functionality", () => {
-    let onShare: ReturnType<typeof vi.fn>;
+    let onShare: Mock<
+      NonNullable<React.ComponentProps<typeof FlightCard>["onShare"]>
+    >;
 
     beforeEach(() => {
       onShare = vi.fn();

@@ -5,7 +5,7 @@
  * including travel settings, personal information, and notifications.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
@@ -119,8 +119,14 @@ const createFilledFormData = (): UserPreferencesFormData => ({
 // ============================================================================
 
 describe("UserProfileForm", () => {
-  let onFormDataChange: ReturnType<typeof vi.fn>;
-  let onSave: ReturnType<typeof vi.fn>;
+  let onFormDataChange: Mock<
+    NonNullable<
+      React.ComponentProps<typeof UserProfileForm>["onFormDataChange"]
+    >
+  >;
+  let onSave: Mock<
+    NonNullable<React.ComponentProps<typeof UserProfileForm>["onSave"]>
+  >;
 
   beforeEach(() => {
     onFormDataChange = vi.fn();

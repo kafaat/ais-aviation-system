@@ -16,7 +16,9 @@ const isBrowser = typeof window !== "undefined";
 // Only import browser-specific testing utilities in browser environment
 if (isBrowser) {
   // Dynamically import jest-dom matchers
-  import("@testing-library/jest-dom/vitest");
+  await import("@testing-library/jest-dom/vitest");
+  const { cleanup } = await import("@testing-library/react");
+  afterEach(() => cleanup());
 }
 
 // Mock console methods to reduce noise in tests
@@ -25,9 +27,6 @@ vi.spyOn(console, "debug").mockImplementation(() => {});
 
 // Cleanup after each test (only in browser environment)
 afterEach(() => {
-  if (isBrowser) {
-    import("@testing-library/react").then(({ cleanup }) => cleanup());
-  }
   vi.clearAllMocks();
 });
 
@@ -104,21 +103,22 @@ beforeAll(() => {
 
 // Mock ResizeObserver (only in browser environment)
 if (isBrowser) {
-  global.ResizeObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-  }));
+  global.ResizeObserver = vi.fn().mockImplementation(function () {
+    return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() };
+  });
 
   // Mock IntersectionObserver
-  global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-    root: null,
-    rootMargin: "",
-    thresholds: [],
-  }));
+  global.IntersectionObserver = vi.fn().mockImplementation(function () {
+    return {
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+      root: null,
+      rootMargin: "",
+      thresholds: [],
+      takeRecords: vi.fn(() => []),
+    };
+  });
 }
 
 // Mock pointer capture methods (needed for Radix UI components)
@@ -145,43 +145,32 @@ if (typeof Element !== "undefined") {
   });
 }
 
-// Mock framer-motion to avoid animation issues in tests (only in browser environment)
-if (isBrowser) {
-  vi.mock("framer-motion", async () => {
-    const React = await import("react");
-    return {
-      motion: {
-        div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) =>
-          React.createElement("div", props, children),
-        header: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
-          React.createElement("header", props, children),
-        section: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
-          React.createElement("section", props, children),
-        h2: ({
-          children,
-          ...props
-        }: React.HTMLAttributes<HTMLHeadingElement>) =>
-          React.createElement("h2", props, children),
-        h3: ({
-          children,
-          ...props
-        }: React.HTMLAttributes<HTMLHeadingElement>) =>
-          React.createElement("h3", props, children),
-        p: ({
-          children,
-          ...props
-        }: React.HTMLAttributes<HTMLParagraphElement>) =>
-          React.createElement("p", props, children),
-        button: ({
-          children,
-          ...props
-        }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
-          React.createElement("button", props, children),
-      },
-      AnimatePresence: ({ children }: { children: React.ReactNode }) =>
+// Module mocks are hoisted; select the environment inside the factory.
+vi.mock("framer-motion", async () => {
+  if (typeof window === "undefined") return vi.importActual("framer-motion");
+  const React = await import("react");
+  return {
+    motion: {
+      div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) =>
+        React.createElement("div", props, children),
+      header: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
+        React.createElement("header", props, children),
+      section: ({ children, ...props }: React.HTMLAttributes<HTMLElement>) =>
+        React.createElement("section", props, children),
+      h2: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) =>
+        React.createElement("h2", props, children),
+      h3: ({ children, ...props }: React.HTMLAttributes<HTMLHeadingElement>) =>
+        React.createElement("h3", props, children),
+      p: ({ children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) =>
+        React.createElement("p", props, children),
+      button: ({
         children,
-      useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
-      useInView: () => true,
-    };
-  });
-}
+        ...props
+      }: React.ButtonHTMLAttributes<HTMLButtonElement>) =>
+        React.createElement("button", props, children),
+    },
+    AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
+    useAnimation: () => ({ start: vi.fn(), stop: vi.fn() }),
+    useInView: () => true,
+  };
+});

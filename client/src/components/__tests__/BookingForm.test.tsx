@@ -5,7 +5,7 @@
  * information collection with validation and multiple passengers.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BookingForm, type Passenger } from "../BookingForm";
@@ -63,9 +63,15 @@ const createFilledPassenger = (index: number): Passenger => ({
 // ============================================================================
 
 describe("BookingForm", () => {
-  let onPassengerChange: ReturnType<typeof vi.fn>;
-  let onAddPassenger: ReturnType<typeof vi.fn>;
-  let onRemovePassenger: ReturnType<typeof vi.fn>;
+  let onPassengerChange: Mock<
+    NonNullable<React.ComponentProps<typeof BookingForm>["onPassengerChange"]>
+  >;
+  let onAddPassenger: Mock<
+    NonNullable<React.ComponentProps<typeof BookingForm>["onAddPassenger"]>
+  >;
+  let onRemovePassenger: Mock<
+    NonNullable<React.ComponentProps<typeof BookingForm>["onRemovePassenger"]>
+  >;
 
   beforeEach(() => {
     onPassengerChange = vi.fn();

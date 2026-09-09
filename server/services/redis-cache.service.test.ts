@@ -33,7 +33,9 @@ vi.mock("ioredis", () => {
   };
 
   return {
-    default: vi.fn().mockImplementation(() => mockClient),
+    default: vi.fn().mockImplementation(function () {
+      return mockClient;
+    }),
   };
 });
 
