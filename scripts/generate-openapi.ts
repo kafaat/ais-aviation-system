@@ -11,7 +11,7 @@
  *   tsx scripts/generate-openapi.ts
  *
  * Output:
- *   - docs/openapi.json: The complete OpenAPI 3.0 specification
+ *   - docs/openapi.json: OpenAPI 3.1 specification (unspecified outputs marked)
  */
 
 import { writeFileSync, mkdirSync, existsSync } from "fs";
@@ -90,4 +90,6 @@ To use the OpenAPI spec with other tools:
 }
 
 // Run the generator
-generateOpenApiDocs();
+// Router imports may initialize background clients. This one-shot command has
+// finished all writes synchronously and must not wait on Redis reconnects.
+generateOpenApiDocs().then(() => process.exit(0));

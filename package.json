@@ -127,13 +127,14 @@
     "swagger-ui-express": "^5.0.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "trpc-openapi": "^1.2.0",
     "uuid": "^13.0.2",
     "vaul": "^1.1.2",
     "web-vitals": "^4.2.4",
     "wouter": "^3.11.0",
     "ws": "^8.21.3",
-    "zod": "^4.5.4"
+    "zod": "^4.5.4",
+    "trpc-to-openapi": "^3.3.0",
+    "zod-openapi": "^5.4.4"
   },
   "devDependencies": {
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",

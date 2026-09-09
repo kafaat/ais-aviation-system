@@ -85,3 +85,15 @@ Final validation: 1,037 tests passed, 240 skipped (84 passed files, 17 skipped) 
 The new manifest will distinguish final verification from intermediate failures encountered during migration of old test assumptions. Docker image scanning, live MySQL/Redis isolation and migration replay, provider test-mode operations, browser lifecycle, restore validation and repository protection remain acceptance work. Existing peer-dependency warnings also remain, notably the legacy trpc-openapi adapter with tRPC 11/Zod 4; REST/OpenAPI adapter replacement is a separate unresolved compatibility item. No claim that all 17 findings are operationally closed is made.
 
 References: https://v4.vitest.dev/guide/migration , https://docs.sentry.io/platforms/javascript/guides/node/migration/v8-to-v9/ , https://docs.sentry.io/platforms/javascript/guides/node/migration/v9-to-v10/ .
+
+
+## Slice 7 — REST/OpenAPI compatibility and transport boundaries
+
+- Replace the incompatible trpc-openapi 1.x dependency with trpc-to-openapi 3.3.0 / zod-openapi 5.4.6 for documentation. Generate OpenAPI 3.1 with 211 paths; missing output validators are explicitly marked x-response-schema-unavailable rather than fabricating typed responses. Preserve original client inference and runtime parsers.
+- Execute REST requests through the original tRPC caller. Convert HTTP strings without mutating shared Zod schemas; retain input refinements, auth, tenant context, sensitive-procedure limits and JSON body types. Static routes precede parameter routes; path identifiers override body/query values. Unknown REST routes return 404. Apply the general per-user API limiter to REST too.
+- Mark public/protected procedures at their actual middleware source for accurate documentation security. Use the real cookie name and /api/rest base URL. Complex query values accept explicitly documented JSON strings.
+- Documentation failures return HTTP 503 or a failing generator exit, never a cached empty success. The one-shot generator exits after its synchronous file writes; generated snapshots are excluded from git.
+
+Validation: five regression cases pass, including real loopback HTTP requests and complete application route/document generation. They prove transport behavior with a supplied test context; existing session/MFA tests separately cover credential verification. MySQL, provider calls and actual production credentials are not exercised by these tests. This slice resolves the REST compatibility limitation recorded in slice 6.
+
+Reference: https://github.com/mcampa/trpc-to-openapi . Its stock HTTP adapter mutates coercion flags; AIS deliberately uses its own transport boundary and only the supported documentation generator.

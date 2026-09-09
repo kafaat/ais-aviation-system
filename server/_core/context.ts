@@ -37,7 +37,7 @@ async function authenticateWithBearerToken(
 }
 
 export async function createContext(
-  opts: CreateExpressContextOptions
+  opts: Pick<CreateExpressContextOptions, "req" | "res">
 ): Promise<TrpcContext> {
   let user: User | null = null;
   let authMethod: "cookie" | "bearer" | null = null;

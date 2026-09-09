@@ -29,6 +29,7 @@ import {
 import { getPrometheusMetrics } from "../services/apm.service";
 import { createServiceLogger } from "./logger";
 import { getOpenApiDocument } from "../openapi";
+import { createRestMiddleware } from "./rest";
 
 // Create server-specific logger
 const log = createServiceLogger("server");
@@ -194,9 +195,12 @@ async function startServer() {
 
   // Serve OpenAPI specification as JSON (lazy generation)
   app.get("/api/openapi.json", async (_req, res) => {
-    const doc = await getOpenApiDocument();
-    res.setHeader("Content-Type", "application/json");
-    res.json(doc);
+    try {
+      res.json(await getOpenApiDocument());
+    } catch (error) {
+      log.error({ error }, "OpenAPI generation failed");
+      res.status(503).json({ error: "OpenAPI documentation unavailable" });
+    }
   });
 
   // Swagger UI options
@@ -227,35 +231,19 @@ async function startServer() {
     swaggerUi.setup(null, swaggerUiOptions)
   );
 
-  // OpenAPI REST endpoints - initialized lazily to avoid startup crash
-  // from trpc-openapi "Unknown procedure type" error
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let restMiddleware: any = null;
-  app.use("/api/rest", async (req, res, next) => {
-    try {
-      if (!restMiddleware) {
-        const { createOpenApiExpressMiddleware } = await import("trpc-openapi");
-        restMiddleware = createOpenApiExpressMiddleware({
-          router: appRouter,
-          createContext,
-          maxBodySize: 50 * 1024 * 1024,
-          responseMeta: undefined,
-          onError: ({ error, path }: { error: Error; path: string }) => {
-            log.error({ error: error.message, path }, "OpenAPI REST error");
-          },
-        });
-      }
-      restMiddleware(req, res, next);
-    } catch (error) {
-      log.warn(
-        { error: error instanceof Error ? error.message : error },
-        "OpenAPI REST endpoint error"
-      );
-      res.status(503).json({
-        error: "REST API temporarily unavailable. Use /api/trpc instead.",
-      });
-    }
-  });
+  app.use(
+    "/api/rest",
+    createUserRateLimitMiddleware({
+      scope: "api",
+      skipInDevelopment: true,
+      authenticateUser: true,
+    }),
+    createRestMiddleware({
+      router: appRouter,
+      createContext,
+      onError: (error, path) => log.error({ error, path }, "REST error"),
+    })
+  );
 
   // Sensitive procedure limits run inside tRPC, including every batch member.
 
