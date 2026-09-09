@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { loyaltyAccounts, milesTransactions } from "../../drizzle/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 
 /**
  * Loyalty Service
@@ -119,9 +119,31 @@ export async function awardMilesForBooking(
         .select()
         .from(loyaltyAccounts)
         .where(eq(loyaltyAccounts.userId, userId))
-        .limit(1);
+        .limit(1)
+        .for("update");
 
       if (!account) throw new Error("Loyalty account not found");
+
+      const [previous] = await tx
+        .select()
+        .from(milesTransactions)
+        .where(
+          and(
+            eq(milesTransactions.bookingId, bookingId),
+            eq(milesTransactions.userId, userId),
+            eq(milesTransactions.type, "earn")
+          )
+        )
+        .limit(1);
+      if (previous)
+        return {
+          milesEarned: previous.amount,
+          baseMiles: 0,
+          bonusMiles: 0,
+          newBalance: account.currentMilesBalance,
+          newTier: account.tier,
+          tierUpgraded: false,
+        };
 
       // Calculate base miles (1 mile per SAR)
       const amountInSAR = amountPaid / 100;

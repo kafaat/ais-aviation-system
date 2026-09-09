@@ -17,7 +17,7 @@ Validation: TypeScript and production build passed. Four focused tests passed (i
 
 Live MySQL/Docker are unavailable locally. Package installation failed on container UID/group restrictions; no restriction was disabled. SQL replay, nonempty upgrade preservation, image startup with live services and a real background job remain required before production acceptance. No local runtime failure due to missing services is treated as an application regression.
 
-## Remaining slices
+## Sequence established after slice 1
 
 - F02/F06/F11: tenant boundaries, request limiting and authenticated offline data.
 - F03/F08/F09/F12: MFA enforcement, shared session revocation, owner registration and refresh rotation.
@@ -56,3 +56,20 @@ Validation: affected password/logout/type tests passed (22); the combined MFA/se
 Validation: 16 executable regression cases cover real settlement functions with transactional persistence doubles (including both Stripe event orders, partial splits, modifications, cumulative refunds, wallet ownership, hold exclusion and booking rollback). The wider affected suite passed 71 cases before correcting a date/operator limitation in the test adapter; the three affected inventory cases subsequently passed. Provider HTTP calls are mocked; no real card, refund, wallet balance or production inventory was changed. Live MySQL contention and Stripe test-mode replay remain acceptance gates.
 
 Stripe references: https://docs.stripe.com/metadata and https://docs.stripe.com/api/refunds/list .
+
+## Slice 5 — durable operations and truthful delivery
+
+- F14: email now requires a configured Resend sender and a successful provider response containing an ID. Failed/missing delivery is an error, so workers cannot announce success from a console log. Confirmation emails carry a stable idempotency key; mileage awards are serialized and deduplicated by booking.
+- F14: outbox delivery uses the confirmation pipeline or an authenticated HTTPS receiver. Claims carry a unique lease token; completion/failure updates must still own that token. A stale worker cannot overwrite a replacement claim. Delivery remains at least once: receivers must deduplicate eventId, and provider acceptance is not proof of inbox delivery.
+- F14: load-plan details are stored in MySQL with optimistic version checks and transactional summary updates. No new plan depends on a process-local Map. Previously lost in-memory plans cannot be reconstructed by migration.
+- F14: simulated GDS reservations/tickets and disaster-recovery measurements refuse production execution. Development simulation requires AIS_ENABLE_DEMOS=true. Real GDS integration, measured recovery objectives and restore exercises remain operator/provider work; these capabilities are not declared implemented.
+- F10/F14: the Kubernetes backup job writes a checked nonempty dump and SHA-256 digest onto a configured persistent volume, using an existing credential secret. The release job fails when backup is enabled without these prerequisites. Job cleanup does not delete the persistent volume. A restore exercise is still required.
+- F01: the upgrade CI gate now seeds seven core tables at the previous release, snapshots their original values, and checks preservation after migrations and catalog verification. This gate requires live MySQL; it was not executed locally.
+- F13: production image builds pull the current base, and the runner removes unused global npm/corepack/yarn toolchains. Image vulnerability closure still requires the real CI image scan; no vulnerability exemption was added.
+- Append migration 0016 for durable load plans and fenced outbox claims. Update Compose/Kubernetes settings for email and event delivery. Full refunds also update their associated payment-history rows.
+
+Validation before dependency upgrades: the full suite passed 1,035 tests; 240 existing/integration tests were skipped (83 passed files, 17 skipped). TypeScript and production build passed. Runtime HTTP probes returned liveness=200, readiness=503 with unavailable dependencies, and the strict login quota=5. The affected operational/email/loyalty/refund suite passed 60 tests. Python syntax, deployment YAML and generated persistent-backup job structure passed. An executable refund rollback case now injects an outbox failure after capacity restoration and verifies the whole transaction rolls back.
+
+These tests use provider and transactional persistence doubles where services are unavailable. They do not establish live MySQL locking, durable-volume restore, actual email receipt, payment-provider replay or image-scan success. The complete-suite log includes existing React act warnings. No production data was changed.
+
+Email references: https://resend.com/docs/api-reference/emails/send-email and https://resend.com/docs/dashboard/emails/idempotency-keys .

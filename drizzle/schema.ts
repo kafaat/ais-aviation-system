@@ -5440,6 +5440,7 @@ export const outbox = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     // When the row was claimed; stale claims (worker crashed) are reclaimed
     // after OUTBOX_CLAIM_TIMEOUT.
+    leaseToken: varchar("leaseToken", { length: 36 }),
     lockedAt: timestamp("lockedAt"),
     publishedAt: timestamp("publishedAt"),
   },
@@ -5455,3 +5456,11 @@ export const outbox = mysqlTable(
 
 export type OutboxEvent = typeof outbox.$inferSelect;
 export type InsertOutboxEvent = typeof outbox.$inferInsert;
+
+/** Durable detailed plans; version prevents stale concurrent writers. */
+export const loadPlanDetails = mysqlTable("load_plan_details", {
+  flightId: int("flightId").primaryKey(),
+  version: int("version").default(1).notNull(),
+  data: json("data").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});

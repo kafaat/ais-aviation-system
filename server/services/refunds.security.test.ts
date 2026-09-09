@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   refund: vi.fn(),
   listRefunds: vi.fn(),
   calculateFee: vi.fn(),
+  settle: vi.fn(),
   refundsState: [] as Array<{
     id: string;
     amount: number;
@@ -16,9 +17,23 @@ const mocks = vi.hoisted(() => ({
   }>,
 }));
 
+vi.mock("./payment-settlement.service", () => ({
+  settleVerifiedRefund: mocks.settle,
+}));
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
 vi.mock("../stripe", () => ({
   stripe: {
+    charges: {
+      retrieve: async () => ({
+        id: "ch_test",
+        amount: 10000,
+        currency: "sar",
+        amount_refunded: mocks.refundsState.reduce(
+          (sum, refund) => sum + refund.amount,
+          0
+        ),
+      }),
+    },
     refunds: {
       create: mocks.refund,
       list: mocks.listRefunds,
@@ -57,6 +72,7 @@ function refundRecord(
     id,
     amount,
     status: "succeeded",
+    charge: "ch_test",
     metadata,
   };
 }
@@ -116,6 +132,7 @@ beforeEach(() => {
 function expectNoFinancialWrites() {
   expect(mocks.refund).not.toHaveBeenCalled();
   expect(mocks.update).not.toHaveBeenCalled();
+  expect(mocks.settle).not.toHaveBeenCalled();
 }
 
 describe("refund service authorization", () => {

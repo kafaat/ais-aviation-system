@@ -1,3 +1,4 @@
+import { requireDemoCapability } from "./demo-capability";
 /**
  * GDS (Global Distribution System) Integration Service
  *
@@ -1159,6 +1160,7 @@ export async function testConnection(connectionId: number): Promise<{
   responseTimeMs: number;
   message: string;
 }> {
+  requireDemoCapability("GDS simulation");
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -1279,6 +1281,7 @@ export async function healthCheckAll(): Promise<{
     responseTimeMs: number;
   }>;
 }> {
+  requireDemoCapability("GDS simulation");
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -1368,6 +1371,7 @@ export async function searchAvailability(
   connectionIdOrParams: number | SearchAvailabilityFlatParams,
   params?: SearchAvailabilityParams
 ): Promise<AvailabilityResult> {
+  requireDemoCapability("GDS simulation");
   // Normalize arguments: support both (connectionId, params) and (flatObject)
   let resolvedConnectionId: number;
   let resolvedParams: SearchAvailabilityParams;
@@ -1562,6 +1566,7 @@ export async function createBooking(
   connectionId: number,
   params: CreateBookingParams
 ): Promise<BookingResult> {
+  requireDemoCapability("GDS simulation");
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -1691,6 +1696,7 @@ export async function issueTicket(
   connectionId: number,
   pnr: string
 ): Promise<TicketResult> {
+  requireDemoCapability("GDS simulation");
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -1795,6 +1801,7 @@ export async function cancelBooking(
   connectionId: number,
   pnr: string
 ): Promise<CancelResult> {
+  requireDemoCapability("GDS simulation");
   const db = await getDb();
   if (!db) {
     throw new TRPCError({

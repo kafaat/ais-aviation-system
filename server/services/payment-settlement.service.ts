@@ -48,13 +48,7 @@ export async function settleVerifiedPayment(
   tx: SettlementTx,
   payment: VerifiedPayment
 ) {
-  const {
-    metadata: meta,
-    paymentIntentId,
-    amount,
-    currency,
-    eventId,
-  } = payment;
+  const { metadata: meta, paymentIntentId, amount, currency } = payment;
   if (!paymentIntentId) throw new Error("Missing payment intent");
   const kind = meta.type || "booking";
   if (
@@ -313,43 +307,37 @@ async function recordReceipt(
   userId: number,
   bookingId: number | null
 ) {
-  await tx
-    .insert(paymentReceipts)
-    .values({
-      paymentIntentId: payment.paymentIntentId,
-      kind,
-      targetId,
-      userId,
+  await tx.insert(paymentReceipts).values({
+    paymentIntentId: payment.paymentIntentId,
+    kind,
+    targetId,
+    userId,
+    bookingId,
+    amount: payment.amount,
+    currency: payment.currency.toUpperCase(),
+  });
+  if (bookingId)
+    await tx.insert(payments).values({
       bookingId,
       amount: payment.amount,
       currency: payment.currency.toUpperCase(),
-    });
-  if (bookingId)
-    await tx
-      .insert(payments)
-      .values({
-        bookingId,
-        amount: payment.amount,
-        currency: payment.currency.toUpperCase(),
-        method: "card",
-        provider: "stripe",
-        status: "completed",
-        transactionId: payment.paymentIntentId,
-        stripePaymentIntentId: payment.paymentIntentId,
-        idempotencyKey: `stripe:${payment.paymentIntentId}`,
-      });
-  await tx
-    .insert(financialLedger)
-    .values({
-      bookingId,
-      userId,
-      type: "charge",
-      amount: (payment.amount / 100).toFixed(2),
-      currency: payment.currency.toUpperCase(),
-      stripeEventId: payment.eventId,
+      method: "card",
+      provider: "stripe",
+      status: "completed",
+      transactionId: payment.paymentIntentId,
       stripePaymentIntentId: payment.paymentIntentId,
-      description: `${kind} payment ${targetId}`,
+      idempotencyKey: `stripe:${payment.paymentIntentId}`,
     });
+  await tx.insert(financialLedger).values({
+    bookingId,
+    userId,
+    type: "charge",
+    amount: (payment.amount / 100).toFixed(2),
+    currency: payment.currency.toUpperCase(),
+    stripeEventId: payment.eventId,
+    stripePaymentIntentId: payment.paymentIntentId,
+    description: `${kind} payment ${targetId}`,
+  });
 }
 
 /** Charge amount_refunded is cumulative: record only a positive, previously unseen delta. */
@@ -387,20 +375,17 @@ export async function settleVerifiedRefund(
     .update(paymentReceipts)
     .set({ refundedAmount: input.amountRefunded })
     .where(eq(paymentReceipts.paymentIntentId, input.paymentIntentId));
-  await tx
-    .insert(financialLedger)
-    .values({
-      bookingId: receipt.bookingId,
-      userId: receipt.userId,
-      type:
-        input.amountRefunded === receipt.amount ? "refund" : "partial_refund",
-      amount: (delta / 100).toFixed(2),
-      currency: receipt.currency,
-      stripePaymentIntentId: input.paymentIntentId,
-      stripeChargeId: input.chargeId,
-      stripeEventId: input.eventId,
-      description: "Verified refund delta",
-    });
+  await tx.insert(financialLedger).values({
+    bookingId: receipt.bookingId,
+    userId: receipt.userId,
+    type: input.amountRefunded === receipt.amount ? "refund" : "partial_refund",
+    amount: (delta / 100).toFixed(2),
+    currency: receipt.currency,
+    stripePaymentIntentId: input.paymentIntentId,
+    stripeChargeId: input.chargeId,
+    stripeEventId: input.eventId,
+    description: "Verified refund delta",
+  });
   if (receipt.kind === "wallet_topup") {
     const [request] = await tx
       .select()
@@ -419,17 +404,15 @@ export async function settleVerifiedRefund(
       .update(wallets)
       .set({ balance, ...(balance < 0 ? { status: "frozen" as const } : {}) })
       .where(eq(wallets.id, wallet.id));
-    await tx
-      .insert(walletTransactions)
-      .values({
-        walletId: wallet.id,
-        userId: wallet.userId,
-        type: "withdrawal",
-        amount: -delta,
-        balanceAfter: balance,
-        description: "Provider reversed wallet funding",
-        stripePaymentIntentId: input.paymentIntentId,
-      });
+    await tx.insert(walletTransactions).values({
+      walletId: wallet.id,
+      userId: wallet.userId,
+      type: "withdrawal",
+      amount: -delta,
+      balanceAfter: balance,
+      description: "Provider reversed wallet funding",
+      stripePaymentIntentId: input.paymentIntentId,
+    });
   } else if (receipt.bookingId && receipt.kind !== "modification") {
     const [booking] = await tx
       .select()
@@ -456,6 +439,12 @@ export async function settleVerifiedRefund(
         .set({ status: "cancelled", paymentStatus: "refunded" })
         .where(eq(bookings.id, booking.id));
     }
+  }
+  if (input.amountRefunded === receipt.amount && receipt.bookingId) {
+    await tx
+      .update(payments)
+      .set({ status: "refunded" })
+      .where(eq(payments.stripePaymentIntentId, input.paymentIntentId));
   }
   await recordEvent(tx, {
     aggregateType: "payment",

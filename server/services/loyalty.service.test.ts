@@ -30,6 +30,9 @@ const createMockDb = () => {
         resolve(result);
       },
       limit: vi.fn().mockImplementation(() => ({
+        for() {
+          return this;
+        },
         then: (resolve: (v: unknown) => void) => {
           const result = results[callIndex++] ?? [];
           resolve(result);
@@ -39,6 +42,9 @@ const createMockDb = () => {
     })),
     orderBy: vi.fn().mockReturnThis(),
     limit: vi.fn().mockImplementation(() => ({
+      for() {
+        return this;
+      },
       then: (resolve: (v: unknown) => void) => {
         const result = results[callIndex++] ?? [];
         resolve(result);
@@ -101,6 +107,7 @@ vi.mock("../../drizzle/schema", () => ({
 }));
 
 vi.mock("drizzle-orm", () => ({
+  and: vi.fn((...conditions) => ({ conditions })),
   eq: vi.fn((a, b) => ({ type: "eq", a, b })),
   desc: vi.fn(a => ({ type: "desc", a })),
 }));
@@ -179,6 +186,7 @@ describe("Loyalty Service", () => {
     mockDb._setResults(
       [bronzeAccount], // getOrCreateLoyaltyAccount: select existing
       [bronzeAccount], // tx: re-read account inside transaction
+      [], // tx: no previous earning for this booking
       [], // tx: update account
       [{ insertId: 1 }] // tx: insert miles transaction
     );
@@ -214,6 +222,7 @@ describe("Loyalty Service", () => {
     mockDb._setResults(
       [bronzeAccountWithPoints], // getOrCreateLoyaltyAccount: select
       [bronzeAccountWithPoints], // tx: re-read account inside transaction
+      [], // tx: no previous earning for this booking
       [], // tx: update account
       [{ insertId: 2 }] // tx: insert miles transaction
     );
@@ -245,6 +254,7 @@ describe("Loyalty Service", () => {
     mockDb._setResults(
       [silverAccount], // getOrCreateLoyaltyAccount: select
       [silverAccount], // tx: re-read account inside transaction
+      [], // tx: no previous earning for this booking
       [], // tx: update account
       [{ insertId: 3 }] // tx: insert miles transaction
     );
@@ -277,6 +287,7 @@ describe("Loyalty Service", () => {
 
     mockDb._setResults(
       [accountWithMiles], // tx: select account inside transaction
+      [], // tx: no previous earning for this booking
       [], // tx: update account
       [{ insertId: 4 }] // tx: insert redemption transaction
     );

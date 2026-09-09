@@ -23,15 +23,13 @@ import {
   users,
   passengers,
   stripeEvents,
-  financialLedger,
   bookingStatusHistory,
-  inventoryLocks,
 } from "../../drizzle/schema";
 import {
   settleVerifiedPayment,
   settleVerifiedRefund,
 } from "../services/payment-settlement.service";
-import { eq, and, gte, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { sendBookingConfirmation } from "../services/email.service";
 import { awardMilesForBooking } from "../services/loyalty.service";
 import { generateETicketForPassenger } from "../services/eticket.service";
@@ -39,7 +37,6 @@ import { createServiceLogger } from "../_core/logger";
 import {
   notifyBookingConfirmed,
   notifyPaymentReceived,
-  notifyRefundProcessed,
   createNotification,
 } from "../services/notification.service";
 
@@ -59,20 +56,6 @@ function isDuplicateEntryError(err: unknown): boolean {
       err.code === "23505" ||
       err.code === "23000")
   );
-}
-
-/** Extract affected-row count from Drizzle/MySQL update results. */
-function getAffectedRows(result: unknown): number {
-  if (Array.isArray(result)) {
-    const first = result[0];
-    if (first && typeof first === "object" && "affectedRows" in first) {
-      return Number((first as { affectedRows?: number }).affectedRows ?? 0);
-    }
-  }
-  if (result && typeof result === "object" && "rowsAffected" in result) {
-    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);
-  }
-  return 0;
 }
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -500,7 +483,7 @@ async function handleChargeRefunded(
  */
 export async function sendConfirmationAndAwardMiles(bookingId: number) {
   const db = await getDb();
-  if (!db) return;
+  if (!db) throw new Error("Database unavailable");
 
   try {
     const [booking] = await db
@@ -527,7 +510,8 @@ export async function sendConfirmationAndAwardMiles(bookingId: number) {
       .where(eq(bookings.id, bookingId))
       .limit(1);
 
-    if (!booking || !booking.userEmail) return;
+    if (!booking || !booking.userEmail)
+      throw new Error("Booking confirmation recipient is unavailable");
 
     // Get destination airport
     const [flight] = await db
@@ -604,7 +588,8 @@ export async function sendConfirmationAndAwardMiles(bookingId: number) {
     }
 
     // Send email
-    await sendBookingConfirmation({
+    const accepted = await sendBookingConfirmation({
+      idempotencyKey: `booking-confirmed:${bookingId}`,
       passengerName: booking.userName || "Passenger",
       passengerEmail: booking.userEmail,
       bookingReference: booking.bookingReference,
@@ -620,6 +605,9 @@ export async function sendConfirmationAndAwardMiles(bookingId: number) {
       attachments:
         eticketAttachments.length > 0 ? eticketAttachments : undefined,
     });
+
+    if (!accepted)
+      throw new Error("Booking confirmation email was not accepted");
 
     log.info(
       { event: "confirmation_sent", bookingId, email: booking.userEmail },
@@ -668,5 +656,6 @@ export async function sendConfirmationAndAwardMiles(bookingId: number) {
       { event: "post_transaction_failed", bookingId, error },
       "Post-transaction tasks failed"
     );
+    throw error;
   }
 }

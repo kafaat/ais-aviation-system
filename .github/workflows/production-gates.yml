@@ -97,6 +97,10 @@ jobs:
         run: pnpm run db:migrate
       - name: Install current dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Seed nonempty upgrade fixture and record its original values
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
+        run: pnpm exec tsx scripts/migration-preservation-check.ts seed "$RUNNER_TEMP/upgrade-before.json"
       - name: Upgrade previous-release database with current migrations
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
@@ -105,6 +109,10 @@ jobs:
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
         run: pnpm run db:verify
+      - name: Verify original data survived the upgrade
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
+        run: pnpm exec tsx scripts/migration-preservation-check.ts verify "$RUNNER_TEMP/upgrade-before.json"
 
   dependency-audit:
     name: Dependency Audit
@@ -127,8 +135,8 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
       - name: Build production and migrator images
         run: |
-          docker build -f Dockerfile.prod --target runner -t ais-production-gate:runner .
-          docker build -f Dockerfile.prod --target migrator -t ais-production-gate:migrator .
+          docker build --pull -f Dockerfile.prod --target runner -t ais-production-gate:runner .
+          docker build --pull -f Dockerfile.prod --target migrator -t ais-production-gate:migrator .
       - name: Verify migrator is self-contained
         run: |
           docker run --rm --network none --entrypoint sh ais-production-gate:migrator -ec \

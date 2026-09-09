@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, sql, gt } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import * as db from "../db";
 import { getDb } from "../db";
 import {
@@ -10,10 +10,7 @@ import {
   bookingAncillaries,
   ancillaryServices,
 } from "../../drizzle/schema";
-import {
-  checkFlightAvailability,
-  calculateFlightPrice,
-} from "./flights.service";
+import { calculateFlightPrice } from "./flights.service";
 import { createInventoryLock } from "./inventory-lock.service";
 import { trackBookingStarted, trackBookingCancelled } from "./metrics.service";
 import { releaseBookingSeats } from "./booking-settlement.service";
@@ -219,36 +216,32 @@ export async function createBooking(input: CreateBookingInput) {
       }
       const totalAmount =
         baseAmount + selected.reduce((sum, item) => sum + item.totalPrice, 0);
-      const [created] = await tx
-        .insert(bookings)
-        .values({
-          tenantId: currentFlight.tenantId,
-          userId: input.userId,
-          flightId: input.flightId,
-          inventoryLockId: lockId,
-          bookingReference,
-          pnr,
-          status: "pending",
-          totalAmount,
-          cabinClass: input.cabinClass,
-          numberOfPassengers: input.passengers.length,
-        });
+      const [created] = await tx.insert(bookings).values({
+        tenantId: currentFlight.tenantId,
+        userId: input.userId,
+        flightId: input.flightId,
+        inventoryLockId: lockId,
+        bookingReference,
+        pnr,
+        status: "pending",
+        totalAmount,
+        cabinClass: input.cabinClass,
+        numberOfPassengers: input.passengers.length,
+      });
       const bookingId = created.insertId;
-      await tx
-        .insert(passengers)
-        .values(
-          input.passengers.map(p => ({
-            tenantId: currentFlight.tenantId,
-            bookingId,
-            type: p.type,
-            title: p.title,
-            firstName: p.firstName,
-            lastName: p.lastName,
-            dateOfBirth: p.dateOfBirth,
-            passportNumber: p.passportNumber,
-            nationality: p.nationality,
-          }))
-        );
+      await tx.insert(passengers).values(
+        input.passengers.map(p => ({
+          tenantId: currentFlight.tenantId,
+          bookingId,
+          type: p.type,
+          title: p.title,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          dateOfBirth: p.dateOfBirth,
+          passportNumber: p.passportNumber,
+          nationality: p.nationality,
+        }))
+      );
       if (selected.length)
         await tx
           .insert(bookingAncillaries)

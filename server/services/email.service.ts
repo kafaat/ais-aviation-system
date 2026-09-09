@@ -2,15 +2,11 @@
  * Email Notification Service
  * Handles sending emails to passengers for various events
  *
- * Note: This is a mock implementation for demonstration.
- * In production, integrate with a real email service like:
- * - SendGrid
- * - AWS SES
- * - Mailgun
- * - Resend
+ * Uses the configured Resend provider and requires a provider acceptance receipt.
  */
 
 export interface EmailTemplate {
+  idempotencyKey?: string;
   to: string;
   subject: string;
   html: string;
@@ -136,6 +132,7 @@ export interface BookingConfirmationData {
   numberOfPassengers: number;
   totalAmount: number;
   language?: EmailLanguage;
+  idempotencyKey?: string;
   attachments?: Array<{
     filename: string;
     content: string; // base64 PDF
@@ -227,22 +224,42 @@ function sanitizeUrl(url: string): string {
   return "#";
 }
 
-/**
- * Mock email sending function
- * In production, replace with actual email service API call
- */
-async function sendEmail(template: EmailTemplate): Promise<boolean> {
-  // Redact the recipient email to avoid PII in logs
-  const redactedTo = template.to.includes("@")
-    ? template.to[0] + "***@" + template.to.split("@")[1]
-    : "[REDACTED]";
-  console.info("[Email Service] Sending email:");
-  console.info(`  To: ${redactedTo}`);
-  console.info(`  Subject: ${template.subject}`);
-
-  // Simulate email sending delay
-  await new Promise(resolve => setTimeout(resolve, 100));
-
+/** Returns success only when the configured provider accepts the message. */
+export async function sendEmail(template: EmailTemplate): Promise<boolean> {
+  const key = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM;
+  if (!key || !from)
+    throw new Error("Email provider requires RESEND_API_KEY and EMAIL_FROM");
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    redirect: "error",
+    signal: AbortSignal.timeout(15000),
+    headers: {
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      ...(template.idempotencyKey
+        ? { "Idempotency-Key": template.idempotencyKey }
+        : {}),
+    },
+    body: JSON.stringify({
+      from,
+      to: [template.to],
+      subject: template.subject,
+      html: template.html,
+      text: template.text,
+      attachments: template.attachments?.map(attachment => ({
+        filename: attachment.filename,
+        content: Buffer.isBuffer(attachment.content)
+          ? attachment.content.toString("base64")
+          : attachment.content,
+        content_type: attachment.contentType,
+      })),
+    }),
+  });
+  if (!response.ok)
+    throw new Error(`Email provider rejected message: HTTP ${response.status}`);
+  const receipt = (await response.json()) as { id?: string };
+  if (!receipt.id) throw new Error("Email provider response has no message ID");
   return true;
 }
 
@@ -261,6 +278,7 @@ export async function sendBookingConfirmation(
     const currencyLabel = lang === "ar" ? "ر.س" : "SAR";
 
     const template: EmailTemplate = {
+      idempotencyKey: data.idempotencyKey,
       to: data.passengerEmail,
       subject: `${t("bookingConfirmedSubject", lang)} - ${data.bookingReference}`,
       attachments: data.attachments?.map(att => ({
@@ -528,7 +546,7 @@ ${t("systemName", lang)}
     return await sendEmail(template);
   } catch (error) {
     console.error("[Email Service] Error sending booking confirmation:", error);
-    return false;
+    throw error;
   }
 }
 
@@ -794,7 +812,7 @@ export async function sendFlightStatusChange(
     return await sendEmail(template);
   } catch (error) {
     console.error("[Email Service] Error sending flight status change:", error);
-    return false;
+    throw error;
   }
 }
 
@@ -1014,7 +1032,7 @@ ${data.refundReason ? `- السبب: ${data.refundReason}` : ""}
     return await sendEmail(template);
   } catch (error) {
     console.error("[Email Service] Error sending refund confirmation:", error);
-    return false;
+    throw error;
   }
 }
 
@@ -1115,7 +1133,7 @@ ${data.checkInUrl}
     return await sendEmail(template);
   } catch (error) {
     console.error("[Email Service] Error sending check-in reminder:", error);
-    return false;
+    throw error;
   }
 }
 
@@ -1249,7 +1267,7 @@ ${nextTierText}
       "[Email Service] Error sending loyalty miles notification:",
       error
     );
-    return false;
+    throw error;
   }
 }
 
@@ -1381,7 +1399,7 @@ export async function sendNotificationEmail(
     return await sendEmail(template);
   } catch (error) {
     console.error("[Email Service] Error sending notification email:", error);
-    return false;
+    throw error;
   }
 }
 
@@ -1497,6 +1515,6 @@ ${data.paymentUrl}
       "[Email Service] Error sending split payment request:",
       error
     );
-    return false;
+    throw error;
   }
 }

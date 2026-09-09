@@ -3,12 +3,7 @@ import * as db from "../db";
 import { getDb } from "../db";
 import { payments } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
-import {
-  trackPaymentInitiated,
-  trackPaymentSuccess,
-  trackPaymentFailed,
-  trackBookingCompleted,
-} from "./metrics.service";
+import { trackPaymentInitiated, trackPaymentFailed } from "./metrics.service";
 import { stripe } from "../stripe";
 
 export interface CreateCheckoutSessionInput {

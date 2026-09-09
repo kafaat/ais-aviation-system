@@ -24,8 +24,6 @@ export function WalletCard() {
   const [customAmount, setCustomAmount] = useState("");
   const [showHistory, setShowHistory] = useState(false);
 
-  const utils = trpc.useUtils();
-
   const { data: balance, isLoading } = trpc.wallet.balance.useQuery(undefined, {
     retry: false,
   });

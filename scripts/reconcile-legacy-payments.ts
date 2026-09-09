@@ -1,5 +1,5 @@
 /** Read-only by default. --write-receipts imports provider-verified legacy collection baselines. */
-import { and, eq, isNotNull } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 import { getDb } from "../server/db";
 import { stripe } from "../server/stripe";
 import { bookings, paymentReceipts } from "../drizzle/schema";
@@ -48,18 +48,16 @@ for (const booking of candidates) {
         .where(eq(paymentReceipts.paymentIntentId, id))
         .limit(1);
       if (!existing)
-        await tx
-          .insert(paymentReceipts)
-          .values({
-            paymentIntentId: id,
-            kind: "booking",
-            bookingId: booking.id,
-            targetId: booking.id,
-            userId: booking.userId,
-            amount: payment.amount_received,
-            currency: "SAR",
-            refundedAmount: refundBaseline,
-          });
+        await tx.insert(paymentReceipts).values({
+          paymentIntentId: id,
+          kind: "booking",
+          bookingId: booking.id,
+          targetId: booking.id,
+          userId: booking.userId,
+          amount: payment.amount_received,
+          currency: "SAR",
+          refundedAmount: refundBaseline,
+        });
     });
   report.push({
     bookingId: booking.id,

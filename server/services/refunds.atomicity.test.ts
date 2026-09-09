@@ -1,28 +1,56 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
-
-const source = readFileSync(
-  new URL("./refunds.service.ts", import.meta.url),
-  "utf8"
-);
+import { describe, expect, it, vi } from "vitest";
+import { transactionMemory } from "../__tests__/helpers/transaction-memory";
+vi.mock("../db", () => ({ getDb: vi.fn() }));
+import { settleVerifiedRefund } from "./payment-settlement.service";
 
 describe("refund local reconciliation atomicity", () => {
-  it("serializes reconciliation and restores seats only on the first full-refund transition", () => {
-    expect(source).toContain("database.transaction(async tx =>");
-    expect(source).toContain('.for("update")');
-    expect(source).toContain('lockedBooking.paymentStatus !== "refunded"');
-    expect(source).toContain('lockedBooking.status === "confirmed"');
-
-    const start = source.indexOf(
-      "const localReconciliation = await database.transaction"
-    );
-    const end = source.indexOf("if (localReconciliation.shouldRestoreSeats)");
-    const body = source.slice(start, end);
-    expect(body).toContain(".update(bookings)");
-    expect(body).toContain(".update(flights)");
-    expect(body).toContain(".update(payments)");
-    expect(body).not.toContain("await database\n          .update(flights)");
-    expect(body).not.toContain("await database\n        .update(bookings)");
-    expect(body).not.toContain("await database\n        .update(payments)");
+  it("rolls back receipt, ledger and inventory together if the durable event cannot be recorded", async () => {
+    const fixture = transactionMemory({
+      payment_receipts: [
+        {
+          paymentIntentId: "pi_1",
+          kind: "booking",
+          amount: 10000,
+          refundedAmount: 0,
+          bookingId: 1,
+          userId: 1,
+          currency: "SAR",
+        },
+      ],
+      bookings: [
+        {
+          id: 1,
+          flightId: 1,
+          userId: 1,
+          status: "confirmed",
+          paymentStatus: "paid",
+          seatsReserved: true,
+          cabinClass: "economy",
+          numberOfPassengers: 1,
+        },
+      ],
+      flights: [{ id: 1, economyAvailable: 4 }],
+    });
+    fixture.failInsert("outbox");
+    await expect(
+      fixture.db.transaction((tx: any) =>
+        settleVerifiedRefund(tx, {
+          paymentIntentId: "pi_1",
+          chargeId: "ch_1",
+          amount: 10000,
+          amountRefunded: 10000,
+          currency: "sar",
+          eventId: "evt_1",
+        })
+      )
+    ).rejects.toThrow("Injected insert failure");
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      status: "confirmed",
+      paymentStatus: "paid",
+      seatsReserved: true,
+    });
+    expect(fixture.rows("flights")[0].economyAvailable).toBe(4);
+    expect(fixture.rows("payment_receipts")[0].refundedAmount).toBe(0);
+    expect(fixture.rows("financial_ledger")).toHaveLength(0);
   });
 });
