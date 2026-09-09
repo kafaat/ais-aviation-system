@@ -1,82 +1,49 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-
-const root = process.cwd();
-const drizzleDir = join(root, "drizzle");
-const schemaPath = join(drizzleDir, "schema.ts");
-const metaDir = join(drizzleDir, "meta");
-
-function sortedUnique(values: Iterable<string>): string[] {
-  return [...new Set(values)].sort();
-}
-
-function schemaTableNames(): string[] {
-  const source = readFileSync(schemaPath, "utf8");
-  const names: string[] = [];
-  const pattern = /mysqlTable\(\s*["'`]([^"'`]+)["'`]/g;
-  for (const match of source.matchAll(pattern)) names.push(match[1]);
-  return sortedUnique(names);
-}
-
-function latestSnapshotTableNames(): { file: string; tables: string[] } {
-  const snapshots = readdirSync(metaDir)
-    .filter(name => /^\d{4}_snapshot\.json$/.test(name))
-    .sort();
-  const file = snapshots.at(-1);
-  if (!file) throw new Error("No Drizzle snapshot found");
-  const snapshot = JSON.parse(readFileSync(join(metaDir, file), "utf8")) as {
-    tables?: Record<string, unknown>;
-  };
-  return { file, tables: sortedUnique(Object.keys(snapshot.tables ?? {})) };
-}
-
-function migrationCreatedTables(): string[] {
-  const names: string[] = [];
-  const sqlFiles = readdirSync(drizzleDir)
-    .filter(name => /^\d{4}_.+\.sql$/.test(name))
-    .sort();
-  const pattern =
-    /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+[`"]?([A-Za-z0-9_]+)[`"]?/gi;
-  for (const file of sqlFiles) {
-    const sql = readFileSync(join(drizzleDir, file), "utf8");
-    for (const match of sql.matchAll(pattern)) names.push(match[1]);
-  }
-  return sortedUnique(names);
-}
-
-function difference(left: string[], right: string[]): string[] {
-  const rightSet = new Set(right);
-  return left.filter(value => !rightSet.has(value));
-}
+import {
+  assertSnapshotMatchesSchema,
+  assertMigrationScope,
+} from "../../scripts/db/snapshot-check";
+import {
+  differences,
+  readHistory,
+  snapshotContract,
+} from "../../scripts/db/schema-contract";
 
 describe("Drizzle schema/snapshot authority", () => {
-  it("keeps schema.ts, latest generated snapshot, and executable CREATE TABLE history aligned", () => {
-    const schema = schemaTableNames();
-    const snapshot = latestSnapshotTableNames();
-    const migrations = migrationCreatedTables();
+  it("matches the complete generated schema including re-exports, columns, indexes and constraints", async () => {
+    await expect(assertSnapshotMatchesSchema()).resolves.toBeUndefined();
+  });
 
-    const report = {
-      schemaTableCount: schema.length,
-      latestSnapshot: snapshot.file,
-      snapshotTableCount: snapshot.tables.length,
-      migrationCreatedTableCount: migrations.length,
-      schemaMissingFromSnapshot: difference(schema, snapshot.tables),
-      snapshotMissingFromSchema: difference(snapshot.tables, schema),
-      schemaMissingFromCreateHistory: difference(schema, migrations),
-      createHistoryMissingFromSchema: difference(migrations, schema),
-    };
-
+  it("rejects lost tenant columns and weakened unique constraints even when table names match", () => {
+    const latest = readHistory().at(-1);
+    if (!latest) throw new Error("Missing migration history");
+    const expected = snapshotContract(latest.snapshot);
+    const missingColumn = structuredClone(expected);
+    delete missingColumn.users.columns.tenantId;
     expect(
-      report,
-      `Drizzle authority drift:\n${JSON.stringify(report, null, 2)}`
-    ).toEqual(
-      expect.objectContaining({
-        schemaMissingFromSnapshot: [],
-        snapshotMissingFromSchema: [],
-        schemaMissingFromCreateHistory: [],
-        createHistoryMissingFromSchema: [],
-      })
-    );
+      differences(expected, missingColumn).some(p =>
+        p.includes("users.columns.tenantId")
+      )
+    ).toBe(true);
+    const weakenedIndex = structuredClone(expected);
+    weakenedIndex.flight_reviews.indexes.user_flight_unique.unique = false;
+    expect(differences(expected, weakenedIndex)).toEqual([
+      "schema.flight_reviews.indexes.user_flight_unique.unique: expected true, received false",
+    ]);
+  });
+  it("refuses broad legacy drift when only ticket and seat tables were declared", () => {
+    const history = readHistory();
+    const before = history[12].snapshot;
+    const last = history.at(-1);
+    if (!last) throw new Error("Missing history");
+    const after = last.snapshot;
+    expect(() =>
+      assertMigrationScope(before, after, ["passengers", "seat_inventory"])
+    ).toThrow("MIGRATION_SCOPE_MISMATCH");
+    const changed = structuredClone(after);
+    changed.tables.passengers.columns.ticketNumber.notNull = true;
+    expect(() =>
+      assertMigrationScope(after, changed, ["passengers"])
+    ).not.toThrow();
   });
 });

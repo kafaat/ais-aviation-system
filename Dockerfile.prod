@@ -40,8 +40,9 @@ FROM deps AS migrator
 WORKDIR /app
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./
+COPY scripts/db ./scripts/db
 USER ais
-CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
+CMD ["node", "--import", "tsx", "scripts/db/migrate.ts", "migrate"]
 
 # Production image
 FROM base AS runner
