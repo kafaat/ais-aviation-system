@@ -128,3 +128,14 @@ Final continuation validation: 1,056 tests passed, 240 skipped, 0 failed (87 pas
 The final suite follows two intermediate failing suite runs that are retained in the evidence: the complete-router documentation case needed a 30-second test deadline under coverage, an old checkout double returned a booking for the newly added receipt lookup, and a pre-existing expiration arithmetic test rounded two different clock reads into an extra day. The first two were corrected at their test boundaries; date arithmetic now starts from one instant. No test was skipped; coverage thresholds were unchanged.
 
 Coverage includes 504 source files: 11.26% of lines and 8.14% of branches. This remains limited assurance. Live migration/transaction/provider/image/browser/restore acceptance is still unexecuted locally.
+
+## CI follow-up — preference defaults and verified flight-cancellation refunds
+
+GitHub Production Gates run 34397473209 passed on PR head `022550f` (merge candidate `9d3a01a`): 112 live MySQL tables matched the checked catalog, nine MySQL/Redis acceptance checks passed without skips, and original values in seven core tables survived an upgrade from v1.20.26. Production Docker Validation run 34397473216 also built and booted the production image. These are CI observations; the local environment still has no MySQL/Redis/Docker acceptance evidence.
+
+The wider CI suite then exposed eight failures (1,285 passed, three skipped). Seven were caused by migration 0013 removing three `false` defaults while tightening preference nullability. The catalog verifier checked nullability but not those defaults. The other failure was an old flight-cancellation test expecting an immediate database refund without a provider reference or verified settlement.
+
+- Append migration 0018 to restore the three defaults without changing stored preferences or previously committed SQL. Extend catalog verification to every declared boolean default, including `false`, and add a mandatory live partial-preference creation/update case.
+- Keep provider confirmation as the refund authority. The flight-status integration fixture now funds a pending booking through the real settlement function. Tests verify rejection of an absent provider reference, a provider refund request with a stable idempotency key, unchanged payment/inventory before verified settlement, and one seat restoration after repeated verified refund delivery. Only provider HTTP and external notifications are doubled; the database operations remain live.
+
+The updated CI revision must pass both the general suite and the expanded ten-check live acceptance gate. Provider test-mode operations and measured backup restoration remain external acceptance work.

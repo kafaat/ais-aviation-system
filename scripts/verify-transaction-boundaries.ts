@@ -36,6 +36,8 @@ const { reserveSeats, InventoryUnavailableError } =
   await import("../server/services/booking-settlement.service");
 const { createInventoryLock, releaseExpiredLocks } =
   await import("../server/services/inventory-lock.service");
+const { upsertUserPreferences } =
+  await import("../server/services/user-preferences.service");
 const db = getDb();
 assert(db, "MySQL is required");
 const checks: string[] = [];
@@ -67,6 +69,7 @@ try {
       schema.paymentReceipts,
       schema.outbox,
       schema.wallets,
+      schema.userPreferences,
     ]) {
       assert.equal(
         (await db.select().from(table).limit(1)).length,
@@ -92,6 +95,24 @@ try {
     name: "Acceptance",
     role: "user",
   });
+  await check(
+    "partial preferences retain database boolean defaults",
+    async () => {
+      const preferences = await upsertUserPreferences(id, {
+        preferredSeatType: "window",
+      });
+      assert.equal(preferences.wheelchairAssistance, false);
+      assert.equal(preferences.extraLegroom, false);
+      assert.equal(preferences.smsNotifications, false);
+      assert.equal(preferences.emailNotifications, true);
+      assert.equal(preferences.autoCheckIn, false);
+      const updated = await upsertUserPreferences(id, {
+        smsNotifications: true,
+      });
+      assert.equal(updated.smsNotifications, true);
+      assert.equal(updated.preferredSeatType, "window");
+    }
+  );
   await db
     .insert(schema.airlines)
     .values({ id, code: "ZX", name: "Acceptance" });

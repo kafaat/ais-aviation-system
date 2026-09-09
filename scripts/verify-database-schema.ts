@@ -16,7 +16,7 @@ const normalize = (value: string) =>
     .replaceAll(", ", ",");
 try {
   const [columns] = await connection.query<RowDataPacket[]>(
-    "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
+    "SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, COLUMN_DEFAULT, IS_NULLABLE, EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()"
   );
   const [indexes] = await connection.query<RowDataPacket[]>(
     "SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, NON_UNIQUE FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX"
@@ -48,6 +48,16 @@ try {
         );
       if ((row.IS_NULLABLE === "NO") !== column.notNull)
         failures.push(`Nullability mismatch: ${config.name}.${column.name}`);
+      // false is a declared default too. NOT NULL/type checks alone cannot
+      // detect a MODIFY COLUMN that silently drops its DEFAULT clause.
+      if (
+        typeof column.default === "boolean" &&
+        (row.COLUMN_DEFAULT === null ||
+          String(row.COLUMN_DEFAULT) !== String(Number(column.default)))
+      )
+        failures.push(
+          `Boolean default mismatch: ${config.name}.${column.name}`
+        );
       if (
         "autoIncrement" in column &&
         Boolean(column.autoIncrement) !== row.EXTRA.includes("auto_increment")
@@ -110,7 +120,7 @@ try {
       `Database schema differs from source:\n${failures.join("\n")}`
     );
   console.info(
-    `Verified ${tables.length} live tables: columns, types, nullability, auto-increment, primary and unique indexes.`
+    `Verified ${tables.length} live tables: columns, types, boolean defaults, nullability, auto-increment, primary and unique indexes.`
   );
 } finally {
   await connection.end();

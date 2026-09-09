@@ -127,6 +127,13 @@
       "when": 1788981091933,
       "tag": "0017_collection_review",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1788983798545,
+      "tag": "0018_restore_preference_defaults",
+      "breakpoints": true
     }
   ]
 }
