@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.20.26
+
+### Bug Fixes
+
+- fix(docker): patch Alpine runtime packages (ddd2159)
+
+### Other Changes
+
+- Merge pull request #128 from kafaat/fix/docker-image-vulnerabilities-20260909 (92c6236)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.25...v1.20.26
+
+---
+
 ## What's Changed in v1.20.25
 
 ### Bug Fixes
