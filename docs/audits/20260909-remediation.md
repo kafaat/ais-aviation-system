@@ -141,3 +141,22 @@ The wider CI suite then exposed eight failures (1,285 passed, three skipped). Se
 The updated CI revision must pass both the general suite and the expanded ten-check live acceptance gate. Provider test-mode operations and measured backup restoration remain external acceptance work.
 
 CI on `87a9de9` passed all ten live checks and the general suite (1,294 passed, three skipped), including all 14 affected preference/flight-status tests. The browser job then exposed a separate auth-startup regression: replacing the substring `mysql://` also rewrote the suffix inside `mysql+pymysql://`, producing an invalid doubled driver name. Normalize only a bare URL scheme. A Python regression test now loads the real SQLAlchemy/PyMySQL driver for both URL forms, checks idempotence and credential preservation, and runs in CI before starting the auth service.
+
+## Backup restore acceptance follow-up
+
+The continuation after `59fe16d` adds a live restore gate using the exact generated
+deployment backup command and the nonempty financial/session fixtures already
+created by transaction acceptance. A new isolated MySQL server restores the dump
+from a volume that survives writer exit. Deterministic before/after dumps compare
+all table definitions and rows, routines, triggers and events. Corruption, failed
+dump, overwrite and nonempty-target cases must fail without false success.
+
+Backup creation now includes events and binary data, refuses overwrites, cleans
+failed partial output and publishes the checksum last. The generated Job has a
+bounded deadline. Eight executable shell boundary tests cover successful private
+artifacts, partial/empty dump failures, collisions, invalid names and missing
+credentials. The restore runner rejects production configuration.
+
+Local boundary and configuration checks are separate from live Docker evidence;
+CI must execute the new restore gate before it is reported as passed. See
+[backup restore acceptance](../BACKUP_RESTORE_ACCEPTANCE.md) for scope and limits.

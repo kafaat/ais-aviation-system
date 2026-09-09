@@ -24,6 +24,7 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: test_password
           MYSQL_DATABASE: ais_migration_test
+          AIS_DISPOSABLE_DATABASE: "true"
         ports:
           - 3306:3306
         options: >-
@@ -59,6 +60,8 @@ jobs:
           pnpm run db:verify
       - name: Type-check the live acceptance runner
         run: pnpm exec tsc -p tsconfig.acceptance.json --noEmit
+      - name: Verify backup failure boundaries
+        run: python3 -m unittest discover -s scripts/ci -p 'test_backup_job.py' -v
       - name: Prove transaction boundaries against live MySQL and Redis
         env:
           NODE_ENV: test
@@ -67,11 +70,22 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379/1
           JWT_SECRET: acceptance-only-signing-key-not-for-production
         run: pnpm test:acceptance "$RUNNER_TEMP/live-acceptance.json"
+      - name: Restore the deployment backup on an isolated MySQL server
+        env:
+          NODE_ENV: test
+          AIS_DISPOSABLE_DATABASE: "true"
+          MYSQL_SERVICE_CONTAINER: ${{ job.services.mysql.id }}
+          MYSQL_DATABASE: ais_migration_test
+          MYSQL_PWD: test_password
+        run: python3 scripts/ci/backup-restore-smoke.py "$RUNNER_TEMP/backup-restore.json"
       - name: Preserve live acceptance evidence
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: live-transaction-acceptance
-          path: ${{ runner.temp }}/live-acceptance.json
+          path: |
+            ${{ runner.temp }}/live-acceptance.json
+            ${{ runner.temp }}/backup-restore.json
           if-no-files-found: error
 
   previous-release-upgrade:
