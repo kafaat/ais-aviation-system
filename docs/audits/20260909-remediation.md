@@ -86,7 +86,6 @@ The new manifest will distinguish final verification from intermediate failures 
 
 References: https://v4.vitest.dev/guide/migration , https://docs.sentry.io/platforms/javascript/guides/node/migration/v8-to-v9/ , https://docs.sentry.io/platforms/javascript/guides/node/migration/v9-to-v10/ .
 
-
 ## Slice 7 — REST/OpenAPI compatibility and transport boundaries
 
 - Replace the incompatible trpc-openapi 1.x dependency with trpc-to-openapi 3.3.0 / zod-openapi 5.4.6 for documentation. Generate OpenAPI 3.1 with 211 paths; missing output validators are explicitly marked x-response-schema-unavailable rather than fabricating typed responses. Preserve original client inference and runtime parsers.
@@ -98,14 +97,12 @@ Validation: five regression cases pass, including real loopback HTTP requests an
 
 Reference: https://github.com/mcampa/trpc-to-openapi . Its stock HTTP adapter mutates coercion flags; AIS deliberately uses its own transport boundary and only the supported documentation generator.
 
-
 ## Slice 8 — collection/refund lock ordering and legacy baseline safety
 
 - Refunds discover an immutable receipt reference without locking, then lock its booking or top-up request/wallet before a current receipt read, matching collection order. All booking receipts used to decide full refund are current locking reads, avoiding a stale repeatable-read snapshot.
 - Legacy receipt import remains read-only by default. Writing requires an explicit maintenance-window flag after payment/refund/webhook writers have stopped; the importer rechecks the locked booking against the provider snapshot and reports existing/changed rows accurately. The flag is an operator assertion, not automatic verification that external writers have stopped.
 
 Validation: 15 financial boundary cases pass, including new booking/wallet lock-order assertions. The transactional double records lock calls but does not simulate MySQL deadlocks. Live contention is covered by the subsequent CI acceptance gate, which must actually run before operational closure.
-
 
 ## Slice 9 — preserve collected funds requiring review
 
@@ -116,7 +113,6 @@ Validation: 15 financial boundary cases pass, including new booking/wallet lock-
 
 Validation: 23 affected payment/operator cases pass. Tests cover late/cancelled and inventory-starved collections, duplicate refund isolation, review-event rollback, blocked repeat wallet payment, administrator permissions and provider retry identity. Provider HTTP is mocked. Unsupported/mismatched purchases and stale modification/top-up state still remain retryable errors in the durable Stripe-event inbox; this slice does not fabricate automatic reconciliation for every business case. Administrative review is exposed through tRPC/REST/Swagger; no dedicated new dashboard was added.
 
-
 ## Slice 10 — current inventory reads and mandatory live acceptance
 
 - Seat reservation and hold creation read current hold rows under lock after locking the flight, so an older repeatable-read snapshot cannot hide a newly committed hold. Fix mutually exclusive expiry predicates that prevented cleanup. Extend holds with one conditional update; expired, converted and foreign-session holds cannot be revived by a check/write race.
@@ -126,7 +122,6 @@ Validation: 23 affected payment/operator cases pass. Tests cover late/cancelled 
 Validation: 21 inventory/payment boundary cases pass locally, including the three new hold lifecycle cases. Final full-suite/build/dependency evidence is recorded below and in the remediation manifest.
 
 MySQL references: https://dev.mysql.com/doc/refman/8.0/en/innodb-locking-reads.html and https://dev.mysql.com/doc/refman/8.0/en/innodb-consistent-read.html .
-
 
 Final continuation validation: 1,056 tests passed, 240 skipped, 0 failed (87 passed files and 17 skipped). TypeScript, the separate live-runner typecheck, production build and frozen dependency installation passed. pnpm audit reported zero advisories. ESLint reported 0 errors and 263 warnings. Ten real built-API HTTP probes passed, including REST authority/validation/404, live=200 and unavailable-dependency ready=503. OpenAPI 3.1 contains 213 paths and 227 operations; 183 operations explicitly lack an output schema. All 17 previously committed SQL migrations and the 36 original audit evidence files remain unchanged.
 

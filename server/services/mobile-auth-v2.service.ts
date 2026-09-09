@@ -166,17 +166,15 @@ export const mobileAuthServiceV2 = {
           code: "PRECONDITION_FAILED",
           message: "MFA_REQUIRED",
         });
-      await tx
-        .insert(refreshTokens)
-        .values({
-          userId,
-          familyId: sessionId,
-          mfaVerified,
-          token: hashToken(token),
-          expiresAt: expiry(),
-          deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : null,
-          ipAddress: deviceInfo?.ipAddress || null,
-        });
+      await tx.insert(refreshTokens).values({
+        userId,
+        familyId: sessionId,
+        mfaVerified,
+        token: hashToken(token),
+        expiresAt: expiry(),
+        deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : null,
+        ipAddress: deviceInfo?.ipAddress || null,
+      });
       await tx
         .update(users)
         .set({ lastSignedIn: new Date() })
@@ -251,19 +249,15 @@ export const mobileAuthServiceV2 = {
       if (claimed.affectedRows !== 1)
         throw unauthorized("Refresh token already used");
       const nextToken = randomToken();
-      await tx
-        .insert(refreshTokens)
-        .values({
-          userId: user.id,
-          familyId: record.familyId,
-          mfaVerified: record.mfaVerified,
-          token: hashToken(nextToken),
-          expiresAt: expiry(),
-          deviceInfo: deviceInfo
-            ? JSON.stringify(deviceInfo)
-            : record.deviceInfo,
-          ipAddress: deviceInfo?.ipAddress || record.ipAddress,
-        });
+      await tx.insert(refreshTokens).values({
+        userId: user.id,
+        familyId: record.familyId,
+        mfaVerified: record.mfaVerified,
+        token: hashToken(nextToken),
+        expiresAt: expiry(),
+        deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : record.deviceInfo,
+        ipAddress: deviceInfo?.ipAddress || record.ipAddress,
+      });
       return { user, nextToken, sessionId: record.familyId };
     });
     return {
