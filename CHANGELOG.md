@@ -1,5 +1,26 @@
 # Changelog
 
+## What's Changed in v1.20.22
+
+### Bug Fixes
+
+- fix(auth): add authenticated route guard (bade7bd)
+- fix(auth): protect account-scoped client routes (ca6f3c4)
+
+### Maintenance
+
+- ci(tmp): apply protected route wrappers (a76ad7d)
+- chore(ci): remove temporary route applicator (cb4ba36)
+
+### Other Changes
+
+- test(auth): guard account route protection (6f868ba)
+- Merge pull request #124 from kafaat/fix/protected-user-routes-20260909 (5db2661)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.21...v1.20.22
+
+---
+
 ## What's Changed in v1.20.21
 
 ### Bug Fixes
