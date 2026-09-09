@@ -35,6 +35,7 @@ const testUrl = new URL(url);
 testUrl.pathname = `/${database}`;
 let connection: Connection | undefined;
 let created = false;
+const scratch: string[] = [];
 const directory = mkdtempSync(join(tmpdir(), "ais-migrations-"));
 try {
   await admin.query(`CREATE DATABASE \`${database}\``);
@@ -188,8 +189,70 @@ try {
   console.info(
     "PASS: physical column drift detected despite unchanged table count"
   );
+
+  // Adoption of a database that already carries the final schema but was never
+  // journaled, which is the shape left behind by `drizzle-kit push`. Both
+  // fixtures are built by replaying every migration and then discarding the
+  // journal, so the schema is known-good and only the history is missing.
+  const scratchUrl = (name: string) => {
+    const target = new URL(testUrl.href);
+    target.pathname = `/${name}`;
+    return target.href;
+  };
+  for (const name of [`${database}_adopt`, `${database}_mismatch`]) {
+    await admin.query(`CREATE DATABASE \`${name}\``);
+    scratch.push(name);
+    const seed = await createConnection(scratchUrl(name));
+    await migrate(drizzle(seed), { migrationsFolder: "drizzle" });
+    await seed.query("DROP TABLE `__drizzle_migrations`");
+    await seed.end();
+  }
+
+  const adopt = await createConnection(scratchUrl(`${database}_adopt`));
+  const beforeAdopt = JSON.stringify(await readDatabaseContract(adopt));
+  await runMigration("baseline", scratchUrl(`${database}_adopt`));
+  assert.equal(
+    JSON.stringify(await readDatabaseContract(adopt)),
+    beforeAdopt,
+    "baseline must not touch application objects"
+  );
+  await runMigration("verify", scratchUrl(`${database}_adopt`));
+  await assert.rejects(
+    runMigration("baseline", scratchUrl(`${database}_adopt`)),
+    /BASELINE_ALREADY_JOURNALED/
+  );
+  await adopt.end();
+  console.info(
+    "PASS: unjournaled database adopted without DDL, verified, and refused a second adoption"
+  );
+
+  const mismatch = await createConnection(scratchUrl(`${database}_mismatch`));
+  await mismatch.query("ALTER TABLE users DROP COLUMN tenantId");
+  const beforeMismatch = JSON.stringify(await readDatabaseContract(mismatch));
+  await assert.rejects(
+    runMigration("baseline", scratchUrl(`${database}_mismatch`)),
+    /BASELINE_SCHEMA_MISMATCH/
+  );
+  assert.equal(
+    JSON.stringify(await readDatabaseContract(mismatch)),
+    beforeMismatch,
+    "refused baseline must not change the schema"
+  );
+  const [journal] = await mismatch.query<RowDataPacket[]>(
+    "SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '__drizzle_migrations'"
+  );
+  assert.equal(
+    Number(journal[0].n),
+    0,
+    "refused baseline must not create the journal"
+  );
+  await mismatch.end();
+  console.info(
+    "PASS: baseline refuses a database that differs from the final snapshot"
+  );
 } finally {
   await connection?.end();
+  for (const name of scratch) await admin.query(`DROP DATABASE \`${name}\``);
   if (created) await admin.query(`DROP DATABASE \`${database}\``);
   await admin.end();
   rmSync(directory, { recursive: true, force: true });
