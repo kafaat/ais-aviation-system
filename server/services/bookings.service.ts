@@ -250,9 +250,12 @@ export async function createBooking(input: CreateBookingInput) {
   }
 }
 
-export async function getUserBookings(userId: number) {
+export async function getUserBookings(
+  userId: number,
+  tenantId?: number | null
+) {
   try {
-    return await db.getBookingsByUserId(userId);
+    return await db.getBookingsByUserId(userId, tenantId);
   } catch (error) {
     console.error("Error getting user bookings:", error);
     throw new TRPCError({

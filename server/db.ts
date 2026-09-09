@@ -654,9 +654,21 @@ export async function createBooking(data: InsertBooking) {
   return result;
 }
 
-export async function getBookingsByUserId(userId: number) {
+export async function getBookingsByUserId(
+  userId: number,
+  tenantId?: number | null
+) {
   const db = await getDb();
   if (!db) return [];
+
+  const bookingWhere =
+    tenantId == null
+      ? and(eq(bookings.userId, userId), isNull(bookings.deletedAt))
+      : and(
+          eq(bookings.userId, userId),
+          eq(bookings.tenantId, tenantId),
+          isNull(bookings.deletedAt)
+        );
 
   const result = await db
     .select({
@@ -685,7 +697,7 @@ export async function getBookingsByUserId(userId: number) {
     .innerJoin(flights, eq(bookings.flightId, flights.id))
     .innerJoin(airports, eq(flights.originId, airports.id))
     .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
-    .where(and(eq(bookings.userId, userId), isNull(bookings.deletedAt)))
+    .where(bookingWhere)
     .orderBy(desc(bookings.createdAt));
 
   // Fetch all passengers for all bookings in a single query
@@ -694,10 +706,18 @@ export async function getBookingsByUserId(userId: number) {
   }
 
   const bookingIds = result.map(b => b.id);
+  const passengerWhere =
+    tenantId == null
+      ? inArray(passengers.bookingId, bookingIds)
+      : and(
+          inArray(passengers.bookingId, bookingIds),
+          eq(passengers.tenantId, tenantId)
+        );
+
   const allPassengers = await db
     .select()
     .from(passengers)
-    .where(inArray(passengers.bookingId, bookingIds));
+    .where(passengerWhere);
 
   // Group passengers by bookingId
   const passengersByBookingId = new Map<
