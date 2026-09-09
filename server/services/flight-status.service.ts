@@ -270,26 +270,34 @@ export async function cancelFlightAndRefund(params: {
         and(eq(bookings.flightId, flightId), eq(bookings.paymentStatus, "paid"))
       );
 
-    // Update all bookings to cancelled and refunded
+    // Request actual provider refunds. Webhooks settle money and release inventory.
+    // A missing payment reference or provider failure remains visible to the caller.
+    const { stripe } = await import("../stripe");
     let refundedCount = 0;
     for (const booking of paidBookings) {
-      await database
-        .update(bookings)
-        .set({
-          status: "cancelled",
-          paymentStatus: "refunded",
-          updatedAt: new Date(),
-        })
-        .where(eq(bookings.id, booking.id));
-
-      refundedCount++;
+      if (!booking.stripePaymentIntentId)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Booking ${booking.id} needs refund reconciliation for its original payment method`,
+        });
+      const refund = await stripe.refunds.create(
+        {
+          payment_intent: booking.stripePaymentIntentId,
+          reason: "requested_by_customer",
+          metadata: {
+            bookingId: String(booking.id),
+            flightId: String(flightId),
+          },
+        },
+        { idempotencyKey: `flight-cancel:${flightId}:booking:${booking.id}` }
+      );
+      if (refund.status === "succeeded") refundedCount++;
+      else
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: `Refund ${refund.id} is ${refund.status}; completion is pending provider confirmation`,
+        });
     }
-
-    // Notify owner
-    await notifyOwner({
-      title: `إلغاء الرحلة وإرجاع المبالغ`,
-      content: `تم إلغاء الرحلة ${flightId} وإرجاع المبالغ لـ ${refundedCount} حجز.\nالسبب: ${reason}`,
-    });
 
     return {
       success: true,

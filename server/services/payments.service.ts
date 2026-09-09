@@ -41,7 +41,7 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       });
     }
 
-    if (booking.paymentStatus === "paid") {
+    if (booking.status !== "pending" || booking.paymentStatus === "paid") {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Booking is already paid",
@@ -75,12 +75,12 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       line_items: [
         {
           price_data: {
-            currency: input.currency || "sar",
+            currency: "sar",
             product_data: {
               name: `Flight Booking - ${booking.bookingReference}`,
               description: `PNR: ${booking.pnr}`,
             },
-            unit_amount: input.amount,
+            unit_amount: booking.totalAmount,
           },
           quantity: 1,
         },
@@ -88,7 +88,15 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
       mode: "payment",
       success_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/booking-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL || "http://localhost:3000"}/booking-cancelled`,
+      payment_intent_data: {
+        metadata: {
+          type: "booking",
+          bookingId: String(input.bookingId),
+          userId: String(input.userId),
+        },
+      },
       metadata: {
+        type: "booking",
         bookingId: input.bookingId.toString(),
         userId: input.userId.toString(),
       },
@@ -97,8 +105,8 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
     // Create payment record
     await db.createPayment({
       bookingId: input.bookingId,
-      amount: input.amount,
-      currency: input.currency || "SAR",
+      amount: booking.totalAmount,
+      currency: "SAR",
       status: "pending",
       method: "card",
       transactionId: session.id,
@@ -109,8 +117,8 @@ export async function createCheckoutSession(input: CreateCheckoutSessionInput) {
     trackPaymentInitiated({
       userId: input.userId,
       bookingId: input.bookingId,
-      amount: input.amount,
-      currency: input.currency || "SAR",
+      amount: booking.totalAmount,
+      currency: "SAR",
       paymentMethod: "card",
     });
 
@@ -137,67 +145,23 @@ export async function handlePaymentSuccess(
   sessionId: string,
   paymentIntentId: string
 ) {
-  try {
-    // Retrieve session from Stripe
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-    if (!session.metadata?.bookingId) {
-      throw new Error("Booking ID not found in session metadata");
-    }
-
-    const bookingId = parseInt(session.metadata.bookingId);
-    const userId = session.metadata.userId
-      ? parseInt(session.metadata.userId)
-      : undefined;
-
-    const booking = await db.getBookingByIdWithDetails(bookingId);
-
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    // Update the specific payment record for this session, not all payments for the booking
-    await database
-      .update(payments)
-      .set({
-        status: "completed",
-        transactionId: paymentIntentId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(payments.bookingId, bookingId),
-          eq(payments.transactionId, sessionId)
-        )
-      );
-
-    await db.updateBookingStatus(bookingId, "confirmed");
-
-    // Track payment success event for metrics
-    if (booking && userId) {
-      trackPaymentSuccess({
-        userId,
-        bookingId,
-        amount: booking.totalAmount,
-        currency: session.currency || "SAR",
-        paymentMethod: "card",
-      });
-
-      // Track booking completed event for metrics
-      trackBookingCompleted({
-        userId,
-        bookingId,
-        flightId: booking.flightId,
-        cabinClass: booking.cabinClass as "economy" | "business",
-        passengerCount: booking.numberOfPassengers,
-        totalAmount: booking.totalAmount,
-      });
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error handling payment success:", error);
-    throw error;
-  }
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  if (
+    session.payment_status !== "paid" ||
+    session.payment_intent !== paymentIntentId
+  )
+    throw new Error("Provider has not confirmed this payment");
+  const database = await getDb();
+  if (!database) throw new Error("Database unavailable");
+  const { processStripeEvent } = await import("../webhooks/stripe");
+  await database.transaction(tx =>
+    processStripeEvent(tx, {
+      id: `reconcile_checkout:${session.id}`,
+      type: "checkout.session.completed",
+      data: { object: session },
+    } as unknown as import("stripe").default.Event)
+  );
+  return { success: true };
 }
 
 /**

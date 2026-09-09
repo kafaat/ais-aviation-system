@@ -243,6 +243,8 @@ export const bookings = mysqlTable(
     ])
       .default("pending")
       .notNull(),
+    inventoryLockId: int("inventoryLockId").unique(),
+    seatsReserved: boolean("seatsReserved").default(false).notNull(),
     totalAmount: int("totalAmount").notNull(), // Total price in SAR cents
     paymentStatus: mysqlEnum("paymentStatus", [
       "pending",
@@ -1216,6 +1218,24 @@ export type InsertStripeEvent = typeof stripeEvents.$inferInsert;
  * Financial Ledger
  * Complete audit trail of all financial transactions
  */
+/** Provider collection authority; keyed by immutable payment reference. */
+export const paymentReceipts = mysqlTable("payment_receipts", {
+  paymentIntentId: varchar("paymentIntentId", { length: 255 }).primaryKey(),
+  kind: mysqlEnum("kind", [
+    "booking",
+    "split_payment",
+    "modification",
+    "wallet_topup",
+  ]).notNull(),
+  bookingId: int("bookingId"),
+  userId: int("userId").notNull(),
+  targetId: int("targetId").notNull(),
+  amount: int("amount").notNull(),
+  currency: varchar("currency", { length: 3 }).notNull(),
+  refundedAmount: int("refundedAmount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const financialLedger = mysqlTable(
   "financial_ledger",
   {

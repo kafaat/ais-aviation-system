@@ -1,22 +1,49 @@
-import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { describe, expect, it, vi } from "vitest";
+import { transactionMemory } from "../__tests__/helpers/transaction-memory";
+vi.mock("../db", () => ({ getDb: vi.fn() }));
+import { reserveSeats } from "../services/booking-settlement.service";
 
 describe("Stripe inventory oversell boundary", () => {
-  const source = readFileSync(new URL("./stripe.ts", import.meta.url), "utf8");
-
-  it("never clamps an overdrawn inventory decrement to zero", () => {
-    expect(source).not.toContain("GREATEST(${flights.businessAvailable}");
-    expect(source).not.toContain("GREATEST(${flights.economyAvailable}");
-  });
-
-  it("guards both cabins and fails when no inventory row was reserved", () => {
-    expect(source).toContain(
-      "gte(flights.businessAvailable, booking.numberOfPassengers)"
+  it.each(["economy", "business"] as const)(
+    "rejects exhausted %s inventory without decrementing",
+    async cabin => {
+      const fixture = transactionMemory({
+        flights: [
+          {
+            id: 1,
+            status: "scheduled",
+            economyAvailable: 0,
+            businessAvailable: 0,
+          },
+        ],
+      });
+      await expect(reserveSeats(fixture.db, 1, cabin, 1)).rejects.toThrow(
+        "Insufficient"
+      );
+      expect(fixture.rows("flights")[0].economyAvailable).toBe(0);
+      expect(fixture.rows("flights")[0].businessAvailable).toBe(0);
+    }
+  );
+  it("does not take seats held by another purchase", async () => {
+    const fixture = transactionMemory({
+      flights: [{ id: 1, status: "scheduled", economyAvailable: 1 }],
+      inventory_locks: [
+        {
+          id: 2,
+          flightId: 1,
+          cabinClass: "economy",
+          numberOfSeats: 1,
+          status: "active",
+          expiresAt: new Date(Date.now() + 300000),
+        },
+      ],
+    });
+    await expect(reserveSeats(fixture.db, 1, "economy", 1)).rejects.toThrow(
+      "Insufficient"
     );
-    expect(source).toContain(
-      "gte(flights.economyAvailable, booking.numberOfPassengers)"
-    );
-    expect(source).toContain("getAffectedRows(seatUpdate) !== 1");
-    expect(source).toContain("Insufficient ${booking.cabinClass} inventory");
+    await expect(
+      reserveSeats(fixture.db, 1, "economy", 1, 2)
+    ).resolves.toBeUndefined();
+    expect(fixture.rows("flights")[0].economyAvailable).toBe(0);
   });
 });

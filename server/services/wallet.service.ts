@@ -1,7 +1,15 @@
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { wallets, walletTransactions } from "../../drizzle/schema";
-import { eq, sql, and } from "drizzle-orm";
+import {
+  wallets,
+  walletTransactions,
+  bookings,
+  paymentSplits,
+  financialLedger,
+} from "../../drizzle/schema";
+import { stripe } from "../stripe";
+import { confirmFundedBooking } from "./booking-settlement.service";
+import { eq, sql, and, inArray } from "drizzle-orm";
 
 /**
  * Get or create a wallet for a user
@@ -23,17 +31,20 @@ export async function getOrCreateWallet(userId: number) {
   if (existing) return existing;
 
   // Create new wallet
-  const [result] = await db.insert(wallets).values({
-    userId,
-    balance: 0,
-    currency: "SAR",
-    status: "active",
-  });
+  await db
+    .insert(wallets)
+    .values({
+      userId,
+      balance: 0,
+      currency: "SAR",
+      status: "active",
+    })
+    .onDuplicateKeyUpdate({ set: { userId } });
 
   const [wallet] = await db
     .select()
     .from(wallets)
-    .where(eq(wallets.id, result.insertId))
+    .where(eq(wallets.userId, userId))
     .limit(1);
 
   return wallet;
@@ -57,202 +68,172 @@ export async function getWalletBalance(userId: number) {
 export async function topUpWallet(
   userId: number,
   amount: number,
-  description: string,
-  stripePaymentIntentId?: string
+  description: string
 ) {
-  if (amount <= 0)
+  if (!Number.isSafeInteger(amount) || amount < 1000 || amount > 1000000)
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Amount must be positive",
+      message: "Invalid top-up amount",
     });
-
   const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
+  if (!db) throw new Error("Database unavailable");
   const wallet = await getOrCreateWallet(userId);
-
-  if (wallet.status !== "active") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Wallet is not active",
-    });
-  }
-
-  const result = await db.transaction(async tx => {
-    // Atomic balance update using SQL arithmetic to prevent lost updates
-    await tx
-      .update(wallets)
-      .set({ balance: sql`${wallets.balance} + ${amount}` })
-      .where(eq(wallets.id, wallet.id));
-
-    // Read back the updated balance
-    const [updated] = await tx
-      .select({ balance: wallets.balance })
-      .from(wallets)
-      .where(eq(wallets.id, wallet.id))
-      .limit(1);
-    const newBalance = updated.balance;
-
-    // Record transaction inside same tx
-    await tx.insert(walletTransactions).values({
+  if (wallet.status !== "active") throw new Error("Wallet is not active");
+  const [request] = await db
+    .insert(walletTransactions)
+    .values({
       walletId: wallet.id,
       userId,
       type: "top_up",
       amount,
-      balanceAfter: newBalance,
+      balanceAfter: wallet.balance,
       description,
-      stripePaymentIntentId,
-      status: "completed",
+      status: "pending",
     });
-
-    return { balance: newBalance, transactionAmount: amount };
-  });
-
-  return result;
+  const metadata = {
+    type: "wallet_topup",
+    topUpId: String(request.insertId),
+    userId: String(userId),
+  };
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+  // Balance changes only after the signed provider event settles this request.
+  const session = await stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "sar",
+            product_data: { name: "Wallet top-up" },
+            unit_amount: amount,
+          },
+          quantity: 1,
+        },
+      ],
+      metadata,
+      payment_intent_data: { metadata },
+      success_url: `${baseUrl}/my-bookings?wallet=pending`,
+      cancel_url: `${baseUrl}/my-bookings?wallet=cancelled`,
+    },
+    { idempotencyKey: `wallet-topup:${request.insertId}` }
+  );
+  return {
+    status: "pending" as const,
+    sessionId: session.id,
+    url: session.url,
+  };
 }
 
-/**
- * Pay from wallet
- */
-export async function payFromWallet(
-  userId: number,
-  amount: number,
-  description: string,
-  bookingId?: number
-) {
-  if (amount <= 0)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Amount must be positive",
-    });
-
+/** Amount and ownership come from the locked booking, never the client. */
+export async function payFromWallet(userId: number, bookingId: number) {
   const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const wallet = await getOrCreateWallet(userId);
-
-  if (wallet.status !== "active") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Wallet is not active",
-    });
-  }
-
-  // Preliminary balance check (authoritative check is inside the transaction)
-  if (wallet.balance < amount) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Insufficient wallet balance",
-    });
-  }
-
-  const result = await db.transaction(async tx => {
-    // Atomic deduct with SQL-level balance check to prevent race conditions
-    const updateResult = await tx
+  if (!db) throw new Error("Database unavailable");
+  return db.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
+      .limit(1)
+      .for("update");
+    if (!booking)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    const [existing] = await tx
+      .select()
+      .from(walletTransactions)
+      .where(
+        and(
+          eq(walletTransactions.bookingId, bookingId),
+          eq(walletTransactions.userId, userId),
+          eq(walletTransactions.type, "payment"),
+          eq(walletTransactions.status, "completed")
+        )
+      )
+      .limit(1);
+    if (existing)
+      return { balance: existing.balanceAfter, amountPaid: -existing.amount };
+    if (booking.status !== "pending" || booking.paymentStatus === "paid")
+      throw new Error("Booking is not payable");
+    const shares = await tx
+      .select()
+      .from(paymentSplits)
+      .where(
+        and(
+          eq(paymentSplits.bookingId, bookingId),
+          inArray(paymentSplits.status, ["paid", "pending", "email_sent"])
+        )
+      );
+    if (shares.length)
+      throw new Error("Booking has an active split payment plan");
+    const amount = booking.totalAmount;
+    if (!Number.isSafeInteger(amount) || amount <= 0)
+      throw new Error("Invalid booking amount");
+    const [wallet] = await tx
+      .select()
+      .from(wallets)
+      .where(eq(wallets.userId, userId))
+      .limit(1)
+      .for("update");
+    if (
+      !wallet ||
+      wallet.status !== "active" ||
+      wallet.currency !== "SAR" ||
+      wallet.balance < amount
+    )
+      throw new Error("Insufficient active wallet balance");
+    const [deduction] = await tx
       .update(wallets)
       .set({ balance: sql`${wallets.balance} - ${amount}` })
       .where(
-        and(eq(wallets.id, wallet.id), sql`${wallets.balance} >= ${amount}`)
+        and(
+          eq(wallets.id, wallet.id),
+          eq(wallets.status, "active"),
+          sql`${wallets.balance} >= ${amount}`
+        )
       );
-
-    // Check if update was applied (balance was sufficient)
-    const affectedRows = (
-      updateResult as unknown as [{ affectedRows: number }]
-    )[0].affectedRows;
-    if (affectedRows === 0) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Insufficient wallet balance",
+    if (deduction.affectedRows !== 1)
+      throw new Error("Wallet payment conflict");
+    await confirmFundedBooking(tx, booking);
+    await tx
+      .insert(walletTransactions)
+      .values({
+        walletId: wallet.id,
+        userId,
+        bookingId,
+        type: "payment",
+        amount: -amount,
+        balanceAfter: wallet.balance - amount,
+        description: `Booking ${booking.bookingReference}`,
+        status: "completed",
       });
-    }
-
-    // Read back the updated balance
-    const [updated] = await tx
-      .select({ balance: wallets.balance })
-      .from(wallets)
-      .where(eq(wallets.id, wallet.id))
-      .limit(1);
-    const newBalance = updated.balance;
-
-    await tx.insert(walletTransactions).values({
-      walletId: wallet.id,
-      userId,
-      type: "payment",
-      amount: -amount,
-      balanceAfter: newBalance,
-      description,
-      bookingId,
-      status: "completed",
-    });
-
-    return { balance: newBalance, amountPaid: amount };
+    await tx
+      .insert(financialLedger)
+      .values({
+        bookingId,
+        userId,
+        type: "charge",
+        amount: (amount / 100).toFixed(2),
+        currency: "SAR",
+        description: "Wallet booking settlement",
+      });
+    return { balance: wallet.balance - amount, amountPaid: amount };
   });
-
-  return result;
 }
 
 /**
  * Refund to wallet
  */
 export async function refundToWallet(
-  userId: number,
-  amount: number,
-  description: string,
-  bookingId?: number
-) {
-  if (amount <= 0)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Amount must be positive",
-    });
-
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const wallet = await getOrCreateWallet(userId);
-
-  const result = await db.transaction(async tx => {
-    // Atomic balance update using SQL arithmetic to prevent lost updates
-    await tx
-      .update(wallets)
-      .set({ balance: sql`${wallets.balance} + ${amount}` })
-      .where(eq(wallets.id, wallet.id));
-
-    // Read back the updated balance
-    const [updated] = await tx
-      .select({ balance: wallets.balance })
-      .from(wallets)
-      .where(eq(wallets.id, wallet.id))
-      .limit(1);
-    const newBalance = updated.balance;
-
-    await tx.insert(walletTransactions).values({
-      walletId: wallet.id,
-      userId,
-      type: "refund",
-      amount,
-      balanceAfter: newBalance,
-      description,
-      bookingId,
-      status: "completed",
-    });
-
-    return { balance: newBalance, amountRefunded: amount };
+  _userId: number,
+  _amount: number,
+  _description: string,
+  _bookingId?: number
+): Promise<never> {
+  throw new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message:
+      "Unlinked wallet credits are disabled; reconcile a verified original payment first",
   });
-
-  return result;
 }
 
 /**

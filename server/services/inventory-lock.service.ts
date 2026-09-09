@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { inventoryLocks, flights } from "../../drizzle/schema";
-import { eq, and, lt, sql } from "drizzle-orm";
+import type { SettlementTx } from "./booking-settlement.service";
+import { eq, and, lt, gt, sql } from "drizzle-orm";
 
 /**
  * Inventory Lock Service
@@ -18,18 +19,17 @@ export async function createInventoryLock(
   numberOfSeats: number,
   cabinClass: "economy" | "business",
   sessionId: string,
-  userId?: number
+  userId?: number,
+  transaction?: SettlementTx
 ): Promise<{ lockId: number; expiresAt: Date }> {
   try {
-    const database = await getDb();
+    const database = transaction || (await getDb());
     if (!database) throw new Error("Database not available");
-
-    await releaseExpiredLocks();
 
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + LOCK_DURATION_MINUTES);
 
-    const result = await database.transaction(async tx => {
+    const create = async (tx: SettlementTx) => {
       const [flight] = await tx
         .select({
           economyAvailable: flights.economyAvailable,
@@ -61,7 +61,8 @@ export async function createInventoryLock(
           and(
             eq(inventoryLocks.flightId, flightId),
             eq(inventoryLocks.cabinClass, cabinClass),
-            eq(inventoryLocks.status, "active")
+            eq(inventoryLocks.status, "active"),
+            gt(inventoryLocks.expiresAt, new Date())
           )
         );
 
@@ -85,8 +86,11 @@ export async function createInventoryLock(
         expiresAt,
       });
 
-      return { lockId: (insertResult as any).insertId };
-    });
+      return { lockId: insertResult.insertId };
+    };
+    const result = transaction
+      ? await create(transaction)
+      : await database.transaction(create);
 
     return {
       lockId: result.lockId,
@@ -171,6 +175,7 @@ export async function releaseExpiredLocks(): Promise<number> {
       .where(
         and(
           eq(inventoryLocks.status, "active"),
+          gt(inventoryLocks.expiresAt, new Date()),
           lt(inventoryLocks.expiresAt, now)
         )
       );
@@ -232,7 +237,8 @@ export async function getAvailableSeats(
         and(
           eq(inventoryLocks.flightId, flightId),
           eq(inventoryLocks.cabinClass, cabinClass),
-          eq(inventoryLocks.status, "active")
+          eq(inventoryLocks.status, "active"),
+          gt(inventoryLocks.expiresAt, new Date())
         )
       );
 
@@ -271,7 +277,8 @@ export async function verifyLock(
         and(
           eq(inventoryLocks.id, lockId),
           eq(inventoryLocks.sessionId, sessionId),
-          eq(inventoryLocks.status, "active")
+          eq(inventoryLocks.status, "active"),
+          gt(inventoryLocks.expiresAt, new Date())
         )
       )
       .limit(1);

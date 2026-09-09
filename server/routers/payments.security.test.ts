@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   limit: vi.fn(),
 }));
 
+vi.mock("../_core/middleware/procedure-rate-limit", () => ({
+  enforceProcedureRateLimit: vi.fn(),
+}));
 vi.mock("../db", () => ({
   getDb: mocks.getDb,
   getBookingByIdWithDetails: mocks.getBookingByIdWithDetails,
@@ -60,6 +63,7 @@ function context(role: "user" | "admin" | null = "user"): TrpcContext {
 }
 
 const booking = {
+  status: "pending",
   id: 10,
   userId: 1,
   bookingReference: "TEST01",

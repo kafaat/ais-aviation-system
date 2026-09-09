@@ -27,6 +27,10 @@ import {
   bookingStatusHistory,
   inventoryLocks,
 } from "../../drizzle/schema";
+import {
+  settleVerifiedPayment,
+  settleVerifiedRefund,
+} from "../services/payment-settlement.service";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { sendBookingConfirmation } from "../services/email.service";
 import { awardMilesForBooking } from "../services/loyalty.service";
@@ -206,6 +210,13 @@ export async function handleStripeWebhook(req: Request, res: Response) {
 
     // 4. Process event in transaction
     await db.transaction(async tx => {
+      const [claim] = await tx
+        .select()
+        .from(stripeEvents)
+        .where(eq(stripeEvents.id, event.id))
+        .limit(1)
+        .for("update");
+      if (claim?.processed) return;
       await processStripeEvent(tx, event);
 
       // Mark as processed only on success
@@ -253,7 +264,9 @@ export async function handleStripeWebhook(req: Request, res: Response) {
           retryCount: (existing2?.retryCount ?? 0) + 1,
           error: errorMsg,
         })
-        .where(eq(stripeEvents.id, event.id));
+        .where(
+          and(eq(stripeEvents.id, event.id), eq(stripeEvents.processed, false))
+        );
     } catch (updateErr) {
       log.error(
         {
@@ -283,6 +296,7 @@ export async function processStripeEvent(
 ): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed":
+    case "checkout.session.async_payment_succeeded":
       await handleCheckoutSessionCompleted(
         tx,
         event.data.object as Stripe.Checkout.Session,
@@ -331,280 +345,36 @@ async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session,
   eventId: string
 ) {
-  log.info(
-    { event: "checkout_completed", sessionId: session.id },
-    `Checkout session completed: ${session.id}`
-  );
-
-  const bookingId = session.metadata?.bookingId;
-  if (!bookingId) {
-    throw new Error("No bookingId in session metadata");
-  }
-
-  // 1. Load booking
-  const [booking] = await tx
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, parseInt(bookingId)))
-    .limit(1);
-
-  if (!booking) {
-    throw new Error(`Booking ${bookingId} not found`);
-  }
-
-  // 2. Check state transition is valid (idempotent)
-  if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
-    log.info(
-      { event: "booking_already_confirmed", bookingId },
-      `Booking ${bookingId} already confirmed, skipping`
-    );
-    return;
-  }
-
-  // Only allow transition from pending states
-  if (booking.status !== "pending" && booking.status !== "confirmed") {
-    throw new Error(`Invalid state transition: ${booking.status} -> confirmed`);
-  }
-
-  const paymentIntentId = session.payment_intent as string;
-  const amount = session.amount_total
-    ? session.amount_total / 100
-    : booking.totalAmount / 100;
-
-  // 3. Create ledger entry (with uniqueness protection)
-  try {
-    await tx.insert(financialLedger).values({
-      bookingId: parseInt(bookingId),
-      userId: booking.userId,
-      type: "charge",
-      amount: amount.toString(),
-      currency: session.currency?.toUpperCase() || "SAR",
-      stripeEventId: eventId,
-      stripePaymentIntentId: paymentIntentId,
-      description: `Payment for booking #${bookingId}`,
-      transactionDate: new Date(),
-      createdAt: new Date(),
-    });
-  } catch (ledgerErr: unknown) {
-    // Check if duplicate (unique constraint violation)
-    if (isDuplicateEntryError(ledgerErr)) {
-      log.info(
-        { event: "ledger_entry_exists", paymentIntentId, bookingId },
-        `Ledger entry already exists for ${paymentIntentId}, skipping`
-      );
-      // Continue - this is OK (idempotent)
-    } else {
-      throw ledgerErr;
-    }
-  }
-
-  // 4. Update booking status
-  const previousStatus = booking.status;
-  await tx
-    .update(bookings)
-    .set({
-      paymentStatus: "paid",
-      status: "confirmed",
-      stripePaymentIntentId: paymentIntentId,
-      updatedAt: new Date(),
-    })
-    .where(eq(bookings.id, parseInt(bookingId)));
-
-  // 5. Record status history
-  if (previousStatus !== "confirmed") {
-    await tx.insert(bookingStatusHistory).values({
-      bookingId: parseInt(bookingId),
-      bookingReference: booking.bookingReference,
-      previousStatus: previousStatus,
-      newStatus: "confirmed",
-      transitionReason: "Payment completed via Stripe checkout",
-      changedBy: null, // System
-      createdAt: new Date(),
-    });
-  }
-
-  // 6. Deduct seats from flight availability. The predicate is the
-  // concurrency boundary: if another writer consumed the last seats first,
-  // affectedRows is zero and the surrounding payment transaction rolls back.
-  if (previousStatus !== "confirmed") {
-    const seatUpdate =
-      booking.cabinClass === "business"
-        ? await tx
-            .update(flights)
-            .set({
-              businessAvailable: sql`${flights.businessAvailable} - ${booking.numberOfPassengers}`,
-            })
-            .where(
-              and(
-                eq(flights.id, booking.flightId),
-                gte(flights.businessAvailable, booking.numberOfPassengers)
-              )
-            )
-        : await tx
-            .update(flights)
-            .set({
-              economyAvailable: sql`${flights.economyAvailable} - ${booking.numberOfPassengers}`,
-            })
-            .where(
-              and(
-                eq(flights.id, booking.flightId),
-                gte(flights.economyAvailable, booking.numberOfPassengers)
-              )
-            );
-
-    if (getAffectedRows(seatUpdate) !== 1) {
-      throw new Error(
-        `Insufficient ${booking.cabinClass} inventory for booking ${bookingId}`
-      );
-    }
-
-    log.info(
-      {
-        event: "seats_deducted",
-        bookingId,
-        flightId: booking.flightId,
-        cabinClass: booking.cabinClass,
-        seatsDeducted: booking.numberOfPassengers,
-      },
-      `Deducted ${booking.numberOfPassengers} ${booking.cabinClass} seat(s) from flight ${booking.flightId}`
-    );
-
-    // 6b. Convert inventory lock to booking (mark lock as converted)
-    try {
-      const [activeLock] = await tx
-        .select({ id: inventoryLocks.id })
-        .from(inventoryLocks)
-        .where(
-          and(
-            eq(inventoryLocks.flightId, booking.flightId),
-            eq(inventoryLocks.userId, booking.userId),
-            eq(inventoryLocks.cabinClass, booking.cabinClass),
-            eq(inventoryLocks.status, "active")
-          )
-        )
-        .limit(1);
-
-      if (activeLock) {
-        await tx
-          .update(inventoryLocks)
-          .set({
-            status: "converted",
-            releasedAt: new Date(),
-          })
-          .where(eq(inventoryLocks.id, activeLock.id));
-
-        log.info(
-          {
-            event: "inventory_lock_converted",
-            lockId: activeLock.id,
-            bookingId,
-          },
-          `Converted inventory lock ${activeLock.id} for booking ${bookingId}`
-        );
-      }
-    } catch (lockErr) {
-      // Lock conversion failure should not break payment confirmation
-      log.warn(
-        {
-          event: "inventory_lock_conversion_failed",
-          bookingId,
-          error: lockErr,
-        },
-        `Failed to convert inventory lock for booking ${bookingId} - non-critical`
-      );
-    }
-  }
-
-  log.info(
-    { event: "booking_confirmed", bookingId, paymentIntentId },
-    `Booking ${bookingId} marked as paid and confirmed`
-  );
-
-  // 7. Post-transaction tasks (outside transaction to avoid blocking)
-  // These are queued/executed after commit
-  setImmediate(async () => {
-    try {
-      await sendConfirmationAndAwardMiles(parseInt(bookingId));
-    } catch (postErr) {
-      log.error(
-        { event: "post_transaction_failed", bookingId, error: postErr },
-        "Post-transaction tasks failed"
-      );
-      // Don't fail the webhook
-    }
+  if (session.payment_status !== "paid") return;
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id;
+  await settleVerifiedPayment(tx, {
+    paymentIntentId: paymentIntentId || "",
+    amount: session.amount_total ?? 0,
+    currency: session.currency || "",
+    metadata: session.metadata || {},
+    eventId,
   });
 }
 
-/**
- * Handle payment_intent.succeeded
- */
+/** Both event orders enter the same atomic settlement path. */
 async function handlePaymentIntentSucceeded(
   tx: DatabaseTransaction,
   pi: Stripe.PaymentIntent,
-  _eventId: string
+  eventId: string
 ) {
-  const bookingId = pi.metadata?.bookingId;
-  if (!bookingId) {
-    log.info(
-      { event: "payment_intent_no_booking", paymentIntentId: pi.id },
-      `No bookingId in PaymentIntent ${pi.id} metadata`
-    );
-    return;
-  }
-
-  log.info(
-    { event: "payment_intent_succeeded", bookingId, paymentIntentId: pi.id },
-    `PaymentIntent succeeded for booking ${bookingId}`
-  );
-
-  // Check if already handled by checkout event
-  const [booking] = await tx
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, parseInt(bookingId)))
-    .limit(1);
-
-  if (!booking) {
-    log.info(
-      { event: "booking_not_found", bookingId, paymentIntentId: pi.id },
-      `Booking ${bookingId} not found`
-    );
-    return;
-  }
-
-  // If already confirmed, skip (handled by checkout event)
-  if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
-    log.info(
-      { event: "booking_already_confirmed", bookingId },
-      `Booking ${bookingId} already confirmed`
-    );
-    return;
-  }
-
-  // Update booking status if still pending (fallback for checkout.session.completed).
-  // IMPORTANT: Seat deduction is handled EXCLUSIVELY by handleCheckoutSessionCompleted
-  // to prevent double-deduction race conditions when both events arrive simultaneously.
-  // This handler only updates booking status as a safety net.
-  if (booking.status === "pending") {
-    await tx
-      .update(bookings)
-      .set({
-        status: "confirmed",
-        paymentStatus: "paid",
-        stripePaymentIntentId: pi.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(bookings.id, parseInt(bookingId)));
-
-    log.info(
-      {
-        event: "booking_confirmed_via_pi",
-        bookingId,
-        paymentIntentId: pi.id,
-      },
-      `Booking ${bookingId} confirmed via payment_intent (seats deducted by checkout handler)`
-    );
-  }
+  if (!pi.metadata?.bookingId && !pi.metadata?.topUpId) return; // Legacy Checkout will supply its own metadata.
+  if (pi.status !== "succeeded")
+    throw new Error("PaymentIntent is not settled");
+  await settleVerifiedPayment(tx, {
+    paymentIntentId: pi.id,
+    amount: pi.amount_received,
+    currency: pi.currency,
+    metadata: pi.metadata,
+    eventId,
+  });
 }
 
 /**
@@ -621,6 +391,8 @@ async function handlePaymentFailed(
   );
 
   // Find booking by payment intent ID or metadata
+  if (paymentIntent.metadata?.type && paymentIntent.metadata.type !== "booking")
+    return;
   const bookingId = paymentIntent.metadata?.bookingId;
 
   let booking;
@@ -708,157 +480,25 @@ async function handleChargeRefunded(
   charge: Stripe.Charge,
   eventId: string
 ) {
-  const bookingId = charge.metadata?.bookingId;
-  if (!bookingId) {
-    log.info(
-      { event: "charge_no_booking", chargeId: charge.id },
-      `No bookingId in Charge ${charge.id} metadata`
-    );
-    return;
-  }
-
-  log.info(
-    { event: "charge_refunded", bookingId, chargeId: charge.id },
-    `Charge refunded for booking ${bookingId}`
-  );
-
-  const [booking] = await tx
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, parseInt(bookingId)))
-    .limit(1);
-
-  if (!booking) {
-    log.info(
-      { event: "booking_not_found", bookingId },
-      `Booking ${bookingId} not found`
-    );
-    return;
-  }
-
-  // Get refund details
-  const refund = charge.refunds?.data[0];
-  const refundAmount = charge.amount_refunded / 100;
-  const isFullRefund = charge.amount_refunded === charge.amount;
-
-  // Create refund ledger entry (with uniqueness protection)
-  try {
-    await tx.insert(financialLedger).values({
-      bookingId: parseInt(bookingId),
-      userId: booking.userId,
-      type: isFullRefund ? "refund" : "partial_refund",
-      amount: refundAmount.toString(),
-      currency: charge.currency.toUpperCase(),
-      stripeEventId: eventId,
-      stripeChargeId: charge.id,
-      stripeRefundId: refund?.id || null,
-      description: isFullRefund
-        ? `Full refund for booking #${bookingId}`
-        : `Partial refund for booking #${bookingId}`,
-      transactionDate: new Date(),
-      createdAt: new Date(),
-    });
-  } catch (ledgerErr: unknown) {
-    if (isDuplicateEntryError(ledgerErr)) {
-      log.info(
-        { event: "refund_entry_exists", bookingId, chargeId: charge.id },
-        "Refund entry already exists, skipping"
-      );
-      return; // Idempotent
-    }
-    throw ledgerErr;
-  }
-
-  // Update booking status
-  // bookings.status enum only allows: pending, confirmed, cancelled, completed
-  // bookings.paymentStatus enum only allows: pending, paid, refunded, failed
-  const bookingNewStatus = isFullRefund ? "cancelled" : booking.status;
-  const previousStatus = booking.status;
-
-  await tx
-    .update(bookings)
-    .set({
-      status: bookingNewStatus,
-      paymentStatus: "refunded",
-      updatedAt: new Date(),
-    })
-    .where(eq(bookings.id, parseInt(bookingId)));
-
-  // Restore seats to flight availability when a full refund cancels the booking
-  if (
-    isFullRefund &&
-    (previousStatus === "confirmed" || booking.paymentStatus === "paid")
-  ) {
-    if (booking.cabinClass === "business") {
-      await tx
-        .update(flights)
-        .set({
-          businessAvailable: sql`${flights.businessAvailable} + ${booking.numberOfPassengers}`,
-        })
-        .where(eq(flights.id, booking.flightId));
-    } else {
-      await tx
-        .update(flights)
-        .set({
-          economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
-        })
-        .where(eq(flights.id, booking.flightId));
-    }
-
-    log.info(
-      {
-        event: "seats_restored",
-        bookingId,
-        flightId: booking.flightId,
-        cabinClass: booking.cabinClass,
-        seatsRestored: booking.numberOfPassengers,
-      },
-      `Restored ${booking.numberOfPassengers} ${booking.cabinClass} seat(s) to flight ${booking.flightId} after full refund`
-    );
-  }
-
-  // Record status history (bookingStatusHistory has the full enum including "refunded")
-  await tx.insert(bookingStatusHistory).values({
-    bookingId: parseInt(bookingId),
-    bookingReference: booking.bookingReference,
-    previousStatus,
-    newStatus: "refunded",
-    transitionReason: isFullRefund
-      ? "Full refund processed"
-      : `Partial refund of ${refundAmount} ${charge.currency.toUpperCase()}`,
-    changedBy: null,
-    createdAt: new Date(),
+  const paymentIntentId =
+    typeof charge.payment_intent === "string"
+      ? charge.payment_intent
+      : charge.payment_intent?.id;
+  if (!paymentIntentId) throw new Error("Refund is missing its payment intent");
+  await settleVerifiedRefund(tx, {
+    paymentIntentId,
+    chargeId: charge.id,
+    amount: charge.amount,
+    amountRefunded: charge.amount_refunded,
+    currency: charge.currency,
+    eventId,
   });
-
-  log.info(
-    {
-      event: "booking_refunded",
-      bookingId,
-      status: bookingNewStatus,
-      refundAmount,
-    },
-    `Booking ${bookingId} ${bookingNewStatus}`
-  );
-
-  // Send in-app refund notification (outside transaction scope via own connection)
-  try {
-    await notifyRefundProcessed(
-      booking.userId,
-      refundAmount * 100, // notifyRefundProcessed expects cents
-      booking.bookingReference || `#${bookingId}`
-    );
-  } catch (notifError) {
-    log.error(
-      { event: "notification_failed", bookingId, error: notifError },
-      "Failed to send refund notification"
-    );
-  }
 }
 
 /**
  * Send confirmation email and award miles (post-transaction)
  */
-async function sendConfirmationAndAwardMiles(bookingId: number) {
+export async function sendConfirmationAndAwardMiles(bookingId: number) {
   const db = await getDb();
   if (!db) return;
 

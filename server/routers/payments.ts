@@ -116,7 +116,10 @@ export const paymentsRouter = router({
       }
 
       // Check if already paid
-      if (bookingData.paymentStatus === "paid") {
+      if (
+        bookingData.status !== "pending" ||
+        bookingData.paymentStatus === "paid"
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Booking is already paid",
@@ -160,13 +163,24 @@ export const paymentsRouter = router({
           customer_email: ctx.user.email || undefined,
           client_reference_id: ctx.user.id.toString(),
           metadata: {
+            type: "booking",
             bookingId: input.bookingId.toString(),
             userId: ctx.user.id.toString(),
             bookingReference: bookingData.bookingReference,
             customerEmail: ctx.user.email || "",
             customerName: ctx.user.name || "",
           },
-          allow_promotion_codes: true,
+          payment_intent_data: {
+            metadata: {
+              type: "booking",
+              bookingId: input.bookingId.toString(),
+              userId: ctx.user.id.toString(),
+              bookingReference: bookingData.bookingReference,
+              customerEmail: ctx.user.email || "",
+              customerName: ctx.user.name || "",
+            },
+          },
+          allow_promotion_codes: false,
         });
 
         await database
@@ -343,6 +357,15 @@ export const paymentsRouter = router({
             userId: ctx.user.id.toString(),
             type: "modification",
             authoritativeAmount: authoritativeAmount.toString(),
+          },
+          payment_intent_data: {
+            metadata: {
+              bookingId: input.bookingId.toString(),
+              modificationId: input.modificationId.toString(),
+              userId: ctx.user.id.toString(),
+              type: "modification",
+              authoritativeAmount: authoritativeAmount.toString(),
+            },
           },
         });
 

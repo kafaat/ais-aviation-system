@@ -37,14 +37,8 @@ export function WalletCard() {
 
   const topUp = trpc.wallet.topUp.useMutation({
     onSuccess: data => {
-      toast.success(
-        t("wallet.topUpSuccess", {
-          amount: (data.transactionAmount / 100).toFixed(0),
-        })
-      );
-      utils.wallet.balance.invalidate();
-      utils.wallet.transactions.invalidate();
-      setCustomAmount("");
+      if (data.url) window.location.assign(data.url);
+      else toast.error(t("wallet.topUpError"));
     },
     onError: error => {
       toast.error(error.message);
