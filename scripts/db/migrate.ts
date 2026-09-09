@@ -31,8 +31,15 @@ export type MigrationCommand = "migrate" | "preflight" | "verify" | "baseline";
  * one built by replaying every migration. A database that differs in any object
  * must be reconciled from its actual state first: this never rewrites history,
  * never creates or alters application objects, and never repairs data.
+ *
+ * The rows and the checks that accept them share one transaction. A partially
+ * written journal would be worse than no journal at all: `baseline` would then
+ * refuse the retry as already journaled, and `migrate` would read the surviving
+ * rows as the applied point and reject the schema as drift, leaving the database
+ * adoptable by neither command. Any failure therefore rolls back to an empty
+ * journal, which is exactly the state the operator started from.
  */
-async function adoptJournal(
+export async function adoptJournal(
   connection: Connection,
   history: Migration[],
   applied: number,
@@ -48,28 +55,39 @@ async function adoptJournal(
     throw new Error(
       `BASELINE_SCHEMA_MISMATCH: no DDL executed; the database must already match the final snapshot exactly\n${gaps.join("\n")}`
     );
+  // MySQL commits implicitly on DDL, so the journal table is created before the
+  // transaction opens. An empty journal table is indistinguishable from none:
+  // appliedMigrationCount reads zero rows, so a rolled-back attempt stays
+  // adoptable.
   await connection.query(
     "CREATE TABLE IF NOT EXISTS `__drizzle_migrations` (id serial primary key, hash text not null, created_at bigint)"
   );
-  for (const migration of history)
-    await connection.query(
-      "INSERT INTO `__drizzle_migrations` (hash, created_at) VALUES (?, ?)",
-      [migration.hash, migration.when]
+  await connection.beginTransaction();
+  try {
+    for (const migration of history)
+      await connection.query(
+        "INSERT INTO `__drizzle_migrations` (hash, created_at) VALUES (?, ?)",
+        [migration.hash, migration.when]
+      );
+    const adopted = await appliedMigrationCount(connection, history);
+    if (adopted !== history.length)
+      throw new Error(`BASELINE_INCOMPLETE: ${adopted}/${history.length}`);
+    const after = differences(target, await readDatabaseContract(connection));
+    if (after.length)
+      throw new Error(`BASELINE_RESULT_DRIFT:\n${after.join("\n")}`);
+    await connection.commit();
+    console.info(
+      JSON.stringify({
+        command: "baseline",
+        adopted,
+        tables: Object.keys(target).length,
+        result: "PASS",
+      })
     );
-  const adopted = await appliedMigrationCount(connection, history);
-  if (adopted !== history.length)
-    throw new Error(`BASELINE_INCOMPLETE: ${adopted}/${history.length}`);
-  const after = differences(target, await readDatabaseContract(connection));
-  if (after.length)
-    throw new Error(`BASELINE_RESULT_DRIFT:\n${after.join("\n")}`);
-  console.info(
-    JSON.stringify({
-      command: "baseline",
-      adopted,
-      tables: Object.keys(target).length,
-      result: "PASS",
-    })
-  );
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  }
 }
 
 export async function runMigration(

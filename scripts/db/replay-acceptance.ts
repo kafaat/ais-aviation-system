@@ -18,7 +18,7 @@ import {
 } from "mysql2/promise";
 import { drizzle } from "drizzle-orm/mysql2";
 import { migrate } from "drizzle-orm/mysql2/migrator";
-import { runMigration } from "./migrate";
+import { adoptJournal, runMigration } from "./migrate";
 import {
   differences,
   readDatabaseContract,
@@ -199,7 +199,11 @@ try {
     target.pathname = `/${name}`;
     return target.href;
   };
-  for (const name of [`${database}_adopt`, `${database}_mismatch`]) {
+  for (const name of [
+    `${database}_adopt`,
+    `${database}_mismatch`,
+    `${database}_partial`,
+  ]) {
     await admin.query(`CREATE DATABASE \`${name}\``);
     scratch.push(name);
     const seed = await createConnection(scratchUrl(name));
@@ -249,6 +253,57 @@ try {
   await mismatch.end();
   console.info(
     "PASS: baseline refuses a database that differs from the final snapshot"
+  );
+
+  // A journal written half-way would strand the database: baseline would refuse
+  // the retry as already journaled and migrate would read the surviving rows as
+  // the applied point. Fail the fifth insert and require an empty journal after.
+  const partialUrl = scratchUrl(`${database}_partial`);
+  const partial = await createConnection(partialUrl);
+  const journalRows = async () => {
+    const [rows] = await partial.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS n FROM `__drizzle_migrations`"
+    );
+    return Number(rows[0].n);
+  };
+  let inserts = 0;
+  const failing = new Proxy(partial, {
+    get(target, property, receiver) {
+      if (property === "query")
+        return async (sql: string, values?: unknown[]) => {
+          if (
+            typeof sql === "string" &&
+            sql.startsWith("INSERT INTO `__drizzle_migrations`") &&
+            ++inserts === 5
+          )
+            throw new Error("SIMULATED_JOURNAL_WRITE_FAILURE");
+          return await target.query(sql, values as never);
+        };
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  }) as Connection;
+  await assert.rejects(
+    adoptJournal(
+      failing,
+      history,
+      0,
+      await readDatabaseContract(partial),
+      snapshotContract(final.snapshot)
+    ),
+    /SIMULATED_JOURNAL_WRITE_FAILURE/
+  );
+  assert.equal(
+    await journalRows(),
+    0,
+    "a failed adoption must roll back every journal row"
+  );
+  await runMigration("baseline", partialUrl);
+  assert.equal(await journalRows(), history.length);
+  await runMigration("verify", partialUrl);
+  await partial.end();
+  console.info(
+    "PASS: interrupted adoption rolls back completely and stays retryable"
   );
 } finally {
   await connection?.end();
