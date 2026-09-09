@@ -15,8 +15,9 @@ concurrency:
 
 jobs:
   migration-replay:
-    name: Migration Replay
+    name: Migration Replay and Live Transaction Acceptance
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     services:
       mysql:
         image: mysql:8.0
@@ -29,6 +30,15 @@ jobs:
           --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_password"
           --health-interval=10s
           --health-timeout=5s
+          --health-retries=10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s
+          --health-timeout=3s
           --health-retries=10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
@@ -47,6 +57,22 @@ jobs:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
         run: |
           pnpm run db:verify
+      - name: Type-check the live acceptance runner
+        run: pnpm exec tsc -p tsconfig.acceptance.json --noEmit
+      - name: Prove transaction boundaries against live MySQL and Redis
+        env:
+          NODE_ENV: test
+          AIS_DISPOSABLE_DATABASE: "true"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
+          REDIS_URL: redis://127.0.0.1:6379/1
+          JWT_SECRET: acceptance-only-signing-key-not-for-production
+        run: pnpm test:acceptance "$RUNNER_TEMP/live-acceptance.json"
+      - name: Preserve live acceptance evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: live-transaction-acceptance
+          path: ${{ runner.temp }}/live-acceptance.json
+          if-no-files-found: error
 
   previous-release-upgrade:
     name: Previous Release Upgrade Replay

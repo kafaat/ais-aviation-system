@@ -115,3 +115,21 @@ Validation: 15 financial boundary cases pass, including new booking/wallet lock-
 - Receipt replay validates immutable purpose/target/amount/currency. Remove absent-receipt locking reads that could hold MySQL gap locks; same-purchase owner locks and the unique receipt key remain authoritative.
 
 Validation: 23 affected payment/operator cases pass. Tests cover late/cancelled and inventory-starved collections, duplicate refund isolation, review-event rollback, blocked repeat wallet payment, administrator permissions and provider retry identity. Provider HTTP is mocked. Unsupported/mismatched purchases and stale modification/top-up state still remain retryable errors in the durable Stripe-event inbox; this slice does not fabricate automatic reconciliation for every business case. Administrative review is exposed through tRPC/REST/Swagger; no dedicated new dashboard was added.
+
+
+## Slice 10 — current inventory reads and mandatory live acceptance
+
+- Seat reservation and hold creation read current hold rows under lock after locking the flight, so an older repeatable-read snapshot cannot hide a newly committed hold. Fix mutually exclusive expiry predicates that prevented cleanup. Extend holds with one conditional update; expired, converted and foreign-session holds cannot be revived by a check/write race.
+- Add test:acceptance, a runner using real MySQL/Redis and production service functions. It requires explicit disposable-database configuration, refuses nonempty fixture tables, and has no skip/fallback branch. Production Gates migrates and verifies the catalog first, then checks concurrent payment replay/refunds, a deliberately stale hold snapshot, last-seat contention, wallet overdraft prevention, refresh rotation/revocation, outbox lease fencing and Redis quotas. Evidence is uploaded only after every assertion succeeds.
+- The acceptance runner is type-checked separately. Its missing-configuration guard is executed locally and rejects the run as intended. Local MySQL/Redis/Docker are unavailable; neither migration replay nor these live assertions have been executed here. Adding the CI gate is not evidence that it passed, nor does it configure repository branch protection.
+
+Validation: 21 inventory/payment boundary cases pass locally, including the three new hold lifecycle cases. Final full-suite/build/dependency evidence is recorded below and in the remediation manifest.
+
+MySQL references: https://dev.mysql.com/doc/refman/8.0/en/innodb-locking-reads.html and https://dev.mysql.com/doc/refman/8.0/en/innodb-consistent-read.html .
+
+
+Final continuation validation: 1,056 tests passed, 240 skipped, 0 failed (87 passed files and 17 skipped). TypeScript, the separate live-runner typecheck, production build and frozen dependency installation passed. pnpm audit reported zero advisories. ESLint reported 0 errors and 263 warnings. Ten real built-API HTTP probes passed, including REST authority/validation/404, live=200 and unavailable-dependency ready=503. OpenAPI 3.1 contains 213 paths and 227 operations; 183 operations explicitly lack an output schema. All 17 previously committed SQL migrations and the 36 original audit evidence files remain unchanged.
+
+The final suite follows two intermediate failing suite runs that are retained in the evidence: the complete-router documentation case needed a 30-second test deadline under coverage, an old checkout double returned a booking for the newly added receipt lookup, and a pre-existing expiration arithmetic test rounded two different clock reads into an extra day. The first two were corrected at their test boundaries; date arithmetic now starts from one instant. No test was skipped; coverage thresholds were unchanged.
+
+Coverage includes 504 source files: 11.26% of lines and 8.14% of branches. This remains limited assurance. Live migration/transaction/provider/image/browser/restore acceptance is still unexecuted locally.

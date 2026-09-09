@@ -38,7 +38,8 @@
     "test:e2e:codegen": "playwright codegen",
     "test:e2e:install": "playwright install --with-deps",
     "prepare": "git config core.hooksPath .hooks || true",
-    "db:verify": "tsx scripts/verify-database-schema.ts"
+    "db:verify": "tsx scripts/verify-database-schema.ts",
+    "test:acceptance": "node --import tsx scripts/verify-transaction-boundaries.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

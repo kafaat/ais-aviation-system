@@ -25,17 +25,17 @@ export function transactionMemory(seed: Record<string, any[]>) {
         if (op === "=")
           return actual === expected || Number(actual) === expected;
         if (op === "!=" || op === "<>") return actual !== expected;
-        if (op === ">=") return actual >= expected!;
-        if (op === ">")
-          return (
-            new Date(actual).getTime() >
-            new Date(
-              typeof expected === "string" && /^\d{4}-/.test(expected)
-                ? expected.replace(" ", "T") + "Z"
-                : (expected as any)
-            ).getTime()
-          );
-        return actual < expected!;
+        const comparable = (value: any) =>
+          value instanceof Date
+            ? value.getTime()
+            : typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)
+              ? new Date(
+                  value.includes("T") ? value : value.replace(" ", "T") + "Z"
+                ).getTime()
+              : value;
+        if (op === ">=") return comparable(actual) >= comparable(expected);
+        if (op === ">") return comparable(actual) > comparable(expected);
+        return comparable(actual) < comparable(expected);
       })
       .every(Boolean);
   }

@@ -102,10 +102,10 @@ export async function reserveSeats(
     .for("update");
   if (!flight || !["scheduled", "delayed"].includes(flight.status))
     throw new InventoryUnavailableError("Flight is unavailable");
-  const [holds] = await tx
-    .select({
-      count: sql<number>`COALESCE(SUM(${inventoryLocks.numberOfSeats}), 0)`,
-    })
+  // Use current rows: a prior nonlocking read may have established an older
+  // REPEATABLE READ snapshot before this transaction obtained the flight lock.
+  const holds = await tx
+    .select({ numberOfSeats: inventoryLocks.numberOfSeats })
     .from(inventoryLocks)
     .where(
       and(
@@ -115,12 +115,14 @@ export async function reserveSeats(
         gt(inventoryLocks.expiresAt, new Date()),
         ownLockId ? ne(inventoryLocks.id, ownLockId) : undefined
       )
-    );
+    )
+    .for("update");
+  const heldSeats = holds.reduce((sum, hold) => sum + hold.numberOfSeats, 0);
   const column =
     cabin === "business" ? flights.businessAvailable : flights.economyAvailable;
   const available =
     cabin === "business" ? flight.businessAvailable : flight.economyAvailable;
-  if (available - Number(holds?.count || 0) < count)
+  if (available - heldSeats < count)
     throw new InventoryUnavailableError(
       `Insufficient ${cabin} inventory for booking`
     );

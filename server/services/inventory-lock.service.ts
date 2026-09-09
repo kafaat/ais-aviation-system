@@ -52,10 +52,8 @@ export async function createInventoryLock(
           ? flight.economyAvailable
           : flight.businessAvailable;
 
-      const [lockResult] = await tx
-        .select({
-          lockedSeats: sql<number>`COALESCE(SUM(${inventoryLocks.numberOfSeats}), 0)`,
-        })
+      const activeLocks = await tx
+        .select({ numberOfSeats: inventoryLocks.numberOfSeats })
         .from(inventoryLocks)
         .where(
           and(
@@ -64,9 +62,13 @@ export async function createInventoryLock(
             eq(inventoryLocks.status, "active"),
             gt(inventoryLocks.expiresAt, new Date())
           )
-        );
+        )
+        .for("update");
 
-      const lockedSeats = lockResult?.lockedSeats || 0;
+      const lockedSeats = activeLocks.reduce(
+        (sum, lock) => sum + lock.numberOfSeats,
+        0
+      );
       const available = Math.max(0, currentAvailable - lockedSeats);
 
       if (available < numberOfSeats) {
@@ -175,7 +177,6 @@ export async function releaseExpiredLocks(): Promise<number> {
       .where(
         and(
           eq(inventoryLocks.status, "active"),
-          gt(inventoryLocks.expiresAt, new Date()),
           lt(inventoryLocks.expiresAt, now)
         )
       );
@@ -311,22 +312,24 @@ export async function extendLock(
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
-    // Verify lock first
-    const isValid = await verifyLock(lockId, sessionId);
-    if (!isValid) {
-      return null;
-    }
-
-    // Extend by another 15 minutes
-    const newExpiresAt = new Date();
-    newExpiresAt.setMinutes(newExpiresAt.getMinutes() + LOCK_DURATION_MINUTES);
-
-    await database
+    const now = new Date();
+    const newExpiresAt = new Date(
+      now.getTime() + LOCK_DURATION_MINUTES * 60_000
+    );
+    // One current UPDATE prevents extending a hold that was released,
+    // converted or expired between validation and writing.
+    const [updated] = await database
       .update(inventoryLocks)
       .set({ expiresAt: newExpiresAt })
-      .where(eq(inventoryLocks.id, lockId));
-
-    return newExpiresAt;
+      .where(
+        and(
+          eq(inventoryLocks.id, lockId),
+          eq(inventoryLocks.sessionId, sessionId),
+          eq(inventoryLocks.status, "active"),
+          gt(inventoryLocks.expiresAt, now)
+        )
+      );
+    return updated.affectedRows === 1 ? newExpiresAt : null;
   } catch (error) {
     console.error("Error extending lock:", error);
     return null;

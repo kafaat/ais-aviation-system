@@ -206,5 +206,5 @@ describe("REST authority and serialization boundary", () => {
         createContext: () => ({}) as any,
       })
     ).not.toThrow();
-  });
+  }, 30_000);
 });

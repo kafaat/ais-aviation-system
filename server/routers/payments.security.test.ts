@@ -138,6 +138,7 @@ describe("payment authority boundary", () => {
   });
 
   it("preserves provider checkout using the stored booking total", async () => {
+    mocks.limit.mockResolvedValueOnce([booking]).mockResolvedValueOnce([]);
     const caller = paymentsRouter.createCaller(context());
 
     const result = await caller.createCheckoutSession({
@@ -155,6 +156,19 @@ describe("payment authority boundary", () => {
       })
     );
     expect(mocks.updateBookingStatus).not.toHaveBeenCalled();
+  });
+
+  it("blocks another checkout while verified funds await review", async () => {
+    mocks.limit
+      .mockResolvedValueOnce([booking])
+      .mockResolvedValueOnce([{ id: "pi_review" }]);
+    await expect(
+      paymentsRouter
+        .createCaller(context())
+        .createCheckoutSession({ bookingId: booking.id, provider: "hyperpay" })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(mocks.providerCheckout).not.toHaveBeenCalled();
+    expect(mocks.checkout).not.toHaveBeenCalled();
   });
 
   it("rejects checkout of another user's booking", async () => {

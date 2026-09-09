@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["scripts/verify-transaction-boundaries.ts"],
+  "exclude": ["node_modules"],
+  "compilerOptions": { "incremental": false }
+}
