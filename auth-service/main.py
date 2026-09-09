@@ -80,7 +80,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
     open_id = f"local_{uuid.uuid4().hex[:16]}"
     hashed = pwd_context.hash(body.password)
 
-    role = "admin" if settings.OWNER_EMAIL and body.email.lower() == settings.OWNER_EMAIL.lower() else "user"
+    role = "user"  # Public registration never grants platform privileges.
 
     user = User(
         openId=open_id,

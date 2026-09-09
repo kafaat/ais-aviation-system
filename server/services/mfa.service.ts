@@ -14,7 +14,13 @@
  */
 
 import crypto from "crypto";
-import { sql } from "drizzle-orm";
+import { sql, eq, and, gt, isNull } from "drizzle-orm";
+import {
+  mfaChallenges,
+  mfaSettings,
+  refreshTokens,
+  users,
+} from "../../drizzle/schema";
 import { getDb } from "../db";
 import { TRPCError } from "@trpc/server";
 import { createServiceLogger } from "../_core/logger";
@@ -38,7 +44,12 @@ const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 // Encryption key for storing secrets (derive from JWT_SECRET)
 const ENCRYPTION_KEY = crypto
   .createHash("sha256")
-  .update(process.env.JWT_SECRET || "mfa-fallback-key")
+  .update(
+    process.env.JWT_SECRET ||
+      (() => {
+        throw new Error("JWT_SECRET is required for MFA encryption");
+      })()
+  )
   .digest();
 
 // ============================================================================
@@ -262,8 +273,12 @@ export function generateQRCodeURL(email: string, secret: string): string {
  * @returns true if the token is valid for any of the 3 time windows
  */
 export function verifyTOTP(secret: string, token: string): boolean {
+  return matchingTotpStep(secret, token) !== null;
+}
+
+function matchingTotpStep(secret: string, token: string): number | null {
   if (!token || token.length !== TOTP_DIGITS || !/^\d+$/.test(token)) {
-    return false;
+    return null;
   }
 
   // Check current step and +/- 1 step for clock drift tolerance
@@ -272,11 +287,11 @@ export function verifyTOTP(secret: string, token: string): boolean {
     if (
       crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expectedToken))
     ) {
-      return true;
+      return Math.floor(Date.now() / 1000 / TOTP_PERIOD) + step;
     }
   }
 
-  return false;
+  return null;
 }
 
 /**
@@ -402,61 +417,79 @@ export async function upsertMfaSetup(
     });
   }
 
-  const backupCodesJson = JSON.stringify(hashedBackupCodes);
-  const now = new Date();
-
-  const existing = await getMfaSettings(userId);
-
-  if (existing) {
-    await db.execute(
-      sql`UPDATE mfa_settings
-       SET secret = ${encryptedSecret}, backupCodes = ${backupCodesJson}, isEnabled = FALSE, enabledAt = NULL, updatedAt = ${now}
-       WHERE userId = ${userId}`
-    );
-  } else {
-    await db.execute(
-      sql`INSERT INTO mfa_settings (userId, secret, isEnabled, backupCodes, createdAt, updatedAt)
-       VALUES (${userId}, ${encryptedSecret}, FALSE, ${backupCodesJson}, ${now}, ${now})`
-    );
-  }
+  await db.transaction(async tx => {
+    await tx.select().from(users).where(eq(users.id, userId)).for("update");
+    const [existing] = await tx
+      .select()
+      .from(mfaSettings)
+      .where(eq(mfaSettings.userId, userId))
+      .for("update");
+    if (existing?.isEnabled)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "MFA is already enabled",
+      });
+    const values = {
+      secret: encryptedSecret,
+      backupCodes: JSON.stringify(hashedBackupCodes),
+      isEnabled: false,
+      enabledAt: null,
+      lastUsedStep: null,
+    };
+    if (existing)
+      await tx
+        .update(mfaSettings)
+        .set(values)
+        .where(eq(mfaSettings.id, existing.id));
+    else await tx.insert(mfaSettings).values({ userId, ...values });
+  });
 }
 
-/**
- * Enable MFA for a user (after successful TOTP verification)
- */
-export async function enableMfa(userId: number): Promise<void> {
+/** Changing MFA invalidates all previously issued sessions and challenges. */
+async function changeMfa(
+  userId: number,
+  expectedSecret: string,
+  enabled: boolean
+): Promise<void> {
   const db = await getDb();
-  if (!db) {
+  if (!db)
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      code: "SERVICE_UNAVAILABLE",
+      message: "Database unavailable",
     });
-  }
-
-  const now = new Date();
-  await db.execute(
-    sql`UPDATE mfa_settings SET isEnabled = TRUE, enabledAt = ${now}, updatedAt = ${now} WHERE userId = ${userId}`
-  );
-
-  log.info({ userId }, "MFA enabled for user");
+  await db.transaction(async tx => {
+    await tx.select().from(users).where(eq(users.id, userId)).for("update");
+    const [settings] = await tx
+      .select()
+      .from(mfaSettings)
+      .where(eq(mfaSettings.userId, userId))
+      .for("update");
+    if (!settings || settings.secret !== expectedSecret)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "MFA setup changed; retry verification",
+      });
+    if (enabled)
+      await tx
+        .update(mfaSettings)
+        .set({ isEnabled: true, enabledAt: new Date() })
+        .where(eq(mfaSettings.id, settings.id));
+    else await tx.delete(mfaSettings).where(eq(mfaSettings.id, settings.id));
+    await tx
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(refreshTokens.userId, userId));
+    await tx
+      .update(mfaChallenges)
+      .set({ consumedAt: new Date() })
+      .where(eq(mfaChallenges.userId, userId));
+  });
+  log.info({ userId, enabled }, "MFA changed; sessions revoked");
 }
-
-/**
- * Disable MFA for a user
- */
-export async function disableMfa(userId: number): Promise<void> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  await db.execute(sql`DELETE FROM mfa_settings WHERE userId = ${userId}`);
-
-  log.info({ userId }, "MFA disabled for user");
-}
+export const enableMfa = (userId: number, expectedSecret: string) =>
+  changeMfa(userId, expectedSecret, true);
+export const disableMfa = (userId: number, expectedSecret: string) =>
+  changeMfa(userId, expectedSecret, false);
 
 /**
  * Update last used timestamp for MFA
@@ -530,3 +563,97 @@ export async function isMfaEnabled(userId: number): Promise<boolean> {
 
 // Re-export encryption function for use by the router
 export { encryptSecret, decryptSecret };
+
+/** Created only after password or OAuth identity verification; grants no API access. */
+export async function createMfaChallenge(userId: number): Promise<string> {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "Database unavailable",
+    });
+  const token = crypto.randomBytes(32).toString("hex");
+  await db.insert(mfaChallenges).values({
+    userId,
+    tokenHash: crypto.createHash("sha256").update(token).digest("hex"),
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+  });
+  return token;
+}
+
+/** Consume both the login challenge and factor under locks, with a five-attempt budget. */
+export type MfaProof = { userId: number; secret: string };
+
+export async function completeMfaChallenge(
+  challengeToken: string,
+  code: string
+): Promise<MfaProof> {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "Database unavailable",
+    });
+  const tokenHash = crypto
+    .createHash("sha256")
+    .update(challengeToken)
+    .digest("hex");
+  const result = await db.transaction(async tx => {
+    const [challenge] = await tx
+      .select()
+      .from(mfaChallenges)
+      .where(
+        and(
+          eq(mfaChallenges.tokenHash, tokenHash),
+          gt(mfaChallenges.expiresAt, new Date()),
+          isNull(mfaChallenges.consumedAt)
+        )
+      )
+      .limit(1)
+      .for("update");
+    if (!challenge || challenge.attempts >= 5) return null;
+    const [settings] = await tx
+      .select()
+      .from(mfaSettings)
+      .where(eq(mfaSettings.userId, challenge.userId))
+      .limit(1)
+      .for("update");
+    let factorUpdate: { lastUsedStep?: number; backupCodes?: string } | null =
+      null;
+    if (settings?.isEnabled) {
+      if (/^\d{6}$/.test(code)) {
+        const step = matchingTotpStep(decryptSecret(settings.secret), code);
+        if (
+          step !== null &&
+          (settings.lastUsedStep == null || step > settings.lastUsedStep)
+        )
+          factorUpdate = { lastUsedStep: step };
+      } else if (/^[a-z0-9]{8}$/i.test(code)) {
+        const backup = verifyBackupCode(code, JSON.parse(settings.backupCodes));
+        if (backup.valid)
+          factorUpdate = { backupCodes: JSON.stringify(backup.remainingCodes) };
+      }
+    }
+    const attempts = challenge.attempts + 1;
+    await tx
+      .update(mfaChallenges)
+      .set({
+        attempts,
+        consumedAt: factorUpdate || attempts >= 5 ? new Date() : null,
+      })
+      .where(eq(mfaChallenges.id, challenge.id));
+    if (!factorUpdate || !settings) return null;
+    await tx
+      .update(mfaSettings)
+      .set({ ...factorUpdate, lastUsedAt: new Date(), updatedAt: new Date() })
+      .where(eq(mfaSettings.id, settings.id));
+    return { userId: challenge.userId, secret: settings.secret };
+  });
+  // Throw after committing the failed-attempt counter.
+  if (result === null)
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Invalid, expired or already used MFA challenge/code",
+    });
+  return result;
+}

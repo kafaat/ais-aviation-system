@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { APP_LOGO, getLoginUrl } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { MFAVerify } from "@/components/MFAVerify";
 import {
   Loader2,
   LogIn,
@@ -26,6 +27,9 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [challengeToken, setChallengeToken] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get("mfaChallenge")
+  );
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const loginUrl = getLoginUrl();
@@ -33,8 +37,13 @@ export default function Login() {
     loginUrl !== "#login-not-configured" && loginUrl.startsWith("http");
 
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: async () => {
+    onSuccess: async data => {
       setLoginError(null);
+      if ("mfaRequired" in data) {
+        setChallengeToken(data.challengeToken);
+        setPassword("");
+        return;
+      }
       await refresh();
       navigate("/", { replace: true });
     },
@@ -55,10 +64,14 @@ export default function Login() {
   });
 
   useEffect(() => {
-    if (!loading && user) {
+    if (!loading && user && !challengeToken) {
       navigate("/", { replace: true });
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, challengeToken]);
+
+  useEffect(() => {
+    if (challengeToken) window.history.replaceState(null, "", "/login");
+  }, [challengeToken]);
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,8 +96,27 @@ export default function Login() {
     );
   }
 
-  if (user) {
+  if (user && !challengeToken) {
     return null;
+  }
+
+  if (challengeToken) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-4">
+        <MFAVerify
+          challengeToken={challengeToken}
+          onVerified={async () => {
+            setChallengeToken(null);
+            await refresh();
+            navigate("/", { replace: true });
+          }}
+          onBack={() => {
+            setChallengeToken(null);
+            window.history.replaceState(null, "", "/login");
+          }}
+        />
+      </main>
+    );
   }
 
   return (

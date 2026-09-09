@@ -52,6 +52,7 @@ export const mfaSettings = mysqlTable("mfa_settings", {
   backupCodes: text("backupCodes").notNull(),
   enabledAt: timestamp("enabledAt"),
   lastUsedAt: timestamp("lastUsedAt"),
+  lastUsedStep: int("lastUsedStep"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -1274,6 +1275,9 @@ export const refreshTokens = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     userId: int("userId").notNull(),
+    // NULL identifies legacy sessions, which must sign in again after upgrade.
+    familyId: varchar("familyId", { length: 64 }),
+    mfaVerified: boolean("mfaVerified").default(false).notNull(),
     token: varchar("token", { length: 500 }).notNull().unique(),
     deviceInfo: text("deviceInfo"), // JSON: device type, OS, app version
     ipAddress: varchar("ipAddress", { length: 45 }),
@@ -1284,6 +1288,10 @@ export const refreshTokens = mysqlTable(
   },
   table => ({
     userIdIdx: index("refresh_tokens_user_id_idx").on(table.userId),
+    familyIdx: index("refresh_tokens_family_idx").on(
+      table.familyId,
+      table.revokedAt
+    ),
     tokenIdx: index("refresh_tokens_token_idx").on(table.token),
     expiresAtIdx: index("refresh_tokens_expires_at_idx").on(table.expiresAt),
   })
@@ -1291,6 +1299,17 @@ export const refreshTokens = mysqlTable(
 
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
+
+/** Password/OAuth verification grants only this short-lived, single-use challenge. */
+export const mfaChallenges = mysqlTable("mfa_challenges", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  attempts: int("attempts").default(0).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  consumedAt: timestamp("consumedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 /**
  * Idempotency Requests

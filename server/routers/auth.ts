@@ -14,14 +14,71 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
-import { mobileAuthServiceV2 } from "../services/mobile-auth-v2.service";
-import { getDb } from "../db";
+import {
+  mobileAuthServiceV2,
+  SESSION_MAX_AGE_MS,
+} from "../services/mobile-auth-v2.service";
+import { getUserById } from "../db";
+import {
+  createMfaChallenge,
+  completeMfaChallenge,
+  getMfaSettings,
+  type MfaProof,
+} from "../services/mfa.service";
+import type { TrpcContext } from "../_core/context";
 import { logger } from "../_core/logger";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "../_core/cookies";
 import { sdk } from "../_core/sdk";
 
-const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+const sessionOutput = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  expiresIn: z.number(),
+  tokenType: z.literal("Bearer"),
+  user: z.object({
+    id: z.number(),
+    name: z.string().nullable(),
+    email: z.string().nullable(),
+    role: z.string(),
+  }),
+});
+
+async function issueSession(
+  user: {
+    id: number;
+    openId: string;
+    name: string | null;
+    email: string | null;
+    role: string;
+  },
+  ctx: TrpcContext,
+  proof: MfaProof | undefined = undefined,
+  deviceInfo?: { userAgent?: string; deviceId?: string }
+) {
+  const tokens = await mobileAuthServiceV2.login(
+    user.id,
+    {
+      userAgent: deviceInfo?.userAgent || ctx.req.headers["user-agent"],
+      ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
+      deviceId: deviceInfo?.deviceId,
+    },
+    proof
+  );
+  const cookie = await sdk.createSessionToken(user.openId, {
+    name: user.name || "",
+    sessionId: tokens.sessionId,
+    expiresInMs: SESSION_MAX_AGE_MS,
+  });
+  ctx.res.cookie(COOKIE_NAME, cookie, {
+    ...getSessionCookieOptions(ctx.req),
+    maxAge: SESSION_MAX_AGE_MS,
+  });
+  return {
+    ...tokens,
+    user: { id: user.id, name: user.name, email: user.email, role: user.role },
+  };
+}
 
 // ============================================================================
 // Input Schemas
@@ -136,7 +193,8 @@ export const authRouter = router({
       },
     })
     .output(z.object({ success: z.literal(true) }))
-    .mutation(({ ctx }) => {
+    .mutation(async ({ ctx }) => {
+      await sdk.revokeRequestSession(ctx.req);
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
@@ -226,79 +284,56 @@ export const authRouter = router({
     })
     .input(loginInputSchema)
     .output(
-      z.object({
-        accessToken: z.string(),
-        refreshToken: z.string(),
-        expiresIn: z.number(),
-        tokenType: z.literal("Bearer"),
-        user: z.object({
-          id: z.number(),
-          name: z.string().nullable(),
-          email: z.string().nullable(),
-          role: z.string(),
-        }),
-      })
+      z.union([
+        sessionOutput,
+        z.object({ mfaRequired: z.literal(true), challengeToken: z.string() }),
+      ])
     )
     .mutation(async ({ input, ctx }) => {
-      const { email, password, deviceInfo } = input;
-
-      // Authenticate user
-      const user = await authenticateWithPassword(email, password);
-
-      if (!user) {
-        logger.warn({ email }, "Failed login attempt - invalid credentials");
+      const user = await authenticateWithPassword(input.email, input.password);
+      if (!user)
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Invalid email or password",
         });
+      const mfa = await getMfaSettings(user.id);
+      if (mfa?.isEnabled) {
+        return {
+          mfaRequired: true as const,
+          challengeToken: await createMfaChallenge(user.id),
+        };
       }
+      return issueSession(user, ctx, undefined, input.deviceInfo);
+    }),
 
-      // Get IP address from request
-      const ipAddress =
-        (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
-        ctx.req.socket.remoteAddress ||
-        undefined;
-
-      // Generate tokens
-      const tokens = await mobileAuthServiceV2.login(user.id, {
-        userAgent: deviceInfo?.userAgent || ctx.req.headers["user-agent"],
-        ipAddress,
-        deviceId: deviceInfo?.deviceId,
-      });
-
-      // Also set a session cookie for web clients (enables browser-based auth)
-      try {
-        const sessionToken = await sdk.createSessionToken(user.openId, {
-          name: user.name || "",
-          expiresInMs: ONE_YEAR_MS,
-        });
-        const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, {
-          ...cookieOptions,
-          maxAge: ONE_YEAR_MS,
-        });
-      } catch (cookieError) {
-        // Non-fatal: JWT tokens still work even if cookie fails
-        logger.warn(
-          { error: cookieError },
-          "Failed to set session cookie during login"
-        );
-      }
-
-      logger.info(
-        { userId: user.id, email: user.email },
-        "User logged in successfully"
+  completeMfa: publicProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/auth/mfa/complete",
+        tags: ["Authentication"],
+        summary: "Complete a password or OAuth MFA challenge",
+      },
+    })
+    .input(
+      z.object({
+        challengeToken: z.string().regex(/^[a-f0-9]{64}$/),
+        code: z.string().min(6).max(8),
+      })
+    )
+    .output(sessionOutput)
+    .mutation(async ({ ctx, input }) => {
+      const proof = await completeMfaChallenge(
+        input.challengeToken,
+        input.code
       );
-
-      return {
-        ...tokens,
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-      };
+      const user = await getUserById(proof.userId);
+      if (!user)
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "User not found",
+        });
+      return issueSession(user, ctx, proof);
     }),
 
   /**
@@ -331,9 +366,7 @@ export const authRouter = router({
       try {
         // Get IP address from request
         const ipAddress =
-          (ctx.req.headers["x-forwarded-for"] as string)?.split(",")[0] ||
-          ctx.req.socket.remoteAddress ||
-          undefined;
+          ctx.req.ip || ctx.req.socket?.remoteAddress || undefined;
 
         // Refresh tokens (implements rotation)
         const result = await mobileAuthServiceV2.refreshTokens(refreshToken, {
@@ -342,6 +375,15 @@ export const authRouter = router({
           deviceId: deviceInfo?.deviceId,
         });
 
+        const cookie = await sdk.createSessionToken(result.user.openId, {
+          name: result.user.name || "",
+          sessionId: result.sessionId,
+          expiresInMs: SESSION_MAX_AGE_MS,
+        });
+        ctx.res.cookie(COOKIE_NAME, cookie, {
+          ...getSessionCookieOptions(ctx.req),
+          maxAge: SESSION_MAX_AGE_MS,
+        });
         logger.info("Token refreshed successfully");
 
         return {
@@ -385,20 +427,11 @@ export const authRouter = router({
     })
     .input(logoutInputSchema)
     .output(z.object({ success: z.boolean() }))
-    .mutation(async ({ input }) => {
-      const { refreshToken } = input;
-
-      try {
-        await mobileAuthServiceV2.logout(refreshToken);
-        logger.info("User logged out successfully");
-
-        return { success: true };
-      } catch (error: unknown) {
-        // Even if logout fails, we don't want to expose errors
-        const errMsg = error instanceof Error ? error.message : String(error);
-        logger.warn({ error: errMsg }, "Logout error (ignored)");
-        return { success: true };
-      }
+    .mutation(async ({ input, ctx }) => {
+      await mobileAuthServiceV2.logout(input.refreshToken);
+      await sdk.revokeRequestSession(ctx.req);
+      ctx.res.clearCookie(COOKIE_NAME, getSessionCookieOptions(ctx.req));
+      return { success: true };
     }),
 
   /**
@@ -423,6 +456,7 @@ export const authRouter = router({
 
       try {
         const revokedCount = await mobileAuthServiceV2.logoutAllDevices(userId);
+        ctx.res.clearCookie(COOKIE_NAME, getSessionCookieOptions(ctx.req));
 
         logger.info(
           { userId, revokedCount },
@@ -540,38 +574,7 @@ export const authRouter = router({
       const userId = ctx.user.id;
       const { sessionId } = input;
 
-      const db = await getDb();
-      if (!db) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-      }
-
-      // Import refreshTokens from schema
-      const { refreshTokens } = await import("../../drizzle/schema");
-      const { and, eq } = await import("drizzle-orm");
-
-      // Verify the session belongs to the user and revoke it
-      const result = await db
-        .update(refreshTokens)
-        .set({ revokedAt: new Date() })
-        .where(
-          and(eq(refreshTokens.id, sessionId), eq(refreshTokens.userId, userId))
-        );
-
-      const affected =
-        (result as unknown as { rowsAffected?: number }).rowsAffected ||
-        (result as unknown as Array<{ affectedRows?: number }>)[0]
-          ?.affectedRows ||
-        0;
-
-      if (affected === 0) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Session not found or already revoked",
-        });
-      }
+      await mobileAuthServiceV2.revokeSession(userId, sessionId);
 
       logger.info({ userId, sessionId }, "Session revoked");
 
@@ -616,11 +619,12 @@ export const authRouter = router({
         }),
       ])
     )
-    .query(({ input }) => {
+    .query(async ({ input }) => {
       const { accessToken } = input;
 
       try {
         const payload = mobileAuthServiceV2.verifyAccessToken(accessToken);
+        await mobileAuthServiceV2.authenticateAccessToken(accessToken);
 
         return {
           valid: true as const,

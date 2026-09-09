@@ -99,6 +99,13 @@
       "when": 1788973464395,
       "tag": "0013_complete_declared_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1788975868525,
+      "tag": "0014_revocable_mfa_sessions",
+      "breakpoints": true
     }
   ]
 }

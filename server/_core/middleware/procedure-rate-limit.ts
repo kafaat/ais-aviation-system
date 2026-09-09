@@ -5,10 +5,8 @@ import { rateLimitService } from "../../services/rate-limit.service";
 export function sensitiveProcedureScope(path: string): string | null {
   if (/^auth\..*(?:reset|forgot)/i.test(path)) return "passwordReset";
   if (
-    /^(auth|mfa)\./.test(path) &&
-    !/^auth\.(me|refreshToken|logout|logoutAllDevices|sessions|getSessions)$/.test(
-      path
-    )
+    /^auth\.(login|register|completeMfa)$/.test(path) ||
+    /^mfa\.(setup|verify|disable|regenerateBackupCodes)$/.test(path)
   )
     return "auth";
   if (/^(payments|wallet|splitPayments|refunds)\./.test(path)) return "payment";

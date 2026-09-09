@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   createSessionToken: vi.fn(),
   cookie: vi.fn(),
+  getMfaSettings: vi.fn(),
+  createMfaChallenge: vi.fn(),
 }));
 
 vi.mock("../services/auth-service.client", () => ({
@@ -16,6 +18,14 @@ vi.mock("../services/auth-service.client", () => ({
 }));
 vi.mock("../services/mobile-auth-v2.service", () => ({
   mobileAuthServiceV2: { login: mocks.login },
+  SESSION_MAX_AGE_MS: 2592000000,
+}));
+vi.mock("../services/mfa.service", () => ({
+  getMfaSettings: mocks.getMfaSettings,
+  createMfaChallenge: mocks.createMfaChallenge,
+}));
+vi.mock("../_core/middleware/procedure-rate-limit", () => ({
+  enforceProcedureRateLimit: vi.fn(),
 }));
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
 vi.mock("../_core/sdk", () => ({
@@ -64,6 +74,7 @@ beforeEach(() => {
   mocks.getDb.mockResolvedValue({
     query: { users: { findFirst: mocks.findFirst } },
   });
+  mocks.getMfaSettings.mockResolvedValue(null);
   mocks.login.mockResolvedValue(tokens);
   mocks.createSessionToken.mockResolvedValue("test-cookie-token");
 });
@@ -131,7 +142,8 @@ describe("authentication security boundary", () => {
     });
     expect(mocks.login).toHaveBeenCalledWith(
       user.id,
-      expect.objectContaining({ ipAddress: "127.0.0.1" })
+      expect.objectContaining({ ipAddress: "127.0.0.1" }),
+      undefined
     );
     expect(mocks.createSessionToken).toHaveBeenCalledWith(
       user.openId,
@@ -146,4 +158,17 @@ describe("authentication security boundary", () => {
     expect(procedures.login._def.meta?.openapi?.protect).not.toBe(true);
     expect(procedures.refreshToken._def.meta?.openapi?.protect).not.toBe(true);
   });
+});
+
+it("issues only a challenge after a valid password for an MFA account", async () => {
+  mocks.verifyPassword.mockResolvedValue({ success: true, user });
+  mocks.getMfaSettings.mockResolvedValue({ isEnabled: true });
+  mocks.createMfaChallenge.mockResolvedValue("a".repeat(64));
+  const result = await authRouter
+    .createCaller(anonymousContext())
+    .login(credentials);
+  expect(result).toEqual({ mfaRequired: true, challengeToken: "a".repeat(64) });
+  expect(mocks.login).not.toHaveBeenCalled();
+  expect(mocks.createSessionToken).not.toHaveBeenCalled();
+  expect(mocks.cookie).not.toHaveBeenCalled();
 });

@@ -1,4 +1,4 @@
-import { AXIOS_TIMEOUT_MS, COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { AXIOS_TIMEOUT_MS, COOKIE_NAME } from "@shared/const";
 import { ForbiddenError } from "@shared/_core/errors";
 import axios, { type AxiosInstance } from "axios";
 import { parse as parseCookieHeader } from "cookie";
@@ -7,6 +7,10 @@ import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
 import * as db from "../db";
 import { ENV } from "./env";
+import {
+  mobileAuthServiceV2,
+  SESSION_MAX_AGE_MS,
+} from "../services/mobile-auth-v2.service";
 import type {
   ExchangeTokenRequest,
   ExchangeTokenResponse,
@@ -19,6 +23,7 @@ const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
 export type SessionPayload = {
+  sid: string;
   openId: string;
   appId: string;
   name: string;
@@ -179,16 +184,22 @@ class SDKServer {
    * @example
    * const sessionToken = await sdk.createSessionToken(userInfo.openId);
    */
-  createSessionToken(
+  async createSessionToken(
     openId: string,
-    options: { expiresInMs?: number; name?: string } = {}
+    options: { expiresInMs?: number; name?: string; sessionId?: string } = {}
   ): Promise<string> {
+    let sid = options.sessionId;
+    if (!sid) {
+      const user = await db.getUserByOpenId(openId);
+      if (!user) throw ForbiddenError("User not found");
+      // This path rejects enrolled accounts until a factor-bound login completes.
+      sid = (await mobileAuthServiceV2.login(user.id)).sessionId;
+    }
+    const user = await mobileAuthServiceV2.authenticateSession(sid);
+    if (user.openId !== openId)
+      throw ForbiddenError("Session identity mismatch");
     return this.signSession(
-      {
-        openId,
-        appId: ENV.appId,
-        name: options.name || "",
-      },
+      { sid, openId, appId: ENV.appId, name: options.name || "" },
       options
     );
   }
@@ -197,54 +208,53 @@ class SDKServer {
     payload: SessionPayload,
     options: { expiresInMs?: number } = {}
   ): Promise<string> {
-    const issuedAt = Date.now();
-    const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
-    const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1000);
-    const secretKey = this.getSessionSecret();
-
-    return new SignJWT({
-      openId: payload.openId,
-      appId: payload.appId,
-      name: payload.name,
-    })
+    const expiresInMs = Math.min(
+      options.expiresInMs ?? SESSION_MAX_AGE_MS,
+      SESSION_MAX_AGE_MS
+    );
+    return new SignJWT({ ...payload, purpose: "web-session" })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
-      .setExpirationTime(expirationSeconds)
-      .sign(secretKey);
+      .setIssuer("ais-aviation")
+      .setAudience(ENV.appId)
+      .setIssuedAt()
+      .setExpirationTime(Math.floor((Date.now() + expiresInMs) / 1000))
+      .sign(this.getSessionSecret());
   }
 
   async verifySession(
     cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
-    if (!cookieValue) {
-      console.warn("[Auth] Missing session cookie");
-      return null;
-    }
-
+  ): Promise<SessionPayload | null> {
+    if (!cookieValue) return null;
     try {
-      const secretKey = this.getSessionSecret();
-      const { payload } = await jwtVerify(cookieValue, secretKey, {
-        algorithms: ["HS256"],
-      });
-      const { openId, appId, name } = payload as Record<string, unknown>;
-
+      const { payload } = await jwtVerify(
+        cookieValue,
+        this.getSessionSecret(),
+        {
+          algorithms: ["HS256"],
+          issuer: "ais-aviation",
+          audience: ENV.appId,
+        }
+      );
+      const { sid, openId, appId, name, purpose } = payload;
       if (
         !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
-        typeof name !== "string"
-      ) {
-        console.warn("[Auth] Session payload missing required fields");
+        appId !== ENV.appId ||
+        typeof name !== "string" ||
+        typeof sid !== "string" ||
+        !/^[a-f0-9]{64}$/.test(sid) ||
+        purpose !== "web-session"
+      )
         return null;
-      }
-
-      return {
-        openId,
-        appId,
-        name,
-      };
-    } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
+      return { sid, openId, appId, name };
+    } catch {
       return null;
     }
+  }
+
+  async revokeRequestSession(req: Request): Promise<void> {
+    const value = this.parseCookies(req.headers.cookie).get(COOKIE_NAME);
+    const session = await this.verifySession(value);
+    if (session) await mobileAuthServiceV2.revokeFamily(session.sid);
   }
 
   async getUserInfoWithJwt(
@@ -281,37 +291,9 @@ class SDKServer {
       throw ForbiddenError("Invalid session cookie");
     }
 
-    const sessionUserId = session.openId;
-    const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
-
-    // If user not in DB, sync from OAuth server automatically
-    if (!user) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionCookie ?? "");
-        await db.upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt,
-        });
-        user = await db.getUserByOpenId(userInfo.openId);
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
-      }
-    }
-
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
-
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
-
+    const user = await mobileAuthServiceV2.authenticateSession(session.sid);
+    if (user.openId !== session.openId)
+      throw ForbiddenError("Session identity mismatch");
     return user;
   }
 }

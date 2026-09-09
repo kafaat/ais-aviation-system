@@ -2,8 +2,6 @@ import type { CreateExpressContextOptions } from "@trpc/server/adapters/express"
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { mobileAuthServiceV2 } from "../services/mobile-auth-v2.service";
-import * as db from "../db";
-import { redisCacheService, CacheTTL } from "../services/redis-cache.service";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -27,46 +25,13 @@ function extractBearerToken(authHeader: string | undefined): string | null {
   return match ? match[1] : null;
 }
 
-/**
- * Get user with caching support
- * Cache user data to reduce database lookups during a session
- */
-async function getCachedUser(userId: number): Promise<User | null> {
-  // Try cache first
-  const cached = await redisCacheService.getCachedUserSession(userId);
-  if (cached) {
-    return cached as User;
-  }
-
-  // Fetch from database
-  const user = await db.getUserById(userId);
-  if (user) {
-    // Cache the user session
-    await redisCacheService.cacheUserSession(
-      userId,
-      user,
-      CacheTTL.USER_SESSION
-    );
-  }
-
-  return user || null;
-}
-
-/**
- * Authenticate request using Bearer token (JWT)
- */
+/** Authoritative DB checks make revocation and role/tenant changes immediate. */
 async function authenticateWithBearerToken(
   token: string
 ): Promise<User | null> {
   try {
-    // Verify the JWT access token
-    const payload = mobileAuthServiceV2.verifyAccessToken(token);
-
-    // Get user from cache or database
-    const user = await getCachedUser(payload.userId);
-    return user;
-  } catch (_error) {
-    // Token is invalid or expired
+    return await mobileAuthServiceV2.authenticateAccessToken(token);
+  } catch {
     return null;
   }
 }
@@ -92,7 +57,7 @@ export async function createContext(
   }
 
   // 2. Fall back to cookie-based authentication (for web clients)
-  if (!user) {
+  if (!bearerToken) {
     try {
       user = await sdk.authenticateRequest(opts.req);
       if (user) {

@@ -33,3 +33,13 @@ Repository protection settings and production credentials are external to this s
 - F11: API and unclassified dynamic responses use network-only/no-store. The new service-worker cache version removes old AIS caches on activation, and session cleanup requests private-cache removal. API response headers prohibit HTTP caching as well.
 
 Validation: 92 tests in ten affected test files passed; TypeScript passed. Tests exercise actual HTTP 429 for dotted/batched procedures, both tenant rows under a generated SQL predicate, rejection before DB access, Redis denial propagation, and the real service-worker code refusing a previous user's cached response. Live multi-tenant DB/Redis and browser lifecycle verification remain part of acceptance.
+
+## Slice 3 — authentication and shared session authority
+
+- F03: verified passwords and OAuth identities receive a five-minute, five-attempt MFA challenge. Only successful, single-use TOTP/backup verification can mint a session. Challenges store a token hash; row locks protect challenge and backup-code consumption. Proof is bound to the exact enrollment. MFA setup changes revoke existing sessions and challenges. The browser completes the same challenge flow.
+- F08: cookie and Bearer authentication consult a shared, revocable refresh-token family on every request, including current role/tenant/MFA state. Cookie tokens have explicit audience/issuer/purpose and a maximum 30-day lifetime. Logout, all-device logout and session revocation invalidate both transports. Old cookies and refresh records intentionally require login again.
+- F09: public Python registration always creates role=user, including OWNER_EMAIL.
+- F12: refresh rotation claims an unrevoked, unexpired record with an atomic conditional UPDATE before inserting its successor. Concurrent losers receive UNAUTHORIZED and do not mint tokens; the winning family remains usable. HMAC hashes protect refresh tokens at rest.
+- Append migration 0014 (MFA challenges and session-family columns); do not edit previously applied migrations. Logout clears client query caches as well as stored tokens.
+
+Validation: affected password/logout/type tests passed (22); the combined MFA/session, password and tenant regression suite passed (28). Real cookie/JWT cryptography under a deterministic DB adapter demonstrates shared revocation, denial without verified MFA, one refresh winner, challenge attempt persistence and consumed backup-code rejection. Python registration is executed under boundary doubles. TypeScript passes. These are not a substitute for MySQL lock/isolation and end-to-end OAuth/MFA acceptance on a configured environment.
