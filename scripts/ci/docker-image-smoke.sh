@@ -29,10 +29,12 @@ for target in runner migrator; do
     test ! -e /usr/local/lib/node_modules/npm
     test ! -e /usr/local/lib/node_modules/pnpm
     test ! -e /app/node_modules/pnpm
-    ! command -v npm
-    ! command -v npx
-    ! command -v pnpm
-    ! command -v pnpx
+    for installer in npm npx pnpm pnpx; do
+      if command -v "$installer" >/dev/null 2>&1; then
+        echo "FAIL: deployed image contains installer $installer" >&2
+        exit 1
+      fi
+    done
     node --version
   ' 2>&1 | tee "$evidence_dir/no-installers-$target.log"
 done
