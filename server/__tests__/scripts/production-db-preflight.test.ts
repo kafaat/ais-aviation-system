@@ -36,6 +36,24 @@ describe("parseArgs", () => {
       ])
     ).toThrow(/TARGET_SHA_INVALID/);
   });
+
+  it("normalizes empty approved SHA values to null", () => {
+    expect(
+      parseArgs([
+        "--target-sha=61754aedb29315949c8cc93b6895845974ccc608",
+        "--approved-sha=",
+        "--tool-repo=/tmp/approved",
+      ]).approvedSha
+    ).toBeNull();
+
+    expect(
+      parseArgs([
+        "--target-sha=61754aedb29315949c8cc93b6895845974ccc608",
+        "--approved-sha",
+        "--tool-repo=/tmp/approved",
+      ]).approvedSha
+    ).toBeNull();
+  });
 });
 
 describe("readGitSha", () => {

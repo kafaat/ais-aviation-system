@@ -86,9 +86,18 @@ jobs:
 
       - name: Materialize approved tool checkout
         run: |
+          git fetch --no-tags --depth=1 origin \
+            ${{ needs.validate-target.outputs.target_sha }}
           rm -rf /tmp/ais-approved-preflight
           git worktree add --detach /tmp/ais-approved-preflight \
             ${{ needs.validate-target.outputs.target_sha }}
+
+      - name: Verify approved tool checkout
+        working-directory: /tmp/ais-approved-preflight
+        run: |
+          test -f scripts/db/replay-acceptance.ts
+          test -f scripts/db/migrate.ts
+          test -f scripts/db/schema-contract.ts
 
       - name: Install approved tool dependencies
         working-directory: /tmp/ais-approved-preflight
@@ -101,6 +110,7 @@ jobs:
           done
 
       - name: Run isolated migration acceptance
+        working-directory: /tmp/ais-approved-preflight
         env:
           MYSQL_USER: root
           MYSQL_PASSWORD: test_password
@@ -109,8 +119,19 @@ jobs:
           MYSQL_DATABASE: ais_preflight_smoke
         run: |
           export DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}"
-          cd /tmp/ais-approved-preflight
           node --import tsx scripts/db/replay-acceptance.ts
+
+      - name: Run approved migrate against isolated MySQL
+        working-directory: /tmp/ais-approved-preflight
+        env:
+          MYSQL_USER: root
+          MYSQL_PASSWORD: test_password
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "3306"
+          MYSQL_DATABASE: ais_preflight_smoke
+        run: |
+          export DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}"
+          node --import tsx scripts/db/migrate.ts migrate
 
       - name: Generate isolated preflight report
         env:
@@ -121,10 +142,6 @@ jobs:
           MYSQL_DATABASE: ais_preflight_smoke
         run: |
           export DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}"
-          (
-            cd /tmp/ais-approved-preflight
-            node --import tsx scripts/db/migrate.ts migrate
-          )
           pnpm exec tsx scripts/ci/production-db-preflight.ts \
             --run \
             --target-sha=${{ needs.validate-target.outputs.target_sha }} \
@@ -168,9 +185,18 @@ jobs:
 
       - name: Materialize approved tool checkout
         run: |
+          git fetch --no-tags --depth=1 origin \
+            ${{ needs.validate-target.outputs.target_sha }}
           rm -rf /tmp/ais-approved-preflight
           git worktree add --detach /tmp/ais-approved-preflight \
             ${{ needs.validate-target.outputs.target_sha }}
+
+      - name: Verify approved tool checkout
+        working-directory: /tmp/ais-approved-preflight
+        run: |
+          test -f scripts/db/replay-acceptance.ts
+          test -f scripts/db/migrate.ts
+          test -f scripts/db/schema-contract.ts
 
       - name: Install approved tool dependencies
         working-directory: /tmp/ais-approved-preflight

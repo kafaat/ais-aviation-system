@@ -106,8 +106,10 @@ export function parseArgs(argv: string[]): CliOptions {
     throw new Error("TARGET_SHA_INVALID: expected --target-sha=<40-hex-sha>");
   }
 
-  const approvedSha = args.get("--approved-sha");
-  if (approvedSha && !/^[0-9a-f]{40}$/i.test(approvedSha)) {
+  const approvedShaArg = args.get("--approved-sha");
+  const approvedSha = approvedShaArg ? approvedShaArg.trim() : "";
+  const normalizedApprovedSha = approvedSha === "" ? null : approvedSha;
+  if (normalizedApprovedSha && !/^[0-9a-f]{40}$/i.test(normalizedApprovedSha)) {
     throw new Error("APPROVED_SHA_INVALID: expected a 40-character commit SHA");
   }
 
@@ -118,7 +120,7 @@ export function parseArgs(argv: string[]): CliOptions {
 
   return {
     targetSha: targetSha.toLowerCase(),
-    approvedSha: approvedSha?.toLowerCase() ?? null,
+    approvedSha: normalizedApprovedSha?.toLowerCase() ?? null,
     context:
       args.get("--context") || process.env.PREFLIGHT_CONTEXT || "production",
     reportDir:
