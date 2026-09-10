@@ -225,7 +225,7 @@ Each manual run:
 4. It generates the production report with:
 
 ```bash
-node --import tsx scripts/ci/production-db-preflight.ts --target-sha=<approved_sha> --tool-repo=/tmp/ais-approved-preflight
+node --import tsx scripts/ci/production-db-preflight.ts --run --target-sha=<approved_sha> --tool-repo=/tmp/ais-approved-preflight
 ```
 
 The uploaded artifact records the checked-out SHA, the approved SHA, migration

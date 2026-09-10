@@ -85,6 +85,12 @@ type Report = {
   };
 };
 
+type PreflightDependencies = {
+  createConnection?: typeof createConnection;
+  loadToolModules?: typeof loadToolModules;
+  readGitSha?: typeof readGitSha;
+};
+
 export function parseArgs(argv: string[]): CliOptions {
   const args = new Map(
     argv.map(arg => {
@@ -151,9 +157,34 @@ export function assertApprovedSha(
 
 function sanitizeError(error: unknown, databaseUrl: string): string {
   const message = error instanceof Error ? error.message : String(error);
-  return databaseUrl
-    ? message.replaceAll(databaseUrl, "[DATABASE_URL]")
-    : message;
+  if (!databaseUrl) {
+    return message;
+  }
+
+  const tokens = new Set<string>([databaseUrl]);
+  try {
+    const url = new URL(databaseUrl);
+    if (url.username) {
+      tokens.add(url.username);
+      tokens.add(decodeURIComponent(url.username));
+    }
+    if (url.password) {
+      tokens.add(url.password);
+      tokens.add(decodeURIComponent(url.password));
+    }
+    if (url.username || url.password) {
+      tokens.add(`${url.username}:${url.password}@`);
+      tokens.add(
+        `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}@`
+      );
+    }
+  } catch {
+    // Ignore URL parsing failures and fall back to whole-string replacement.
+  }
+
+  return [...tokens]
+    .filter(Boolean)
+    .reduce((result, token) => result.replaceAll(token, "[REDACTED]"), message);
 }
 
 async function withWorkingDirectory<T>(
@@ -192,25 +223,29 @@ async function loadToolModules(
   };
 }
 
-async function readActualMigrationHistory(
-  connection: Connection
-): Promise<Array<{ id: number; createdAt: number; hash: string }>> {
+async function readActualMigrationHistory(connection: Connection): Promise<{
+  migrationTablePresent: boolean;
+  rows: Array<{ id: number; createdAt: number; hash: string }>;
+}> {
   const [tables] = await connection.query<RowDataPacket[]>(
     "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '__drizzle_migrations'"
   );
   if (!tables.length) {
-    return [];
+    return { migrationTablePresent: false, rows: [] };
   }
 
   const [rows] = await connection.query<RowDataPacket[]>(
     "SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY id"
   );
 
-  return rows.map(row => ({
-    id: Number(row.id),
-    createdAt: Number(row.created_at),
-    hash: String(row.hash),
-  }));
+  return {
+    migrationTablePresent: true,
+    rows: rows.map(row => ({
+      id: Number(row.id),
+      createdAt: Number(row.created_at),
+      hash: String(row.hash),
+    })),
+  };
 }
 
 function buildMarkdownReport(report: Report): string {
@@ -264,15 +299,20 @@ ${JSON.stringify(report.migrationHistory.actualEntries, null, 2)}
 
 export async function writePreflightReport(
   options: CliOptions,
-  databaseUrl: string
+  databaseUrl: string,
+  dependencies: PreflightDependencies = {}
 ): Promise<Report> {
-  const checkedOutSha = readGitSha(options.toolRepo);
+  const readToolSha = dependencies.readGitSha ?? readGitSha;
+  const connect = dependencies.createConnection ?? createConnection;
+  const loadModules = dependencies.loadToolModules ?? loadToolModules;
+
+  const checkedOutSha = readToolSha(options.toolRepo);
   assertApprovedSha("TARGET_SHA", options.targetSha, checkedOutSha);
   if (options.approvedSha) {
     assertApprovedSha("APPROVED_SHA", options.approvedSha, checkedOutSha);
   }
 
-  const { migrate, schemaContract } = await loadToolModules(options.toolRepo);
+  const { migrate, schemaContract } = await loadModules(options.toolRepo);
 
   const history = await withWorkingDirectory(options.toolRepo, () =>
     Promise.resolve(schemaContract.readHistory())
@@ -291,7 +331,7 @@ export async function writePreflightReport(
     preflightError = sanitizeError(error, databaseUrl);
   }
 
-  const connection = await createConnection({
+  const connection = await connect({
     uri: databaseUrl,
     multipleStatements: false,
     connectTimeout: 10000,
@@ -334,6 +374,8 @@ export async function writePreflightReport(
       }
     } catch {
       actualTableCount = null;
+      appliedSnapshotTableCount = null;
+      appliedSnapshotDiffCount = null;
     }
 
     const report: Report = {
@@ -351,8 +393,8 @@ export async function writePreflightReport(
       },
       database: {
         schemaName: database[0]?.name ? String(database[0].name) : null,
-        migrationTablePresent: actualHistory.length > 0,
-        actualMigrationCount: actualHistory.length,
+        migrationTablePresent: actualHistory.migrationTablePresent,
+        actualMigrationCount: actualHistory.rows.length,
         verifiedAppliedCount,
         pendingMigrationCount:
           verifiedAppliedCount === null
@@ -374,7 +416,7 @@ export async function writePreflightReport(
           when,
           hash,
         })),
-        actualEntries: actualHistory,
+        actualEntries: actualHistory.rows,
       },
       preflight: {
         status: preflightError ? "FAIL" : "PASS",
@@ -427,7 +469,10 @@ export async function main(): Promise<void> {
   await writePreflightReport(options, databaseUrl);
 }
 
-if (process.argv.slice(2).some(arg => arg.startsWith("--tool-repo="))) {
+if (
+  process.argv.includes("--run") &&
+  process.argv.slice(2).some(arg => arg.startsWith("--tool-repo="))
+) {
   main().catch(error => {
     console.error(
       error instanceof Error
