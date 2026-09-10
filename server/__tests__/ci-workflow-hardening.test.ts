@@ -56,7 +56,9 @@ describe("CI workflow hardening", () => {
       "utf8"
     );
 
-    expect(text).toContain('PREFLIGHT_CONTEXT: ${{ inputs.production_context }}');
+    expect(text).toContain(
+      "PREFLIGHT_CONTEXT: ${{ inputs.production_context }}"
+    );
     expect(text).toContain('--context="$PREFLIGHT_CONTEXT"');
     expect(text).not.toContain("--context=${{ inputs.production_context }}");
   });
