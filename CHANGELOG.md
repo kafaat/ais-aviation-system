@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.21.1
+
+### Bug Fixes
+
+- fix(docker): remove unused npm from the runtime image (a044f9e)
+
+### Other Changes
+
+- Merge pull request #134 from kafaat/fix/runtime-image-npm-cves-20260910 (0e08b04)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.21.0...v1.21.1
+
+---
+
 ## What's Changed in v1.21.0
 
 ### Features
