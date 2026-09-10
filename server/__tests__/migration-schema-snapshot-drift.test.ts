@@ -1,15 +1,57 @@
 import { describe, expect, it } from "vitest";
+import type { Connection } from "mysql2/promise";
 import {
   assertSnapshotMatchesSchema,
   assertMigrationScope,
 } from "../../scripts/db/snapshot-check";
 import {
   differences,
+  readDatabaseContract,
   readHistory,
   snapshotContract,
 } from "../../scripts/db/schema-contract";
 
 describe("Drizzle schema/snapshot authority", () => {
+  it("keeps schema fingerprints stable when table metadata arrives in a different order", async () => {
+    const read = (names: string[]) =>
+      readDatabaseContract({
+        query: (sql: string) => {
+          if (sql.includes("information_schema.TABLES "))
+            return Promise.resolve([
+              names.map(TABLE_NAME => ({
+                TABLE_NAME,
+                TABLE_TYPE: "BASE TABLE",
+                ENGINE: "InnoDB",
+              })),
+            ]);
+          if (sql.includes("information_schema.COLUMNS "))
+            return Promise.resolve([
+              ["bookings", "flights"].map(TABLE_NAME => ({
+                TABLE_NAME,
+                COLUMN_NAME: "id",
+                COLUMN_TYPE: "int",
+                IS_NULLABLE: "NO",
+                COLUMN_DEFAULT: null,
+                EXTRA: "",
+                GENERATION_EXPRESSION: "",
+              })),
+            ]);
+          if (
+            sql.includes("information_schema.STATISTICS ") ||
+            sql.includes("information_schema.TABLE_CONSTRAINTS ")
+          )
+            return Promise.resolve([[]]);
+          throw new Error(`Unexpected metadata query: ${sql}`);
+        },
+      } as unknown as Connection);
+
+    const before = await read(["bookings", "flights"]);
+    const after = await read(["flights", "bookings"]);
+    expect(differences(before, after)).toEqual([]);
+    expect(JSON.stringify(after)).toBe(JSON.stringify(before));
+    expect(after.bookings.columns.id.type).toBe("int");
+  });
+
   it("matches the complete generated schema including re-exports, columns, indexes and constraints", async () => {
     await expect(assertSnapshotMatchesSchema()).resolves.toBeUndefined();
   });
