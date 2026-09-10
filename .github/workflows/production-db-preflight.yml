@@ -1,0 +1,77 @@
+name: Production Database Preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      github_environment:
+        description: "Protected GitHub environment that holds the read-only DATABASE_URL secret"
+        required: true
+        default: "production-preflight"
+        type: string
+      production_context:
+        description: "Human-readable production context for the report"
+        required: true
+        default: "production"
+        type: string
+      target_sha:
+        description: "Reviewed commit SHA to inspect against production"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-db-preflight-${{ inputs.github_environment }}-${{ inputs.target_sha }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Read-only production schema preflight
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.github_environment }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout reviewed SHA
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+        with:
+          ref: ${{ inputs.target_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate protected secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Protected environment secret DATABASE_URL is not configured."
+            exit 1
+          fi
+
+      - name: Run read-only preflight
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PREFLIGHT_CONTEXT: ${{ inputs.production_context }}
+          PREFLIGHT_REPORT_DIR: artifacts/db-preflight
+          GITHUB_ENVIRONMENT_NAME: ${{ inputs.github_environment }}
+        run: node --import tsx scripts/db/migrate.ts preflight
+
+      - name: Upload preflight report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-db-preflight-${{ inputs.target_sha }}
+          path: artifacts/db-preflight/
+          if-no-files-found: error
+          retention-days: 14

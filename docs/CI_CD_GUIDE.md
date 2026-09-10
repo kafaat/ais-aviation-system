@@ -196,6 +196,29 @@ mysql -u root -p ais_aviation < rollback.sql
 mysql -u root -p ais_aviation < backup.sql
 ```
 
+### Manual Production Database Preflight
+
+Before using GitHub to inspect production, configure a **protected GitHub environment**
+that exposes a read-only `DATABASE_URL` secret for the AIS schema. The MySQL account
+behind that URL should be able to read `information_schema` and `__drizzle_migrations`
+only; it must not be able to mutate data or DDL.
+
+Run the workflow `.github/workflows/production-db-preflight.yml` manually with:
+
+- `github_environment`: the protected environment that gates the secret
+- `production_context`: a human-readable label such as `production-eu`
+- `target_sha`: the reviewed SHA to inspect against production (for example from PR #129)
+
+The workflow checks out the requested SHA, runs:
+
+```bash
+node --import tsx scripts/db/migrate.ts preflight
+```
+
+and uploads a redacted artifact containing the SHA, inspection time, production
+context, classification, and schema/migration deviations without passwords or
+customer-row data.
+
 ## 🏗️ Environment Configuration
 
 ### Required Environment Variables
