@@ -6,7 +6,7 @@ import {
   defaultsEquivalent,
   parseDeclaredSchemaTables,
   typesEquivalent,
-} from "./migrate";
+} from "../../../scripts/db/migrate";
 
 describe("parseDeclaredSchemaTables", () => {
   it("extracts unique table names from drizzle/schema.ts source", () => {
@@ -174,6 +174,6 @@ describe("buildMarkdownReport", () => {
 
     expect(markdown).toContain("Production Database Preflight Report");
     expect(markdown).toContain("database_unexpected_tables");
-    expect(markdown).not.toContain("password");
+    expect(markdown).not.toContain("mysql://");
   });
 });

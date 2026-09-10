@@ -189,7 +189,11 @@ async function loadAuthoritativeMetadata(repoRoot: string): Promise<{
     throw new Error(`Unable to resolve snapshot name from tag "${latestTag}".`);
   }
 
-  const latestSnapshotPath = join(drizzleDir, "meta", `${tagPrefix}_snapshot.json`);
+  const latestSnapshotPath = join(
+    drizzleDir,
+    "meta",
+    `${tagPrefix}_snapshot.json`
+  );
   const snapshot = JSON.parse(
     await readFile(latestSnapshotPath, "utf8")
   ) as Snapshot;
@@ -215,9 +219,7 @@ async function queryActualSchema(connection: mysql.Connection): Promise<{
 }> {
   const [contextRows] = await connection.query<
     Array<{ schemaName: string | null; serverVersion: string | null }>
-  >(
-    `SELECT DATABASE() AS schemaName, VERSION() AS serverVersion`
-  );
+  >(`SELECT DATABASE() AS schemaName, VERSION() AS serverVersion`);
 
   const schemaName = contextRows[0]?.schemaName ?? null;
   const serverVersion = contextRows[0]?.serverVersion ?? null;
@@ -306,10 +308,14 @@ function comparePreflightState(input: {
 }): Deviation[] {
   const deviations: Deviation[] = [];
 
-  const journalSql = input.journal.entries.map(entry => `${entry.tag}.sql`).sort();
+  const journalSql = input.journal.entries
+    .map(entry => `${entry.tag}.sql`)
+    .sort();
   if (
     input.executableMigrations.length !== journalSql.length ||
-    input.executableMigrations.some((fileName, index) => fileName !== journalSql[index])
+    input.executableMigrations.some(
+      (fileName, index) => fileName !== journalSql[index]
+    )
   ) {
     deviations.push({
       severity: "fail",
@@ -365,7 +371,9 @@ function comparePreflightState(input: {
       message:
         "Production schema does not expose the __drizzle_migrations table to the read-only preflight.",
     });
-  } else if (input.actual.appliedMigrationCount !== input.journal.entries.length) {
+  } else if (
+    input.actual.appliedMigrationCount !== input.journal.entries.length
+  ) {
     deviations.push({
       severity: "fail",
       code: "database_migration_count_mismatch",
@@ -379,7 +387,9 @@ function comparePreflightState(input: {
     });
   }
 
-  const missingTables = migrationTables.filter(tableName => !actualSet.has(tableName));
+  const missingTables = migrationTables.filter(
+    tableName => !actualSet.has(tableName)
+  );
   if (missingTables.length > 0) {
     deviations.push({
       severity: "fail",
@@ -412,11 +422,14 @@ function comparePreflightState(input: {
       continue;
     }
 
-    const expectedColumns = Object.values(input.snapshot.tables[tableName]?.columns ?? {});
+    const expectedColumns = Object.values(
+      input.snapshot.tables[tableName]?.columns ?? {}
+    );
     const expectedColumnMap = new Map(
       expectedColumns.map(column => [column.name, column] as const)
     );
-    const actualColumnMap = input.actual.columnsByTable.get(tableName) ?? new Map();
+    const actualColumnMap =
+      input.actual.columnsByTable.get(tableName) ?? new Map();
 
     const missingColumns = expectedColumns
       .map(column => column.name)
@@ -457,7 +470,9 @@ function comparePreflightState(input: {
 
         const issues: string[] = [];
         if (!typesEquivalent(column.type, actualColumn.columnType)) {
-          issues.push(`type expected ${column.type} but found ${actualColumn.columnType}`);
+          issues.push(
+            `type expected ${column.type} but found ${actualColumn.columnType}`
+          );
         }
 
         const expectedNullable = column.notNull ? "NO" : "YES";
@@ -474,7 +489,8 @@ function comparePreflightState(input: {
         }
 
         const expectedAutoIncrement = Boolean(column.autoincrement);
-        const actualAutoIncrement = actualColumn.extra?.includes("auto_increment") ?? false;
+        const actualAutoIncrement =
+          actualColumn.extra?.includes("auto_increment") ?? false;
         if (expectedAutoIncrement !== actualAutoIncrement) {
           issues.push(
             `autoincrement expected ${expectedAutoIncrement} but found ${actualAutoIncrement}`
@@ -490,7 +506,10 @@ function comparePreflightState(input: {
           issues,
         };
       })
-      .filter((value): value is { columnName: string; issues: string[] } => value !== null);
+      .filter(
+        (value): value is { columnName: string; issues: string[] } =>
+          value !== null
+      );
 
     if (mismatchedColumns.length > 0) {
       deviations.push({
@@ -624,12 +643,19 @@ async function runPreflight(): Promise<void> {
         expectedMigrationCount: metadata.journal.entries.length,
         appliedMigrationCount: actual.appliedMigrationCount,
         deviationCount: deviations.length,
-        failureCount: deviations.filter(deviation => deviation.severity === "fail").length,
-        warningCount: deviations.filter(deviation => deviation.severity === "warn").length,
+        failureCount: deviations.filter(
+          deviation => deviation.severity === "fail"
+        ).length,
+        warningCount: deviations.filter(
+          deviation => deviation.severity === "warn"
+        ).length,
       },
       repository: {
         migrationJournalPath: "drizzle/meta/_journal.json",
-        latestSnapshotPath: metadata.latestSnapshotPath.replace(`${repoRoot}/`, ""),
+        latestSnapshotPath: metadata.latestSnapshotPath.replace(
+          `${repoRoot}/`,
+          ""
+        ),
         latestMigrationTag: metadata.latestTag,
       },
       database: {
