@@ -198,26 +198,37 @@ mysql -u root -p ais_aviation < backup.sql
 
 ### Manual Production Database Preflight
 
-Before using GitHub to inspect production, configure a **protected GitHub environment**
-that exposes a read-only `DATABASE_URL` secret for the AIS schema. The MySQL account
-behind that URL should be able to read `information_schema` and `__drizzle_migrations`
-only; it must not be able to mutate data or DDL.
+`.github/workflows/production-db-preflight.yml` is a wrapper around the guarded
+database tool in `scripts/db/migrate.ts`. It does not accept an arbitrary
+environment name, and it does not expose production credentials until the target
+commit has been approved.
 
-Run the workflow `.github/workflows/production-db-preflight.yml` manually with:
+One-time setup:
 
-- `github_environment`: the protected environment that gates the secret
-- `production_context`: a human-readable label such as `production-eu`
-- `target_sha`: the reviewed SHA to inspect against production (for example from PR #129)
+1. Configure the pinned GitHub environment `production-preflight`.
+2. Store the read-only production `DATABASE_URL` secret in that environment.
+3. Set the repository variable `PRODUCTION_PREFLIGHT_APPROVED_SHA` to the exact
+   reviewed 40-character commit SHA that is allowed to inspect production.
 
-The workflow checks out the requested SHA, runs:
+The MySQL account behind `DATABASE_URL` must be read-only and limited to the AIS
+schema, `information_schema`, and `__drizzle_migrations`.
+
+Each manual run:
+
+1. Provide `target_sha` as the exact approved 40-character SHA.
+2. Optionally set `production_context` (for example `production-eu`).
+3. The workflow first runs the guarded migration acceptance path on isolated
+   MySQL, then checks out the approved SHA again under the protected
+   `production-preflight` environment.
+4. It generates the production report with:
 
 ```bash
-node --import tsx scripts/db/migrate.ts preflight
+node --import tsx scripts/db/preflight-report.ts --target-sha=<approved_sha>
 ```
 
-and uploads a redacted artifact containing the SHA, inspection time, production
-context, classification, and schema/migration deviations without passwords or
-customer-row data.
+The uploaded artifact records the checked-out SHA, the approved SHA, migration
+hashes and timestamps, pending migration count, and preflight status without
+including passwords or customer-row data.
 
 ## 🏗️ Environment Configuration
 

@@ -3,11 +3,6 @@ name: Production Database Preflight
 on:
   workflow_dispatch:
     inputs:
-      github_environment:
-        description: "Protected GitHub environment that holds the read-only DATABASE_URL secret"
-        required: true
-        default: "production-preflight"
-        type: string
       production_context:
         description: "Human-readable production context for the report"
         required: true
@@ -22,20 +17,60 @@ permissions:
   contents: read
 
 concurrency:
-  group: production-db-preflight-${{ inputs.github_environment }}-${{ inputs.target_sha }}
+  group: production-db-preflight-${{ inputs.target_sha }}
   cancel-in-progress: false
 
 jobs:
-  preflight:
-    name: Read-only production schema preflight
+  validate-target:
+    name: Validate approved target SHA
     runs-on: ubuntu-latest
-    environment: ${{ inputs.github_environment }}
-    timeout-minutes: 20
+    outputs:
+      target_sha: ${{ steps.validate.outputs.target_sha }}
     steps:
-      - name: Checkout reviewed SHA
+      - name: Validate target SHA format and approval
+        id: validate
+        env:
+          TARGET_SHA: ${{ inputs.target_sha }}
+          APPROVED_SHA: ${{ vars.PRODUCTION_PREFLIGHT_APPROVED_SHA }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$TARGET_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::target_sha must be a full 40-character commit SHA."
+            exit 1
+          fi
+          if [ -z "${APPROVED_SHA:-}" ]; then
+            echo "::error::Repository variable PRODUCTION_PREFLIGHT_APPROVED_SHA is not configured."
+            exit 1
+          fi
+          if [ "${TARGET_SHA,,}" != "${APPROVED_SHA,,}" ]; then
+            echo "::error::target_sha is not the approved production preflight SHA."
+            exit 1
+          fi
+          echo "target_sha=${TARGET_SHA,,}" >> "$GITHUB_OUTPUT"
+
+  isolated-mysql-smoke:
+    name: Exercise approved preflight on isolated MySQL
+    needs: validate-target
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: ais_preflight_smoke
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout approved SHA
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
         with:
-          ref: ${{ inputs.target_sha }}
+          ref: ${{ needs.validate-target.outputs.target_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -50,7 +85,74 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Validate protected secrets
+      - name: Wait for MySQL
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -P 3306 -u root -ptest_password --silent; do
+            sleep 2
+          done
+
+      - name: Run isolated migration acceptance
+        env:
+          MYSQL_USER: root
+          MYSQL_PASSWORD: test_password
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "3306"
+          MYSQL_DATABASE: ais_preflight_smoke
+        run: |
+          export DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}"
+          node --import tsx scripts/db/replay-acceptance.ts
+
+      - name: Generate isolated preflight report
+        env:
+          MYSQL_USER: root
+          MYSQL_PASSWORD: test_password
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "3306"
+          MYSQL_DATABASE: ais_preflight_smoke
+        run: |
+          export DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}"
+          node --import tsx scripts/db/migrate.ts migrate
+          node --import tsx scripts/db/preflight-report.ts \
+            --target-sha=${{ needs.validate-target.outputs.target_sha }} \
+            --approved-sha=${{ needs.validate-target.outputs.target_sha }} \
+            --context=isolated-mysql-smoke \
+            --report-dir=artifacts/db-preflight-smoke
+
+      - name: Upload isolated preflight report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-db-preflight-smoke-${{ needs.validate-target.outputs.target_sha }}
+          path: artifacts/db-preflight-smoke/
+          if-no-files-found: error
+          retention-days: 14
+
+  preflight:
+    name: Read-only production schema preflight
+    needs: [validate-target, isolated-mysql-smoke]
+    runs-on: ubuntu-latest
+    environment: production-preflight
+    timeout-minutes: 20
+    steps:
+      - name: Checkout approved SHA
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+        with:
+          ref: ${{ needs.validate-target.outputs.target_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Validate protected secret
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
@@ -59,19 +161,21 @@ jobs:
             exit 1
           fi
 
-      - name: Run read-only preflight
+      - name: Generate production preflight report
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          PREFLIGHT_CONTEXT: ${{ inputs.production_context }}
-          PREFLIGHT_REPORT_DIR: artifacts/db-preflight
-          GITHUB_ENVIRONMENT_NAME: ${{ inputs.github_environment }}
-        run: node --import tsx scripts/db/migrate.ts preflight
+        run: |
+          node --import tsx scripts/db/preflight-report.ts \
+            --target-sha=${{ needs.validate-target.outputs.target_sha }} \
+            --approved-sha=${{ vars.PRODUCTION_PREFLIGHT_APPROVED_SHA }} \
+            --context=${{ inputs.production_context }} \
+            --report-dir=artifacts/db-preflight
 
-      - name: Upload preflight report
+      - name: Upload production preflight report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: production-db-preflight-${{ inputs.target_sha }}
+          name: production-db-preflight-${{ needs.validate-target.outputs.target_sha }}
           path: artifacts/db-preflight/
           if-no-files-found: error
           retention-days: 14
