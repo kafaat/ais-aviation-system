@@ -67,10 +67,9 @@ jobs:
           --health-timeout=5s
           --health-retries=10
     steps:
-      - name: Checkout approved SHA
+      - name: Checkout wrapper branch
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
         with:
-          ref: ${{ needs.validate-target.outputs.target_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -83,6 +82,16 @@ jobs:
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Materialize approved tool checkout
+        run: |
+          rm -rf /tmp/ais-approved-preflight
+          git worktree add --detach /tmp/ais-approved-preflight \
+            ${{ needs.validate-target.outputs.target_sha }}
+
+      - name: Install approved tool dependencies
+        working-directory: /tmp/ais-approved-preflight
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Wait for MySQL
@@ -100,6 +109,7 @@ jobs:
           MYSQL_DATABASE: ais_preflight_smoke
         run: |
           export DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}"
+          cd /tmp/ais-approved-preflight
           node --import tsx scripts/db/replay-acceptance.ts
 
       - name: Generate isolated preflight report
@@ -111,12 +121,16 @@ jobs:
           MYSQL_DATABASE: ais_preflight_smoke
         run: |
           export DATABASE_URL="mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DATABASE}"
-          node --import tsx scripts/db/migrate.ts migrate
-          node --import tsx scripts/db/preflight-report.ts \
+          (
+            cd /tmp/ais-approved-preflight
+            node --import tsx scripts/db/migrate.ts migrate
+          )
+          node --import tsx scripts/ci/production-db-preflight.ts \
             --target-sha=${{ needs.validate-target.outputs.target_sha }} \
             --approved-sha=${{ needs.validate-target.outputs.target_sha }} \
             --context=isolated-mysql-smoke \
-            --report-dir=artifacts/db-preflight-smoke
+            --report-dir=artifacts/db-preflight-smoke \
+            --tool-repo=/tmp/ais-approved-preflight
 
       - name: Upload isolated preflight report
         if: always()
@@ -134,10 +148,9 @@ jobs:
     environment: production-preflight
     timeout-minutes: 20
     steps:
-      - name: Checkout approved SHA
+      - name: Checkout wrapper branch
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
         with:
-          ref: ${{ needs.validate-target.outputs.target_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -150,6 +163,16 @@ jobs:
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Materialize approved tool checkout
+        run: |
+          rm -rf /tmp/ais-approved-preflight
+          git worktree add --detach /tmp/ais-approved-preflight \
+            ${{ needs.validate-target.outputs.target_sha }}
+
+      - name: Install approved tool dependencies
+        working-directory: /tmp/ais-approved-preflight
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Validate protected secret
@@ -165,11 +188,12 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          node --import tsx scripts/db/preflight-report.ts \
+          node --import tsx scripts/ci/production-db-preflight.ts \
             --target-sha=${{ needs.validate-target.outputs.target_sha }} \
             --approved-sha=${{ vars.PRODUCTION_PREFLIGHT_APPROVED_SHA }} \
             --context=${{ inputs.production_context }} \
-            --report-dir=artifacts/db-preflight
+            --report-dir=artifacts/db-preflight \
+            --tool-repo=/tmp/ais-approved-preflight
 
       - name: Upload production preflight report
         if: always()

@@ -199,7 +199,8 @@ mysql -u root -p ais_aviation < backup.sql
 ### Manual Production Database Preflight
 
 `.github/workflows/production-db-preflight.yml` is a wrapper around the guarded
-database tool in `scripts/db/migrate.ts`. It does not accept an arbitrary
+database tool from the approved target checkout. The wrapper logic lives in
+`scripts/ci/production-db-preflight.ts`. It does not accept an arbitrary
 environment name, and it does not expose production credentials until the target
 commit has been approved.
 
@@ -217,13 +218,14 @@ Each manual run:
 
 1. Provide `target_sha` as the exact approved 40-character SHA.
 2. Optionally set `production_context` (for example `production-eu`).
-3. The workflow first runs the guarded migration acceptance path on isolated
-   MySQL, then checks out the approved SHA again under the protected
-   `production-preflight` environment.
+3. The workflow first materializes the approved SHA in a detached worktree under
+   `/tmp/ais-approved-preflight`, runs the guarded migration acceptance path on
+   isolated MySQL from that checkout, then reuses the same approved worktree
+   under the protected `production-preflight` environment.
 4. It generates the production report with:
 
 ```bash
-node --import tsx scripts/db/preflight-report.ts --target-sha=<approved_sha>
+node --import tsx scripts/ci/production-db-preflight.ts --target-sha=<approved_sha> --tool-repo=/tmp/ais-approved-preflight
 ```
 
 The uploaded artifact records the checked-out SHA, the approved SHA, migration

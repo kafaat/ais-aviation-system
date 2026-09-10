@@ -1,31 +1,56 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { createConnection, type RowDataPacket } from "mysql2/promise";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
-  appliedMigrationCount,
-  differences,
-  readDatabaseContract,
-  readHistory,
-  snapshotContract,
-} from "./schema-contract";
-import { runMigration } from "./migrate";
+  createConnection,
+  type Connection,
+  type RowDataPacket,
+} from "mysql2/promise";
 
-type Classification = "pass" | "fail";
+type Migration = {
+  idx: number;
+  tag: string;
+  when: number;
+  hash: string;
+  snapshot: unknown;
+};
+
+type Contract = Record<string, unknown>;
+
+type SchemaContractModule = {
+  appliedMigrationCount(
+    connection: Connection,
+    history: Migration[]
+  ): Promise<number>;
+  differences(expected: unknown, actual: unknown, path?: string): string[];
+  readDatabaseContract(connection: Connection): Promise<Contract>;
+  readHistory(root?: string): Migration[];
+  snapshotContract(snapshot: unknown): Contract;
+};
+
+type MigrateModule = {
+  runMigration(
+    command: "migrate" | "preflight" | "verify",
+    url: string
+  ): Promise<void>;
+};
 
 type CliOptions = {
   targetSha: string;
   approvedSha: string | null;
   context: string;
   reportDir: string;
+  toolRepo: string;
 };
 
 type Report = {
   generatedAt: string;
-  classification: Classification;
+  classification: "pass" | "fail";
   requestedSha: string;
-  checkedOutSha: string;
   approvedSha: string | null;
+  checkedOutSha: string;
+  toolRepo: string;
   productionContext: string;
   command: string;
   repository: {
@@ -46,7 +71,12 @@ type Report = {
     appliedSnapshotDiffCount: number | null;
   };
   migrationHistory: {
-    expectedEntries: Array<{ idx: number; tag: string; when: number; hash: string }>;
+    expectedEntries: Array<{
+      idx: number;
+      tag: string;
+      when: number;
+      hash: string;
+    }>;
     actualEntries: Array<{ id: number; createdAt: number; hash: string }>;
   };
   preflight: {
@@ -54,11 +84,6 @@ type Report = {
     error: string | null;
   };
 };
-
-function sanitizeError(error: unknown, databaseUrl: string): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.replaceAll(databaseUrl, "[DATABASE_URL]");
-}
 
 export function parseArgs(argv: string[]): CliOptions {
   const args = new Map(
@@ -80,24 +105,34 @@ export function parseArgs(argv: string[]): CliOptions {
     throw new Error("APPROVED_SHA_INVALID: expected a 40-character commit SHA");
   }
 
+  const toolRepo = args.get("--tool-repo");
+  if (!toolRepo) {
+    throw new Error("TOOL_REPO_REQUIRED: expected --tool-repo=<absolute-path>");
+  }
+
   return {
     targetSha: targetSha.toLowerCase(),
     approvedSha: approvedSha?.toLowerCase() ?? null,
-    context: args.get("--context") || process.env.PREFLIGHT_CONTEXT || "production",
+    context:
+      args.get("--context") || process.env.PREFLIGHT_CONTEXT || "production",
     reportDir:
       args.get("--report-dir") ||
       process.env.PREFLIGHT_REPORT_DIR ||
       "artifacts/db-preflight",
+    toolRepo: resolve(toolRepo),
   };
 }
 
-export function readCheckedOutSha(
+export function readGitSha(
+  cwd: string,
   readStdout: (command: string, args: string[]) => string = (command, args) =>
     execFileSync(command, args, { encoding: "utf8" }).trim()
 ): string {
-  const sha = readStdout("git", ["rev-parse", "HEAD"]).trim().toLowerCase();
+  const sha = readStdout("git", ["-C", cwd, "rev-parse", "HEAD"])
+    .trim()
+    .toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(sha)) {
-    throw new Error("CHECKED_OUT_SHA_INVALID: git rev-parse HEAD did not return a full SHA");
+    throw new Error(`CHECKED_OUT_SHA_INVALID: ${cwd}`);
   }
   return sha;
 }
@@ -114,8 +149,51 @@ export function assertApprovedSha(
   }
 }
 
+function sanitizeError(error: unknown, databaseUrl: string): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return databaseUrl
+    ? message.replaceAll(databaseUrl, "[DATABASE_URL]")
+    : message;
+}
+
+async function withWorkingDirectory<T>(
+  cwd: string,
+  callback: () => Promise<T>
+): Promise<T> {
+  const previous = process.cwd();
+  process.chdir(cwd);
+  try {
+    return await callback();
+  } finally {
+    process.chdir(previous);
+  }
+}
+
+async function loadToolModules(
+  toolRepo: string
+): Promise<{ migrate: MigrateModule; schemaContract: SchemaContractModule }> {
+  const migratePath = join(toolRepo, "scripts/db/migrate.ts");
+  const schemaContractPath = join(toolRepo, "scripts/db/schema-contract.ts");
+
+  if (!existsSync(migratePath) || !existsSync(schemaContractPath)) {
+    throw new Error(
+      "APPROVED_TOOL_MISSING: expected scripts/db/migrate.ts and scripts/db/schema-contract.ts in the approved checkout"
+    );
+  }
+
+  const [migrate, schemaContract] = await Promise.all([
+    import(pathToFileURL(migratePath).href),
+    import(pathToFileURL(schemaContractPath).href),
+  ]);
+
+  return {
+    migrate: migrate as MigrateModule,
+    schemaContract: schemaContract as SchemaContractModule,
+  };
+}
+
 async function readActualMigrationHistory(
-  connection: Awaited<ReturnType<typeof createConnection>>
+  connection: Connection
 ): Promise<Array<{ id: number; createdAt: number; hash: string }>> {
   const [tables] = await connection.query<RowDataPacket[]>(
     "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '__drizzle_migrations'"
@@ -127,6 +205,7 @@ async function readActualMigrationHistory(
   const [rows] = await connection.query<RowDataPacket[]>(
     "SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY id"
   );
+
   return rows.map(row => ({
     id: Number(row.id),
     createdAt: Number(row.created_at),
@@ -141,6 +220,7 @@ function buildMarkdownReport(report: Report): string {
 - Requested SHA: \`${report.requestedSha}\`
 - Checked-out SHA: \`${report.checkedOutSha}\`
 - Approved SHA: \`${report.approvedSha ?? "n/a"}\`
+- Approved tool repo: \`${report.toolRepo}\`
 - Generated at: \`${report.generatedAt}\`
 - Production context: \`${report.productionContext}\`
 - Command: \`${report.command}\`
@@ -186,13 +266,17 @@ export async function writePreflightReport(
   options: CliOptions,
   databaseUrl: string
 ): Promise<Report> {
-  const checkedOutSha = readCheckedOutSha();
+  const checkedOutSha = readGitSha(options.toolRepo);
   assertApprovedSha("TARGET_SHA", options.targetSha, checkedOutSha);
   if (options.approvedSha) {
     assertApprovedSha("APPROVED_SHA", options.approvedSha, checkedOutSha);
   }
 
-  const history = readHistory();
+  const { migrate, schemaContract } = await loadToolModules(options.toolRepo);
+
+  const history = await withWorkingDirectory(options.toolRepo, () =>
+    Promise.resolve(schemaContract.readHistory())
+  );
   const latest = history.at(-1);
   if (!latest) {
     throw new Error("EMPTY_MIGRATION_HISTORY");
@@ -200,7 +284,9 @@ export async function writePreflightReport(
 
   let preflightError: string | null = null;
   try {
-    await runMigration("preflight", databaseUrl);
+    await withWorkingDirectory(options.toolRepo, async () => {
+      await migrate.runMigration("preflight", databaseUrl);
+    });
   } catch (error) {
     preflightError = sanitizeError(error, databaseUrl);
   }
@@ -219,7 +305,9 @@ export async function writePreflightReport(
 
     let verifiedAppliedCount: number | null = null;
     try {
-      verifiedAppliedCount = await appliedMigrationCount(connection, history);
+      verifiedAppliedCount = await withWorkingDirectory(options.toolRepo, () =>
+        schemaContract.appliedMigrationCount(connection, history)
+      );
     } catch {
       verifiedAppliedCount = null;
     }
@@ -229,14 +317,17 @@ export async function writePreflightReport(
     let appliedSnapshotDiffCount: number | null = null;
 
     try {
-      const actualContract = await readDatabaseContract(connection);
+      const actualContract =
+        await schemaContract.readDatabaseContract(connection);
       actualTableCount = Object.keys(actualContract).length;
       if (verifiedAppliedCount !== null) {
         const appliedContract = verifiedAppliedCount
-          ? snapshotContract(history[verifiedAppliedCount - 1].snapshot)
+          ? schemaContract.snapshotContract(
+              history[verifiedAppliedCount - 1].snapshot
+            )
           : {};
         appliedSnapshotTableCount = Object.keys(appliedContract).length;
-        appliedSnapshotDiffCount = differences(
+        appliedSnapshotDiffCount = schemaContract.differences(
           appliedContract,
           actualContract
         ).length;
@@ -249,8 +340,9 @@ export async function writePreflightReport(
       generatedAt: new Date().toISOString(),
       classification: preflightError ? "fail" : "pass",
       requestedSha: options.targetSha,
-      checkedOutSha,
       approvedSha: options.approvedSha,
+      checkedOutSha,
+      toolRepo: options.toolRepo,
       productionContext: options.context,
       command: "node --import tsx scripts/db/migrate.ts preflight",
       repository: {
@@ -263,12 +355,14 @@ export async function writePreflightReport(
         actualMigrationCount: actualHistory.length,
         verifiedAppliedCount,
         pendingMigrationCount:
-          verifiedAppliedCount === null ? null : history.length - verifiedAppliedCount,
+          verifiedAppliedCount === null
+            ? null
+            : history.length - verifiedAppliedCount,
       },
       schema: {
         appliedSnapshotTableCount,
         targetSnapshotTableCount: Object.keys(
-          snapshotContract(latest.snapshot)
+          schemaContract.snapshotContract(latest.snapshot)
         ).length,
         actualTableCount,
         appliedSnapshotDiffCount,
@@ -333,7 +427,7 @@ export async function main(): Promise<void> {
   await writePreflightReport(options, databaseUrl);
 }
 
-if (process.argv.slice(2).some(arg => arg.startsWith("--target-sha="))) {
+if (process.argv.slice(2).some(arg => arg.startsWith("--tool-repo="))) {
   main().catch(error => {
     console.error(
       error instanceof Error
