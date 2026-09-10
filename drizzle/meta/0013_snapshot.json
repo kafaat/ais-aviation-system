@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "b1373fa0-a1fc-4e0f-9e3f-0a33e60a2eb5",
+  "id": "21090a7b-870e-42c0-91b5-1f1b5e27cbe5",
   "prevId": "d212e777-38e0-4386-8cac-a339b6eeb084",
   "tables": {
     "account_deletion_requests": {
@@ -8340,93 +8340,6 @@
       "uniqueConstraints": {
         "loyalty_accounts_userId_unique": {
           "name": "loyalty_accounts_userId_unique",
-          "columns": ["userId"]
-        }
-      },
-      "checkConstraint": {}
-    },
-    "mfa_settings": {
-      "name": "mfa_settings",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "userId": {
-          "name": "userId",
-          "type": "int",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "secret": {
-          "name": "secret",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "isEnabled": {
-          "name": "isEnabled",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "backupCodes": {
-          "name": "backupCodes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "enabledAt": {
-          "name": "enabledAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lastUsedAt": {
-          "name": "lastUsedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "onUpdate": true,
-          "default": "(now())"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "mfa_settings_id": {
-          "name": "mfa_settings_id",
-          "columns": ["id"]
-        }
-      },
-      "uniqueConstraints": {
-        "mfa_settings_userId_unique": {
-          "name": "mfa_settings_userId_unique",
           "columns": ["userId"]
         }
       },

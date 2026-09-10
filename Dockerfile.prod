@@ -40,8 +40,15 @@ FROM deps AS migrator
 WORKDIR /app
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./
+COPY scripts/db ./scripts/db
+# Installers are build tools. The guarded migrator uses Node + local tsx/Drizzle;
+# remove both global and project pnpm, including their bundled dependencies.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+    /usr/local/lib/node_modules/pnpm /usr/local/bin/pnpm /usr/local/bin/pnpx \
+    /app/node_modules/pnpm /app/node_modules/.bin/pnpm /app/node_modules/.bin/pnpx \
+    /app/node_modules/.pnpm/pnpm@*
 USER ais
-CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
+CMD ["node", "--import", "tsx", "scripts/db/migrate.ts", "migrate"]
 
 # Production image
 FROM base AS runner

@@ -53,11 +53,16 @@ jobs:
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
         run: pnpm run db:migrate
+      - name: Prove data preservation and refusal before DDL
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
+        run: pnpm run db:test-migrations
       - name: Verify migration result matches the declared schema
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_migration_test
         run: |
           pnpm run db:verify
+          pnpm run db:verify-catalog
       - name: Type-check the live acceptance runner
         run: pnpm exec tsc -p tsconfig.acceptance.json --noEmit
       - name: Verify backup failure boundaries
@@ -148,7 +153,9 @@ jobs:
       - name: Verify upgraded database matches current schema
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test
-        run: pnpm run db:verify
+        run: |
+          pnpm run db:verify
+          pnpm run db:verify-catalog
       - name: Verify original data survived the upgrade
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_upgrade_test

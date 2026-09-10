@@ -821,20 +821,6 @@ CREATE TABLE `login_attempts` (
 	CONSTRAINT `login_attempts_id` PRIMARY KEY(`id`)
 );
 --> statement-breakpoint
-CREATE TABLE `mfa_settings` (
-	`id` int AUTO_INCREMENT NOT NULL,
-	`userId` int NOT NULL,
-	`secret` text NOT NULL,
-	`isEnabled` boolean NOT NULL DEFAULT false,
-	`backupCodes` text NOT NULL,
-	`enabledAt` timestamp,
-	`lastUsedAt` timestamp,
-	`createdAt` timestamp NOT NULL DEFAULT (now()),
-	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
-	CONSTRAINT `mfa_settings_id` PRIMARY KEY(`id`),
-	CONSTRAINT `mfa_settings_userId_unique` UNIQUE(`userId`)
-);
---> statement-breakpoint
 CREATE TABLE `ndc_offers` (
 	`id` int AUTO_INCREMENT NOT NULL,
 	`offerId` varchar(64) NOT NULL,
@@ -1583,16 +1569,10 @@ DROP INDEX `user_route_favorite_unique` ON `favorite_flights`;--> statement-brea
 DROP INDEX `user_flight_unique` ON `flight_reviews`;--> statement-breakpoint
 ALTER TABLE `bookings` MODIFY COLUMN `numberOfPassengers` int NOT NULL DEFAULT 1;--> statement-breakpoint
 ALTER TABLE `payments` MODIFY COLUMN `method` enum('card','wallet','bank_transfer','mada','apple_pay','stc_pay','tabby','tamara') NOT NULL;--> statement-breakpoint
--- Preserve the prior defaults when making existing nullable preferences required.
-UPDATE `user_preferences` SET
-  `wheelchairAssistance` = COALESCE(`wheelchairAssistance`, false),
-  `extraLegroom` = COALESCE(`extraLegroom`, false),
-  `emailNotifications` = COALESCE(`emailNotifications`, true),
-  `smsNotifications` = COALESCE(`smsNotifications`, false);--> statement-breakpoint
-ALTER TABLE `user_preferences` MODIFY COLUMN `wheelchairAssistance` boolean NOT NULL;--> statement-breakpoint
-ALTER TABLE `user_preferences` MODIFY COLUMN `extraLegroom` boolean NOT NULL;--> statement-breakpoint
+ALTER TABLE `user_preferences` MODIFY COLUMN `wheelchairAssistance` boolean NOT NULL DEFAULT false;--> statement-breakpoint
+ALTER TABLE `user_preferences` MODIFY COLUMN `extraLegroom` boolean NOT NULL DEFAULT false;--> statement-breakpoint
 ALTER TABLE `user_preferences` MODIFY COLUMN `emailNotifications` boolean NOT NULL DEFAULT true;--> statement-breakpoint
-ALTER TABLE `user_preferences` MODIFY COLUMN `smsNotifications` boolean NOT NULL;--> statement-breakpoint
+ALTER TABLE `user_preferences` MODIFY COLUMN `smsNotifications` boolean NOT NULL DEFAULT false;--> statement-breakpoint
 ALTER TABLE `bookings` ADD `tenantId` int;--> statement-breakpoint
 ALTER TABLE `bookings` ADD `idempotencyKey` varchar(255);--> statement-breakpoint
 ALTER TABLE `bookings` ADD `checkInReminderSentAt` timestamp;--> statement-breakpoint

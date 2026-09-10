@@ -1,2 +1,0 @@
-ALTER TABLE `payment_receipts` ADD `settlementStatus` enum('applied','review_required','review_refunded') DEFAULT 'applied' NOT NULL;--> statement-breakpoint
-ALTER TABLE `payment_receipts` ADD `settlementError` varchar(255);

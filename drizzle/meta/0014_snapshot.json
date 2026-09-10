@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "b1738302-6711-4805-9fa0-e43e44d7575c",
-  "prevId": "b1373fa0-a1fc-4e0f-9e3f-0a33e60a2eb5",
+  "id": "18b625af-90db-47f5-810f-46190e38108f",
+  "prevId": "21090a7b-870e-42c0-91b5-1f1b5e27cbe5",
   "tables": {
     "account_deletion_requests": {
       "name": "account_deletion_requests",
@@ -2484,6 +2484,21 @@
           "autoincrement": false,
           "default": "'pending'"
         },
+        "inventoryLockId": {
+          "name": "inventoryLockId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "seatsReserved": {
+          "name": "seatsReserved",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
         "totalAmount": {
           "name": "totalAmount",
           "type": "int",
@@ -2667,6 +2682,10 @@
         "bookings_pnr_unique": {
           "name": "bookings_pnr_unique",
           "columns": ["pnr"]
+        },
+        "bookings_inventoryLockId_unique": {
+          "name": "bookings_inventoryLockId_unique",
+          "columns": ["inventoryLockId"]
         },
         "bookings_idempotencyKey_unique": {
           "name": "bookings_idempotencyKey_unique",
@@ -7933,6 +7952,52 @@
       },
       "checkConstraint": {}
     },
+    "load_plan_details": {
+      "name": "load_plan_details",
+      "columns": {
+        "flightId": {
+          "name": "flightId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "data": {
+          "name": "data",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "onUpdate": true,
+          "default": "(now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "load_plan_details_flightId": {
+          "name": "load_plan_details_flightId",
+          "columns": ["flightId"]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
     "load_plans": {
       "name": "load_plans",
       "columns": {
@@ -9235,6 +9300,13 @@
           "autoincrement": false,
           "default": "(now())"
         },
+        "leaseToken": {
+          "name": "leaseToken",
+          "type": "varchar(36)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "lockedAt": {
           "name": "lockedAt",
           "type": "timestamp",
@@ -9687,6 +9759,101 @@
         "payment_history_id": {
           "name": "payment_history_id",
           "columns": ["id"]
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraint": {}
+    },
+    "payment_receipts": {
+      "name": "payment_receipts",
+      "columns": {
+        "paymentIntentId": {
+          "name": "paymentIntentId",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "enum('booking','split_payment','modification','wallet_topup')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bookingId": {
+          "name": "bookingId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "userId": {
+          "name": "userId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "targetId": {
+          "name": "targetId",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "varchar(3)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "refundedAmount": {
+          "name": "refundedAmount",
+          "type": "int",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "settlementStatus": {
+          "name": "settlementStatus",
+          "type": "enum('applied','review_required','review_refunded')",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'applied'"
+        },
+        "settlementError": {
+          "name": "settlementError",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(now())"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "payment_receipts_paymentIntentId": {
+          "name": "payment_receipts_paymentIntentId",
+          "columns": ["paymentIntentId"]
         }
       },
       "uniqueConstraints": {},

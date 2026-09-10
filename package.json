@@ -1,6 +1,6 @@
 {
   "name": "ais-web-app",
-  "version": "1.20.26",
+  "version": "1.22.0",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -18,8 +18,8 @@
     "test:coverage": "vitest run --coverage",
     "test:coverage:report": "vitest run --coverage --reporter=verbose",
     "test:coverage:html": "vitest run --coverage && open coverage/index.html 2>/dev/null || xdg-open coverage/index.html 2>/dev/null || echo 'Open coverage/index.html in your browser'",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:generate": "node --import tsx scripts/db/generate.ts",
+    "db:migrate": "node --import tsx scripts/db/migrate.ts migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed-data.mjs",
@@ -38,7 +38,11 @@
     "test:e2e:codegen": "playwright codegen",
     "test:e2e:install": "playwright install --with-deps",
     "prepare": "git config core.hooksPath .hooks || true",
-    "db:verify": "tsx scripts/verify-database-schema.ts",
+    "db:baseline": "node --import tsx scripts/db/migrate.ts baseline",
+    "db:preflight": "node --import tsx scripts/db/migrate.ts preflight",
+    "db:verify": "node --import tsx scripts/db/migrate.ts verify",
+    "db:test-migrations": "node --import tsx scripts/db/replay-acceptance.ts",
+    "db:verify-catalog": "tsx scripts/verify-database-schema.ts",
     "test:acceptance": "node --import tsx scripts/verify-transaction-boundaries.ts"
   },
   "dependencies": {
@@ -162,7 +166,7 @@
     "add": "^2.0.9",
     "autoprefixer": "^10.5.5",
     "drizzle-kit": "^0.31.10",
-    "esbuild": "^0.25.12",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^24.1.3",
@@ -182,14 +186,15 @@
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "~4.1.11"
   },
-  "packageManager": "pnpm@10.28.2",
+  "packageManager": "pnpm@10.34.5",
   "pnpm": {
     "overrides": {
       "tailwindcss>nanoid": "3.3.7",
       "nwsapi": "2.2.23",
       "serialize-javascript": ">=7.0.5",
       "qs": ">=6.16.0",
-      "@esbuild-kit/core-utils>esbuild": "^0.25.12",
+      "@esbuild-kit/core-utils>esbuild": "0.28.2",
+      "drizzle-kit>esbuild": "0.28.2",
       "exceljs>uuid": "^11.1.1"
     }
   },

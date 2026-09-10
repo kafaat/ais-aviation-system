@@ -96,43 +96,15 @@
     {
       "idx": 13,
       "version": "5",
-      "when": 1788973464395,
-      "tag": "0013_complete_declared_schema",
+      "when": 1788983758238,
+      "tag": "0013_schema_reconciliation",
       "breakpoints": true
     },
     {
       "idx": 14,
       "version": "5",
-      "when": 1788975868525,
-      "tag": "0014_revocable_mfa_sessions",
-      "breakpoints": true
-    },
-    {
-      "idx": 15,
-      "version": "5",
-      "when": 1788976592984,
-      "tag": "0015_atomic_payment_settlement",
-      "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "5",
-      "when": 1788977220883,
-      "tag": "0016_durable_operational_state",
-      "breakpoints": true
-    },
-    {
-      "idx": 17,
-      "version": "5",
-      "when": 1788981091933,
-      "tag": "0017_collection_review",
-      "breakpoints": true
-    },
-    {
-      "idx": 18,
-      "version": "5",
-      "when": 1788983798545,
-      "tag": "0018_restore_preference_defaults",
+      "when": 1789058975518,
+      "tag": "0014_transactional_audit_forward",
       "breakpoints": true
     }
   ]

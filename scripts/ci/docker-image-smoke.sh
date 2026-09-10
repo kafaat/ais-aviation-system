@@ -25,29 +25,48 @@ for target in runner migrator; do
     2>&1 | tee "$evidence_dir/build-$target.log"
   docker image inspect "ais-build-check:$target" > "$evidence_dir/image-$target.json"
   test "$(docker run --rm --network none --entrypoint id "ais-build-check:$target" -u)" = 1001
+  docker run --rm --network none --entrypoint sh "ais-build-check:$target" -ec '
+    test ! -e /usr/local/lib/node_modules/npm
+    test ! -e /usr/local/lib/node_modules/pnpm
+    test ! -e /app/node_modules/pnpm
+    for installer in npm npx pnpm pnpx; do
+      if command -v "$installer" >/dev/null 2>&1; then
+        echo "FAIL: deployed image contains installer $installer" >&2
+        exit 1
+      fi
+    done
+    node --version
+  ' 2>&1 | tee "$evidence_dir/no-installers-$target.log"
 done
 
 # Check the installed CLI, not a tool fetched by npx on demand.
 # The authoritative Drizzle root is ./drizzle; PR #115 deliberately archives the
 # stale parallel drizzle/migrations tree under drizzle/legacy-migrations.
 docker run --rm --network none --entrypoint sh ais-build-check:migrator -ec '
-  expected="$(node -p '\''require("./package.json").packageManager.split("@")[1]'\'')"
-  actual="$(pnpm --version)"
-  if [ "$actual" != "$expected" ]; then
-    echo "FAIL: migrator pnpm version $actual != pinned $expected" >&2
-    exit 1
-  fi
-  hoist="$(pnpm config get shamefully-hoist)"
-  if [ "$hoist" != true ]; then
-    echo "FAIL: migrator requires shamefully-hoist=true, got $hoist" >&2
-    exit 1
-  fi
   if [ ! -s drizzle/meta/_journal.json ]; then
     echo "FAIL: authoritative migration journal missing at drizzle/meta/_journal.json" >&2
     exit 1
   fi
   ./node_modules/.bin/drizzle-kit --version
 ' 2>&1 | tee "$evidence_dir/migrator-cli.log"
+
+# Exercise the actual guarded entrypoint and serializer without contacting a DB.
+# Verify the installed dependency tree was created with the pinned build tool;
+# the deployed image must not need that installer to run its migration code.
+docker run --rm --network none --entrypoint node ais-build-check:migrator \
+  --import tsx --input-type=module -e '
+  import assert from "node:assert/strict";
+  import { readFileSync } from "node:fs";
+  import { runMigration } from "./scripts/db/migrate.ts";
+  import { assertSnapshotMatchesSchema } from "./scripts/db/snapshot-check.ts";
+  const { packageManager } = JSON.parse(readFileSync("package.json", "utf8"));
+  // pnpm 10.34 writes JSON (valid YAML) to the historical .modules.yaml path.
+  const modules = JSON.parse(readFileSync("node_modules/.modules.yaml", "utf8"));
+  assert.equal(modules.packageManager, packageManager);
+  assert.equal(typeof runMigration, "function");
+  await assertSnapshotMatchesSchema();
+  console.log("PASS: pinned dependency installation and guarded migrator work without installers");
+' 2>&1 | tee "$evidence_dir/migrator-entrypoint.log"
 
 # Fail when the runtime only works because build tools were copied into it.
 docker run --rm --network none --entrypoint node ais-build-check:runner --input-type=module -e '
@@ -61,11 +80,11 @@ docker run --rm --network none --entrypoint node ais-build-check:runner --input-
   for (const name of ["express", "mysql2", "drizzle-orm"]) require.resolve(name);
   // Assert the installation mode, not absence of a package also needed as a peer.
   // The locked @trpc/server production dependency itself depends on TypeScript.
-  const modules = readFileSync("node_modules/.modules.yaml", "utf8");
-  const included = modules.match(/^included:\r?\n((?:[ \t]+[^\r\n]*\r?\n)+)/m)?.[1];
+  const modules = JSON.parse(readFileSync("node_modules/.modules.yaml", "utf8"));
+  const included = modules.included;
   assert.ok(included, "pnpm installation metadata must contain included flags");
-  assert.match(included, /^  dependencies: true\r?$/m, "Runtime dependencies must be installed");
-  assert.match(included, /^  devDependencies: false\r?$/m, "Root devDependencies must be excluded");
+  assert.equal(included.dependencies, true, "Runtime dependencies must be installed");
+  assert.equal(included.devDependencies, false, "Root devDependencies must be excluded");
   for (const name of ["vite", "drizzle-kit"]) {
     assert.throws(() => require.resolve(name), { code: "MODULE_NOT_FOUND" }, `Build-only dependency leaked: ${name}`);
   }
