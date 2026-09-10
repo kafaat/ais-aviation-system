@@ -126,7 +126,12 @@ export async function runCheckInReminderJob(): Promise<ReminderResult> {
       `[Check-In Reminder Job] Found ${bookingsToRemind.length} bookings to remind`
     );
 
-    for (const item of bookingsToRemind) {
+    const uniqueBookings = [
+      ...new Map(
+        bookingsToRemind.map(item => [item.booking.id, item])
+      ).values(),
+    ];
+    for (const item of uniqueBookings) {
       try {
         result.processed++;
 
@@ -142,6 +147,7 @@ export async function runCheckInReminderJob(): Promise<ReminderResult> {
 
         // Send email reminder
         const emailSent = await sendCheckInReminder({
+          idempotencyKey: `checkin-${item.booking.id}-${item.flight.departureTime.getTime()}`,
           passengerName: `${item.passenger.firstName} ${item.passenger.lastName}`,
           passengerEmail: item.user.email,
           bookingReference: item.booking.bookingReference,
@@ -153,6 +159,8 @@ export async function runCheckInReminderJob(): Promise<ReminderResult> {
           checkInUrl,
         });
 
+        if (!emailSent)
+          throw new Error("Reminder provider did not accept the email");
         if (emailSent) {
           result.emailsSent++;
           await markReminderSent(item.booking.id);

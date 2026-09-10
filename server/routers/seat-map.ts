@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/seat-map";
 /**
  * Seat Map & Check-in Router
  *
@@ -190,6 +191,7 @@ export const seatMapRouter = router({
         hasIFE: z.boolean().default(false),
       })
     )
+    .output(responseContracts["createSeatMap"])
     .mutation(async ({ input }) => {
       return await seatMapService.createSeatMap({
         aircraftType: input.aircraftType,
@@ -233,6 +235,7 @@ export const seatMapRouter = router({
         active: z.boolean().optional(),
       })
     )
+    .output(responseContracts["updateSeatMap"])
     .mutation(async ({ input }) => {
       const { id, ...updateData } = input;
       return await seatMapService.updateSeatMap(id, updateData);
@@ -244,6 +247,7 @@ export const seatMapRouter = router({
    */
   getSeatMap: publicProcedure
     .input(z.object({ id: z.number().positive() }))
+    .output(responseContracts["getSeatMap"])
     .query(async ({ input }) => {
       return await seatMapService.getSeatMap(input.id);
     }),
@@ -261,6 +265,7 @@ export const seatMapRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["listSeatMaps"])
     .query(async ({ input }) => {
       return await seatMapService.listSeatMaps(
         input?.airlineId,
@@ -280,6 +285,7 @@ export const seatMapRouter = router({
         seatMapId: z.number().positive(),
       })
     )
+    .output(responseContracts["initializeFlightSeats"])
     .mutation(async ({ input }) => {
       return await seatMapService.initializeFlightSeats(
         input.flightId,
@@ -298,6 +304,7 @@ export const seatMapRouter = router({
    */
   getFlightSeatMap: publicProcedure
     .input(z.object({ flightId: z.number().positive() }))
+    .output(responseContracts["getFlightSeatMap"])
     .query(async ({ input }) => {
       return await seatMapService.getFlightSeatMap(input.flightId);
     }),
@@ -316,6 +323,7 @@ export const seatMapRouter = router({
         passengerId: z.number().positive(),
       })
     )
+    .output(responseContracts["selectSeat"])
     .mutation(async ({ input, ctx }) => {
       // Verify the authenticated user owns this booking
       await verifyBookingOwnership(input.bookingId, ctx.user.id);
@@ -340,6 +348,7 @@ export const seatMapRouter = router({
         seatNumber: z.string().min(2).max(5),
       })
     )
+    .output(responseContracts["releaseSeat"])
     .mutation(async ({ input, ctx }) => {
       // Verify ownership of the seat's booking
       await verifySeatOwnership(input.flightId, input.seatNumber, ctx.user.id);
@@ -362,6 +371,7 @@ export const seatMapRouter = router({
         passengerId: z.number().positive(),
       })
     )
+    .output(responseContracts["changeSeat"])
     .mutation(async ({ input, ctx }) => {
       // Verify the authenticated user owns this booking
       await verifyBookingOwnership(input.bookingId, ctx.user.id);
@@ -386,6 +396,7 @@ export const seatMapRouter = router({
         passengerId: z.number().positive(),
       })
     )
+    .output(responseContracts["getPassengerSeat"])
     .query(async ({ input, ctx }) => {
       // Verify the authenticated user owns this booking
       await verifyBookingOwnership(input.bookingId, ctx.user.id);
@@ -413,6 +424,7 @@ export const seatMapRouter = router({
         reason: z.string().max(255).optional(),
       })
     )
+    .output(responseContracts["blockSeat"])
     .mutation(async ({ input }) => {
       return await seatMapService.blockSeat(
         input.flightId,
@@ -432,6 +444,7 @@ export const seatMapRouter = router({
         seatNumber: z.string().min(2).max(5),
       })
     )
+    .output(responseContracts["unblockSeat"])
     .mutation(async ({ input }) => {
       return await seatMapService.unblockSeat(input.flightId, input.seatNumber);
     }),
@@ -456,6 +469,7 @@ export const seatMapRouter = router({
         seatNumber: z.string().min(2).max(5).optional(),
       })
     )
+    .output(responseContracts["checkIn"])
     .mutation(async ({ input, ctx }) => {
       // Verify the authenticated user owns this booking
       await verifyBookingOwnership(input.bookingId, ctx.user.id);
@@ -481,6 +495,7 @@ export const seatMapRouter = router({
         passengerId: z.number().positive(),
       })
     )
+    .output(responseContracts["undoCheckIn"])
     .mutation(async ({ input }) => {
       return await seatMapService.undoCheckIn(
         input.flightId,
@@ -501,6 +516,7 @@ export const seatMapRouter = router({
         passengerId: z.number().positive(),
       })
     )
+    .output(responseContracts["getBoardingPass"])
     .query(async ({ input, ctx }) => {
       // Verify ownership: look up the seat to find the booking, then verify
       const db = await getDb();
@@ -545,6 +561,7 @@ export const seatMapRouter = router({
    */
   getCheckInStatus: adminProcedure
     .input(z.object({ flightId: z.number().positive() }))
+    .output(responseContracts["getCheckInStatus"])
     .query(async ({ input }) => {
       return await seatMapService.getCheckInStatus(input.flightId);
     }),
@@ -565,6 +582,7 @@ export const seatMapRouter = router({
         cabinClass: cabinClassEnum.optional(),
       })
     )
+    .output(responseContracts["getSeatPricing"])
     .query(async ({ input }) => {
       return await seatMapService.getSeatPricing(
         input.flightId,
@@ -585,6 +603,7 @@ export const seatMapRouter = router({
         newSeat: z.string().min(2).max(5),
       })
     )
+    .output(responseContracts["calculateUpgradePrice"])
     .query(async ({ input }) => {
       return await seatMapService.calculateSeatUpgradePrice(
         input.flightId,

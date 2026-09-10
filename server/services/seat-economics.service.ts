@@ -10,12 +10,9 @@
  *
  * All money is in minor units (SAR cents), matching the rest of the schema.
  *
- * Data model notes (verified against the codebase):
- *  - `bookings.totalAmount` is the BASE FARE only (= pricingResult.price);
- *    ancillaries are stored separately in `bookingAncillaries.totalPrice`
- *    and are NOT folded into totalAmount, so we add them on top.
- *  - Payment-processing fee is not stored anywhere, so it is ESTIMATED from
- *    configurable rates (clearly surfaced in the result under `assumptions`).
+ * The canonical booking total already includes ancillary charges. Credit usage
+ * is a payment method, not a reduction in revenue. Detached voucher-use rows
+ * do not prove a discount was applied to the settled invoice.
  */
 
 import { and, eq } from "drizzle-orm";
@@ -26,7 +23,6 @@ import {
   passengers,
   bookingAncillaries,
   voucherUsage,
-  creditUsage,
   agentBookings,
   payments,
 } from "../../drizzle/schema";
@@ -76,6 +72,7 @@ export interface SeatEconomics {
 }
 
 export interface BookingSeatEconomics {
+  unverifiedVoucherDiscounts?: number;
   bookingId?: number;
   currency: string;
   seats: SeatEconomics[];
@@ -321,22 +318,29 @@ export async function getBookingSeatEconomics(
       totalPrice: bookingAncillaries.totalPrice,
     })
     .from(bookingAncillaries)
-    .where(eq(bookingAncillaries.bookingId, bookingId));
+    .where(
+      and(
+        eq(bookingAncillaries.bookingId, bookingId),
+        eq(bookingAncillaries.status, "active")
+      )
+    );
 
   const voucherRows = await db
     .select({ discountApplied: voucherUsage.discountApplied })
     .from(voucherUsage)
     .where(eq(voucherUsage.bookingId, bookingId));
 
-  const creditRows = await db
-    .select({ amountUsed: creditUsage.amountUsed })
-    .from(creditUsage)
-    .where(eq(creditUsage.bookingId, bookingId));
-
-  const discountsTotal =
-    voucherRows.reduce((a, v) => a + v.discountApplied, 0) +
-    creditRows.reduce((a, c) => a + c.amountUsed, 0);
-
+  const ancillaryTotal = ancRows.reduce((sum, row) => sum + row.totalPrice, 0);
+  if (ancillaryTotal > booking.totalAmount)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Ancillary charges exceed the booking invoice; reconcile historical pricing before reporting",
+    });
+  const unverifiedVoucherDiscounts = voucherRows.reduce(
+    (sum, row) => sum + row.discountApplied,
+    0
+  );
   const [agent] = await db
     .select({ commissionAmount: agentBookings.commissionAmount })
     .from(agentBookings)
@@ -350,20 +354,30 @@ export async function getBookingSeatEconomics(
     .limit(1);
 
   const result = computeSeatEconomics({
-    baseFareTotal: booking.totalAmount,
+    baseFareTotal: booking.totalAmount - ancillaryTotal,
     currency: payment?.currency ?? "SAR",
     seats,
     ancillaries: ancRows.map(a => ({
       passengerId: a.passengerId ?? null,
       totalPrice: a.totalPrice,
     })),
-    discountsTotal,
+    discountsTotal: 0,
     agentCommission: agent?.commissionAmount ?? 0,
     paymentFeeRate: opts.paymentFeeRate,
     paymentFeeFixed: opts.paymentFeeFixed,
   });
 
-  return { ...result, bookingId };
+  return {
+    ...result,
+    bookingId,
+    unverifiedVoucherDiscounts,
+    assumptions: {
+      ...result.assumptions,
+      note:
+        result.assumptions.note +
+        " Invoice total includes ancillaries; credits are tender. Detached voucher usage is excluded until linked to settlement.",
+    },
+  };
 }
 
 export interface FlightEconomics {

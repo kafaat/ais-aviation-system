@@ -69,6 +69,8 @@ export interface RefundResult {
 }
 
 export interface PaymentProviderInfo {
+  integrationState?: "implemented" | "unverified";
+  unavailableReason?: string;
   id: PaymentProviderType;
   name: string;
   nameAr: string;

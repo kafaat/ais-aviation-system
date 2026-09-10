@@ -1,3 +1,8 @@
+import { responseContracts } from "../contracts/flights";
+import { getDb } from "../db";
+import { flights } from "../../drizzle/schema";
+import { inArray } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import * as flightsService from "../services/flights.service";
@@ -14,6 +19,35 @@ import {
  * Handles all flight-related operations
  */
 export const flightsRouter = router({
+  statusBatch: publicProcedure
+    .input(
+      z.object({ ids: z.array(z.number().int().positive()).min(1).max(50) })
+    )
+    .output(
+      z.array(
+        z.object({
+          flightId: z.number().int(),
+          status: z.enum(["scheduled", "delayed", "cancelled", "completed"]),
+          lastUpdated: z.date(),
+        })
+      )
+    )
+    .query(async ({ input }) => {
+      const database = await getDb();
+      if (!database)
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message: "Flight status unavailable",
+        });
+      return database
+        .select({
+          flightId: flights.id,
+          status: flights.status,
+          lastUpdated: flights.updatedAt,
+        })
+        .from(flights)
+        .where(inArray(flights.id, input.ids));
+    }),
   /**
    * Search for flights
    * Results are cached for 2 minutes
@@ -41,6 +75,7 @@ export const flightsRouter = router({
           path: ["destinationId"],
         })
     )
+    .output(responseContracts["search"])
     .query(async ({ input, ctx }) => {
       const startTime = Date.now();
       const results = await flightsService.searchFlights(input);
@@ -80,6 +115,7 @@ export const flightsRouter = router({
       },
     })
     .input(z.object({ id: z.number().describe("Flight ID") }))
+    .output(responseContracts["getById"])
     .query(async ({ input }) => {
       return await flightsService.getFlightById(input);
     }),
@@ -99,6 +135,7 @@ export const flightsRouter = router({
       },
     })
     .input(z.object({ flightId: z.number().describe("Flight ID") }))
+    .output(responseContracts["getStatusHistory"])
     .query(async ({ input }) => {
       return await getFlightStatusHistory(input.flightId);
     }),
@@ -130,6 +167,7 @@ export const flightsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["popularRoutes"])
     .query(async ({ input }) => {
       const limit = input?.limit ?? 10;
       return await getPopularRoutes(limit);
@@ -161,6 +199,7 @@ export const flightsRouter = router({
           .describe("Maximum number of suggestions"),
       })
     )
+    .output(responseContracts["suggestedDestinations"])
     .query(async ({ input }) => {
       return await getSuggestedDestinations(input.originId, input.limit);
     }),

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/ai-pricing.router";
 /**
  * AI Pricing Router
  *
@@ -115,24 +116,27 @@ export const aiPricingRouter = router({
   // ========================
 
   /** Get AI pricing dashboard data */
-  getDashboard: adminProcedure.query(async () => {
-    try {
-      const data = await AIPricingService.getAIDashboardData();
-      return { success: true, data };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to load dashboard data",
-      });
-    }
-  }),
+  getDashboard: adminProcedure
+    .output(responseContracts["getDashboard"])
+    .query(async () => {
+      try {
+        const data = await AIPricingService.getAIDashboardData();
+        return { success: true, data };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to load dashboard data",
+        });
+      }
+    }),
 
   /** Toggle AI pricing on/off */
   setEnabled: adminProcedure
     .input(z.object({ enabled: z.boolean() }))
+    .output(responseContracts["setEnabled"])
     .mutation(async ({ input }) => {
       await AIPricingService.setAIPricingEnabled(input.enabled);
       return { success: true, enabled: input.enabled };
@@ -145,6 +149,7 @@ export const aiPricingRouter = router({
   /** Get demand forecast for a flight */
   forecastDemand: adminProcedure
     .input(forecastInput)
+    .output(responseContracts["forecastDemand"])
     .query(async ({ input }) => {
       try {
         const forecasts = await DemandForecastingService.forecastFlightDemand(
@@ -179,6 +184,7 @@ export const aiPricingRouter = router({
   /** Get route-level demand forecast */
   forecastRoute: adminProcedure
     .input(routeForecastInput)
+    .output(responseContracts["forecastRoute"])
     .query(async ({ input }) => {
       try {
         const forecasts = await DemandForecastingService.forecastRouteDemand(
@@ -219,6 +225,7 @@ export const aiPricingRouter = router({
         periodDays: z.number().int().min(1).max(365).default(30),
       })
     )
+    .output(responseContracts["forecastAccuracy"])
     .query(async ({ input }) => {
       const accuracy = await DemandForecastingService.evaluateForecastAccuracy(
         input.modelId,
@@ -234,6 +241,7 @@ export const aiPricingRouter = router({
   /** Get customer profile and segments */
   getCustomerProfile: adminProcedure
     .input(z.object({ userId: z.number().int().positive() }))
+    .output(responseContracts["getCustomerProfile"])
     .query(async ({ input }) => {
       try {
         const profile = await CustomerSegmentationService.getCustomerProfile(
@@ -252,57 +260,62 @@ export const aiPricingRouter = router({
     }),
 
   /** Get my own profile (for logged-in users) */
-  getMyProfile: protectedProcedure.query(async ({ ctx }) => {
-    try {
-      const profile = await CustomerSegmentationService.getCustomerProfile(
-        ctx.user.id
-      );
-      return {
-        success: true,
-        data: {
-          segments: profile.segments.map(s => ({
-            name: s.segmentName,
-            type: s.segmentType,
-          })),
-          metrics: {
-            totalBookings: profile.metrics.totalBookings,
-            avgBookingValue: profile.metrics.avgBookingValue,
-            preferredCabinClass: profile.metrics.preferredCabinClass,
+  getMyProfile: protectedProcedure
+    .output(responseContracts["getMyProfile"])
+    .query(async ({ ctx }) => {
+      try {
+        const profile = await CustomerSegmentationService.getCustomerProfile(
+          ctx.user.id
+        );
+        return {
+          success: true,
+          data: {
+            segments: profile.segments.map(s => ({
+              name: s.segmentName,
+              type: s.segmentType,
+            })),
+            metrics: {
+              totalBookings: profile.metrics.totalBookings,
+              avgBookingValue: profile.metrics.avgBookingValue,
+              preferredCabinClass: profile.metrics.preferredCabinClass,
+            },
           },
-        },
-      };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          error instanceof Error ? error.message : "Failed to get profile",
-      });
-    }
-  }),
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to get profile",
+        });
+      }
+    }),
 
   /** List all segment definitions */
-  getSegments: adminProcedure.query(async () => {
-    const segments = await CustomerSegmentationService.getSegments();
-    return {
-      success: true,
-      data: segments.map(s => ({
-        id: s.id,
-        name: s.name,
-        nameAr: s.nameAr,
-        description: s.description,
-        segmentType: s.segmentType,
-        criteria: JSON.parse(s.criteria),
-        priceMultiplier: parseFloat(s.priceMultiplier || "1"),
-        maxDiscount: parseFloat(s.maxDiscount || "0.3"),
-        memberCount: s.memberCount,
-        isActive: s.isActive,
-      })),
-    };
-  }),
+  getSegments: adminProcedure
+    .output(responseContracts["getSegments"])
+    .query(async () => {
+      const segments = await CustomerSegmentationService.getSegments();
+      return {
+        success: true,
+        data: segments.map(s => ({
+          id: s.id,
+          name: s.name,
+          nameAr: s.nameAr,
+          description: s.description,
+          segmentType: s.segmentType,
+          criteria: JSON.parse(s.criteria),
+          priceMultiplier: parseFloat(s.priceMultiplier || "1"),
+          maxDiscount: parseFloat(s.maxDiscount || "0.3"),
+          memberCount: s.memberCount,
+          isActive: s.isActive,
+        })),
+      };
+    }),
 
   /** Create or update a segment */
   upsertSegment: adminProcedure
     .input(segmentInput)
+    .output(responseContracts["upsertSegment"])
     .mutation(async ({ input }) => {
       try {
         const id = await CustomerSegmentationService.upsertSegment(input);
@@ -317,10 +330,12 @@ export const aiPricingRouter = router({
     }),
 
   /** Run bulk segmentation for all users */
-  runSegmentation: adminProcedure.mutation(async () => {
-    const result = await CustomerSegmentationService.runBulkSegmentation();
-    return { success: true, data: result };
-  }),
+  runSegmentation: adminProcedure
+    .output(responseContracts["runSegmentation"])
+    .mutation(async () => {
+      const result = await CustomerSegmentationService.runBulkSegmentation();
+      return { success: true, data: result };
+    }),
 
   // ========================
   // Revenue Optimization
@@ -329,6 +344,7 @@ export const aiPricingRouter = router({
   /** Optimize a single flight's price */
   optimizeFlight: adminProcedure
     .input(optimizeInput)
+    .output(responseContracts["optimizeFlight"])
     .query(async ({ input }) => {
       try {
         const result = await RevenueOptimizationService.optimizeFlightPrice(
@@ -363,6 +379,7 @@ export const aiPricingRouter = router({
         daysAhead: z.number().int().min(1).max(90).default(30),
       })
     )
+    .output(responseContracts["optimizeUpcoming"])
     .query(async ({ input }) => {
       try {
         const results =
@@ -393,6 +410,7 @@ export const aiPricingRouter = router({
         logId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["applyOptimization"])
     .mutation(async ({ input, ctx }) => {
       try {
         await RevenueOptimizationService.applyOptimization(
@@ -414,6 +432,7 @@ export const aiPricingRouter = router({
   /** Get revenue metrics */
   getRevenueMetrics: adminProcedure
     .input(metricsInput)
+    .output(responseContracts["getRevenueMetrics"])
     .query(async ({ input }) => {
       try {
         const metrics = await RevenueOptimizationService.getRevenueMetrics(
@@ -440,6 +459,7 @@ export const aiPricingRouter = router({
   /** Create a new A/B test */
   createABTest: adminProcedure
     .input(abTestInput)
+    .output(responseContracts["createABTest"])
     .mutation(async ({ input, ctx }) => {
       try {
         const testId = await ABTestingService.createTest({
@@ -461,6 +481,7 @@ export const aiPricingRouter = router({
   /** Start an A/B test */
   startABTest: adminProcedure
     .input(z.object({ testId: z.number().int().positive() }))
+    .output(responseContracts["startABTest"])
     .mutation(async ({ input }) => {
       await ABTestingService.startTest(input.testId);
       return { success: true };
@@ -469,6 +490,7 @@ export const aiPricingRouter = router({
   /** Pause an A/B test */
   pauseABTest: adminProcedure
     .input(z.object({ testId: z.number().int().positive() }))
+    .output(responseContracts["pauseABTest"])
     .mutation(async ({ input }) => {
       await ABTestingService.pauseTest(input.testId);
       return { success: true };
@@ -483,6 +505,7 @@ export const aiPricingRouter = router({
         notes: z.string().optional(),
       })
     )
+    .output(responseContracts["completeABTest"])
     .mutation(async ({ input }) => {
       await ABTestingService.completeTest(
         input.testId,
@@ -501,6 +524,7 @@ export const aiPricingRouter = router({
           .optional(),
       })
     )
+    .output(responseContracts["getABTests"])
     .query(async ({ input }) => {
       const tests = await ABTestingService.getTests(input.status);
       return { success: true, data: tests };
@@ -509,6 +533,7 @@ export const aiPricingRouter = router({
   /** Get A/B test results with statistical analysis */
   getABTestResults: adminProcedure
     .input(z.object({ testId: z.number().int().positive() }))
+    .output(responseContracts["getABTestResults"])
     .query(async ({ input }) => {
       try {
         const results = await ABTestingService.getTestResults(input.testId);

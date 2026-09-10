@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/crew";
 /**
  * Crew Assignment Router
  *
@@ -35,6 +36,7 @@ export const crewRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getMembers"])
     .query(async ({ input }) => {
       return await crewService.getCrewMembers(input ?? undefined);
     }),
@@ -42,6 +44,7 @@ export const crewRouter = router({
   /** Get a single crew member by ID */
   getMember: adminProcedure
     .input(z.object({ id: z.number() }))
+    .output(responseContracts["getMember"])
     .query(async ({ input }) => {
       return await crewService.getCrewMemberById(input.id);
     }),
@@ -62,6 +65,7 @@ export const crewRouter = router({
         notes: z.string().max(500).optional(),
       })
     )
+    .output(responseContracts["assignToFlight"])
     .mutation(async ({ input, ctx }) => {
       return await crewService.assignCrewToFlight({
         ...input,
@@ -77,6 +81,7 @@ export const crewRouter = router({
         crewMemberId: z.number(),
       })
     )
+    .output(responseContracts["removeFromFlight"])
     .mutation(async ({ input }) => {
       return await crewService.removeCrewFromFlight(
         input.flightId,
@@ -87,6 +92,7 @@ export const crewRouter = router({
   /** Get all crew assigned to a flight */
   getFlightCrew: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getFlightCrew"])
     .query(async ({ input }) => {
       return await crewService.getFlightCrew(input.flightId);
     }),
@@ -104,6 +110,7 @@ export const crewRouter = router({
         endDate: z.date(),
       })
     )
+    .output(responseContracts["getSchedule"])
     .query(async ({ input }) => {
       return await crewService.getCrewSchedule(input.crewMemberId, {
         startDate: input.startDate,
@@ -119,6 +126,7 @@ export const crewRouter = router({
         date: z.date(),
       })
     )
+    .output(responseContracts["checkAvailability"])
     .query(async ({ input }) => {
       return await crewService.checkCrewAvailability(
         input.crewMemberId,
@@ -139,6 +147,7 @@ export const crewRouter = router({
         arrivalTime: z.date(),
       })
     )
+    .output(responseContracts["checkFTL"])
     .query(async ({ input }) => {
       return await crewService.checkFTLCompliance(input.crewMemberId, {
         departureTime: input.departureTime,
@@ -161,6 +170,7 @@ export const crewRouter = router({
           .optional(),
       })
     )
+    .output(responseContracts["validateRequirements"])
     .query(async ({ input }) => {
       return await crewService.validateCrewRequirements(
         input.flightId,
@@ -180,6 +190,7 @@ export const crewRouter = router({
         role: crewRoleEnum,
       })
     )
+    .output(responseContracts["findReplacement"])
     .query(async ({ input }) => {
       return await crewService.findReplacementCrew(input.flightId, input.role);
     }),

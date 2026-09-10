@@ -376,6 +376,8 @@ try {
       );
     }
   );
+  const { verifyForensicWorkflows } = await import("./acceptance/forensic");
+  await verifyForensicWorkflows(db, id, check);
   const report = {
     passed: checks.length,
     skipped: 0,

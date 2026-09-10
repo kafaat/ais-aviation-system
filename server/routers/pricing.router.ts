@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/pricing.router";
 /**
  * Pricing Router
  *
@@ -55,6 +56,7 @@ export const pricingRouter = router({
    */
   calculate: publicProcedure
     .input(calculatePriceInput)
+    .output(responseContracts["calculate"])
     .query(async ({ input, ctx }) => {
       try {
         const result = await DynamicPricingService.calculateDynamicPrice({
@@ -112,6 +114,7 @@ export const pricingRouter = router({
    */
   getPriceRange: publicProcedure
     .input(getPriceRangeInput)
+    .output(responseContracts["getPriceRange"])
     .query(async ({ input }) => {
       try {
         const range = await DynamicPricingService.getPriceRange(
@@ -184,6 +187,7 @@ export const pricingRouter = router({
    */
   validate: publicProcedure
     .input(validatePriceInput)
+    .output(responseContracts["validate"])
     .query(async ({ input }) => {
       const result = await DynamicPricingService.validatePrice(
         input.priceId,
@@ -202,6 +206,7 @@ export const pricingRouter = router({
    */
   getForecast: publicProcedure
     .input(getPriceForecastInput)
+    .output(responseContracts["getForecast"])
     .query(async ({ input }) => {
       try {
         const forecast = await DynamicPricingService.getPriceForecast(
@@ -264,13 +269,15 @@ export const pricingRouter = router({
   /**
    * Get supported currencies
    */
-  getSupportedCurrencies: publicProcedure.query(() => {
-    const currencies = CurrencyService.getSupportedCurrencies();
-    return {
-      success: true,
-      data: currencies,
-    };
-  }),
+  getSupportedCurrencies: publicProcedure
+    .output(responseContracts["getSupportedCurrencies"])
+    .query(() => {
+      const currencies = CurrencyService.getSupportedCurrencies();
+      return {
+        success: true,
+        data: currencies,
+      };
+    }),
 
   /**
    * Convert price between currencies
@@ -283,6 +290,7 @@ export const pricingRouter = router({
         toCurrency: z.string().length(3),
       })
     )
+    .output(responseContracts["convertCurrency"])
     .query(async ({ input }) => {
       try {
         const result = await CurrencyService.convertCurrency(
@@ -316,6 +324,7 @@ export const pricingRouter = router({
         toCurrency: z.string().length(3),
       })
     )
+    .output(responseContracts["getExchangeRate"])
     .query(async ({ input }) => {
       try {
         const rate = await CurrencyService.getExchangeRate(

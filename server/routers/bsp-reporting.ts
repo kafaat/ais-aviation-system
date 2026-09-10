@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/bsp-reporting";
 /**
  * BSP Reporting Router
  *
@@ -30,6 +31,7 @@ export const bspReportingRouter = router({
         periodEnd: z.string(),
       })
     )
+    .output(responseContracts["generateReport"])
     .mutation(async ({ input }) => {
       const periodStart = new Date(input.periodStart);
       const periodEnd = new Date(input.periodEnd);
@@ -100,6 +102,7 @@ export const bspReportingRouter = router({
         offset: z.number().min(0).default(0),
       })
     )
+    .output(responseContracts["getReports"])
     .query(async ({ input }) => {
       const periodStart = input.startDate
         ? new Date(input.startDate)
@@ -147,6 +150,7 @@ export const bspReportingRouter = router({
         reportType: z.enum(["bsp", "ahc"]).default("bsp"),
       })
     )
+    .output(responseContracts["getReportDetail"])
     .query(async ({ input }) => {
       const periodStart = new Date(input.periodStart);
       const periodEnd = new Date(input.periodEnd);
@@ -200,6 +204,7 @@ export const bspReportingRouter = router({
         count: z.number().min(1).max(24).default(6),
       })
     )
+    .output(responseContracts["getSettlementCycles"])
     .query(async ({ input }) => {
       if (input.cycleNumber) {
         const cycle = await getSettlementCycle(input.cycleNumber);
@@ -261,6 +266,7 @@ export const bspReportingRouter = router({
         cycleNumber: z.number(),
       })
     )
+    .output(responseContracts["reconcile"])
     .mutation(async ({ input }) => {
       const result = await reconcileBSPTransactions(input.cycleNumber);
       return {
@@ -276,16 +282,18 @@ export const bspReportingRouter = router({
   /**
    * Export IATA HOT (Hand Off Tape) file for the current cycle
    */
-  exportHOT: adminProcedure.mutation(async () => {
-    const result = await generateHOTFile();
-    return {
-      filename: result.filename,
-      content: result.content,
-      contentType: "text/plain",
-      recordCount: result.recordCount,
-      generatedAt: result.generatedAt.toISOString(),
-    };
-  }),
+  exportHOT: adminProcedure
+    .output(responseContracts["exportHOT"])
+    .mutation(async () => {
+      const result = await generateHOTFile();
+      return {
+        filename: result.filename,
+        content: result.content,
+        contentType: "text/plain",
+        recordCount: result.recordCount,
+        generatedAt: result.generatedAt.toISOString(),
+      };
+    }),
 
   /**
    * Get agent settlement data for a period
@@ -296,6 +304,7 @@ export const bspReportingRouter = router({
         cycleNumber: z.number(),
       })
     )
+    .output(responseContracts["getAgentSettlements"])
     .query(async ({ input }) => {
       const result = await calculateAgentCommissions(input.cycleNumber);
       return {
@@ -318,6 +327,7 @@ export const bspReportingRouter = router({
         reportId: z.string().optional(),
       })
     )
+    .output(responseContracts["validateCompliance"])
     .mutation(async ({ input }) => {
       const result = await validateIATACompliance(input.reportId || "");
       return {

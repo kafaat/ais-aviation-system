@@ -1,3 +1,9 @@
+import { operationalIntegrations } from "../routes/operational-integrations";
+import {
+  recordMetric,
+  startSLAMonitoring,
+  stopSLAMonitoring,
+} from "../services/sla-monitoring.service";
 import "dotenv/config";
 // Initialize Sentry first (before other imports that might throw)
 import { initSentry, flushSentry } from "../services/sentry.service";
@@ -92,6 +98,18 @@ async function startServer() {
   });
 
   // APM request timing middleware
+  startSLAMonitoring();
+  app.use((req, res, next) => {
+    const start = performance.now();
+    res.once("finish", () => {
+      // Observed HTTP responses for this process only; not fleet uptime.
+      recordMetric("api", "uptime", res.statusCode < 500 ? 100 : 0);
+      recordMetric("api", "response_time", performance.now() - start);
+      recordMetric("api", "error_rate", res.statusCode >= 500 ? 100 : 0);
+      recordMetric("api", "throughput", 1);
+    });
+    next();
+  });
   app.use(apmRequestMiddleware);
 
   // Request ID middleware - generates unique ID for each request
@@ -186,6 +204,7 @@ async function startServer() {
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use("/api", operationalIntegrations);
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
 
@@ -349,7 +368,10 @@ async function startServer() {
     }, 10000);
   };
 
-  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGTERM", () => {
+    stopSLAMonitoring();
+    return gracefulShutdown("SIGTERM");
+  });
   process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 

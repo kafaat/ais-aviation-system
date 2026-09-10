@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/gates";
 import { z } from "zod";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as gateService from "../services/gate.service";
@@ -30,6 +31,7 @@ export const gatesRouter = router({
         flightId: z.number().describe("Flight ID"),
       })
     )
+    .output(responseContracts["getFlightGate"])
     .query(async ({ input }) => {
       return await gateService.getFlightGate(input.flightId);
     }),
@@ -53,6 +55,7 @@ export const gatesRouter = router({
         airportId: z.number().describe("Airport ID"),
       })
     )
+    .output(responseContracts["getAirportGates"])
     .query(async ({ input }) => {
       return await gateService.getAirportGates(input.airportId);
     }),
@@ -85,6 +88,7 @@ export const gatesRouter = router({
           .describe("Type of flight for filtering gates"),
       })
     )
+    .output(responseContracts["getAvailableGates"])
     .query(async ({ input }) => {
       return await gateService.getAvailableGates(input);
     }),
@@ -111,6 +115,7 @@ export const gatesRouter = router({
         boardingEndTime: z.date().optional().describe("Boarding end time"),
       })
     )
+    .output(responseContracts["assignGate"])
     .mutation(async ({ input, ctx }) => {
       return await gateService.assignGate({
         ...input,
@@ -142,6 +147,7 @@ export const gatesRouter = router({
           .describe("Reason for the gate change"),
       })
     )
+    .output(responseContracts["updateGateAssignment"])
     .mutation(async ({ input, ctx }) => {
       const result = await gateService.updateGateAssignment({
         ...input,
@@ -191,6 +197,7 @@ export const gatesRouter = router({
         flightId: z.number().describe("Flight ID"),
       })
     )
+    .output(responseContracts["releaseGate"])
     .mutation(async ({ input }) => {
       return await gateService.releaseGate(input.flightId);
     }),
@@ -215,6 +222,7 @@ export const gatesRouter = router({
         date: z.date().describe("Date for the schedule"),
       })
     )
+    .output(responseContracts["getGateSchedule"])
     .query(async ({ input }) => {
       return await gateService.getGateSchedule(input);
     }),
@@ -257,6 +265,7 @@ export const gatesRouter = router({
         amenities: z.array(z.string()).optional().describe("List of amenities"),
       })
     )
+    .output(responseContracts["createGate"])
     .mutation(async ({ input }) => {
       return await gateService.createGate(input);
     }),
@@ -283,6 +292,7 @@ export const gatesRouter = router({
           .describe("New status"),
       })
     )
+    .output(responseContracts["updateGateStatus"])
     .mutation(async ({ input }) => {
       return await gateService.updateGateStatus(input);
     }),
@@ -306,6 +316,7 @@ export const gatesRouter = router({
         gateId: z.number().describe("Gate ID to delete"),
       })
     )
+    .output(responseContracts["deleteGate"])
     .mutation(async ({ input }) => {
       return await gateService.deleteGate(input.gateId);
     }),
@@ -334,6 +345,7 @@ export const gatesRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getStats"])
     .query(async ({ input }) => {
       return await gateService.getGateStats(input?.airportId);
     }),
@@ -359,6 +371,7 @@ export const gatesRouter = router({
         newTerminal: z.string().nullable().describe("New terminal (optional)"),
       })
     )
+    .output(responseContracts["notifyGateChange"])
     .mutation(async ({ input }) => {
       return await gateService.notifyGateChange(
         input.flightId,

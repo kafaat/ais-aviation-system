@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/dcs";
 /**
  * Departure Control System (DCS) Router
  *
@@ -18,12 +19,15 @@ export const dcsRouter = router({
   // Aircraft Types
   // ========================================================================
 
-  getAircraftTypes: adminProcedure.query(async () => {
-    return await dcsService.getAircraftTypes();
-  }),
+  getAircraftTypes: adminProcedure
+    .output(responseContracts["getAircraftTypes"])
+    .query(async () => {
+      return await dcsService.getAircraftTypes();
+    }),
 
   getAircraftType: adminProcedure
     .input(z.object({ id: z.number() }))
+    .output(responseContracts["getAircraftType"])
     .query(async ({ input }) => {
       return await dcsService.getAircraftTypeById(input.id);
     }),
@@ -50,6 +54,7 @@ export const dcsRouter = router({
         aftCgLimit: z.string().optional(),
       })
     )
+    .output(responseContracts["createAircraftType"])
     .mutation(async ({ input }) => {
       return await dcsService.createAircraftType(input);
     }),
@@ -68,6 +73,7 @@ export const dcsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getCrewMembers"])
     .query(async ({ input }) => {
       return await dcsService.getCrewMembers(input ?? undefined);
     }),
@@ -88,6 +94,7 @@ export const dcsRouter = router({
         email: z.string().email().optional(),
       })
     )
+    .output(responseContracts["createCrewMember"])
     .mutation(async ({ input }) => {
       return await dcsService.createCrewMember(input);
     }),
@@ -101,6 +108,7 @@ export const dcsRouter = router({
         notes: z.string().optional(),
       })
     )
+    .output(responseContracts["assignCrew"])
     .mutation(async ({ input, ctx }) => {
       return await dcsService.assignCrewToFlight({
         ...input,
@@ -110,12 +118,14 @@ export const dcsRouter = router({
 
   getFlightCrew: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getFlightCrew"])
     .query(async ({ input }) => {
       return await dcsService.getFlightCrew(input.flightId);
     }),
 
   removeCrewAssignment: adminProcedure
     .input(z.object({ assignmentId: z.number() }))
+    .output(responseContracts["removeCrewAssignment"])
     .mutation(async ({ input }) => {
       return await dcsService.removeCrewFromFlight(input.assignmentId);
     }),
@@ -126,6 +136,7 @@ export const dcsRouter = router({
 
   getFlightManifest: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getFlightManifest"])
     .query(async ({ input }) => {
       return await dcsService.generateFlightManifest(input.flightId);
     }),
@@ -147,6 +158,7 @@ export const dcsRouter = router({
           .optional(),
       })
     )
+    .output(responseContracts["calculateWeightBalance"])
     .query(async ({ input }) => {
       return await dcsService.calculateWeightAndBalance(input);
     }),
@@ -168,24 +180,28 @@ export const dcsRouter = router({
           .optional(),
       })
     )
+    .output(responseContracts["createLoadPlan"])
     .mutation(async ({ input }) => {
       return await dcsService.createLoadPlan(input);
     }),
 
   getLoadPlan: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getLoadPlan"])
     .query(async ({ input }) => {
       return await dcsService.getLoadPlan(input.flightId);
     }),
 
   approveLoadPlan: adminProcedure
     .input(z.object({ loadPlanId: z.number() }))
+    .output(responseContracts["approveLoadPlan"])
     .mutation(async ({ input, ctx }) => {
       return await dcsService.approveLoadPlan(input.loadPlanId, ctx.user.id);
     }),
 
   finalizeLoadPlan: adminProcedure
     .input(z.object({ loadPlanId: z.number() }))
+    .output(responseContracts["finalizeLoadPlan"])
     .mutation(async ({ input, ctx }) => {
       return await dcsService.finalizeLoadPlan(input.loadPlanId, ctx.user.id);
     }),
@@ -194,7 +210,9 @@ export const dcsRouter = router({
   // DCS Dashboard Stats
   // ========================================================================
 
-  getStats: adminProcedure.query(async () => {
-    return await dcsService.getDcsStats();
-  }),
+  getStats: adminProcedure
+    .output(responseContracts["getStats"])
+    .query(async () => {
+      return await dcsService.getDcsStats();
+    }),
 });

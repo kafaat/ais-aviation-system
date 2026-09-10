@@ -58,6 +58,8 @@ services:
     container_name: ais_api_1
     environment:
       - NODE_ENV=production
+      - SELF_SERVICE_CAPABILITY_SECRET=${SELF_SERVICE_CAPABILITY_SECRET:?Set a shared secret of at least 32 characters}
+      - QUEUE_REDIS_URL=${QUEUE_REDIS_URL:-}
       - VITE_APP_ID=${VITE_APP_ID:-ais-aviation-system}
       - BUILT_IN_FORGE_API_URL=${BUILT_IN_FORGE_API_URL:-}
       - BUILT_IN_FORGE_API_KEY=${BUILT_IN_FORGE_API_KEY:-}
@@ -123,6 +125,8 @@ services:
     container_name: ais_api_2
     environment:
       - NODE_ENV=production
+      - SELF_SERVICE_CAPABILITY_SECRET=${SELF_SERVICE_CAPABILITY_SECRET:?Set a shared secret of at least 32 characters}
+      - QUEUE_REDIS_URL=${QUEUE_REDIS_URL:-}
       - VITE_APP_ID=${VITE_APP_ID:-ais-aviation-system}
       - BUILT_IN_FORGE_API_URL=${BUILT_IN_FORGE_API_URL:-}
       - BUILT_IN_FORGE_API_KEY=${BUILT_IN_FORGE_API_KEY:-}
@@ -188,6 +192,8 @@ services:
     container_name: ais_api_3
     environment:
       - NODE_ENV=production
+      - SELF_SERVICE_CAPABILITY_SECRET=${SELF_SERVICE_CAPABILITY_SECRET:?Set a shared secret of at least 32 characters}
+      - QUEUE_REDIS_URL=${QUEUE_REDIS_URL:-}
       - VITE_APP_ID=${VITE_APP_ID:-ais-aviation-system}
       - BUILT_IN_FORGE_API_URL=${BUILT_IN_FORGE_API_URL:-}
       - BUILT_IN_FORGE_API_KEY=${BUILT_IN_FORGE_API_KEY:-}
@@ -302,7 +308,7 @@ services:
     command: >
       redis-server
       --maxmemory 3gb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --appendonly yes
       --appendfsync everysec
       --save 900 1
@@ -337,13 +343,21 @@ services:
     container_name: ais_worker
     command: node dist/worker.js
     healthcheck:
-      test: ["CMD", "test", "-f", "/tmp/ais-worker-ready"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const fs=require('node:fs');try{process.exit(Date.now()-fs.statSync('/tmp/ais-worker-ready').mtimeMs<30000?0:1)}catch{process.exit(1)}",
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 40s
     environment:
       - NODE_ENV=production
+      - SELF_SERVICE_CAPABILITY_SECRET=${SELF_SERVICE_CAPABILITY_SECRET:?Set a shared secret of at least 32 characters}
+      - QUEUE_REDIS_URL=${QUEUE_REDIS_URL:-}
       - VITE_APP_ID=${VITE_APP_ID:-ais-aviation-system}
       - BUILT_IN_FORGE_API_URL=${BUILT_IN_FORGE_API_URL:-}
       - BUILT_IN_FORGE_API_KEY=${BUILT_IN_FORGE_API_KEY:-}

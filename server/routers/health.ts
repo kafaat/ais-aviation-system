@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/health";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
@@ -28,6 +29,7 @@ export const healthRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["check"])
     .query(async () => {
       return await performHealthChecks();
     }),

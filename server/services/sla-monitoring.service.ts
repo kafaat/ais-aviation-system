@@ -32,7 +32,11 @@ export type SLAReportStatus = "draft" | "published";
 
 export type SLAUnit = "percent" | "ms" | "per_minute";
 
-export type ServiceHealthStatus = "healthy" | "degraded" | "unhealthy";
+export type ServiceHealthStatus =
+  | "healthy"
+  | "degraded"
+  | "unhealthy"
+  | "unknown";
 
 export interface SLATarget {
   id: number;
@@ -75,7 +79,7 @@ export interface SLAReport {
   id: number;
   reportPeriodStart: Date;
   reportPeriodEnd: Date;
-  overallUptime: number;
+  overallUptime: number | null;
   avgResponseTime: number;
   p95ResponseTime: number;
   p99ResponseTime: number;
@@ -105,10 +109,11 @@ export interface ResponseTimeStats {
 export interface ServiceStatus {
   serviceName: string;
   status: ServiceHealthStatus;
-  uptime: number;
+  uptime: number | null;
   responseTime: ResponseTimeStats;
   errorRate: number;
-  lastChecked: string;
+  lastChecked: string | null;
+  observationScope: "process";
   activeAlerts: number;
   slaCompliant: boolean;
 }
@@ -118,17 +123,17 @@ export interface SystemHealthSummary {
   timestamp: string;
   services: ServiceStatus[];
   activeAlerts: number;
-  slaCompliance: number;
-  uptimeAverage: number;
+  slaCompliance: number | null;
+  uptimeAverage: number | null;
 }
 
 export interface SLAComplianceResult {
   serviceName: string;
   metricType: SLAMetricType;
   targetValue: number;
-  currentValue: number;
-  isCompliant: boolean;
-  margin: number;
+  currentValue: number | null;
+  isCompliant: boolean | null;
+  margin: number | null;
   severity: SLASeverity | null;
 }
 
@@ -582,12 +587,14 @@ function evaluateThreshold(
 /**
  * Calculate service uptime percentage over a date range
  */
-export function calculateUptime(service: string, dateRange: DateRange): number {
+export function calculateUptime(
+  service: string,
+  dateRange: DateRange
+): number | null {
   const metrics = slaStore.getMetrics(service, "uptime", dateRange);
 
   if (metrics.length === 0) {
-    // No data means we assume 100% uptime (no recorded outages)
-    return 100;
+    return null;
   }
 
   const totalValue = metrics.reduce((sum, m) => sum + m.value, 0);
@@ -654,11 +661,29 @@ export function checkSLACompliance(service: string): SLAComplianceResult[] {
   };
 
   for (const target of targets) {
+    const observations = slaStore.getMetrics(
+      service,
+      target.metricType,
+      dateRange
+    );
+    const latest = observations.at(-1)?.timestamp;
+    if (!latest || Date.now() - latest.getTime() > 10 * 60_000) {
+      results.push({
+        serviceName: service,
+        metricType: target.metricType,
+        targetValue: target.targetValue,
+        currentValue: null,
+        isCompliant: null,
+        margin: null,
+        severity: null,
+      });
+      continue;
+    }
     let currentValue: number;
 
     switch (target.metricType) {
       case "uptime":
-        currentValue = calculateUptime(service, dateRange);
+        currentValue = calculateUptime(service, dateRange)!;
         break;
       case "response_time": {
         const rtStats = calculateResponseTime(service, dateRange);
@@ -725,55 +750,30 @@ export function checkSLACompliance(service: string): SLAComplianceResult[] {
  * Get overall system health summary across all monitored services
  */
 export function getSystemHealth(): SystemHealthSummary {
-  const serviceNames = slaStore.getServiceNames();
-  const services: ServiceStatus[] = [];
-  let totalUptime = 0;
-  let serviceCount = 0;
-  let totalActiveAlerts = 0;
-  let compliantServices = 0;
-
-  const _dateRange: DateRange = {
-    start: new Date(Date.now() - 60 * 60 * 1000),
-    end: new Date(),
-  };
-
-  for (const serviceName of serviceNames) {
-    const serviceStatus = getServiceStatus(serviceName);
-    services.push(serviceStatus);
-
-    totalUptime += serviceStatus.uptime;
-    serviceCount++;
-    totalActiveAlerts += serviceStatus.activeAlerts;
-
-    if (serviceStatus.slaCompliant) {
-      compliantServices++;
-    }
-  }
-
+  const services = slaStore.getServiceNames().map(getServiceStatus);
+  const incomplete =
+    !services.length || services.some(s => s.status === "unknown");
   const uptimeAverage =
-    serviceCount > 0
-      ? Math.round((totalUptime / serviceCount) * 100) / 100
-      : 100;
-
-  const slaCompliance =
-    serviceCount > 0
-      ? Math.round((compliantServices / serviceCount) * 100 * 100) / 100
-      : 100;
-
-  let overallStatus: ServiceHealthStatus;
-  if (slaCompliance >= 100 && uptimeAverage >= 99.9) {
-    overallStatus = "healthy";
-  } else if (slaCompliance >= 75 && uptimeAverage >= 99.0) {
-    overallStatus = "degraded";
-  } else {
-    overallStatus = "unhealthy";
-  }
-
+    incomplete || services.some(s => s.uptime == null)
+      ? null
+      : services.reduce((sum, s) => sum + s.uptime!, 0) / services.length;
+  const slaCompliance = incomplete
+    ? null
+    : (services.filter(s => s.slaCompliant).length / services.length) * 100;
+  const overallStatus: ServiceHealthStatus = services.some(
+    s => s.status === "unhealthy"
+  )
+    ? "unhealthy"
+    : incomplete
+      ? "unknown"
+      : services.some(s => s.status === "degraded")
+        ? "degraded"
+        : "healthy";
   return {
     overallStatus,
     timestamp: new Date().toISOString(),
     services,
-    activeAlerts: totalActiveAlerts,
+    activeAlerts: services.reduce((sum, s) => sum + s.activeAlerts, 0),
     slaCompliance,
     uptimeAverage,
   };
@@ -793,10 +793,21 @@ export function getServiceStatus(service: string): ServiceStatus {
   const errorRate = getErrorRate(service, dateRange);
   const activeAlerts = slaStore.getActiveAlertsForService(service);
   const compliance = checkSLACompliance(service);
-  const slaCompliant = compliance.every(c => c.isCompliant);
+  const slaCompliant =
+    compliance.length > 0 && compliance.every(c => c.isCompliant === true);
+  const latest = slaStore
+    .getMetrics(service, "uptime", dateRange)
+    .at(-1)?.timestamp;
+  const unknown =
+    !compliance.length ||
+    compliance.some(c => c.currentValue == null) ||
+    !latest ||
+    Date.now() - latest.getTime() > 10 * 60_000;
 
   let status: ServiceHealthStatus;
-  if (slaCompliant && uptime >= 99.9 && activeAlerts.length === 0) {
+  if (unknown || uptime == null) {
+    status = "unknown";
+  } else if (slaCompliant && uptime >= 99.9 && activeAlerts.length === 0) {
     status = "healthy";
   } else if (uptime >= 99.0 && activeAlerts.length <= 2) {
     status = "degraded";
@@ -807,10 +818,11 @@ export function getServiceStatus(service: string): ServiceStatus {
   return {
     serviceName: service,
     status,
-    uptime,
+    uptime: unknown ? null : uptime,
     responseTime,
     errorRate,
-    lastChecked: new Date().toISOString(),
+    lastChecked: latest?.toISOString() ?? null,
+    observationScope: "process",
     activeAlerts: activeAlerts.length,
     slaCompliant,
   };
@@ -876,8 +888,10 @@ export function getSLAReport(dateRange: DateRange): SLAReport {
 
   for (const serviceName of serviceNames) {
     const uptime = calculateUptime(serviceName, dateRange);
-    totalUptime += uptime;
-    serviceCount++;
+    if (uptime != null) {
+      totalUptime += uptime;
+      serviceCount++;
+    }
 
     const rtMetrics = slaStore.getMetrics(
       serviceName,
@@ -906,13 +920,13 @@ export function getSLAReport(dateRange: DateRange): SLAReport {
 
     // Count SLA breaches
     const compliance = checkSLACompliance(serviceName);
-    slaBreaches += compliance.filter(c => !c.isCompliant).length;
+    slaBreaches += compliance.filter(c => c.isCompliant === false).length;
   }
 
   const overallUptime =
-    serviceCount > 0
+    serviceCount > 0 && serviceCount === serviceNames.length
       ? Math.round((totalUptime / serviceCount) * 100) / 100
-      : 100;
+      : null;
   const errorRate =
     serviceCount > 0
       ? Math.round((totalErrorRate / serviceCount) * 1000) / 1000
@@ -1081,13 +1095,6 @@ export function startSLAMonitoring(intervalMinutes: number = 5): void {
   monitoringInterval = setInterval(
     () => {
       try {
-        // Record synthetic uptime metrics for all services
-        const serviceNames = slaStore.getServiceNames();
-        for (const serviceName of serviceNames) {
-          // Default to 100% uptime if the service is reachable
-          recordMetric(serviceName, "uptime", 100);
-        }
-
         // Periodically flush old data
         flushOldMetrics();
       } catch (error) {
@@ -1097,8 +1104,9 @@ export function startSLAMonitoring(intervalMinutes: number = 5): void {
     intervalMinutes * 60 * 1000
   );
 
+  monitoringInterval.unref();
   console.info(
-    `[SLA] Started periodic monitoring every ${intervalMinutes} minutes`
+    `[SLA] Started observation retention every ${intervalMinutes} minutes`
   );
 }
 

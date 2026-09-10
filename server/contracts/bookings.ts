@@ -1,0 +1,92 @@
+// Explicit response field allowlists. Review contract changes with producers and consumers.
+import { z } from "zod";
+import { outputNumber } from "./primitives";
+export const responseContracts = {
+  create: z.object({
+    bookingId: outputNumber,
+    bookingReference: z.string(),
+    pnr: z.string(),
+    totalAmount: outputNumber,
+  }),
+  myBookings: z.array(
+    z.object({
+      passengers: z.array(
+        z.object({
+          id: outputNumber,
+          tenantId: z.union([z.null(), outputNumber]),
+          bookingId: outputNumber,
+          type: z.enum(["adult", "child", "infant"]),
+          title: z.union([z.null(), z.string()]),
+          firstName: z.string(),
+          lastName: z.string(),
+          dateOfBirth: z.union([z.null(), z.date()]),
+          passportNumber: z.union([z.null(), z.string()]),
+          nationality: z.union([z.null(), z.string()]),
+          seatNumber: z.union([z.null(), z.string()]),
+          ticketNumber: z.union([z.null(), z.string()]),
+          createdAt: z.date(),
+        })
+      ),
+      id: outputNumber,
+      bookingReference: z.string(),
+      pnr: z.string(),
+      status: z.enum(["cancelled", "completed", "pending", "confirmed"]),
+      totalAmount: outputNumber,
+      paymentStatus: z.enum(["pending", "paid", "refunded", "failed"]),
+      cabinClass: z.enum(["economy", "business"]),
+      numberOfPassengers: outputNumber,
+      checkedIn: z.boolean(),
+      createdAt: z.date(),
+      flightId: outputNumber,
+      flight: z.object({
+        id: outputNumber,
+        flightNumber: z.string(),
+        departureTime: z.date(),
+        arrivalTime: z.date(),
+        status: z.enum(["scheduled", "delayed", "cancelled", "completed"]),
+        origin: z.string(),
+        destination: z.string(),
+      }),
+    })
+  ),
+  getByPNR: z.object({
+    id: outputNumber,
+    tenantId: z.union([z.null(), outputNumber]),
+    userId: outputNumber,
+    flightId: outputNumber,
+    bookingReference: z.string(),
+    pnr: z.string(),
+    status: z.enum(["cancelled", "completed", "pending", "confirmed"]),
+    inventoryLockId: z.union([z.null(), outputNumber]),
+    seatsReserved: z.boolean(),
+    totalAmount: outputNumber,
+    paymentStatus: z.enum(["pending", "paid", "refunded", "failed"]),
+    stripePaymentIntentId: z.union([z.null(), z.string()]),
+    stripeCheckoutSessionId: z.union([z.null(), z.string()]),
+    idempotencyKey: z.union([z.null(), z.string()]),
+    cabinClass: z.enum(["economy", "business"]),
+    numberOfPassengers: outputNumber,
+    checkedIn: z.boolean(),
+    checkInReminderSentAt: z.union([z.null(), z.date()]),
+    deletedAt: z.union([z.null(), z.date()]),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+  }),
+  getPassengers: z.array(
+    z.object({
+      id: outputNumber,
+      tenantId: z.union([z.null(), outputNumber]),
+      bookingId: outputNumber,
+      type: z.enum(["adult", "child", "infant"]),
+      title: z.union([z.null(), z.string()]),
+      firstName: z.string(),
+      lastName: z.string(),
+      dateOfBirth: z.union([z.null(), z.date()]),
+      passportNumber: z.union([z.null(), z.string()]),
+      nationality: z.union([z.null(), z.string()]),
+      seatNumber: z.union([z.null(), z.string()]),
+      ticketNumber: z.union([z.null(), z.string()]),
+      createdAt: z.date(),
+    })
+  ),
+};

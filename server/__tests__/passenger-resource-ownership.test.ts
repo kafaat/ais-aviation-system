@@ -83,6 +83,13 @@ const cases = [
         givenNames: "Synthetic",
         surname: "Fixture",
       }),
+    result: {
+      id: 1,
+      passengerId: 700,
+      bookingId: 800,
+      status: "complete",
+      message: "Saved",
+    },
     target: boundary.submit,
     id: 700,
   },
@@ -90,6 +97,16 @@ const cases = [
     name: "APIS status read",
     call: (ctx: TrpcContext) =>
       apisRouter.createCaller(ctx).getMyAPISStatus({ passengerId: 700 }),
+    result: {
+      passengerId: 700,
+      passengerName: "Fixture",
+      bookingId: 800,
+      hasData: false,
+      status: "incomplete",
+      data: null,
+      completeness: 0,
+      missingFields: [],
+    },
     target: boundary.status,
     id: 700,
   },
@@ -99,6 +116,7 @@ const cases = [
       emergencyHotelRouter
         .createCaller(ctx)
         .getMyHotelBookings({ passengerId: 700 }),
+    result: [],
     target: boundary.hotels,
     id: 700,
   },
@@ -106,6 +124,7 @@ const cases = [
     name: "multi-city itinerary read",
     call: (ctx: TrpcContext) =>
       multiCityRouter.createCaller(ctx).getSegments({ bookingId: 800 }),
+    result: [],
     target: boundary.segments,
     id: 800,
   },
@@ -116,51 +135,56 @@ beforeEach(() => {
   boundary.ownerId = 101;
   boundary.exists = true;
   boundary.available = true;
-  for (const entry of cases) entry.target.mockResolvedValue({ ok: true });
+  for (const entry of cases) entry.target.mockResolvedValue(entry.result);
 });
 
-describe.each(cases)("$name ownership boundary", ({ call, target, id }) => {
-  it("allows the booking owner before calling the domain service", async () => {
-    await expect(call(context())).resolves.toEqual({ ok: true });
-    expect(target).toHaveBeenCalledTimes(1);
-    expect(target.mock.calls[0][0]).toBe(id);
-  });
+describe.each(cases)(
+  "$name ownership boundary",
+  ({ call, target, id, result }) => {
+    it("allows the booking owner before calling the domain service", async () => {
+      await expect(call(context())).resolves.toEqual(result);
+      expect(target).toHaveBeenCalledTimes(1);
+      expect(target.mock.calls[0][0]).toBe(id);
+    });
 
-  it.each(["user", "airline_admin"])(
-    "rejects a different owner with role %s",
-    async role => {
+    it.each(["user", "airline_admin"])(
+      "rejects a different owner with role %s",
+      async role => {
+        boundary.ownerId = 202;
+        await expect(call(context(role))).rejects.toMatchObject({
+          code: "FORBIDDEN",
+        });
+        expect(target).not.toHaveBeenCalled();
+      }
+    );
+
+    it("preserves the existing platform-admin support permission", async () => {
       boundary.ownerId = 202;
-      await expect(call(context(role))).rejects.toMatchObject({
-        code: "FORBIDDEN",
+      await expect(call(context("admin"))).resolves.toEqual(result);
+      expect(target).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects missing resources before domain reads or writes", async () => {
+      boundary.exists = false;
+      await expect(call(context())).rejects.toMatchObject({
+        code: "NOT_FOUND",
       });
       expect(target).not.toHaveBeenCalled();
-    }
-  );
-
-  it("preserves the existing platform-admin support permission", async () => {
-    boundary.ownerId = 202;
-    await expect(call(context("admin"))).resolves.toEqual({ ok: true });
-    expect(target).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects missing resources before domain reads or writes", async () => {
-    boundary.exists = false;
-    await expect(call(context())).rejects.toMatchObject({ code: "NOT_FOUND" });
-    expect(target).not.toHaveBeenCalled();
-  });
-
-  it("fails closed when the ownership database is unavailable", async () => {
-    boundary.available = false;
-    await expect(call(context())).rejects.toMatchObject({
-      code: "INTERNAL_SERVER_ERROR",
     });
-    expect(target).not.toHaveBeenCalled();
-  });
 
-  it("requires authentication", async () => {
-    await expect(call(context(null))).rejects.toMatchObject({
-      code: "UNAUTHORIZED",
+    it("fails closed when the ownership database is unavailable", async () => {
+      boundary.available = false;
+      await expect(call(context())).rejects.toMatchObject({
+        code: "INTERNAL_SERVER_ERROR",
+      });
+      expect(target).not.toHaveBeenCalled();
     });
-    expect(target).not.toHaveBeenCalled();
-  });
-});
+
+    it("requires authentication", async () => {
+      await expect(call(context(null))).rejects.toMatchObject({
+        code: "UNAUTHORIZED",
+      });
+      expect(target).not.toHaveBeenCalled();
+    });
+  }
+);

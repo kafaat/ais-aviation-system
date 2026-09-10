@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/emd";
 import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
@@ -89,6 +90,7 @@ export const emdRouter = router({
         expiryDate: z.string().optional(),
       })
     )
+    .output(responseContracts["issue"])
     .mutation(async ({ input }) => {
       const result = await issueEmd(input);
       return {
@@ -107,6 +109,7 @@ export const emdRouter = router({
         emdNumber: z.string().length(14),
       })
     )
+    .output(responseContracts["get"])
     .query(async ({ input }) => {
       const emd = await getEmd(input.emdNumber);
       if (!emd) {
@@ -139,6 +142,7 @@ export const emdRouter = router({
         limit: z.number().int().min(1).max(100).default(20),
       })
     )
+    .output(responseContracts["list"])
     .query(async ({ input }) => {
       const result = await listEmds(input);
       return {
@@ -157,6 +161,7 @@ export const emdRouter = router({
         emdNumber: z.string(),
       })
     )
+    .output(responseContracts["use"])
     .mutation(async ({ input }) => {
       const result = await useEmd(input.emdNumber);
       return {
@@ -176,6 +181,7 @@ export const emdRouter = router({
         reason: z.string().min(1),
       })
     )
+    .output(responseContracts["void"])
     .mutation(async ({ input }) => {
       const result = await voidEmd(input.emdNumber, input.reason);
       return {
@@ -203,6 +209,7 @@ export const emdRouter = router({
         newExpiryDate: z.string().optional(),
       })
     )
+    .output(responseContracts["exchange"])
     .mutation(async ({ input }) => {
       const { emdNumber, ...newParams } = input;
       const result = await exchangeEmd(emdNumber, {
@@ -233,6 +240,7 @@ export const emdRouter = router({
         refundAmount: z.number().int().min(1).optional(),
       })
     )
+    .output(responseContracts["refund"])
     .mutation(async ({ input }) => {
       const result = await refundEmd(input.emdNumber, input.refundAmount);
       return {
@@ -251,6 +259,7 @@ export const emdRouter = router({
         bookingId: z.number().int(),
       })
     )
+    .output(responseContracts["getByBooking"])
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db) {
@@ -304,6 +313,7 @@ export const emdRouter = router({
         dateTo: z.string().optional(),
       })
     )
+    .output(responseContracts["statistics"])
     .query(async ({ input }) => {
       const dateRange =
         input.dateFrom || input.dateTo

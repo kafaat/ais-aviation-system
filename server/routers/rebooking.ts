@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/rebooking";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -21,6 +22,7 @@ export const rebookingRouter = router({
         bookingId: z.number().describe("Previous booking ID to rebook from"),
       })
     )
+    .output(responseContracts["getRebookData"])
     .query(async ({ ctx, input }) => {
       return await getRebookData(input.bookingId, ctx.user.id);
     }),
@@ -38,6 +40,7 @@ export const rebookingRouter = router({
           .describe("Preferred cabin class"),
       })
     )
+    .output(responseContracts["searchFlights"])
     .query(async ({ input }) => {
       return await searchFlightsForRebook(
         input.originId,
@@ -59,7 +62,13 @@ export const rebookingRouter = router({
         newFlightId: z.number().describe("New flight ID to book"),
       })
     )
+    .output(responseContracts["quickRebook"])
     .mutation(async ({ ctx, input }) => {
-      return await quickRebook(input.bookingId, input.newFlightId, ctx.user.id);
+      return await quickRebook(
+        input.bookingId,
+        input.newFlightId,
+        ctx.user.id,
+        ctx.tenantId
+      );
     }),
 });

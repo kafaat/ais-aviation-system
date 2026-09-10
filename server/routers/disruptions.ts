@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/disruptions";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import {
@@ -17,15 +18,18 @@ export const disruptionsRouter = router({
   /**
    * Get disruptions affecting the user's bookings
    */
-  myDisruptions: protectedProcedure.query(async ({ ctx }) => {
-    return await getUserDisruptions(ctx.user.id);
-  }),
+  myDisruptions: protectedProcedure
+    .output(responseContracts["myDisruptions"])
+    .query(async ({ ctx }) => {
+      return await getUserDisruptions(ctx.user.id);
+    }),
 
   /**
    * Get alternative flights for rebooking after disruption
    */
   getAlternatives: protectedProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getAlternatives"])
     .query(async ({ ctx, input }) => {
       return await getAlternativeFlights(input.flightId, ctx.user.id);
     }),
@@ -44,6 +48,7 @@ export const disruptionsRouter = router({
         delayMinutes: z.number().min(0).optional(),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await createDisruption({
@@ -64,15 +69,18 @@ export const disruptionsRouter = router({
   /**
    * Get all active disruptions (admin)
    */
-  activeDisruptions: adminProcedure.query(async () => {
-    return await getActiveDisruptions();
-  }),
+  activeDisruptions: adminProcedure
+    .output(responseContracts["activeDisruptions"])
+    .query(async () => {
+      return await getActiveDisruptions();
+    }),
 
   /**
    * Resolve a disruption (admin)
    */
   resolve: adminProcedure
     .input(z.object({ disruptionId: z.number() }))
+    .output(responseContracts["resolve"])
     .mutation(async ({ input }) => {
       return await resolveDisruption(input.disruptionId);
     }),

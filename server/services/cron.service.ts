@@ -1,7 +1,6 @@
 import cron from "node-cron";
-import { getDb } from "../db";
-import { inventoryLocks } from "../../drizzle/schema";
-import { lt } from "drizzle-orm";
+import { releaseExpiredLocks } from "./inventory-lock.service";
+import { runScheduledTask } from "./scheduled-task.service";
 import { logger, logInfo, logError } from "../_core/logger";
 import { runOutboxRelay } from "./outbox.service";
 
@@ -25,27 +24,77 @@ export async function relayOutboxEvents() {
  * Runs every 5 minutes
  */
 export async function cleanupExpiredLocks() {
-  try {
-    const db = await getDb();
-    if (!db) {
-      logError(new Error("Database not available"), {
-        operation: "cleanupExpiredLocks",
-      });
-      return;
-    }
-
-    const result = await db
-      .delete(inventoryLocks)
-      .where(lt(inventoryLocks.expiresAt, new Date()));
-
-    const deletedCount = (result as any)[0]?.affectedRows || 0;
-    if (deletedCount > 0) {
-      logInfo(`Cleaned up ${deletedCount} expired inventory locks`);
-    }
-  } catch (error) {
-    logError(error as Error, { operation: "cleanupExpiredLocks" });
-  }
+  await releaseExpiredLocks();
 }
+
+export const PERIODIC_JOB_CATALOG = [
+  {
+    name: "bagDropExpiry",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { expireBagDropSessions } = await import("./bag-drop.service");
+      await expireBagDropSessions();
+    },
+  },
+  {
+    name: "cleanupExpiredLocks",
+    cron: "*/5 * * * *",
+    periodMs: 5 * 60_000,
+    run: cleanupExpiredLocks,
+  },
+  {
+    name: "relayOutboxEvents",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const result = await runOutboxRelay();
+      if (result.failed)
+        throw new Error(`${result.failed} outbox deliveries failed`);
+    },
+  },
+  {
+    name: "checkInReminders",
+    cron: "0 * * * *",
+    periodMs: 60 * 60_000,
+    run: async () => {
+      const { runCheckInReminderJob } =
+        await import("../jobs/check-in-reminder.job");
+      const result = await runCheckInReminderJob();
+      if (result.errors.length) throw new Error(result.errors.join("; "));
+    },
+  },
+  {
+    name: "loyaltyExpiry",
+    cron: "0 0 * * *",
+    periodMs: 86400000,
+    run: async () => {
+      const { runMilesExpirationJob } =
+        await import("../jobs/loyalty-cleanup.job");
+      const result = await runMilesExpirationJob();
+      if (!result.success) throw new Error(result.error);
+    },
+  },
+  {
+    name: "priceAlerts",
+    cron: "*/15 * * * *",
+    periodMs: 15 * 60_000,
+    run: async () => {
+      const { checkAlerts } = await import("./price-alerts.service");
+      await checkAlerts();
+    },
+  },
+  {
+    name: "warehouseExports",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { processScheduledExports } =
+        await import("./data-warehouse.service");
+      await processScheduledExports();
+    },
+  },
+] as const;
 
 const scheduledTasks: Array<{ stop: () => void | Promise<void> }> = [];
 const runningJobs = new Set<string>();
@@ -63,7 +112,16 @@ async function runGuarded(name: string, job: () => Promise<void>) {
   runningJobs.add(name);
   try {
     logger.debug({}, `Running cron job: ${name}`);
-    await job();
+    await runScheduledTask(
+      name,
+      String(
+        Math.floor(
+          Date.now() /
+            (PERIODIC_JOB_CATALOG.find(j => j.name === name)?.periodMs ?? 60000)
+        )
+      ),
+      job
+    );
   } finally {
     runningJobs.delete(name);
   }
@@ -84,19 +142,17 @@ export function startCronJobs() {
   }
   logger.info({}, "Starting cron jobs...");
 
-  // Clean up expired locks every 5 minutes
-  scheduledTasks.push(
-    cron.schedule("*/5 * * * *", () =>
-      runGuarded("cleanupExpiredLocks", cleanupExpiredLocks)
-    )
-  );
-
-  // Relay transactional-outbox events every minute
-  scheduledTasks.push(
-    cron.schedule("* * * * *", () =>
-      runGuarded("relayOutboxEvents", relayOutboxEvents)
-    )
-  );
+  for (const job of PERIODIC_JOB_CATALOG)
+    scheduledTasks.push(
+      cron.schedule(
+        job.cron,
+        () =>
+          runGuarded(job.name, job.run).catch(error =>
+            logError(error as Error, { operation: job.name })
+          ),
+        { timezone: "UTC" }
+      )
+    );
 
   logger.info({}, "Cron jobs started successfully");
 }

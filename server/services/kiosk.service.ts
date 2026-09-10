@@ -1,3 +1,8 @@
+export {
+  kioskDevices,
+  kioskSessions,
+  kioskAnalytics,
+} from "../../drizzle/schema";
 /**
  * Self-Service Kiosk Service
  *
@@ -8,6 +13,9 @@
 
 import { getDb } from "../db";
 import {
+  kioskDevices,
+  kioskSessions,
+  kioskAnalytics,
   bookings,
   passengers,
   flights,
@@ -18,115 +26,16 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import {
-  int,
-  mysqlEnum,
-  mysqlTable,
-  varchar,
-  boolean,
-  timestamp,
-  text,
-  index,
-  uniqueIndex,
-} from "drizzle-orm/mysql-core";
 
 // ============================================================================
-// Schema Definitions (inline)
+// Schema Definitions (canonical imports)
 // ============================================================================
-
-export const kioskDevices = mysqlTable(
-  "kiosk_devices",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    kioskCode: varchar("kioskCode", { length: 20 }).notNull().unique(),
-    airportId: int("airportId").notNull(),
-    terminal: varchar("terminal", { length: 50 }).notNull(),
-    location: varchar("location", { length: 255 }).notNull(), // e.g., "Terminal 1, Near Gate A3"
-    status: mysqlEnum("status", ["online", "offline", "maintenance"])
-      .default("online")
-      .notNull(),
-    hardwareType: varchar("hardwareType", { length: 100 }),
-    hasPrinter: boolean("hasPrinter").default(true).notNull(),
-    hasScanner: boolean("hasScanner").default(true).notNull(),
-    hasPayment: boolean("hasPayment").default(false).notNull(),
-    lastHeartbeat: timestamp("lastHeartbeat"),
-    installedAt: timestamp("installedAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    airportIdIdx: index("kiosk_devices_airport_id_idx").on(table.airportId),
-    statusIdx: index("kiosk_devices_status_idx").on(table.status),
-    kioskCodeIdx: uniqueIndex("kiosk_devices_code_unique_idx").on(
-      table.kioskCode
-    ),
-    airportStatusIdx: index("kiosk_devices_airport_status_idx").on(
-      table.airportId,
-      table.status
-    ),
-  })
-);
 
 export type KioskDevice = typeof kioskDevices.$inferSelect;
 export type InsertKioskDevice = typeof kioskDevices.$inferInsert;
 
-export const kioskSessions = mysqlTable(
-  "kiosk_sessions",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    kioskId: int("kioskId"),
-    bookingId: int("bookingId").notNull(),
-    passengerId: int("passengerId"),
-    sessionType: mysqlEnum("sessionType", [
-      "check_in",
-      "seat_change",
-      "bag_tag",
-      "ancillary",
-    ]).notNull(),
-    startedAt: timestamp("startedAt").defaultNow().notNull(),
-    completedAt: timestamp("completedAt"),
-    status: mysqlEnum("status", ["active", "completed", "abandoned", "error"])
-      .default("active")
-      .notNull(),
-    errorMessage: text("errorMessage"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    kioskIdIdx: index("kiosk_sessions_kiosk_id_idx").on(table.kioskId),
-    bookingIdIdx: index("kiosk_sessions_booking_id_idx").on(table.bookingId),
-    statusIdx: index("kiosk_sessions_status_idx").on(table.status),
-    sessionTypeIdx: index("kiosk_sessions_type_idx").on(table.sessionType),
-    startedAtIdx: index("kiosk_sessions_started_at_idx").on(table.startedAt),
-  })
-);
-
 export type KioskSession = typeof kioskSessions.$inferSelect;
 export type InsertKioskSession = typeof kioskSessions.$inferInsert;
-
-export const kioskAnalytics = mysqlTable(
-  "kiosk_analytics",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    kioskId: int("kioskId").notNull(),
-    date: timestamp("date").notNull(),
-    totalSessions: int("totalSessions").default(0).notNull(),
-    completedSessions: int("completedSessions").default(0).notNull(),
-    abandonedSessions: int("abandonedSessions").default(0).notNull(),
-    avgSessionDurationSec: int("avgSessionDurationSec").default(0).notNull(),
-    boardingPassesPrinted: int("boardingPassesPrinted").default(0).notNull(),
-    bagTagsPrinted: int("bagTagsPrinted").default(0).notNull(),
-    ancillaryRevenue: int("ancillaryRevenue").default(0).notNull(), // SAR cents
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    kioskIdIdx: index("kiosk_analytics_kiosk_id_idx").on(table.kioskId),
-    dateIdx: index("kiosk_analytics_date_idx").on(table.date),
-    kioskDateIdx: index("kiosk_analytics_kiosk_date_idx").on(
-      table.kioskId,
-      table.date
-    ),
-  })
-);
 
 export type KioskAnalytic = typeof kioskAnalytics.$inferSelect;
 export type InsertKioskAnalytic = typeof kioskAnalytics.$inferInsert;
@@ -1279,12 +1188,12 @@ export async function registerKiosk(
     terminal,
     location,
     hardwareType: options?.hardwareType ?? null,
-    hasPrinter: options?.hasPrinter ?? true,
-    hasScanner: options?.hasScanner ?? true,
+    hasPrinter: options?.hasPrinter ?? false,
+    hasScanner: options?.hasScanner ?? false,
     hasPayment: options?.hasPayment ?? false,
-    status: "online",
+    status: "offline",
     installedAt: new Date(),
-    lastHeartbeat: new Date(),
+    lastHeartbeat: null,
   });
 
   return {
@@ -1293,7 +1202,7 @@ export async function registerKiosk(
     airportId,
     terminal,
     location,
-    status: "online" as const,
+    status: "offline" as const,
   };
 }
 

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/load-planning";
 /**
  * Load Planning Router
  *
@@ -26,6 +27,7 @@ export const loadPlanningRouter = router({
         flightId: z.number().positive(),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ input }) => {
       return await loadPlanningService.createLoadPlan(input.flightId);
     }),
@@ -40,6 +42,7 @@ export const loadPlanningRouter = router({
         flightId: z.number().positive(),
       })
     )
+    .output(responseContracts["get"])
     .query(async ({ input }) => {
       return await loadPlanningService.getLoadPlan(input.flightId);
     }),
@@ -56,6 +59,7 @@ export const loadPlanningRouter = router({
         compartmentId: z.number().positive(),
       })
     )
+    .output(responseContracts["assignCompartment"])
     .mutation(async ({ input }) => {
       return await loadPlanningService.assignCompartment(
         input.flightId,
@@ -74,6 +78,7 @@ export const loadPlanningRouter = router({
         flightId: z.number().positive(),
       })
     )
+    .output(responseContracts["optimize"])
     .mutation(async ({ input }) => {
       return await loadPlanningService.optimizeDistribution(input.flightId);
     }),
@@ -88,6 +93,7 @@ export const loadPlanningRouter = router({
         flightId: z.number().positive(),
       })
     )
+    .output(responseContracts["validate"])
     .query(async ({ input }) => {
       return await loadPlanningService.validateLoadPlan(input.flightId);
     }),
@@ -104,6 +110,7 @@ export const loadPlanningRouter = router({
         weight: z.number().nonnegative(),
       })
     )
+    .output(responseContracts["updateBulk"])
     .mutation(async ({ input }) => {
       return await loadPlanningService.updateBulkLoad(
         input.flightId,
@@ -122,6 +129,7 @@ export const loadPlanningRouter = router({
         aircraftTypeId: z.number().positive(),
       })
     )
+    .output(responseContracts["getCompartments"])
     .query(async ({ input }) => {
       return await loadPlanningService.getCompartmentLayout(
         input.aircraftTypeId
@@ -138,6 +146,7 @@ export const loadPlanningRouter = router({
         flightId: z.number().positive(),
       })
     )
+    .output(responseContracts["finalize"])
     .mutation(async ({ input, ctx }) => {
       return await loadPlanningService.finalizeLoadPlan(
         input.flightId,
@@ -173,6 +182,7 @@ export const loadPlanningRouter = router({
         ),
       })
     )
+    .output(responseContracts["amend"])
     .mutation(async ({ input }) => {
       return await loadPlanningService.amendLoadPlan(
         input.flightId,

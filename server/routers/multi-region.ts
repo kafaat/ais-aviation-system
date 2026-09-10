@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/multi-region";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import * as multiRegionService from "../services/multi-region.service";
@@ -27,6 +28,7 @@ export const multiRegionRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getRegions"])
     .query(() => {
       const regions = multiRegionService.getRegions();
       const config = multiRegionService.getRegionConfig();
@@ -56,6 +58,7 @@ export const multiRegionRouter = router({
         regionId: z.string().min(1).describe("Region identifier"),
       })
     )
+    .output(responseContracts["getRegionHealth"])
     .query(async ({ input }) => {
       return await multiRegionService.getRegionHealth(input.regionId);
     }),
@@ -75,6 +78,7 @@ export const multiRegionRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getReplicationStatus"])
     .query(() => {
       return multiRegionService.getReplicationStatus();
     }),
@@ -94,6 +98,7 @@ export const multiRegionRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getLatencyMap"])
     .query(() => {
       return multiRegionService.getRegionLatency();
     }),
@@ -113,6 +118,7 @@ export const multiRegionRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getFailoverHistory"])
     .query(() => {
       return multiRegionService.getFailoverHistory();
     }),
@@ -145,6 +151,7 @@ export const multiRegionRouter = router({
           .describe("Type of data to synchronize"),
       })
     )
+    .output(responseContracts["triggerSync"])
     .mutation(async ({ input }) => {
       return await multiRegionService.syncData(
         input.sourceRegion,
@@ -174,6 +181,7 @@ export const multiRegionRouter = router({
         reason: z.string().min(1).max(500).describe("Reason for the failover"),
       })
     )
+    .output(responseContracts["initiateFailover"])
     .mutation(async ({ input }) => {
       return await multiRegionService.failoverToRegion(
         input.regionId,
@@ -223,6 +231,7 @@ export const multiRegionRouter = router({
           .describe("Region API endpoint URL"),
       })
     )
+    .output(responseContracts["updateRegion"])
     .mutation(({ input }) => {
       const { regionId, ...updates } = input;
       return multiRegionService.updateRegion(regionId, updates);

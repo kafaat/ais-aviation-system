@@ -18,6 +18,7 @@ const message = {
   idempotencyKey: "test-message",
 };
 beforeEach(() => {
+  boundary.db = null;
   vi.stubEnv("RESEND_API_KEY", "");
   vi.stubEnv("EMAIL_FROM", "");
   vi.stubEnv("OUTBOX_PUBLISH_URL", "");
@@ -55,7 +56,9 @@ describe("operational truth", () => {
       eventType: "booking.modified",
       aggregateId: "7",
     } as any;
-    await expect(configuredPublisher(event)).rejects.toThrow("not configured");
+    await expect(configuredPublisher(event)).rejects.toThrow(
+      "Inbox database unavailable"
+    );
     vi.stubEnv("OUTBOX_PUBLISH_URL", "https://receiver.example.test/events");
     vi.stubEnv("OUTBOX_PUBLISH_TOKEN", "synthetic-key");
     const fetch = vi

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/bookings";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -59,7 +60,14 @@ export const bookingsRouter = router({
           )
           .describe("List of passengers"),
         sessionId: z.string().describe("Booking session ID for inventory lock"),
-        lockId: z.number().optional().describe("Inventory lock ID"),
+        lockId: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("Inventory lock ID"),
+        priceLockId: z.number().int().positive().optional(),
+        idempotencyKey: z.string().min(1).max(255).optional(),
         ancillaries: z
           .array(
             z.object({
@@ -81,6 +89,7 @@ export const bookingsRouter = router({
           .describe("Optional ancillary services"),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       const result = await bookingsService.createBooking({
         userId: ctx.user.id,
@@ -90,25 +99,12 @@ export const bookingsRouter = router({
         passengers: input.passengers,
         sessionId: input.sessionId,
         lockId: input.lockId,
+        priceLockId: input.priceLockId,
+        idempotencyKey: input.idempotencyKey,
         ancillaries: input.ancillaries,
       });
 
-      await auditBookingChange(
-        result.bookingId,
-        result.bookingReference,
-        ctx.user.id,
-        ctx.user.role,
-        "created",
-        undefined,
-        {
-          flightId: input.flightId,
-          cabinClass: input.cabinClass,
-          passengerCount: input.passengers.length,
-          totalAmount: result.totalAmount,
-        },
-        ctx.req.ip,
-        ctx.req.headers["x-request-id"] as string
-      );
+      // The booking.created outbox record commits with the booking.
 
       return result;
     }),
@@ -125,6 +121,7 @@ export const bookingsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["myBookings"])
     .query(async ({ ctx }) => {
       return await bookingsService.getUserBookings(ctx.user.id, ctx.tenantId);
     }),
@@ -142,6 +139,7 @@ export const bookingsRouter = router({
       },
     })
     .input(z.object({ pnr: z.string().describe("6-character PNR code") }))
+    .output(responseContracts["getByPNR"])
     .query(async ({ ctx, input }) => {
       const booking = await db.getBookingByPNR(input.pnr);
       if (!booking) {
@@ -173,6 +171,7 @@ export const bookingsRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
+    .output(responseContracts["getPassengers"])
     .query(async ({ ctx, input }) => {
       const booking = await db.getBookingByIdWithDetails(input.bookingId);
       if (!booking) {

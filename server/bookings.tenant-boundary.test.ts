@@ -32,6 +32,8 @@ describe("booking tenant boundary", () => {
 
   it("binds cancellation inventory restoration to the tenant", () => {
     expect(serviceSource).toContain("eq(bookings.tenantId, tenantId)");
-    expect(serviceSource).toContain("await releaseBookingSeats(tx, current)");
+    expect(serviceSource).toContain(
+      "await cancelBookingResources(tx, current,"
+    );
   });
 });

@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 /**
  * AI Gateway - LLM Router & Model Registry
  *
@@ -49,6 +50,8 @@ export interface GatewayRequest {
     | "extraction";
   messages: Message[];
   preferredModel?: string;
+  maxTokens?: number;
+  userId?: number;
   maxCost?: number; // max USD per request
   maxLatencyMs?: number;
   cacheKey?: string;
@@ -137,15 +140,30 @@ export class AIGateway {
   /**
    * Route an LLM request through the gateway
    */
-  async invoke(request: GatewayRequest): Promise<GatewayResponse> {
+  async invoke(
+    request: GatewayRequest,
+    attempted: string[] = []
+  ): Promise<GatewayResponse> {
     const startTime = Date.now();
-    const requestId = `gw-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = `gw-${randomUUID()}`;
+    const cacheKey = `ai_gateway:${request.tenantId ?? "platform"}:${request.userId ?? "service"}:${createHash(
+      "sha256"
+    )
+      .update(
+        JSON.stringify({
+          agent: request.agentId,
+          feature: request.feature,
+          key: request.cacheKey,
+          messages: request.messages,
+          model: request.preferredModel,
+          maxTokens: request.maxTokens,
+        })
+      )
+      .digest("hex")}`;
 
     // Check cache first
     if (request.cacheKey) {
-      const cached = await cacheService.get<GatewayResponse>(
-        `ai_gateway:${request.cacheKey}`
-      );
+      const cached = await cacheService.get<GatewayResponse>(cacheKey);
       if (cached) {
         this.cacheHits++;
         log.info(
@@ -172,7 +190,7 @@ export class AIGateway {
     }
 
     // Select best model
-    const model = this.selectModel(request);
+    const model = this.selectModel(request, attempted);
     if (!model) {
       throw new Error("No suitable model available for this request");
     }
@@ -181,9 +199,18 @@ export class AIGateway {
       // Invoke LLM
       const result = await invokeLLM({
         messages: request.messages,
-        maxTokens: model.maxTokens,
+        model: model.id,
+        provider: "forge",
+        maxTokens: Math.min(
+          request.maxTokens ?? model.maxTokens,
+          model.maxTokens
+        ),
       });
 
+      if (result.model !== model.id)
+        throw new Error(
+          "LLM provider returned a different model than requested"
+        );
       const latencyMs = Date.now() - startTime;
 
       // Calculate cost
@@ -224,11 +251,7 @@ export class AIGateway {
 
       // Cache response if requested
       if (request.cacheKey && request.cacheTtlSeconds) {
-        await cacheService.set(
-          `ai_gateway:${request.cacheKey}`,
-          response,
-          request.cacheTtlSeconds
-        );
+        await cacheService.set(cacheKey, response, request.cacheTtlSeconds);
       }
 
       log.info(
@@ -257,13 +280,17 @@ export class AIGateway {
       );
 
       // Try fallback model
-      const fallback = this.getFallbackModel(model.id, request);
+      const tried = [...attempted, model.id];
+      const fallback = this.selectModel(
+        { ...request, preferredModel: undefined },
+        tried
+      );
       if (fallback) {
         log.info(
           { requestId, fallbackModel: fallback.id },
           "Attempting fallback model"
         );
-        return this.invoke({ ...request, preferredModel: fallback.id });
+        return this.invoke({ ...request, preferredModel: fallback.id }, tried);
       }
 
       throw error;
@@ -273,36 +300,29 @@ export class AIGateway {
   /**
    * Select the best model for a request
    */
-  private selectModel(request: GatewayRequest): ModelConfig | null {
-    // If preferred model specified, use it
-    if (request.preferredModel) {
-      const preferred = MODEL_REGISTRY.find(
-        m => m.id === request.preferredModel && m.enabled
-      );
-      if (preferred) return preferred;
-    }
-
-    // Filter by capabilities and constraints
-    const candidates = MODEL_REGISTRY.filter(m => m.enabled)
+  private selectModel(
+    request: GatewayRequest,
+    attempted: string[] = []
+  ): ModelConfig | null {
+    const candidates = MODEL_REGISTRY.filter(
+      m => m.enabled && m.provider === "forge" && !attempted.includes(m.id)
+    )
       .filter(m => m.capabilities.includes(request.taskType))
       .filter(m => !request.maxLatencyMs || m.latencyMs <= request.maxLatencyMs)
+      .filter(
+        m =>
+          request.maxCost == null ||
+          (Buffer.byteLength(JSON.stringify(request.messages)) *
+            m.costPer1kInput +
+            Math.min(request.maxTokens ?? m.maxTokens, m.maxTokens) *
+              m.costPer1kOutput) /
+            1000 <=
+            request.maxCost
+      )
       .sort((a, b) => a.priority - b.priority);
-
-    return candidates[0] || null;
-  }
-
-  /**
-   * Get fallback model when primary fails
-   */
-  private getFallbackModel(
-    failedModelId: string,
-    request: GatewayRequest
-  ): ModelConfig | null {
-    return (
-      MODEL_REGISTRY.filter(m => m.enabled && m.id !== failedModelId)
-        .filter(m => m.capabilities.includes(request.taskType))
-        .sort((a, b) => a.priority - b.priority)[0] || null
-    );
+    if (request.preferredModel)
+      return candidates.find(m => m.id === request.preferredModel) ?? null;
+    return candidates[0] ?? null;
   }
 
   /**

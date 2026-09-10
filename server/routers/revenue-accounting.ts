@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/revenue-accounting";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import * as revenueService from "../services/revenue-accounting.service";
@@ -20,6 +21,7 @@ export const revenueAccountingRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getDashboard"])
     .query(async ({ input }) => {
       return await revenueService.getRevenueDashboard(
         input?.startDate,
@@ -39,6 +41,7 @@ export const revenueAccountingRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getRevenueByRoute"])
     .query(async ({ input }) => {
       return await revenueService.getRevenueByRoute(
         input?.startDate,
@@ -58,6 +61,7 @@ export const revenueAccountingRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getRevenueByClass"])
     .query(async ({ input }) => {
       return await revenueService.getRevenueByClass(
         input?.startDate,
@@ -77,6 +81,7 @@ export const revenueAccountingRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getRevenueByChannel"])
     .query(async ({ input }) => {
       return await revenueService.getRevenueByChannel(
         input?.startDate,
@@ -96,6 +101,7 @@ export const revenueAccountingRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getAncillaryRevenue"])
     .query(async ({ input }) => {
       return await revenueService.getAncillaryRevenue(
         input?.startDate,
@@ -106,9 +112,11 @@ export const revenueAccountingRouter = router({
   /**
    * Get deferred revenue (tickets sold, flights not yet flown)
    */
-  getDeferredRevenue: adminProcedure.query(async () => {
-    return await revenueService.calculateDeferredRevenue();
-  }),
+  getDeferredRevenue: adminProcedure
+    .output(responseContracts["getDeferredRevenue"])
+    .query(async () => {
+      return await revenueService.calculateDeferredRevenue();
+    }),
 
   /**
    * Generate a monthly revenue reconciliation report
@@ -120,6 +128,7 @@ export const revenueAccountingRouter = router({
         year: z.number().min(2020).max(2100),
       })
     )
+    .output(responseContracts["generateReport"])
     .mutation(async ({ input, ctx }) => {
       return await revenueService.generateRevenueReport(
         input.month,
@@ -139,6 +148,7 @@ export const revenueAccountingRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getReports"])
     .query(async ({ input }) => {
       return await revenueService.getReports(input?.limit || 12);
     }),
@@ -156,6 +166,7 @@ export const revenueAccountingRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getYieldAnalysis"])
     .query(async ({ input }) => {
       return await revenueService.getYieldAnalysis(
         input?.startDate,
@@ -176,6 +187,7 @@ export const revenueAccountingRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getRefundImpact"])
     .query(async ({ input }) => {
       return await revenueService.getRefundImpact(
         input?.startDate,

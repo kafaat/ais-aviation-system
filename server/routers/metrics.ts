@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/metrics";
 /**
  * Metrics Router
  * Provides Prometheus-compatible metrics endpoint for monitoring
@@ -32,15 +33,17 @@ export const metricsRouter = router({
    * NOTE: For production Prometheus scraping, use the Express endpoint
    * at /api/metrics which returns proper content-type
    */
-  prometheus: adminProcedure.query(() => {
-    return getPrometheusMetrics();
-  }),
+  prometheus: adminProcedure
+    .output(responseContracts["prometheus"])
+    .query(() => {
+      return getPrometheusMetrics();
+    }),
 
   /**
    * JSON metrics endpoint
    * Returns system metrics in JSON format for debugging
    */
-  json: adminProcedure.query(() => {
+  json: adminProcedure.output(responseContracts["json"]).query(() => {
     collectSystemMetrics();
     return getMetricsJson();
   }),
@@ -49,7 +52,7 @@ export const metricsRouter = router({
    * Summary of key metrics
    * Returns a high-level overview of system health
    */
-  summary: adminProcedure.query(() => {
+  summary: adminProcedure.output(responseContracts["summary"]).query(() => {
     collectSystemMetrics();
     const memUsage = process.memoryUsage();
     const uptime = process.uptime();
@@ -117,7 +120,7 @@ export const metricsRouter = router({
    * Reset all metrics
    * WARNING: This clears all collected metrics data
    */
-  reset: adminProcedure.mutation(() => {
+  reset: adminProcedure.output(responseContracts["reset"]).mutation(() => {
     registry.reset();
     return { success: true, message: "All metrics have been reset" };
   }),
@@ -131,6 +134,7 @@ export const metricsRouter = router({
         category: z.enum(["http", "database", "trpc", "system", "business"]),
       })
     )
+    .output(responseContracts["category"])
     .query(({ input }) => {
       collectSystemMetrics();
 

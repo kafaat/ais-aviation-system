@@ -1,7 +1,7 @@
+import { responseContracts } from "../contracts/multi-city";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import * as multiCityService from "../services/multi-city.service";
-import { auditBookingChange } from "../services/audit.service";
 import { assertBookingOwnership } from "../services/access-control.service";
 
 /**
@@ -39,6 +39,7 @@ export const multiCityRouter = router({
           .describe("List of flight segments"),
       })
     )
+    .output(responseContracts["search"])
     .mutation(async ({ input }) => {
       return await multiCityService.searchMultiCityFlights(input.segments);
     }),
@@ -79,6 +80,7 @@ export const multiCityRouter = router({
           .describe("Number of passengers"),
       })
     )
+    .output(responseContracts["calculatePrice"])
     .query(async ({ input }) => {
       return await multiCityService.calculateMultiCityPrice(
         input.segments,
@@ -137,9 +139,11 @@ export const multiCityRouter = router({
         sessionId: z.string().describe("Booking session ID"),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       const result = await multiCityService.createMultiCityBooking({
         userId: ctx.user.id,
+        tenantId: ctx.tenantId,
         segments: input.segments,
         cabinClass: input.cabinClass,
         passengers: input.passengers,
@@ -147,23 +151,7 @@ export const multiCityRouter = router({
       });
 
       // Audit log: Multi-city booking created
-      await auditBookingChange(
-        result.bookingId,
-        result.bookingReference,
-        ctx.user.id,
-        ctx.user.role,
-        "created",
-        undefined,
-        {
-          isMultiCity: true,
-          segmentCount: input.segments.length,
-          cabinClass: input.cabinClass,
-          passengerCount: input.passengers.length,
-          totalAmount: result.totalAmount,
-        },
-        ctx.req.ip,
-        ctx.req.headers["x-request-id"] as string
-      );
+      // Creation is audited in the same transaction through the outbox.
 
       return result;
     }),
@@ -185,6 +173,7 @@ export const multiCityRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
+    .output(responseContracts["getSegments"])
     .query(async ({ input, ctx }) => {
       await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
       return await multiCityService.getBookingSegments(input.bookingId);
@@ -206,6 +195,7 @@ export const multiCityRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
+    .output(responseContracts["isMultiCity"])
     .query(async ({ input, ctx }) => {
       const isMultiCity = await multiCityService.isMultiCityBooking(
         input.bookingId,

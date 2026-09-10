@@ -18,7 +18,7 @@
  */
 
 import "dotenv/config";
-import { writeFileSync, rmSync } from "node:fs";
+import { writeFileSync, rmSync, renameSync } from "node:fs";
 import { getDb, closePool } from "./db";
 import { createServiceLogger } from "./_core/logger";
 import {
@@ -26,13 +26,18 @@ import {
   initializeQueues,
   closeQueues,
 } from "./queue/queues";
-import { startWorkers, stopWorkers } from "./queue/workers/index";
+import {
+  startWorkers,
+  stopWorkers,
+  getWorkersStatus,
+} from "./queue/workers/index";
 import {
   startAllWorkers as startV2Workers,
   stopAllWorkers as stopV2Workers,
   closeAllQueues as closeV2Queues,
   scheduleReconciliation,
   scheduleCleanupJobs,
+  areV2WorkersHealthy,
 } from "./services/queue-v2.service";
 import { startCronJobs, stopCronJobs } from "./services/cron.service";
 
@@ -40,6 +45,7 @@ const log = createServiceLogger("worker");
 rmSync("/tmp/ais-worker-ready", { force: true });
 
 let isShuttingDown = false;
+let heartbeat: NodeJS.Timeout | undefined;
 
 // ============================================================================
 // Initialization
@@ -79,18 +85,15 @@ async function initialize(): Promise<void> {
 
   // 5. Start V2 workers (from queue-v2.service)
   log.info({}, "Starting V2 workers...");
-  startV2Workers();
+  await startV2Workers();
 
-  // 6. Schedule recurring jobs via V2 queues
-  try {
-    await scheduleReconciliation();
-    await scheduleCleanupJobs();
-    log.info({}, "Recurring jobs scheduled");
-  } catch (err) {
-    log.warn(
-      { error: err },
-      "Failed to schedule some recurring jobs - they may already be scheduled"
-    );
+  // Mandatory registration failures prevent readiness and trigger restart.
+  await scheduleReconciliation();
+  await scheduleCleanupJobs();
+  if (process.env.NODE_ENV === "production") {
+    const info = await redis.info("memory");
+    if (!/^maxmemory_policy:noeviction\r?$/m.test(info))
+      throw new Error("Queue Redis requires maxmemory-policy noeviction");
   }
 
   // 7. Start node-cron jobs (outbox relay, inventory-lock cleanup).
@@ -98,8 +101,44 @@ async function initialize(): Promise<void> {
   log.info({}, "Starting cron jobs...");
   startCronJobs();
 
-  log.info({}, "Worker process started successfully - processing jobs");
-  writeFileSync("/tmp/ais-worker-ready", String(process.pid));
+  let checking = false;
+  const check = async (initial = false) => {
+    if (checking || isShuttingDown) return;
+    checking = true;
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        Promise.all([redis.ping(), db.execute("SELECT 1")]),
+        new Promise((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("Dependency heartbeat timed out")),
+            3000
+          );
+        }),
+      ]);
+      if (
+        !areV2WorkersHealthy() ||
+        Object.values(getWorkersStatus()).some(w => !w.running || w.paused)
+      )
+        throw new Error("A mandatory queue worker stopped");
+      if (!isShuttingDown) {
+        writeFileSync("/tmp/ais-worker-ready.next", String(Date.now()));
+        renameSync("/tmp/ais-worker-ready.next", "/tmp/ais-worker-ready");
+      }
+    } catch (error) {
+      rmSync("/tmp/ais-worker-ready", { force: true });
+      log.error({ error }, "Worker readiness lost");
+      if (initial) throw error;
+    } finally {
+      clearTimeout(timeout);
+      checking = false;
+    }
+  };
+  await check(true);
+  log.info({}, "Worker dependencies and mandatory consumers are ready");
+  heartbeat = setInterval(() => {
+    void check();
+  }, 10000);
 }
 
 // ============================================================================
@@ -113,6 +152,7 @@ async function shutdown(signal: string): Promise<void> {
   }
 
   isShuttingDown = true;
+  clearInterval(heartbeat);
   rmSync("/tmp/ais-worker-ready", { force: true });
   log.info({ signal }, `Received ${signal}, starting graceful shutdown...`);
 

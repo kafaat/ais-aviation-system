@@ -1,3 +1,4 @@
+import { createBooking } from "./bookings.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -262,7 +263,8 @@ export async function searchFlightsForRebook(
 export async function quickRebook(
   bookingId: number,
   newFlightId: number,
-  userId: number
+  userId: number,
+  tenantId?: number | null
 ): Promise<{
   newBookingId: number;
   bookingReference: string;
@@ -281,110 +283,34 @@ export async function quickRebook(
   // Get original booking data
   const rebookData = await getRebookData(bookingId, userId);
 
-  // Verify new flight has availability
-  const [newFlight] = await database
-    .select()
-    .from(flights)
-    .where(and(eq(flights.id, newFlightId), eq(flights.status, "scheduled")))
-    .limit(1);
-
-  if (!newFlight) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Selected flight not found or not available",
-    });
-  }
-
-  const availableSeats =
-    rebookData.cabinClass === "economy"
-      ? newFlight.economyAvailable
-      : newFlight.businessAvailable;
-
-  if (availableSeats < rebookData.passengers.length) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Not enough seats available on the selected flight",
-    });
-  }
-
-  // Calculate total amount
-  const pricePerSeat =
-    rebookData.cabinClass === "economy"
-      ? newFlight.economyPrice
-      : newFlight.businessPrice;
-  const totalAmount = pricePerSeat * rebookData.passengers.length;
-
-  // Generate booking reference and PNR
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const generateCode = () =>
-    Array.from(
-      { length: 6 },
-      () => chars[Math.floor(Math.random() * chars.length)]
-    ).join("");
-  const bookingReference = generateCode();
-  const pnr = generateCode();
-
-  // Create new booking, passengers, ancillaries, and update seats atomically
-  const newBookingId = await database.transaction(async tx => {
-    const bookingResult = await tx.insert(bookings).values({
-      userId,
-      flightId: newFlightId,
-      bookingReference,
-      pnr,
-      status: "pending",
-      paymentStatus: "pending",
-      totalAmount,
-      cabinClass: rebookData.cabinClass,
-      numberOfPassengers: rebookData.passengers.length,
-    });
-
-    const insertedBookingId = Number(bookingResult[0].insertId);
-
-    // Copy passengers to new booking
-    for (const passenger of rebookData.passengers) {
-      await tx.insert(passengers).values({
-        bookingId: insertedBookingId,
-        type: passenger.type,
-        title: passenger.title,
-        firstName: passenger.firstName,
-        lastName: passenger.lastName,
-        dateOfBirth: passenger.dateOfBirth,
-        passportNumber: passenger.passportNumber,
-        nationality: passenger.nationality,
-      });
-    }
-
-    // Copy ancillaries with original pricing
-    for (const ancillary of rebookData.ancillaries) {
-      await tx.insert(bookingAncillaries).values({
-        bookingId: insertedBookingId,
-        ancillaryServiceId: ancillary.ancillaryServiceId,
-        quantity: ancillary.quantity,
-        unitPrice: ancillary.unitPrice,
-        totalPrice: ancillary.totalPrice,
-        status: "active",
-      });
-    }
-
-    // Update flight availability
-    if (rebookData.cabinClass === "economy") {
-      await tx
-        .update(flights)
-        .set({
-          economyAvailable: sql`${flights.economyAvailable} - ${rebookData.passengers.length}`,
-        })
-        .where(eq(flights.id, newFlightId));
-    } else {
-      await tx
-        .update(flights)
-        .set({
-          businessAvailable: sql`${flights.businessAvailable} - ${rebookData.passengers.length}`,
-        })
-        .where(eq(flights.id, newFlightId));
-    }
-
-    return insertedBookingId;
+  const result = await createBooking({
+    userId,
+    tenantId,
+    flightId: newFlightId,
+    cabinClass: rebookData.cabinClass,
+    sessionId: `rebook:${bookingId}:${newFlightId}`,
+    passengers: rebookData.passengers.map(p => ({
+      type: p.type,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      title: p.title ?? undefined,
+      dateOfBirth: p.dateOfBirth ?? undefined,
+      passportNumber: p.passportNumber ?? undefined,
+      nationality: p.nationality ?? undefined,
+    })),
+    ancillaries: rebookData.ancillaries.map(a => ({
+      ancillaryServiceId: a.ancillaryServiceId,
+      quantity: a.quantity,
+      unitPrice: a.unitPrice,
+      totalPrice: a.totalPrice,
+    })),
   });
+  const {
+    bookingId: newBookingId,
+    bookingReference,
+    pnr,
+    totalAmount,
+  } = result;
 
   return {
     newBookingId,

@@ -4,11 +4,12 @@ import type { RedisOptions } from "ioredis";
 export function redisConnectionOptions(
   env: NodeJS.ProcessEnv = process.env
 ): RedisOptions {
-  if (!env.REDIS_URL && env.NODE_ENV === "production") {
+  const queueUrl = env.QUEUE_REDIS_URL || env.REDIS_URL;
+  if (!queueUrl && env.NODE_ENV === "production") {
     throw new Error("REDIS_URL is required in production environment");
   }
   const url = new URL(
-    env.REDIS_URL ||
+    queueUrl ||
       `redis://${env.REDIS_HOST || "127.0.0.1"}:${env.REDIS_PORT || "6379"}`
   );
   if (!["redis:", "rediss:"].includes(url.protocol))

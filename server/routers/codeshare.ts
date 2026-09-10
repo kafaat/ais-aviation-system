@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/codeshare";
 import { z } from "zod";
 import { router, publicProcedure, adminProcedure } from "../_core/trpc";
 import * as codeshareService from "../services/codeshare.service";
@@ -96,6 +97,7 @@ export const codeshareRouter = router({
           .describe("Agreement validity end date (ISO 8601 string)"),
       })
     )
+    .output(responseContracts["createAgreement"])
     .mutation(async ({ input }) => {
       const data = await codeshareService.createCodeshareAgreement({
         marketingAirlineId: input.marketingAirlineId,
@@ -175,6 +177,7 @@ export const codeshareRouter = router({
         validUntil: z.string().optional().describe("Updated validity end date"),
       })
     )
+    .output(responseContracts["updateAgreement"])
     .mutation(async ({ input }) => {
       const { id, ...fields } = input;
 
@@ -236,6 +239,7 @@ export const codeshareRouter = router({
         id: z.number().int().positive().describe("Codeshare agreement ID"),
       })
     )
+    .output(responseContracts["getAgreement"])
     .query(async ({ input }) => {
       const data = await codeshareService.getCodeshareAgreement(input.id);
 
@@ -299,6 +303,7 @@ export const codeshareRouter = router({
           .describe("Number of results per page (max 100)"),
       })
     )
+    .output(responseContracts["listAgreements"])
     .query(async ({ input }) => {
       const offset = (input.page - 1) * input.limit;
 
@@ -341,6 +346,7 @@ export const codeshareRouter = router({
           .describe("Codeshare agreement ID to activate"),
       })
     )
+    .output(responseContracts["activate"])
     .mutation(async ({ input }) => {
       const data = await codeshareService.activateCodeshareAgreement(input.id);
 
@@ -380,6 +386,7 @@ export const codeshareRouter = router({
           .describe("Reason for terminating the agreement"),
       })
     )
+    .output(responseContracts["terminate"])
     .mutation(async ({ input }) => {
       const data = await codeshareService.terminateCodeshareAgreement(
         input.id,
@@ -420,6 +427,7 @@ export const codeshareRouter = router({
           .describe("Marketing airline ID to get codeshare flights for"),
       })
     )
+    .output(responseContracts["getCodeshareFlights"])
     .query(async ({ input }) => {
       const data = await codeshareService.getCodeshareFlights(input.airlineId);
 
@@ -471,6 +479,7 @@ export const codeshareRouter = router({
           ),
       })
     )
+    .output(responseContracts["calculateRevenue"])
     .mutation(async ({ input }) => {
       const data = await codeshareService.calculateRevenueShare(
         input.agreementId,

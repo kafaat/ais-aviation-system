@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/mfa";
 /**
  * MFA Router - Multi-Factor Authentication Endpoints
  *
@@ -63,6 +64,7 @@ export const mfaRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["setup"])
     .mutation(async ({ ctx }) => {
       const userId = ctx.user.id;
       const email = ctx.user.email || `user-${userId}@ais-aviation.com`;
@@ -114,6 +116,7 @@ export const mfaRouter = router({
       },
     })
     .input(verifyTokenSchema)
+    .output(responseContracts["verify"])
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id;
 
@@ -172,6 +175,7 @@ export const mfaRouter = router({
       },
     })
     .input(verifyTokenSchema)
+    .output(responseContracts["disable"])
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id;
 
@@ -223,6 +227,7 @@ export const mfaRouter = router({
       },
     })
     .input(verifyTokenSchema)
+    .output(responseContracts["regenerateBackupCodes"])
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id;
 
@@ -275,6 +280,7 @@ export const mfaRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getStatus"])
     .query(async ({ ctx }) => {
       const userId = ctx.user.id;
 

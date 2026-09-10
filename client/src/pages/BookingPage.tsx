@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -57,8 +57,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import SplitPaymentForm from "@/components/SplitPaymentForm";
-import { VoucherInput } from "@/components/VoucherInput";
-import { CreditBalance } from "@/components/CreditBalance";
 import { CarbonOffset } from "@/components/CarbonOffset";
 import { TravelRequirements } from "@/components/TravelRequirements";
 
@@ -112,18 +110,41 @@ export default function BookingPage() {
   const [createdBookingAmount, setCreatedBookingAmount] = useState<number>(0);
   const [smsNotification, setSmsNotification] = useState(false);
   const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
-  const [appliedVoucher, setAppliedVoucher] = useState<{
-    code: string;
-    discount: number;
-  } | null>(null);
-  const [creditsToUse, setCreditsToUse] = useState(0);
-
   const currentLocale = i18n.language === "ar" ? ar : enUS;
 
   const { data: flight, isLoading } = trpc.flights.getById.useQuery({
     id: flightId,
   });
   const createBooking = trpc.bookings.create.useMutation();
+  const { data: priceLockStatus } = trpc.priceLock.checkLock.useQuery(
+    { flightId, cabinClass },
+    { enabled: isAuthenticated && flightId > 0 }
+  );
+  const command = useRef<{
+    fingerprint: string;
+    key: string;
+    priceLockId?: number;
+  } | null>(null);
+  const bookingCommand = () => {
+    const fingerprint = JSON.stringify({
+      flightId,
+      cabinClass,
+      passengers,
+      selectedAncillaries,
+    });
+    if (command.current?.fingerprint !== fingerprint) {
+      command.current = {
+        fingerprint,
+        key: crypto.randomUUID(),
+        priceLockId: priceLockStatus?.lock?.id,
+      };
+    }
+    return {
+      sessionId: command.current.key,
+      idempotencyKey: command.current.key,
+      priceLockId: command.current.priceLockId,
+    };
+  };
   const createCheckout = trpc.payments.createCheckoutSession.useMutation();
   const savePassengerMutation = trpc.savedPassengers.add.useMutation();
 
@@ -306,15 +327,12 @@ export default function BookingPage() {
     }
 
     try {
-      // Generate session ID for inventory locking
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
       // Create booking
       const booking = await createBooking.mutateAsync({
         flightId,
         cabinClass,
         passengers,
-        sessionId,
+        ...bookingCommand(),
         ancillaries:
           selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
       });
@@ -374,15 +392,12 @@ export default function BookingPage() {
     }
 
     try {
-      // Generate session ID for inventory locking
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
       // Create booking (without processing payment)
       const booking = await createBooking.mutateAsync({
         flightId,
         cabinClass,
         passengers,
-        sessionId,
+        ...bookingCommand(),
         ancillaries:
           selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
       });
@@ -457,14 +472,13 @@ export default function BookingPage() {
     );
   }
 
+  const activePriceLock = priceLockStatus?.lock;
   const price =
-    cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
-  const baseAmount = (price * passengers.length) / 100;
-  const subtotal = baseAmount + ancillariesTotalCost / 100;
-  const voucherDiscount = appliedVoucher ? appliedVoucher.discount / 100 : 0;
-  const creditDiscount = creditsToUse / 100;
-  const totalAmount = Math.max(0, subtotal - voucherDiscount - creditDiscount);
-  const subtotalInCents = Math.round(subtotal * 100);
+    activePriceLock?.lockedPrice ??
+    (cabinClass === "economy" ? flight.economyPrice : flight.businessPrice);
+  const baseAmount =
+    (price * passengers.length + (activePriceLock?.lockFee ?? 0)) / 100;
+  const totalAmount = baseAmount + ancillariesTotalCost / 100;
 
   const handleAncillariesChange = (
     ancillaries: SelectedAncillary[],
@@ -1089,22 +1103,6 @@ export default function BookingPage() {
                       </div>
                     </>
                   )}
-                  {voucherDiscount > 0 && (
-                    <div className="flex justify-between items-center mb-2 text-green-600">
-                      <span className="text-sm">{t("voucher.title")}</span>
-                      <span>
-                        -{voucherDiscount.toFixed(2)} {t("common.currency")}
-                      </span>
-                    </div>
-                  )}
-                  {creditDiscount > 0 && (
-                    <div className="flex justify-between items-center mb-2 text-green-600">
-                      <span className="text-sm">{t("credits.title")}</span>
-                      <span>
-                        -{creditDiscount.toFixed(2)} {t("common.currency")}
-                      </span>
-                    </div>
-                  )}
                   <div
                     className="flex justify-between items-center text-lg font-bold mt-4 pt-4 border-t"
                     data-testid="total-price"
@@ -1116,30 +1114,6 @@ export default function BookingPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Voucher Input */}
-              {isAuthenticated && (
-                <VoucherInput
-                  amount={subtotalInCents}
-                  appliedVoucher={appliedVoucher}
-                  onVoucherApplied={(discount, code) =>
-                    setAppliedVoucher({ discount, code })
-                  }
-                  onVoucherRemoved={() => setAppliedVoucher(null)}
-                  className="mb-4"
-                />
-              )}
-
-              {/* Credit Balance */}
-              {isAuthenticated && (
-                <CreditBalance
-                  maxAmount={subtotalInCents - (appliedVoucher?.discount ?? 0)}
-                  selectedCredits={creditsToUse}
-                  onUseCredits={setCreditsToUse}
-                  showUsageOption
-                  className="mb-4"
-                />
-              )}
 
               {/* SMS Notification Option */}
               <div className="mb-6 p-4 border rounded-lg bg-muted/30">

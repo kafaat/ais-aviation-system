@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/group-bookings";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
@@ -142,6 +143,7 @@ export const groupBookingsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["list"])
     .query(async ({ input }) => {
       return await groupBookingService.getGroupBookingsWithFlightDetails(input);
     }),
@@ -160,6 +162,7 @@ export const groupBookingsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getStats"])
     .query(async () => {
       return await groupBookingService.getGroupBookingStats();
     }),
@@ -184,6 +187,7 @@ export const groupBookingsRouter = router({
         id: z.number().describe("Group booking ID"),
       })
     )
+    .output(responseContracts["getById"])
     .query(async ({ input }) => {
       const booking = await groupBookingService.getGroupBookingById(input.id);
       if (!booking) {
@@ -293,6 +297,7 @@ export const groupBookingsRouter = router({
         description: "Get information about the group booking discount tiers.",
       },
     })
+    .output(responseContracts["getDiscountTiers"])
     .query(() => {
       return {
         minGroupSize: groupBookingService.MIN_GROUP_SIZE,

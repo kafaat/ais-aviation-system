@@ -12,6 +12,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid URL"),
 
   // Authentication
+  SELF_SERVICE_CAPABILITY_SECRET: z.string().optional(),
   JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
   OAUTH_SERVER_URL: z
     .string()
@@ -43,7 +44,15 @@ const envSchema = z.object({
  */
 function validateEnv() {
   try {
-    return envSchema.parse(process.env);
+    const env = envSchema.parse(process.env);
+    if (
+      env.NODE_ENV === "production" &&
+      (env.SELF_SERVICE_CAPABILITY_SECRET?.length ?? 0) < 32
+    )
+      throw new Error(
+        "SELF_SERVICE_CAPABILITY_SECRET must contain at least 32 characters in production"
+      );
+    return env;
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error("❌ Environment validation failed:");

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/refunds";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -62,6 +63,7 @@ export const refundsRouter = router({
           .describe("Admin-only refund override in integer cents"),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       if (input.amount !== undefined && ctx.user.role !== "admin") {
         throw new TRPCError({
@@ -139,6 +141,7 @@ export const refundsRouter = router({
           .describe("Override refund amount in integer cents"),
       })
     )
+    .output(responseContracts["adminCreate"])
     .mutation(async ({ ctx, input }) => {
       // Get booking reference for audit
       const db = await getDb();
@@ -189,6 +192,7 @@ export const refundsRouter = router({
       },
     })
     .input(z.object({ refundId: z.string().min(1).describe("Refund ID") }))
+    .output(responseContracts["getDetails"])
     .query(async ({ input, ctx }) => {
       return await refundsService.getRefundDetails(input.refundId, ctx.user);
     }),
@@ -209,6 +213,7 @@ export const refundsRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID to check") }))
+    .output(responseContracts["checkRefundable"])
     .query(async ({ input, ctx }) => {
       // Ownership check: prevent leaking other users' booking status (IDOR)
       await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
@@ -231,6 +236,7 @@ export const refundsRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
+    .output(responseContracts["calculateCancellationFee"])
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db)
@@ -294,6 +300,7 @@ export const refundsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getCancellationPolicy"])
     .query(() => {
       return getAllCancellationTiers();
     }),
@@ -313,6 +320,7 @@ export const refundsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getStats"])
     .query(async () => {
       return await getRefundStats();
     }),
@@ -341,6 +349,7 @@ export const refundsRouter = router({
         offset: z.number().optional().describe("Number of records to skip"),
       })
     )
+    .output(responseContracts["getHistory"])
     .query(async ({ input }) => {
       return await getRefundHistory(input);
     }),
@@ -360,6 +369,7 @@ export const refundsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getTrends"])
     .query(async () => {
       return await getRefundTrends();
     }),

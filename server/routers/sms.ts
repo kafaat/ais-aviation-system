@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/sms";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import * as smsService from "../services/sms.service";
@@ -57,6 +58,7 @@ export const smsRouter = router({
           .describe("Filter by status"),
       })
     )
+    .output(responseContracts["getMyLogs"])
     .query(async ({ ctx, input }) => {
       return await smsService.getSMSLogs(ctx.user.id, input);
     }),
@@ -75,6 +77,7 @@ export const smsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getPreferences"])
     .query(async ({ ctx }) => {
       const prefs = await getUserPreferences(ctx.user.id);
       return {
@@ -126,6 +129,7 @@ export const smsRouter = router({
         endDate: z.string().datetime().optional(),
       })
     )
+    .output(responseContracts["listLogs"])
     .query(async ({ input }) => {
       return await smsService.getAllSMSLogs({
         ...input,
@@ -148,6 +152,7 @@ export const smsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getStats"])
     .query(async () => {
       return await smsService.getSMSStats();
     }),
@@ -182,6 +187,7 @@ export const smsRouter = router({
           .describe("Test message content"),
       })
     )
+    .output(responseContracts["sendTest"])
     .mutation(async ({ ctx, input }) => {
       const result = await smsService.sendSMS(
         ctx.user.id,
@@ -215,6 +221,7 @@ export const smsRouter = router({
         id: z.number().describe("SMS log ID to resend"),
       })
     )
+    .output(responseContracts["resend"])
     .mutation(async ({ input }) => {
       const result = await smsService.resendSMS(input.id);
       return {
@@ -259,6 +266,7 @@ export const smsRouter = router({
           .describe("Array of messages to send"),
       })
     )
+    .output(responseContracts["sendBulk"])
     .mutation(async ({ input }) => {
       return await smsService.sendBulkSMS(input.messages);
     }),
@@ -284,6 +292,7 @@ export const smsRouter = router({
         offset: z.number().min(0).default(0),
       })
     )
+    .output(responseContracts["getUserLogs"])
     .query(async ({ input }) => {
       return await smsService.getSMSLogs(input.userId, {
         limit: input.limit,
@@ -305,6 +314,7 @@ export const smsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getTemplates"])
     .query(() => {
       return Object.values(smsService.SMS_TEMPLATES);
     }),
@@ -356,6 +366,7 @@ export const smsRouter = router({
         flightId: z.number().optional().describe("Related flight ID"),
       })
     )
+    .output(responseContracts["sendTemplated"])
     .mutation(async ({ input }) => {
       const result = await smsService.sendTemplatedSMS(
         input.userId,

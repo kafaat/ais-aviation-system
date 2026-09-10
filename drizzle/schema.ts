@@ -1369,7 +1369,7 @@ export const idempotencyRequests = mysqlTable(
     errorMessage: text("errorMessage"), // Error message if FAILED
 
     // Timestamps
-    expiresAt: timestamp("expiresAt").notNull(), // TTL for cleanup
+    expiresAt: timestamp("expiresAt"), // NULL retains atomic business-command responses
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -1632,6 +1632,7 @@ export const seatHolds = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
 
+    inventoryLockId: int("inventoryLockId"), // Canonical hold; NULL only for legacy rows.
     flightId: int("flightId").notNull(),
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
     seats: int("seats").notNull(),
@@ -2393,6 +2394,9 @@ export const bookingSegments = mysqlTable(
     bookingId: int("bookingId").notNull(),
     segmentOrder: int("segmentOrder").notNull(), // Order of segment in the trip (1, 2, 3, etc.)
     flightId: int("flightId").notNull(),
+    inventoryLockId: int("inventoryLockId"),
+    seatsReserved: boolean("seatsReserved").default(false).notNull(),
+    segmentAmount: int("segmentAmount"), // Allocated share of the quoted itinerary total; NULL for historical unknowns.
     departureDate: timestamp("departureDate").notNull(),
     status: mysqlEnum("status", [
       "pending",
@@ -2843,6 +2847,7 @@ export const travelAgents = mysqlTable(
   "travel_agents",
   {
     id: int("id").autoincrement().primaryKey(),
+    ownerUserId: int("ownerUserId"), // Existing agencies must be linked by an administrator.
     agencyName: varchar("agencyName", { length: 255 }).notNull(),
     iataNumber: varchar("iataNumber", { length: 20 }).notNull().unique(), // IATA accreditation number
     contactName: varchar("contactName", { length: 255 }).notNull(),
@@ -5472,3 +5477,6 @@ export const loadPlanDetails = mysqlTable("load_plan_details", {
   data: json("data").notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+// Canonical operational schemas used by services and migration generation.
+export * from "./operations-schema";

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/analytics";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import * as analyticsService from "../services/analytics.service";
@@ -19,6 +20,7 @@ export const analyticsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getKPIs"])
     .query(async ({ input }) => {
       return await analyticsService.getKPIMetrics(
         input?.startDate,
@@ -37,6 +39,7 @@ export const analyticsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getRevenueOverTime"])
     .query(async ({ input }) => {
       return await analyticsService.getRevenueOverTime(input?.days || 30);
     }),
@@ -52,6 +55,7 @@ export const analyticsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getPopularDestinations"])
     .query(async ({ input }) => {
       return await analyticsService.getPopularDestinations(input?.limit || 10);
     }),
@@ -67,6 +71,7 @@ export const analyticsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getBookingTrends"])
     .query(async ({ input }) => {
       return await analyticsService.getBookingTrends(input?.days || 30);
     }),
@@ -74,9 +79,11 @@ export const analyticsRouter = router({
   /**
    * Get flight occupancy details
    */
-  getFlightOccupancy: adminProcedure.query(async () => {
-    return await analyticsService.getFlightOccupancyDetails();
-  }),
+  getFlightOccupancy: adminProcedure
+    .output(responseContracts["getFlightOccupancy"])
+    .query(async () => {
+      return await analyticsService.getFlightOccupancyDetails();
+    }),
 
   /**
    * Get ancillary services KPI metrics
@@ -90,6 +97,7 @@ export const analyticsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getAncillaryMetrics"])
     .query(async ({ input }) => {
       return await analyticsService.getAncillaryMetrics(
         input?.startDate,
@@ -100,9 +108,11 @@ export const analyticsRouter = router({
   /**
    * Get ancillary revenue breakdown by category
    */
-  getAncillaryRevenueByCategory: adminProcedure.query(async () => {
-    return await analyticsService.getAncillaryRevenueByCategory();
-  }),
+  getAncillaryRevenueByCategory: adminProcedure
+    .output(responseContracts["getAncillaryRevenueByCategory"])
+    .query(async () => {
+      return await analyticsService.getAncillaryRevenueByCategory();
+    }),
 
   /**
    * Get most popular ancillary services
@@ -115,6 +125,7 @@ export const analyticsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getPopularAncillaries"])
     .query(async ({ input }) => {
       return await analyticsService.getPopularAncillaries(input?.limit || 10);
     }),

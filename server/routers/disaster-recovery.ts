@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/disaster-recovery";
 /**
  * Disaster Recovery / Business Continuity (DR/BCP) Router
  *
@@ -22,9 +23,11 @@ export const disasterRecoveryRouter = router({
    * Get the overall DR health dashboard
    * Returns health score, backup summary, test results, active incidents
    */
-  getDashboard: adminProcedure.query(async () => {
-    return await drService.getDRDashboard();
-  }),
+  getDashboard: adminProcedure
+    .output(responseContracts["getDashboard"])
+    .query(async () => {
+      return await drService.getDRDashboard();
+    }),
 
   // ========================================================================
   // Backup Operations
@@ -33,9 +36,11 @@ export const disasterRecoveryRouter = router({
   /**
    * Get current backup status for all system components
    */
-  getBackupStatus: adminProcedure.query(async () => {
-    return await drService.getBackupStatus();
-  }),
+  getBackupStatus: adminProcedure
+    .output(responseContracts["getBackupStatus"])
+    .query(async () => {
+      return await drService.getBackupStatus();
+    }),
 
   /**
    * Trigger a manual backup for a specific component
@@ -47,6 +52,7 @@ export const disasterRecoveryRouter = router({
         component: z.enum(["database", "files", "config", "redis"]),
       })
     )
+    .output(responseContracts["triggerBackup"])
     .mutation(async ({ input }) => {
       return await drService.triggerBackup(input.backupType, input.component);
     }),
@@ -54,9 +60,11 @@ export const disasterRecoveryRouter = router({
   /**
    * Get backup schedule configuration
    */
-  getBackupSchedule: adminProcedure.query(() => {
-    return drService.getBackupSchedule();
-  }),
+  getBackupSchedule: adminProcedure
+    .output(responseContracts["getBackupSchedule"])
+    .query(() => {
+      return drService.getBackupSchedule();
+    }),
 
   // ========================================================================
   // Recovery Planning
@@ -65,9 +73,11 @@ export const disasterRecoveryRouter = router({
   /**
    * Get the current disaster recovery plan
    */
-  getRecoveryPlan: adminProcedure.query(() => {
-    return drService.getRecoveryPlan();
-  }),
+  getRecoveryPlan: adminProcedure
+    .output(responseContracts["getRecoveryPlan"])
+    .query(() => {
+      return drService.getRecoveryPlan();
+    }),
 
   // ========================================================================
   // Failover Testing
@@ -88,6 +98,7 @@ export const disasterRecoveryRouter = router({
         component: z.string().min(1).max(100),
       })
     )
+    .output(responseContracts["testFailover"])
     .mutation(async ({ input, ctx }) => {
       return await drService.testFailover(
         input.testType,
@@ -99,9 +110,11 @@ export const disasterRecoveryRouter = router({
   /**
    * Get the history of all failover tests
    */
-  getTestHistory: adminProcedure.query(() => {
-    return drService.getFailoverTestHistory();
-  }),
+  getTestHistory: adminProcedure
+    .output(responseContracts["getTestHistory"])
+    .query(() => {
+      return drService.getFailoverTestHistory();
+    }),
 
   // ========================================================================
   // RPO / RTO
@@ -110,14 +123,14 @@ export const disasterRecoveryRouter = router({
   /**
    * Calculate current Recovery Point Objective
    */
-  getRPO: adminProcedure.query(() => {
+  getRPO: adminProcedure.output(responseContracts["getRPO"]).query(() => {
     return drService.calculateRPO();
   }),
 
   /**
    * Calculate estimated Recovery Time Objective
    */
-  getRTO: adminProcedure.query(async () => {
+  getRTO: adminProcedure.output(responseContracts["getRTO"]).query(async () => {
     return await drService.calculateRTO();
   }),
 
@@ -142,6 +155,7 @@ export const disasterRecoveryRouter = router({
         impactAssessment: z.string().max(2000).optional(),
       })
     )
+    .output(responseContracts["createIncident"])
     .mutation(({ input }) => {
       return drService.createIncident(
         input.incidentType,
@@ -162,6 +176,7 @@ export const disasterRecoveryRouter = router({
         postmortemUrl: z.string().url().optional(),
       })
     )
+    .output(responseContracts["resolveIncident"])
     .mutation(({ input }) => {
       return drService.resolveIncident(
         input.incidentId,
@@ -189,6 +204,7 @@ export const disasterRecoveryRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getIncidents"])
     .query(({ input }) => {
       return drService.getIncidents(input?.status);
     }),
@@ -212,6 +228,7 @@ export const disasterRecoveryRouter = router({
         ]),
       })
     )
+    .output(responseContracts["getRunbook"])
     .query(({ input }) => {
       return drService.getRunbook(input.scenarioType);
     }),
@@ -219,9 +236,11 @@ export const disasterRecoveryRouter = router({
   /**
    * Get all active runbooks
    */
-  getAllRunbooks: adminProcedure.query(() => {
-    return drService.getAllRunbooks();
-  }),
+  getAllRunbooks: adminProcedure
+    .output(responseContracts["getAllRunbooks"])
+    .query(() => {
+      return drService.getAllRunbooks();
+    }),
 
   /**
    * Update a runbook's content or mark it as reviewed
@@ -247,6 +266,7 @@ export const disasterRecoveryRouter = router({
         reviewedBy: z.string().optional(),
       })
     )
+    .output(responseContracts["updateRunbook"])
     .mutation(({ input }) => {
       const { id, ...updates } = input;
       return drService.updateRunbook(id, updates);

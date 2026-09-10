@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/biometric";
 /**
  * Biometric Boarding Router
  *
@@ -32,6 +33,7 @@ export const biometricRouter = router({
         consentGiven: z.boolean(),
       })
     )
+    .output(responseContracts["enroll"])
     .mutation(async ({ input, ctx }) => {
       return await biometricService.enrollPassenger(
         input.passengerId,
@@ -59,6 +61,7 @@ export const biometricRouter = router({
         deviceId: z.string().max(100).optional(),
       })
     )
+    .output(responseContracts["verify"])
     .mutation(async ({ input, ctx }) => {
       return await biometricService.verifyIdentity(
         input.passengerId,
@@ -85,6 +88,7 @@ export const biometricRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getBoardingToken"])
     .query(async ({ input, ctx }) => {
       return await biometricService.getBoardingToken(
         input.passengerId,
@@ -106,6 +110,7 @@ export const biometricRouter = router({
         passengerId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getMyEnrollment"])
     .query(async ({ input, ctx }) => {
       return await biometricService.getEnrollmentStatus(input.passengerId, {
         userId: ctx.user.id,
@@ -129,6 +134,7 @@ export const biometricRouter = router({
         biometricType: z.enum(["face", "fingerprint", "iris"]).optional(),
       })
     )
+    .output(responseContracts["revokeEnrollment"])
     .mutation(async ({ input, ctx }) => {
       return await biometricService.revokeEnrollment(
         input.passengerId,
@@ -151,6 +157,7 @@ export const biometricRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getFlightStats"])
     .query(async ({ input }) => {
       return await biometricService.getFlightBiometricStats(input.flightId);
     }),
@@ -168,6 +175,7 @@ export const biometricRouter = router({
         gateId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getGateStatus"])
     .query(async ({ input }) => {
       return await biometricService.getGateReadiness(input.gateId);
     }),
@@ -199,6 +207,7 @@ export const biometricRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getEvents"])
     .query(async ({ input }) => {
       return await biometricService.getBiometricEvents(input ?? undefined);
     }),
@@ -220,6 +229,7 @@ export const biometricRouter = router({
         firmwareVersion: z.string().max(50).optional(),
       })
     )
+    .output(responseContracts["configureGate"])
     .mutation(async ({ input }) => {
       return await biometricService.configureGate(input);
     }),

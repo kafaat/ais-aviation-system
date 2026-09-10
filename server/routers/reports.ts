@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/reports";
 /**
  * Reports Router
  *
@@ -35,6 +36,7 @@ export const reportsRouter = router({
         status: z.string().optional(),
       })
     )
+    .output(responseContracts["exportBookingsCSV"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -62,6 +64,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["exportRevenueCSV"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -88,6 +91,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["exportFlightPerformanceCSV"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -115,6 +119,7 @@ export const reportsRouter = router({
         status: z.string().optional(),
       })
     )
+    .output(responseContracts["generateBookingsPDF"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -143,6 +148,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["generateRevenuePDF"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -175,6 +181,7 @@ export const reportsRouter = router({
         status: z.string().optional(),
       })
     )
+    .output(responseContracts["exportBookingsExcel"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -204,6 +211,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["exportRevenueExcel"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -232,6 +240,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["exportFlightPerformanceExcel"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -260,6 +269,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["generateFlightPerformancePDF"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -291,6 +301,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["exportRefundsCSV"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -317,6 +328,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["exportRefundsExcel"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,
@@ -345,6 +357,7 @@ export const reportsRouter = router({
         endDate: z.string().optional(),
       })
     )
+    .output(responseContracts["generateRefundsPDF"])
     .mutation(async ({ input }) => {
       const filters = {
         startDate: input.startDate ? new Date(input.startDate) : undefined,

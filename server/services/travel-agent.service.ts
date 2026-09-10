@@ -1,3 +1,7 @@
+import { recordEvent } from "./outbox.service";
+import { assertTenantOperational, isTenantActive } from "./tenant.service";
+import { createBooking } from "./bookings.service";
+import { withTransactionalIdempotency } from "./idempotency-v2.service";
 /**
  * Travel Agent Service
  *
@@ -22,27 +26,16 @@ import {
   airports,
   airlines,
   type TravelAgent,
+  users,
 } from "../../drizzle/schema";
 import { createServiceLogger } from "../_core/logger";
 
 const log = createServiceLogger("travel-agent");
 
-function getAffectedRows(result: unknown): number {
-  if (Array.isArray(result)) {
-    const first = result[0];
-    if (first && typeof first === "object" && "affectedRows" in first) {
-      return Number((first as { affectedRows?: number }).affectedRows ?? 0);
-    }
-  }
-  if (result && typeof result === "object" && "rowsAffected" in result) {
-    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);
-  }
-  return 0;
-}
-
 // ============ Types ============
 
 export interface RegisterAgentInput {
+  ownerUserId?: number;
   agencyName: string;
   iataNumber: string;
   contactName: string;
@@ -68,6 +61,7 @@ export interface AgentSearchParams {
 }
 
 export interface AgentBookingInput {
+  idempotencyKey?: string;
   flightId: number;
   cabinClass: "economy" | "business";
   passengers: Array<{
@@ -175,8 +169,10 @@ export async function registerAgent(
   const apiSecret = generateApiSecret();
   const apiSecretHash = hashApiSecret(apiSecret);
 
+  if (input.ownerUserId) await validateAgentOwner(input.ownerUserId);
   // Create agent
   const result = await db.insert(travelAgents).values({
+    ownerUserId: input.ownerUserId,
     agencyName: input.agencyName,
     iataNumber: input.iataNumber,
     contactName: input.contactName,
@@ -307,7 +303,7 @@ export async function validateApiKey(
 export async function searchFlightsForAgent(
   agentId: number,
   params: AgentSearchParams
-): Promise<any[]> {
+) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -435,159 +431,178 @@ export async function createAgentBooking(
     throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
   }
 
-  // Check daily booking limit
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  const todayBookings = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(agentBookings)
-    .where(
-      and(
-        eq(agentBookings.agentId, agentId),
-        gte(agentBookings.createdAt, todayStart)
-      )
-    );
-
-  if ((todayBookings[0]?.count ?? 0) >= agent.dailyBookingLimit) {
+  if (!agent.isActive || !agent.ownerUserId)
     throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message: "Daily booking limit exceeded",
+      code: "PRECONDITION_FAILED",
+      message:
+        "Agency must have an active, verified account owner before booking",
     });
-  }
-
-  // Check monthly booking limit
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
-
-  const monthlyBookings = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(agentBookings)
-    .where(
-      and(
-        eq(agentBookings.agentId, agentId),
-        gte(agentBookings.createdAt, monthStart)
-      )
-    );
-
-  if ((monthlyBookings[0]?.count ?? 0) >= agent.monthlyBookingLimit) {
+  const owner = await validateAgentOwner(agent.ownerUserId);
+  const key = input.idempotencyKey ?? input.externalReference;
+  if (!key)
     throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message: "Monthly booking limit exceeded",
+      code: "BAD_REQUEST",
+      message: "An idempotency key or unique external reference is required",
     });
-  }
-
-  return db.transaction(async tx => {
-    const [flight] = await tx
-      .select()
-      .from(flights)
-      .where(eq(flights.id, input.flightId));
-
-    if (!flight) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-    }
-
-    const seatCount = input.passengers.length;
-    const pricePerSeat =
-      input.cabinClass === "economy"
-        ? flight.economyPrice
-        : flight.businessPrice;
-    const totalAmount = pricePerSeat * seatCount;
-    const commissionRate = parseFloat(String(agent.commissionRate));
-    const commissionAmount = Math.round((totalAmount * commissionRate) / 100);
-    const bookingReference = generateBookingReference();
-    const pnr = generateBookingReference();
-
-    const seatUpdate =
-      input.cabinClass === "economy"
-        ? await tx
-            .update(flights)
-            .set({
-              economyAvailable: sql`${flights.economyAvailable} - ${seatCount}`,
-            })
-            .where(
-              and(
-                eq(flights.id, input.flightId),
-                gte(flights.economyAvailable, seatCount)
-              )
+  return withTransactionalIdempotency({
+    scope: `agent.booking.${agentId}`,
+    key,
+    userId: owner.id,
+    request: input,
+    run: async tx => {
+      const [current] = await tx
+        .select()
+        .from(travelAgents)
+        .where(eq(travelAgents.id, agentId))
+        .limit(1)
+        .for("update");
+      if (!current?.isActive || current.ownerUserId !== owner.id)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Agency account changed",
+        });
+      const [currentOwner] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, owner.id))
+        .limit(1)
+        .for("share");
+      if (!currentOwner || currentOwner.tenantId !== owner.tenantId)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Agency owner changed; retry with the current account",
+        });
+      for (const [period, limit] of [
+        ["day", current.dailyBookingLimit],
+        ["month", current.monthlyBookingLimit],
+      ] as const) {
+        const since = new Date();
+        since.setUTCHours(0, 0, 0, 0);
+        if (period === "month") since.setUTCDate(1);
+        const [usage] = await tx
+          .select({ count: sql<number>`count(*)` })
+          .from(agentBookings)
+          .where(
+            and(
+              eq(agentBookings.agentId, agentId),
+              gte(agentBookings.createdAt, since)
             )
-        : await tx
-            .update(flights)
-            .set({
-              businessAvailable: sql`${flights.businessAvailable} - ${seatCount}`,
-            })
-            .where(
-              and(
-                eq(flights.id, input.flightId),
-                gte(flights.businessAvailable, seatCount)
-              )
-            );
-
-    if (getAffectedRows(seatUpdate) !== 1) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Not enough seats available",
-      });
-    }
-
-    const bookingResult = await tx.insert(bookings).values({
-      userId: 0,
-      flightId: input.flightId,
-      bookingReference,
-      pnr,
-      status: "pending",
-      totalAmount,
-      cabinClass: input.cabinClass,
-      numberOfPassengers: seatCount,
-    });
-    const bookingId =
-      (bookingResult as unknown as { insertId?: number }).insertId ??
-      Number(
-        (bookingResult as unknown as Array<{ insertId?: number }>)[0]?.insertId
+          );
+        if (Number(usage?.count ?? 0) >= limit)
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `${period} booking limit exceeded`,
+          });
+      }
+      const booking = await createBooking(
+        {
+          userId: owner.id,
+          tenantId: owner.tenantId,
+          flightId: input.flightId,
+          cabinClass: input.cabinClass,
+          passengers: input.passengers,
+          sessionId: `agent:${agentId}:${key}`,
+          idempotencyKey: `agent:${agentId}:${key}`,
+        },
+        tx
       );
-
-    if (!bookingId) {
-      throw new Error("Failed to create agent booking");
-    }
-
-    await tx.insert(agentBookings).values({
-      agentId,
-      bookingId,
-      commissionRate: String(commissionRate),
-      commissionAmount,
-      bookingAmount: totalAmount,
-      externalReference: input.externalReference,
-    });
-
-    await tx
-      .update(travelAgents)
-      .set({
-        totalBookings: sql`${travelAgents.totalBookings} + 1`,
-        totalRevenue: sql`${travelAgents.totalRevenue} + ${totalAmount}`,
-        totalCommission: sql`${travelAgents.totalCommission} + ${commissionAmount}`,
-      })
-      .where(eq(travelAgents.id, agentId));
-
-    log.info(
-      { agentId, bookingId, commission: commissionAmount },
-      "Agent booking created"
-    );
-
-    return { bookingId, bookingReference, commission: commissionAmount };
+      const commissionRate = Number(current.commissionRate);
+      const commission = Math.round(
+        (booking.totalAmount * commissionRate) / 100
+      );
+      await tx.insert(agentBookings).values({
+        agentId,
+        bookingId: booking.bookingId,
+        commissionRate: String(commissionRate),
+        commissionAmount: commission,
+        bookingAmount: booking.totalAmount,
+        externalReference: input.externalReference,
+      });
+      await tx
+        .update(travelAgents)
+        .set({
+          totalBookings: sql`${travelAgents.totalBookings} + 1`,
+          totalRevenue: sql`${travelAgents.totalRevenue} + ${booking.totalAmount}`,
+          totalCommission: sql`${travelAgents.totalCommission} + ${commission}`,
+        })
+        .where(eq(travelAgents.id, agentId));
+      return {
+        bookingId: booking.bookingId,
+        bookingReference: booking.bookingReference,
+        commission,
+      };
+    },
   });
 }
 
-/**
- * Generate a unique booking reference
- */
-function generateBookingReference(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let result = "";
-  for (let i = 0; i < 6; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+async function validateAgentOwner(ownerUserId: number) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  const [owner] = await database
+    .select()
+    .from(users)
+    .where(eq(users.id, ownerUserId))
+    .limit(1);
+  if (!owner)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Agency owner must be an existing user",
+    });
+  if (owner.tenantId != null && !(await isTenantActive(owner.tenantId)))
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Agency tenant is not active",
+    });
+  return owner;
+}
+
+/** Administration must explicitly link historical agencies; never use userId=0. */
+export async function assignAgentOwner(
+  agentId: number,
+  ownerUserId: number,
+  actorId: number
+) {
+  const database = await getDb();
+  if (!database) throw new Error("Database not available");
+  return database.transaction(async tx => {
+    const [agency] = await tx
+      .select()
+      .from(travelAgents)
+      .where(eq(travelAgents.id, agentId))
+      .limit(1)
+      .for("update");
+    if (!agency)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Agency not found" });
+    const [owner] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.id, ownerUserId))
+      .limit(1)
+      .for("share");
+    if (!owner)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Agency owner not found",
+      });
+    await assertTenantOperational(tx, owner.tenantId);
+    await tx
+      .update(travelAgents)
+      .set({ ownerUserId })
+      .where(eq(travelAgents.id, agentId));
+    await recordEvent(tx, {
+      aggregateType: "travel_agent",
+      aggregateId: agentId,
+      tenantId: owner.tenantId,
+      eventType: "travel_agent.owner_assigned",
+      payload: {
+        agentId,
+        previousOwnerId: agency.ownerUserId,
+        ownerUserId,
+        actorId,
+      },
+    });
+    return { success: true as const };
+  });
 }
 
 /**
@@ -596,7 +611,7 @@ function generateBookingReference(): string {
 export async function getAgentBookings(
   agentId: number,
   filters: BookingFilters = {}
-): Promise<{ bookings: any[]; total: number; page: number; limit: number }> {
+) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -929,7 +944,7 @@ export async function updateCommissionStatus(
 /**
  * Get all pending commissions (admin)
  */
-export async function getPendingCommissions(): Promise<any[]> {
+export async function getPendingCommissions() {
   const db = await getDb();
   if (!db)
     throw new TRPCError({

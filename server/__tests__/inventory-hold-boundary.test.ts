@@ -45,12 +45,20 @@ describe("inventory hold current state", () => {
     await expect(reserveSeats(fixture.db, 1, "economy", 1)).rejects.toThrow(
       "Insufficient"
     );
-    expect(fixture.lockedTables).toEqual(["flights", "inventory_locks"]);
+    expect(fixture.lockedTables).toEqual([
+      "flights",
+      "inventory_locks",
+      "seat_holds",
+    ]);
     fixture.lockedTables.length = 0;
     await expect(
       createInventoryLock(1, 1, "economy", "other", 9)
     ).rejects.toThrow("Only 0 seats");
-    expect(fixture.lockedTables).toEqual(["flights", "inventory_locks"]);
+    expect(fixture.lockedTables).toEqual([
+      "flights",
+      "inventory_locks",
+      "seat_holds",
+    ]);
     expect(fixture.rows("flights")[0].economyAvailable).toBe(1);
   });
   it("expires only elapsed active holds", async () => {

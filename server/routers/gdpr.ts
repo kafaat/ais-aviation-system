@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/gdpr";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import * as gdprService from "../services/gdpr.service";
@@ -14,14 +15,16 @@ export const gdprRouter = router({
    * Get user's current consent status
    * Returns all consent preferences and whether they need to be updated
    */
-  getConsentStatus: protectedProcedure.query(async ({ ctx }) => {
-    const requestContext = {
-      ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
-      userAgent: ctx.req.headers["user-agent"],
-    };
+  getConsentStatus: protectedProcedure
+    .output(responseContracts["getConsentStatus"])
+    .query(async ({ ctx }) => {
+      const requestContext = {
+        ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
+        userAgent: ctx.req.headers["user-agent"],
+      };
 
-    return await gdprService.getConsentStatus(ctx.user.id, requestContext);
-  }),
+      return await gdprService.getConsentStatus(ctx.user.id, requestContext);
+    }),
 
   /**
    * Update user's consent preferences
@@ -41,6 +44,7 @@ export const gdprRouter = router({
         personalizedContent: z.boolean().optional(),
       })
     )
+    .output(responseContracts["updateConsent"])
     .mutation(async ({ ctx, input }) => {
       const requestContext = {
         ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
@@ -58,14 +62,16 @@ export const gdprRouter = router({
    * Withdraw all consent (except essential cookies)
    * Useful for users who want to opt-out of everything at once
    */
-  withdrawAllConsent: protectedProcedure.mutation(async ({ ctx }) => {
-    const requestContext = {
-      ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
-      userAgent: ctx.req.headers["user-agent"],
-    };
+  withdrawAllConsent: protectedProcedure
+    .output(responseContracts["withdrawAllConsent"])
+    .mutation(async ({ ctx }) => {
+      const requestContext = {
+        ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
+        userAgent: ctx.req.headers["user-agent"],
+      };
 
-    return await gdprService.withdrawAllConsent(ctx.user.id, requestContext);
-  }),
+      return await gdprService.withdrawAllConsent(ctx.user.id, requestContext);
+    }),
 
   /**
    * Get consent change history
@@ -79,6 +85,7 @@ export const gdprRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getConsentHistory"])
     .query(async ({ ctx, input }) => {
       return await gdprService.getConsentHistory(
         ctx.user.id,
@@ -98,6 +105,7 @@ export const gdprRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["exportData"])
     .mutation(async ({ ctx, input }) => {
       const requestContext = {
         ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
@@ -121,6 +129,7 @@ export const gdprRouter = router({
         requestId: z.number(),
       })
     )
+    .output(responseContracts["getExportStatus"])
     .query(async ({ ctx, input }) => {
       return await gdprService.getExportStatus(ctx.user.id, input.requestId);
     }),
@@ -137,6 +146,7 @@ export const gdprRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getExportHistory"])
     .query(async ({ ctx, input }) => {
       return await gdprService.getExportHistory(
         ctx.user.id,
@@ -155,6 +165,7 @@ export const gdprRouter = router({
         deletionType: z.enum(["full", "anonymize"]).default("anonymize"),
       })
     )
+    .output(responseContracts["deleteAccount"])
     .mutation(async ({ ctx, input }) => {
       const requestContext = {
         ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
@@ -179,6 +190,7 @@ export const gdprRouter = router({
         confirmationToken: z.string().length(64),
       })
     )
+    .output(responseContracts["confirmDeletion"])
     .mutation(async ({ ctx, input }) => {
       const requestContext = {
         ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
@@ -196,46 +208,55 @@ export const gdprRouter = router({
    * Cancel account deletion request
    * Allows user to cancel pending deletion during grace period
    */
-  cancelDeletion: protectedProcedure.mutation(async ({ ctx }) => {
-    const requestContext = {
-      ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
-      userAgent: ctx.req.headers["user-agent"],
-    };
+  cancelDeletion: protectedProcedure
+    .output(responseContracts["cancelDeletion"])
+    .mutation(async ({ ctx }) => {
+      const requestContext = {
+        ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
+        userAgent: ctx.req.headers["user-agent"],
+      };
 
-    return await gdprService.cancelAccountDeletion(ctx.user.id, requestContext);
-  }),
+      return await gdprService.cancelAccountDeletion(
+        ctx.user.id,
+        requestContext
+      );
+    }),
 
   /**
    * Get account deletion status
    * Check if there's a pending deletion request
    */
-  getDeletionStatus: protectedProcedure.query(async ({ ctx }) => {
-    return await gdprService.getDeletionStatus(ctx.user.id);
-  }),
+  getDeletionStatus: protectedProcedure
+    .output(responseContracts["getDeletionStatus"])
+    .query(async ({ ctx }) => {
+      return await gdprService.getDeletionStatus(ctx.user.id);
+    }),
 
   /**
    * Get privacy dashboard data
    * Aggregated view of all GDPR-related user data
    */
-  getPrivacyDashboard: protectedProcedure.query(async ({ ctx }) => {
-    const requestContext = {
-      ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
-      userAgent: ctx.req.headers["user-agent"],
-    };
+  getPrivacyDashboard: protectedProcedure
+    .output(responseContracts["getPrivacyDashboard"])
+    .query(async ({ ctx }) => {
+      const requestContext = {
+        ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
+        userAgent: ctx.req.headers["user-agent"],
+      };
 
-    const [consentStatus, deletionStatus, exportHistory, consentHistory] =
-      await Promise.all([
-        gdprService.getConsentStatus(ctx.user.id, requestContext),
-        gdprService.getDeletionStatus(ctx.user.id),
-        gdprService.getExportHistory(ctx.user.id, 5),
-        gdprService.getConsentHistory(ctx.user.id, 10),
-      ]);
+      const [consentStatus, deletionStatus, exportHistory, consentHistory] =
+        await Promise.all([
+          gdprService.getConsentStatus(ctx.user.id, requestContext),
+          gdprService.getDeletionStatus(ctx.user.id),
+          gdprService.getExportHistory(ctx.user.id, 5),
+          gdprService.getConsentHistory(ctx.user.id, 10),
+        ]);
 
-    return {
-      consent: consentStatus,
-      deletion: deletionStatus,
-      recentExports: exportHistory,
-      recentConsentChanges: consentHistory,
-    };
-  }),
+      return {
+        consent: consentStatus,
+        deletion: deletionStatus,
+        recentExports: exportHistory,
+        recentConsentChanges: consentHistory,
+      };
+    }),
 });

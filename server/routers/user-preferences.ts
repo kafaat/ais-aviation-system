@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/user-preferences";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -14,9 +15,11 @@ export const userPreferencesRouter = router({
   /**
    * Get current user's preferences
    */
-  getMyPreferences: protectedProcedure.query(async ({ ctx }) => {
-    return await getUserPreferences(ctx.user.id);
-  }),
+  getMyPreferences: protectedProcedure
+    .output(responseContracts["getMyPreferences"])
+    .query(async ({ ctx }) => {
+      return await getUserPreferences(ctx.user.id);
+    }),
 
   /**
    * Update current user's preferences
@@ -50,6 +53,7 @@ export const userPreferencesRouter = router({
         smsNotifications: z.boolean().optional(),
       })
     )
+    .output(responseContracts["updateMyPreferences"])
     .mutation(async ({ ctx, input }) => {
       return await upsertUserPreferences(ctx.user.id, input);
     }),
@@ -57,17 +61,21 @@ export const userPreferencesRouter = router({
   /**
    * Delete current user's preferences
    */
-  deleteMyPreferences: protectedProcedure.mutation(async ({ ctx }) => {
-    await deleteUserPreferences(ctx.user.id);
-    return { success: true };
-  }),
+  deleteMyPreferences: protectedProcedure
+    .output(responseContracts["deleteMyPreferences"])
+    .mutation(async ({ ctx }) => {
+      await deleteUserPreferences(ctx.user.id);
+      return { success: true };
+    }),
 
   /**
    * Get saved passport info for quick booking
    */
-  getSavedPassport: protectedProcedure.query(async ({ ctx }) => {
-    return await getSavedPassportInfo(ctx.user.id);
-  }),
+  getSavedPassport: protectedProcedure
+    .output(responseContracts["getSavedPassport"])
+    .query(async ({ ctx }) => {
+      return await getSavedPassportInfo(ctx.user.id);
+    }),
 
   /**
    * Update saved passport info
@@ -80,6 +88,7 @@ export const userPreferencesRouter = router({
         nationality: z.string().optional(),
       })
     )
+    .output(responseContracts["updatePassport"])
     .mutation(async ({ ctx, input }) => {
       await updatePassportInfo(ctx.user.id, input);
       return { success: true };
@@ -88,9 +97,11 @@ export const userPreferencesRouter = router({
   /**
    * Get notification preferences
    */
-  getNotificationSettings: protectedProcedure.query(async ({ ctx }) => {
-    return await getNotificationPreferences(ctx.user.id);
-  }),
+  getNotificationSettings: protectedProcedure
+    .output(responseContracts["getNotificationSettings"])
+    .query(async ({ ctx }) => {
+      return await getNotificationPreferences(ctx.user.id);
+    }),
 
   /**
    * Update notification preferences
@@ -102,6 +113,7 @@ export const userPreferencesRouter = router({
         smsNotifications: z.boolean().optional(),
       })
     )
+    .output(responseContracts["updateNotificationSettings"])
     .mutation(async ({ ctx, input }) => {
       await updateNotificationPreferences(ctx.user.id, input);
       return { success: true };

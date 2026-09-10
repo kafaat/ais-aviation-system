@@ -26,10 +26,25 @@ import { getClientIp } from "../_core/middleware/user-rate-limit.middleware";
 afterEach(() => vi.clearAllMocks());
 describe("tenant and request boundaries", () => {
   it("scopes airline booking reads and rejects absent tenant context before DB access", async () => {
-    const rows = [
-      { id: 1, tenantId: 1 },
-      { id: 2, tenantId: 2 },
-    ];
+    const rows = [1, 2].map(id => ({
+      id,
+      tenantId: id,
+      bookingReference: `TEST0${id}`,
+      pnr: `PNR00${id}`,
+      status: "pending",
+      paymentStatus: "pending",
+      totalAmount: 10000,
+      cabinClass: "economy",
+      numberOfPassengers: 1,
+      createdAt: new Date(),
+      user: { name: "Fixture", email: null },
+      flight: {
+        flightNumber: "ZX1",
+        departureTime: new Date(),
+        origin: "ZZZ",
+        destination: "ZZY",
+      },
+    }));
     let selected = rows;
     const chain: any = {
       from: () => chain,
@@ -51,7 +66,9 @@ describe("tenant and request boundaries", () => {
         user: { id: 7, role, tenantId },
         tenantId,
       } as any);
-    expect(await caller(1).getAllBookings()).toEqual([rows[0]]);
+    expect(await caller(1).getAllBookings()).toEqual([
+      (({ tenantId: _tenant, ...dto }) => dto)(rows[0]),
+    ]);
     m.select.mockClear();
     await expect(caller(null).getAllBookings()).rejects.toMatchObject({
       code: "FORBIDDEN",

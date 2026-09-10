@@ -173,9 +173,14 @@ function StatusBadge({ status }: { status: string }) {
 function ETLStatusIndicator({
   status,
 }: {
-  status: "healthy" | "degraded" | "down";
+  status: "healthy" | "degraded" | "down" | "unknown";
 }) {
   const config = {
+    unknown: {
+      label: "غير معلوم",
+      color: "bg-gray-400",
+      icon: <Activity className="h-5 w-5 text-gray-500" />,
+    },
     healthy: {
       color: "bg-green-500",
       label: "Healthy",

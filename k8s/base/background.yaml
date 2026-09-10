@@ -21,11 +21,21 @@ spec:
             - { name: NODE_ENV, value: production }
           readinessProbe:
             exec:
-              command: ["test", "-f", "/tmp/ais-worker-ready"]
+              command:
+                [
+                  "node",
+                  "-e",
+                  "const fs=require('node:fs');try{process.exit(Date.now()-fs.statSync('/tmp/ais-worker-ready').mtimeMs<30000?0:1)}catch{process.exit(1)}",
+                ]
             periodSeconds: 5
           startupProbe:
             exec:
-              command: ["test", "-f", "/tmp/ais-worker-ready"]
+              command:
+                [
+                  "node",
+                  "-e",
+                  "const fs=require('node:fs');try{process.exit(Date.now()-fs.statSync('/tmp/ais-worker-ready').mtimeMs<30000?0:1)}catch{process.exit(1)}",
+                ]
             periodSeconds: 5
             failureThreshold: 30
 ---

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/flight-tracking.router";
 /**
  * Flight Tracking Router
  *
@@ -26,6 +27,7 @@ export const flightTrackingRouter = router({
         flightNumber: z.string().min(1).max(20),
       })
     )
+    .output(responseContracts["trackByNumber"])
     .query(async ({ input }) => {
       const data = await getFlightTrackingByNumber(input.flightNumber);
       if (!data) {
@@ -46,6 +48,7 @@ export const flightTrackingRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["trackById"])
     .query(async ({ input }) => {
       const data = await getFlightTrackingById(input.flightId);
       if (!data) {
@@ -60,9 +63,11 @@ export const flightTrackingRouter = router({
   /**
    * Get all currently active flights (for map view)
    */
-  activeFlights: publicProcedure.query(async () => {
-    return await getActiveFlights();
-  }),
+  activeFlights: publicProcedure
+    .output(responseContracts["activeFlights"])
+    .query(async () => {
+      return await getActiveFlights();
+    }),
 
   /**
    * Record flight position (admin/system only)
@@ -97,6 +102,7 @@ export const flightTrackingRouter = router({
         progressPercent: z.string().optional(),
       })
     )
+    .output(responseContracts["recordPosition"])
     .mutation(async ({ input }) => {
       const result = await recordFlightPosition(input);
       return { success: true, id: result.id };

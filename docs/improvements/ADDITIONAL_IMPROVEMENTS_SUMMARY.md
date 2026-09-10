@@ -1,3 +1,5 @@
+> Historical proposal. Do not append schema files or run `db:push` against deployed databases. Use `db:generate`, review the migration, then `db:migrate`. Active schemas are exported from `drizzle/schema.ts`; archived proposals are in `docs/architecture/schema-proposals/`.
+
 # ملخص التحسينات الإضافية - AIS v2.1
 
 **تاريخ الإنشاء:** 24 نوفمبر 2025  
@@ -298,8 +300,6 @@ initializeRedis();
 
 ```bash
 # دمج الـ schemas الجديدة
-cat drizzle/new-schemas/schema-i18n.ts >> drizzle/schema.ts
-cat drizzle/new-schemas/schema-analytics.ts >> drizzle/schema.ts
 
 # تطبيق على قاعدة البيانات
 pnpm db:push

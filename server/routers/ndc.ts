@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/ndc";
 import { z } from "zod";
 import {
   router,
@@ -133,6 +134,7 @@ export const ndcRouter = router({
         cabinClass: cabinClassEnum.describe("Preferred cabin class"),
       })
     )
+    .output(responseContracts["airShopping"])
     .query(async ({ input }) => {
       try {
         const offers = await ndcService.searchOffers({
@@ -180,6 +182,7 @@ export const ndcRouter = router({
         offerId: z.string().min(1).describe("NDC offer identifier"),
       })
     )
+    .output(responseContracts["offerPrice"])
     .query(async ({ input }) => {
       try {
         const pricing = await ndcService.getOfferPrice(input.offerId);
@@ -247,10 +250,12 @@ export const ndcRouter = router({
           ),
       })
     )
+    .output(responseContracts["createOrder"])
     .mutation(async ({ ctx, input }) => {
       try {
         const order = await ndcService.createOrder({
           userId: ctx.user.id,
+          tenantId: ctx.tenantId,
           offerId: input.offerId,
           passengers: input.passengers,
           contactInfo: input.contactInfo,
@@ -297,6 +302,7 @@ export const ndcRouter = router({
         orderId: z.string().min(1).describe("NDC order identifier"),
       })
     )
+    .output(responseContracts["retrieveOrder"])
     .query(async ({ ctx, input }) => {
       try {
         const order = await ndcService.getOrder(input.orderId);
@@ -354,6 +360,7 @@ export const ndcRouter = router({
         reason: z.string().min(1).max(1000).describe("Reason for cancellation"),
       })
     )
+    .output(responseContracts["cancelOrder"])
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await ndcService.cancelOrder({
@@ -441,6 +448,7 @@ export const ndcRouter = router({
           .describe("Order changes to apply"),
       })
     )
+    .output(responseContracts["changeOrder"])
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await ndcService.changeOrder({
@@ -497,6 +505,7 @@ export const ndcRouter = router({
           .describe("Ancillary services to add"),
       })
     )
+    .output(responseContracts["addServices"])
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await ndcService.addServices({
@@ -581,6 +590,7 @@ export const ndcRouter = router({
           .describe("Results per page (max 100)"),
       })
     )
+    .output(responseContracts["listOrders"])
     .query(async ({ input }) => {
       try {
         const result = await ndcService.listOrders({
@@ -625,6 +635,7 @@ export const ndcRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getOrderHistory"])
     .query(async ({ ctx }) => {
       try {
         const orders = await ndcService.getOrderHistory(ctx.user.id);
@@ -665,6 +676,7 @@ export const ndcRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["expireOffers"])
     .mutation(async () => {
       try {
         const result = await ndcService.expireOffers();
@@ -701,6 +713,7 @@ export const ndcRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getStatistics"])
     .query(async () => {
       try {
         const stats = await ndcService.getStatistics();

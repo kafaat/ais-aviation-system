@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/baggage";
 import { z } from "zod";
 import {
   publicProcedure,
@@ -41,6 +42,7 @@ export const baggageRouter = router({
         tagNumber: z.string().min(1).max(20),
       })
     )
+    .output(responseContracts["track"])
     .query(async ({ input }) => {
       try {
         const result = await baggageService.trackBaggage(input.tagNumber);
@@ -64,6 +66,7 @@ export const baggageRouter = router({
         tagNumber: z.string().min(1).max(20),
       })
     )
+    .output(responseContracts["getByTag"])
     .query(async ({ input }) => {
       const baggage = await baggageService.getBaggageByTag(input.tagNumber);
       if (!baggage) {
@@ -89,6 +92,7 @@ export const baggageRouter = router({
         specialHandling: z.string().max(255).optional(),
       })
     )
+    .output(responseContracts["register"])
     .mutation(async ({ input, ctx }) => {
       // Ownership check: only register baggage on your own booking (IDOR)
       await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
@@ -138,6 +142,7 @@ export const baggageRouter = router({
         bookingId: z.number(),
       })
     )
+    .output(responseContracts["getBookingBaggage"])
     .query(async ({ input, ctx }) => {
       // Ownership check: prevent reading another user's baggage (IDOR)
       await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
@@ -165,6 +170,7 @@ export const baggageRouter = router({
         passengerId: z.number(),
       })
     )
+    .output(responseContracts["getPassengerBaggage"])
     .query(async ({ input, ctx }) => {
       // Ownership check: passenger must belong to a booking owned by caller (IDOR)
       await assertPassengerOwnership(
@@ -201,6 +207,7 @@ export const baggageRouter = router({
         contactPhone: z.string().max(20).optional(),
       })
     )
+    .output(responseContracts["reportLost"])
     .mutation(async ({ input }) => {
       try {
         const result = await baggageService.reportLostBaggage({
@@ -227,9 +234,11 @@ export const baggageRouter = router({
    * Get status labels
    * Public endpoint for UI
    */
-  getStatusLabels: publicProcedure.query(() => {
-    return baggageService.BAGGAGE_STATUS_LABELS;
-  }),
+  getStatusLabels: publicProcedure
+    .output(responseContracts["getStatusLabels"])
+    .query(() => {
+      return baggageService.BAGGAGE_STATUS_LABELS;
+    }),
 
   // =================== Admin Endpoints ===================
 
@@ -245,6 +254,7 @@ export const baggageRouter = router({
         notes: z.string().max(500).optional(),
       })
     )
+    .output(responseContracts["adminUpdateStatus"])
     .mutation(async ({ input, ctx }) => {
       try {
         const result = await baggageService.updateBaggageStatus({
@@ -280,6 +290,7 @@ export const baggageRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["adminGetAll"])
     .query(async ({ input }) => {
       try {
         const baggage = await baggageService.getAllBaggage(input);
@@ -297,19 +308,21 @@ export const baggageRouter = router({
   /**
    * Admin: Get lost baggage
    */
-  adminGetLost: adminProcedure.query(async () => {
-    try {
-      const baggage = await baggageService.getLostBaggage();
-      return baggage;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to get lost baggage";
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message,
-      });
-    }
-  }),
+  adminGetLost: adminProcedure
+    .output(responseContracts["adminGetLost"])
+    .query(async () => {
+      try {
+        const baggage = await baggageService.getLostBaggage();
+        return baggage;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Failed to get lost baggage";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message,
+        });
+      }
+    }),
 
   /**
    * Admin: Mark baggage as found
@@ -322,6 +335,7 @@ export const baggageRouter = router({
         notes: z.string().max(500).optional(),
       })
     )
+    .output(responseContracts["adminMarkFound"])
     .mutation(async ({ input, ctx }) => {
       try {
         const result = await baggageService.markBaggageFound({
@@ -347,21 +361,23 @@ export const baggageRouter = router({
   /**
    * Admin: Get baggage statistics
    */
-  adminGetStats: adminProcedure.query(async () => {
-    try {
-      const stats = await baggageService.getBaggageStats();
-      return stats;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to get baggage statistics";
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message,
-      });
-    }
-  }),
+  adminGetStats: adminProcedure
+    .output(responseContracts["adminGetStats"])
+    .query(async () => {
+      try {
+        const stats = await baggageService.getBaggageStats();
+        return stats;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to get baggage statistics";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message,
+        });
+      }
+    }),
 
   /**
    * Admin: Get baggage by status
@@ -372,6 +388,7 @@ export const baggageRouter = router({
         status: baggageStatusEnum,
       })
     )
+    .output(responseContracts["adminGetByStatus"])
     .query(async ({ input }) => {
       try {
         const baggage = await baggageService.getBaggageByStatus(input.status);

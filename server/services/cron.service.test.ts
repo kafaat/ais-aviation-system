@@ -17,11 +17,21 @@ vi.mock("node-cron", () => ({
 }));
 
 vi.mock("../db");
+vi.mock("./scheduled-task.service", () => ({
+  runScheduledTask: vi.fn(async (_name, _tick, run) => {
+    await run();
+    return true;
+  }),
+}));
 vi.mock("./outbox.service", () => ({
   runOutboxRelay: vi.fn(() => Promise.resolve({ published: 0, failed: 0 })),
 }));
 
-import { startCronJobs, stopCronJobs } from "./cron.service";
+import {
+  startCronJobs,
+  stopCronJobs,
+  PERIODIC_JOB_CATALOG,
+} from "./cron.service";
 import { runOutboxRelay } from "./outbox.service";
 
 beforeEach(() => {
@@ -37,14 +47,22 @@ describe("cron.service scheduler", () => {
   it("schedules the outbox relay every minute and lock cleanup every 5 minutes", () => {
     startCronJobs();
     expect(scheduled.map(t => t.expr).sort()).toEqual(
-      ["* * * * *", "*/5 * * * *"].sort()
+      [
+        "* * * * *",
+        "*/5 * * * *",
+        "* * * * *",
+        "0 * * * *",
+        "0 0 * * *",
+        "*/15 * * * *",
+        "* * * * *",
+      ].sort()
     );
   });
 
   it("is idempotent — a second start does not double-schedule", () => {
     startCronJobs();
     startCronJobs();
-    expect(scheduled).toHaveLength(2);
+    expect(scheduled).toHaveLength(7);
   });
 
   it("stop() halts every scheduled task and allows a clean restart", async () => {
@@ -54,12 +72,15 @@ describe("cron.service scheduler", () => {
     for (const t of tasks) expect(t.stop).toHaveBeenCalledTimes(1);
 
     startCronJobs();
-    expect(scheduled).toHaveLength(4); // two new tasks after restart
+    expect(scheduled).toHaveLength(14); // every task can restart
   });
 
   it("the relay tick actually invokes the outbox relay", async () => {
     startCronJobs();
-    const relayTask = scheduled.find(t => t.expr === "* * * * *")!;
+    const relayTask =
+      scheduled[
+        PERIODIC_JOB_CATALOG.findIndex(j => j.name === "relayOutboxEvents")
+      ];
     await relayTask.fn();
     expect(runOutboxRelay).toHaveBeenCalledTimes(1);
   });
@@ -73,7 +94,10 @@ describe("cron.service scheduler", () => {
         })
     );
     startCronJobs();
-    const relayTask = scheduled.find(t => t.expr === "* * * * *")!;
+    const relayTask =
+      scheduled[
+        PERIODIC_JOB_CATALOG.findIndex(j => j.name === "relayOutboxEvents")
+      ];
 
     const first = relayTask.fn(); // in-flight
     await relayTask.fn(); // overlapping tick → skipped

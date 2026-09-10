@@ -50,6 +50,7 @@ async function event(type: string, object: any) {
 }
 beforeEach(() => {
   fixture = transactionMemory({
+    tenants: [{ id: 3, status: "active" }],
     bookings: [
       {
         id: 7,

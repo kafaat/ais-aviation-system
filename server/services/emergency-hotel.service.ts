@@ -1,50 +1,22 @@
+export { emergencyHotels, emergencyHotelBookings } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { flights, airports } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte } from "drizzle-orm";
 import {
-  int,
-  mysqlEnum,
-  mysqlTable,
-  varchar,
-  timestamp,
-  boolean,
-  text,
-  datetime,
-  decimal,
-  index,
-} from "drizzle-orm/mysql-core";
+  flights,
+  airports,
+  emergencyHotels,
+  emergencyHotelBookings,
+} from "../../drizzle/schema";
+import { eq, and, sql, gte, lte } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
-// Inline Drizzle Table Schemas
+// Canonical Drizzle Table Schemas
 // ---------------------------------------------------------------------------
 
 /**
  * emergencyHotels: id, name, airportId, address, phone, email, starRating,
  * standardRate (int SAR cents), distanceKm, hasTransport, isActive, createdAt
  */
-export const emergencyHotels = mysqlTable(
-  "emergency_hotels",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    name: varchar("name", { length: 255 }).notNull(),
-    airportId: int("airportId").notNull(),
-    address: varchar("address", { length: 500 }).notNull(),
-    phone: varchar("phone", { length: 50 }).notNull(),
-    email: varchar("email", { length: 255 }).notNull(),
-    starRating: int("starRating").notNull(),
-    /** Nightly standard rate in SAR cents (100 = 1 SAR) */
-    standardRate: int("standardRate").notNull(),
-    distanceKm: decimal("distanceKm", { precision: 6, scale: 2 }).notNull(),
-    hasTransport: boolean("hasTransport").default(false).notNull(),
-    isActive: boolean("isActive").default(true).notNull(),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    airportIdx: index("eh_airport_idx").on(table.airportId),
-    activeIdx: index("eh_active_idx").on(table.isActive),
-  })
-);
 
 /**
  * emergencyHotelBookings: id, hotelId, bookingId, flightId, passengerId,
@@ -53,48 +25,6 @@ export const emergencyHotels = mysqlTable(
  * transportIncluded(bool), status(reserved/checked_in/checked_out/cancelled/no_show),
  * confirmationNumber, notes, createdAt, updatedAt
  */
-export const emergencyHotelBookings = mysqlTable(
-  "emergency_hotel_bookings",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    hotelId: int("hotelId").notNull(),
-    bookingId: int("bookingId").notNull(),
-    flightId: int("flightId").notNull(),
-    passengerId: int("passengerId").notNull(),
-    roomType: mysqlEnum("roomType", ["standard", "suite"])
-      .default("standard")
-      .notNull(),
-    checkIn: datetime("checkIn").notNull(),
-    checkOut: datetime("checkOut").notNull(),
-    /** SAR cents */
-    nightlyRate: int("nightlyRate").notNull(),
-    /** SAR cents */
-    totalCost: int("totalCost").notNull(),
-    mealIncluded: boolean("mealIncluded").default(true).notNull(),
-    transportIncluded: boolean("transportIncluded").default(false).notNull(),
-    status: mysqlEnum("status", [
-      "reserved",
-      "checked_in",
-      "checked_out",
-      "cancelled",
-      "no_show",
-    ])
-      .default("reserved")
-      .notNull(),
-    confirmationNumber: varchar("confirmationNumber", { length: 20 }).notNull(),
-    notes: text("notes"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  },
-  table => ({
-    hotelIdx: index("ehb_hotel_idx").on(table.hotelId),
-    bookingIdx: index("ehb_booking_idx").on(table.bookingId),
-    flightIdx: index("ehb_flight_idx").on(table.flightId),
-    passengerIdx: index("ehb_passenger_idx").on(table.passengerId),
-    statusIdx: index("ehb_status_idx").on(table.status),
-    confirmationIdx: index("ehb_confirmation_idx").on(table.confirmationNumber),
-  })
-);
 
 // Inferred types
 export type EmergencyHotel = typeof emergencyHotels.$inferSelect;
@@ -192,7 +122,8 @@ export async function bookHotelRoom(input: {
       .select()
       .from(emergencyHotels)
       .where(eq(emergencyHotels.id, input.hotelId))
-      .limit(1);
+      .limit(1)
+      .for("share");
 
     if (!hotel)
       throw new TRPCError({ code: "NOT_FOUND", message: "Hotel not found" });
@@ -258,7 +189,8 @@ export async function cancelHotelBooking(hotelBookingId: number) {
       .select()
       .from(emergencyHotelBookings)
       .where(eq(emergencyHotelBookings.id, hotelBookingId))
-      .limit(1);
+      .limit(1)
+      .for("update");
 
     if (!existing)
       throw new TRPCError({

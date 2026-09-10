@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 /**
  * Data Warehouse Export Service
  *
@@ -14,8 +15,10 @@ import {
   airports,
   airlines,
   users,
+  warehouseExports,
+  warehouseSchedules,
 } from "../../drizzle/schema";
-import { eq, and, gte, lte, desc, sql, gt } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, gt, getTableColumns } from "drizzle-orm";
 
 // ============================================================================
 // Types
@@ -46,9 +49,10 @@ export interface ExportOptions {
   lastExportTimestamp?: Date;
 }
 
-/** In-memory representation of a data warehouse export record */
+/** Persistent representation of a data warehouse export record */
 export interface DataWarehouseExport {
   id: number;
+  checksum: string | null;
   exportType: ExportType;
   dateRangeStart: Date;
   dateRangeEnd: Date;
@@ -63,9 +67,10 @@ export interface DataWarehouseExport {
   errorMessage?: string | null;
 }
 
-/** In-memory representation of a scheduled export */
+/** Persistent representation of a scheduled export */
 export interface DataWarehouseSchedule {
   id: number;
+  createdBy: number;
   name: string;
   exportType: ExportType;
   frequency: ScheduleFrequency;
@@ -102,14 +107,16 @@ export interface ExportResult {
 }
 
 // ============================================================================
-// In-memory store (backed by DB in production, in-memory for portability)
+// Persistent export metadata and bounded content, shared by all replicas.
 // ============================================================================
-
-let exportIdCounter = 1;
-const exportsStore: DataWarehouseExport[] = [];
-
-let scheduleIdCounter = 1;
-const schedulesStore: DataWarehouseSchedule[] = [];
+const { content: _contentColumn, ...exportColumns } =
+  getTableColumns(warehouseExports);
+async function warehouseDb() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db;
+}
+const MAX_EXPORT_BYTES = 8 * 1024 * 1024;
 
 // ============================================================================
 // Export: Bookings Data
@@ -186,9 +193,10 @@ export async function exportBookingsData(
     .limit(50000);
 
   if (results.length === 50000) {
-    console.warn(
-      "[DataWarehouse] exportBookingsData result count equals the 50000 limit — results may be truncated"
-    );
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Export reached its row limit; narrow the date range",
+    });
   }
 
   const data = formatExportData(
@@ -327,9 +335,10 @@ export async function exportFlightsData(
     .limit(50000);
 
   if (results.length === 50000) {
-    console.warn(
-      "[DataWarehouse] exportFlightsData result count equals the 50000 limit — results may be truncated"
-    );
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Export reached its row limit; narrow the date range",
+    });
   }
 
   const processedRows = results.map(row => {
@@ -586,9 +595,10 @@ export async function exportCustomerData(
     .limit(50000);
 
   if (results.length === 50000) {
-    console.warn(
-      "[DataWarehouse] exportCustomerData result count equals the 50000 limit — results may be truncated"
-    );
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Export reached its row limit; narrow the date range",
+    });
   }
 
   const headers = [
@@ -760,7 +770,7 @@ export function generateETLManifest(
   exportRecords: DataWarehouseExport[]
 ): ETLManifest {
   const completedExports = exportRecords.filter(
-    e => e.status === "completed" && e.filePath
+    e => e.status === "completed" && e.filePath && e.checksum
   );
 
   const totalRecords = completedExports.reduce(
@@ -781,7 +791,7 @@ export function generateETLManifest(
       fileSize: e.fileSize,
       dateRangeStart: e.dateRangeStart.toISOString(),
       dateRangeEnd: e.dateRangeEnd.toISOString(),
-      checksum: generateChecksum(e),
+      checksum: e.checksum!,
     })),
     totalRecords,
     totalSize,
@@ -801,25 +811,49 @@ export async function createExportJob(
   format: ExportFormat,
   createdBy: number,
   incremental: boolean = false,
-  lastExportTimestamp?: Date
+  lastExportTimestamp?: Date,
+  requestKey?: string
 ): Promise<DataWarehouseExport> {
-  const exportRecord: DataWarehouseExport = {
-    id: exportIdCounter++,
-    exportType,
-    dateRangeStart: dateRange.startDate,
-    dateRangeEnd: dateRange.endDate,
-    format,
-    status: "pending",
-    filePath: null,
-    recordCount: 0,
-    fileSize: 0,
-    createdBy,
-    createdAt: new Date(),
-    completedAt: null,
+  const db = await warehouseDb();
+  if (
+    !Number.isFinite(dateRange.startDate.getTime()) ||
+    !Number.isFinite(dateRange.endDate.getTime()) ||
+    dateRange.startDate > dateRange.endDate
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid export date range",
+    });
+  const [created] = await db
+    .insert(warehouseExports)
+    .values({
+      exportType,
+      format,
+      createdBy,
+      requestKey,
+      dateRangeStart: dateRange.startDate,
+      dateRangeEnd: dateRange.endDate,
+      status: "processing",
+    })
+    .onDuplicateKeyUpdate({ set: { id: sql`${warehouseExports.id}` } });
+  const [exportRecord] = await db
+    .select(exportColumns)
+    .from(warehouseExports)
+    .where(
+      requestKey
+        ? eq(warehouseExports.requestKey, requestKey)
+        : eq(warehouseExports.id, created.insertId)
+    )
+    .limit(1);
+  if (exportRecord.status === "completed") return exportRecord;
+  dateRange = {
+    startDate: exportRecord.dateRangeStart,
+    endDate: exportRecord.dateRangeEnd,
   };
-
-  exportsStore.push(exportRecord);
-
+  await db
+    .update(warehouseExports)
+    .set({ status: "processing", errorMessage: null })
+    .where(eq(warehouseExports.id, exportRecord.id));
   // Process the export
   try {
     exportRecord.status = "processing";
@@ -856,129 +890,143 @@ export async function createExportJob(
         });
     }
 
-    const extension = format === "jsonl" ? "jsonl" : format;
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    exportRecord.filePath = `exports/${exportType}/${exportType}-${timestamp}.${extension}`;
-    exportRecord.recordCount = result.recordCount;
-    exportRecord.fileSize = result.fileSize;
-    exportRecord.status = "completed";
-    exportRecord.completedAt = new Date();
+    const bytes = Buffer.byteLength(result.data, "utf8");
+    if (bytes > MAX_EXPORT_BYTES)
+      throw new Error("Export exceeds 8 MiB; select a smaller date range");
+    const checksum = createHash("sha256")
+      .update(result.data, "utf8")
+      .digest("hex");
+    await db
+      .update(warehouseExports)
+      .set({
+        content: result.data,
+        checksum,
+        filePath: `/api/data-warehouse/download/${exportRecord.id}`,
+        recordCount: result.recordCount,
+        fileSize: bytes,
+        status: "completed",
+        completedAt: new Date(),
+      })
+      .where(eq(warehouseExports.id, exportRecord.id));
   } catch (error) {
-    exportRecord.status = "failed";
-    exportRecord.errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
+    await db
+      .update(warehouseExports)
+      .set({
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : "Export failed",
+      })
+      .where(eq(warehouseExports.id, exportRecord.id));
   }
-
-  return exportRecord;
+  return (await getExportJobById(exportRecord.id))!;
 }
 
 /**
  * Get a list of export jobs with pagination.
  */
-export function getExportJobs(
-  page: number = 1,
-  limit: number = 20,
+export async function getExportJobs(
+  page = 1,
+  limit = 20,
   exportType?: ExportType,
   status?: ExportStatus
-): {
-  exports: DataWarehouseExport[];
-  total: number;
-  page: number;
-  limit: number;
-} {
-  let filtered = [...exportsStore];
-
-  if (exportType) {
-    filtered = filtered.filter(e => e.exportType === exportType);
-  }
-  if (status) {
-    filtered = filtered.filter(e => e.status === status);
-  }
-
-  // Sort by createdAt descending
-  filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-  const total = filtered.length;
-  const start = (page - 1) * limit;
-  const paged = filtered.slice(start, start + limit);
-
-  return { exports: paged, total, page, limit };
+) {
+  const db = await warehouseDb();
+  page = Math.max(1, Math.floor(page));
+  limit = Math.min(100, Math.max(1, Math.floor(limit)));
+  const filter = and(
+    exportType ? eq(warehouseExports.exportType, exportType) : undefined,
+    status ? eq(warehouseExports.status, status) : undefined
+  );
+  const [count] = await db
+    .select({ total: sql<number>`count(*)` })
+    .from(warehouseExports)
+    .where(filter);
+  const exports = await db
+    .select(exportColumns)
+    .from(warehouseExports)
+    .where(filter)
+    .orderBy(desc(warehouseExports.createdAt))
+    .limit(limit)
+    .offset((page - 1) * limit);
+  return { exports, total: Number(count?.total ?? 0), page, limit };
 }
-
-/**
- * Get a single export job by ID.
- */
-export function getExportJobById(id: number): DataWarehouseExport | undefined {
-  return exportsStore.find(e => e.id === id);
+export async function getExportJobById(
+  id: number
+): Promise<DataWarehouseExport | undefined> {
+  const db = await warehouseDb();
+  const [record] = await db
+    .select(exportColumns)
+    .from(warehouseExports)
+    .where(eq(warehouseExports.id, id))
+    .limit(1);
+  return record;
 }
-
-/**
- * Get download URL for a completed export.
- */
-export function getExportDownloadUrl(id: number): string | null {
-  const exportRecord = exportsStore.find(e => e.id === id);
+export async function getExportDownloadUrl(id: number): Promise<string | null> {
+  const record = await getExportJobById(id);
+  return record?.status === "completed" && record.checksum
+    ? record.filePath
+    : null;
+}
+export async function readExportContent(id: number) {
+  const db = await warehouseDb();
+  const [record] = await db
+    .select()
+    .from(warehouseExports)
+    .where(
+      and(eq(warehouseExports.id, id), eq(warehouseExports.status, "completed"))
+    )
+    .limit(1);
+  if (!record || record.content == null || !record.checksum)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Export content unavailable",
+    });
   if (
-    !exportRecord ||
-    exportRecord.status !== "completed" ||
-    !exportRecord.filePath
-  ) {
-    return null;
-  }
-  return `/api/data-warehouse/download/${exportRecord.filePath}`;
+    createHash("sha256").update(record.content).digest("hex") !==
+    record.checksum
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Export integrity check failed",
+    });
+  return {
+    content: record.content,
+    format: record.format,
+    checksum: record.checksum,
+  };
 }
 
-// ============================================================================
-// Schedule Management
-// ============================================================================
-
-/**
- * Create a scheduled export.
- */
-export function createSchedule(input: {
+export async function createSchedule(input: {
   name: string;
   exportType: ExportType;
   frequency: ScheduleFrequency;
   format: ExportFormat;
+  createdBy: number;
   config?: Record<string, unknown>;
-}): DataWarehouseSchedule {
-  const nextRunAt = calculateNextRunAt(input.frequency);
-
-  const schedule: DataWarehouseSchedule = {
-    id: scheduleIdCounter++,
-    name: input.name,
-    exportType: input.exportType,
-    frequency: input.frequency,
-    format: input.format,
-    lastRunAt: null,
-    nextRunAt,
-    isActive: true,
-    config: input.config || {},
-    createdAt: new Date(),
-  };
-
-  schedulesStore.push(schedule);
+}): Promise<DataWarehouseSchedule> {
+  const db = await warehouseDb();
+  const [created] = await db.insert(warehouseSchedules).values({
+    ...input,
+    config: input.config ?? {},
+    nextRunAt: calculateNextRunAt(input.frequency),
+  });
+  const [schedule] = await db
+    .select()
+    .from(warehouseSchedules)
+    .where(eq(warehouseSchedules.id, created.insertId))
+    .limit(1);
   return schedule;
 }
-
-/**
- * Get all scheduled exports.
- */
-export function getSchedules(
-  activeOnly: boolean = false
-): DataWarehouseSchedule[] {
-  let schedules = [...schedulesStore];
-  if (activeOnly) {
-    schedules = schedules.filter(s => s.isActive);
-  }
-  return schedules.sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-  );
+export async function getSchedules(
+  activeOnly = false
+): Promise<DataWarehouseSchedule[]> {
+  const db = await warehouseDb();
+  return db
+    .select()
+    .from(warehouseSchedules)
+    .where(activeOnly ? eq(warehouseSchedules.isActive, true) : undefined)
+    .orderBy(desc(warehouseSchedules.createdAt));
 }
-
-/**
- * Update a scheduled export.
- */
-export function updateSchedule(
+export async function updateSchedule(
   id: number,
   updates: Partial<
     Pick<
@@ -986,107 +1034,123 @@ export function updateSchedule(
       "name" | "frequency" | "format" | "isActive" | "config"
     >
   >
-): DataWarehouseSchedule | null {
-  const schedule = schedulesStore.find(s => s.id === id);
-  if (!schedule) return null;
-
-  if (updates.name !== undefined) schedule.name = updates.name;
-  if (updates.frequency !== undefined) {
-    schedule.frequency = updates.frequency;
-    schedule.nextRunAt = calculateNextRunAt(updates.frequency);
-  }
-  if (updates.format !== undefined) schedule.format = updates.format;
-  if (updates.isActive !== undefined) schedule.isActive = updates.isActive;
-  if (updates.config !== undefined) schedule.config = updates.config;
-
-  return schedule;
+) {
+  const db = await warehouseDb();
+  await db
+    .update(warehouseSchedules)
+    .set({
+      ...updates,
+      ...(updates.frequency
+        ? { nextRunAt: calculateNextRunAt(updates.frequency) }
+        : {}),
+    })
+    .where(eq(warehouseSchedules.id, id));
+  const [schedule] = await db
+    .select()
+    .from(warehouseSchedules)
+    .where(eq(warehouseSchedules.id, id))
+    .limit(1);
+  return schedule ?? null;
 }
-
-/**
- * Delete a scheduled export.
- */
-export function deleteSchedule(id: number): boolean {
-  const index = schedulesStore.findIndex(s => s.id === id);
-  if (index === -1) return false;
-  schedulesStore.splice(index, 1);
-  return true;
+export async function deleteSchedule(id: number) {
+  const db = await warehouseDb();
+  const [result] = await db
+    .delete(warehouseSchedules)
+    .where(eq(warehouseSchedules.id, id));
+  return result.affectedRows === 1;
 }
-
-// ============================================================================
-// ETL Pipeline Status
-// ============================================================================
-
-/**
- * Get overall ETL pipeline health status.
- */
-export function getETLPipelineStatus(): {
-  status: "healthy" | "degraded" | "down";
-  totalExports: number;
-  completedExports: number;
-  failedExports: number;
-  processingExports: number;
-  activeSchedules: number;
-  lastExportAt: string | null;
-  recentFailures: Array<{
-    id: number;
-    exportType: ExportType;
-    errorMessage: string | null;
-    createdAt: string;
-  }>;
-} {
-  const totalExports = exportsStore.length;
-  const completedExports = exportsStore.filter(
-    e => e.status === "completed"
-  ).length;
-  const failedExports = exportsStore.filter(e => e.status === "failed").length;
-  const processingExports = exportsStore.filter(
-    e => e.status === "processing"
-  ).length;
-  const activeSchedules = schedulesStore.filter(s => s.isActive).length;
-
-  // Find the last completed export
-  const completedSorted = exportsStore
-    .filter(
-      (e): e is DataWarehouseExport & { completedAt: Date } =>
-        e.completedAt !== null
-    )
-    .sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
-  const lastExportAt =
-    completedSorted.length > 0
-      ? completedSorted[0].completedAt.toISOString()
-      : null;
-
-  // Recent failures (last 5)
-  const recentFailures = exportsStore
-    .filter(e => e.status === "failed")
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 5)
-    .map(e => ({
+export async function getETLPipelineStatus() {
+  const db = await warehouseDb();
+  const counts = await db
+    .select({ status: warehouseExports.status, count: sql<number>`count(*)` })
+    .from(warehouseExports)
+    .groupBy(warehouseExports.status);
+  const count = (status: ExportStatus) =>
+    Number(counts.find(r => r.status === status)?.count ?? 0);
+  const totalExports = counts.reduce((sum, row) => sum + Number(row.count), 0);
+  const recent = await getExportJobs(1, 5, undefined, "failed");
+  const [latest] = await db
+    .select({ completedAt: warehouseExports.completedAt })
+    .from(warehouseExports)
+    .where(eq(warehouseExports.status, "completed"))
+    .orderBy(desc(warehouseExports.completedAt))
+    .limit(1);
+  return {
+    status: !totalExports
+      ? ("unknown" as const)
+      : count("failed") === totalExports
+        ? ("down" as const)
+        : count("failed") > 0
+          ? ("degraded" as const)
+          : ("healthy" as const),
+    totalExports,
+    completedExports: count("completed"),
+    failedExports: count("failed"),
+    processingExports: count("processing"),
+    activeSchedules: (await getSchedules(true)).length,
+    lastExportAt: latest?.completedAt?.toISOString() ?? null,
+    recentFailures: recent.exports.map(e => ({
       id: e.id,
       exportType: e.exportType,
-      errorMessage: e.errorMessage ?? null,
+      errorMessage: e.errorMessage,
       createdAt: e.createdAt.toISOString(),
-    }));
-
-  // Determine overall status
-  let status: "healthy" | "degraded" | "down" = "healthy";
-  if (failedExports > 0 && failedExports < totalExports) {
-    status = "degraded";
-  }
-  if (totalExports > 0 && failedExports === totalExports) {
-    status = "down";
-  }
-
-  return {
-    status,
-    totalExports,
-    completedExports,
-    failedExports,
-    processingExports,
-    activeSchedules,
-    lastExportAt,
-    recentFailures,
+    })),
   };
+}
+
+/** Called by the durable scheduled-task coordinator; errors leave the due date retryable. */
+export async function processScheduledExports() {
+  const db = await warehouseDb();
+  const { isAdmin } = await import("./rbac.service");
+  const now = new Date();
+  for (const schedule of await getSchedules(true)) {
+    if (schedule.nextRunAt > now) continue;
+    const [owner] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, schedule.createdBy))
+      .limit(1);
+    if (!owner || !isAdmin(owner.role))
+      throw new Error(
+        `Export schedule ${schedule.id} requires an active administrator owner`
+      );
+    const startDate =
+      schedule.lastRunAt ??
+      new Date(
+        now.getTime() -
+          (schedule.frequency === "daily"
+            ? 1
+            : schedule.frequency === "weekly"
+              ? 7
+              : 31) *
+            86400000
+      );
+    const result = await createExportJob(
+      schedule.exportType,
+      { startDate, endDate: now },
+      schedule.format,
+      schedule.createdBy,
+      false,
+      undefined,
+      `schedule:${schedule.id}:${schedule.nextRunAt.toISOString()}`
+    );
+    if (result.status !== "completed")
+      throw new Error(
+        `Scheduled export ${schedule.id} failed: ${result.errorMessage}`
+      );
+    await db
+      .update(warehouseSchedules)
+      .set({
+        lastRunAt: result.dateRangeEnd,
+        nextRunAt: calculateNextRunAt(schedule.frequency),
+      })
+      .where(
+        and(
+          eq(warehouseSchedules.id, schedule.id),
+          eq(warehouseSchedules.nextRunAt, schedule.nextRunAt)
+        )
+      );
+  }
 }
 
 // ============================================================================
@@ -1198,14 +1262,3 @@ function calculateNextRunAt(frequency: ScheduleFrequency): Date {
 /**
  * Generate a simple checksum string for an export record.
  */
-function generateChecksum(exportRecord: DataWarehouseExport): string {
-  const input = `${exportRecord.id}-${exportRecord.exportType}-${exportRecord.recordCount}-${exportRecord.fileSize}-${exportRecord.completedAt?.toISOString()}`;
-  // Simple hash: convert string to a hex-like representation
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const chr = input.charCodeAt(i);
-    hash = (hash << 5) - hash + chr;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(16).padStart(8, "0");
-}

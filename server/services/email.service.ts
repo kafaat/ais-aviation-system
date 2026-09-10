@@ -167,6 +167,7 @@ export interface RefundConfirmationData {
 }
 
 export interface CheckInReminderData {
+  idempotencyKey?: string;
   passengerName: string;
   passengerEmail: string;
   bookingReference: string;
@@ -1046,6 +1047,7 @@ export async function sendCheckInReminder(
     const lang = data.language || "ar";
     const _dir = lang === "ar" ? "rtl" : "ltr";
     const template: EmailTemplate = {
+      idempotencyKey: data.idempotencyKey,
       to: data.passengerEmail,
       subject: `${t("checkInReminder", lang)} - ${data.flightNumber}`,
       text: `

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/emergency-hotel";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import {
@@ -33,6 +34,7 @@ export const emergencyHotelRouter = router({
         guests: z.number().min(1).max(50).default(1),
       })
     )
+    .output(responseContracts["findHotels"])
     .query(async ({ input }) => {
       try {
         return await findNearbyHotels(
@@ -70,6 +72,7 @@ export const emergencyHotelRouter = router({
         notes: z.string().max(1000).optional(),
       })
     )
+    .output(responseContracts["bookRoom"])
     .mutation(async ({ input }) => {
       try {
         return await bookHotelRoom(input);
@@ -93,6 +96,7 @@ export const emergencyHotelRouter = router({
         passengerId: z.number(),
       })
     )
+    .output(responseContracts["getMyHotelBookings"])
     .query(async ({ input, ctx }) => {
       await assertPassengerOwnership(
         input.passengerId,
@@ -121,6 +125,7 @@ export const emergencyHotelRouter = router({
         flightId: z.number(),
       })
     )
+    .output(responseContracts["getFlightHotelBookings"])
     .query(async ({ input }) => {
       try {
         return await getHotelBookingsByFlight(input.flightId);
@@ -144,6 +149,7 @@ export const emergencyHotelRouter = router({
         hotelBookingId: z.number(),
       })
     )
+    .output(responseContracts["cancelBooking"])
     .mutation(async ({ input }) => {
       try {
         return await cancelHotelBooking(input.hotelBookingId);
@@ -168,6 +174,7 @@ export const emergencyHotelRouter = router({
         delayHours: z.number().min(0),
       })
     )
+    .output(responseContracts["checkEntitlement"])
     .query(async ({ input }) => {
       return await calculateHotelEntitlement(
         input.disruptionType,
@@ -185,6 +192,7 @@ export const emergencyHotelRouter = router({
         to: z.date(),
       })
     )
+    .output(responseContracts["getCosts"])
     .query(async ({ input }) => {
       try {
         return await getHotelCosts(input);
@@ -202,17 +210,19 @@ export const emergencyHotelRouter = router({
   /**
    * Get all emergency hotels (admin management)
    */
-  getHotels: adminProcedure.query(async () => {
-    try {
-      return await getAllHotels();
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          error instanceof Error ? error.message : "Failed to fetch hotels",
-      });
-    }
-  }),
+  getHotels: adminProcedure
+    .output(responseContracts["getHotels"])
+    .query(async () => {
+      try {
+        return await getAllHotels();
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to fetch hotels",
+        });
+      }
+    }),
 
   /**
    * Add a new emergency hotel (admin)
@@ -231,6 +241,7 @@ export const emergencyHotelRouter = router({
         hasTransport: z.boolean(),
       })
     )
+    .output(responseContracts["addHotel"])
     .mutation(async ({ input }) => {
       try {
         return await addHotel(input);
@@ -261,6 +272,7 @@ export const emergencyHotelRouter = router({
         isActive: z.boolean().optional(),
       })
     )
+    .output(responseContracts["updateHotel"])
     .mutation(async ({ input }) => {
       const { hotelId, ...updates } = input;
       try {
@@ -284,6 +296,7 @@ export const emergencyHotelRouter = router({
         type: z.enum(["shuttle", "taxi", "private_car"]),
       })
     )
+    .output(responseContracts["assignTransport"])
     .mutation(async ({ input }) => {
       try {
         return await assignTransportation(input.hotelBookingId, input.type);

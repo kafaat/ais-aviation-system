@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/webhooks";
 import { router, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -25,6 +26,7 @@ export const webhooksRouter = router({
         signature: z.string(), // Stripe-Signature header
       })
     )
+    .output(responseContracts["stripe"])
     .mutation(async ({ input }) => {
       try {
         // 1. Verify webhook signature
@@ -93,7 +95,7 @@ export const webhooksRouter = router({
   /**
    * Test endpoint for webhook verification
    */
-  test: publicProcedure.query(() => {
+  test: publicProcedure.output(responseContracts["test"]).query(() => {
     return {
       status: "ok",
       message: "Webhook endpoint is reachable",

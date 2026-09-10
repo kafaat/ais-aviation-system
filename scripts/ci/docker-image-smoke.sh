@@ -120,6 +120,7 @@ echo 'PASS: floating and missing package-manager versions rejected before instal
 # The repository's legacy admin-only HEALTHCHECK is outside this build-fix scope.
 container="$(docker run -d --network none --no-healthcheck \
   -e NODE_ENV=production -e PORT=3000 \
+  -e SELF_SERVICE_CAPABILITY_SECRET=ci-disposable-self-service-secret-32-plus \
   -e VITE_APP_ID=ais-image-smoke -e OWNER_OPEN_ID=image-smoke \
   -e JWT_SECRET=image-smoke-only-not-a-deployment-key \
   -e REFRESH_TOKEN_PEPPER=image-smoke-only-not-a-deployment-pepper \

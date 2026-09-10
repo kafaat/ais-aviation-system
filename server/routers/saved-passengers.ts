@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/saved-passengers";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -27,15 +28,18 @@ export const savedPassengersRouter = router({
   /**
    * Get all saved passengers for the current user
    */
-  getAll: protectedProcedure.query(async ({ ctx }) => {
-    return await getUserPassengers(ctx.user.id);
-  }),
+  getAll: protectedProcedure
+    .output(responseContracts["getAll"])
+    .query(async ({ ctx }) => {
+      return await getUserPassengers(ctx.user.id);
+    }),
 
   /**
    * Get a single saved passenger by ID
    */
   getById: protectedProcedure
     .input(z.object({ id: z.number() }))
+    .output(responseContracts["getById"])
     .query(async ({ ctx, input }) => {
       return await getPassenger(input.id, ctx.user.id);
     }),
@@ -43,15 +47,18 @@ export const savedPassengersRouter = router({
   /**
    * Get the default passenger for the current user
    */
-  getDefault: protectedProcedure.query(async ({ ctx }) => {
-    return await getDefaultPassenger(ctx.user.id);
-  }),
+  getDefault: protectedProcedure
+    .output(responseContracts["getDefault"])
+    .query(async ({ ctx }) => {
+      return await getDefaultPassenger(ctx.user.id);
+    }),
 
   /**
    * Add a new saved passenger
    */
   add: protectedProcedure
     .input(passengerDataSchema)
+    .output(responseContracts["add"])
     .mutation(async ({ ctx, input }) => {
       return await addPassenger(ctx.user.id, {
         firstName: input.firstName,
@@ -76,6 +83,7 @@ export const savedPassengersRouter = router({
         data: passengerDataSchema.partial(),
       })
     )
+    .output(responseContracts["update"])
     .mutation(async ({ ctx, input }) => {
       return await updatePassenger(input.id, ctx.user.id, input.data);
     }),
@@ -85,6 +93,7 @@ export const savedPassengersRouter = router({
    */
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
+    .output(responseContracts["delete"])
     .mutation(async ({ ctx, input }) => {
       await deletePassenger(input.id, ctx.user.id);
       return { success: true };
@@ -95,6 +104,7 @@ export const savedPassengersRouter = router({
    */
   setDefault: protectedProcedure
     .input(z.object({ id: z.number() }))
+    .output(responseContracts["setDefault"])
     .mutation(async ({ ctx, input }) => {
       return await setDefaultPassenger(input.id, ctx.user.id);
     }),

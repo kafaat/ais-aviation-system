@@ -165,7 +165,7 @@ export async function requestChangeFlightDate(input: ChangeFlightDateInput) {
     });
 
     return {
-      modificationId: (result as any).insertId,
+      modificationId: Number(result.insertId),
       originalAmount: booking.totalAmount,
       newAmount,
       priceDifference,
@@ -269,7 +269,7 @@ export async function requestUpgradeCabin(input: UpgradeCabinInput) {
     });
 
     return {
-      modificationId: (result as any).insertId,
+      modificationId: Number(result.insertId),
       originalAmount: booking.totalAmount,
       newAmount,
       priceDifference,

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/price-lock";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -23,6 +24,7 @@ export const priceLockRouter = router({
         cabinClass: z.enum(["economy", "business"]),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       try {
         const result = await createPriceLock(
@@ -56,9 +58,11 @@ export const priceLockRouter = router({
   /**
    * Get all price locks for the current user
    */
-  myLocks: protectedProcedure.query(async ({ ctx }) => {
-    return await getUserPriceLocks(ctx.user.id);
-  }),
+  myLocks: protectedProcedure
+    .output(responseContracts["myLocks"])
+    .query(async ({ ctx }) => {
+      return await getUserPriceLocks(ctx.user.id);
+    }),
 
   /**
    * Check if user has an active lock for a specific flight
@@ -70,6 +74,7 @@ export const priceLockRouter = router({
         cabinClass: z.enum(["economy", "business"]),
       })
     )
+    .output(responseContracts["checkLock"])
     .query(async ({ ctx, input }) => {
       const lock = await getActiveLockForFlight(
         ctx.user.id,
@@ -84,6 +89,7 @@ export const priceLockRouter = router({
    */
   cancel: protectedProcedure
     .input(z.object({ lockId: z.number() }))
+    .output(responseContracts["cancel"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await cancelPriceLock(ctx.user.id, input.lockId);

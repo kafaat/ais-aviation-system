@@ -1,3 +1,4 @@
+import { countActiveHolds } from "./inventory-capacity.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { inventoryLocks, flights } from "../../drizzle/schema";
@@ -26,6 +27,11 @@ export async function createInventoryLock(
     const database = transaction || (await getDb());
     if (!database) throw new Error("Database not available");
 
+    if (!Number.isSafeInteger(numberOfSeats) || numberOfSeats <= 0)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Seat count must be positive",
+      });
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + LOCK_DURATION_MINUTES);
 
@@ -52,23 +58,7 @@ export async function createInventoryLock(
           ? flight.economyAvailable
           : flight.businessAvailable;
 
-      const activeLocks = await tx
-        .select({ numberOfSeats: inventoryLocks.numberOfSeats })
-        .from(inventoryLocks)
-        .where(
-          and(
-            eq(inventoryLocks.flightId, flightId),
-            eq(inventoryLocks.cabinClass, cabinClass),
-            eq(inventoryLocks.status, "active"),
-            gt(inventoryLocks.expiresAt, new Date())
-          )
-        )
-        .for("update");
-
-      const lockedSeats = activeLocks.reduce(
-        (sum, lock) => sum + lock.numberOfSeats,
-        0
-      );
+      const lockedSeats = await countActiveHolds(tx, flightId, cabinClass);
       const available = Math.max(0, currentAvailable - lockedSeats);
 
       if (available < numberOfSeats) {
@@ -124,7 +114,9 @@ export async function releaseInventoryLock(lockId: number): Promise<void> {
         status: "released",
         releasedAt: new Date(),
       })
-      .where(eq(inventoryLocks.id, lockId));
+      .where(
+        and(eq(inventoryLocks.id, lockId), eq(inventoryLocks.status, "active"))
+      );
   } catch (error) {
     console.error("Error releasing inventory lock:", error);
     throw new TRPCError({
@@ -148,7 +140,9 @@ export async function convertLockToBooking(lockId: number): Promise<void> {
         status: "converted",
         releasedAt: new Date(),
       })
-      .where(eq(inventoryLocks.id, lockId));
+      .where(
+        and(eq(inventoryLocks.id, lockId), eq(inventoryLocks.status, "active"))
+      );
   } catch (error) {
     console.error("Error converting lock to booking:", error);
     throw new TRPCError({
@@ -229,21 +223,13 @@ export async function getAvailableSeats(
         ? flight.economyAvailable
         : flight.businessAvailable;
 
-    const [lockResult] = await database
-      .select({
-        lockedSeats: sql<number>`COALESCE(SUM(${inventoryLocks.numberOfSeats}), 0)`,
-      })
-      .from(inventoryLocks)
-      .where(
-        and(
-          eq(inventoryLocks.flightId, flightId),
-          eq(inventoryLocks.cabinClass, cabinClass),
-          eq(inventoryLocks.status, "active"),
-          gt(inventoryLocks.expiresAt, new Date())
-        )
-      );
-
-    const lockedSeats = lockResult?.lockedSeats || 0;
+    const lockedSeats = await countActiveHolds(
+      database,
+      flightId,
+      cabinClass,
+      undefined,
+      false
+    );
 
     const available = currentAvailable - lockedSeats;
 
