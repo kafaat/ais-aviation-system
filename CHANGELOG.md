@@ -1,5 +1,37 @@
 # Changelog
 
+## What's Changed in v1.22.1
+
+### Bug Fixes
+
+- fix: restore migration and production runtime contracts (8a1dec1)
+- fix: enforce tenant boundaries and per-procedure request limits (be56013)
+- fix: require MFA and unify revocable session families (006eaab)
+- fix: settle verified payments and booking inventory atomically (aeb6084)
+- fix: persist operational state and require real delivery acknowledgements (075be79)
+- fix: update security dependencies and protect telemetry data (58d31d5)
+- fix(api): restore REST and truthful OpenAPI without mutating RPC schemas (1dd1b90)
+- fix(payments): align refund locks and guard legacy receipt imports (7e434d0)
+- fix(payments): retain unsettled collections for controlled refund review (ccbac5e)
+- fix(inventory): read current holds and gate live transaction acceptance (5b45225)
+- fix: restore preference defaults and verify cancellation refunds (87a9de9)
+- fix(auth): normalize only bare MySQL database URL schemes (59fe16d)
+- fix: verify durable database backups through isolated restoration (2921575)
+- fix(migrations): reconcile audit changes after adopted main history (76f33ca)
+
+### Maintenance
+
+- ci: scan the tested production runtime image before merge (51e2795)
+
+### Other Changes
+
+- style: satisfy CI formatting for audit remediation (022550f)
+- Merge pull request #130 from kafaat/fix/audit-ef2a2db-sequential (b94d8f2)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.0...v1.22.1
+
+---
+
 ## What's Changed in v1.22.0
 
 ### Features
