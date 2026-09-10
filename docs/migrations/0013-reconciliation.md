@@ -74,6 +74,11 @@ access for the first two steps. Do not put credentials in a report or commit.
    BASELINE_ALREADY_JOURNALED on any journaled database, and emits no
    application DDL in either case. Follow it with `verify`. A database that does
    differ from 0013 is not a baseline candidate and returns to step 3.
+   The journal rows are written in one transaction and rolled back as a unit on
+   any failure, which requires a transactional journal table. Adoption creates
+   `__drizzle_migrations` as InnoDB, and refuses with BASELINE_JOURNAL_ENGINE,
+   before writing anything, if an existing one uses another engine. Convert it
+   with `ALTER TABLE __drizzle_migrations ENGINE=InnoDB` and retry.
 5. If NULL/unique conflicts appear, resolve them through a separately reviewed
    data repair, then repeat preflight. No automatic deduplication is provided.
 6. With application writes stopped and a successful preflight, run

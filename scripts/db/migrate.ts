@@ -37,7 +37,10 @@ export type MigrationCommand = "migrate" | "preflight" | "verify" | "baseline";
  * refuse the retry as already journaled, and `migrate` would read the surviving
  * rows as the applied point and reject the schema as drift, leaving the database
  * adoptable by neither command. Any failure therefore rolls back to an empty
- * journal, which is exactly the state the operator started from.
+ * journal, which is exactly the state the operator started from. Because that
+ * guarantee is only as good as the journal's storage engine, adoption is refused
+ * outright on a non-InnoDB journal table rather than run without a working
+ * rollback.
  */
 export async function adoptJournal(
   connection: Connection,
@@ -60,8 +63,21 @@ export async function adoptJournal(
   // appliedMigrationCount reads zero rows, so a rolled-back attempt stays
   // adoptable.
   await connection.query(
-    "CREATE TABLE IF NOT EXISTS `__drizzle_migrations` (id serial primary key, hash text not null, created_at bigint)"
+    "CREATE TABLE IF NOT EXISTS `__drizzle_migrations` (id serial primary key, hash text not null, created_at bigint) ENGINE=InnoDB"
   );
+  // The explicit ENGINE above only governs a table this call creates; it is
+  // ignored when one already exists, and default_storage_engine could have been
+  // anything when it did. A non-transactional journal would silently defeat the
+  // rollback below, leaving exactly the half-written history the transaction is
+  // here to prevent, so the engine is read back rather than assumed.
+  const [journal] = await connection.query<RowDataPacket[]>(
+    "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '__drizzle_migrations'"
+  );
+  const engine = journal[0]?.ENGINE;
+  if (engine !== "InnoDB")
+    throw new Error(
+      `BASELINE_JOURNAL_ENGINE: no rows written; __drizzle_migrations uses ${engine ?? "no transactional engine"} instead of InnoDB, so a failed adoption could not be rolled back. Convert it with ALTER TABLE \`__drizzle_migrations\` ENGINE=InnoDB, then retry`
+    );
   await connection.beginTransaction();
   try {
     for (const migration of history)

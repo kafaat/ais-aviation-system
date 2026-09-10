@@ -203,6 +203,7 @@ try {
     `${database}_adopt`,
     `${database}_mismatch`,
     `${database}_partial`,
+    `${database}_myisam`,
   ]) {
     await admin.query(`CREATE DATABASE \`${name}\``);
     scratch.push(name);
@@ -304,6 +305,43 @@ try {
   await partial.end();
   console.info(
     "PASS: interrupted adoption rolls back completely and stays retryable"
+  );
+
+  // The rollback above is only a guarantee on a transactional journal. A journal
+  // table left behind by an older tool, or created while default_storage_engine
+  // was MyISAM, would accept the inserts and ignore the rollback, so an empty
+  // non-InnoDB journal must be refused rather than adopted.
+  const myisamUrl = scratchUrl(`${database}_myisam`);
+  const myisam = await createConnection(myisamUrl);
+  await myisam.query(
+    "CREATE TABLE `__drizzle_migrations` (id serial primary key, hash text not null, created_at bigint) ENGINE=MyISAM"
+  );
+  const [engine] = await myisam.query<RowDataPacket[]>(
+    "SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '__drizzle_migrations'"
+  );
+  assert.equal(
+    engine[0].ENGINE,
+    "MyISAM",
+    "this MySQL build must actually provide MyISAM for the fixture to mean anything"
+  );
+  await assert.rejects(
+    runMigration("baseline", myisamUrl),
+    /BASELINE_JOURNAL_ENGINE/
+  );
+  const [refused] = await myisam.query<RowDataPacket[]>(
+    "SELECT COUNT(*) AS n FROM `__drizzle_migrations`"
+  );
+  assert.equal(
+    Number(refused[0].n),
+    0,
+    "a refused adoption must not write into a journal it cannot roll back"
+  );
+  await myisam.query("ALTER TABLE `__drizzle_migrations` ENGINE=InnoDB");
+  await runMigration("baseline", myisamUrl);
+  await runMigration("verify", myisamUrl);
+  await myisam.end();
+  console.info(
+    "PASS: non-transactional journal refused before any insert and adopted once converted"
   );
 } finally {
   await connection?.end();
