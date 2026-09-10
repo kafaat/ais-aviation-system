@@ -481,10 +481,7 @@ export async function main(): Promise<void> {
   await writePreflightReport(options, databaseUrl);
 }
 
-if (
-  process.argv.includes("--run") &&
-  process.argv.slice(2).some(arg => arg.startsWith("--tool-repo="))
-) {
+if (process.argv.includes("--run")) {
   main().catch(error => {
     console.error(
       error instanceof Error
