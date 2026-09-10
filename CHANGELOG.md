@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.22.3
+
+### Bug Fixes
+
+- fix: enforce resource ownership and configured production SMS (a8e02dc)
+
+### Other Changes
+
+- Merge pull request #136 from kafaat/fix/forensic-service-ownership (04fc7a2)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.2...v1.22.3
+
+---
+
 ## What's Changed in v1.22.2
 
 ### Bug Fixes
