@@ -196,6 +196,49 @@ mysql -u root -p ais_aviation < rollback.sql
 mysql -u root -p ais_aviation < backup.sql
 ```
 
+### Manual Production Database Preflight
+
+`.github/workflows/production-db-preflight.yml` is a wrapper around the guarded
+database tool from the approved target checkout. The wrapper logic lives in
+`scripts/ci/production-db-preflight.ts`. It does not accept an arbitrary
+environment name, and it does not expose production credentials until the target
+commit has been approved.
+
+One-time setup:
+
+1. Configure the pinned GitHub environment `production-preflight`.
+2. Store the read-only production `DATABASE_URL` secret in that environment.
+3. Set the repository variable `PRODUCTION_PREFLIGHT_APPROVED_SHA` to the exact
+   reviewed 40-character commit SHA that is allowed to inspect production.
+
+The MySQL account behind `DATABASE_URL` must be read-only and limited to the AIS
+schema, `information_schema`, and `__drizzle_migrations`.
+
+Each manual run:
+
+1. Provide `target_sha` as the exact approved 40-character SHA.
+2. Optionally set `production_context` (for example `production-eu`).
+3. The workflow first materializes the approved SHA in a detached worktree under
+   `/tmp/ais-approved-preflight`, runs the guarded migration acceptance path on
+   isolated MySQL from that checkout, then reuses the same approved worktree
+   under the protected `production-preflight` environment.
+4. It generates the production report with:
+
+```bash
+pnpm exec tsx scripts/ci/production-db-preflight.ts --run --target-sha=<approved_sha> --tool-repo=/tmp/ais-approved-preflight
+```
+
+The uploaded artifact records the checked-out SHA, the approved SHA, migration
+hashes and timestamps, pending migration count, and preflight status without
+including passwords or customer-row data.
+
+The overall report classification and process exit status require both a
+successful guarded preflight and complete evidence without schema drift. A
+later journal/schema inspection error or detected drift makes the report fail,
+even when `preflight.status` is `PASS`; `evidence.status` and redacted
+`evidence.errors` explain that failure. These are sequential observations on
+separate connections, not an atomic database snapshot.
+
 ## 🏗️ Environment Configuration
 
 ### Required Environment Variables
