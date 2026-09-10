@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/data-warehouse";
 /**
  * Data Warehouse Router
  *
@@ -43,6 +44,7 @@ export const dataWarehouseRouter = router({
         lastExportTimestamp: z.date().optional(),
       })
     )
+    .output(responseContracts["createExport"])
     .mutation(async ({ input, ctx }) => {
       const result = await dwService.createExportJob(
         input.exportType,
@@ -81,8 +83,9 @@ export const dataWarehouseRouter = router({
         })
         .optional()
     )
-    .query(({ input }) => {
-      const { exports, total, page, limit } = dwService.getExportJobs(
+    .output(responseContracts["getExports"])
+    .query(async ({ input }) => {
+      const { exports, total, page, limit } = await dwService.getExportJobs(
         input?.page || 1,
         input?.limit || 20,
         input?.exportType,
@@ -117,8 +120,9 @@ export const dataWarehouseRouter = router({
    */
   getExportStatus: adminProcedure
     .input(z.object({ id: z.number() }))
-    .query(({ input }) => {
-      const exportRecord = dwService.getExportJobById(input.id);
+    .output(responseContracts["getExportStatus"])
+    .query(async ({ input }) => {
+      const exportRecord = await dwService.getExportJobById(input.id);
 
       if (!exportRecord) {
         return { found: false as const };
@@ -143,9 +147,10 @@ export const dataWarehouseRouter = router({
    */
   downloadExport: adminProcedure
     .input(z.object({ id: z.number() }))
-    .query(({ input }) => {
-      const downloadUrl = dwService.getExportDownloadUrl(input.id);
-      const exportRecord = dwService.getExportJobById(input.id);
+    .output(responseContracts["downloadExport"])
+    .query(async ({ input }) => {
+      const downloadUrl = await dwService.getExportDownloadUrl(input.id);
+      const exportRecord = await dwService.getExportJobById(input.id);
 
       return {
         downloadUrl,
@@ -170,8 +175,10 @@ export const dataWarehouseRouter = router({
         config: z.record(z.string(), z.unknown()).optional(),
       })
     )
-    .mutation(({ input }) => {
-      const schedule = dwService.createSchedule({
+    .output(responseContracts["createSchedule"])
+    .mutation(async ({ input, ctx }) => {
+      const schedule = await dwService.createSchedule({
+        createdBy: ctx.user.id,
         name: input.name,
         exportType: input.exportType,
         frequency: input.frequency,
@@ -203,8 +210,11 @@ export const dataWarehouseRouter = router({
         })
         .optional()
     )
-    .query(({ input }) => {
-      const schedules = dwService.getSchedules(input?.activeOnly || false);
+    .output(responseContracts["getSchedules"])
+    .query(async ({ input }) => {
+      const schedules = await dwService.getSchedules(
+        input?.activeOnly || false
+      );
 
       return schedules.map(s => ({
         id: s.id,
@@ -234,9 +244,10 @@ export const dataWarehouseRouter = router({
         config: z.record(z.string(), z.unknown()).optional(),
       })
     )
-    .mutation(({ input }) => {
+    .output(responseContracts["updateSchedule"])
+    .mutation(async ({ input, ctx }) => {
       const { id, ...updates } = input;
-      const schedule = dwService.updateSchedule(id, updates);
+      const schedule = await dwService.updateSchedule(id, updates);
 
       if (!schedule) {
         return { success: false as const, message: "Schedule not found" };
@@ -263,8 +274,9 @@ export const dataWarehouseRouter = router({
    */
   deleteSchedule: adminProcedure
     .input(z.object({ id: z.number() }))
-    .mutation(({ input }) => {
-      const deleted = dwService.deleteSchedule(input.id);
+    .output(responseContracts["deleteSchedule"])
+    .mutation(async ({ input, ctx }) => {
+      const deleted = await dwService.deleteSchedule(input.id);
       return {
         success: deleted,
         message: deleted
@@ -276,7 +288,9 @@ export const dataWarehouseRouter = router({
   /**
    * Get overall ETL pipeline health and status.
    */
-  getETLStatus: adminProcedure.query(() => {
-    return dwService.getETLPipelineStatus();
-  }),
+  getETLStatus: adminProcedure
+    .output(responseContracts["getETLStatus"])
+    .query(() => {
+      return dwService.getETLPipelineStatus();
+    }),
 });

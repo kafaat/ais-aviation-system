@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/eticket";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -31,6 +32,7 @@ export const eticketRouter = router({
         passengerId: z.number(),
       })
     )
+    .output(responseContracts["generateETicket"])
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
       if (!database)
@@ -172,6 +174,7 @@ export const eticketRouter = router({
         passengerId: z.number(),
       })
     )
+    .output(responseContracts["generateBoardingPass"])
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
       if (!database)
@@ -307,6 +310,7 @@ export const eticketRouter = router({
         bookingId: z.number(),
       })
     )
+    .output(responseContracts["generateCalendarEvent"])
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
       if (!database)

@@ -9,6 +9,7 @@ export const systemRouter = router({
         timestamp: z.number().min(0, "timestamp cannot be negative"),
       })
     )
+    .output(z.object({ ok: z.boolean() }))
     .query(() => ({
       ok: true,
     })),
@@ -20,6 +21,7 @@ export const systemRouter = router({
         content: z.string().min(1, "content is required"),
       })
     )
+    .output(z.object({ success: z.boolean() }))
     .mutation(async ({ input }) => {
       const delivered = await notifyOwner(input);
       return {

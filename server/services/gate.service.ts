@@ -99,7 +99,7 @@ export async function createGate(input: CreateGateInput) {
       amenities: input.amenities ? JSON.stringify(input.amenities) : null,
     });
 
-    const insertId = (result as any).insertId;
+    const insertId = Number(result.insertId);
     console.info(
       `[Gate] Created gate ${input.gateNumber} at airport ${input.airportId}`
     );
@@ -335,7 +335,7 @@ export async function assignGate(input: AssignGateInput) {
       .set({ status: "occupied", updatedAt: new Date() })
       .where(eq(airportGates.id, input.gateId));
 
-    const insertId = (result as any).insertId;
+    const insertId = Number(result.insertId);
     console.info(
       `[Gate] Assigned gate ${gate.gateNumber} to flight ${flight.flightNumber}`
     );
@@ -441,7 +441,7 @@ export async function updateGateAssignment(input: UpdateGateAssignmentInput) {
       .set({ status: "occupied", updatedAt: new Date() })
       .where(eq(airportGates.id, input.newGateId));
 
-    const insertId = (result as any).insertId;
+    const insertId = Number(result.insertId);
     console.info(
       `[Gate] Changed gate for flight ${input.flightId} from gate ${currentAssignment.gateId} to gate ${input.newGateId}`
     );

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/loyalty";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import * as loyaltyService from "../services/loyalty.service";
@@ -22,6 +23,7 @@ export const loyaltyRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["myAccount"])
     .query(async ({ ctx }) => {
       return await loyaltyService.getLoyaltyAccountDetails(ctx.user.id);
     }),
@@ -52,6 +54,7 @@ export const loyaltyRouter = router({
           .describe("Maximum transactions to return"),
       })
     )
+    .output(responseContracts["myTransactions"])
     .query(async ({ ctx, input }) => {
       return await loyaltyService.getMilesTransactions(
         ctx.user.id,
@@ -87,6 +90,7 @@ export const loyaltyRouter = router({
           .describe("Booking ID to apply discount to"),
       })
     )
+    .output(responseContracts["redeemMiles"])
     .mutation(async ({ ctx, input }) => {
       return await loyaltyService.redeemMiles(
         ctx.user.id,
@@ -125,6 +129,7 @@ export const loyaltyRouter = router({
         reason: z.string().min(1).max(500).describe("Reason for bonus miles"),
       })
     )
+    .output(responseContracts["awardBonusMiles"])
     .mutation(async ({ input }) => {
       return await loyaltyService.awardBonusMiles(
         input.userId,
@@ -155,6 +160,7 @@ export const loyaltyRouter = router({
         reason: z.string().optional().describe("Reason for reversal"),
       })
     )
+    .output(responseContracts["reverseMilesForBooking"])
     .mutation(async ({ input }) => {
       return await loyaltyService.reverseMilesForBooking(
         input.userId,
@@ -178,6 +184,7 @@ export const loyaltyRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["processExpiredMiles"])
     .mutation(async () => {
       return await loyaltyService.processExpiredMiles();
     }),
@@ -202,6 +209,7 @@ export const loyaltyRouter = router({
         userId: z.number().describe("User ID"),
       })
     )
+    .output(responseContracts["getUserAccount"])
     .query(async ({ input }) => {
       return await loyaltyService.getLoyaltyAccountDetails(input.userId);
     }),
@@ -233,6 +241,7 @@ export const loyaltyRouter = router({
           .describe("Maximum transactions to return"),
       })
     )
+    .output(responseContracts["getUserTransactions"])
     .query(async ({ input }) => {
       return await loyaltyService.getMilesTransactions(
         input.userId,

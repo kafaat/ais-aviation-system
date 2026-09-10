@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/inventory.router";
 /**
  * Inventory Router
  *
@@ -63,6 +64,7 @@ export const inventoryRouter = router({
    */
   getStatus: publicProcedure
     .input(getInventoryStatusInput)
+    .output(responseContracts["getStatus"])
     .query(async ({ input }) => {
       try {
         const status = await InventoryService.getInventoryStatus(
@@ -94,6 +96,7 @@ export const inventoryRouter = router({
    */
   allocateSeats: protectedProcedure
     .input(allocateSeatsInput)
+    .output(responseContracts["allocateSeats"])
     .mutation(async ({ input, ctx }) => {
       try {
         const result = await InventoryService.allocateSeats(
@@ -122,6 +125,7 @@ export const inventoryRouter = router({
    */
   releaseHold: protectedProcedure
     .input(releaseHoldInput)
+    .output(responseContracts["releaseHold"])
     .mutation(async ({ input, ctx }) => {
       try {
         await InventoryService.releaseSeatHold(input.holdId, ctx.user.id);
@@ -145,6 +149,7 @@ export const inventoryRouter = router({
    */
   addToWaitlist: protectedProcedure
     .input(addToWaitlistInput)
+    .output(responseContracts["addToWaitlist"])
     .mutation(async ({ input, ctx }) => {
       try {
         const entry = await InventoryService.addToWaitlist(
@@ -178,6 +183,7 @@ export const inventoryRouter = router({
    */
   removeFromWaitlist: protectedProcedure
     .input(removeFromWaitlistInput)
+    .output(responseContracts["removeFromWaitlist"])
     .mutation(async ({ input, ctx }) => {
       try {
         await InventoryService.removeFromWaitlist(
@@ -206,6 +212,7 @@ export const inventoryRouter = router({
    */
   getForecast: adminProcedure
     .input(forecastDemandInput)
+    .output(responseContracts["getForecast"])
     .query(async ({ input }) => {
       try {
         const forecast = await InventoryService.forecastDemand(
@@ -231,6 +238,7 @@ export const inventoryRouter = router({
    */
   getRecommendedOverbooking: adminProcedure
     .input(z.object({ flightId: z.number().int().positive() }))
+    .output(responseContracts["getRecommendedOverbooking"])
     .query(async ({ input }) => {
       try {
         const recommendation =
@@ -264,6 +272,7 @@ export const inventoryRouter = router({
         seatsNeeded: z.number().int().min(1),
       })
     )
+    .output(responseContracts["handleDeniedBoarding"])
     .mutation(async ({ input }) => {
       try {
         const result = await InventoryService.handleDeniedBoarding(
@@ -303,6 +312,7 @@ export const inventoryRouter = router({
         notes: z.string().optional(),
       })
     )
+    .output(responseContracts["recordDeniedBoarding"])
     .mutation(async ({ input }) => {
       try {
         const result = await InventoryService.recordDeniedBoarding(input);
@@ -323,6 +333,7 @@ export const inventoryRouter = router({
    */
   getDeniedBoardingRecords: adminProcedure
     .input(z.object({ flightId: z.number().int().positive() }))
+    .output(responseContracts["getDeniedBoardingRecords"])
     .query(async ({ input }) => {
       try {
         const records = await InventoryService.getDeniedBoardingRecords(
@@ -350,6 +361,7 @@ export const inventoryRouter = router({
         status: z.enum(["accepted", "rejected", "completed"]),
       })
     )
+    .output(responseContracts["updateDeniedBoardingStatus"])
     .mutation(async ({ input }) => {
       try {
         await InventoryService.updateDeniedBoardingStatus(
@@ -371,20 +383,22 @@ export const inventoryRouter = router({
   /**
    * Get all overbooking configurations
    */
-  getOverbookingConfigs: adminProcedure.query(async () => {
-    try {
-      const configs = await InventoryService.getOverbookingConfigs();
-      return { success: true, data: configs };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to get overbooking configs",
-      });
-    }
-  }),
+  getOverbookingConfigs: adminProcedure
+    .output(responseContracts["getOverbookingConfigs"])
+    .query(async () => {
+      try {
+        const configs = await InventoryService.getOverbookingConfigs();
+        return { success: true, data: configs };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to get overbooking configs",
+        });
+      }
+    }),
 
   /**
    * Create overbooking configuration
@@ -401,6 +415,7 @@ export const inventoryRouter = router({
         historicalNoShowRate: z.string().optional(),
       })
     )
+    .output(responseContracts["createOverbookingConfig"])
     .mutation(async ({ input }) => {
       try {
         const result = await InventoryService.upsertOverbookingConfig(input);
@@ -419,31 +434,34 @@ export const inventoryRouter = router({
   /**
    * Expire old holds (admin/system)
    */
-  expireOldHolds: adminProcedure.mutation(async () => {
-    try {
-      const count = await InventoryService.expireOldHolds();
+  expireOldHolds: adminProcedure
+    .output(responseContracts["expireOldHolds"])
+    .mutation(async () => {
+      try {
+        const count = await InventoryService.expireOldHolds();
 
-      return {
-        success: true,
-        data: {
-          expiredCount: count,
-          message: `Expired ${count} old seat holds`,
-        },
-      };
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          error instanceof Error ? error.message : "Failed to expire holds",
-      });
-    }
-  }),
+        return {
+          success: true,
+          data: {
+            expiredCount: count,
+            message: `Expired ${count} old seat holds`,
+          },
+        };
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error ? error.message : "Failed to expire holds",
+        });
+      }
+    }),
 
   /**
    * Process waitlist (admin/system)
    */
   processWaitlist: adminProcedure
     .input(getInventoryStatusInput)
+    .output(responseContracts["processWaitlist"])
     .mutation(async ({ input }) => {
       try {
         const seatsOffered = await InventoryService.processWaitlist(

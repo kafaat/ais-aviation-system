@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/fare-rules";
 import { z } from "zod";
 import {
   router,
@@ -145,6 +146,7 @@ export const fareRulesRouter = router({
         mealIncluded: z.boolean().describe("Meal service included"),
       })
     )
+    .output(responseContracts["createFareClass"])
     .mutation(async ({ input }) => {
       try {
         return await fareRulesService.createFareClass({
@@ -256,6 +258,7 @@ export const fareRulesRouter = router({
         active: z.boolean().optional().describe("Active status"),
       })
     )
+    .output(responseContracts["updateFareClass"])
     .mutation(async ({ input }) => {
       const { id, basePriceMultiplier, mileageEarningRate, ...rest } = input;
 
@@ -307,6 +310,7 @@ export const fareRulesRouter = router({
         id: z.number().int().describe("Fare class ID"),
       })
     )
+    .output(responseContracts["getFareClass"])
     .query(async ({ input }) => {
       const fareClass = await fareRulesService.getFareClass(input.id);
 
@@ -341,6 +345,7 @@ export const fareRulesRouter = router({
         cabinClass: cabinClassEnum.optional().describe("Filter by cabin class"),
       })
     )
+    .output(responseContracts["listFareClasses"])
     .query(async ({ input }) => {
       try {
         return await fareRulesService.listFareClasses(
@@ -378,6 +383,7 @@ export const fareRulesRouter = router({
         flightId: z.number().int().describe("Flight ID"),
       })
     )
+    .output(responseContracts["getFareClassAvailability"])
     .query(async ({ input }) => {
       try {
         return await fareRulesService.getFareClassAvailability(input.flightId);
@@ -459,6 +465,7 @@ export const fareRulesRouter = router({
           .describe("Price multiplier (1.0 = no change, 1.1 = +10%)"),
       })
     )
+    .output(responseContracts["createFareRule"])
     .mutation(async ({ input }) => {
       // Validate conditions is valid JSON
       try {
@@ -548,6 +555,7 @@ export const fareRulesRouter = router({
         active: z.boolean().optional().describe("Active status"),
       })
     )
+    .output(responseContracts["updateFareRule"])
     .mutation(async ({ input }) => {
       // Validate conditions JSON if provided
       if (input.conditions !== undefined) {
@@ -615,6 +623,7 @@ export const fareRulesRouter = router({
         id: z.number().int().describe("Fare rule ID"),
       })
     )
+    .output(responseContracts["getFareRule"])
     .query(async ({ input }) => {
       const rule = await fareRulesService.getFareRule(input.id);
 
@@ -671,6 +680,7 @@ export const fareRulesRouter = router({
           .describe("Items per page"),
       })
     )
+    .output(responseContracts["listFareRules"])
     .query(async ({ input }) => {
       try {
         return await fareRulesService.listFareRules(input);
@@ -727,6 +737,7 @@ export const fareRulesRouter = router({
           .describe("Number of passengers (1-9)"),
       })
     )
+    .output(responseContracts["calculateFare"])
     .query(async ({ input }) => {
       try {
         return await fareRulesService.calculateFare(input);
@@ -777,6 +788,7 @@ export const fareRulesRouter = router({
           .describe("Number of passengers"),
       })
     )
+    .output(responseContracts["validateRules"])
     .query(async ({ input }) => {
       try {
         return await fareRulesService.validateRules(input);
@@ -815,6 +827,7 @@ export const fareRulesRouter = router({
         departureDate: z.string().describe("Departure date (ISO 8601)"),
       })
     )
+    .output(responseContracts["compareFareClasses"])
     .query(async ({ input }) => {
       try {
         return await fareRulesService.compareFareClasses(input);
@@ -859,6 +872,7 @@ export const fareRulesRouter = router({
         changeDate: z.string().describe("Requested change date (ISO 8601)"),
       })
     )
+    .output(responseContracts["calculateChangeFee"])
     .query(async ({ input }) => {
       try {
         return await fareRulesService.calculateChangeFee(input);

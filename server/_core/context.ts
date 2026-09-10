@@ -1,3 +1,5 @@
+import { isTenantActive } from "../services/tenant.service";
+import { isAdmin } from "../services/rbac.service";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
@@ -67,6 +69,15 @@ export async function createContext(
       // Authentication is optional for public procedures.
       user = null;
     }
+  }
+
+  if (
+    user?.tenantId != null &&
+    !isAdmin(user.role) &&
+    !(await isTenantActive(user.tenantId))
+  ) {
+    user = null;
+    authMethod = null;
   }
 
   return {

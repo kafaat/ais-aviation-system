@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/family-pool";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -20,6 +21,7 @@ export const familyPoolRouter = router({
    */
   createGroup: protectedProcedure
     .input(z.object({ name: z.string().min(2).max(100) }))
+    .output(responseContracts["createGroup"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await createFamilyGroup(ctx.user.id, input.name);
@@ -37,9 +39,11 @@ export const familyPoolRouter = router({
   /**
    * Get current user's family group
    */
-  myGroup: protectedProcedure.query(async ({ ctx }) => {
-    return await getMyFamilyGroup(ctx.user.id);
-  }),
+  myGroup: protectedProcedure
+    .output(responseContracts["myGroup"])
+    .query(async ({ ctx }) => {
+      return await getMyFamilyGroup(ctx.user.id);
+    }),
 
   /**
    * Add a member to the family group by email
@@ -51,6 +55,7 @@ export const familyPoolRouter = router({
         memberEmail: z.string().email(),
       })
     )
+    .output(responseContracts["addMember"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await addFamilyMember(
@@ -77,6 +82,7 @@ export const familyPoolRouter = router({
         memberId: z.number(),
       })
     )
+    .output(responseContracts["removeMember"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await removeFamilyMember(
@@ -103,6 +109,7 @@ export const familyPoolRouter = router({
         miles: z.number().min(100).max(100000),
       })
     )
+    .output(responseContracts["contributeMiles"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await contributeMilesToPool(
@@ -126,6 +133,7 @@ export const familyPoolRouter = router({
    */
   deleteGroup: protectedProcedure
     .input(z.object({ groupId: z.number() }))
+    .output(responseContracts["deleteGroup"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await deleteFamilyGroup(ctx.user.id, input.groupId);

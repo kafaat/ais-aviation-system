@@ -1,3 +1,8 @@
+# Historical schema proposal — not an active migration
+
+This source was never part of the runtime schema. See the remediation register before implementing it.
+
+```typescript
 import {
   mysqlTable,
   int,
@@ -94,3 +99,4 @@ export const DEFAULT_LOCALE: SupportedLocale = "ar";
  * Fallback locale (if translation not found)
  */
 export const FALLBACK_LOCALE: SupportedLocale = "en";
+```

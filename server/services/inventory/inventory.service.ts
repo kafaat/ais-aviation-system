@@ -1,3 +1,5 @@
+import { createInventoryLock } from "../inventory-lock.service";
+import { countActiveHolds } from "../inventory-capacity.service";
 /**
  * Advanced Inventory Management Service
  *
@@ -16,6 +18,7 @@ import {
   flights,
   bookings,
   seatHolds,
+  inventoryLocks,
   waitlist,
   overbookingConfig as overbookingConfigTable,
   deniedBoardingRecords,
@@ -43,6 +46,7 @@ export interface InventoryStatus {
 
 export interface SeatHoldData {
   id: number;
+  lockId?: number;
   flightId: number;
   cabinClass: "economy" | "business";
   seats: number;
@@ -83,6 +87,7 @@ export interface InventoryForecast {
 export interface SeatAllocationResult {
   success: boolean;
   holdId?: number;
+  lockId?: number;
   seatsAllocated: number;
   expiresAt?: Date;
   waitlistPosition?: number;
@@ -93,7 +98,6 @@ export interface SeatAllocationResult {
 // Constants
 // ============================================================================
 
-const HOLD_EXPIRATION_MINUTES = 15;
 const WAITLIST_OFFER_HOURS = 24;
 
 const DEFAULT_OVERBOOKING: OverbookingConfig = {
@@ -155,7 +159,7 @@ export async function getInventoryStatus(
   );
 
   const availableSeats = baseAvailable - activeHolds;
-  const effectiveAvailable = Math.max(0, availableSeats + overbookingLimit);
+  const effectiveAvailable = Math.max(0, availableSeats);
   const occupancyRate =
     totalSeats > 0 ? (soldSeats + activeHolds) / totalSeats : 0;
 
@@ -209,6 +213,7 @@ export async function allocateSeats(
     return {
       success: true,
       holdId: hold.id,
+      lockId: hold.lockId,
       seatsAllocated: seats,
       expiresAt: hold.expiresAt,
       message: `${seats} seat(s) held successfully`,
@@ -236,6 +241,7 @@ export async function allocateSeats(
     return {
       success: true,
       holdId: hold.id,
+      lockId: hold.lockId,
       seatsAllocated: availableSeats,
       expiresAt: hold.expiresAt,
       waitlistPosition: waitlistEntry.priority,
@@ -281,34 +287,37 @@ async function createSeatHold(
     throw new Error("Database connection not available");
   }
 
-  const expiresAt = new Date(Date.now() + HOLD_EXPIRATION_MINUTES * 60 * 1000);
-
-  const result = await database.insert(seatHolds).values({
-    flightId,
-    cabinClass,
-    seats,
-    userId,
-    sessionId,
-    status: "active",
-    expiresAt,
+  return database.transaction(async tx => {
+    const { lockId, expiresAt } = await createInventoryLock(
+      flightId,
+      seats,
+      cabinClass,
+      sessionId,
+      userId,
+      tx
+    );
+    const [result] = await tx.insert(seatHolds).values({
+      flightId,
+      cabinClass,
+      seats,
+      userId,
+      sessionId,
+      status: "active",
+      expiresAt,
+      inventoryLockId: lockId,
+    });
+    return {
+      id: result.insertId,
+      lockId,
+      flightId,
+      cabinClass,
+      seats,
+      userId,
+      sessionId,
+      expiresAt,
+      status: "active" as const,
+    };
   });
-
-  const holdId = Number(result[0].insertId);
-
-  console.info(
-    `[Inventory] Seat hold created: id=${holdId}, flight=${flightId}, class=${cabinClass}, seats=${seats}, expires=${expiresAt.toISOString()}`
-  );
-
-  return {
-    id: holdId,
-    flightId,
-    cabinClass,
-    seats,
-    userId,
-    sessionId,
-    expiresAt,
-    status: "active",
-  };
 }
 
 /**
@@ -324,90 +333,80 @@ export async function releaseSeatHold(
     throw new Error("Database connection not available");
   }
 
-  // Get hold details before releasing
-  const [hold] = await database
-    .select()
-    .from(seatHolds)
-    .where(eq(seatHolds.id, holdId))
-    .limit(1);
+  const hold = await database.transaction(async database => {
+    // Get hold details before releasing
+    const [hold] = await database
+      .select()
+      .from(seatHolds)
+      .where(eq(seatHolds.id, holdId))
+      .limit(1)
+      .for("update");
 
-  if (!hold) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Seat hold not found" });
-  }
+    if (!hold) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Seat hold not found",
+      });
+    }
 
-  if (hold.userId !== userId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-  }
+    if (hold.userId !== userId) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+    }
 
-  if (hold.status === "released") return;
+    if (hold.status === "released") return hold;
 
-  if (hold.status !== "active") {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: "Seat hold is not active",
-    });
-  }
+    if (hold.status !== "active") {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Seat hold is not active",
+      });
+    }
 
-  const [result] = await database
-    .update(seatHolds)
-    .set({ status: "released", updatedAt: new Date() })
-    .where(
-      and(
-        eq(seatHolds.id, holdId),
-        eq(seatHolds.userId, userId),
-        eq(seatHolds.status, "active")
-      )
-    );
+    const [result] = await database
+      .update(seatHolds)
+      .set({ status: "released", updatedAt: new Date() })
+      .where(
+        and(
+          eq(seatHolds.id, holdId),
+          eq(seatHolds.userId, userId),
+          eq(seatHolds.status, "active")
+        )
+      );
 
-  if (result.affectedRows !== 1) {
-    throw new TRPCError({ code: "CONFLICT", message: "Seat hold changed" });
-  }
+    if (result.affectedRows !== 1) {
+      throw new TRPCError({ code: "CONFLICT", message: "Seat hold changed" });
+    }
 
+    if (hold.inventoryLockId) {
+      const [released] = await database
+        .update(inventoryLocks)
+        .set({ status: "released", releasedAt: new Date() })
+        .where(
+          and(
+            eq(inventoryLocks.id, hold.inventoryLockId),
+            eq(inventoryLocks.userId, userId),
+            eq(inventoryLocks.status, "active")
+          )
+        );
+      if (released.affectedRows !== 1)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Canonical hold changed",
+        });
+    }
+    return hold;
+  });
   console.info(`[Inventory] Seat hold released: id=${holdId}`);
 
   // Process waitlist after releasing seats
-  await processWaitlist(
-    hold.flightId,
-    hold.cabinClass as "economy" | "business"
+  await processWaitlist(hold.flightId, hold.cabinClass).catch(error =>
+    console.error("Waitlist dispatch deferred", error)
   );
 }
 
 /**
  * Convert hold to booking
  */
-export async function convertHoldToBooking(
-  holdId: number,
-  bookingId: number
-): Promise<void> {
-  const database = await getDb();
-  if (!database) {
-    throw new Error("Database connection not available");
-  }
-
-  const [hold] = await database
-    .select()
-    .from(seatHolds)
-    .where(eq(seatHolds.id, holdId))
-    .limit(1);
-
-  if (!hold) {
-    throw new Error(`Seat hold ${holdId} not found`);
-  }
-
-  await database
-    .update(seatHolds)
-    .set({
-      status: "converted",
-      bookingId,
-      updatedAt: new Date(),
-    })
-    .where(eq(seatHolds.id, holdId));
-
-  console.info(
-    `[Inventory] Seat hold converted: id=${holdId}, bookingId=${bookingId}`
-  );
-}
-
 /**
  * Get active holds count from database
  */
@@ -418,23 +417,7 @@ async function getActiveHoldsCount(
   const database = await getDb();
   if (!database) return 0;
 
-  const now = new Date();
-
-  const result = await database
-    .select({
-      totalSeats: sql<number>`COALESCE(SUM(${seatHolds.seats}), 0)`,
-    })
-    .from(seatHolds)
-    .where(
-      and(
-        eq(seatHolds.flightId, flightId),
-        eq(seatHolds.cabinClass, cabinClass),
-        eq(seatHolds.status, "active"),
-        gte(seatHolds.expiresAt, now)
-      )
-    );
-
-  return Number(result[0]?.totalSeats ?? 0);
+  return countActiveHolds(database, flightId, cabinClass, undefined, false);
 }
 
 // ============================================================================
@@ -1172,7 +1155,6 @@ export const InventoryService = {
   getInventoryStatus,
   allocateSeats,
   releaseSeatHold,
-  convertHoldToBooking,
   addToWaitlist,
   processWaitlist,
   removeFromWaitlist,

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/vouchers";
 import { z } from "zod";
 import {
   publicProcedure,
@@ -40,6 +41,7 @@ export const vouchersRouter = router({
           .describe("Purchase amount in cents to calculate discount"),
       })
     )
+    .output(responseContracts["validate"])
     .mutation(async ({ input }) => {
       return await voucherService.validateVoucher(input.code, input.amount);
     }),
@@ -70,6 +72,7 @@ export const vouchersRouter = router({
         amount: z.number().min(0).describe("Booking amount in cents"),
       })
     )
+    .output(responseContracts["applyVoucher"])
     .mutation(async ({ ctx, input }) => {
       return await voucherService.applyVoucher(
         input.code,
@@ -94,6 +97,7 @@ export const vouchersRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["myCredits"])
     .query(async ({ ctx }) => {
       return await voucherService.getAvailableBalance(ctx.user.id);
     }),
@@ -112,6 +116,7 @@ export const vouchersRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["myCreditHistory"])
     .query(async ({ ctx }) => {
       return await voucherService.getUserCredits(ctx.user.id);
     }),
@@ -130,6 +135,7 @@ export const vouchersRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["myCreditUsage"])
     .query(async ({ ctx }) => {
       return await voucherService.getCreditUsageHistory(ctx.user.id);
     }),
@@ -155,6 +161,7 @@ export const vouchersRouter = router({
         bookingId: z.number().describe("Booking ID to apply credits to"),
       })
     )
+    .output(responseContracts["useCredits"])
     .mutation(async ({ ctx, input }) => {
       return await voucherService.useCredit(
         ctx.user.id,
@@ -212,6 +219,7 @@ export const vouchersRouter = router({
         isActive: z.boolean().default(true).describe("Active status"),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       return await voucherService.createVoucher(input, ctx.user.id);
     }),
@@ -238,6 +246,7 @@ export const vouchersRouter = router({
           .describe("Include inactive vouchers"),
       })
     )
+    .output(responseContracts["getAll"])
     .query(async ({ input }) => {
       return await voucherService.getAllVouchers(input.includeInactive);
     }),
@@ -261,6 +270,7 @@ export const vouchersRouter = router({
         id: z.number().describe("Voucher ID"),
       })
     )
+    .output(responseContracts["getById"])
     .query(async ({ input }) => {
       return await voucherService.getVoucherById(input.id);
     }),
@@ -293,6 +303,7 @@ export const vouchersRouter = router({
         isActive: z.boolean().optional(),
       })
     )
+    .output(responseContracts["update"])
     .mutation(async ({ input }) => {
       const { id, ...data } = input;
       return await voucherService.updateVoucher(id, data);
@@ -317,6 +328,7 @@ export const vouchersRouter = router({
         id: z.number().describe("Voucher ID"),
       })
     )
+    .output(responseContracts["deactivate"])
     .mutation(async ({ input }) => {
       return await voucherService.deactivateVoucher(input.id);
     }),
@@ -340,6 +352,7 @@ export const vouchersRouter = router({
         id: z.number().describe("Voucher ID"),
       })
     )
+    .output(responseContracts["getUsageHistory"])
     .query(async ({ input }) => {
       return await voucherService.getVoucherUsageHistory(input.id);
     }),
@@ -369,6 +382,7 @@ export const vouchersRouter = router({
         expiresAt: z.date().optional().describe("Expiration date"),
       })
     )
+    .output(responseContracts["addCredit"])
     .mutation(async ({ ctx, input }) => {
       return await voucherService.addCredit(
         input.userId,
@@ -401,6 +415,7 @@ export const vouchersRouter = router({
         userId: z.number().describe("User ID"),
       })
     )
+    .output(responseContracts["getUserCredits"])
     .query(async ({ input }) => {
       return await voucherService.getAvailableBalance(input.userId);
     }),
@@ -425,6 +440,7 @@ export const vouchersRouter = router({
         offset: z.number().min(0).default(0).describe("Offset"),
       })
     )
+    .output(responseContracts["getAllCredits"])
     .query(async ({ input }) => {
       return await voucherService.getAllCredits(input.limit, input.offset);
     }),
@@ -444,6 +460,7 @@ export const vouchersRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["processExpiredCredits"])
     .mutation(async () => {
       return await voucherService.processExpiredCredits();
     }),

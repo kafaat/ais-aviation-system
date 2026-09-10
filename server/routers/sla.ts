@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/sla";
 /**
  * SLA Monitoring Router
  * Provides admin endpoints for monitoring service level agreements,
@@ -26,9 +27,11 @@ export const slaRouter = router({
    * Get overall system health summary
    * Returns health status for all monitored services with uptime and alert counts
    */
-  getSystemHealth: adminProcedure.query(() => {
-    return getSystemHealth();
-  }),
+  getSystemHealth: adminProcedure
+    .output(responseContracts["getSystemHealth"])
+    .query(() => {
+      return getSystemHealth();
+    }),
 
   /**
    * Get individual service health status
@@ -40,6 +43,7 @@ export const slaRouter = router({
         service: z.string().min(1),
       })
     )
+    .output(responseContracts["getServiceStatus"])
     .query(({ input }) => {
       return getServiceStatus(input.service);
     }),
@@ -48,9 +52,11 @@ export const slaRouter = router({
    * Get full SLA dashboard data
    * Returns system health, recent alerts, compliance history, and service breakdown
    */
-  getSLADashboard: adminProcedure.query(() => {
-    return getSLADashboard();
-  }),
+  getSLADashboard: adminProcedure
+    .output(responseContracts["getSLADashboard"])
+    .query(() => {
+      return getSLADashboard();
+    }),
 
   /**
    * Get SLA alerts with optional filtering
@@ -66,6 +72,7 @@ export const slaRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getAlerts"])
     .query(({ input }) => {
       const dateRange =
         input?.startDate && input?.endDate
@@ -89,6 +96,7 @@ export const slaRouter = router({
         alertId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["acknowledgeAlert"])
     .mutation(({ input, ctx }) => {
       const result = acknowledgeAlert(input.alertId, ctx.user.id);
       if (!result) {
@@ -109,6 +117,7 @@ export const slaRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getTargets"])
     .query(({ input }) => {
       return getTargets(input?.activeOnly ?? true);
     }),
@@ -127,6 +136,7 @@ export const slaRouter = router({
         isActive: z.boolean().optional(),
       })
     )
+    .output(responseContracts["updateTarget"])
     .mutation(({ input }) => {
       const { id, ...updates } = input;
       const result = updateTarget(id, updates);
@@ -147,6 +157,7 @@ export const slaRouter = router({
         endDate: z.string().datetime(),
       })
     )
+    .output(responseContracts["generateReport"])
     .mutation(({ input }) => {
       const report = getSLAReport({
         start: new Date(input.startDate),
@@ -159,9 +170,11 @@ export const slaRouter = router({
    * Get all previously generated SLA reports
    * Returns reports sorted by generation date (most recent first)
    */
-  getReports: adminProcedure.query(() => {
-    return getReports();
-  }),
+  getReports: adminProcedure
+    .output(responseContracts["getReports"])
+    .query(() => {
+      return getReports();
+    }),
 
   /**
    * Get metric history for a specific service and metric type
@@ -181,6 +194,7 @@ export const slaRouter = router({
         endDate: z.string().datetime(),
       })
     )
+    .output(responseContracts["getMetricHistory"])
     .query(({ input }) => {
       const metrics = getMetricHistory(
         input.service,

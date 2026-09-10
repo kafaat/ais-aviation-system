@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/passenger-priority";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import {
@@ -26,6 +27,7 @@ export const passengerPriorityRouter = router({
         bookingId: z.number(),
       })
     )
+    .output(responseContracts["calculateScore"])
     .query(async ({ input }) => {
       return await calculatePriorityScore(input.passengerId, input.bookingId);
     }),
@@ -35,6 +37,7 @@ export const passengerPriorityRouter = router({
    */
   rankPassengers: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["rankPassengers"])
     .query(async ({ input }) => {
       return await rankPassengers(input.flightId);
     }),
@@ -44,6 +47,7 @@ export const passengerPriorityRouter = router({
    */
   getPassengerProfile: adminProcedure
     .input(z.object({ passengerId: z.number() }))
+    .output(responseContracts["getPassengerProfile"])
     .query(async ({ input }) => {
       return await getPassengerProfile(input.passengerId);
     }),
@@ -53,6 +57,7 @@ export const passengerPriorityRouter = router({
    */
   getRebookingOrder: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getRebookingOrder"])
     .query(async ({ input }) => {
       return await suggestRebookingOrder(input.flightId);
     }),
@@ -67,6 +72,7 @@ export const passengerPriorityRouter = router({
         bookingId: z.number(),
       })
     )
+    .output(responseContracts["getProtectionOptions"])
     .query(async ({ input }) => {
       return await getProtectionOptions(input.passengerId, input.bookingId);
     }),
@@ -74,7 +80,7 @@ export const passengerPriorityRouter = router({
   /**
    * Get all priority scoring rules
    */
-  getRules: adminProcedure.query(() => {
+  getRules: adminProcedure.output(responseContracts["getRules"]).query(() => {
     return getRules();
   }),
 
@@ -89,6 +95,7 @@ export const passengerPriorityRouter = router({
         isActive: z.boolean().optional(),
       })
     )
+    .output(responseContracts["updateRule"])
     .mutation(({ input }) => {
       return updateRule(input.ruleId, {
         score: input.score,

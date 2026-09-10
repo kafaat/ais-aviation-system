@@ -269,7 +269,13 @@ export const configuredPublisher: OutboxPublisher = async event => {
   }
   const endpoint = process.env.OUTBOX_PUBLISH_URL;
   const token = process.env.OUTBOX_PUBLISH_TOKEN;
-  if (!endpoint || !token) throw new Error("Outbox receiver is not configured");
+  if (!endpoint) {
+    const { consumeLocalEvent } = await import("./event-inbox.service");
+    await consumeLocalEvent(event);
+    return;
+  }
+  if (!token)
+    throw new Error("Configured outbox receiver requires authentication");
   if (
     process.env.NODE_ENV === "production" &&
     new URL(endpoint).protocol !== "https:"

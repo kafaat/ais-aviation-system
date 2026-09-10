@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/weight-balance";
 /**
  * Weight & Balance Router
  *
@@ -38,6 +39,7 @@ export const weightBalanceRouter = router({
           .default("preliminary"),
       })
     )
+    .output(responseContracts["calculate"])
     .mutation(async ({ input, ctx }) => {
       return await wbService.calculateFlightWeightBalance(input.flightId, {
         aircraftTypeId: input.aircraftTypeId,
@@ -62,6 +64,7 @@ export const weightBalanceRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getFlightWB"])
     .query(async ({ input }) => {
       return await wbService.getFlightWeightBalance(input.flightId);
     }),
@@ -80,6 +83,7 @@ export const weightBalanceRouter = router({
         aircraftTypeId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getAircraftLimits"])
     .query(async ({ input }) => {
       return await wbService.getAircraftLimits(input.aircraftTypeId);
     }),
@@ -106,6 +110,7 @@ export const weightBalanceRouter = router({
         standardBagWeight: z.number().positive().optional(),
       })
     )
+    .output(responseContracts["updateAircraftLimits"])
     .mutation(async ({ input }) => {
       const { aircraftTypeId, ...updates } = input;
       return await wbService.updateAircraftLimits(aircraftTypeId, updates);
@@ -125,6 +130,7 @@ export const weightBalanceRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["generateLoadSheet"])
     .mutation(async ({ input }) => {
       return await wbService.generateLoadSheet(input.flightId);
     }),
@@ -143,6 +149,7 @@ export const weightBalanceRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["checkLimits"])
     .query(async ({ input }) => {
       return await wbService.checkWeightLimits(input.flightId);
     }),
@@ -161,6 +168,7 @@ export const weightBalanceRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getHistory"])
     .query(async ({ input }) => {
       return await wbService.getWeightHistory(input.flightId);
     }),

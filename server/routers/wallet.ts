@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/wallet";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -16,9 +17,11 @@ export const walletRouter = router({
   /**
    * Get current wallet balance
    */
-  balance: protectedProcedure.query(async ({ ctx }) => {
-    return await getWalletBalance(ctx.user.id);
-  }),
+  balance: protectedProcedure
+    .output(responseContracts["balance"])
+    .query(async ({ ctx }) => {
+      return await getWalletBalance(ctx.user.id);
+    }),
 
   /**
    * Top up wallet balance
@@ -29,6 +32,7 @@ export const walletRouter = router({
         amount: z.number().int().min(1000).max(1000000), // 10 SAR to 10,000 SAR in cents
       })
     )
+    .output(responseContracts["topUp"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await topUpWallet(ctx.user.id, input.amount, "Wallet top-up");
@@ -50,6 +54,7 @@ export const walletRouter = router({
         bookingId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["pay"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await payFromWallet(ctx.user.id, input.bookingId);
@@ -76,6 +81,7 @@ export const walletRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["transactions"])
     .query(async ({ ctx, input }) => {
       return await getWalletTransactions(
         ctx.user.id,

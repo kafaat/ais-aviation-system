@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/travel-scenarios";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import {
@@ -18,9 +19,11 @@ export const travelScenariosRouter = router({
   /**
    * Get auto check-in status for the current user
    */
-  getAutoCheckIn: protectedProcedure.query(async ({ ctx }) => {
-    return await getAutoCheckInStatus(ctx.user.id);
-  }),
+  getAutoCheckIn: protectedProcedure
+    .output(responseContracts["getAutoCheckIn"])
+    .query(async ({ ctx }) => {
+      return await getAutoCheckInStatus(ctx.user.id);
+    }),
 
   /**
    * Toggle auto check-in preference
@@ -31,6 +34,7 @@ export const travelScenariosRouter = router({
         enabled: z.boolean().describe("Enable or disable auto check-in"),
       })
     )
+    .output(responseContracts["setAutoCheckIn"])
     .mutation(async ({ ctx, input }) => {
       return await setAutoCheckIn(ctx.user.id, input.enabled);
     }),
@@ -46,6 +50,7 @@ export const travelScenariosRouter = router({
         bookingId: z.number().describe("Booking ID to share"),
       })
     )
+    .output(responseContracts["getShareableItinerary"])
     .query(async ({ ctx, input }) => {
       return await getShareableItinerary(input.bookingId, ctx.user.id);
     }),
@@ -61,6 +66,7 @@ export const travelScenariosRouter = router({
         flightId: z.number().describe("Flight ID"),
       })
     )
+    .output(responseContracts["getCarbonOffset"])
     .query(async ({ input }) => {
       return await calculateCarbonOffset(input.flightId);
     }),
@@ -76,6 +82,7 @@ export const travelScenariosRouter = router({
         flightId: z.number().describe("Flight ID"),
       })
     )
+    .output(responseContracts["getTravelRequirements"])
     .query(async ({ input }) => {
       return await getTravelRequirements(input.flightId);
     }),

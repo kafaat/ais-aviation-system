@@ -168,20 +168,22 @@ export class IntelligenceKernel {
     // Economics summary
     const economicsData = economics?.data as
       | {
-          netMargin?: number;
+          netMargin?: number | null;
           unprofitableRoutes?: unknown[];
           routes?: unknown[];
         }
       | undefined;
-    const profitMargin = economicsData?.netMargin ?? 0;
+    const profitMargin = economicsData?.netMargin ?? null;
     const economicsTrend =
-      profitMargin > 15
-        ? "Strong profitability"
-        : profitMargin > 5
-          ? "Healthy margins"
-          : profitMargin > 0
-            ? "Thin margins"
-            : "Loss-making";
+      profitMargin == null
+        ? "Insufficient operating-cost data"
+        : profitMargin > 15
+          ? "Strong profitability"
+          : profitMargin > 5
+            ? "Healthy margins"
+            : profitMargin > 0
+              ? "Thin margins"
+              : "Loss-making";
 
     // Fraud summary
     const fraudData = fraud?.data as
@@ -217,8 +219,14 @@ export class IntelligenceKernel {
       overallHealth,
       healthScore,
       economics: {
-        summary: `Net margin: ${profitMargin}%. ${economicsData?.unprofitableRoutes?.length || 0} routes below threshold.`,
-        summaryAr: `هامش الربح الصافي: ${profitMargin}%. ${economicsData?.unprofitableRoutes?.length || 0} خطوط أقل من الحد الأدنى.`,
+        summary:
+          profitMargin == null
+            ? "Profitability is unavailable until operating costs are integrated."
+            : `Net margin: ${profitMargin}%. ${economicsData?.unprofitableRoutes?.length || 0} routes below threshold.`,
+        summaryAr:
+          profitMargin == null
+            ? "الربحية غير متاحة حتى ربط تكاليف التشغيل الفعلية."
+            : `هامش الربح الصافي: ${profitMargin}%. ${economicsData?.unprofitableRoutes?.length || 0} خطوط أقل من الحد الأدنى.`,
         profitMargin,
         trend: economicsTrend,
         keyMetrics: {
@@ -402,7 +410,10 @@ export class IntelligenceKernel {
     let factorCount = 0;
 
     // Economics contribution (30%)
-    if (economics?.status === "completed") {
+    if (
+      economics?.status === "completed" &&
+      (economics.data as { netMargin?: number | null })?.netMargin != null
+    ) {
       const data = economics.data as { netMargin?: number } | undefined;
       const margin = data?.netMargin ?? 0;
       const econScore =

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/reviews";
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import * as reviewsService from "../services/reviews.service";
@@ -19,6 +20,7 @@ export const reviewsRouter = router({
         comment: z.string().max(5000).optional(),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       return await reviewsService.createReview({
         userId: ctx.user.id,
@@ -38,6 +40,7 @@ export const reviewsRouter = router({
         minRating: z.number().int().min(1).max(5).optional(),
       })
     )
+    .output(responseContracts["getFlightReviews"])
     .query(async ({ input }) => {
       return await reviewsService.getFlightReviews(input.flightId, {
         limit: input.limit,
@@ -55,6 +58,7 @@ export const reviewsRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getFlightStats"])
     .query(async ({ input }) => {
       return await reviewsService.getFlightReviewStats(input.flightId);
     }),
@@ -74,6 +78,7 @@ export const reviewsRouter = router({
         comment: z.string().max(5000).optional(),
       })
     )
+    .output(responseContracts["update"])
     .mutation(async ({ ctx, input }) => {
       const { reviewId, ...updateData } = input;
       return await reviewsService.updateReview({
@@ -92,6 +97,7 @@ export const reviewsRouter = router({
         reviewId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["delete"])
     .mutation(async ({ ctx, input }) => {
       return await reviewsService.deleteReview(input.reviewId, ctx.user.id);
     }),
@@ -106,6 +112,7 @@ export const reviewsRouter = router({
         offset: z.number().int().min(0).optional(),
       })
     )
+    .output(responseContracts["getUserReviews"])
     .query(async ({ ctx, input }) => {
       return await reviewsService.getUserReviews(ctx.user.id, {
         limit: input.limit,
@@ -122,6 +129,7 @@ export const reviewsRouter = router({
         reviewId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["markHelpful"])
     .mutation(async ({ input }) => {
       return await reviewsService.markReviewHelpful(input.reviewId);
     }),
@@ -138,6 +146,7 @@ export const reviewsRouter = router({
         minRating: z.number().int().min(1).max(5).optional(),
       })
     )
+    .output(responseContracts["getAirlineReviews"])
     .query(async ({ input }) => {
       return await reviewsService.getAirlineReviews(input.airlineId, {
         limit: input.limit,
@@ -155,6 +164,7 @@ export const reviewsRouter = router({
         airlineId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getAirlineStats"])
     .query(async ({ input }) => {
       return await reviewsService.getAirlineReviewStats(input.airlineId);
     }),
@@ -168,6 +178,7 @@ export const reviewsRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["canReview"])
     .query(async ({ ctx, input }) => {
       return await reviewsService.canUserReviewFlight(
         ctx.user.id,

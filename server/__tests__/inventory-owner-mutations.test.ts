@@ -124,14 +124,14 @@ describe("inventory owner mutations through the real router and service", () => 
     }
   );
 
-  it("does not overwrite a hold converted between read and write", async () => {
+  it("rolls back the transaction when the conditional hold write loses a race", async () => {
     beforeWrite("seat_holds", () => {
       fixture.rows("seat_holds")[0].status = "converted";
     });
     await expect(caller.releaseHold({ holdId: 1 })).rejects.toMatchObject({
       code: "CONFLICT",
     });
-    expect(fixture.rows("seat_holds")[0].status).toBe("converted");
+    expect(fixture.rows("seat_holds")[0].status).toBe("active");
     expect(fixture.rows("waitlist")[0].status).toBe("waiting");
   });
 

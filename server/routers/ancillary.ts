@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/ancillary";
 import { z } from "zod";
 import {
   publicProcedure,
@@ -34,6 +35,7 @@ export const ancillaryRouter = router({
           .optional(),
       })
     )
+    .output(responseContracts["getAvailable"])
     .query(async ({ input }) => {
       return await ancillaryService.getAvailableAncillaries(input.category);
     }),
@@ -56,6 +58,7 @@ export const ancillaryRouter = router({
         airlineId: z.number().optional(),
       })
     )
+    .output(responseContracts["getByCategory"])
     .query(async ({ input }) => {
       return await ancillaryService.getAncillariesByCategory(input);
     }),
@@ -65,6 +68,7 @@ export const ancillaryRouter = router({
    */
   getById: publicProcedure
     .input(z.object({ id: z.number() }))
+    .output(responseContracts["getById"])
     .query(async ({ input }) => {
       const service = await ancillaryService.getAncillaryById(input.id);
       if (!service) {
@@ -89,6 +93,7 @@ export const ancillaryRouter = router({
         metadata: z.any().optional(),
       })
     )
+    .output(responseContracts["addToBooking"])
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db)
@@ -125,6 +130,7 @@ export const ancillaryRouter = router({
    */
   getBookingAncillaries: protectedProcedure
     .input(z.object({ bookingId: z.number() }))
+    .output(responseContracts["getBookingAncillaries"])
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db)
@@ -161,6 +167,7 @@ export const ancillaryRouter = router({
    */
   removeFromBooking: protectedProcedure
     .input(z.object({ ancillaryId: z.number() }))
+    .output(responseContracts["removeFromBooking"])
     .mutation(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db)
@@ -208,6 +215,7 @@ export const ancillaryRouter = router({
    */
   calculateTotal: protectedProcedure
     .input(z.object({ bookingId: z.number() }))
+    .output(responseContracts["calculateTotal"])
     .query(async ({ input, ctx }) => {
       const db = await getDb();
       if (!db)
@@ -267,6 +275,7 @@ export const ancillaryRouter = router({
         icon: z.string().max(255).optional(),
       })
     )
+    .output(responseContracts["adminCreate"])
     .mutation(async ({ input }) => {
       const id = await ancillaryService.createAncillaryService(input);
       return { id, success: true };
@@ -299,6 +308,7 @@ export const ancillaryRouter = router({
         icon: z.string().max(255).optional(),
       })
     )
+    .output(responseContracts["adminUpdate"])
     .mutation(async ({ input }) => {
       const { id, ...data } = input;
       await ancillaryService.updateAncillaryService(id, data);
@@ -310,6 +320,7 @@ export const ancillaryRouter = router({
    */
   adminDeactivate: adminProcedure
     .input(z.object({ id: z.number() }))
+    .output(responseContracts["adminDeactivate"])
     .mutation(async ({ input }) => {
       await ancillaryService.deactivateAncillaryService(input.id);
       return { success: true };

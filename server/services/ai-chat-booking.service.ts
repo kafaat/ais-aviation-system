@@ -16,7 +16,8 @@ import {
   type ChatMessage,
   type BookingSuggestion,
 } from "../../drizzle/schema";
-import { invokeLLM, type Message } from "../_core/llm";
+import type { Message } from "../_core/llm";
+import { aiGateway } from "./intelligence/gateway";
 import { searchFlights } from "./flights.service";
 
 // ============================================================================
@@ -58,6 +59,7 @@ export interface StartConversationInput {
 }
 
 export interface SendMessageInput {
+  tenantId?: number | null;
   conversationId: number;
   userId: number;
   message: string;
@@ -219,7 +221,12 @@ export async function sendMessage(
   let processingTime = 0;
 
   try {
-    const llmResponse = await invokeLLM({
+    const { result: llmResponse } = await aiGateway.invoke({
+      agentId: "booking-chat",
+      taskType: "generation",
+      feature: "ai-chat",
+      userId: input.userId,
+      tenantId: input.tenantId ?? undefined,
       messages: llmMessages,
       maxTokens: 1024,
     });

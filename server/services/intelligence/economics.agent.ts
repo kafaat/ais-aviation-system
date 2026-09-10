@@ -16,8 +16,13 @@
  */
 
 import { getDb } from "../../db";
-import { flights, bookings, airports } from "../../../drizzle/schema";
-import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+import {
+  flights,
+  bookings,
+  airports,
+  bookingSegments,
+} from "../../../drizzle/schema";
+import { eq, and, gte, lte, inArray, or } from "drizzle-orm";
 import { createServiceLogger } from "../../_core/logger";
 import type {
   AgentResult,
@@ -51,8 +56,65 @@ const COST_STRUCTURE = {
   overhead: 0.15,
 } as const;
 
-/** Minimum profitable margin threshold */
-const MIN_PROFIT_MARGIN = 0.05; // 5%
+/** Aggregate capacities independently from booking multiplicity and retain unknown allocations. */
+export function summarizeRouteActivity(
+  flightRows: Array<{
+    id: number;
+    originId: number;
+    destinationId: number;
+    economySeats: number;
+    businessSeats: number;
+  }>,
+  bookingRows: Array<{
+    id: number;
+    flightId: number;
+    numberOfPassengers: number;
+    totalAmount: number;
+  }>,
+  segments: Array<{
+    bookingId: number;
+    flightId: number;
+    segmentAmount: number | null;
+  }>
+) {
+  const routes = new Map<
+    string,
+    {
+      originId: number;
+      destinationId: number;
+      flightCount: number;
+      totalSeats: number;
+      bookedSeats: number;
+      revenue: number | null;
+    }
+  >();
+  for (const flight of flightRows) {
+    const key = `${flight.originId}-${flight.destinationId}`;
+    const route = routes.get(key) ?? {
+      originId: flight.originId,
+      destinationId: flight.destinationId,
+      flightCount: 0,
+      totalSeats: 0,
+      bookedSeats: 0,
+      revenue: 0,
+    };
+    route.flightCount++;
+    route.totalSeats += flight.economySeats + flight.businessSeats;
+    for (const booking of bookingRows) {
+      const itinerary = segments.filter(s => s.bookingId === booking.id);
+      const leg = itinerary.find(s => s.flightId === flight.id);
+      if (itinerary.length ? !leg : booking.flightId !== flight.id) continue;
+      route.bookedSeats += booking.numberOfPassengers;
+      const amount = itinerary.length
+        ? leg!.segmentAmount
+        : booking.totalAmount;
+      route.revenue =
+        route.revenue == null || amount == null ? null : route.revenue + amount;
+    }
+    routes.set(key, route);
+  }
+  return [...routes.values()];
+}
 
 // ============================================================================
 // Economics Agent
@@ -88,220 +150,128 @@ export class EconomicsAgent {
         `Analyzing period: ${startDate.toISOString().split("T")[0]} to ${endDate.toISOString().split("T")[0]}`
       );
 
-      // Fetch route performance data
-      const routeData = await db
-        .select({
-          originId: flights.originId,
-          destinationId: flights.destinationId,
-          totalFlights: sql<number>`COUNT(DISTINCT ${flights.id})`,
-          totalSeats: sql<number>`COALESCE(SUM(${flights.economySeats} + ${flights.businessSeats}), 0)`,
-          bookedSeats: sql<number>`COUNT(DISTINCT ${bookings.id})`,
-          totalRevenue: sql<number>`COALESCE(SUM(CASE WHEN ${bookings.paymentStatus} = 'paid' THEN ${bookings.totalAmount} ELSE 0 END), 0)`,
-          avgPrice: sql<number>`COALESCE(AVG(CASE WHEN ${bookings.paymentStatus} = 'paid' THEN ${bookings.totalAmount} ELSE NULL END), 0)`,
-        })
+      // Read each flight once; never SUM capacity across a one-to-many booking join.
+      const flown = await db
+        .select()
         .from(flights)
-        .leftJoin(bookings, eq(bookings.flightId, flights.id))
         .where(
           and(
             gte(flights.departureTime, startDate),
             lte(flights.departureTime, endDate),
-            eq(flights.status, "completed")
+            eq(flights.status, "completed"),
+            context.scope.flightIds?.length
+              ? inArray(flights.id, context.scope.flightIds)
+              : undefined,
+            context.scope.airlineIds?.length
+              ? inArray(flights.airlineId, context.scope.airlineIds)
+              : undefined
           )
-        )
-        .groupBy(flights.originId, flights.destinationId)
-        .orderBy(desc(sql`totalRevenue`));
-
-      reasoning.push(`Found ${routeData.length} active routes in the period`);
-
-      // Fetch airport names for readable output
+        );
+      const flightIds = flown.map(f => f.id);
+      const matchingSegments = flightIds.length
+        ? await db
+            .select()
+            .from(bookingSegments)
+            .where(inArray(bookingSegments.flightId, flightIds))
+        : [];
+      const segmentBookingIds = [
+        ...new Set(matchingSegments.map(s => s.bookingId)),
+      ];
+      const paid = flightIds.length
+        ? await db
+            .select()
+            .from(bookings)
+            .where(
+              and(
+                eq(bookings.paymentStatus, "paid"),
+                inArray(bookings.status, ["confirmed", "completed"]),
+                or(
+                  inArray(bookings.flightId, flightIds),
+                  segmentBookingIds.length
+                    ? inArray(bookings.id, segmentBookingIds)
+                    : undefined
+                )
+              )
+            )
+        : [];
+      const segments = paid.length
+        ? await db
+            .select()
+            .from(bookingSegments)
+            .where(
+              inArray(
+                bookingSegments.bookingId,
+                paid.map(b => b.id)
+              )
+            )
+        : [];
       const airportList = await db
-        .select({ id: airports.id, code: airports.code, name: airports.name })
+        .select({ id: airports.id, code: airports.code })
         .from(airports);
-      const airportMap = new Map(airportList.map(a => [a.id, a]));
-
-      // Calculate economics for each route
-      const routes: RouteEconomics[] = routeData.map(route => {
-        const origin = airportMap.get(route.originId);
-        const dest = airportMap.get(route.destinationId);
-        const routeId = `${route.originId}-${route.destinationId}`;
-        const distance = AVG_DOMESTIC_DISTANCE_KM; // Simplified; use actual distance in production
-
-        const totalSeats = Number(route.totalSeats) || 1;
-        const bookedSeats = Number(route.bookedSeats) || 0;
-        const totalRevenue = Number(route.totalRevenue) / 100; // Convert from cents to SAR
-        const loadFactor = Math.min(bookedSeats / totalSeats, 1);
-
-        // Calculate RASK (Revenue per Available Seat Kilometer)
-        const askm = totalSeats * distance;
-        const rask = askm > 0 ? totalRevenue / askm : 0;
-
-        // Estimate costs using industry cost structure
-        const estimatedCostPerSeat =
-          (totalRevenue / Math.max(bookedSeats, 1)) * 0.75;
-        const totalCost = estimatedCostPerSeat * totalSeats;
-        const cask = askm > 0 ? totalCost / askm : 0;
-
-        // Calculate yield (Revenue per RPK)
-        const rpkm = bookedSeats * distance;
-        const yieldVal = rpkm > 0 ? totalRevenue / rpkm : 0;
-
-        // Break-even load factor
-        const breakEvenLF =
-          cask > 0 ? cask / (rask / Math.max(loadFactor, 0.01)) : 0.7;
-
-        const profitMargin =
-          totalRevenue > 0 ? (totalRevenue - totalCost) / totalRevenue : 0;
-        const contributionMargin = rask - cask;
-
-        return {
-          routeId,
-          origin: origin?.code || `APT-${route.originId}`,
-          destination: dest?.code || `APT-${route.destinationId}`,
-          metrics: {
-            rask: Math.round(rask * 1000) / 1000,
-            cask: Math.round(cask * 1000) / 1000,
-            yield: Math.round(yieldVal * 1000) / 1000,
-            loadFactor: Math.round(loadFactor * 1000) / 10,
-            breakEvenLoadFactor:
-              Math.round(Math.min(breakEvenLF, 1) * 1000) / 10,
-            profitMargin: Math.round(profitMargin * 1000) / 10,
-            contributionMargin: Math.round(contributionMargin * 1000) / 1000,
-          },
-          trend:
-            profitMargin > MIN_PROFIT_MARGIN
-              ? "improving"
-              : profitMargin < 0
-                ? "declining"
-                : "stable",
-          forecast: {
-            nextMonth: totalRevenue * 1.02, // Simplified; use actual forecasting model
-            nextQuarter: totalRevenue * 3.05,
-            confidence: 0.72,
-          },
-        };
-      });
-
-      // Identify unprofitable routes
-      const unprofitableRoutes = routes.filter(
-        r => r.metrics.profitMargin < MIN_PROFIT_MARGIN
-      );
-      const topPerformers = routes.slice(0, 5);
-
-      // Calculate aggregated metrics
-      const totalRevenue = routes.reduce(
-        (sum, r) => sum + r.forecast.nextMonth,
-        0
-      );
-      const totalCost = routes.reduce(
-        (sum, r) =>
-          sum + r.forecast.nextMonth * (1 - r.metrics.profitMargin / 100),
-        0
-      );
-      const operatingProfit = totalRevenue - totalCost;
-      const netMargin = totalRevenue > 0 ? operatingProfit / totalRevenue : 0;
-
-      reasoning.push(`Overall net margin: ${(netMargin * 100).toFixed(1)}%`);
-      reasoning.push(
-        `${unprofitableRoutes.length} routes below ${MIN_PROFIT_MARGIN * 100}% margin threshold`
-      );
-      reasoning.push(
-        `Top route: ${topPerformers[0]?.origin}-${topPerformers[0]?.destination} with ${topPerformers[0]?.metrics.profitMargin}% margin`
-      );
-
-      // Generate recommendations
-      for (const route of unprofitableRoutes.slice(0, 3)) {
-        if (route.metrics.loadFactor < 60) {
-          recommendations.push({
-            id: `econ-lf-${route.routeId}`,
-            type: "economics",
-            severity: "warning",
-            title: `Low load factor on ${route.origin}-${route.destination}`,
-            titleAr: `معامل حمولة منخفض على ${route.origin}-${route.destination}`,
-            description: `Load factor is ${route.metrics.loadFactor}%. Consider reducing frequency or offering promotions.`,
-            descriptionAr: `معامل الحمولة ${route.metrics.loadFactor}%. يُنصح بتقليل عدد الرحلات أو تقديم عروض ترويجية.`,
-            action: "reduce_frequency_or_promote",
-            impact: {
-              metric: "load_factor",
-              currentValue: route.metrics.loadFactor,
-              projectedValue: Math.min(route.metrics.loadFactor + 15, 90),
-              change: 15,
-              unit: "%",
-            },
-            autoApplicable: false,
-          });
-        }
-
-        if (route.metrics.profitMargin < 0) {
-          recommendations.push({
-            id: `econ-loss-${route.routeId}`,
-            type: "economics",
-            severity: "critical",
-            title: `Route ${route.origin}-${route.destination} is operating at a loss`,
-            titleAr: `خط ${route.origin}-${route.destination} يعمل بخسارة`,
-            description: `Profit margin is ${route.metrics.profitMargin}%. Consider route suspension or ACMI partnership.`,
-            descriptionAr: `هامش الربح ${route.metrics.profitMargin}%. يُنصح بتعليق الخط أو الشراكة مع ACMI.`,
-            action: "evaluate_route_viability",
-            impact: {
-              metric: "profit_margin",
-              currentValue: route.metrics.profitMargin,
-              projectedValue: 5,
-              change: 5 - route.metrics.profitMargin,
-              unit: "%",
-            },
-            autoApplicable: false,
-          });
-        }
-      }
-
-      // Revenue optimization opportunity
-      if (routes.length > 0) {
-        const avgLoadFactor =
-          routes.reduce((s, r) => s + r.metrics.loadFactor, 0) / routes.length;
-        if (avgLoadFactor < 75) {
-          recommendations.push({
-            id: "econ-network-lf",
-            type: "economics",
-            severity: "action_required",
-            title: "Network load factor below target",
-            titleAr: "معامل حمولة الشبكة أقل من المستهدف",
-            description: `Average load factor is ${avgLoadFactor.toFixed(1)}%. Target is 80%. Dynamic pricing adjustments recommended.`,
-            descriptionAr: `متوسط معامل الحمولة ${avgLoadFactor.toFixed(1)}%. المستهدف 80%. يُنصح بتعديلات التسعير الديناميكي.`,
-            action: "activate_dynamic_pricing",
-            impact: {
-              metric: "load_factor",
-              currentValue: avgLoadFactor,
-              projectedValue: 80,
-              change: ((80 - avgLoadFactor) / avgLoadFactor) * 100,
-              unit: "%",
-            },
-            autoApplicable: true,
-          });
-        }
-      }
-
-      const result: ProfitabilityAnalysis = {
-        totalRevenue,
-        totalCost,
-        operatingProfit,
-        netMargin: Math.round(netMargin * 1000) / 10,
-        roi:
-          totalCost > 0
-            ? Math.round((operatingProfit / totalCost) * 1000) / 10
+      const airportMap = new Map(airportList.map(a => [a.id, a.code]));
+      const activity = summarizeRouteActivity(flown, paid, segments);
+      const routes: RouteEconomics[] = activity.map(route => ({
+        routeId: `${route.originId}-${route.destinationId}`,
+        origin: airportMap.get(route.originId) ?? `APT-${route.originId}`,
+        destination:
+          airportMap.get(route.destinationId) ?? `APT-${route.destinationId}`,
+        measured: {
+          flights: route.flightCount,
+          availableSeats: route.totalSeats,
+          bookedSeats: route.bookedSeats,
+          revenue: route.revenue == null ? null : route.revenue / 100,
+        },
+        metrics: {
+          loadFactor: route.totalSeats
+            ? Math.round((route.bookedSeats / route.totalSeats) * 1000) / 10
             : 0,
+          rask: null,
+          cask: null,
+          yield: null,
+          breakEvenLoadFactor: null,
+          profitMargin: null,
+          contributionMargin: null,
+        },
+        trend: "unknown",
+        forecast: { nextMonth: null, nextQuarter: null, confidence: 0 },
+      }));
+      reasoning.push(
+        `Measured ${flown.length} completed flights and ${paid.length} paid bookings; capacity counted once per flight and passengers per segment.`
+      );
+      reasoning.push(
+        "Distance, operating costs and a validated forecasting model are absent. Profitability, RASK/CASK and forecasts are unavailable; no route closure or automatic price action is inferred."
+      );
+      const result: ProfitabilityAnalysis = {
+        totalRevenue: activity.some(r => r.revenue == null)
+          ? null
+          : activity.reduce((sum, r) => sum + (r.revenue ?? 0), 0) / 100,
+        totalCost: null,
+        operatingProfit: null,
+        netMargin: null,
+        roi: null,
         routes,
-        unprofitableRoutes,
-        topPerformers,
+        unprofitableRoutes: [],
+        topPerformers: [],
         recommendations,
+        dataQuality: {
+          missing: [
+            "route_distance",
+            "operating_cost_ledger",
+            "validated_forecast",
+            ...(activity.some(r => r.revenue == null)
+              ? ["historical_segment_revenue_allocation"]
+              : []),
+          ],
+          revenueAllocation:
+            "Stored itinerary quote allocation; historical missing allocations remain unknown",
+        },
       };
-
-      const confidence =
-        routes.length > 5 ? 0.85 : routes.length > 0 ? 0.65 : 0.2;
-
+      const confidence = 0; // No evidence supporting a profitability prediction.
       log.info(
         {
           event: "economics_analysis_complete",
           routeCount: routes.length,
-          unprofitableCount: unprofitableRoutes.length,
+          unprofitableCount: result.unprofitableRoutes.length,
           recommendationCount: recommendations.length,
           executionTimeMs: Date.now() - startTime,
         },

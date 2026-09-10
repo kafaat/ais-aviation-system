@@ -53,9 +53,10 @@ import { format, subDays } from "date-fns";
 function StatusIndicator({
   status,
 }: {
-  status: "healthy" | "degraded" | "unhealthy";
+  status: "healthy" | "degraded" | "unhealthy" | "unknown";
 }) {
   const config = {
+    unknown: { label: "غير معلوم", color: "bg-gray-400", pulse: "" },
     healthy: {
       color: "bg-green-500",
       pulse: "animate-pulse",
@@ -93,7 +94,8 @@ function StatusIndicator({
   );
 }
 
-function UptimeDisplay({ value }: { value: number }) {
+function UptimeDisplay({ value }: { value: number | null | undefined }) {
+  if (value == null) return <span>غير معلوم</span>;
   const color =
     value >= 99.9
       ? "text-green-600 dark:text-green-400"
@@ -317,7 +319,7 @@ export function SLADashboard() {
               <Skeleton className="h-8 w-20" />
             ) : (
               <div className="text-2xl font-bold tabular-nums">
-                {(systemHealth?.uptimeAverage ?? 100).toFixed(2)}%
+                {systemHealth?.uptimeAverage?.toFixed(2) ?? "—"}%
               </div>
             )}
           </CardContent>
@@ -337,14 +339,16 @@ export function SLADashboard() {
             ) : (
               <div
                 className={`text-2xl font-bold ${
-                  (systemHealth?.slaCompliance ?? 100) >= 100
+                  (systemHealth?.slaCompliance ?? 0) >= 100
                     ? "text-green-600 dark:text-green-400"
                     : (systemHealth?.slaCompliance ?? 0) >= 75
                       ? "text-yellow-600 dark:text-yellow-400"
                       : "text-red-600 dark:text-red-400"
                 }`}
               >
-                {(systemHealth?.slaCompliance ?? 100).toFixed(1)}%
+                {systemHealth?.slaCompliance == null
+                  ? "—"
+                  : `${systemHealth.slaCompliance.toFixed(1)}%`}
               </div>
             )}
           </CardContent>
@@ -433,7 +437,7 @@ export function SLADashboard() {
                 {dashboardLoading ? (
                   <Skeleton className="h-16 w-40" />
                 ) : (
-                  <UptimeDisplay value={systemHealth?.uptimeAverage ?? 100} />
+                  <UptimeDisplay value={systemHealth?.uptimeAverage ?? null} />
                 )}
               </CardContent>
             </Card>
@@ -647,22 +651,22 @@ export function SLADashboard() {
                         </span>
                         <span
                           className={`font-mono font-semibold ${
-                            service.uptime >= 99.9
+                            service.uptime != null && service.uptime >= 99.9
                               ? "text-green-600 dark:text-green-400"
-                              : service.uptime >= 99.0
+                              : service.uptime != null && service.uptime >= 99.0
                                 ? "text-yellow-600 dark:text-yellow-400"
                                 : "text-red-600 dark:text-red-400"
                           }`}
                         >
-                          {service.uptime.toFixed(2)}%
+                          {service.uptime?.toFixed(2) ?? "—"}%
                         </span>
                       </div>
                       <Progress
                         value={service.uptime}
                         className={`h-2 ${
-                          service.uptime >= 99.9
+                          service.uptime != null && service.uptime >= 99.9
                             ? "[&>[data-slot=indicator]]:bg-green-500"
-                            : service.uptime >= 99.0
+                            : service.uptime != null && service.uptime >= 99.0
                               ? "[&>[data-slot=indicator]]:bg-yellow-500"
                               : "[&>[data-slot=indicator]]:bg-red-500"
                         }`}
@@ -1169,14 +1173,16 @@ export function SLADashboard() {
                           </td>
                           <td
                             className={`p-3 font-mono font-semibold ${
+                              report.overallUptime != null &&
                               report.overallUptime >= 99.9
                                 ? "text-green-600 dark:text-green-400"
-                                : report.overallUptime >= 99.0
+                                : report.overallUptime != null &&
+                                    report.overallUptime >= 99.0
                                   ? "text-yellow-600 dark:text-yellow-400"
                                   : "text-red-600 dark:text-red-400"
                             }`}
                           >
-                            {report.overallUptime.toFixed(2)}%
+                            {report.overallUptime?.toFixed(2) ?? "—"}%
                           </td>
                           <td className="p-3 font-mono">
                             {Math.round(report.avgResponseTime)}ms

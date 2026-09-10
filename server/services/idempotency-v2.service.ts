@@ -1,3 +1,5 @@
+import superjson from "superjson";
+import { TRPCError } from "@trpc/server";
 /**
  * Idempotency V2 Service - Production-Grade
  *
@@ -15,15 +17,15 @@
 import crypto from "crypto";
 import { getDb } from "../db";
 import { idempotencyRequests } from "../../drizzle/schema";
-import { eq, and, lt, isNull } from "drizzle-orm";
+import { eq, and, lt, isNull, sql } from "drizzle-orm";
 import { AppError, ErrorCode } from "../_core/errors";
 
 /**
  * Custom error for idempotency conflicts
  */
-export class IdempotencyError extends Error {
+export class IdempotencyError extends TRPCError {
   constructor(message: string) {
-    super(message);
+    super({ code: "CONFLICT", message });
     this.name = "IdempotencyError";
   }
 }
@@ -64,18 +66,141 @@ export interface IdempotencyOptions<T> {
 /**
  * Calculate SHA256 hash of request payload
  */
-function calculateRequestHash(request: unknown): string {
-  if (request == null || typeof request !== "object") {
-    return crypto
-      .createHash("sha256")
-      .update(String(request ?? ""))
-      .digest("hex");
-  }
-  const normalized = JSON.stringify(
-    request,
-    Object.keys(request as object).sort()
-  );
-  return crypto.createHash("sha256").update(normalized).digest("hex");
+export function calculateRequestHash(request: unknown): string {
+  const normalize = (value: unknown): unknown => {
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map(normalize);
+    if (value && typeof value === "object")
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([, v]) => v !== undefined)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([k, v]) => [k, normalize(v)])
+      );
+    return value;
+  };
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(normalize(request)) ?? "null")
+    .digest("hex");
+}
+
+/** Preserve Date and explicit undefined values across first response and replay.
+ * Plain JSON rows from the earlier format remain readable. */
+function decodeCommandResponse<T>(value: string): T {
+  const stored = JSON.parse(value);
+  return stored?.__aisAtomicResponse === 1
+    ? superjson.deserialize<T>(stored.payload)
+    : (stored as T);
+}
+
+/** Fast replay before mutable availability/pricing checks. Authorization remains scoped
+ * to the same authenticated user and complete request hash; writes still use the
+ * transactional unique-key claim below. */
+export async function findCompletedCommand<T>(
+  opts: { scope: string; key: string; userId: number; request: unknown },
+  transaction?: import("./booking-settlement.service").SettlementTx
+): Promise<{ response: T } | null> {
+  const database = transaction ?? (await getDb());
+  if (!database) throw new Error("Database not available");
+  const [entry] = await database
+    .select()
+    .from(idempotencyRequests)
+    .where(
+      and(
+        eq(idempotencyRequests.scope, opts.scope),
+        eq(idempotencyRequests.idempotencyKey, opts.key),
+        eq(idempotencyRequests.userId, opts.userId)
+      )
+    )
+    .limit(1);
+  if (!entry) return null;
+  if (entry.requestHash !== calculateRequestHash(opts.request))
+    throw new IdempotencyError("Idempotency key reused with different payload");
+  if (entry.status !== "COMPLETED") return null;
+  if (!entry.responseJson)
+    throw new IdempotencyError("Stored command response is unavailable");
+  return { response: decodeCommandResponse<T>(entry.responseJson) };
+}
+
+/** The command and its durable response commit together. No external I/O in run. */
+export async function withTransactionalIdempotency<T>(
+  opts: {
+    scope: string;
+    key: string;
+    userId: number;
+    request: unknown;
+    run: (
+      tx: import("./booking-settlement.service").SettlementTx
+    ) => Promise<T>;
+  },
+  transaction?: import("./booking-settlement.service").SettlementTx
+): Promise<T> {
+  if (
+    !Number.isSafeInteger(opts.userId) ||
+    opts.userId <= 0 ||
+    !opts.key ||
+    opts.key.length > 255
+  )
+    throw new IdempotencyError(
+      "An authenticated owner and a valid idempotency key are required"
+    );
+  const database = transaction ?? (await getDb());
+  if (!database) throw new Error("Database not available");
+  const execute = async (
+    tx: import("./booking-settlement.service").SettlementTx
+  ): Promise<T> => {
+    const requestHash = calculateRequestHash(opts.request);
+    // The unique key serializes competing attempts, including a first insert.
+    // NULL expiry retains the result for the lifetime of the business command.
+    await tx
+      .insert(idempotencyRequests)
+      .values({
+        scope: opts.scope,
+        idempotencyKey: opts.key,
+        userId: opts.userId,
+        requestHash,
+        status: "STARTED",
+        expiresAt: null,
+      })
+      .onDuplicateKeyUpdate({ set: { id: sql`${idempotencyRequests.id}` } });
+    const [entry] = await tx
+      .select()
+      .from(idempotencyRequests)
+      .where(
+        and(
+          eq(idempotencyRequests.scope, opts.scope),
+          eq(idempotencyRequests.idempotencyKey, opts.key),
+          eq(idempotencyRequests.userId, opts.userId)
+        )
+      )
+      .limit(1)
+      .for("update");
+    if (!entry || entry.requestHash !== requestHash)
+      throw new IdempotencyError(
+        "Idempotency key reused with different payload"
+      );
+    if (entry.status === "COMPLETED") {
+      if (!entry.responseJson)
+        throw new IdempotencyError("Stored command response is unavailable");
+      return decodeCommandResponse<T>(entry.responseJson);
+    }
+    const response = await opts.run(tx);
+    await tx
+      .update(idempotencyRequests)
+      .set({
+        status: "COMPLETED",
+        responseJson: JSON.stringify({
+          __aisAtomicResponse: 1,
+          payload: superjson.serialize(response),
+        }),
+        errorMessage: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(idempotencyRequests.id, entry.id));
+    return response;
+  };
+  return transaction ? execute(transaction) : database.transaction(execute);
 }
 
 /**

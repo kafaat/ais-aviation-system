@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/ai-chat";
 /**
  * AI Chat Booking Router
  *
@@ -45,6 +46,7 @@ export const aiChatRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["startConversation"])
     .mutation(async ({ ctx, input }) => {
       return await startConversation({
         userId: ctx.user.id,
@@ -64,6 +66,7 @@ export const aiChatRouter = router({
         message: z.string().min(1).max(2000),
       })
     )
+    .output(responseContracts["sendMessage"])
     .mutation(async ({ ctx, input }) => {
       // Apply guardrails: validate and sanitize message
       const validation = validateMessage(input.message);
@@ -76,6 +79,7 @@ export const aiChatRouter = router({
 
       // Send sanitized message (PII masked)
       const result = await sendMessage({
+        tenantId: ctx.tenantId,
         conversationId: input.conversationId,
         userId: ctx.user.id,
         message: validation.sanitized,
@@ -97,6 +101,7 @@ export const aiChatRouter = router({
         conversationId: z.number(),
       })
     )
+    .output(responseContracts.getHistory)
     .query(async ({ ctx, input }) => {
       return await getConversationHistory(input.conversationId, ctx.user.id);
     }),
@@ -110,6 +115,7 @@ export const aiChatRouter = router({
         conversationId: z.number(),
       })
     )
+    .output(responseContracts["getSuggestions"])
     .query(async ({ ctx, input }) => {
       return await getConversationSuggestions(
         input.conversationId,
@@ -126,6 +132,7 @@ export const aiChatRouter = router({
         suggestionId: z.number(),
       })
     )
+    .output(responseContracts["selectSuggestion"])
     .mutation(async ({ ctx, input }) => {
       return await selectSuggestion(input.suggestionId, ctx.user.id);
     }),
@@ -133,9 +140,11 @@ export const aiChatRouter = router({
   /**
    * Get user's active conversations
    */
-  myConversations: protectedProcedure.query(async ({ ctx }) => {
-    return await getUserConversations(ctx.user.id);
-  }),
+  myConversations: protectedProcedure
+    .output(responseContracts["myConversations"])
+    .query(async ({ ctx }) => {
+      return await getUserConversations(ctx.user.id);
+    }),
 
   /**
    * Get suggested quick-reply messages based on conversation context
@@ -155,6 +164,7 @@ export const aiChatRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getQuickReplies"])
     .query(({ input }) => {
       return {
         suggestions: getSuggestedMessages(input?.context),
@@ -164,15 +174,17 @@ export const aiChatRouter = router({
   /**
    * Get AI chat configuration (limits, features)
    */
-  getConfig: protectedProcedure.query(() => {
-    return {
-      limits: AI_LIMITS,
-      features: {
-        suggestedMessages: true,
-        stopGeneration: true,
-        piiMasking: true,
-        contentFiltering: true,
-      },
-    };
-  }),
+  getConfig: protectedProcedure
+    .output(responseContracts["getConfig"])
+    .query(() => {
+      return {
+        limits: AI_LIMITS,
+        features: {
+          suggestedMessages: true,
+          stopGeneration: true,
+          piiMasking: true,
+          contentFiltering: true,
+        },
+      };
+    }),
 });

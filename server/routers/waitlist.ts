@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/waitlist";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import * as waitlistService from "../services/waitlist.service";
@@ -41,6 +42,7 @@ export const waitlistRouter = router({
           .describe("Receive SMS notifications"),
       })
     )
+    .output(responseContracts["join"])
     .mutation(async ({ ctx, input }) => {
       return await waitlistService.addToWaitlist(
         ctx.user.id,
@@ -73,6 +75,7 @@ export const waitlistRouter = router({
         cabinClass: z.enum(["economy", "business"]).describe("Cabin class"),
       })
     )
+    .output(responseContracts["getPosition"])
     .query(async ({ ctx, input }) => {
       return await waitlistService.getWaitlistPosition(
         ctx.user.id,
@@ -96,6 +99,7 @@ export const waitlistRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["myWaitlist"])
     .query(async ({ ctx }) => {
       return await waitlistService.getUserWaitlist(ctx.user.id);
     }),
@@ -120,6 +124,7 @@ export const waitlistRouter = router({
         waitlistId: z.number().describe("ID of the waitlist entry"),
       })
     )
+    .output(responseContracts["acceptOffer"])
     .mutation(async ({ ctx, input }) => {
       return await waitlistService.acceptOffer(input.waitlistId, ctx.user.id);
     }),
@@ -144,6 +149,7 @@ export const waitlistRouter = router({
         waitlistId: z.number().describe("ID of the waitlist entry"),
       })
     )
+    .output(responseContracts["declineOffer"])
     .mutation(async ({ ctx, input }) => {
       return await waitlistService.declineOffer(input.waitlistId, ctx.user.id);
     }),
@@ -167,6 +173,7 @@ export const waitlistRouter = router({
         waitlistId: z.number().describe("ID of the waitlist entry to cancel"),
       })
     )
+    .output(responseContracts["cancel"])
     .mutation(async ({ ctx, input }) => {
       return await waitlistService.cancelWaitlistEntry(
         input.waitlistId,
@@ -196,6 +203,7 @@ export const waitlistRouter = router({
         notifyBySms: z.boolean().describe("Receive SMS notifications"),
       })
     )
+    .output(responseContracts["updateNotifications"])
     .mutation(async ({ ctx, input }) => {
       return await waitlistService.updateNotificationPreferences(
         input.waitlistId,
@@ -229,6 +237,7 @@ export const waitlistRouter = router({
         flightId: z.number().describe("ID of the flight"),
       })
     )
+    .output(responseContracts["getFlightWaitlist"])
     .query(async ({ input }) => {
       return await waitlistService.getFlightWaitlist(input.flightId);
     }),
@@ -253,6 +262,7 @@ export const waitlistRouter = router({
         waitlistId: z.number().describe("ID of the waitlist entry"),
       })
     )
+    .output(responseContracts["offerSeat"])
     .mutation(async ({ input }) => {
       return await waitlistService.offerSeat(input.waitlistId);
     }),
@@ -277,6 +287,7 @@ export const waitlistRouter = router({
         flightId: z.number().describe("ID of the flight"),
       })
     )
+    .output(responseContracts["processWaitlist"])
     .mutation(async ({ input }) => {
       return await waitlistService.processWaitlist(input.flightId);
     }),
@@ -296,6 +307,7 @@ export const waitlistRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["processExpiredOffers"])
     .mutation(async () => {
       return await waitlistService.processExpiredOffers();
     }),
@@ -315,6 +327,7 @@ export const waitlistRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getStats"])
     .query(async () => {
       return await waitlistService.getWaitlistStats();
     }),

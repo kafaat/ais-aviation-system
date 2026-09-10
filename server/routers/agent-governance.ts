@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/agent-governance";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import {
@@ -36,6 +37,7 @@ export const agentGovernanceRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getAiCostBreakdown"])
     .query(async ({ input }) => {
       return await getAiCostBreakdown(input ?? {});
     }),

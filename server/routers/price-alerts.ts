@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/price-alerts";
 import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import * as priceAlertsService from "../services/price-alerts.service";
@@ -15,6 +16,7 @@ export const priceAlertsRouter = router({
         cabinClass: z.enum(["economy", "business"]).optional(),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ ctx, input }) => {
       return await priceAlertsService.createAlert({
         userId: ctx.user.id,
@@ -25,9 +27,11 @@ export const priceAlertsRouter = router({
   /**
    * Get all user's price alerts
    */
-  getAll: protectedProcedure.query(async ({ ctx }) => {
-    return await priceAlertsService.getUserAlerts(ctx.user.id);
-  }),
+  getAll: protectedProcedure
+    .output(responseContracts["getAll"])
+    .query(async ({ ctx }) => {
+      return await priceAlertsService.getUserAlerts(ctx.user.id);
+    }),
 
   /**
    * Get a specific price alert
@@ -38,6 +42,7 @@ export const priceAlertsRouter = router({
         alertId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getById"])
     .query(async ({ ctx, input }) => {
       return await priceAlertsService.getAlertById(input.alertId, ctx.user.id);
     }),
@@ -51,6 +56,7 @@ export const priceAlertsRouter = router({
         alertId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["delete"])
     .mutation(async ({ ctx, input }) => {
       return await priceAlertsService.deleteAlert(input.alertId, ctx.user.id);
     }),
@@ -64,6 +70,7 @@ export const priceAlertsRouter = router({
         alertId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["toggle"])
     .mutation(async ({ ctx, input }) => {
       return await priceAlertsService.toggleAlert(input.alertId, ctx.user.id);
     }),
@@ -78,6 +85,7 @@ export const priceAlertsRouter = router({
         targetPrice: z.number().int().positive(),
       })
     )
+    .output(responseContracts["updatePrice"])
     .mutation(async ({ ctx, input }) => {
       return await priceAlertsService.updateAlertPrice(
         input.alertId,
@@ -89,7 +97,9 @@ export const priceAlertsRouter = router({
   /**
    * Check all alerts (admin only - for cron job)
    */
-  checkAlerts: adminProcedure.mutation(async () => {
-    return await priceAlertsService.checkAlerts();
-  }),
+  checkAlerts: adminProcedure
+    .output(responseContracts["checkAlerts"])
+    .mutation(async () => {
+      return await priceAlertsService.checkAlerts();
+    }),
 });

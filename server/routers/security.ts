@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/security";
 import { z } from "zod";
 import { router, adminProcedure } from "../_core/trpc";
 import * as accountLockService from "../services/account-lock.service";
@@ -18,6 +19,7 @@ export const securityRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getRecentSecurityEvents"])
     .query(async ({ input }) => {
       const limit = input?.limit ?? 50;
       return await accountLockService.getRecentSecurityEvents(limit);
@@ -34,6 +36,7 @@ export const securityRouter = router({
         autoUnlockMinutes: z.number().int().positive().optional(),
       })
     )
+    .output(responseContracts["lockAccount"])
     .mutation(async ({ input, ctx }) => {
       await accountLockService.lockAccount(
         input.userId,
@@ -57,6 +60,7 @@ export const securityRouter = router({
         userId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["unlockAccount"])
     .mutation(async ({ input, ctx }) => {
       await accountLockService.unlockAccount(
         input.userId,
@@ -78,6 +82,7 @@ export const securityRouter = router({
         userId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["isAccountLocked"])
     .query(async ({ input }) => {
       const locked = await accountLockService.isAccountLocked(input.userId);
 
@@ -97,6 +102,7 @@ export const securityRouter = router({
         autoUnblockMinutes: z.number().int().positive().optional(),
       })
     )
+    .output(responseContracts["blockIp"])
     .mutation(async ({ input, ctx }) => {
       await accountLockService.blockIpAddress(
         input.ipAddress,
@@ -120,6 +126,7 @@ export const securityRouter = router({
         ipAddress: z.string().min(1).max(45), // IPv4 or IPv6
       })
     )
+    .output(responseContracts["unblockIp"])
     .mutation(async ({ input, ctx }) => {
       await accountLockService.unblockIpAddress(
         input.ipAddress,
@@ -141,6 +148,7 @@ export const securityRouter = router({
         ipAddress: z.string().min(1).max(45), // IPv4 or IPv6
       })
     )
+    .output(responseContracts["isIpBlocked"])
     .query(async ({ input }) => {
       const blocked = await accountLockService.isIpBlocked(input.ipAddress);
 
@@ -160,6 +168,7 @@ export const securityRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["cleanupOldAttempts"])
     .mutation(async ({ input }) => {
       const daysToKeep = input?.daysToKeep ?? 30;
       const deletedCount =

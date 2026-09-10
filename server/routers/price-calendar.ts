@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/price-calendar";
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import * as priceCalendarService from "../services/price-calendar.service";
@@ -35,6 +36,7 @@ export const priceCalendarRouter = router({
           .describe("Cabin class for pricing"),
       })
     )
+    .output(responseContracts["getMonthlyPrices"])
     .query(async ({ input }) => {
       return await priceCalendarService.getMonthlyPrices({
         originId: input.originId,
@@ -79,6 +81,7 @@ export const priceCalendarRouter = router({
           .describe("Cabin class for pricing"),
       })
     )
+    .output(responseContracts["getFlexiblePrices"])
     .query(async ({ input }) => {
       return await priceCalendarService.getFlexiblePrices({
         originId: input.originId,
@@ -117,6 +120,7 @@ export const priceCalendarRouter = router({
           .describe("Number of months to look ahead"),
       })
     )
+    .output(responseContracts["getAvailableMonths"])
     .query(async ({ input }) => {
       return await priceCalendarService.getAvailableMonths(
         input.originId,

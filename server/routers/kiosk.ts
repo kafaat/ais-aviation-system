@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/kiosk";
 /** Self-Service Kiosk Router */
 
 import { z } from "zod";
@@ -23,6 +24,7 @@ export const kioskRouter = router({
         lastName: z.string().min(1).max(100),
       })
     )
+    .output(responseContracts["authenticate"])
     .mutation(async ({ input }) => {
       const result = await kioskService.authenticatePassenger(
         input.bookingRef,
@@ -39,6 +41,7 @@ export const kioskRouter = router({
 
   getCheckInData: publicProcedure
     .input(z.object({ capabilityToken: capabilityInput }))
+    .output(responseContracts["getCheckInData"])
     .query(async ({ input }) => {
       const capability = kioskCapability(input.capabilityToken);
       return await kioskService.getCheckInData(capability.bookingId);
@@ -53,6 +56,7 @@ export const kioskRouter = router({
         baggageCount: z.number().nonnegative().optional(),
       })
     )
+    .output(responseContracts["checkIn"])
     .mutation(async ({ input }) => {
       const capability = kioskCapability(input.capabilityToken);
       assertPassengerInKioskCapability(capability, input.passengerId);
@@ -71,6 +75,7 @@ export const kioskRouter = router({
         seatNumber: z.string().min(1).max(5),
       })
     )
+    .output(responseContracts["selectSeat"])
     .mutation(async ({ input }) => {
       const capability = kioskCapability(input.capabilityToken);
       assertPassengerInKioskCapability(capability, input.passengerId);
@@ -88,6 +93,7 @@ export const kioskRouter = router({
         passengerId: z.number().positive(),
       })
     )
+    .output(responseContracts["printBoardingPass"])
     .mutation(async ({ input }) => {
       const capability = kioskCapability(input.capabilityToken);
       assertPassengerInKioskCapability(capability, input.passengerId);
@@ -105,6 +111,7 @@ export const kioskRouter = router({
         bagCount: z.number().min(1).max(10),
       })
     )
+    .output(responseContracts["printBagTag"])
     .mutation(async ({ input }) => {
       const capability = kioskCapability(input.capabilityToken);
       assertPassengerInKioskCapability(capability, input.passengerId);
@@ -123,6 +130,7 @@ export const kioskRouter = router({
         passengerId: z.number().positive(),
       })
     )
+    .output(responseContracts["addAncillary"])
     .mutation(async ({ input }) => {
       const capability = kioskCapability(input.capabilityToken);
       assertPassengerInKioskCapability(capability, input.passengerId);
@@ -142,6 +150,7 @@ export const kioskRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getDevices"])
     .query(async ({ input }) =>
       kioskService.getKioskDevices(input ?? undefined)
     ),
@@ -158,6 +167,7 @@ export const kioskRouter = router({
         hasPayment: z.boolean().optional(),
       })
     )
+    .output(responseContracts["registerDevice"])
     .mutation(async ({ input }) =>
       kioskService.registerKiosk(
         input.airportId,
@@ -180,6 +190,7 @@ export const kioskRouter = router({
         to: z.date(),
       })
     )
+    .output(responseContracts["getAnalytics"])
     .query(async ({ input }) =>
       kioskService.getKioskAnalytics(input.airportId, {
         from: input.from,
@@ -189,5 +200,6 @@ export const kioskRouter = router({
 
   getDeviceStatus: adminProcedure
     .input(z.object({ kioskId: z.number().positive() }))
+    .output(responseContracts["getDeviceStatus"])
     .query(async ({ input }) => kioskService.getKioskStatus(input.kioskId)),
 });

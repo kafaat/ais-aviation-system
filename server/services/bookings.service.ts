@@ -1,3 +1,4 @@
+import { assertTenantOperational } from "./tenant.service";
 import { TRPCError } from "@trpc/server";
 import { and, eq, gt } from "drizzle-orm";
 import * as db from "../db";
@@ -9,12 +10,20 @@ import {
   inventoryLocks,
   bookingAncillaries,
   ancillaryServices,
+  priceLocks,
 } from "../../drizzle/schema";
 import { calculateFlightPrice } from "./flights.service";
 import { createInventoryLock } from "./inventory-lock.service";
 import { trackBookingStarted, trackBookingCancelled } from "./metrics.service";
-import { releaseBookingSeats } from "./booking-settlement.service";
-import { createNotification } from "./notification.service";
+import {
+  cancelBookingResources,
+  type SettlementTx,
+} from "./booking-settlement.service";
+import {
+  findCompletedCommand,
+  withTransactionalIdempotency,
+} from "./idempotency-v2.service";
+import { recordEvent } from "./outbox.service";
 
 /**
  * Bookings Service
@@ -48,6 +57,8 @@ export interface CreateBookingInput {
   passengers: Passenger[];
   sessionId: string;
   lockId?: number;
+  priceLockId?: number;
+  idempotencyKey?: string;
   ancillaries?: SelectedAncillary[];
 }
 
@@ -63,8 +74,25 @@ function assertTenantMatch(
 /**
  * Create a new booking
  */
-export async function createBooking(input: CreateBookingInput) {
+export async function createBooking(
+  input: CreateBookingInput,
+  transaction?: SettlementTx
+) {
+  const command = {
+    scope: "booking.create.atomic",
+    key: input.idempotencyKey ?? input.sessionId,
+    userId: input.userId,
+    request: input,
+  };
+  type Result = {
+    bookingId: number;
+    bookingReference: string;
+    pnr: string;
+    totalAmount: number;
+  };
   try {
+    const replay = await findCompletedCommand<Result>(command, transaction);
+    if (replay) return replay.response;
     if (input.tenantId != null) {
       const database = await getDb();
       if (!database) throw new Error("Database not available");
@@ -126,129 +154,193 @@ export async function createBooking(input: CreateBookingInput) {
 
     const database = await getDb();
     if (!database) throw new Error("Database unavailable");
-    const { bookingId, totalAmount } = await database.transaction(async tx => {
-      const [currentFlight] = await tx
-        .select()
-        .from(flights)
-        .where(eq(flights.id, input.flightId))
-        .limit(1)
-        .for("update");
-      if (
-        !currentFlight ||
-        !["scheduled", "delayed"].includes(currentFlight.status) ||
-        (input.tenantId != null && currentFlight.tenantId !== input.tenantId)
-      )
-        throw new Error("Flight unavailable");
-      let lockId = input.lockId;
-      if (lockId) {
-        const [hold] = await tx
-          .select()
-          .from(inventoryLocks)
-          .where(
-            and(
-              eq(inventoryLocks.id, lockId),
-              eq(inventoryLocks.sessionId, input.sessionId),
-              eq(inventoryLocks.userId, input.userId),
-              eq(inventoryLocks.flightId, input.flightId),
-              eq(inventoryLocks.cabinClass, input.cabinClass),
-              eq(inventoryLocks.numberOfSeats, input.passengers.length),
-              eq(inventoryLocks.status, "active"),
-              gt(inventoryLocks.expiresAt, new Date())
-            )
-          )
-          .limit(1)
-          .for("update");
-        if (!hold)
-          throw new Error(
-            "Inventory hold expired or does not match this booking"
-          );
-      } else {
-        lockId = (
-          await createInventoryLock(
-            input.flightId,
-            input.passengers.length,
-            input.cabinClass,
-            input.sessionId,
-            input.userId,
-            tx
-          )
-        ).lockId;
-      }
-      const selected = [];
-      for (const item of input.ancillaries || []) {
-        if (
-          !Number.isSafeInteger(item.quantity) ||
-          item.quantity <= 0 ||
-          item.quantity > 20 ||
-          item.passengerId != null
-        )
-          throw new Error("Invalid ancillary selection");
-        const [service] = await tx
-          .select()
-          .from(ancillaryServices)
-          .where(
-            and(
-              eq(ancillaryServices.id, item.ancillaryServiceId),
-              eq(ancillaryServices.available, true)
-            )
-          )
-          .limit(1);
-        if (!service || service.currency !== "SAR")
-          throw new Error("Ancillary unavailable");
-        if (
-          service.applicableCabinClasses &&
-          !JSON.parse(service.applicableCabinClasses).includes(input.cabinClass)
-        )
-          throw new Error("Ancillary not available in this cabin");
-        if (
-          service.applicableAirlines &&
-          !JSON.parse(service.applicableAirlines).includes(
-            currentFlight.airlineId
-          )
-        )
-          throw new Error("Ancillary not available for this airline");
-        selected.push({
-          ancillaryServiceId: service.id,
-          quantity: item.quantity,
-          unitPrice: service.price,
-          totalPrice: service.price * item.quantity,
-        });
-      }
-      const totalAmount =
-        baseAmount + selected.reduce((sum, item) => sum + item.totalPrice, 0);
-      const [created] = await tx.insert(bookings).values({
-        tenantId: currentFlight.tenantId,
+    const result = await withTransactionalIdempotency(
+      {
+        scope: "booking.create.atomic",
+        key: input.idempotencyKey ?? input.sessionId,
         userId: input.userId,
-        flightId: input.flightId,
-        inventoryLockId: lockId,
-        bookingReference,
-        pnr,
-        status: "pending",
-        totalAmount,
-        cabinClass: input.cabinClass,
-        numberOfPassengers: input.passengers.length,
-      });
-      const bookingId = created.insertId;
-      await tx.insert(passengers).values(
-        input.passengers.map(p => ({
-          tenantId: currentFlight.tenantId,
-          bookingId,
-          type: p.type,
-          title: p.title,
-          firstName: p.firstName,
-          lastName: p.lastName,
-          dateOfBirth: p.dateOfBirth,
-          passportNumber: p.passportNumber,
-          nationality: p.nationality,
-        }))
-      );
-      if (selected.length)
-        await tx
-          .insert(bookingAncillaries)
-          .values(selected.map(item => ({ bookingId, ...item })));
-      // The linked hold remains active until verified payment or expiry.
-      return { bookingId, totalAmount };
-    });
+        request: input,
+        run: async tx => {
+          const [currentFlight] = await tx
+            .select()
+            .from(flights)
+            .where(eq(flights.id, input.flightId))
+            .limit(1)
+            .for("update");
+          if (
+            !currentFlight ||
+            !["scheduled", "delayed"].includes(currentFlight.status) ||
+            (input.tenantId != null &&
+              currentFlight.tenantId !== input.tenantId)
+          )
+            throw new Error("Flight unavailable");
+          await assertTenantOperational(tx, currentFlight.tenantId);
+          let lockId = input.lockId;
+          if (lockId) {
+            const [hold] = await tx
+              .select()
+              .from(inventoryLocks)
+              .where(
+                and(
+                  eq(inventoryLocks.id, lockId),
+                  eq(inventoryLocks.sessionId, input.sessionId),
+                  eq(inventoryLocks.userId, input.userId),
+                  eq(inventoryLocks.flightId, input.flightId),
+                  eq(inventoryLocks.cabinClass, input.cabinClass),
+                  eq(inventoryLocks.numberOfSeats, input.passengers.length),
+                  eq(inventoryLocks.status, "active"),
+                  gt(inventoryLocks.expiresAt, new Date())
+                )
+              )
+              .limit(1)
+              .for("update");
+            if (!hold)
+              throw new Error(
+                "Inventory hold expired or does not match this booking"
+              );
+          } else {
+            lockId = (
+              await createInventoryLock(
+                input.flightId,
+                input.passengers.length,
+                input.cabinClass,
+                input.sessionId,
+                input.userId,
+                tx
+              )
+            ).lockId;
+          }
+          const selected = [];
+          for (const item of input.ancillaries || []) {
+            if (
+              !Number.isSafeInteger(item.quantity) ||
+              item.quantity <= 0 ||
+              item.quantity > 20 ||
+              item.passengerId != null
+            )
+              throw new Error("Invalid ancillary selection");
+            const [service] = await tx
+              .select()
+              .from(ancillaryServices)
+              .where(
+                and(
+                  eq(ancillaryServices.id, item.ancillaryServiceId),
+                  eq(ancillaryServices.available, true)
+                )
+              )
+              .limit(1);
+            if (!service || service.currency !== "SAR")
+              throw new Error("Ancillary unavailable");
+            if (
+              service.applicableCabinClasses &&
+              !JSON.parse(service.applicableCabinClasses).includes(
+                input.cabinClass
+              )
+            )
+              throw new Error("Ancillary not available in this cabin");
+            if (
+              service.applicableAirlines &&
+              !JSON.parse(service.applicableAirlines).includes(
+                currentFlight.airlineId
+              )
+            )
+              throw new Error("Ancillary not available for this airline");
+            selected.push({
+              ancillaryServiceId: service.id,
+              quantity: item.quantity,
+              unitPrice: service.price,
+              totalPrice: service.price * item.quantity,
+            });
+          }
+          let fareAmount = baseAmount;
+          if (input.priceLockId) {
+            const [priceLock] = await tx
+              .select()
+              .from(priceLocks)
+              .where(
+                and(
+                  eq(priceLocks.id, input.priceLockId),
+                  eq(priceLocks.userId, input.userId),
+                  eq(priceLocks.flightId, input.flightId),
+                  eq(priceLocks.cabinClass, input.cabinClass),
+                  eq(priceLocks.status, "active"),
+                  gt(priceLocks.expiresAt, new Date())
+                )
+              )
+              .limit(1)
+              .for("update");
+            if (!priceLock)
+              throw new TRPCError({
+                code: "CONFLICT",
+                message:
+                  "Price lock is unavailable or does not belong to this booking",
+              });
+            fareAmount =
+              priceLock.lockedPrice * input.passengers.length +
+              priceLock.lockFee;
+          }
+          const totalAmount =
+            fareAmount +
+            selected.reduce((sum, item) => sum + item.totalPrice, 0);
+          const [created] = await tx.insert(bookings).values({
+            tenantId: currentFlight.tenantId,
+            userId: input.userId,
+            flightId: input.flightId,
+            inventoryLockId: lockId,
+            bookingReference,
+            pnr,
+            status: "pending",
+            totalAmount,
+            cabinClass: input.cabinClass,
+            numberOfPassengers: input.passengers.length,
+          });
+          const bookingId = created.insertId;
+          await tx.insert(passengers).values(
+            input.passengers.map(p => ({
+              tenantId: currentFlight.tenantId,
+              bookingId,
+              type: p.type,
+              title: p.title,
+              firstName: p.firstName,
+              lastName: p.lastName,
+              dateOfBirth: p.dateOfBirth,
+              passportNumber: p.passportNumber,
+              nationality: p.nationality,
+            }))
+          );
+          if (selected.length)
+            await tx
+              .insert(bookingAncillaries)
+              .values(selected.map(item => ({ bookingId, ...item })));
+          if (input.priceLockId)
+            await tx
+              .update(priceLocks)
+              .set({ status: "used", bookingId })
+              .where(
+                and(
+                  eq(priceLocks.id, input.priceLockId),
+                  eq(priceLocks.status, "active")
+                )
+              );
+          await recordEvent(tx, {
+            aggregateType: "booking",
+            aggregateId: bookingId,
+            tenantId: currentFlight.tenantId,
+            eventType: "booking.created",
+            payload: {
+              bookingId,
+              userId: input.userId,
+              channel: "direct",
+              flightId: input.flightId,
+            },
+          });
+          return { bookingId, bookingReference, pnr, totalAmount };
+        },
+      },
+      transaction
+    );
+    if (transaction) return result;
+    const { bookingId, totalAmount } = result;
 
     trackBookingStarted({
       userId: input.userId,
@@ -260,28 +352,13 @@ export async function createBooking(input: CreateBookingInput) {
       totalAmount,
     });
 
-    try {
-      await createNotification(
-        input.userId,
-        "booking",
-        "Booking Created",
-        `Your booking ${bookingReference} has been created and is awaiting payment. Please complete your payment to confirm your reservation.`,
-        {
-          bookingId,
-          bookingReference,
-          flightId: input.flightId,
-          link: `/my-bookings`,
-        }
-      );
-    } catch (notifError) {
-      console.error(
-        "[Booking] Error sending booking creation notification:",
-        notifError
-      );
-    }
+    // Notification delivery is driven by the durable booking.created event.
 
-    return { bookingId, bookingReference, pnr, totalAmount };
+    return result;
   } catch (error) {
+    // Another request may have committed while a mutable preflight check ran.
+    const replay = await findCompletedCommand<Result>(command, transaction);
+    if (replay) return replay.response;
     if (error instanceof TRPCError) throw error;
     console.error("Error creating booking:", error);
     throw new TRPCError({
@@ -376,21 +453,7 @@ export async function cancelBooking(
       if (!current || current.status === "completed")
         throw new Error("Booking cannot be cancelled");
       if (current.status === "cancelled") return;
-      await releaseBookingSeats(tx, current);
-      await tx
-        .update(bookings)
-        .set({ status: "cancelled", updatedAt: new Date() })
-        .where(eq(bookings.id, bookingId));
-      if (current.inventoryLockId)
-        await tx
-          .update(inventoryLocks)
-          .set({ status: "released", releasedAt: new Date() })
-          .where(
-            and(
-              eq(inventoryLocks.id, current.inventoryLockId),
-              eq(inventoryLocks.status, "active")
-            )
-          );
+      await cancelBookingResources(tx, current, "Owner cancellation", userId);
     });
 
     trackBookingCancelled({

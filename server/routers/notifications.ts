@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/notifications";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import * as notificationService from "../services/notification.service";
@@ -45,6 +46,7 @@ export const notificationsRouter = router({
           .describe("Only return unread notifications"),
       })
     )
+    .output(responseContracts["list"])
     .query(async ({ ctx, input }) => {
       return await notificationService.getUserNotifications(ctx.user.id, input);
     }),
@@ -64,6 +66,7 @@ export const notificationsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["unreadCount"])
     .query(async ({ ctx }) => {
       return await notificationService.getUnreadCount(ctx.user.id);
     }),
@@ -87,6 +90,7 @@ export const notificationsRouter = router({
         id: z.number().describe("Notification ID to mark as read"),
       })
     )
+    .output(responseContracts["markAsRead"])
     .mutation(async ({ ctx, input }) => {
       return await notificationService.markAsRead(input.id, ctx.user.id);
     }),
@@ -106,6 +110,7 @@ export const notificationsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["markAllAsRead"])
     .mutation(async ({ ctx }) => {
       return await notificationService.markAllAsRead(ctx.user.id);
     }),
@@ -129,6 +134,7 @@ export const notificationsRouter = router({
         id: z.number().describe("Notification ID to delete"),
       })
     )
+    .output(responseContracts["delete"])
     .mutation(async ({ ctx, input }) => {
       return await notificationService.deleteNotification(
         input.id,
@@ -150,6 +156,7 @@ export const notificationsRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["deleteAll"])
     .mutation(async ({ ctx }) => {
       return await notificationService.deleteAllNotifications(ctx.user.id);
     }),
@@ -187,6 +194,7 @@ export const notificationsRouter = router({
           .describe("Additional data (JSON)"),
       })
     )
+    .output(responseContracts["create"])
     .mutation(async ({ input }) => {
       return await notificationService.createNotification(
         input.userId,
@@ -232,6 +240,7 @@ export const notificationsRouter = router({
           .describe("Additional data (JSON)"),
       })
     )
+    .output(responseContracts["createBulk"])
     .mutation(async ({ input }) => {
       return await notificationService.createBulkNotifications(
         input.userIds,
@@ -265,6 +274,7 @@ export const notificationsRouter = router({
         offset: z.number().min(0).optional().default(0),
       })
     )
+    .output(responseContracts["getUserNotifications"])
     .query(async ({ input }) => {
       return await notificationService.getUserNotifications(input.userId, {
         limit: input.limit,
@@ -297,6 +307,7 @@ export const notificationsRouter = router({
           .describe("Delete read notifications older than this many days"),
       })
     )
+    .output(responseContracts["cleanup"])
     .mutation(async ({ input }) => {
       return await notificationService.cleanupOldNotifications(input.daysOld);
     }),

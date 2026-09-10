@@ -1,3 +1,8 @@
+# Historical schema proposal — not an active migration
+
+This source was never part of the runtime schema. See the remediation register before implementing it.
+
+```typescript
 import {
   mysqlTable,
   int,
@@ -160,3 +165,4 @@ export const ipBlacklist = mysqlTable(
 
 export type IpBlacklist = typeof ipBlacklist.$inferSelect;
 export type InsertIpBlacklist = typeof ipBlacklist.$inferInsert;
+```

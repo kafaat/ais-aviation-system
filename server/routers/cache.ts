@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/cache";
 import { z } from "zod";
 import { adminProcedure, publicProcedure, router } from "../_core/trpc";
 import {
@@ -15,46 +16,50 @@ export const cacheRouter = router({
    * Get cache health status
    * Public endpoint for monitoring
    */
-  health: publicProcedure.query(async () => {
-    return await redisCacheService.healthCheck();
-  }),
+  health: publicProcedure
+    .output(responseContracts["health"])
+    .query(async () => {
+      return await redisCacheService.healthCheck();
+    }),
 
   /**
    * Get detailed cache statistics (admin only)
    */
-  stats: adminProcedure.query(async () => {
+  stats: adminProcedure.output(responseContracts["stats"]).query(async () => {
     return await redisCacheService.getStats();
   }),
 
   /**
    * Get Redis server info (admin only)
    */
-  redisInfo: adminProcedure.query(async () => {
-    const info = await redisCacheService.getRedisInfo();
-    if (!info) {
-      return {
-        available: false,
-        message: "Redis is not connected",
-      };
-    }
+  redisInfo: adminProcedure
+    .output(responseContracts["redisInfo"])
+    .query(async () => {
+      const info = await redisCacheService.getRedisInfo();
+      if (!info) {
+        return {
+          available: false,
+          message: "Redis is not connected",
+        };
+      }
 
-    // Return selected useful metrics
-    return {
-      available: true,
-      version: info.redis_version,
-      uptimeSeconds: parseInt(info.uptime_in_seconds || "0"),
-      connectedClients: parseInt(info.connected_clients || "0"),
-      usedMemory: info.used_memory_human,
-      usedMemoryPeak: info.used_memory_peak_human,
-      totalKeys: parseInt(info.db0?.split(",")[0]?.split("=")[1] || "0"),
-      expiredKeys: parseInt(info.expired_keys || "0"),
-      evictedKeys: parseInt(info.evicted_keys || "0"),
-      hitRate:
-        parseInt(info.keyspace_hits || "0") /
-          (parseInt(info.keyspace_hits || "0") +
-            parseInt(info.keyspace_misses || "1")) || 0,
-    };
-  }),
+      // Return selected useful metrics
+      return {
+        available: true,
+        version: info.redis_version,
+        uptimeSeconds: parseInt(info.uptime_in_seconds || "0"),
+        connectedClients: parseInt(info.connected_clients || "0"),
+        usedMemory: info.used_memory_human,
+        usedMemoryPeak: info.used_memory_peak_human,
+        totalKeys: parseInt(info.db0?.split(",")[0]?.split("=")[1] || "0"),
+        expiredKeys: parseInt(info.expired_keys || "0"),
+        evictedKeys: parseInt(info.evicted_keys || "0"),
+        hitRate:
+          parseInt(info.keyspace_hits || "0") /
+            (parseInt(info.keyspace_hits || "0") +
+              parseInt(info.keyspace_misses || "1")) || 0,
+      };
+    }),
 
   /**
    * Invalidate a specific cache namespace (admin only)
@@ -75,6 +80,7 @@ export const cacheRouter = router({
         ]),
       })
     )
+    .output(responseContracts["invalidateNamespace"])
     .mutation(async ({ input }) => {
       await redisCacheService.invalidateNamespace(input.namespace);
       return {
@@ -86,24 +92,29 @@ export const cacheRouter = router({
   /**
    * Invalidate flight search cache (admin only)
    */
-  invalidateFlightSearch: adminProcedure.mutation(async () => {
-    await redisCacheService.invalidateFlightSearchCache();
-    return {
-      success: true,
-      message: "Flight search cache invalidated",
-    };
-  }),
+  invalidateFlightSearch: adminProcedure
+    .output(responseContracts["invalidateFlightSearch"])
+    .mutation(async () => {
+      await redisCacheService.invalidateFlightSearchCache();
+      return {
+        success: true,
+        message: "Flight search cache invalidated",
+      };
+    }),
 
   /**
    * Invalidate reference data cache (airports, airlines, cities) (admin only)
    */
-  invalidateReferenceData: adminProcedure.mutation(async () => {
-    await redisCacheService.invalidateReferenceDataCache();
-    return {
-      success: true,
-      message: "Reference data cache invalidated (airports, airlines, cities)",
-    };
-  }),
+  invalidateReferenceData: adminProcedure
+    .output(responseContracts["invalidateReferenceData"])
+    .mutation(async () => {
+      await redisCacheService.invalidateReferenceDataCache();
+      return {
+        success: true,
+        message:
+          "Reference data cache invalidated (airports, airlines, cities)",
+      };
+    }),
 
   /**
    * Invalidate pricing cache (admin only)
@@ -114,6 +125,7 @@ export const cacheRouter = router({
         flightId: z.number().optional(),
       })
     )
+    .output(responseContracts["invalidatePricing"])
     .mutation(async ({ input }) => {
       await redisCacheService.invalidatePricingCache(input.flightId);
       return {
@@ -133,6 +145,7 @@ export const cacheRouter = router({
         userId: z.number(),
       })
     )
+    .output(responseContracts["invalidateUserSession"])
     .mutation(async ({ input }) => {
       await redisCacheService.invalidateUserSession(input.userId);
       return {
@@ -144,43 +157,49 @@ export const cacheRouter = router({
   /**
    * Reset cache statistics (admin only)
    */
-  resetStats: adminProcedure.mutation(() => {
-    redisCacheService.resetStats();
-    return {
-      success: true,
-      message: "Cache statistics reset",
-    };
-  }),
+  resetStats: adminProcedure
+    .output(responseContracts["resetStats"])
+    .mutation(() => {
+      redisCacheService.resetStats();
+      return {
+        success: true,
+        message: "Cache statistics reset",
+      };
+    }),
 
   /**
    * Clear all caches (admin only)
    * USE WITH CAUTION - this will clear all cached data
    */
-  clearAll: adminProcedure.mutation(async () => {
-    await redisCacheService.clearAll();
-    return {
-      success: true,
-      message: "All caches cleared",
-    };
-  }),
+  clearAll: adminProcedure
+    .output(responseContracts["clearAll"])
+    .mutation(async () => {
+      await redisCacheService.clearAll();
+      return {
+        success: true,
+        message: "All caches cleared",
+      };
+    }),
 
   /**
    * Force reconnect to Redis (admin only)
    */
-  reconnect: adminProcedure.mutation(async () => {
-    const success = await redisCacheService.reconnect();
-    return {
-      success,
-      message: success
-        ? "Successfully reconnected to Redis"
-        : "Failed to reconnect to Redis, using memory fallback",
-    };
-  }),
+  reconnect: adminProcedure
+    .output(responseContracts["reconnect"])
+    .mutation(async () => {
+      const success = await redisCacheService.reconnect();
+      return {
+        success,
+        message: success
+          ? "Successfully reconnected to Redis"
+          : "Failed to reconnect to Redis, using memory fallback",
+      };
+    }),
 
   /**
    * Get cache configuration (admin only)
    */
-  config: adminProcedure.query(() => {
+  config: adminProcedure.output(responseContracts["config"]).query(() => {
     return {
       ttl: CacheTTL,
       namespaces: CacheNamespace,

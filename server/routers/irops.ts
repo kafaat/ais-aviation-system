@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/irops";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import {
@@ -25,36 +26,40 @@ export const iropsRouter = router({
    * Get IROPS dashboard summary
    * Returns active disruptions count, passengers affected, recovery rate, etc.
    */
-  getDashboard: adminProcedure.query(async () => {
-    try {
-      return await getIROPSDashboard();
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to load IROPS dashboard",
-      });
-    }
-  }),
+  getDashboard: adminProcedure
+    .output(responseContracts["getDashboard"])
+    .query(async () => {
+      try {
+        return await getIROPSDashboard();
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to load IROPS dashboard",
+        });
+      }
+    }),
 
   /**
    * Get all active disruption events
    */
-  getActiveDisruptions: adminProcedure.query(async () => {
-    try {
-      return await getActiveIROPSDisruptions();
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to load active disruptions",
-      });
-    }
-  }),
+  getActiveDisruptions: adminProcedure
+    .output(responseContracts["getActiveDisruptions"])
+    .query(async () => {
+      try {
+        return await getActiveIROPSDisruptions();
+      } catch (error) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Failed to load active disruptions",
+        });
+      }
+    }),
 
   /**
    * Create a new IROPS disruption event
@@ -75,6 +80,7 @@ export const iropsRouter = router({
         estimatedRecoveryTime: z.date().optional(),
       })
     )
+    .output(responseContracts["createEvent"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await createDisruptionEvent(input.flightId, input.type, {
@@ -100,6 +106,7 @@ export const iropsRouter = router({
    */
   getEventDetail: adminProcedure
     .input(z.object({ eventId: z.number() }))
+    .output(responseContracts["getEventDetail"])
     .query(async ({ input }) => {
       try {
         const detail = await getIROPSEventDetail(input.eventId);
@@ -127,6 +134,7 @@ export const iropsRouter = router({
    */
   getAffectedPassengers: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getAffectedPassengers"])
     .query(async ({ input }) => {
       try {
         return await getAffectedPassengers(input.flightId);
@@ -146,6 +154,7 @@ export const iropsRouter = router({
    */
   getConnectionsAtRisk: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getConnectionsAtRisk"])
     .query(async ({ input }) => {
       try {
         return await getConnectionsAtRisk(input.flightId);
@@ -165,6 +174,7 @@ export const iropsRouter = router({
    */
   triggerAutoProtection: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["triggerAutoProtection"])
     .mutation(async ({ input }) => {
       try {
         return await autoTriggerProtection(input.flightId);
@@ -189,6 +199,7 @@ export const iropsRouter = router({
         message: z.string().min(10).max(1000),
       })
     )
+    .output(responseContracts["sendNotification"])
     .mutation(async ({ input }) => {
       try {
         return await sendMassNotification(input.flightId, input.message);
@@ -213,6 +224,7 @@ export const iropsRouter = router({
         level: z.enum(["low", "medium", "high", "critical"]),
       })
     )
+    .output(responseContracts["escalate"])
     .mutation(async ({ input }) => {
       try {
         return await escalateDisruption(input.disruptionId, input.level);
@@ -232,6 +244,7 @@ export const iropsRouter = router({
    */
   resolveEvent: adminProcedure
     .input(z.object({ eventId: z.number() }))
+    .output(responseContracts["resolveEvent"])
     .mutation(async ({ input }) => {
       try {
         return await resolveIROPSEvent(input.eventId);
@@ -256,6 +269,7 @@ export const iropsRouter = router({
         end: z.date(),
       })
     )
+    .output(responseContracts["getRecoveryMetrics"])
     .query(async ({ input }) => {
       try {
         return await getRecoveryMetrics({ start: input.start, end: input.end });

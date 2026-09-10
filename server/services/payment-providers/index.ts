@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 /**
  * Payment Provider Registry
  * Central factory for all payment providers
@@ -57,6 +58,12 @@ function initProviders() {
  * Get a specific payment provider by ID
  */
 export function getProvider(id: PaymentProviderType): PaymentProvider {
+  if (id !== "stripe")
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "This provider requires verified invoice/session binding, amount and currency checks, settlement and refund integration before activation",
+    });
   initProviders();
   const provider = providers.get(id);
   if (!provider) {
@@ -78,7 +85,9 @@ export function getAllProviders(): PaymentProvider[] {
  */
 export function getAvailableProviders(): PaymentProvider[] {
   initProviders();
-  return Array.from(providers.values()).filter(p => p.isAvailable());
+  return Array.from(providers.values()).filter(
+    p => p.id === "stripe" && p.isAvailable()
+  );
 }
 
 /**
@@ -86,7 +95,16 @@ export function getAvailableProviders(): PaymentProvider[] {
  */
 export function getAllProviderInfo(): PaymentProviderInfo[] {
   initProviders();
-  return Array.from(providers.values()).map(p => p.getInfo());
+  return Array.from(providers.values()).map(p => ({
+    ...p.getInfo(),
+    enabled: p.id === "stripe" && p.isAvailable(),
+    integrationState:
+      p.id === "stripe" ? ("implemented" as const) : ("unverified" as const),
+    unavailableReason:
+      p.id === "stripe"
+        ? undefined
+        : "Verified settlement and refund integration pending",
+  }));
 }
 
 /**
@@ -95,7 +113,7 @@ export function getAllProviderInfo(): PaymentProviderInfo[] {
 export function getAvailableProviderInfo(): PaymentProviderInfo[] {
   initProviders();
   return Array.from(providers.values())
-    .filter(p => p.isAvailable())
+    .filter(p => p.id === "stripe" && p.isAvailable())
     .map(p => p.getInfo());
 }
 

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/corporate";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -86,6 +87,7 @@ export const corporateRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["listAccounts"])
     .query(async ({ input }) => {
       return await corporateService.getCorporateAccounts(input);
     }),
@@ -109,6 +111,7 @@ export const corporateRouter = router({
         id: z.number().describe("Corporate account ID"),
       })
     )
+    .output(responseContracts["getAccountById"])
     .query(async ({ input }) => {
       const account = await corporateService.getCorporateAccountById(input.id);
       if (!account) {
@@ -255,6 +258,7 @@ export const corporateRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getMyAccount"])
     .query(async ({ ctx }) => {
       return await corporateService.getUserCorporateAccount(ctx.user.id);
     }),
@@ -336,6 +340,7 @@ export const corporateRouter = router({
         accountId: z.number().describe("Corporate account ID"),
       })
     )
+    .output(responseContracts["getUsers"])
     .query(async ({ ctx, input }) => {
       // Check if current user is in the corporate account or is system admin
       const userAccount = await corporateService.getUserCorporateAccount(
@@ -653,6 +658,7 @@ export const corporateRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getBookings"])
     .query(async ({ ctx, input }) => {
       // Get user's corporate account
       const userAccount = await corporateService.getUserCorporateAccount(
@@ -679,6 +685,7 @@ export const corporateRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getStats"])
     .query(async ({ ctx }) => {
       // Get user's corporate account
       const userAccount = await corporateService.getUserCorporateAccount(
@@ -714,6 +721,7 @@ export const corporateRouter = router({
         id: z.number().describe("Corporate account ID"),
       })
     )
+    .output(responseContracts["getAccountStats"])
     .query(async ({ input }) => {
       return await corporateService.getCorporateStats(input.id);
     }),

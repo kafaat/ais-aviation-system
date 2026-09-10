@@ -1288,100 +1288,27 @@ function formatEdifactTime(date: Date): string {
 export async function submitToAuthorities(
   flightId: number,
   destination: string
-) {
-  const db = await requireDb();
-
-  // Get destination-specific requirements
-  const [flight] = await db
-    .select({
-      id: flights.id,
-      flightNumber: flights.flightNumber,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (!flight) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-  }
-
-  // Get destination airport for country info
-  const [destAirport] = await db
-    .select({ code: airports.code, country: airports.country })
-    .from(airports)
-    .where(eq(airports.id, flight.destinationId))
-    .limit(1);
-
-  const destinationCountry = destination || destAirport?.country || "??";
-
-  // Determine format
-  const requirements = await getAPISRequirements("**", destinationCountry);
-  const format = requirements.format;
-
-  // Check for incomplete passengers first
-  const incomplete = await flagIncompletePassengers(flightId);
-  if (incomplete.incompleteCount > 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Cannot submit: ${incomplete.incompleteCount} passenger(s) have incomplete APIS data`,
-    });
-  }
-
-  // Generate the APIS message
-  const message = await generateAPISMessage(flightId, format);
-
-  const now = new Date();
-
-  // Record the submission
-  const [result] = await db.execute(sql`
-    INSERT INTO apis_submissions (
-      flight_id, destination_country, format, message_content,
-      submission_time, status, created_at
-    ) VALUES (
-      ${flightId}, ${destinationCountry}, ${format}, ${message.messageContent},
-      ${now}, 'submitted', ${now}
-    )
-  `);
-
-  const submissionId = Number((result as { insertId: number }).insertId);
-
-  // Update all validated APIS records to submitted
-  const passengerIds = await db
-    .select({ passengerId: passengers.id })
-    .from(passengers)
-    .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        eq(bookings.flightId, flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
-
-  if (passengerIds.length > 0) {
-    await db.execute(sql`
-      UPDATE apis_data
-      SET status = 'submitted', submitted_at = ${now}, updated_at = ${now}
-      WHERE passenger_id IN (${sql.join(
-        passengerIds.map(p => sql`${p.passengerId}`),
-        sql`, `
-      )})
-      AND status = 'validated'
-    `);
-  }
-
-  return {
-    submissionId,
-    flightId,
-    flightNumber: flight.flightNumber,
-    destinationCountry,
-    format,
-    status: "submitted" as APISSubmissionStatus,
-    submittedAt: now.toISOString(),
-    passengerCount: message.passengerCount,
-    validatedCount: message.validatedCount,
-  };
+): Promise<{
+  submissionId: number;
+  flightId: number;
+  flightNumber: string;
+  destinationCountry: string;
+  format: "paxlst" | "pnrgov";
+  status: APISSubmissionStatus;
+  submittedAt: string;
+  passengerCount: number;
+  validatedCount: number;
+}> {
+  // Message generation is available separately. A stored draft is not evidence
+  // of transmission or acceptance by a border authority. No certified transport
+  // adapter is installed in this deployment.
+  void flightId;
+  void destination;
+  throw new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message:
+      "APIS authority submission is unavailable: configure and validate the destination authority transport and acknowledgment contract. Generate a draft for review instead.",
+  });
 }
 
 // ============================================================================

@@ -1,3 +1,8 @@
+import { cancelBookingResources } from "./booking-settlement.service";
+import { assertTenantOperational } from "./tenant.service";
+import { allocateProportional } from "./seat-economics.service";
+import { createInventoryLock } from "./inventory-lock.service";
+import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import { TRPCError } from "@trpc/server";
 import { eq, and, gte, lte, desc, asc, lt, sql } from "drizzle-orm";
 import { getDb, generateBookingReference } from "../db";
@@ -6,13 +11,12 @@ import { recordEvent } from "./outbox.service";
 import {
   ndcOffers,
   ndcOrders,
+  bookingSegments,
   flights,
   airlines,
   airports,
   fareClasses,
   bookings,
-  ancillaryServices,
-  bookingAncillaries,
   passengers,
   type FareClass,
 } from "../../drizzle/schema";
@@ -166,6 +170,7 @@ export interface CreateOrderInput {
   channel?: NdcChannel | string;
   distributorId?: string;
   userId?: number;
+  tenantId?: number | null;
 }
 
 /** Input for NDC OrderChange */
@@ -504,26 +509,21 @@ async function resolveOrderUserId(
 // Core NDC Service Functions
 // ============================================================================
 
-/**
- * Emit an NDC order lifecycle event to the transactional outbox (best-effort:
- * a logging/relay failure must never break the order operation).
- */
+/** Persist the lifecycle event in the caller's transaction; failure aborts the command. */
 async function emitNdcOrderEvent(
   db: Parameters<typeof recordEvent>[0],
   orderId: string,
   eventType: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  tenantId: number | null = null
 ): Promise<void> {
-  try {
-    await recordEvent(db, {
-      aggregateType: "ndcOrder",
-      aggregateId: orderId,
-      eventType,
-      payload,
-    });
-  } catch (err) {
-    console.error(`[ndc] failed to emit ${eventType} for ${orderId}`, err);
-  }
+  await recordEvent(db, {
+    aggregateType: "ndcOrder",
+    aggregateId: orderId,
+    eventType,
+    payload,
+    tenantId,
+  });
 }
 
 /**
@@ -900,186 +900,284 @@ export async function createOrder(
     });
   }
 
-  // Fetch and validate the offer
-  const offerResults = await db
-    .select()
-    .from(ndcOffers)
-    .where(eq(ndcOffers.offerId, params.offerId))
-    .limit(1);
-
-  const offer = offerResults[0];
-  if (!offer) {
+  if (!params.userId || params.userId <= 0)
     throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `NDC offer not found: ${params.offerId}`,
+      code: "UNAUTHORIZED",
+      message: "An authenticated booking owner is required",
     });
-  }
-
-  const now = new Date();
-
-  // Check expiry
-  if (offer.expiresAt < now && offer.status === "active") {
-    await db
-      .update(ndcOffers)
-      .set({ status: "expired", updatedAt: now })
-      .where(eq(ndcOffers.id, offer.id));
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `NDC offer has expired: ${params.offerId}. Cannot create order from expired offer.`,
-    });
-  }
-
-  if (offer.status !== "active" && offer.status !== "selected") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `NDC offer is not available for ordering. Current status: ${offer.status}`,
-    });
-  }
-
-  // Create the internal booking
-  const bookingReference = generateBookingReference();
-  const pnr = generateBookingReference();
-  const cabinClass =
-    offer.cabinClass === "economy" || offer.cabinClass === "premium_economy"
-      ? "economy"
-      : "business";
-
-  // Determine userId (from params or default to system user 0)
-  const userId = params.userId ?? 0;
-
-  const [bookingResult] = await db.insert(bookings).values({
+  const userId = params.userId;
+  return withTransactionalIdempotency({
+    scope: "ndc.order.create",
+    key: params.offerId,
     userId,
-    flightId: safeParseJson<NdcSegment[]>(offer.segments, [])[0]?.flightId ?? 0,
-    bookingReference,
-    pnr,
-    status: "pending",
-    totalAmount: offer.totalPrice,
-    cabinClass,
-    numberOfPassengers: params.passengers.length,
-  });
+    request: params,
+    run: async db => {
+      // Fetch and validate the offer
+      const offerResults = await db
+        .select()
+        .from(ndcOffers)
+        .where(eq(ndcOffers.offerId, params.offerId))
+        .limit(1)
+        .for("update");
 
-  const bookingId = Number(
-    (bookingResult as unknown as { insertId?: number }).insertId ?? 0
-  );
+      const offer = offerResults[0];
+      if (!offer) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `NDC offer not found: ${params.offerId}`,
+        });
+      }
 
-  if (!bookingId) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to create internal booking for NDC order",
-    });
-  }
+      const now = new Date();
 
-  // Create passenger records in the bookings system
-  const passengerRecords = params.passengers.map(p => ({
-    bookingId,
-    type: p.type,
-    title: p.title,
-    firstName: p.firstName,
-    lastName: p.lastName,
-    dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : undefined,
-    passportNumber: p.passportNumber,
-    nationality: p.nationality,
-  }));
+      // Check expiry
+      if (offer.expiresAt < now) {
+        await db
+          .update(ndcOffers)
+          .set({ status: "expired", updatedAt: now })
+          .where(eq(ndcOffers.id, offer.id));
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `NDC offer has expired: ${params.offerId}. Cannot create order from expired offer.`,
+        });
+      }
 
-  await db.insert(passengers).values(passengerRecords);
+      if (offer.status !== "active" && offer.status !== "selected") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `NDC offer is not available for ordering. Current status: ${offer.status}`,
+        });
+      }
 
-  // Generate the NDC order ID
-  const orderId = generateNdcId("ORD");
-  const channel = (params.channel ?? offer.channel) as NdcChannel;
+      // Create the internal booking
+      const bookingReference = generateBookingReference();
+      const pnr = generateBookingReference();
+      const cabinClass =
+        offer.cabinClass === "economy" || offer.cabinClass === "premium_economy"
+          ? "economy"
+          : "business";
 
-  // Build the initial servicing history
-  const initialHistory: NdcServicingAction[] = [
-    {
-      action: "OrderCreate",
-      timestamp: now.toISOString(),
-      details: `Order created from offer ${params.offerId}`,
+      const segments = safeParseJson<NdcSegment[]>(offer.segments, []);
+      if (
+        !segments.length ||
+        new Set(segments.map(s => s.flightId)).size !== segments.length ||
+        offer.currency !== "SAR" ||
+        !["economy", "business"].includes(offer.cabinClass) ||
+        safeParseJson<{ pricing?: { passengerCount?: number } }>(
+          offer.offerPayload,
+          {}
+        ).pricing?.passengerCount !== params.passengers.length
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Offer inventory, cabin, currency or passenger count is unsupported",
+        });
+      const held = new Map<
+        number,
+        { lockId: number; tenantId: number | null; departureTime: Date }
+      >();
+      for (const segment of [...segments].sort(
+        (a, b) => a.flightId - b.flightId
+      )) {
+        const [flight] = await db
+          .select()
+          .from(flights)
+          .where(eq(flights.id, segment.flightId))
+          .limit(1)
+          .for("update");
+        if (
+          !flight ||
+          !["scheduled", "delayed"].includes(flight.status) ||
+          (params.tenantId != null && flight.tenantId !== params.tenantId)
+        )
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Offer flight unavailable",
+          });
+        if (held.size && [...held.values()][0].tenantId !== flight.tenantId)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Cross-tenant NDC itinerary requires interline integration",
+          });
+        await assertTenantOperational(db, flight.tenantId);
+        const hold = await createInventoryLock(
+          flight.id,
+          params.passengers.length,
+          cabinClass,
+          `ndc:${params.offerId}`,
+          userId,
+          db
+        );
+        held.set(flight.id, {
+          lockId: hold.lockId,
+          tenantId: flight.tenantId,
+          departureTime: flight.departureTime,
+        });
+      }
+      const first = held.get(segments[0].flightId)!;
+
+      const [bookingResult] = await db.insert(bookings).values({
+        userId,
+        flightId: segments[0].flightId,
+        tenantId: first.tenantId,
+        inventoryLockId: first.lockId,
+        bookingReference,
+        pnr,
+        status: "pending",
+        totalAmount: offer.totalPrice,
+        cabinClass,
+        numberOfPassengers: params.passengers.length,
+      });
+
+      const bookingId = Number(
+        (bookingResult as unknown as { insertId?: number }).insertId ?? 0
+      );
+
+      if (!bookingId) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create internal booking for NDC order",
+        });
+      }
+
+      // Create passenger records in the bookings system
+      const passengerRecords = params.passengers.map(p => ({
+        bookingId,
+        tenantId: first.tenantId,
+        type: p.type,
+        title: p.title,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : undefined,
+        passportNumber: p.passportNumber,
+        nationality: p.nationality,
+      }));
+
+      await db.insert(passengers).values(passengerRecords);
+      const segmentAmounts = allocateProportional(
+        offer.totalPrice,
+        segments.map(() => 1)
+      );
+      if (segments.length > 1)
+        await db.insert(bookingSegments).values(
+          segments.map((segment, i) => ({
+            bookingId,
+            flightId: segment.flightId,
+            segmentOrder: i + 1,
+            segmentAmount: segmentAmounts[i],
+            status: "pending" as const,
+            inventoryLockId: held.get(segment.flightId)!.lockId,
+            departureDate: held.get(segment.flightId)!.departureTime,
+          }))
+        );
+
+      // Generate the NDC order ID
+      const orderId = generateNdcId("ORD");
+      const channel = (params.channel ?? offer.channel) as NdcChannel;
+
+      // Build the initial servicing history
+      const initialHistory: NdcServicingAction[] = [
+        {
+          action: "OrderCreate",
+          timestamp: now.toISOString(),
+          details: `Order created from offer ${params.offerId}`,
+        },
+      ];
+
+      // Build the order payload (NDC-structured JSON)
+      const orderPayload = JSON.stringify({
+        ndcVersion: NDC_VERSION,
+        orderId,
+        offerId: params.offerId,
+        bookingReference,
+        pnr,
+        createdAt: now.toISOString(),
+        passengers: params.passengers,
+        contactInfo,
+        pricing: {
+          totalAmount: offer.totalPrice,
+          basePrice: offer.basePrice,
+          taxesAndFees: offer.taxesAndFees,
+          currency: offer.currency,
+        },
+        segments: safeParseJson(offer.segments, []),
+      });
+
+      // Insert the NDC order
+      await db.insert(ndcOrders).values({
+        orderId,
+        offerId: params.offerId,
+        bookingId,
+        airlineId: offer.airlineId,
+        passengers: JSON.stringify(params.passengers),
+        contactInfo: JSON.stringify(contactInfo),
+        paymentMethod: params.paymentMethod ?? null,
+        totalAmount: offer.totalPrice,
+        currency: offer.currency,
+        status: "pending",
+        orderPayload,
+        lastServicingAction: "OrderCreate",
+        servicingHistory: JSON.stringify(initialHistory),
+        channel,
+        distributorId: params.distributorId ?? null,
+      });
+
+      // Mark the offer as ordered
+      await db
+        .update(ndcOffers)
+        .set({ status: "ordered", updatedAt: now })
+        .where(eq(ndcOffers.id, offer.id));
+
+      await emitNdcOrderEvent(
+        db,
+        orderId,
+        "NdcOrderCreated",
+        {
+          orderId,
+          offerId: params.offerId,
+          totalAmount: offer.totalPrice,
+          currency: offer.currency,
+        },
+        first.tenantId
+      );
+
+      // Resolve airline for the response
+      const airlineResults = await db
+        .select({ id: airlines.id, code: airlines.code, name: airlines.name })
+        .from(airlines)
+        .where(eq(airlines.id, offer.airlineId))
+        .limit(1);
+      const airline = airlineResults[0] ?? {
+        id: offer.airlineId,
+        code: "XX",
+        name: "Unknown Airline",
+      };
+
+      return {
+        orderId,
+        offerId: params.offerId,
+        bookingId,
+        userId,
+        airline,
+        passengers: params.passengers,
+        contactInfo,
+        paymentMethod: params.paymentMethod ?? null,
+        totalAmount: offer.totalPrice,
+        currency: offer.currency,
+        ticketNumbers: [],
+        emdNumbers: [],
+        status: "pending",
+        channel,
+        distributorId: params.distributorId ?? null,
+        servicingHistory: initialHistory,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        ndcVersion: NDC_VERSION,
+      };
     },
-  ];
-
-  // Build the order payload (NDC-structured JSON)
-  const orderPayload = JSON.stringify({
-    ndcVersion: NDC_VERSION,
-    orderId,
-    offerId: params.offerId,
-    bookingReference,
-    pnr,
-    createdAt: now.toISOString(),
-    passengers: params.passengers,
-    contactInfo,
-    pricing: {
-      totalAmount: offer.totalPrice,
-      basePrice: offer.basePrice,
-      taxesAndFees: offer.taxesAndFees,
-      currency: offer.currency,
-    },
-    segments: safeParseJson(offer.segments, []),
   });
-
-  // Insert the NDC order
-  await db.insert(ndcOrders).values({
-    orderId,
-    offerId: params.offerId,
-    bookingId,
-    airlineId: offer.airlineId,
-    passengers: JSON.stringify(params.passengers),
-    contactInfo: JSON.stringify(contactInfo),
-    paymentMethod: params.paymentMethod ?? null,
-    totalAmount: offer.totalPrice,
-    currency: offer.currency,
-    status: "pending",
-    orderPayload,
-    lastServicingAction: "OrderCreate",
-    servicingHistory: JSON.stringify(initialHistory),
-    channel,
-    distributorId: params.distributorId ?? null,
-  });
-
-  // Mark the offer as ordered
-  await db
-    .update(ndcOffers)
-    .set({ status: "ordered", updatedAt: now })
-    .where(eq(ndcOffers.id, offer.id));
-
-  await emitNdcOrderEvent(db, orderId, "NdcOrderCreated", {
-    orderId,
-    offerId: params.offerId,
-    totalAmount: offer.totalPrice,
-    currency: offer.currency,
-  });
-
-  // Resolve airline for the response
-  const airlineResults = await db
-    .select({ id: airlines.id, code: airlines.code, name: airlines.name })
-    .from(airlines)
-    .where(eq(airlines.id, offer.airlineId))
-    .limit(1);
-  const airline = airlineResults[0] ?? {
-    id: offer.airlineId,
-    code: "XX",
-    name: "Unknown Airline",
-  };
-
-  return {
-    orderId,
-    offerId: params.offerId,
-    bookingId,
-    userId,
-    airline,
-    passengers: params.passengers,
-    contactInfo,
-    paymentMethod: params.paymentMethod ?? null,
-    totalAmount: offer.totalPrice,
-    currency: offer.currency,
-    ticketNumbers: [],
-    emdNumbers: [],
-    status: "pending",
-    channel,
-    distributorId: params.distributorId ?? null,
-    servicingHistory: initialHistory,
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
-    ndcVersion: NDC_VERSION,
-  };
 }
 
 /**
@@ -1171,555 +1269,146 @@ export async function cancelOrder(
     | { orderId: string; userId?: number; reason?: string },
   reason?: string
 ): Promise<NdcOrderResponse> {
-  // Normalize arguments: support both positional and object-based calling
   const orderId =
     typeof orderIdOrParams === "string"
       ? orderIdOrParams
       : orderIdOrParams.orderId;
+  const actorId =
+    typeof orderIdOrParams === "object" ? orderIdOrParams.userId : undefined;
+  if (!actorId || !Number.isSafeInteger(actorId))
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Authenticated order owner is required",
+    });
   const cancelReason =
     reason ??
     (typeof orderIdOrParams === "object"
       ? orderIdOrParams.reason
       : undefined) ??
     "Cancelled by request";
-
-  const db = await getDb();
+  const db = getDb();
   if (!db)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
-
-  const results = await db
-    .select()
-    .from(ndcOrders)
-    .where(eq(ndcOrders.orderId, orderId))
-    .limit(1);
-
-  const order = results[0];
-  if (!order) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `NDC order not found: ${orderId}`,
-    });
-  }
-
-  // Validate cancellable status via the order state machine.
-  if (!canTransitionTo(order.status, "cancelled")) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `NDC order cannot be cancelled. Current status: ${order.status}`,
-    });
-  }
-
-  const now = new Date();
-
-  // Update the servicing history
-  const history = safeParseJson<NdcServicingAction[]>(
-    order.servicingHistory,
-    []
-  );
-  history.push({
-    action: "OrderCancel",
-    timestamp: now.toISOString(),
-    details: cancelReason,
-  });
-
-  // Update the NDC order
-  await db
-    .update(ndcOrders)
-    .set({
-      status: "cancelled",
-      lastServicingAction: "OrderCancel",
-      servicingHistory: JSON.stringify(history),
-      updatedAt: now,
-    })
-    .where(eq(ndcOrders.id, order.id));
-
-  await emitNdcOrderEvent(db, orderId, "NdcOrderCancelled", {
-    orderId,
-    reason: cancelReason,
-  });
-
-  // Cancel the linked internal booking if it exists
-  if (order.bookingId) {
-    const bookingResults = await db
+  await db.transaction(async tx => {
+    const [identity] = await tx
       .select()
-      .from(bookings)
-      .where(eq(bookings.id, order.bookingId))
+      .from(ndcOrders)
+      .where(eq(ndcOrders.orderId, orderId))
       .limit(1);
-
-    const booking = bookingResults[0];
-    if (booking && booking.status !== "cancelled") {
-      await db
-        .update(bookings)
-        .set({ status: "cancelled", updatedAt: now })
-        .where(eq(bookings.id, order.bookingId));
-
-      // Restore seat availability if booking was confirmed/paid
-      if (booking.status === "confirmed" && booking.paymentStatus === "paid") {
-        const cabin = booking.cabinClass as "economy" | "business";
-        if (cabin === "business") {
-          await db
-            .update(flights)
-            .set({
-              businessAvailable: sql`${flights.businessAvailable} + ${booking.numberOfPassengers}`,
-              updatedAt: now,
-            })
-            .where(eq(flights.id, booking.flightId));
-        } else {
-          await db
-            .update(flights)
-            .set({
-              economyAvailable: sql`${flights.economyAvailable} + ${booking.numberOfPassengers}`,
-              updatedAt: now,
-            })
-            .where(eq(flights.id, booking.flightId));
-        }
-      }
-    }
-  }
-
-  // Mark the source offer as cancelled if it was in "ordered" state
-  const offerResults = await db
-    .select()
-    .from(ndcOffers)
-    .where(eq(ndcOffers.offerId, order.offerId))
-    .limit(1);
-
-  if (offerResults[0] && offerResults[0].status === "ordered") {
-    await db
-      .update(ndcOffers)
-      .set({ status: "cancelled", updatedAt: now })
-      .where(eq(ndcOffers.id, offerResults[0].id));
-  }
-
-  return getOrder(orderId);
-}
-
-/**
- * NDC OrderChange: Modify an existing order.
- *
- * Supports date changes, passenger detail updates, contact info updates,
- * and cabin class upgrades. Records each change in the servicing history.
- *
- * @param orderIdOrParams - The NDC order identifier, or an object with orderId, userId, and changes
- * @param changesArg - Object describing the desired changes (when first arg is a string)
- * @returns The updated order response
- */
-export async function changeOrder(
-  orderIdOrParams:
-    | string
-    | { orderId: string; userId?: number; changes: ChangeOrderInput },
-  changesArg?: ChangeOrderInput
-): Promise<NdcOrderResponse> {
-  // Normalize arguments: support both positional and object-based calling
-  const orderId =
-    typeof orderIdOrParams === "string"
-      ? orderIdOrParams
-      : orderIdOrParams.orderId;
-  const changes =
-    changesArg ??
-    (typeof orderIdOrParams === "object" ? orderIdOrParams.changes : {});
-
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const results = await db
-    .select()
-    .from(ndcOrders)
-    .where(eq(ndcOrders.orderId, orderId))
-    .limit(1);
-
-  const order = results[0];
-  if (!order) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `NDC order not found: ${orderId}`,
-    });
-  }
-
-  // Only pending, confirmed, or ticketed orders can be changed
-  const changeableStatuses: NdcOrderStatus[] = [
-    "pending",
-    "confirmed",
-    "ticketed",
-  ];
-  if (!changeableStatuses.includes(order.status)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `NDC order cannot be changed. Current status: ${order.status}`,
-    });
-  }
-
-  const now = new Date();
-  const history = safeParseJson<NdcServicingAction[]>(
-    order.servicingHistory,
-    []
-  );
-  const currentPassengers = safeParseJson<NdcPassengerInfo[]>(
-    order.passengers,
-    []
-  );
-  const currentContact = safeParseJson<NdcContactInfo>(order.contactInfo, {
-    emailAddress: "",
-    phoneNumber: "",
-  });
-
-  const updatedPassengers = [...currentPassengers];
-  let updatedContact = currentContact;
-  let updatedAmount = order.totalAmount;
-  const changeDetails: string[] = [];
-
-  // Apply passenger updates
-  if (changes.passengerUpdates && changes.passengerUpdates.length > 0) {
-    for (const paxUpdate of changes.passengerUpdates) {
-      const idx =
-        paxUpdate.index ?? parseInt(paxUpdate.passengerId ?? "-1", 10);
-      if (idx >= 0 && idx < updatedPassengers.length) {
-        // Support both { updates: {...} } and direct field form from the router
-        const patchData = paxUpdate.updates ?? {
-          ...(paxUpdate.firstName ? { firstName: paxUpdate.firstName } : {}),
-          ...(paxUpdate.lastName ? { lastName: paxUpdate.lastName } : {}),
-          ...(paxUpdate.passportNumber
-            ? { passportNumber: paxUpdate.passportNumber }
-            : {}),
-          ...(paxUpdate.passportExpiry
-            ? { passportExpiry: paxUpdate.passportExpiry }
-            : {}),
-        };
-        updatedPassengers[idx] = {
-          ...updatedPassengers[idx],
-          ...patchData,
-        };
-        changeDetails.push(
-          `Passenger ${idx + 1} updated: ${Object.keys(patchData).join(", ")}`
-        );
-      }
-    }
-  }
-
-  // Apply contact info update
-  if (changes.contactInfoUpdate) {
-    updatedContact = { ...updatedContact, ...changes.contactInfoUpdate };
-    changeDetails.push(
-      `Contact info updated: ${Object.keys(changes.contactInfoUpdate).join(", ")}`
-    );
-  }
-
-  // Handle date change
-  const newDepartureDate = changes.newDepartureDate
-    ? toDate(changes.newDepartureDate)
-    : undefined;
-  if (newDepartureDate && order.bookingId) {
-    const bookingResults = await db
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, order.bookingId))
-      .limit(1);
-
-    const booking = bookingResults[0];
-    if (booking) {
-      // Find a new flight on the requested date for the same route
-      const offerResults = await db
-        .select()
-        .from(ndcOffers)
-        .where(eq(ndcOffers.offerId, order.offerId))
-        .limit(1);
-
-      const offer = offerResults[0];
-      if (offer) {
-        const newStartOfDay = new Date(newDepartureDate);
-        newStartOfDay.setHours(0, 0, 0, 0);
-        const newEndOfDay = new Date(newDepartureDate);
-        newEndOfDay.setHours(23, 59, 59, 999);
-
-        const newFlights = await db
-          .select()
-          .from(flights)
-          .where(
-            and(
-              eq(flights.originId, offer.originId),
-              eq(flights.destinationId, offer.destinationId),
-              gte(flights.departureTime, newStartOfDay),
-              lte(flights.departureTime, newEndOfDay),
-              eq(flights.status, "scheduled")
-            )
-          )
-          .orderBy(asc(flights.departureTime))
-          .limit(1);
-
-        const newFlight = newFlights[0];
-        if (!newFlight) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `No available flights found on ${newDepartureDate.toISOString().split("T")[0]} for this route`,
-          });
-        }
-
-        // Verify seat availability on the new flight
-        const cabin = booking.cabinClass as "economy" | "business";
-        const seatsAvailable =
-          cabin === "business"
-            ? newFlight.businessAvailable
-            : newFlight.economyAvailable;
-
-        if (seatsAvailable < booking.numberOfPassengers) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Insufficient seats on the new flight. Available: ${seatsAvailable}, Required: ${booking.numberOfPassengers}`,
-          });
-        }
-
-        // Update the booking to point to the new flight
-        await db
-          .update(bookings)
-          .set({ flightId: newFlight.id, updatedAt: now })
-          .where(eq(bookings.id, order.bookingId));
-
-        changeDetails.push(
-          `Date changed to ${newDepartureDate.toISOString().split("T")[0]}, new flight: ${newFlight.flightNumber}`
-        );
-      }
-    }
-  }
-
-  // Handle cabin class upgrade (from changes.cabinClassUpgrade or changes.newCabinClass)
-  const targetCabinRaw = changes.cabinClassUpgrade ?? changes.newCabinClass;
-  if (targetCabinRaw && order.bookingId) {
-    const bookingResults = await db
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, order.bookingId))
-      .limit(1);
-
-    const booking = bookingResults[0];
-    if (booking) {
-      const currentFlight = await db
-        .select()
-        .from(flights)
-        .where(eq(flights.id, booking.flightId))
-        .limit(1);
-
-      if (currentFlight[0]) {
-        const targetCabin =
-          targetCabinRaw === "economy" || targetCabinRaw === "premium_economy"
-            ? "economy"
-            : "business";
-
-        if (targetCabin === "business" && booking.cabinClass !== "business") {
-          if (currentFlight[0].businessAvailable < booking.numberOfPassengers) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `Insufficient business class seats for upgrade. Available: ${currentFlight[0].businessAvailable}`,
-            });
-          }
-          // Calculate price difference
-          const priceDifference =
-            (currentFlight[0].businessPrice - currentFlight[0].economyPrice) *
-            booking.numberOfPassengers;
-          updatedAmount = order.totalAmount + priceDifference;
-
-          await db
-            .update(bookings)
-            .set({
-              cabinClass: targetCabin,
-              totalAmount: updatedAmount,
-              updatedAt: now,
-            })
-            .where(eq(bookings.id, order.bookingId));
-
-          changeDetails.push(
-            `Cabin upgraded to ${targetCabinRaw}. Additional charge: ${(priceDifference / 100).toFixed(2)} SAR`
-          );
-        }
-      }
-    }
-  }
-
-  // Record the change in servicing history
-  if (changeDetails.length > 0) {
-    history.push({
-      action: "OrderChange",
-      timestamp: now.toISOString(),
-      details: changeDetails.join("; "),
-    });
-  }
-
-  // Update the NDC order
-  await db
-    .update(ndcOrders)
-    .set({
-      passengers: JSON.stringify(updatedPassengers),
-      contactInfo: JSON.stringify(updatedContact),
-      totalAmount: updatedAmount,
-      status: "changed",
-      lastServicingAction: "OrderChange",
-      servicingHistory: JSON.stringify(history),
-      updatedAt: now,
-    })
-    .where(eq(ndcOrders.id, order.id));
-
-  await emitNdcOrderEvent(db, orderId, "NdcOrderChanged", {
-    orderId,
-    totalAmount: updatedAmount,
-  });
-
-  return getOrder(orderId);
-}
-
-/**
- * NDC ServiceList/ServiceOrder: Add ancillary services to an existing order.
- *
- * Looks up available ancillary services by code, validates the order is in
- * a serviceable state, attaches the services to the linked booking, and
- * updates the order total and servicing history.
- *
- * @param orderId - The NDC order identifier
- * @param services - Array of services to add
- * @returns The updated order response
- */
-export async function serviceOrder(
-  orderId: string,
-  services: ServiceOrderInput[]
-): Promise<NdcOrderResponse> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  if (!services || services.length === 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "At least one service must be provided",
-    });
-  }
-
-  const orderResults = await db
-    .select()
-    .from(ndcOrders)
-    .where(eq(ndcOrders.orderId, orderId))
-    .limit(1);
-
-  const order = orderResults[0];
-  if (!order) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `NDC order not found: ${orderId}`,
-    });
-  }
-
-  // Only pending, confirmed, or ticketed orders can have services added
-  const serviceableStatuses: NdcOrderStatus[] = [
-    "pending",
-    "confirmed",
-    "ticketed",
-  ];
-  if (!serviceableStatuses.includes(order.status)) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Cannot add services to order with status: ${order.status}`,
-    });
-  }
-
-  if (!order.bookingId) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "NDC order has no linked booking. Cannot add ancillary services.",
-    });
-  }
-
-  const now = new Date();
-  const history = safeParseJson<NdcServicingAction[]>(
-    order.servicingHistory,
-    []
-  );
-  let additionalCost = 0;
-  const serviceDetails: string[] = [];
-
-  for (const svc of services) {
-    // Support both serviceCode and serviceType from the router
-    const code = svc.serviceCode || svc.serviceType || "";
-    if (!code) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "serviceCode is required for each service",
-      });
-    }
-
-    // Look up the ancillary service by code
-    const ancillaryResults = await db
-      .select()
-      .from(ancillaryServices)
-      .where(
-        and(
-          eq(ancillaryServices.code, code),
-          eq(ancillaryServices.available, true)
-        )
-      )
-      .limit(1);
-
-    const ancillary = ancillaryResults[0];
-    if (!ancillary) {
+    if (!identity?.bookingId)
       throw new TRPCError({
         code: "NOT_FOUND",
-        message: `Ancillary service not found or unavailable: ${code}`,
+        message: "Owned NDC booking not found",
       });
-    }
-
-    const quantity = svc.quantity ?? 1;
-    const totalPrice = ancillary.price * quantity;
-
-    // Create the booking ancillary record
-    await db.insert(bookingAncillaries).values({
-      bookingId: order.bookingId,
-      ancillaryServiceId: ancillary.id,
-      quantity,
-      unitPrice: ancillary.price,
-      totalPrice,
-      status: "active",
-    });
-
-    additionalCost += totalPrice;
-    serviceDetails.push(
-      `${ancillary.name} x${quantity} (${(totalPrice / 100).toFixed(2)} SAR)`
+    // Match collection/refund lock order: booking before NDC order.
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, identity.bookingId))
+      .for("update");
+    if (!booking || booking.userId !== actorId)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Owned NDC booking not found",
+      });
+    const [order] = await tx
+      .select()
+      .from(ndcOrders)
+      .where(eq(ndcOrders.id, identity.id))
+      .for("update");
+    if (!order || order.bookingId !== booking.id)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "NDC booking association changed",
+      });
+    // Replays after cancellation or a verified refund must not release seats again.
+    if (
+      order.status === "refunded" ||
+      (order.status === "cancelled" && booking.status === "cancelled")
+    )
+      return;
+    if (
+      order.status !== "cancelled" &&
+      !canTransitionTo(order.status, "cancelled")
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `NDC order cannot be cancelled. Current status: ${order.status}`,
+      });
+    await cancelBookingResources(tx, booking, cancelReason, actorId);
+    const now = new Date();
+    const history = safeParseJson<NdcServicingAction[]>(
+      order.servicingHistory,
+      []
     );
-  }
-
-  // Update order total
-  const newTotal = order.totalAmount + additionalCost;
-
-  // Build EMD numbers for the new services (placeholder format)
-  const existingEmds = safeParseJson<string[]>(order.emdNumbers, []);
-  for (const _svc of services) {
-    existingEmds.push(`EMD-${crypto.randomUUID().slice(0, 13).toUpperCase()}`);
-  }
-
-  history.push({
-    action: "ServiceOrder",
-    timestamp: now.toISOString(),
-    details: `Added services: ${serviceDetails.join(", ")}. Additional cost: ${(additionalCost / 100).toFixed(2)} SAR`,
+    history.push({
+      action: "OrderCancel",
+      timestamp: now.toISOString(),
+      details: cancelReason,
+    });
+    await tx
+      .update(ndcOrders)
+      .set({
+        status: "cancelled",
+        lastServicingAction: "OrderCancel",
+        servicingHistory: JSON.stringify(history),
+        updatedAt: now,
+      })
+      .where(eq(ndcOrders.id, order.id));
+    await tx
+      .update(ndcOffers)
+      .set({ status: "cancelled", updatedAt: now })
+      .where(
+        and(
+          eq(ndcOffers.offerId, order.offerId),
+          eq(ndcOffers.status, "ordered")
+        )
+      );
+    await emitNdcOrderEvent(
+      tx,
+      orderId,
+      "NdcOrderCancelled",
+      {
+        orderId,
+        bookingId: booking.id,
+        reason: cancelReason,
+        // Cancellation alone never claims that money was refunded.
+        paymentStatus: booking.paymentStatus,
+      },
+      booking.tenantId
+    );
   });
-
-  await db
-    .update(ndcOrders)
-    .set({
-      totalAmount: newTotal,
-      emdNumbers: JSON.stringify(existingEmds),
-      lastServicingAction: "ServiceOrder",
-      servicingHistory: JSON.stringify(history),
-      updatedAt: now,
-    })
-    .where(eq(ndcOrders.id, order.id));
-
   return getOrder(orderId);
+}
+
+/** NDC exchanges require a quoted, idempotent inventory/payment/document transaction.
+ * The earlier implementation changed the booking without reconciling those owners. */
+export async function changeOrder(
+  _orderIdOrParams:
+    | string
+    | { orderId: string; userId?: number; changes: ChangeOrderInput },
+  _changesArg?: ChangeOrderInput
+): Promise<NdcOrderResponse> {
+  throw new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message:
+      "NDC order changes require an integrated exchange, passenger synchronization and settlement workflow",
+  });
+}
+
+/** No ancillary charge or EMD is issued without the central invoice/payment workflow. */
+export async function serviceOrder(
+  _orderId: string,
+  _services: ServiceOrderInput[]
+): Promise<NdcOrderResponse> {
+  throw new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message:
+      "NDC ancillary servicing requires verified invoice settlement and an EMD issuer",
+  });
 }
 
 /**

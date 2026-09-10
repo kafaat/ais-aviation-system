@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/modifications";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import * as modificationService from "../services/booking-modification.service";
@@ -19,6 +20,7 @@ export const modificationsRouter = router({
         reason: z.string().optional(),
       })
     )
+    .output(responseContracts["requestChangeDate"])
     .mutation(async ({ input, ctx }) => {
       return await modificationService.requestChangeFlightDate({
         bookingId: input.bookingId,
@@ -38,6 +40,7 @@ export const modificationsRouter = router({
         reason: z.string().optional(),
       })
     )
+    .output(responseContracts["requestUpgrade"])
     .mutation(async ({ input, ctx }) => {
       return await modificationService.requestUpgradeCabin({
         bookingId: input.bookingId,
@@ -52,6 +55,7 @@ export const modificationsRouter = router({
    */
   getDetails: protectedProcedure
     .input(z.object({ modificationId: z.number() }))
+    .output(responseContracts["getDetails"])
     .query(async ({ input, ctx }) => {
       // Ownership check: prevent reading another user's modification (IDOR)
       await assertModificationOwnership(
@@ -67,7 +71,9 @@ export const modificationsRouter = router({
   /**
    * Get user's modification requests
    */
-  myModifications: protectedProcedure.query(async ({ ctx }) => {
-    return await modificationService.getUserModifications(ctx.user.id);
-  }),
+  myModifications: protectedProcedure
+    .output(responseContracts["myModifications"])
+    .query(async ({ ctx }) => {
+      return await modificationService.getUserModifications(ctx.user.id);
+    }),
 });

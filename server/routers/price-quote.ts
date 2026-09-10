@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/price-quote";
 import { z } from "zod";
 import { publicProcedure, router } from "../_core/trpc";
 import { getPriceQuote } from "../services/price-quote.service";
@@ -31,6 +32,7 @@ export const priceQuoteRouter = router({
         milesToRedeem: z.number().int().min(0).optional(),
       })
     )
+    .output(responseContracts["get"])
     .query(async ({ input }) => {
       return await getPriceQuote(input);
     }),

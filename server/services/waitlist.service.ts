@@ -148,7 +148,7 @@ export async function getWaitlistPosition(
 ): Promise<{
   position: number | null;
   status: string | null;
-  entry: any | null;
+  entry: typeof waitlist.$inferSelect | null;
 }> {
   const database = await getDb();
   if (!database) throw new Error("Database not available");

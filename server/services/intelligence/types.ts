@@ -94,18 +94,24 @@ export interface RouteEconomics {
   origin: string;
   destination: string;
   metrics: {
-    rask: number; // Revenue per Available Seat Kilometer
-    cask: number; // Cost per Available Seat Kilometer
-    yield: number; // Revenue per Revenue Passenger Kilometer
+    rask: number | null; // Revenue per Available Seat Kilometer
+    cask: number | null; // Cost per Available Seat Kilometer
+    yield: number | null; // Revenue per Revenue Passenger Kilometer
     loadFactor: number; // Percentage of seats filled
-    breakEvenLoadFactor: number;
-    profitMargin: number;
-    contributionMargin: number;
+    breakEvenLoadFactor: number | null;
+    profitMargin: number | null;
+    contributionMargin: number | null;
   };
-  trend: "improving" | "stable" | "declining";
+  trend: "improving" | "stable" | "declining" | "unknown";
+  measured?: {
+    flights: number;
+    availableSeats: number;
+    bookedSeats: number;
+    revenue: number | null;
+  };
   forecast: {
-    nextMonth: number;
-    nextQuarter: number;
+    nextMonth: number | null;
+    nextQuarter: number | null;
     confidence: number;
   };
 }
@@ -124,11 +130,12 @@ export interface CostBreakdown {
 }
 
 export interface ProfitabilityAnalysis {
-  totalRevenue: number;
-  totalCost: number;
-  operatingProfit: number;
-  netMargin: number;
-  roi: number;
+  dataQuality?: { missing: string[]; revenueAllocation: string };
+  totalRevenue: number | null;
+  totalCost: number | null;
+  operatingProfit: number | null;
+  netMargin: number | null;
+  roi: number | null;
   routes: RouteEconomics[];
   unprofitableRoutes: RouteEconomics[];
   topPerformers: RouteEconomics[];
@@ -233,9 +240,9 @@ export interface IntelligenceBriefing {
   economics: {
     summary: string;
     summaryAr: string;
-    profitMargin: number;
+    profitMargin: number | null;
     trend: string;
-    keyMetrics: Record<string, number>;
+    keyMetrics: Record<string, number | null>;
   };
   operations: {
     summary: string;

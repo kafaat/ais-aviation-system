@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/gds";
 import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
@@ -223,6 +224,7 @@ export const gdsRouter = router({
       },
     })
     .input(createConnectionInput)
+    .output(responseContracts["createConnection"])
     .mutation(async ({ input, ctx }) => {
       try {
         const connection = await gdsService.createConnection({
@@ -262,6 +264,7 @@ export const gdsRouter = router({
       },
     })
     .input(updateConnectionInput)
+    .output(responseContracts["updateConnection"])
     .mutation(async ({ input }) => {
       try {
         const { id, ...updates } = input;
@@ -302,6 +305,7 @@ export const gdsRouter = router({
       },
     })
     .input(getConnectionInput)
+    .output(responseContracts["getConnection"])
     .query(async ({ input }) => {
       try {
         const connection = await gdsService.getConnection(input.id);
@@ -345,6 +349,7 @@ export const gdsRouter = router({
       },
     })
     .input(listConnectionsInput)
+    .output(responseContracts["listConnections"])
     .query(async ({ input }) => {
       try {
         const connections = await gdsService.listConnections(input);
@@ -381,6 +386,7 @@ export const gdsRouter = router({
       },
     })
     .input(testConnectionInput)
+    .output(responseContracts["testConnection"])
     .mutation(async ({ input }) => {
       try {
         const result = await gdsService.testConnection(input.connectionId);
@@ -421,6 +427,7 @@ export const gdsRouter = router({
       },
     })
     .input(searchAvailabilityInput)
+    .output(responseContracts["searchAvailability"])
     .query(async ({ input, ctx }) => {
       try {
         const results = await gdsService.searchAvailability({
@@ -460,6 +467,7 @@ export const gdsRouter = router({
       },
     })
     .input(createGdsBookingInput)
+    .output(responseContracts["createGdsBooking"])
     .mutation(async ({ input, ctx }) => {
       try {
         const booking = await gdsService.createGdsBooking({
@@ -503,6 +511,7 @@ export const gdsRouter = router({
       },
     })
     .input(getMessageLogInput)
+    .output(responseContracts["getMessageLog"])
     .query(async ({ input }) => {
       try {
         const { connectionId, messageType, status, page, limit } = input;
@@ -546,6 +555,7 @@ export const gdsRouter = router({
       },
     })
     .input(getStatisticsInput)
+    .output(responseContracts["getStatistics"])
     .query(async ({ input }) => {
       try {
         const { connectionId, dateFrom, dateTo } = input;

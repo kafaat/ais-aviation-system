@@ -1,0 +1,81 @@
+// Explicit response field allowlists. Review contract changes with producers and consumers.
+import { z } from "zod";
+import { outputNumber } from "./primitives";
+export const responseContracts = {
+  myAccount: z.object({
+    nextTier: z.union([z.null(), z.string()]),
+    pointsToNextTier: z.union([z.null(), outputNumber]),
+    tierMultiplier: outputNumber,
+    milesValue: z.string(),
+    id: outputNumber,
+    userId: outputNumber,
+    totalMilesEarned: outputNumber,
+    currentMilesBalance: outputNumber,
+    milesRedeemed: outputNumber,
+    tier: z.enum(["bronze", "silver", "gold", "platinum"]),
+    tierPoints: outputNumber,
+    memberSince: z.date(),
+    lastActivityAt: z.date(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+  }),
+  myTransactions: z.array(
+    z.object({
+      id: outputNumber,
+      userId: outputNumber,
+      loyaltyAccountId: outputNumber,
+      type: z.enum(["earn", "redeem", "expire", "bonus", "adjustment"]),
+      amount: outputNumber,
+      balanceAfter: outputNumber,
+      bookingId: z.union([z.null(), outputNumber]),
+      flightId: z.union([z.null(), outputNumber]),
+      description: z.string(),
+      reason: z.union([z.null(), z.string()]),
+      expiresAt: z.union([z.null(), z.date()]),
+      createdAt: z.date(),
+    })
+  ),
+  redeemMiles: z.object({
+    discountAmount: outputNumber,
+    newBalance: outputNumber,
+  }),
+  awardBonusMiles: z.object({ newBalance: outputNumber }),
+  reverseMilesForBooking: z.object({ milesReversed: outputNumber }),
+  processExpiredMiles: z.object({
+    processedAccounts: outputNumber,
+    totalExpiredMiles: outputNumber,
+  }),
+  getUserAccount: z.object({
+    nextTier: z.union([z.null(), z.string()]),
+    pointsToNextTier: z.union([z.null(), outputNumber]),
+    tierMultiplier: outputNumber,
+    milesValue: z.string(),
+    id: outputNumber,
+    userId: outputNumber,
+    totalMilesEarned: outputNumber,
+    currentMilesBalance: outputNumber,
+    milesRedeemed: outputNumber,
+    tier: z.enum(["bronze", "silver", "gold", "platinum"]),
+    tierPoints: outputNumber,
+    memberSince: z.date(),
+    lastActivityAt: z.date(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+  }),
+  getUserTransactions: z.array(
+    z.object({
+      id: outputNumber,
+      userId: outputNumber,
+      loyaltyAccountId: outputNumber,
+      type: z.enum(["earn", "redeem", "expire", "bonus", "adjustment"]),
+      amount: outputNumber,
+      balanceAfter: outputNumber,
+      bookingId: z.union([z.null(), outputNumber]),
+      flightId: z.union([z.null(), outputNumber]),
+      description: z.string(),
+      reason: z.union([z.null(), z.string()]),
+      expiresAt: z.union([z.null(), z.date()]),
+      createdAt: z.date(),
+    })
+  ),
+};

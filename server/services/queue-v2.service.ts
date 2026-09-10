@@ -1,3 +1,4 @@
+import { cancelBookingResources } from "./booking-settlement.service";
 /**
  * Background Queue V2 Service - Production-Grade
  *
@@ -17,8 +18,8 @@ import { Queue, Worker, Job } from "bullmq";
 import { redisConnectionOptions } from "../queue/redis-config";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { stripeEvents, bookings } from "../../drizzle/schema";
-import { eq, and, lt } from "drizzle-orm";
+import { stripeEvents, bookings, paymentReceipts } from "../../drizzle/schema";
+import { eq, and, lt, gt, asc } from "drizzle-orm";
 
 // ============================================================================
 // CONFIGURATION
@@ -589,30 +590,57 @@ async function runCleanup(data: CleanupJobData): Promise<void> {
 /**
  * Cleanup expired pending bookings
  */
-async function cleanupExpiredBookings(): Promise<void> {
+export async function cleanupExpiredBookings(): Promise<void> {
   const db = await getDb();
-  if (!db) {
-    return;
-  }
-
-  // Find bookings that have been pending for more than 30 minutes
-  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
-
-  const result = await db
-    .update(bookings)
-    .set({
-      status: "cancelled",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(bookings.status, "pending"),
-        lt(bookings.createdAt, thirtyMinutesAgo)
+  if (!db) throw new Error("Database unavailable during booking expiry");
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+  let cursor = 0;
+  for (;;) {
+    const candidates = await db
+      .select({ id: bookings.id })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.status, "pending"),
+          eq(bookings.paymentStatus, "pending"),
+          lt(bookings.createdAt, cutoff),
+          gt(bookings.id, cursor)
+        )
       )
-    );
-
-  const expiredCount = (result as any)[0]?.affectedRows || 0;
-  console.info(`[Cleanup] Expired ${expiredCount} pending bookings`);
+      .orderBy(asc(bookings.id))
+      .limit(100);
+    if (!candidates.length) break;
+    for (const candidate of candidates) {
+      await db.transaction(async tx => {
+        const [booking] = await tx
+          .select()
+          .from(bookings)
+          .where(eq(bookings.id, candidate.id))
+          .limit(1)
+          .for("update");
+        if (
+          !booking ||
+          booking.status !== "pending" ||
+          booking.paymentStatus !== "pending" ||
+          booking.createdAt >= cutoff
+        )
+          return;
+        const [review] = await tx
+          .select({ id: paymentReceipts.paymentIntentId })
+          .from(paymentReceipts)
+          .where(
+            and(
+              eq(paymentReceipts.bookingId, booking.id),
+              eq(paymentReceipts.settlementStatus, "review_required")
+            )
+          )
+          .limit(1);
+        if (review) return; // Collected funds require review, never automatic expiry.
+        await cancelBookingResources(tx, booking, "Unpaid booking expired");
+      });
+      cursor = candidate.id;
+    }
+  }
 }
 
 // ============================================================================
@@ -622,10 +650,12 @@ async function cleanupExpiredBookings(): Promise<void> {
 /**
  * Start all workers
  */
-export function startAllWorkers(): void {
-  startEmailWorker();
-  startWebhookRetryWorker();
-  startScheduledWorker();
+export async function startAllWorkers(): Promise<void> {
+  await Promise.all(
+    [startEmailWorker(), startWebhookRetryWorker(), startScheduledWorker()].map(
+      worker => worker.waitUntilReady()
+    )
+  );
   console.info(`[Queue] All workers started`);
 }
 
@@ -726,3 +756,9 @@ export default {
   closeAllQueues,
   getQueueHealth,
 };
+
+export function areV2WorkersHealthy(): boolean {
+  return [emailWorker, webhookRetryWorker, scheduledWorker].every(
+    worker => worker != null && worker.isRunning() && !worker.isPaused()
+  );
+}

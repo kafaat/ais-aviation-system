@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/boarding-pass";
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
@@ -30,6 +31,7 @@ export const boardingPassRouter = router({
         passengerId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["issue"])
     .mutation(async ({ input, ctx }) => {
       return await issueBoardingPass(input, {
         userId: ctx.user.id,
@@ -49,6 +51,7 @@ export const boardingPassRouter = router({
       },
     })
     .input(z.object({ token: z.string().min(1) }))
+    .output(responseContracts["verify"])
     .query(({ input }) => {
       return verifyBoardingPass(input.token);
     }),

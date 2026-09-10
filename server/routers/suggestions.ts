@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/suggestions";
 /**
  * Suggestions Router
  * Provides personalized and popular flight suggestions
@@ -23,6 +24,7 @@ export const suggestionsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["forUser"])
     .query(async ({ ctx, input }) => {
       const limit = input?.limit ?? 6;
       return await getUserSuggestions(ctx.user.id, limit);
@@ -39,6 +41,7 @@ export const suggestionsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["popular"])
     .query(async ({ input }) => {
       const limit = input?.limit ?? 6;
       return await getPopularFlightSuggestions(limit);
@@ -55,6 +58,7 @@ export const suggestionsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["deals"])
     .query(async ({ input }) => {
       const limit = input?.limit ?? 4;
       return await getDealSuggestions(limit);

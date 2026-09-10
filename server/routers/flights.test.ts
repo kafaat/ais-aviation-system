@@ -15,6 +15,15 @@ describe("Flights Router", () => {
       const mockFlights = [
         {
           id: 1,
+          aircraftType: null,
+          status: "scheduled",
+          economyPrice: 10000,
+          businessPrice: 20000,
+          economyAvailable: 50,
+          businessAvailable: 5,
+          airline: { code: "ZX", name: "Test", logo: null },
+          origin: { code: "ZZZ", name: "Origin", city: "Test" },
+          destination: { code: "ZZY", name: "Destination", city: "Test" },
           flightNumber: "SV123",
           departureTime: new Date("2025-01-01T10:00:00Z"),
           arrivalTime: new Date("2025-01-01T12:00:00Z"),
@@ -48,6 +57,29 @@ describe("Flights Router", () => {
         flightNumber: "SV123",
         departureTime: new Date("2025-01-01T10:00:00Z"),
         arrivalTime: new Date("2025-01-01T12:00:00Z"),
+        aircraftType: null,
+        status: "scheduled",
+        economySeats: 100,
+        businessSeats: 10,
+        economyPrice: 10000,
+        businessPrice: 20000,
+        economyAvailable: 50,
+        businessAvailable: 5,
+        airline: { id: 1, code: "ZX", name: "Test", logo: null },
+        origin: {
+          id: 1,
+          code: "ZZZ",
+          name: "Origin",
+          city: "Test",
+          country: "Test",
+        },
+        destination: {
+          id: 2,
+          code: "ZZY",
+          name: "Destination",
+          city: "Test",
+          country: "Test",
+        },
       };
 
       vi.mocked(flightsService.getFlightById).mockResolvedValue(

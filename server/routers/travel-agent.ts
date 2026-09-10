@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/travel-agent";
 /**
  * Travel Agent Router
  *
@@ -16,6 +17,7 @@ import * as travelAgentService from "../services/travel-agent.service";
 // ============ Input Schemas ============
 
 const registerAgentSchema = z.object({
+  ownerUserId: z.number().int().positive().optional(),
   agencyName: z.string().min(1).max(255),
   iataNumber: z.string().min(1).max(20),
   contactName: z.string().min(1).max(255),
@@ -46,6 +48,7 @@ const passengerSchema = z.object({
 });
 
 const createBookingSchema = z.object({
+  idempotencyKey: z.string().min(1).max(200).optional(),
   flightId: z.number().int().positive(),
   cabinClass: z.enum(["economy", "business"]),
   passengers: z.array(passengerSchema).min(1).max(9),
@@ -70,6 +73,22 @@ const apiCredentialsSchema = z.object({
 // ============ Router ============
 
 export const travelAgentRouter = router({
+  assignOwner: adminProcedure
+    .input(
+      z.object({
+        agentId: z.number().int().positive(),
+        ownerUserId: z.number().int().positive(),
+      })
+    )
+    .output(z.object({ success: z.literal(true) }))
+    .mutation(({ input, ctx }) =>
+      travelAgentService.assignAgentOwner(
+        input.agentId,
+        input.ownerUserId,
+        ctx.user.id
+      )
+    ),
+
   // ==================== Admin Endpoints ====================
 
   /**
@@ -88,6 +107,7 @@ export const travelAgentRouter = router({
       },
     })
     .input(registerAgentSchema)
+    .output(responseContracts["register"])
     .mutation(async ({ input }) => {
       return await travelAgentService.registerAgent(input);
     }),
@@ -115,6 +135,7 @@ export const travelAgentRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["list"])
     .query(async ({ input }) => {
       return await travelAgentService.listAgents(input ?? {});
     }),
@@ -134,6 +155,7 @@ export const travelAgentRouter = router({
       },
     })
     .input(z.object({ id: z.number().int().positive() }))
+    .output(responseContracts["getById"])
     .query(async ({ input }) => {
       const agent = await travelAgentService.getAgentById(input.id);
       if (!agent) {
@@ -158,6 +180,7 @@ export const travelAgentRouter = router({
       },
     })
     .input(z.object({ id: z.number().int().positive() }))
+    .output(responseContracts["regenerateCredentials"])
     .mutation(async ({ input }) => {
       return await travelAgentService.generateApiCredentials(input.id);
     }),
@@ -182,6 +205,7 @@ export const travelAgentRouter = router({
         isActive: z.boolean(),
       })
     )
+    .output(responseContracts["updateStatus"])
     .mutation(async ({ input }) => {
       await travelAgentService.updateAgentStatus(input.id, input.isActive);
       return { success: true };
@@ -207,6 +231,7 @@ export const travelAgentRouter = router({
         commissionRate: z.number().min(0).max(50),
       })
     )
+    .output(responseContracts["updateCommissionRate"])
     .mutation(async ({ input }) => {
       await travelAgentService.updateAgentCommissionRate(
         input.id,
@@ -231,6 +256,7 @@ export const travelAgentRouter = router({
       },
     })
     .input(z.object({ id: z.number().int().positive() }))
+    .output(responseContracts["getAgentStats"])
     .query(async ({ input }) => {
       return await travelAgentService.getAgentStats(input.id);
     }),
@@ -249,6 +275,7 @@ export const travelAgentRouter = router({
         protect: true,
       },
     })
+    .output(responseContracts["getPendingCommissions"])
     .query(async () => {
       return await travelAgentService.getPendingCommissions();
     }),
@@ -273,6 +300,7 @@ export const travelAgentRouter = router({
         status: z.enum(["pending", "approved", "paid", "cancelled"]),
       })
     )
+    .output(responseContracts["updateCommissionStatus"])
     .mutation(async ({ input }) => {
       await travelAgentService.updateCommissionStatus(input.id, input.status);
       return { success: true };
@@ -295,6 +323,7 @@ export const travelAgentRouter = router({
       },
     })
     .input(apiCredentialsSchema)
+    .output(responseContracts["validateCredentials"])
     .mutation(async ({ input }) => {
       const agent = await travelAgentService.validateApiKey(
         input.apiKey,
@@ -335,6 +364,7 @@ export const travelAgentRouter = router({
         search: searchFlightsSchema,
       })
     )
+    .output(responseContracts["searchFlights"])
     .mutation(async ({ input }) => {
       const agent = await travelAgentService.validateApiKey(
         input.credentials.apiKey,
@@ -374,6 +404,7 @@ export const travelAgentRouter = router({
         booking: createBookingSchema,
       })
     )
+    .output(responseContracts["createBooking"])
     .mutation(async ({ input }) => {
       const agent = await travelAgentService.validateApiKey(
         input.credentials.apiKey,
@@ -413,6 +444,7 @@ export const travelAgentRouter = router({
         filters: bookingFiltersSchema.optional(),
       })
     )
+    .output(responseContracts["getBookings"])
     .mutation(async ({ input }) => {
       const agent = await travelAgentService.validateApiKey(
         input.credentials.apiKey,
@@ -452,6 +484,7 @@ export const travelAgentRouter = router({
         bookingAmount: z.number().int().positive(),
       })
     )
+    .output(responseContracts["calculateCommission"])
     .mutation(async ({ input }) => {
       const agent = await travelAgentService.validateApiKey(
         input.credentials.apiKey,
@@ -490,6 +523,7 @@ export const travelAgentRouter = router({
         credentials: apiCredentialsSchema,
       })
     )
+    .output(responseContracts["getStats"])
     .mutation(async ({ input }) => {
       const agent = await travelAgentService.validateApiKey(
         input.credentials.apiKey,
@@ -521,6 +555,7 @@ export const travelAgentRouter = router({
         description: "Get documentation for the Travel Agent API.",
       },
     })
+    .output(responseContracts["getApiDocumentation"])
     .query(() => {
       return {
         version: "1.0.0",

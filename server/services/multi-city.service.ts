@@ -1,3 +1,11 @@
+import { assertTenantOperational } from "./tenant.service";
+import { allocateProportional } from "./seat-economics.service";
+import { createInventoryLock } from "./inventory-lock.service";
+import {
+  findCompletedCommand,
+  withTransactionalIdempotency,
+} from "./idempotency-v2.service";
+import { recordEvent } from "./outbox.service";
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import * as db from "../db";
@@ -49,6 +57,8 @@ export interface MultiCityPriceResult {
 
 export interface MultiCityBookingInput {
   userId: number;
+  tenantId?: number | null;
+  idempotencyKey?: string;
   segments: Array<{
     flightId: number;
     departureDate: Date;
@@ -286,7 +296,18 @@ export async function createMultiCityBooking(
     });
   }
 
+  const command = {
+    scope: "booking.multi-city.atomic",
+    key: input.idempotencyKey ?? input.sessionId,
+    userId: input.userId,
+    request: input,
+  };
   try {
+    const replay =
+      await findCompletedCommand<
+        Awaited<ReturnType<typeof createMultiCityBooking>>
+      >(command);
+    if (replay) return replay.response;
     // Validate and calculate pricing (before transaction to avoid holding locks)
     const priceResult = await calculateMultiCityPrice(
       input.segments.map(s => ({
@@ -302,76 +323,153 @@ export async function createMultiCityBooking(
 
     // Wrap all inserts in a transaction so partial failures don't leave
     // orphaned bookings, segments, or passengers
-    const result = await database.transaction(async tx => {
-      // Create the main booking record
-      // For multi-city, we use the first segment's flight as the primary flightId
-      const bookingResult = await tx.insert(bookings).values({
-        userId: input.userId,
-        flightId: input.segments[0].flightId, // Primary flight (first segment)
-        bookingReference,
-        pnr,
-        status: "pending",
-        totalAmount: priceResult.totalPrice,
-        cabinClass: input.cabinClass,
-        numberOfPassengers: input.passengers.length,
+    if (
+      !input.passengers.length ||
+      new Set(input.segments.map(s => s.flightId)).size !==
+        input.segments.length
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Passengers and distinct flight segments are required",
       });
-
-      const bookingId =
-        (bookingResult as unknown as { insertId: number }).insertId ||
-        (bookingResult as unknown as Array<{ insertId: number }>)[0]?.insertId;
-
-      if (!bookingId) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to create booking",
-        });
-      }
-
-      // Create booking segments
-      const segmentResults: Array<{ segmentId: number; flightId: number }> = [];
-
-      for (let i = 0; i < input.segments.length; i++) {
-        const segment = input.segments[i];
-        const segmentResult = await tx.insert(bookingSegments).values({
-          bookingId,
-          segmentOrder: i + 1,
-          flightId: segment.flightId,
-          departureDate: segment.departureDate,
+    const result = await withTransactionalIdempotency({
+      scope: "booking.multi-city.atomic",
+      key: input.idempotencyKey ?? input.sessionId,
+      userId: input.userId,
+      request: input,
+      run: async tx => {
+        const held = new Map<
+          number,
+          { lockId: number; tenantId: number | null; departureTime: Date }
+        >();
+        for (const segment of [...input.segments].sort(
+          (a, b) => a.flightId - b.flightId
+        )) {
+          const [flight] = await tx
+            .select()
+            .from(flights)
+            .where(eq(flights.id, segment.flightId))
+            .limit(1)
+            .for("update");
+          if (
+            !flight ||
+            !["scheduled", "delayed"].includes(flight.status) ||
+            (input.tenantId != null && flight.tenantId !== input.tenantId)
+          )
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Flight unavailable",
+            });
+          if (held.size && [...held.values()][0].tenantId !== flight.tenantId)
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message:
+                "Cross-tenant itineraries require an interline agreement",
+            });
+          await assertTenantOperational(tx, flight.tenantId);
+          const hold = await createInventoryLock(
+            flight.id,
+            input.passengers.length,
+            input.cabinClass,
+            input.sessionId,
+            input.userId,
+            tx
+          );
+          held.set(flight.id, {
+            lockId: hold.lockId,
+            tenantId: flight.tenantId,
+            departureTime: flight.departureTime,
+          });
+        }
+        const first = held.get(input.segments[0].flightId)!;
+        // Create the main booking record
+        // For multi-city, we use the first segment's flight as the primary flightId
+        const bookingResult = await tx.insert(bookings).values({
+          userId: input.userId,
+          tenantId: first.tenantId,
+          inventoryLockId: first.lockId,
+          flightId: input.segments[0].flightId, // Primary flight (first segment)
+          bookingReference,
+          pnr,
           status: "pending",
+          totalAmount: priceResult.totalPrice,
+          cabinClass: input.cabinClass,
+          numberOfPassengers: input.passengers.length,
         });
 
-        const segmentId =
-          (segmentResult as unknown as { insertId: number }).insertId ||
-          (segmentResult as unknown as Array<{ insertId: number }>)[0]
+        const bookingId =
+          (bookingResult as unknown as { insertId: number }).insertId ||
+          (bookingResult as unknown as Array<{ insertId: number }>)[0]
             ?.insertId;
 
-        segmentResults.push({
-          segmentId,
-          flightId: segment.flightId,
+        if (!bookingId) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create booking",
+          });
+        }
+
+        // Create booking segments
+        const segmentResults: Array<{ segmentId: number; flightId: number }> =
+          [];
+
+        const segmentAmounts = allocateProportional(
+          priceResult.totalPrice,
+          priceResult.segments.map(s => s.basePrice)
+        );
+        for (let i = 0; i < input.segments.length; i++) {
+          const segment = input.segments[i];
+          const segmentResult = await tx.insert(bookingSegments).values({
+            bookingId,
+            segmentOrder: i + 1,
+            segmentAmount: segmentAmounts[i],
+            flightId: segment.flightId,
+            departureDate: held.get(segment.flightId)!.departureTime,
+            inventoryLockId: held.get(segment.flightId)!.lockId,
+            status: "pending",
+          });
+
+          const segmentId =
+            (segmentResult as unknown as { insertId: number }).insertId ||
+            (segmentResult as unknown as Array<{ insertId: number }>)[0]
+              ?.insertId;
+
+          segmentResults.push({
+            segmentId,
+            flightId: segment.flightId,
+          });
+        }
+
+        // Create passengers within the same transaction
+        const passengersData = input.passengers.map(p => ({
+          bookingId,
+          tenantId: first.tenantId,
+          type: p.type,
+          title: p.title,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          dateOfBirth: p.dateOfBirth,
+          passportNumber: p.passportNumber,
+          nationality: p.nationality,
+        }));
+
+        await tx.insert(passengers).values(passengersData);
+        await recordEvent(tx, {
+          aggregateType: "booking",
+          aggregateId: bookingId,
+          tenantId: first.tenantId,
+          eventType: "booking.created",
+          payload: { bookingId, userId: input.userId, channel: "multi-city" },
         });
-      }
 
-      // Create passengers within the same transaction
-      const passengersData = input.passengers.map(p => ({
-        bookingId,
-        type: p.type,
-        title: p.title,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        dateOfBirth: p.dateOfBirth,
-        passportNumber: p.passportNumber,
-        nationality: p.nationality,
-      }));
-
-      await tx.insert(passengers).values(passengersData);
-
-      return {
-        bookingId,
-        bookingReference,
-        pnr,
-        totalAmount: priceResult.totalPrice,
-        segments: segmentResults,
-      };
+        return {
+          bookingId,
+          bookingReference,
+          pnr,
+          totalAmount: priceResult.totalPrice,
+          segments: segmentResults,
+        };
+      },
     });
 
     // Track booking started event (outside transaction - non-critical)
@@ -387,6 +485,11 @@ export async function createMultiCityBooking(
 
     return result;
   } catch (error) {
+    const replay =
+      await findCompletedCommand<
+        Awaited<ReturnType<typeof createMultiCityBooking>>
+      >(command);
+    if (replay) return replay.response;
     if (error instanceof TRPCError) {
       throw error;
     }

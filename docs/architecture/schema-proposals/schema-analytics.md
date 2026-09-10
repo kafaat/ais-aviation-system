@@ -1,3 +1,8 @@
+# Historical schema proposal — not an active migration
+
+This source was never part of the runtime schema. See the remediation register before implementing it.
+
+```typescript
 import {
   mysqlTable,
   int,
@@ -144,3 +149,4 @@ export const popularRoutes = mysqlTable(
 
 export type PopularRoute = typeof popularRoutes.$inferSelect;
 export type InsertPopularRoute = typeof popularRoutes.$inferInsert;
+```

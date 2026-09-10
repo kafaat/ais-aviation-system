@@ -65,9 +65,12 @@ jobs:
           pnpm run db:verify-catalog
       - name: Type-check the live acceptance runner
         run: pnpm exec tsc -p tsconfig.acceptance.json --noEmit
+      - name: Verify service producers, consumers and retired modules
+        run: node --import tsx scripts/generate-service-catalog.ts --check
       - name: Verify backup failure boundaries
         run: python3 -m unittest discover -s scripts/ci -p 'test_backup_job.py' -v
       - name: Prove transaction boundaries against live MySQL and Redis
+        timeout-minutes: 3
         env:
           NODE_ENV: test
           AIS_DISPOSABLE_DATABASE: "true"

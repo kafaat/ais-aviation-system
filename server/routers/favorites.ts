@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/favorites";
 import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "../_core/trpc";
 import * as favoritesService from "../services/favorites.service";
@@ -16,6 +17,7 @@ export const favoritesRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["addFlight"])
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.addFlightFavorite(
         ctx.user.id,
@@ -32,6 +34,7 @@ export const favoritesRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["removeFlight"])
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.removeFlightFavorite(
         ctx.user.id,
@@ -42,9 +45,11 @@ export const favoritesRouter = router({
   /**
    * Get user's favorite flights (specific flights)
    */
-  getFlights: protectedProcedure.query(async ({ ctx }) => {
-    return await favoritesService.getUserFlightFavorites(ctx.user.id);
-  }),
+  getFlights: protectedProcedure
+    .output(responseContracts["getFlights"])
+    .query(async ({ ctx }) => {
+      return await favoritesService.getUserFlightFavorites(ctx.user.id);
+    }),
 
   /**
    * Check if a specific flight is favorited
@@ -55,6 +60,7 @@ export const favoritesRouter = router({
         flightId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["isFlightFavorited"])
     .query(async ({ ctx, input }) => {
       return await favoritesService.isFlightFavorited(
         ctx.user.id,
@@ -82,6 +88,7 @@ export const favoritesRouter = router({
         notes: z.string().optional(),
       })
     )
+    .output(responseContracts["add"])
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.addFavorite({
         userId: ctx.user.id,
@@ -92,9 +99,11 @@ export const favoritesRouter = router({
   /**
    * Get user's favorite flights
    */
-  getAll: protectedProcedure.query(async ({ ctx }) => {
-    return await favoritesService.getUserFavorites(ctx.user.id);
-  }),
+  getAll: protectedProcedure
+    .output(responseContracts["getAll"])
+    .query(async ({ ctx }) => {
+      return await favoritesService.getUserFavorites(ctx.user.id);
+    }),
 
   /**
    * Update favorite settings
@@ -110,6 +119,7 @@ export const favoritesRouter = router({
         cabinClass: z.enum(["economy", "business"]).optional(),
       })
     )
+    .output(responseContracts["update"])
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.updateFavorite({
         userId: ctx.user.id,
@@ -126,6 +136,7 @@ export const favoritesRouter = router({
         favoriteId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["delete"])
     .mutation(async ({ ctx, input }) => {
       return await favoritesService.deleteFavorite(
         input.favoriteId,
@@ -144,6 +155,7 @@ export const favoritesRouter = router({
         airlineId: z.number().int().positive().optional(),
       })
     )
+    .output(responseContracts["isFavorited"])
     .query(async ({ ctx, input }) => {
       return await favoritesService.isFavorited({
         userId: ctx.user.id,
@@ -160,6 +172,7 @@ export const favoritesRouter = router({
         favoriteId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getPriceAlertHistory"])
     .query(async ({ ctx, input }) => {
       return await favoritesService.getPriceAlertHistory(
         input.favoriteId,
@@ -176,6 +189,7 @@ export const favoritesRouter = router({
         favoriteId: z.number().int().positive(),
       })
     )
+    .output(responseContracts["getBestPrices"])
     .query(async ({ ctx, input }) => {
       return await favoritesService.getBestPricesForFavorite(
         input.favoriteId,
@@ -186,7 +200,9 @@ export const favoritesRouter = router({
   /**
    * Check for price alerts and notify (admin only - for cron job)
    */
-  checkPriceAlerts: adminProcedure.mutation(async () => {
-    return await favoritesService.checkPriceAlertsAndNotify();
-  }),
+  checkPriceAlerts: adminProcedure
+    .output(responseContracts["checkPriceAlerts"])
+    .mutation(async () => {
+      return await favoritesService.checkPriceAlertsAndNotify();
+    }),
 });

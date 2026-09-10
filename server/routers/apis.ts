@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/apis";
 /**
  * Advance Passenger Information System (APIS) Router
  *
@@ -66,6 +67,7 @@ export const apisRouter = router({
         knownTravelerNumber: z.string().max(25).optional(),
       })
     )
+    .output(responseContracts["submitInfo"])
     .mutation(async ({ input, ctx }) => {
       const { passengerId, ...data } = input;
       await assertPassengerOwnership(passengerId, ctx.user.id, ctx.user.role);
@@ -81,6 +83,7 @@ export const apisRouter = router({
         passengerId: z.number(),
       })
     )
+    .output(responseContracts["getMyAPISStatus"])
     .query(async ({ input, ctx }) => {
       await assertPassengerOwnership(
         input.passengerId,
@@ -103,6 +106,7 @@ export const apisRouter = router({
         flightId: z.number(),
       })
     )
+    .output(responseContracts["getFlightStatus"])
     .query(async ({ input }) => {
       return await apisService.getFlightAPISStatus(input.flightId);
     }),
@@ -117,6 +121,7 @@ export const apisRouter = router({
         passengerId: z.number(),
       })
     )
+    .output(responseContracts["validatePassenger"])
     .mutation(async ({ input }) => {
       return await apisService.validateAPISData(input.passengerId);
     }),
@@ -131,6 +136,7 @@ export const apisRouter = router({
         format: z.enum(["paxlst", "pnrgov"]),
       })
     )
+    .output(responseContracts["generateMessage"])
     .mutation(async ({ input }) => {
       return await apisService.generateAPISMessage(
         input.flightId,
@@ -148,6 +154,7 @@ export const apisRouter = router({
         destination: z.string().min(2).max(3).optional(),
       })
     )
+    .output(responseContracts["submitToAuthorities"])
     .mutation(async ({ input }) => {
       return await apisService.submitToAuthorities(
         input.flightId,
@@ -178,6 +185,7 @@ export const apisRouter = router({
           .transform(v => v.toUpperCase()),
       })
     )
+    .output(responseContracts["getRequirements"])
     .query(async ({ input }) => {
       return await apisService.getAPISRequirements(
         input.originCountry,
@@ -198,6 +206,7 @@ export const apisRouter = router({
         flightId: z.number(),
       })
     )
+    .output(responseContracts["flagIncomplete"])
     .query(async ({ input }) => {
       return await apisService.flagIncompletePassengers(input.flightId);
     }),
@@ -211,6 +220,7 @@ export const apisRouter = router({
         flightId: z.number(),
       })
     )
+    .output(responseContracts["getSubmissions"])
     .query(async ({ input }) => {
       return await apisService.getFlightSubmissions(input.flightId);
     }),

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/reference";
 import { publicProcedure, router } from "../_core/trpc";
 import * as db from "../db";
 import { redisCacheService, CacheTTL } from "../services/redis-cache.service";
@@ -12,39 +13,43 @@ export const referenceRouter = router({
    * Get all active airlines
    * Cached for 1 hour
    */
-  airlines: publicProcedure.query(async () => {
-    // Try to get from cache
-    const cached = await redisCacheService.getCachedAirlines();
-    if (cached) {
-      return cached as Awaited<ReturnType<typeof db.getAllAirlines>>;
-    }
+  airlines: publicProcedure
+    .output(responseContracts["airlines"])
+    .query(async () => {
+      // Try to get from cache
+      const cached = await redisCacheService.getCachedAirlines();
+      if (cached) {
+        return cached as Awaited<ReturnType<typeof db.getAllAirlines>>;
+      }
 
-    // Fetch from database
-    const airlines = await db.getAllAirlines();
+      // Fetch from database
+      const airlines = await db.getAllAirlines();
 
-    // Cache the results
-    await redisCacheService.cacheAirlines(airlines, CacheTTL.AIRLINES);
+      // Cache the results
+      await redisCacheService.cacheAirlines(airlines, CacheTTL.AIRLINES);
 
-    return airlines;
-  }),
+      return airlines;
+    }),
 
   /**
    * Get all airports
    * Cached for 1 hour
    */
-  airports: publicProcedure.query(async () => {
-    // Try to get from cache
-    const cached = await redisCacheService.getCachedAirports();
-    if (cached) {
-      return cached as Awaited<ReturnType<typeof db.getAllAirports>>;
-    }
+  airports: publicProcedure
+    .output(responseContracts["airports"])
+    .query(async () => {
+      // Try to get from cache
+      const cached = await redisCacheService.getCachedAirports();
+      if (cached) {
+        return cached as Awaited<ReturnType<typeof db.getAllAirports>>;
+      }
 
-    // Fetch from database
-    const airports = await db.getAllAirports();
+      // Fetch from database
+      const airports = await db.getAllAirports();
 
-    // Cache the results
-    await redisCacheService.cacheAirports(airports, CacheTTL.AIRPORTS);
+      // Cache the results
+      await redisCacheService.cacheAirports(airports, CacheTTL.AIRPORTS);
 
-    return airports;
-  }),
+      return airports;
+    }),
 });

@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/compensation";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import {
@@ -36,6 +37,7 @@ export const compensationRouter = router({
         reason: z.string().max(1000).optional(),
       })
     )
+    .output(responseContracts["fileClaim"])
     .mutation(async ({ ctx, input }) => {
       try {
         return await createClaim({
@@ -60,15 +62,18 @@ export const compensationRouter = router({
   /**
    * Get all claims for the current user
    */
-  getMyClaims: protectedProcedure.query(async ({ ctx }) => {
-    return await getClaimsByUser(ctx.user.id);
-  }),
+  getMyClaims: protectedProcedure
+    .output(responseContracts["getMyClaims"])
+    .query(async ({ ctx }) => {
+      return await getClaimsByUser(ctx.user.id);
+    }),
 
   /**
    * Get detailed info about a specific claim
    */
   getClaimDetail: protectedProcedure
     .input(z.object({ claimId: z.number() }))
+    .output(responseContracts["getClaimDetail"])
     .query(async ({ ctx, input }) => {
       return await getClaimById(input.claimId, ctx.user.id);
     }),
@@ -88,6 +93,7 @@ export const compensationRouter = router({
         ]),
       })
     )
+    .output(responseContracts["checkEligibility"])
     .query(async ({ ctx, input }) => {
       return await autoAssessEligibility(
         input.bookingId,
@@ -108,6 +114,7 @@ export const compensationRouter = router({
         denialReason: z.string().max(1000).optional(),
       })
     )
+    .output(responseContracts["processClaim"])
     .mutation(async ({ input }) => {
       try {
         return await processClaim({
@@ -147,6 +154,7 @@ export const compensationRouter = router({
         limit: z.number().min(1).max(100).default(20),
       })
     )
+    .output(responseContracts["getAllClaims"])
     .query(async ({ input }) => {
       return await getAllClaims({
         status: input.status,
@@ -161,6 +169,7 @@ export const compensationRouter = router({
    */
   getFlightLiability: adminProcedure
     .input(z.object({ flightId: z.number() }))
+    .output(responseContracts["getFlightLiability"])
     .query(async ({ input }) => {
       return await calculateTotalLiability(input.flightId);
     }),
@@ -177,6 +186,7 @@ export const compensationRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getStats"])
     .query(async ({ input }) => {
       const dateRange =
         input?.from && input?.to
@@ -188,9 +198,11 @@ export const compensationRouter = router({
   /**
    * Get all compensation rules (admin)
    */
-  getRules: adminProcedure.query(async () => {
-    return await getCompensationRules();
-  }),
+  getRules: adminProcedure
+    .output(responseContracts["getRules"])
+    .query(async () => {
+      return await getCompensationRules();
+    }),
 
   /**
    * Update a compensation rule (admin)
@@ -208,6 +220,7 @@ export const compensationRouter = router({
         conditions: z.record(z.string(), z.unknown()).optional(),
       })
     )
+    .output(responseContracts["updateRule"])
     .mutation(async ({ input }) => {
       try {
         return await updateCompensationRule(input);

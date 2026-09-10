@@ -61,6 +61,8 @@ export type ToolChoice =
   | ToolChoiceExplicit;
 
 export type InvokeParams = {
+  model?: string;
+  provider?: "forge";
   messages: Message[];
   tools?: Tool[];
   toolChoice?: ToolChoice;
@@ -274,6 +276,8 @@ const normalizeResponseFormat = ({
 const LLM_TIMEOUT_MS = 120_000;
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  if (params.provider && params.provider !== "forge")
+    throw new Error("Unsupported LLM transport provider");
   assertApiKey();
 
   const {
@@ -292,7 +296,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: params.model ?? "gemini-2.5-flash",
     messages: messages.map(normalizeMessage),
   };
 
@@ -308,7 +312,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768;
+  const maxTokens = params.maxTokens ?? params.max_tokens ?? 32768;
+  if (!Number.isSafeInteger(maxTokens) || maxTokens < 1 || maxTokens > 65536)
+    throw new Error("Invalid model token limit");
+  payload.max_tokens = maxTokens;
   payload.thinking = {
     budget_tokens: 128,
   };

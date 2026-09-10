@@ -1,3 +1,8 @@
+# Historical schema proposal — not an active migration
+
+This source was never part of the runtime schema. See the remediation register before implementing it.
+
+```typescript
 import {
   mysqlTable,
   int,
@@ -85,3 +90,4 @@ export const SUPPORTED_CURRENCIES = [
 ] as const;
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number]["code"];
+```

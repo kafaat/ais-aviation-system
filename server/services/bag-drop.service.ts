@@ -1,7 +1,18 @@
+import { randomInt } from "node:crypto";
+import type { SettlementTx } from "./booking-settlement.service";
+import { requireDemoCapability } from "./demo-capability";
 import { TRPCError } from "@trpc/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, gt, lt, asc, gte, lte, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { bookings, passengers, flights, airports } from "../../drizzle/schema";
+import {
+  bookings,
+  passengers,
+  flights,
+  airports,
+  bagDropUnits as unitsTable,
+  bagDropSessions as sessionsTable,
+  bagDropTags as tagsTable,
+} from "../../drizzle/schema";
 
 // ============================================================================
 // Automated Bag Drop Service
@@ -54,6 +65,8 @@ export interface BagDropUnit {
 
 /** Bag drop session record */
 export interface BagDropSession {
+  bagWeights: number[];
+  version: number;
   id: number;
   unitId: number;
   bookingId: number;
@@ -105,215 +118,392 @@ const MAX_BAGS_PER_SESSION = 10;
 /** Session timeout in milliseconds (10 minutes) */
 const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
 
-// ─── In-memory stores (production would use DB tables) ──────────────────────
-
-let _unitIdSeq = 0;
-let _sessionIdSeq = 0;
-let _tagIdSeq = 0;
-
-const bagDropUnits: Map<number, BagDropUnit> = new Map();
-const bagDropSessions: Map<number, BagDropSession> = new Map();
-const bagTags: Map<number, BagTag> = new Map();
-
-// ─── Helper Functions ───────────────────────────────────────────────────────
-
-/**
- * Generate a unique 10-character bag tag number.
- * Format: BD + 8 alphanumeric characters (e.g., "BD4A7K29XN")
- */
-function generateTagNumber(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let tag = "BD";
-  for (let i = 0; i < 8; i++) {
-    tag += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return tag;
+async function requireDb() {
+  const db = await getDb();
+  if (!db) throw new Error("Bag drop database unavailable");
+  return db;
 }
-
-/**
- * Ensure the tag number is unique within existing tags.
- */
-function generateUniqueTagNumber(): string {
-  const existingTags = new Set<string>();
-  for (const tag of bagTags.values()) {
-    existingTags.add(tag.tagNumber);
-  }
-  let tagNumber = generateTagNumber();
-  let attempts = 0;
-  while (existingTags.has(tagNumber) && attempts < 20) {
-    tagNumber = generateTagNumber();
-    attempts++;
-  }
-  if (attempts >= 20) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to generate unique bag tag number",
-    });
-  }
-  return tagNumber;
-}
-
-/**
- * Look up a session and validate it is not timed-out or completed.
- */
-function getActiveSession(sessionId: number): BagDropSession {
-  const session = bagDropSessions.get(sessionId);
-  if (!session) {
+async function getActiveSession(
+  tx: SettlementTx,
+  sessionId: number,
+  allowComplete = false
+) {
+  const [session] = await tx
+    .select()
+    .from(sessionsTable)
+    .where(eq(sessionsTable.id, sessionId))
+    .limit(1)
+    .for("update");
+  if (!session)
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Bag drop session not found",
     });
-  }
-
-  if (session.status === "complete") {
+  if (allowComplete && session.status === "complete") return session;
+  if (
+    ["complete", "error", "timeout"].includes(session.status) ||
+    Date.now() - session.startedAt.getTime() > SESSION_TIMEOUT_MS
+  )
     throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Session already completed",
+      code: "CONFLICT",
+      message: "Bag drop session is terminal or expired",
     });
-  }
-
-  if (session.status === "error") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Session in error state: ${session.errorMessage}`,
-    });
-  }
-
-  // Check for timeout
-  const elapsed = Date.now() - session.startedAt.getTime();
-  if (elapsed > SESSION_TIMEOUT_MS) {
-    session.status = "timeout";
-    session.errorMessage = "Session timed out after 10 minutes";
-    bagDropSessions.set(sessionId, session);
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Session timed out. Please start a new bag drop session.",
-    });
-  }
-
   return session;
 }
+async function saveSession(
+  tx: SettlementTx,
+  session: typeof sessionsTable.$inferSelect
+) {
+  const { id, version, ...changes } = session;
+  const [result] = await tx
+    .update(sessionsTable)
+    .set({ ...changes, version: version + 1 })
+    .where(and(eq(sessionsTable.id, id), eq(sessionsTable.version, version)));
+  if (result.affectedRows !== 1)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Bag drop session changed",
+    });
+  return { ...session, version: version + 1 };
+}
 
-// ─── Service Functions ──────────────────────────────────────────────────────
-
-/**
- * Initiate a bag drop session for a booking and passenger.
- * Validates the booking exists and is confirmed, passenger belongs to booking.
- */
 export async function initiateBagDrop(
   bookingId: number,
   passengerId: number
 ): Promise<BagDropSession> {
-  if (bookingId <= 0) {
+  if (
+    !Number.isSafeInteger(bookingId) ||
+    bookingId <= 0 ||
+    !Number.isSafeInteger(passengerId) ||
+    passengerId <= 0
+  )
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "bookingId must be greater than 0",
+      message: "Valid booking and passenger identifiers are required",
     });
-  }
-
-  if (passengerId <= 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "passengerId must be greater than 0",
-    });
-  }
-
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Validate booking exists and is confirmed
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Booking not found",
-    });
-  }
-
-  if (booking.status !== "confirmed") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Booking is not confirmed (status: ${booking.status})`,
-    });
-  }
-
-  // Validate passenger belongs to booking
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
-
-  if (!passenger) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found or does not belong to this booking",
-    });
-  }
-
-  // Check for active sessions for this passenger
-  for (const session of bagDropSessions.values()) {
-    if (
-      session.passengerId === passengerId &&
-      session.bookingId === bookingId &&
-      session.status !== "complete" &&
-      session.status !== "error" &&
-      session.status !== "timeout"
-    ) {
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1)
+      .for("update");
+    if (!booking || booking.status !== "confirmed")
       throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          "An active bag drop session already exists for this passenger. Please complete or cancel it first.",
+        code: "CONFLICT",
+        message: "A confirmed booking is required",
       });
-    }
-  }
-
-  // Determine allowance based on cabin class
-  const allowanceWeight =
-    CABIN_ALLOWANCE_GRAMS[booking.cabinClass] ?? CABIN_ALLOWANCE_GRAMS.economy;
-
-  // Create session
-  const sessionId = ++_sessionIdSeq;
-  const now = new Date();
-
-  const session: BagDropSession = {
-    id: sessionId,
-    unitId: 0, // Will be assigned when a unit is available
-    bookingId,
-    passengerId,
-    totalBags: 0,
-    totalWeight: 0,
-    allowanceWeight,
-    excessWeight: 0,
-    excessFee: 0,
-    paymentStatus: "none",
-    status: "started",
-    startedAt: now,
-    completedAt: null,
-    errorMessage: null,
-    createdAt: now,
-  };
-
-  bagDropSessions.set(sessionId, session);
-
-  return session;
+    const [passenger] = await tx
+      .select()
+      .from(passengers)
+      .where(
+        and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
+      )
+      .limit(1);
+    if (!passenger)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Passenger does not belong to booking",
+      });
+    const [existing] = await tx
+      .select()
+      .from(sessionsTable)
+      .where(
+        and(
+          eq(sessionsTable.bookingId, bookingId),
+          eq(sessionsTable.passengerId, passengerId),
+          inArray(sessionsTable.status, [
+            "started",
+            "weighing",
+            "payment",
+            "printing",
+          ]),
+          gt(sessionsTable.startedAt, new Date(Date.now() - SESSION_TIMEOUT_MS))
+        )
+      )
+      .limit(1)
+      .for("update");
+    if (existing) return existing; // Retrying admission never creates a second active session.
+    const [created] = await tx.insert(sessionsTable).values({
+      bookingId,
+      passengerId,
+      bagWeights: [],
+      allowanceWeight:
+        CABIN_ALLOWANCE_GRAMS[booking.cabinClass] ??
+        CABIN_ALLOWANCE_GRAMS.economy,
+    });
+    const [session] = await tx
+      .select()
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, created.insertId))
+      .limit(1);
+    return session;
+  });
 }
 
-/**
- * Scan a boarding pass barcode to identify the passenger.
- * Barcode format assumed: PNR-PASSENGER_ID (e.g., "ABC123-5")
- */
+export async function weighBag(
+  sessionId: number,
+  weight: number,
+  bagNumber?: number
+) {
+  requireDemoCapability("Bag-drop scale measurement");
+  if (
+    !Number.isSafeInteger(weight) ||
+    weight <= 0 ||
+    weight > MAX_BAG_WEIGHT_GRAMS
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid individual bag weight",
+    });
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const session = await getActiveSession(tx, sessionId);
+    const number = bagNumber ?? session.totalBags + 1;
+    if (number <= session.totalBags) {
+      if (session.bagWeights[number - 1] !== weight)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Bag measurement changed; operator review required",
+        });
+      return {
+        session,
+        bagNumber: number,
+        weightGrams: weight,
+        withinAllowance: session.totalWeight <= session.allowanceWeight,
+      };
+    }
+    if (
+      number !== session.totalBags + 1 ||
+      number > MAX_BAGS_PER_SESSION ||
+      !["started", "weighing"].includes(session.status)
+    )
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Bag weighing sequence is invalid",
+      });
+    session.bagWeights = [...session.bagWeights, weight];
+    session.totalBags++;
+    session.totalWeight += weight;
+    session.status = "weighing";
+    session.excessWeight = Math.max(
+      0,
+      session.totalWeight - session.allowanceWeight
+    );
+    session.excessFee =
+      Math.ceil(session.excessWeight / 1000) * EXCESS_FEE_PER_KG_CENTS;
+    session.paymentStatus = session.excessFee > 0 ? "pending" : "none";
+    return {
+      session: await saveSession(tx, session),
+      bagNumber: number,
+      weightGrams: weight,
+      withinAllowance: session.totalWeight <= session.allowanceWeight,
+    };
+  });
+}
+
+/** Only verified PSP settlement may authorize excess baggage payment. */
+export function processPayment(_sessionId: number, _amount: number): never {
+  throw new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message: "Verified excess-baggage payment adapter is not installed",
+  });
+}
+
+export async function printBagTag(
+  sessionId: number,
+  bagNumber: number
+): Promise<BagTag> {
+  requireDemoCapability("Bag-tag printer");
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const session = await getActiveSession(tx, sessionId);
+    if (
+      !Number.isSafeInteger(bagNumber) ||
+      bagNumber < 1 ||
+      bagNumber > session.totalBags
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Bag has not been weighed",
+      });
+    if (session.excessFee > 0 && session.paymentStatus !== "paid")
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Excess baggage has not been paid",
+      });
+    const [existing] = await tx
+      .select()
+      .from(tagsTable)
+      .where(
+        and(
+          eq(tagsTable.sessionId, sessionId),
+          eq(tagsTable.bagNumber, bagNumber)
+        )
+      )
+      .limit(1);
+    if (existing) return existing;
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, session.bookingId))
+      .limit(1);
+    const [flight] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, booking.flightId))
+      .limit(1);
+    const [airport] = await tx
+      .select()
+      .from(airports)
+      .where(eq(airports.id, flight.destinationId))
+      .limit(1);
+    if (!airport)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Bag destination unavailable",
+      });
+    const [created] = await tx.insert(tagsTable).values({
+      sessionId,
+      bagNumber,
+      tagNumber: `BD${String(randomInt(100000000)).padStart(8, "0")}`,
+      weight: session.bagWeights[bagNumber - 1],
+      destination: airport.code,
+      printedAt: new Date(),
+      status: "printed",
+    });
+    session.status = "printing";
+    await saveSession(tx, session);
+    const [tag] = await tx
+      .select()
+      .from(tagsTable)
+      .where(eq(tagsTable.id, created.insertId))
+      .limit(1);
+    return tag;
+  });
+}
+
+export async function confirmBagDrop(sessionId: number) {
+  requireDemoCapability("Bag-drop belt acceptance");
+  const db = await requireDb();
+  return db.transaction(async tx => {
+    const session = await getActiveSession(tx, sessionId, true);
+    const tags = await tx
+      .select()
+      .from(tagsTable)
+      .where(eq(tagsTable.sessionId, sessionId));
+    if (session.status === "complete") return { session, tags };
+    if (
+      session.totalBags === 0 ||
+      tags.length !== session.totalBags ||
+      (session.excessFee > 0 && session.paymentStatus !== "paid")
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "All bags must be tagged and excess fees settled",
+      });
+    await tx
+      .update(tagsTable)
+      .set({ status: "attached" })
+      .where(eq(tagsTable.sessionId, sessionId));
+    session.status = "complete";
+    session.completedAt = new Date();
+    return {
+      session: await saveSession(tx, session),
+      tags: tags.map(tag => ({ ...tag, status: "attached" as const })),
+    };
+  });
+}
+
+export async function getAllBagDropUnits(
+  airportId?: number
+): Promise<BagDropUnit[]> {
+  const db = await requireDb();
+  return db
+    .select()
+    .from(unitsTable)
+    .where(airportId == null ? undefined : eq(unitsTable.airportId, airportId))
+    .orderBy(asc(unitsTable.id));
+}
+export async function getBagDropStatus(unitId: number) {
+  const db = await requireDb();
+  const [unit] = await db
+    .select()
+    .from(unitsTable)
+    .where(eq(unitsTable.id, unitId))
+    .limit(1);
+  if (!unit)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Bag drop unit not found",
+    });
+  const active = await db
+    .select({ id: sessionsTable.id })
+    .from(sessionsTable)
+    .where(
+      and(
+        eq(sessionsTable.unitId, unitId),
+        inArray(sessionsTable.status, [
+          "started",
+          "weighing",
+          "payment",
+          "printing",
+        ]),
+        gt(sessionsTable.startedAt, new Date(Date.now() - SESSION_TIMEOUT_MS))
+      )
+    );
+  return {
+    unit,
+    activeSessions: active.length,
+    isOperational: false,
+    unavailableReason:
+      "Device heartbeat and certified scale/printer/belt adapters are not installed",
+  };
+}
+export async function registerBagDropUnit(data: {
+  unitCode: string;
+  airportId: number;
+  terminal: string;
+  zone: string;
+  hasPrinter?: boolean;
+  hasScale?: boolean;
+  hasPayment?: boolean;
+  beltConnected?: boolean;
+}): Promise<BagDropUnit> {
+  const db = await requireDb();
+  const [created] = await db
+    .insert(unitsTable)
+    .values({ ...data, status: "offline" });
+  const [unit] = await db
+    .select()
+    .from(unitsTable)
+    .where(eq(unitsTable.id, created.insertId))
+    .limit(1);
+  return unit;
+}
+export async function expireBagDropSessions() {
+  const db = await requireDb();
+  await db
+    .update(sessionsTable)
+    .set({
+      status: "timeout",
+      errorMessage: "Session timed out",
+      version: sql`${sessionsTable.version} + 1`,
+    })
+    .where(
+      and(
+        inArray(sessionsTable.status, [
+          "started",
+          "weighing",
+          "payment",
+          "printing",
+        ]),
+        lt(sessionsTable.startedAt, new Date(Date.now() - SESSION_TIMEOUT_MS))
+      )
+    );
+}
+
 export async function scanBoardingPass(barcode: string): Promise<{
   bookingId: number;
   passengerId: number;
@@ -323,6 +513,7 @@ export async function scanBoardingPass(barcode: string): Promise<{
   cabinClass: string;
 }> {
   const db = await getDb();
+  requireDemoCapability("Unsigned legacy boarding-pass parser");
   if (!db)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -418,73 +609,6 @@ export async function scanBoardingPass(barcode: string): Promise<{
   };
 }
 
-/**
- * Record a bag weight for an active session.
- * Validates weight limits and updates session totals.
- */
-export function weighBag(
-  sessionId: number,
-  weight: number
-): {
-  session: BagDropSession;
-  bagNumber: number;
-  weightGrams: number;
-  withinAllowance: boolean;
-} {
-  const session = getActiveSession(sessionId);
-
-  if (session.totalBags >= MAX_BAGS_PER_SESSION) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Maximum number of bags per session (${MAX_BAGS_PER_SESSION}) reached`,
-    });
-  }
-
-  if (weight <= 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Weight must be greater than 0 grams",
-    });
-  }
-
-  if (weight > MAX_BAG_WEIGHT_GRAMS) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Single bag weight (${(weight / 1000).toFixed(1)} kg) exceeds maximum limit of ${MAX_BAG_WEIGHT_GRAMS / 1000} kg`,
-    });
-  }
-
-  // Update session
-  session.totalBags += 1;
-  session.totalWeight += weight;
-  session.status = "weighing";
-
-  // Calculate excess
-  const excess = Math.max(0, session.totalWeight - session.allowanceWeight);
-  session.excessWeight = excess;
-
-  if (excess > 0) {
-    const excessKg = Math.ceil(excess / 1000); // Round up to next kg
-    session.excessFee = excessKg * EXCESS_FEE_PER_KG_CENTS;
-    session.paymentStatus = "pending";
-  }
-
-  bagDropSessions.set(sessionId, session);
-
-  const withinAllowance = session.totalWeight <= session.allowanceWeight;
-
-  return {
-    session,
-    bagNumber: session.totalBags,
-    weightGrams: weight,
-    withinAllowance,
-  };
-}
-
-/**
- * Check the baggage allowance for a booking and passenger.
- * Returns allowance details based on cabin class and any purchased extras.
- */
 export async function checkBagAllowance(
   bookingId: number,
   passengerId: number
@@ -556,10 +680,6 @@ export async function checkBagAllowance(
   };
 }
 
-/**
- * Calculate the excess baggage fee for a given total weight.
- * Returns 0 if within allowance.
- */
 export async function calculateExcessFee(
   bookingId: number,
   totalWeight: number
@@ -607,282 +727,14 @@ export async function calculateExcessFee(
   };
 }
 
-/**
- * Process payment for excess baggage on a bag drop session.
- * In production this would integrate with Stripe or another payment gateway.
- */
-export function processPayment(
-  sessionId: number,
-  amount: number
-): {
-  session: BagDropSession;
-  paymentConfirmed: boolean;
-  transactionId: string;
-} {
-  const session = getActiveSession(sessionId);
-
-  if (session.excessFee === 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "No excess fee to pay. Baggage is within allowance.",
-    });
-  }
-
-  if (amount < session.excessFee) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Insufficient payment amount. Required: ${session.excessFee} SAR cents, provided: ${amount} SAR cents.`,
-    });
-  }
-
-  // Simulate payment processing (in production, integrate with Stripe)
-  const transactionId = `BD-TXN-${Date.now()}-${sessionId}`;
-
-  session.paymentStatus = "paid";
-  session.status = "payment";
-  bagDropSessions.set(sessionId, session);
-
-  return {
-    session,
-    paymentConfirmed: true,
-    transactionId,
-  };
-}
-
-/**
- * Print a bag tag for a specific bag in the session.
- * Returns the generated tag details.
- */
-export async function printBagTag(
-  sessionId: number,
-  bagNumber: number
-): Promise<BagTag> {
-  const session = getActiveSession(sessionId);
-
-  if (bagNumber < 1 || bagNumber > session.totalBags) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Invalid bag number. Session has ${session.totalBags} bag(s). Requested bag #${bagNumber}.`,
-    });
-  }
-
-  // Check if excess fee needs to be paid first
-  if (session.excessFee > 0 && session.paymentStatus !== "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "Excess baggage fee must be paid before printing tags. Please process payment first.",
-    });
-  }
-
-  // Check if tag already printed for this bag number in this session
-  for (const tag of bagTags.values()) {
-    if (tag.sessionId === sessionId && tag.bagNumber === bagNumber) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Tag already printed for bag #${bagNumber} in this session`,
-      });
-    }
-  }
-
-  // Get destination from booking
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  let destination = "N/A";
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, session.bookingId))
-    .limit(1);
-
-  if (booking) {
-    const [flight] = await db
-      .select({ destinationId: flights.destinationId })
-      .from(flights)
-      .where(eq(flights.id, booking.flightId))
-      .limit(1);
-
-    if (flight) {
-      const [destAirport] = await db
-        .select({ code: airports.code })
-        .from(airports)
-        .where(eq(airports.id, flight.destinationId))
-        .limit(1);
-      if (destAirport) {
-        destination = destAirport.code;
-      }
-    }
-  }
-
-  // Estimate bag weight (distribute total evenly if individual weights not stored)
-  const bagWeight = Math.round(session.totalWeight / session.totalBags);
-
-  const tagId = ++_tagIdSeq;
-  const tagNumber = generateUniqueTagNumber();
-  const now = new Date();
-
-  const tag: BagTag = {
-    id: tagId,
-    sessionId,
-    bagNumber,
-    tagNumber,
-    weight: bagWeight,
-    destination,
-    connectionTags: null,
-    printedAt: now,
-    status: "printed",
-    createdAt: now,
-  };
-
-  bagTags.set(tagId, tag);
-
-  // Update session status to printing
-  session.status = "printing";
-  bagDropSessions.set(sessionId, session);
-
-  return tag;
-}
-
-/**
- * Confirm that all bags have been dropped onto the belt.
- * Marks the session as complete.
- */
-export function confirmBagDrop(sessionId: number): {
-  session: BagDropSession;
-  tags: BagTag[];
-} {
-  const session = getActiveSession(sessionId);
-
-  if (session.totalBags === 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "No bags have been weighed in this session",
-    });
-  }
-
-  // Check that excess fee has been paid if applicable
-  if (session.excessFee > 0 && session.paymentStatus !== "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Excess baggage fee must be paid before confirming bag drop",
-    });
-  }
-
-  // Collect all tags for this session
-  const sessionTags: BagTag[] = [];
-  for (const tag of bagTags.values()) {
-    if (tag.sessionId === sessionId) {
-      sessionTags.push(tag);
-    }
-  }
-
-  // Verify all bags have printed tags
-  if (sessionTags.length < session.totalBags) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Not all bags have tags printed. ${sessionTags.length}/${session.totalBags} tags printed.`,
-    });
-  }
-
-  // Mark all tags as attached (accepted to belt)
-  for (const tag of sessionTags) {
-    tag.status = "attached";
-    bagTags.set(tag.id, tag);
-  }
-
-  // Complete session
-  session.status = "complete";
-  session.completedAt = new Date();
-  bagDropSessions.set(sessionId, session);
-
-  return {
-    session,
-    tags: sessionTags,
-  };
-}
-
-/**
- * Get the health/status of a bag drop unit.
- * Returns the unit details and its current operational state.
- */
-export function getBagDropStatus(unitId: number): {
-  unit: BagDropUnit;
-  activeSessions: number;
-  isOperational: boolean;
-} {
-  const unit = bagDropUnits.get(unitId);
-  if (!unit) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `Bag drop unit #${unitId} not found`,
-    });
-  }
-
-  // Count active sessions for this unit
-  let activeSessions = 0;
-  for (const session of bagDropSessions.values()) {
-    if (
-      session.unitId === unitId &&
-      session.status !== "complete" &&
-      session.status !== "error" &&
-      session.status !== "timeout"
-    ) {
-      activeSessions++;
-    }
-  }
-
-  const isOperational =
-    unit.status === "online" &&
-    unit.hasPrinter &&
-    unit.hasScale &&
-    unit.beltConnected;
-
-  return {
-    unit,
-    activeSessions,
-    isOperational,
-  };
-}
-
-/**
- * Get analytics and performance stats for bag drop units at an airport.
- */
-export function getBagDropAnalytics(
+export async function getBagDropAnalytics(
   airportId: number,
   dateRange: { start: Date; end: Date }
-): {
-  airportId: number;
-  period: { start: Date; end: Date };
-  totalSessions: number;
-  completedSessions: number;
-  errorSessions: number;
-  timeoutSessions: number;
-  averageSessionDurationMs: number;
-  totalBagsProcessed: number;
-  totalWeightGrams: number;
-  totalExcessFeeCents: number;
-  units: Array<{
-    unitId: number;
-    unitCode: string;
-    status: BagDropUnitStatus;
-    sessionsProcessed: number;
-  }>;
-} {
+) {
   const { start, end } = dateRange;
 
-  // Get units for this airport
-  const airportUnits: BagDropUnit[] = [];
-  for (const unit of bagDropUnits.values()) {
-    if (unit.airportId === airportId) {
-      airportUnits.push(unit);
-    }
-  }
-
+  const db = await requireDb();
+  const airportUnits = await getAllBagDropUnits(airportId);
   const unitIds = new Set(airportUnits.map(u => u.id));
 
   // Aggregate session data
@@ -901,7 +753,19 @@ export function getBagDropAnalytics(
     unitSessionCounts.set(unitId, 0);
   }
 
-  for (const session of bagDropSessions.values()) {
+  const sessions = unitIds.size
+    ? await db
+        .select()
+        .from(sessionsTable)
+        .where(
+          and(
+            inArray(sessionsTable.unitId, [...unitIds]),
+            gte(sessionsTable.startedAt, start),
+            lte(sessionsTable.startedAt, end)
+          )
+        )
+    : [];
+  for (const session of sessions) {
     if (!unitIds.has(session.unitId)) continue;
 
     const sessionTime = session.startedAt.getTime();
@@ -928,7 +792,8 @@ export function getBagDropAnalytics(
 
     totalBagsProcessed += session.totalBags;
     totalWeightGrams += session.totalWeight;
-    totalExcessFeeCents += session.excessFee;
+    if (session.paymentStatus === "paid")
+      totalExcessFeeCents += session.excessFee;
 
     const count = unitSessionCounts.get(session.unitId) ?? 0;
     unitSessionCounts.set(session.unitId, count + 1);
@@ -959,64 +824,4 @@ export function getBagDropAnalytics(
     totalExcessFeeCents,
     units,
   };
-}
-
-// ─── Admin Helpers ──────────────────────────────────────────────────────────
-
-/**
- * Get all bag drop units, optionally filtered by airport.
- */
-export function getAllBagDropUnits(airportId?: number): BagDropUnit[] {
-  const allUnits: BagDropUnit[] = [];
-  for (const unit of bagDropUnits.values()) {
-    if (airportId !== undefined && unit.airportId !== airportId) continue;
-    allUnits.push(unit);
-  }
-  return allUnits.sort((a, b) => a.id - b.id);
-}
-
-/**
- * Register a new bag drop unit (admin utility).
- */
-export function registerBagDropUnit(data: {
-  unitCode: string;
-  airportId: number;
-  terminal: string;
-  zone: string;
-  hasPrinter?: boolean;
-  hasScale?: boolean;
-  hasPayment?: boolean;
-  beltConnected?: boolean;
-}): BagDropUnit {
-  // Validate uniqueness of unit code
-  for (const unit of bagDropUnits.values()) {
-    if (unit.unitCode === data.unitCode) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Unit code "${data.unitCode}" is already in use`,
-      });
-    }
-  }
-
-  const unitId = ++_unitIdSeq;
-  const now = new Date();
-
-  const unit: BagDropUnit = {
-    id: unitId,
-    unitCode: data.unitCode,
-    airportId: data.airportId,
-    terminal: data.terminal,
-    zone: data.zone,
-    status: "online",
-    hasPrinter: data.hasPrinter ?? true,
-    hasScale: data.hasScale ?? true,
-    hasPayment: data.hasPayment ?? true,
-    beltConnected: data.beltConnected ?? true,
-    lastMaintenance: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  bagDropUnits.set(unitId, unit);
-  return unit;
 }

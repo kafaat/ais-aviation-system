@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/admin";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { adminProcedure, airlineAdminProcedure, router } from "../_core/trpc";
@@ -44,6 +45,7 @@ export const adminRouter = router({
         businessPrice: z.number(),
       })
     )
+    .output(responseContracts["createFlight"])
     .mutation(async ({ ctx, input }) => {
       const result = await db.createFlight({
         ...input,
@@ -82,6 +84,7 @@ export const adminRouter = router({
         seats: z.number().int().min(0),
       })
     )
+    .output(responseContracts["updateFlightAvailability"])
     .mutation(async ({ ctx, input }) => {
       const updated = await db.updateFlightAvailability(
         input.flightId,
@@ -97,54 +100,59 @@ export const adminRouter = router({
   /**
    * Get all bookings (admin view)
    */
-  getAllBookings: airlineAdminProcedure.query(async ({ ctx }) => {
-    const database = await db.getDb();
-    if (!database)
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Database not available",
-      });
+  getAllBookings: airlineAdminProcedure
+    .output(responseContracts["getAllBookings"])
+    .query(async ({ ctx }) => {
+      const database = await db.getDb();
+      if (!database)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Database not available",
+        });
 
-    const { bookings, flights, airports, users } =
-      await import("../../drizzle/schema");
-    const { eq, desc, sql } = await import("drizzle-orm");
+      const { bookings, flights, airports, users } =
+        await import("../../drizzle/schema");
+      const { eq, desc, sql } = await import("drizzle-orm");
 
-    const result = await database
-      .select({
-        id: bookings.id,
-        bookingReference: bookings.bookingReference,
-        pnr: bookings.pnr,
-        status: bookings.status,
-        totalAmount: bookings.totalAmount,
-        paymentStatus: bookings.paymentStatus,
-        cabinClass: bookings.cabinClass,
-        numberOfPassengers: bookings.numberOfPassengers,
-        createdAt: bookings.createdAt,
-        user: {
-          name: users.name,
-          email: users.email,
-        },
-        flight: {
-          flightNumber: flights.flightNumber,
-          departureTime: flights.departureTime,
-          origin: airports.code,
-          destination: sql<string>`dest.code`,
-        },
-      })
-      .from(bookings)
-      .innerJoin(users, eq(bookings.userId, users.id))
-      .innerJoin(flights, eq(bookings.flightId, flights.id))
-      .innerJoin(airports, eq(flights.originId, airports.id))
-      .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
-      .where(
-        isAdmin(ctx.user.role)
-          ? undefined
-          : tenantCondition(bookings.tenantId, ctx.tenantId)
-      )
-      .orderBy(desc(bookings.createdAt));
+      const result = await database
+        .select({
+          id: bookings.id,
+          bookingReference: bookings.bookingReference,
+          pnr: bookings.pnr,
+          status: bookings.status,
+          totalAmount: bookings.totalAmount,
+          paymentStatus: bookings.paymentStatus,
+          cabinClass: bookings.cabinClass,
+          numberOfPassengers: bookings.numberOfPassengers,
+          createdAt: bookings.createdAt,
+          user: {
+            name: users.name,
+            email: users.email,
+          },
+          flight: {
+            flightNumber: flights.flightNumber,
+            departureTime: flights.departureTime,
+            origin: airports.code,
+            destination: sql<string>`dest.code`,
+          },
+        })
+        .from(bookings)
+        .innerJoin(users, eq(bookings.userId, users.id))
+        .innerJoin(flights, eq(bookings.flightId, flights.id))
+        .innerJoin(airports, eq(flights.originId, airports.id))
+        .innerJoin(
+          sql`airports as dest`,
+          sql`${flights.destinationId} = dest.id`
+        )
+        .where(
+          isAdmin(ctx.user.role)
+            ? undefined
+            : tenantCondition(bookings.tenantId, ctx.tenantId)
+        )
+        .orderBy(desc(bookings.createdAt));
 
-    return result;
-  }),
+      return result;
+    }),
 
   /**
    * Update booking status
@@ -156,6 +164,7 @@ export const adminRouter = router({
         status: z.enum(["pending", "confirmed", "cancelled", "completed"]),
       })
     )
+    .output(responseContracts["updateBookingStatus"])
     .mutation(async ({ input }) => {
       await db.updateBookingStatus(input.bookingId, input.status);
       return { success: true };
@@ -173,6 +182,7 @@ export const adminRouter = router({
         reason: z.string().optional(),
       })
     )
+    .output(responseContracts["updateFlightStatus"])
     .mutation(async ({ ctx, input }) => {
       // Get flight details before update for audit
       const database = await db.getDb();
@@ -225,6 +235,7 @@ export const adminRouter = router({
         reason: z.string(),
       })
     )
+    .output(responseContracts["cancelFlightAndRefund"])
     .mutation(async ({ ctx, input }) => {
       // Get flight details for audit
       const database = await db.getDb();
@@ -275,6 +286,7 @@ export const adminRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getMetrics"])
     .query(({ input }) => {
       const hoursBack = input?.hoursBack ?? 24;
       return metricsService.getBusinessMetrics(hoursBack);
@@ -292,6 +304,7 @@ export const adminRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getMetricsSummary"])
     .query(({ input }) => {
       const hoursBack = input?.hoursBack ?? 1;
       return metricsService.getMetricsSummary(hoursBack);
@@ -301,30 +314,36 @@ export const adminRouter = router({
    * Get real-time statistics
    * Returns metrics from the last 5 minutes for live monitoring
    */
-  getRealTimeStats: adminProcedure.query(() => {
-    return metricsService.getRealTimeStats();
-  }),
+  getRealTimeStats: adminProcedure
+    .output(responseContracts["getRealTimeStats"])
+    .query(() => {
+      return metricsService.getRealTimeStats();
+    }),
 
   /**
    * Get current metrics storage info
    */
-  getMetricsInfo: adminProcedure.query(() => {
-    return {
-      eventCount: metricsService.getEventCount(),
-      timestamp: new Date(),
-    };
-  }),
+  getMetricsInfo: adminProcedure
+    .output(responseContracts["getMetricsInfo"])
+    .query(() => {
+      return {
+        eventCount: metricsService.getEventCount(),
+        timestamp: new Date(),
+      };
+    }),
 
   /**
    * Manually flush old metrics events
    */
-  flushMetrics: adminProcedure.mutation(async () => {
-    const flushedCount = await metricsService.flushOldEvents();
-    return {
-      success: true,
-      flushedEvents: flushedCount,
-    };
-  }),
+  flushMetrics: adminProcedure
+    .output(responseContracts["flushMetrics"])
+    .mutation(async () => {
+      const flushedCount = await metricsService.flushOldEvents();
+      return {
+        success: true,
+        flushedEvents: flushedCount,
+      };
+    }),
 
   // ============================================================================
   // Audit Log Endpoints
@@ -362,6 +381,7 @@ export const adminRouter = router({
         offset: z.number().min(0).default(0),
       })
     )
+    .output(responseContracts["getAuditLogs"])
     .query(async ({ ctx, input }) => {
       // Audit the access to audit logs
       await auditAdminAccess(
@@ -395,6 +415,7 @@ export const adminRouter = router({
    */
   getAuditLogById: adminProcedure
     .input(z.object({ id: z.number() }))
+    .output(responseContracts["getAuditLogById"])
     .query(async ({ input }) => {
       const log = await getAuditLogById(input.id);
       if (!log) {
@@ -417,6 +438,7 @@ export const adminRouter = router({
         limit: z.number().min(1).max(500).default(100),
       })
     )
+    .output(responseContracts["getAuditLogsForResource"])
     .query(async ({ input }) => {
       return await getAuditLogsForResource(
         input.resourceType,
@@ -435,6 +457,7 @@ export const adminRouter = router({
         limit: z.number().min(1).max(500).default(100),
       })
     )
+    .output(responseContracts["getAuditLogsForUser"])
     .query(async ({ input }) => {
       return await getAuditLogsForUser(input.userId, input.limit);
     }),
@@ -450,6 +473,7 @@ export const adminRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getHighSeverityEvents"])
     .query(async ({ input }) => {
       return await getHighSeverityEvents(input?.limit ?? 50);
     }),
@@ -465,6 +489,7 @@ export const adminRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getAuditLogStats"])
     .query(async ({ input }) => {
       return await getAuditLogStats(input?.days ?? 30);
     }),

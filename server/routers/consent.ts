@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/consent";
 import { z } from "zod";
 import {
   router,
@@ -32,6 +33,7 @@ export const consentRouter = router({
         consentVersion: z.string().max(20).default("1.0"),
       })
     )
+    .output(responseContracts["recordConsent"])
     .mutation(async ({ input, ctx }) => {
       const requestContext = {
         ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
@@ -57,9 +59,11 @@ export const consentRouter = router({
    * Get the current user's most recent consent record.
    * Also indicates whether re-consent is needed (policy version changed).
    */
-  getMyConsent: protectedProcedure.query(async ({ ctx }) => {
-    return await consentService.getMyConsent(ctx.user.id);
-  }),
+  getMyConsent: protectedProcedure
+    .output(responseContracts["getMyConsent"])
+    .query(async ({ ctx }) => {
+      return await consentService.getMyConsent(ctx.user.id);
+    }),
 
   /**
    * Update consent preferences for an authenticated user.
@@ -75,6 +79,7 @@ export const consentRouter = router({
         consentVersion: z.string().max(20).default("1.0"),
       })
     )
+    .output(responseContracts["updateConsent"])
     .mutation(async ({ input, ctx }) => {
       const requestContext = {
         ipAddress: ctx.req.ip || ctx.req.socket?.remoteAddress,
@@ -98,7 +103,9 @@ export const consentRouter = router({
    * Admin-only: get aggregate consent statistics.
    * Shows total records, unique users, and acceptance rates per category.
    */
-  getConsentStats: adminProcedure.query(async () => {
-    return await consentService.getConsentStats();
-  }),
+  getConsentStats: adminProcedure
+    .output(responseContracts["getConsentStats"])
+    .query(async () => {
+      return await consentService.getConsentStats();
+    }),
 });

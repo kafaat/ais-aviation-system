@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/special-services";
 import { z } from "zod";
 import {
   publicProcedure,
@@ -20,9 +21,11 @@ export const specialServicesRouter = router({
    * Get available special services by type
    * Public endpoint for displaying available options
    */
-  getAvailableServices: publicProcedure.query(() => {
-    return specialServicesService.getAvailableServices();
-  }),
+  getAvailableServices: publicProcedure
+    .output(responseContracts["getAvailableServices"])
+    .query(() => {
+      return specialServicesService.getAvailableServices();
+    }),
 
   /**
    * Request a special service for a passenger
@@ -45,6 +48,7 @@ export const specialServicesRouter = router({
         details: z.any().optional(),
       })
     )
+    .output(responseContracts["requestService"])
     .mutation(async ({ input, ctx }) => {
       // Verify booking ownership
       const db = await getDb();
@@ -108,6 +112,7 @@ export const specialServicesRouter = router({
         bookingId: z.number(),
       })
     )
+    .output(responseContracts["getBookingServices"])
     .query(async ({ input, ctx }) => {
       // Verify booking ownership
       const db = await getDb();
@@ -163,6 +168,7 @@ export const specialServicesRouter = router({
         serviceId: z.number(),
       })
     )
+    .output(responseContracts["cancelService"])
     .mutation(async ({ input, ctx }) => {
       try {
         const result = await specialServicesService.cancelService(
@@ -190,6 +196,7 @@ export const specialServicesRouter = router({
         serviceId: z.number(),
       })
     )
+    .output(responseContracts["getServiceById"])
     .query(async ({ input, ctx }) => {
       const service = await specialServicesService.getServiceById(
         input.serviceId
@@ -239,6 +246,7 @@ export const specialServicesRouter = router({
         passengerId: z.number(),
       })
     )
+    .output(responseContracts["getPassengerServices"])
     .query(async ({ input, ctx }) => {
       // Verify passenger belongs to a booking owned by the user
       const db = await getDb();
@@ -296,21 +304,23 @@ export const specialServicesRouter = router({
   /**
    * Admin: Get all pending service requests
    */
-  adminGetPending: adminProcedure.query(async () => {
-    try {
-      const services = await specialServicesService.getPendingServices();
-      return services;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Failed to get pending services";
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message,
-      });
-    }
-  }),
+  adminGetPending: adminProcedure
+    .output(responseContracts["adminGetPending"])
+    .query(async () => {
+      try {
+        const services = await specialServicesService.getPendingServices();
+        return services;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Failed to get pending services";
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message,
+        });
+      }
+    }),
 
   /**
    * Admin: Update service status
@@ -323,6 +333,7 @@ export const specialServicesRouter = router({
         adminNotes: z.string().optional(),
       })
     )
+    .output(responseContracts["adminUpdateStatus"])
     .mutation(async ({ input }) => {
       try {
         const result = await specialServicesService.updateServiceStatus(
@@ -354,6 +365,7 @@ export const specialServicesRouter = router({
         adminNotes: z.string().optional(),
       })
     )
+    .output(responseContracts["adminBulkUpdateStatus"])
     .mutation(async ({ input }) => {
       try {
         const result = await specialServicesService.bulkUpdateServiceStatus(

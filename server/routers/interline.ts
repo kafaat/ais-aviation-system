@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/interline";
 import { z } from "zod";
 import {
   router,
@@ -65,6 +66,7 @@ export const interlineRouter = router({
           .describe("Agreement validity end date (ISO 8601), if applicable"),
       })
     )
+    .output(responseContracts["createAgreement"])
     .mutation(async ({ input }) => {
       try {
         const result = await interlineService.createInterlineAgreement({
@@ -135,6 +137,7 @@ export const interlineRouter = router({
           .describe("Updated validity end date (ISO 8601)"),
       })
     )
+    .output(responseContracts["updateAgreement"])
     .mutation(async ({ input }) => {
       try {
         const { id, ...fields } = input;
@@ -193,6 +196,7 @@ export const interlineRouter = router({
         id: z.number().int().positive().describe("Interline agreement ID"),
       })
     )
+    .output(responseContracts["getAgreement"])
     .query(async ({ input }) => {
       try {
         const data = await interlineService.getInterlineAgreement(input.id);
@@ -254,6 +258,7 @@ export const interlineRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["listAgreements"])
     .query(async ({ input }) => {
       try {
         const page = input?.page ?? 1;
@@ -296,6 +301,7 @@ export const interlineRouter = router({
           .describe("Interline agreement ID to activate"),
       })
     )
+    .output(responseContracts["activate"])
     .mutation(async ({ input }) => {
       try {
         const data = await interlineService.activateInterlineAgreement(
@@ -330,6 +336,7 @@ export const interlineRouter = router({
         reason: z.string().min(1).max(500).describe("Reason for termination"),
       })
     )
+    .output(responseContracts["terminate"])
     .mutation(async ({ input }) => {
       try {
         const data = await interlineService.terminateInterlineAgreement(
@@ -366,6 +373,7 @@ export const interlineRouter = router({
         airline2Id: z.number().int().positive().describe("Second airline ID"),
       })
     )
+    .output(responseContracts["checkEligibility"])
     .query(async ({ input }) => {
       try {
         const data = await interlineService.checkInterlineEligibility(
@@ -417,6 +425,7 @@ export const interlineRouter = router({
           .describe("Distance of segment 2 in miles/km"),
       })
     )
+    .output(responseContracts["calculateProrate"])
     .query(async ({ input }) => {
       try {
         const data = await interlineService.calculateProrateShare(
@@ -454,6 +463,7 @@ export const interlineRouter = router({
         airlineId: z.number().int().positive().describe("Airline ID"),
       })
     )
+    .output(responseContracts["getPartners"])
     .query(async ({ input }) => {
       try {
         const allPartners = await interlineService.getPartnerAirlines(

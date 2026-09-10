@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/payment-history";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import * as paymentHistoryService from "../services/payment-history.service";
@@ -21,6 +22,7 @@ export const paymentHistoryRouter = router({
         offset: z.number().int().min(0).optional(),
       })
     )
+    .output(responseContracts["myPayments"])
     .query(async ({ ctx, input }) => {
       return await paymentHistoryService.getUserPaymentHistory(ctx.user.id, {
         ...input,
@@ -30,9 +32,11 @@ export const paymentHistoryRouter = router({
   /**
    * Get authenticated user's payment statistics
    */
-  myStats: protectedProcedure.query(async ({ ctx }) => {
-    return await paymentHistoryService.getUserPaymentStats(ctx.user.id);
-  }),
+  myStats: protectedProcedure
+    .output(responseContracts["myStats"])
+    .query(async ({ ctx }) => {
+      return await paymentHistoryService.getUserPaymentStats(ctx.user.id);
+    }),
 
   /**
    * Admin: Get all payment history with filters
@@ -48,6 +52,7 @@ export const paymentHistoryRouter = router({
         offset: z.number().int().min(0).optional(),
       })
     )
+    .output(responseContracts["adminHistory"])
     .query(async ({ input }) => {
       return await paymentHistoryService.getAdminPaymentHistory(input);
     }),
@@ -55,7 +60,9 @@ export const paymentHistoryRouter = router({
   /**
    * Admin: Get overall payment statistics
    */
-  adminStats: adminProcedure.query(async () => {
-    return await paymentHistoryService.getAdminPaymentStats();
-  }),
+  adminStats: adminProcedure
+    .output(responseContracts["adminStats"])
+    .query(async () => {
+      return await paymentHistoryService.getAdminPaymentStats();
+    }),
 });

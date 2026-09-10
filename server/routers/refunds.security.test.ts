@@ -52,6 +52,8 @@ beforeEach(() => {
     success: true,
     refundId: "re_test",
     amount: 8000,
+    cumulativeRefundedAmount: 8000,
+    remainingRefundableAmount: 2000,
     status: "succeeded",
   });
 });

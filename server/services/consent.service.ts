@@ -1,20 +1,15 @@
+export { consentRecords } from "../../drizzle/schema";
+import { consentRecords } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import {
-  int,
-  mysqlTable,
-  varchar,
-  boolean,
-  timestamp,
-  index,
-} from "drizzle-orm/mysql-core";
+
 import { createServiceLogger } from "../_core/logger";
 
 const log = createServiceLogger("consent-service");
 
 // ---------------------------------------------------------------------------
-// Schema – defined inline as instructed (not modifying drizzle/schema.ts)
+// Schema is defined in the canonical Drizzle module
 // ---------------------------------------------------------------------------
 
 /**
@@ -22,25 +17,6 @@ const log = createServiceLogger("consent-service");
  * Stores each user's current cookie consent preferences along with metadata
  * for GDPR compliance and audit trail.
  */
-export const consentRecords = mysqlTable(
-  "consent_records",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId"),
-    consentVersion: varchar("consentVersion", { length: 20 }).notNull(),
-    essential: boolean("essential").default(true).notNull(),
-    analytics: boolean("analytics").default(false).notNull(),
-    marketing: boolean("marketing").default(false).notNull(),
-    preferences: boolean("preferences").default(false).notNull(),
-    ipAddress: varchar("ipAddress", { length: 45 }),
-    userAgent: varchar("userAgent", { length: 512 }),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  table => ({
-    userIdIdx: index("consent_records_userId_idx").on(table.userId),
-    versionIdx: index("consent_records_version_idx").on(table.consentVersion),
-  })
-);
 
 export type ConsentRecord = typeof consentRecords.$inferSelect;
 export type InsertConsentRecord = typeof consentRecords.$inferInsert;
@@ -102,19 +78,13 @@ export async function recordConsent(
     userAgent: context.userAgent || null,
   };
 
-  await db.insert(consentRecords).values(record);
+  const [result] = await db.insert(consentRecords).values(record);
 
   // Fetch the just-inserted row
   const inserted = await db
     .select()
     .from(consentRecords)
-    .where(
-      and(
-        userId !== null ? eq(consentRecords.userId, userId) : undefined,
-        eq(consentRecords.ipAddress, context.ipAddress || "")
-      )
-    )
-    .orderBy(desc(consentRecords.createdAt))
+    .where(eq(consentRecords.id, result.insertId))
     .limit(1);
 
   log.info(
@@ -145,7 +115,7 @@ export async function getMyConsent(userId: number): Promise<{
     .select()
     .from(consentRecords)
     .where(eq(consentRecords.userId, userId))
-    .orderBy(desc(consentRecords.createdAt))
+    .orderBy(desc(consentRecords.createdAt), desc(consentRecords.id))
     .limit(1);
 
   const consent = records.length > 0 ? records[0] : null;
@@ -191,7 +161,7 @@ export async function getConsentHistory(
     .select()
     .from(consentRecords)
     .where(eq(consentRecords.userId, userId))
-    .orderBy(desc(consentRecords.createdAt))
+    .orderBy(desc(consentRecords.createdAt), desc(consentRecords.id))
     .limit(limit);
 }
 

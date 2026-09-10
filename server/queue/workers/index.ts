@@ -28,18 +28,15 @@ export {
 export async function startWorkers(): Promise<void> {
   console.info("[Workers] Starting all workers...");
 
-  // Reconciliation worker is started automatically when imported (module-level init).
-  // Email worker uses lazy initialization - we must explicitly trigger it here.
-  try {
-    const { getEmailWorker } = await import("./email.worker");
-    getEmailWorker();
-    console.info("  - emailWorker: running");
-  } catch (err) {
-    console.warn("  - emailWorker: failed to start", err);
-  }
-
-  console.info("[Workers] All workers started:");
-  console.info("  - reconciliationWorker: running");
+  const { getEmailWorker } = await import("./email.worker");
+  const worker = getEmailWorker();
+  if (!reconciliationWorker || !worker)
+    throw new Error("Mandatory queue workers unavailable");
+  await Promise.all([
+    worker.waitUntilReady(),
+    reconciliationWorker.waitUntilReady(),
+  ]);
+  console.info("[Workers] Mandatory queue workers ready");
 }
 
 /**

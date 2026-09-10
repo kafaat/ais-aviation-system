@@ -9,6 +9,11 @@ export function transactionMemory(seed: Record<string, any[]>) {
   function filter(predicate: any, row: any) {
     if (!predicate) return true;
     const query = dialect.sqlToQuery(predicate);
+    for (const [, column, negate] of query.sql.matchAll(
+      /`[^`]+`\.`([^`]+)` is (not )?null/g
+    )) {
+      if ((row[column] == null) === Boolean(negate)) return false;
+    }
     let index = 0;
     const conditions = [
       ...query.sql.matchAll(
@@ -59,16 +64,36 @@ export function transactionMemory(seed: Record<string, any[]>) {
         const found = rows(table)
           .filter(row => filter(predicate, row))
           .slice(0, limit);
-        if (
-          projection &&
-          Object.values(projection).some(v => v instanceof SQL)
-        ) {
-          const key = Object.keys(projection)[0];
+        if (!projection) return structuredClone(found);
+        const entries = Object.entries(projection);
+        if (entries.some(([, v]) => v instanceof SQL)) {
           return [
-            { [key]: found.reduce((n, row) => n + row.numberOfSeats, 0) },
+            Object.fromEntries(
+              entries.map(([key, value]) => {
+                if (!(value instanceof SQL))
+                  throw new Error(
+                    "Mixed aggregate projection requires a grouped fixture"
+                  );
+                const query = dialect.sqlToQuery(value).sql;
+                if (/count\(\*\)/i.test(query)) return [key, found.length];
+                const column = query.match(/SUM\(`[^`]+`\.`([^`]+)`\)/i)?.[1];
+                if (!column) throw new Error(`Unsupported aggregate: ${query}`);
+                return [
+                  key,
+                  found.reduce((sum, row) => sum + Number(row[column] ?? 0), 0),
+                ];
+              })
+            ),
           ];
         }
-        return structuredClone(found);
+        return found.map(row =>
+          Object.fromEntries(
+            entries.map(([key, value]) => [
+              key,
+              structuredClone(row[(value as any).name]),
+            ])
+          )
+        );
       };
       const chain: any = {
         from(t: any) {
@@ -94,27 +119,57 @@ export function transactionMemory(seed: Record<string, any[]>) {
       return chain;
     },
     insert: (table: any) => ({
-      values: async (values: any) => {
-        if (failTable === getTableName(table))
-          throw new Error("Injected insert failure");
-        const list = rows(table);
-        const insertId = list.length
-          ? Math.max(...list.map(r => r.id || 0)) + 1
-          : 1;
-        for (const [index, value] of (Array.isArray(values)
-          ? values
-          : [values]
-        ).entries())
-          list.push({
-            id: insertId + index,
-            refundedAmount: 0,
-            settlementStatus: "applied",
-            seatsReserved: false,
-            status: "pending",
-            paymentStatus: "pending",
-            ...structuredClone(value),
-          });
-        return [{ insertId }];
+      values: (values: any) => {
+        let upsert = false;
+        const execute = () => {
+          if (failTable === getTableName(table))
+            throw new Error("Injected insert failure");
+          const list = rows(table);
+          const insertId = list.length
+            ? Math.max(...list.map(r => r.id || 0)) + 1
+            : 1;
+          for (const [index, value] of (Array.isArray(values)
+            ? values
+            : [values]
+          ).entries()) {
+            if (
+              upsert &&
+              list.some(r =>
+                getTableName(table) === "idempotency_requests"
+                  ? r.scope === value.scope &&
+                    r.userId === value.userId &&
+                    r.idempotencyKey === value.idempotencyKey
+                  : getTableName(table) === "event_inbox"
+                    ? r.eventId === value.eventId
+                    : getTableName(table) === "scheduled_tasks"
+                      ? r.name === value.name
+                      : getTableName(table) === "warehouse_exports" &&
+                        value.requestKey != null &&
+                        r.requestKey === value.requestKey
+              )
+            )
+              continue;
+            list.push({
+              id: insertId + index,
+              refundedAmount: 0,
+              settlementStatus: "applied",
+              seatsReserved: false,
+              status: "pending",
+              paymentStatus: "pending",
+              ...structuredClone(value),
+            });
+          }
+          return [{ insertId }];
+        };
+        const chain: any = {
+          onDuplicateKeyUpdate: () => {
+            upsert = true;
+            return chain;
+          },
+          then: (resolve: any, reject: any) =>
+            Promise.resolve().then(execute).then(resolve, reject),
+        };
+        return chain;
       },
     }),
     update: (table: any) => ({

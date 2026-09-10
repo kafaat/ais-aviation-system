@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/payments";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import {
@@ -54,6 +55,7 @@ export const paymentsRouter = router({
       },
     })
     .input(z.object({ limit: z.number().int().min(1).max(100).default(50) }))
+    .output(responseContracts["settlementReviews"])
     .query(({ input }) => listSettlementReviews(input.limit)),
   refundSettlementReview: adminProcedure
     .meta({
@@ -88,6 +90,7 @@ export const paymentsRouter = router({
         })
         .optional()
     )
+    .output(responseContracts["getProviders"])
     .query(({ input }) => {
       if (input?.includeUnavailable) {
         return getAllProviderInfo();
@@ -300,6 +303,7 @@ export const paymentsRouter = router({
         provider: providerEnum.optional().default("stripe"),
       })
     )
+    .output(responseContracts["createModificationCheckout"])
     .mutation(async ({ ctx, input }) => {
       const database = await getDb();
       if (!database)
@@ -551,6 +555,7 @@ export const paymentsRouter = router({
         offset: z.number().int().min(0).optional(),
       })
     )
+    .output(responseContracts["getHistory"])
     .query(async ({ ctx, input }) => {
       return await paymentHistoryService.getUserPaymentHistory(ctx.user.id, {
         status: input.status,
@@ -565,9 +570,11 @@ export const paymentsRouter = router({
   /**
    * Get user's payment statistics
    */
-  getStats: protectedProcedure.query(async ({ ctx }) => {
-    return await paymentHistoryService.getUserPaymentStats(ctx.user.id);
-  }),
+  getStats: protectedProcedure
+    .output(responseContracts["getStats"])
+    .query(async ({ ctx }) => {
+      return await paymentHistoryService.getUserPaymentStats(ctx.user.id);
+    }),
 
   /**
    * Admin: Get all payment history
@@ -583,6 +590,7 @@ export const paymentsRouter = router({
         offset: z.number().int().min(0).optional(),
       })
     )
+    .output(responseContracts["adminGetHistory"])
     .query(async ({ input }) => {
       return await paymentHistoryService.getAdminPaymentHistory({
         status: input.status,
@@ -597,7 +605,9 @@ export const paymentsRouter = router({
   /**
    * Admin: Get payment statistics
    */
-  adminGetStats: adminProcedure.query(async () => {
-    return await paymentHistoryService.getAdminPaymentStats();
-  }),
+  adminGetStats: adminProcedure
+    .output(responseContracts["adminGetStats"])
+    .query(async () => {
+      return await paymentHistoryService.getAdminPaymentStats();
+    }),
 });

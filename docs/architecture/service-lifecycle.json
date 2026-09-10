@@ -1,0 +1,24 @@
+{
+  "retired": {
+    "server/services/cache-v2.service.ts": "server/services/cache.service.ts",
+    "server/services/db-optimizer.service.ts": "server/db.ts",
+    "server/services/dynamic-pricing.service.ts": "server/services/flights.service.ts",
+    "server/services/idempotency.service.ts": "server/services/idempotency-v2.service.ts",
+    "server/services/mobile-auth.service.ts": "server/services/mobile-auth-v2.service.ts",
+    "server/services/payments.service.ts": "server/services/payment-settlement.service.ts",
+    "server/services/queue.service.ts": "server/queue/workers/index.ts and server/services/queue-v2.service.ts",
+    "server/services/security.service.ts": "server/_core/index.ts and server/middleware/",
+    "server/services/websocket.service.ts": "server/routers/flights.ts statusBatch and client/src/hooks/useFlightStatus.ts"
+  },
+  "designOnlySchemas": [
+    "user_currency_preferences",
+    "content_types",
+    "translations",
+    "analytics_events",
+    "daily_metrics",
+    "popular_routes"
+  ],
+  "canonicalSchema": "drizzle/schema.ts",
+  "accountableOwner": null,
+  "note": "Technical replacements only. Repository fallback reviewer is @kafaat; domain accountability and on-call contacts must be assigned by the organization."
+}

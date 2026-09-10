@@ -99,10 +99,18 @@ describe("Production-Ready Features", () => {
         // Run cleanup
         await cleanupExpiredLocks();
 
-        // Check that only valid lock remains
+        // Expiry retains historical records and removes only their active capacity claim.
         const remainingLocks = await db.select().from(inventoryLocks);
-        expect(remainingLocks.length).toBe(1);
-        expect(remainingLocks[0]?.sessionId).toBe("test-session-valid");
+        expect(remainingLocks).toHaveLength(2);
+        expect(
+          remainingLocks.find(lock => lock.sessionId === "test-session-expired")
+            ?.status
+        ).toBe("expired");
+        expect(
+          remainingLocks
+            .filter(lock => lock.status === "active")
+            .map(lock => lock.sessionId)
+        ).toEqual(["test-session-valid"]);
       }
     );
 

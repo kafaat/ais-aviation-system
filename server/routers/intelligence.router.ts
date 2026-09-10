@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/intelligence.router";
 /**
  * Intelligence Router
  *
@@ -82,6 +83,7 @@ export const intelligenceRouter = router({
    */
   getBriefing: adminProcedure
     .input(contextInput)
+    .output(responseContracts["getBriefing"])
     .query(async ({ input, ctx }) => {
       const context = buildContext(input, ctx.user?.id);
       return await intelligenceKernel.generateBriefing(context);
@@ -92,6 +94,7 @@ export const intelligenceRouter = router({
    */
   getEconomics: adminProcedure
     .input(contextInput)
+    .output(responseContracts["getEconomics"])
     .query(async ({ input, ctx }) => {
       const context = buildContext(input, ctx.user?.id);
       return await intelligenceKernel.getEconomicsAnalysis(context);
@@ -102,6 +105,7 @@ export const intelligenceRouter = router({
    */
   assessFraud: protectedProcedure
     .input(fraudAssessInput)
+    .output(responseContracts["assessFraud"])
     .query(async ({ input, ctx }) => {
       const context = buildContext({ timeHorizon: "realtime" }, ctx.user?.id);
       return await intelligenceKernel.assessBookingFraud(
@@ -116,6 +120,7 @@ export const intelligenceRouter = router({
    */
   predictDelay: protectedProcedure
     .input(delayPredictInput)
+    .output(responseContracts["predictDelay"])
     .query(async ({ input, ctx }) => {
       const context = buildContext({ timeHorizon: "realtime" }, ctx.user?.id);
       return await intelligenceKernel.predictFlightDelay(
@@ -129,6 +134,7 @@ export const intelligenceRouter = router({
    */
   getDisruptionForecast: adminProcedure
     .input(contextInput)
+    .output(responseContracts["getDisruptionForecast"])
     .query(async ({ input, ctx }) => {
       const context = buildContext(input, ctx.user?.id);
       return await intelligenceKernel.getDisruptionForecast(context);
@@ -137,21 +143,23 @@ export const intelligenceRouter = router({
   /**
    * Get AI Gateway statistics
    */
-  getGatewayStats: adminProcedure.query(() => {
-    return intelligenceKernel.getGatewayStats();
-  }),
+  getGatewayStats: adminProcedure
+    .output(responseContracts["getGatewayStats"])
+    .query(() => {
+      return intelligenceKernel.getGatewayStats();
+    }),
 
   /**
    * Get available AI models
    */
-  getModels: adminProcedure.query(() => {
+  getModels: adminProcedure.output(responseContracts["getModels"]).query(() => {
     return intelligenceKernel.getAvailableModels();
   }),
 
   /**
    * Get kernel status and configuration
    */
-  getStatus: adminProcedure.query(() => {
+  getStatus: adminProcedure.output(responseContracts["getStatus"]).query(() => {
     return {
       ...intelligenceKernel.getStatus(),
       config: intelligenceKernel.getConfig(),
@@ -200,6 +208,7 @@ export const intelligenceRouter = router({
           .optional(),
       })
     )
+    .output(responseContracts["updateConfig"])
     .mutation(({ input }) => {
       // Deep-merge partial agent configs with existing config
       const currentConfig = intelligenceKernel.getConfig();

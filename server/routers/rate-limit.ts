@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/rate-limit";
 /**
  * Rate Limit Router
  *
@@ -28,34 +29,36 @@ export const rateLimitRouter = router({
    * Get current rate limit status for the requesting user/IP
    * Returns remaining requests, limits, and tier information
    */
-  status: publicProcedure.query(async ({ ctx }) => {
-    // Get IP from request
-    const ip = getClientIpFromContext(ctx);
+  status: publicProcedure
+    .output(responseContracts["status"])
+    .query(async ({ ctx }) => {
+      // Get IP from request
+      const ip = getClientIpFromContext(ctx);
 
-    // Get rate limit status
-    const status = await rateLimitService.getRateLimitStatus(
-      ctx.user,
-      ip,
-      "api"
-    );
+      // Get rate limit status
+      const status = await rateLimitService.getRateLimitStatus(
+        ctx.user,
+        ip,
+        "api"
+      );
 
-    return {
-      tier: status.tier,
-      limit: status.limit,
-      remaining: status.remaining,
-      resetAt: status.resetAt.toISOString(),
-      allowed: status.allowed,
-      tierInfo: {
-        name: status.tierInfo.name,
-        requestsPerWindow: status.tierInfo.requestsPerWindow,
-        windowMs: status.tierInfo.windowMs,
-        windowSeconds: Math.floor(status.tierInfo.windowMs / 1000),
-        burstLimit: status.tierInfo.burstLimit,
-      },
-      isAuthenticated: ctx.user !== null,
-      userId: ctx.user?.id ?? null,
-    };
-  }),
+      return {
+        tier: status.tier,
+        limit: status.limit,
+        remaining: status.remaining,
+        resetAt: status.resetAt.toISOString(),
+        allowed: status.allowed,
+        tierInfo: {
+          name: status.tierInfo.name,
+          requestsPerWindow: status.tierInfo.requestsPerWindow,
+          windowMs: status.tierInfo.windowMs,
+          windowSeconds: Math.floor(status.tierInfo.windowMs / 1000),
+          burstLimit: status.tierInfo.burstLimit,
+        },
+        isAuthenticated: ctx.user !== null,
+        userId: ctx.user?.id ?? null,
+      };
+    }),
 
   /**
    * Get rate limit status for a specific scope
@@ -66,6 +69,7 @@ export const rateLimitRouter = router({
         scope: z.enum(["api", "auth", "payment", "booking"]),
       })
     )
+    .output(responseContracts["statusForScope"])
     .query(async ({ ctx, input }) => {
       const ip = getClientIpFromContext(ctx);
       const status = await rateLimitService.getRateLimitStatus(
@@ -88,7 +92,7 @@ export const rateLimitRouter = router({
    * Get all available rate limit tiers and their configurations
    * Useful for documentation and client-side display
    */
-  tiers: publicProcedure.query(() => {
+  tiers: publicProcedure.output(responseContracts["tiers"]).query(() => {
     return {
       standard: Object.entries(RATE_LIMIT_TIERS).map(([key, tier]) => ({
         key,
@@ -111,25 +115,29 @@ export const rateLimitRouter = router({
   /**
    * Get the user's current rate limit tier based on their account
    */
-  myTier: protectedProcedure.query(async ({ ctx }) => {
-    const tier = await rateLimitService.getRateLimitTier(ctx.user);
+  myTier: protectedProcedure
+    .output(responseContracts["myTier"])
+    .query(async ({ ctx }) => {
+      const tier = await rateLimitService.getRateLimitTier(ctx.user);
 
-    // Get loyalty tier if exists
-    const loyaltyTier = await rateLimitService.getUserLoyaltyTier(ctx.user.id);
+      // Get loyalty tier if exists
+      const loyaltyTier = await rateLimitService.getUserLoyaltyTier(
+        ctx.user.id
+      );
 
-    return {
-      currentTier: tier.name,
-      loyaltyTier,
-      userRole: ctx.user.role,
-      limits: {
-        requestsPerWindow: tier.requestsPerWindow,
-        windowMs: tier.windowMs,
-        windowSeconds: Math.floor(tier.windowMs / 1000),
-        burstLimit: tier.burstLimit,
-      },
-      tierBenefits: getTierBenefits(tier.name),
-    };
-  }),
+      return {
+        currentTier: tier.name,
+        loyaltyTier,
+        userRole: ctx.user.role,
+        limits: {
+          requestsPerWindow: tier.requestsPerWindow,
+          windowMs: tier.windowMs,
+          windowSeconds: Math.floor(tier.windowMs / 1000),
+          burstLimit: tier.burstLimit,
+        },
+        tierBenefits: getTierBenefits(tier.name),
+      };
+    }),
 
   // ============================================================================
   // Admin Endpoints
@@ -145,6 +153,7 @@ export const rateLimitRouter = router({
         scope: z.string().optional().default("api"),
       })
     )
+    .output(responseContracts["resetUser"])
     .mutation(async ({ input }) => {
       await rateLimitService.resetRateLimit(
         `user:${input.userId}`,
@@ -167,6 +176,7 @@ export const rateLimitRouter = router({
         scope: z.string().optional().default("api"),
       })
     )
+    .output(responseContracts["resetIp"])
     .mutation(async ({ input }) => {
       await rateLimitService.resetRateLimit(`ip:${input.ip}`, input.scope);
 
@@ -186,6 +196,7 @@ export const rateLimitRouter = router({
         scope: z.string().optional().default("api"),
       })
     )
+    .output(responseContracts["getUserStatus"])
     .query(async ({ input }) => {
       // Create a minimal user object for rate limit lookup
       const mockUser = { id: input.userId, role: "user" as const };
@@ -210,7 +221,7 @@ export const rateLimitRouter = router({
   /**
    * Get rate limit configuration summary (admin only)
    */
-  config: adminProcedure.query(() => {
+  config: adminProcedure.output(responseContracts["config"]).query(() => {
     return {
       tiers: Object.entries(RATE_LIMIT_TIERS).map(([key, tier]) => ({
         key,

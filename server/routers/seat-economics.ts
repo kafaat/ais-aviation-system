@@ -1,3 +1,4 @@
+import { responseContracts } from "../contracts/seat-economics";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { getFlightEconomics } from "../services/seat-economics.service";
@@ -30,6 +31,7 @@ export const seatEconomicsRouter = router({
         paymentFeeFixed: z.number().int().min(0).optional(),
       })
     )
+    .output(responseContracts["getByBooking"])
     .query(async ({ input, ctx }) => {
       return await getTenantBookingSeatEconomics(
         input.bookingId,
@@ -57,6 +59,7 @@ export const seatEconomicsRouter = router({
       },
     })
     .input(z.object({ flightId: z.number().int().positive() }))
+    .output(responseContracts["getByFlight"])
     .query(async ({ input, ctx }) => {
       return await getFlightEconomics(input.flightId, {
         tenantId: ctx.tenantId,
