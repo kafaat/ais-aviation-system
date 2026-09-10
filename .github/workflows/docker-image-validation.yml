@@ -34,6 +34,14 @@ jobs:
           persist-credentials: false
       - name: Build, validate and boot the production-only images
         run: bash scripts/ci/docker-image-smoke.sh
+      - name: Reject high or critical vulnerabilities in the runtime image
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297
+        with:
+          image-ref: ais-build-check:runner
+          format: json
+          output: /tmp/ais-docker-build-evidence/trivy-runner.json
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
       - name: Upload build evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
