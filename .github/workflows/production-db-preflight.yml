@@ -188,12 +188,13 @@ jobs:
       - name: Generate production preflight report
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PREFLIGHT_CONTEXT: ${{ inputs.production_context }}
         run: |
           pnpm exec tsx scripts/ci/production-db-preflight.ts \
             --run \
             --target-sha=${{ needs.validate-target.outputs.target_sha }} \
             --approved-sha=${{ vars.PRODUCTION_PREFLIGHT_APPROVED_SHA }} \
-            --context=${{ inputs.production_context }} \
+            --context="$PREFLIGHT_CONTEXT" \
             --report-dir=artifacts/db-preflight \
             --tool-repo=/tmp/ais-approved-preflight
 

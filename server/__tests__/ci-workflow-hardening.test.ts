@@ -49,4 +49,15 @@ describe("CI workflow hardening", () => {
     }
     expect(violations).toEqual([]);
   });
+
+  it("quotes manual preflight context instead of interpolating it directly into shell commands", () => {
+    const text = readFileSync(
+      join(workflowDir, "production-db-preflight.yml"),
+      "utf8"
+    );
+
+    expect(text).toContain('PREFLIGHT_CONTEXT: ${{ inputs.production_context }}');
+    expect(text).toContain('--context="$PREFLIGHT_CONTEXT"');
+    expect(text).not.toContain("--context=${{ inputs.production_context }}");
+  });
 });
