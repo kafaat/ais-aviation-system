@@ -14,6 +14,7 @@ import {
   updateHotel,
 } from "../services/emergency-hotel.service";
 import { TRPCError } from "@trpc/server";
+import { assertPassengerOwnership } from "../services/access-control.service";
 
 /**
  * Emergency Hotel Router
@@ -92,7 +93,12 @@ export const emergencyHotelRouter = router({
         passengerId: z.number(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertPassengerOwnership(
+        input.passengerId,
+        ctx.user.id,
+        ctx.user.role
+      );
       try {
         return await getHotelBookingsByPassenger(input.passengerId);
       } catch (error) {

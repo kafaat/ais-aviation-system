@@ -2,6 +2,7 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import * as multiCityService from "../services/multi-city.service";
 import { auditBookingChange } from "../services/audit.service";
+import { assertBookingOwnership } from "../services/access-control.service";
 
 /**
  * Multi-City Flights Router
@@ -184,7 +185,8 @@ export const multiCityRouter = router({
       },
     })
     .input(z.object({ bookingId: z.number().describe("Booking ID") }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
       return await multiCityService.getBookingSegments(input.bookingId);
     }),
 

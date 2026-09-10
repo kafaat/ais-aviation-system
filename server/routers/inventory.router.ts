@@ -44,7 +44,8 @@ const addToWaitlistInput = z.object({
 
 const removeFromWaitlistInput = z.object({
   waitlistId: z.number().int().positive(),
-  reason: z.enum(["confirmed", "cancelled", "expired"]),
+  // Passengers may withdraw; confirmation and expiry belong to server workflows.
+  reason: z.literal("cancelled").default("cancelled"),
 });
 
 const forecastDemandInput = z.object({
@@ -121,15 +122,16 @@ export const inventoryRouter = router({
    */
   releaseHold: protectedProcedure
     .input(releaseHoldInput)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
-        await InventoryService.releaseSeatHold(input.holdId);
+        await InventoryService.releaseSeatHold(input.holdId, ctx.user.id);
 
         return {
           success: true,
           message: "Seat hold released successfully",
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:
@@ -176,11 +178,11 @@ export const inventoryRouter = router({
    */
   removeFromWaitlist: protectedProcedure
     .input(removeFromWaitlistInput)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
         await InventoryService.removeFromWaitlist(
           input.waitlistId,
-          input.reason
+          ctx.user.id
         );
 
         return {
@@ -188,6 +190,7 @@ export const inventoryRouter = router({
           message: "Removed from waitlist successfully",
         };
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:

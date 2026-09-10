@@ -15,6 +15,7 @@ import {
   router,
 } from "../_core/trpc";
 import * as apisService from "../services/apis.service";
+import { assertPassengerOwnership } from "../services/access-control.service";
 
 export const apisRouter = router({
   // ========================================================================
@@ -65,8 +66,9 @@ export const apisRouter = router({
         knownTravelerNumber: z.string().max(25).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { passengerId, ...data } = input;
+      await assertPassengerOwnership(passengerId, ctx.user.id, ctx.user.role);
       return await apisService.collectPassengerInfo(passengerId, data);
     }),
 
@@ -79,7 +81,12 @@ export const apisRouter = router({
         passengerId: z.number(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await assertPassengerOwnership(
+        input.passengerId,
+        ctx.user.id,
+        ctx.user.role
+      );
       return await apisService.getPassengerAPISStatus(input.passengerId);
     }),
 
