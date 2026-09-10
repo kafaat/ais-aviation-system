@@ -356,3 +356,30 @@ it("replays a committed booking even after availability and pricing become unava
   expect(await createBooking(input)).toEqual(first);
   expect(fixture.rows("bookings")).toHaveLength(1);
 });
+
+it("preserves optional properties and dates in committed command responses", async () => {
+  const { withTransactionalIdempotency, findCompletedCommand } =
+    await import("../services/idempotency-v2.service");
+  const response = {
+    createdAt: new Date("2030-01-01"),
+    contact: { optional: undefined },
+  };
+  const command = {
+    scope: "test.serialization",
+    key: "1",
+    userId: 1,
+    request: { id: 1 },
+  };
+  const first = await withTransactionalIdempotency({
+    ...command,
+    run: async () => response,
+  });
+  const retry = await withTransactionalIdempotency({
+    ...command,
+    run: async () => {
+      throw new Error("Must not rerun");
+    },
+  });
+  expect(retry).toStrictEqual(first);
+  expect((await findCompletedCommand(command))?.response).toStrictEqual(first);
+});

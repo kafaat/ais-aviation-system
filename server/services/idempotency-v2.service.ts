@@ -1,3 +1,4 @@
+import superjson from "superjson";
 import { TRPCError } from "@trpc/server";
 /**
  * Idempotency V2 Service - Production-Grade
@@ -84,6 +85,15 @@ export function calculateRequestHash(request: unknown): string {
     .digest("hex");
 }
 
+/** Preserve Date and explicit undefined values across first response and replay.
+ * Plain JSON rows from the earlier format remain readable. */
+function decodeCommandResponse<T>(value: string): T {
+  const stored = JSON.parse(value);
+  return stored?.__aisAtomicResponse === 1
+    ? superjson.deserialize<T>(stored.payload)
+    : (stored as T);
+}
+
 /** Fast replay before mutable availability/pricing checks. Authorization remains scoped
  * to the same authenticated user and complete request hash; writes still use the
  * transactional unique-key claim below. */
@@ -110,7 +120,7 @@ export async function findCompletedCommand<T>(
   if (entry.status !== "COMPLETED") return null;
   if (!entry.responseJson)
     throw new IdempotencyError("Stored command response is unavailable");
-  return { response: JSON.parse(entry.responseJson) as T };
+  return { response: decodeCommandResponse<T>(entry.responseJson) };
 }
 
 /** The command and its durable response commit together. No external I/O in run. */
@@ -173,14 +183,17 @@ export async function withTransactionalIdempotency<T>(
     if (entry.status === "COMPLETED") {
       if (!entry.responseJson)
         throw new IdempotencyError("Stored command response is unavailable");
-      return JSON.parse(entry.responseJson) as T;
+      return decodeCommandResponse<T>(entry.responseJson);
     }
     const response = await opts.run(tx);
     await tx
       .update(idempotencyRequests)
       .set({
         status: "COMPLETED",
-        responseJson: JSON.stringify(response),
+        responseJson: JSON.stringify({
+          __aisAtomicResponse: 1,
+          payload: superjson.serialize(response),
+        }),
         errorMessage: null,
         updatedAt: new Date(),
       })

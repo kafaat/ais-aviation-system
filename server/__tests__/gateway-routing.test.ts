@@ -28,13 +28,11 @@ const request = {
 };
 beforeEach(() => {
   m.cache.clear();
-  m.invoke
-    .mockReset()
-    .mockResolvedValue({
-      model: "gemini-2.5-flash",
-      choices: [],
-      usage: { prompt_tokens: 5, completion_tokens: 10 },
-    });
+  m.invoke.mockReset().mockResolvedValue({
+    model: "gemini-2.5-flash",
+    choices: [],
+    usage: { prompt_tokens: 5, completion_tokens: 10 },
+  });
   m.usage.mockReset().mockResolvedValue(undefined);
 });
 it("sends the selected model and token ceiling to the actual transport", async () => {

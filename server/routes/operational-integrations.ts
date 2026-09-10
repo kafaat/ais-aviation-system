@@ -34,6 +34,12 @@ operationalIntegrations.get(
         )
         .send(file.content);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        res
+          .status(400)
+          .json({ error: "Invalid operational integration request" });
+        return;
+      }
       next(error);
     }
   }
@@ -68,6 +74,12 @@ operationalIntegrations.post("/events/inbox", async (req, res, next) => {
     }
     res.json({ accepted: true, ...(await consumeLocalEvent(input)) });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      res
+        .status(400)
+        .json({ error: "Invalid operational integration request" });
+      return;
+    }
     next(error);
   }
 });

@@ -41,9 +41,13 @@ const { upsertUserPreferences } =
 const db = getDb();
 assert(db, "MySQL is required");
 const checks: string[] = [];
+let activeCheck: string | null = null;
+let completed = false;
 async function check(name: string, run: () => Promise<void>) {
+  activeCheck = name;
   await run();
   checks.push(name);
+  activeCheck = null;
   console.info(`PASS ${name}`);
 }
 const id = 984001;
@@ -378,18 +382,28 @@ try {
   );
   const { verifyForensicWorkflows } = await import("./acceptance/forensic");
   await verifyForensicWorkflows(db, id, check);
+  completed = true;
+} finally {
   const report = {
+    completed,
     passed: checks.length,
     skipped: 0,
     checks,
-    database: "real MySQL",
-    cache: "real Redis",
+    failedCheck: activeCheck,
+    database: checks.includes("live services and empty database")
+      ? "real MySQL"
+      : "not verified",
+    cache: checks.includes("live services and empty database")
+      ? "real Redis"
+      : "not verified",
     providerCalls: 0,
   };
-  if (process.argv[2])
-    await writeFile(process.argv[2], JSON.stringify(report, null, 2));
-  console.info(JSON.stringify(report));
-} finally {
-  await Promise.allSettled([cacheService.disconnect(), closePool()]);
-  clearTimeout(deadline);
+  try {
+    if (process.argv[2])
+      await writeFile(process.argv[2], JSON.stringify(report, null, 2));
+    console.info(JSON.stringify(report));
+  } finally {
+    await Promise.allSettled([cacheService.disconnect(), closePool()]);
+    clearTimeout(deadline);
+  }
 }
