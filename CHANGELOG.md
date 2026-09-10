@@ -1,5 +1,27 @@
 # Changelog
 
+## What's Changed in v1.21.2
+
+### Bug Fixes
+
+- fix(migrations): reconcile schema and enforce guarded MySQL replay (defb20d)
+- fix: remove unused npm from deployed images and scan both targets (4176902)
+- fix: patch migration toolchain and exclude deployed installers (540f93c)
+- fix(ci): reconcile migration branch with production preflight bootstrap (322632d)
+- fix(migrations): stabilize schema fingerprint table order (b139cd1)
+
+### Other Changes
+
+- test(migrations): measure schema snapshot drift (4f97d8d)
+- style(migrations): format drift guard (5387205)
+- test: fail explicitly when deployed installer commands remain (cb2fa3e)
+- test: read JSON installation metadata emitted by pinned pnpm (518342f)
+- Merge pull request #129 from kafaat/fix/migration-schema-snapshot-reconciliation-20260909 (b550494)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.21.1...v1.21.2
+
+---
+
 ## What's Changed in v1.21.1
 
 ### Bug Fixes
