@@ -83,6 +83,10 @@ type Report = {
     status: "PASS" | "FAIL";
     error: string | null;
   };
+  evidence: {
+    status: "PASS" | "FAIL";
+    errors: string[];
+  };
 };
 
 type PreflightDependencies = {
@@ -280,6 +284,11 @@ function buildMarkdownReport(report: Report): string {
 - Status: **${report.preflight.status}**
 - Error: ${report.preflight.error ?? "none"}
 
+## Evidence inspection
+
+- Evidence status: **${report.evidence.status}**
+- Errors: ${report.evidence.errors.length ? report.evidence.errors.join("\n  - ") : "none"}
+
 ## Expected migration history
 
 \`\`\`json
@@ -296,6 +305,8 @@ ${JSON.stringify(report.migrationHistory.actualEntries, null, 2)}
 
 - This report includes migration hashes and timestamps, not database credentials or customer data.
 - The approved migration guard remains authoritative for preflight, migrate, and verify behavior.
+- Evidence is collected after preflight on a separate connection; the two observations are not an atomic database snapshot.
+- Overall classification is PASS only when preflight passes and evidence inspection completes without drift.
 `;
 }
 
@@ -344,14 +355,18 @@ export async function writePreflightReport(
       "SELECT DATABASE() AS name"
     );
     const actualHistory = await readActualMigrationHistory(connection);
+    const evidenceErrors: string[] = [];
 
     let verifiedAppliedCount: number | null = null;
     try {
       verifiedAppliedCount = await withWorkingDirectory(options.toolRepo, () =>
         schemaContract.appliedMigrationCount(connection, history)
       );
-    } catch {
+    } catch (error) {
       verifiedAppliedCount = null;
+      evidenceErrors.push(
+        `JOURNAL_INSPECTION_FAILED: ${sanitizeError(error, databaseUrl)}`
+      );
     }
 
     let actualTableCount: number | null = null;
@@ -373,16 +388,24 @@ export async function writePreflightReport(
           appliedContract,
           actualContract
         ).length;
+        if (appliedSnapshotDiffCount > 0) {
+          evidenceErrors.push(
+            `SCHEMA_DRIFT: evidence inspection found ${appliedSnapshotDiffCount} differences from the applied snapshot`
+          );
+        }
       }
-    } catch {
+    } catch (error) {
       actualTableCount = null;
       appliedSnapshotTableCount = null;
       appliedSnapshotDiffCount = null;
+      evidenceErrors.push(
+        `SCHEMA_INSPECTION_FAILED: ${sanitizeError(error, databaseUrl)}`
+      );
     }
 
     const report: Report = {
       generatedAt: new Date().toISOString(),
-      classification: preflightError ? "fail" : "pass",
+      classification: preflightError || evidenceErrors.length ? "fail" : "pass",
       requestedSha: options.targetSha,
       approvedSha: options.approvedSha,
       checkedOutSha,
@@ -424,6 +447,10 @@ export async function writePreflightReport(
         status: preflightError ? "FAIL" : "PASS",
         error: preflightError,
       },
+      evidence: {
+        status: evidenceErrors.length ? "FAIL" : "PASS",
+        errors: evidenceErrors,
+      },
     };
 
     mkdirSync(options.reportDir, { recursive: true });
@@ -459,11 +486,12 @@ export async function writePreflightReport(
         verifiedAppliedCount: report.database.verifiedAppliedCount,
         pendingMigrationCount: report.database.pendingMigrationCount,
         preflightStatus: report.preflight.status,
+        evidenceStatus: report.evidence.status,
         reportDir: options.reportDir,
       })
     );
 
-    if (preflightError) {
+    if (report.classification === "fail") {
       process.exitCode = 1;
     }
 

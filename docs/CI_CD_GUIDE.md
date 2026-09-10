@@ -232,6 +232,13 @@ The uploaded artifact records the checked-out SHA, the approved SHA, migration
 hashes and timestamps, pending migration count, and preflight status without
 including passwords or customer-row data.
 
+The overall report classification and process exit status require both a
+successful guarded preflight and complete evidence without schema drift. A
+later journal/schema inspection error or detected drift makes the report fail,
+even when `preflight.status` is `PASS`; `evidence.status` and redacted
+`evidence.errors` explain that failure. These are sequential observations on
+separate connections, not an atomic database snapshot.
+
 ## 🏗️ Environment Configuration
 
 ### Required Environment Variables

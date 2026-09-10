@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   assertApprovedSha,
   parseArgs,
@@ -100,8 +100,21 @@ describe("shouldRunCli", () => {
 });
 
 describe("writePreflightReport", () => {
+  let reportDir: string;
+  let previousExitCode: typeof process.exitCode;
+
+  beforeEach(() => {
+    reportDir = mkdtempSync(join(tmpdir(), "preflight-report-"));
+    previousExitCode = process.exitCode;
+    process.exitCode = undefined;
+  });
+
+  afterEach(() => {
+    process.exitCode = previousExitCode;
+    rmSync(reportDir, { recursive: true, force: true });
+  });
+
   it("writes a fail report with redacted database credentials", async () => {
-    const reportDir = mkdtempSync(join(tmpdir(), "preflight-report-"));
     const password = "secret";
     const databaseUrl = [
       "mysql://reader",
@@ -174,12 +187,12 @@ describe("writePreflightReport", () => {
     expect(report.database.verifiedAppliedCount).toBe(0);
     expect(jsonReport).not.toContain(databaseUrl);
     expect(jsonReport).not.toContain("reader:secret@");
-
-    rmSync(reportDir, { recursive: true, force: true });
+    expect(report.evidence.status).toBe("PASS");
+    expect(process.exitCode).toBe(1);
+    expect(readFileSync(join(reportDir, "summary.txt"), "utf8")).toBe("fail");
   });
 
-  it("clears partial schema fields when schema inspection fails", async () => {
-    const reportDir = mkdtempSync(join(tmpdir(), "preflight-report-"));
+  it("fails the report and clears partial fields when schema inspection fails after preflight passes", async () => {
     let queryCount = 0;
     const connection = {
       query: () => {
@@ -234,7 +247,130 @@ describe("writePreflightReport", () => {
     expect(report.schema.actualTableCount).toBeNull();
     expect(report.schema.appliedSnapshotTableCount).toBeNull();
     expect(report.schema.appliedSnapshotDiffCount).toBeNull();
-
-    rmSync(reportDir, { recursive: true, force: true });
+    expect(report.classification).toBe("fail");
+    expect(report.preflight.status).toBe("PASS");
+    expect(report.evidence.status).toBe("FAIL");
+    expect(report.evidence.errors.join("\n")).toContain(
+      "SCHEMA_INSPECTION_FAILED"
+    );
+    expect(process.exitCode).toBe(1);
+    expect(readFileSync(join(reportDir, "summary.txt"), "utf8")).toBe("fail");
   });
+
+  it.each(["complete", "journal failure", "schema drift"] as const)(
+    "classifies %s evidence independently of a successful preflight",
+    async scenario => {
+      const databaseUrl = [
+        "mysql://reader",
+        "secret@example.com:3306/ais",
+      ].join(":");
+      const connection = {
+        query: (query: string) => {
+          if (query === "SELECT DATABASE() AS name") {
+            return Promise.resolve([[{ name: "ais" }]]);
+          }
+          if (query.startsWith("SELECT TABLE_NAME")) {
+            return Promise.resolve([[{ TABLE_NAME: "__drizzle_migrations" }]]);
+          }
+          if (query.startsWith("SELECT id, hash")) {
+            return Promise.resolve([[{ id: 1, hash: "abc", created_at: 100 }]]);
+          }
+          throw new Error("unexpected query");
+        },
+        end: () => Promise.resolve(),
+      };
+      const report = await writePreflightReport(
+        {
+          targetSha: "518342fa658f7c6d8029d7af87c402e9a2a74d8a",
+          approvedSha: "518342fa658f7c6d8029d7af87c402e9a2a74d8a",
+          context: "isolated-test",
+          reportDir,
+          toolRepo: "/tmp",
+        },
+        databaseUrl,
+        {
+          readGitSha: () => "518342fa658f7c6d8029d7af87c402e9a2a74d8a",
+          createConnection: () => Promise.resolve(connection as never),
+          loadToolModules: () =>
+            Promise.resolve({
+              migrate: { runMigration: () => Promise.resolve() },
+              schemaContract: {
+                readHistory: () => [
+                  {
+                    idx: 0,
+                    tag: "0000_alpha",
+                    when: 100,
+                    hash: "abc",
+                    snapshot: {},
+                  },
+                ],
+                appliedMigrationCount: () => {
+                  if (scenario === "journal failure") {
+                    throw new Error(
+                      `journal validation failed for ${databaseUrl} and reader:secret@`
+                    );
+                  }
+                  return Promise.resolve(1);
+                },
+                readDatabaseContract: () =>
+                  Promise.resolve(
+                    scenario === "schema drift"
+                      ? { users: {}, unexpected_table: {} }
+                      : { users: {} }
+                  ),
+                snapshotContract: () => ({ users: {} }),
+                differences: (expected, actual) =>
+                  JSON.stringify(expected) === JSON.stringify(actual)
+                    ? []
+                    : ["unexpected_table"],
+              },
+            }),
+        }
+      );
+
+      const classification = scenario === "complete" ? "pass" : "fail";
+      expect(report.classification).toBe(classification);
+      expect(report.preflight.status).toBe("PASS");
+      expect(process.exitCode ?? 0).toBe(scenario === "complete" ? 0 : 1);
+      expect(report.evidence.status).toBe(
+        scenario === "complete" ? "PASS" : "FAIL"
+      );
+      if (scenario === "complete") {
+        expect(report.evidence.errors).toEqual([]);
+        expect(report.schema.appliedSnapshotDiffCount).toBe(0);
+      } else if (scenario === "journal failure") {
+        expect(report.database.verifiedAppliedCount).toBeNull();
+        expect(report.evidence.errors.join("\n")).toContain(
+          "JOURNAL_INSPECTION_FAILED"
+        );
+      } else {
+        expect(report.schema.appliedSnapshotDiffCount).toBe(1);
+        expect(report.evidence.errors.join("\n")).toContain("SCHEMA_DRIFT");
+      }
+
+      const jsonReport = readFileSync(
+        join(reportDir, "preflight-report.json"),
+        "utf8"
+      );
+      const markdownReport = readFileSync(
+        join(reportDir, "preflight-report.md"),
+        "utf8"
+      );
+      expect(JSON.parse(jsonReport).classification).toBe(classification);
+      expect(markdownReport).toContain(
+        `Classification: **${classification.toUpperCase()}**`
+      );
+      expect(markdownReport).toContain(
+        `Evidence status: **${report.evidence.status}**`
+      );
+      expect(readFileSync(join(reportDir, "summary.txt"), "utf8")).toBe(
+        classification
+      );
+      for (const output of [jsonReport, markdownReport]) {
+        expect(output).not.toContain(databaseUrl);
+        expect(output).not.toContain("secret");
+        expect(output).not.toContain("reader:secret@");
+      }
+    }
+  );
 });
