@@ -14,7 +14,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure } from "../_core/trpc";
 import { logger } from "../_core/logger";
 import {
   generateSecret,
@@ -22,13 +22,11 @@ import {
   verifyTOTP,
   generateBackupCodes,
   hashBackupCode,
-  verifyBackupCode,
   encryptSecret,
   getMfaSettings,
   upsertMfaSetup,
   enableMfa,
   disableMfa,
-  updateLastUsed,
   updateBackupCodes,
   decryptSecret,
 } from "../services/mfa.service";
@@ -42,22 +40,6 @@ const verifyTokenSchema = z.object({
     .string()
     .length(6, "Token must be exactly 6 digits")
     .regex(/^\d{6}$/, "Token must contain only digits"),
-});
-
-const verifyLoginSchema = z.object({
-  userId: z.number().int().positive(),
-  token: z
-    .string()
-    .length(6, "Token must be exactly 6 digits")
-    .regex(/^\d{6}$/, "Token must contain only digits"),
-});
-
-const backupCodeSchema = z.object({
-  userId: z.number().int().positive(),
-  code: z
-    .string()
-    .length(8, "Backup code must be exactly 8 characters")
-    .regex(/^[a-z0-9]+$/, "Backup code must be lowercase alphanumeric"),
 });
 
 // ============================================================================
@@ -164,7 +146,7 @@ export const mfaRouter = router({
       }
 
       // Enable MFA
-      await enableMfa(userId);
+      await enableMfa(userId, settings.secret);
 
       logger.info({ userId }, "MFA verified and enabled");
 
@@ -214,132 +196,13 @@ export const mfaRouter = router({
         });
       }
 
-      await disableMfa(userId);
+      await disableMfa(userId, settings.secret);
 
       logger.info({ userId }, "MFA disabled by user");
 
       return {
         success: true,
         message: "MFA has been disabled.",
-      };
-    }),
-
-  /**
-   * Verify TOTP during login flow
-   * This is a public procedure since the user is not yet fully authenticated
-   */
-  verifyLogin: publicProcedure
-    .meta({
-      openapi: {
-        method: "POST",
-        path: "/mfa/verify-login",
-        tags: ["MFA"],
-        summary: "Verify MFA during login",
-        description:
-          "Verify a TOTP token during the login flow. Called after successful password authentication when MFA is enabled.",
-      },
-    })
-    .input(verifyLoginSchema)
-    .mutation(async ({ input }) => {
-      const { userId, token } = input;
-
-      // Verify MFA is enabled
-      const settings = await getMfaSettings(userId);
-      if (!settings || !settings.isEnabled) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "MFA is not enabled for this account.",
-        });
-      }
-
-      // Decrypt and verify
-      const secret = decryptSecret(settings.secret);
-      const isValid = verifyTOTP(secret, token);
-
-      if (!isValid) {
-        logger.warn({ userId }, "MFA login verification failed");
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid verification code.",
-        });
-      }
-
-      // Update last used timestamp
-      await updateLastUsed(userId);
-
-      logger.info({ userId }, "MFA login verification successful");
-
-      return {
-        success: true,
-        verified: true,
-      };
-    }),
-
-  /**
-   * Use a backup code during login
-   * Consumes the backup code (one-time use)
-   */
-  useBackupCode: publicProcedure
-    .meta({
-      openapi: {
-        method: "POST",
-        path: "/mfa/backup-code",
-        tags: ["MFA"],
-        summary: "Verify with backup code",
-        description:
-          "Use a backup code to authenticate when the authenticator app is unavailable. Each backup code can only be used once.",
-      },
-    })
-    .input(backupCodeSchema)
-    .mutation(async ({ input }) => {
-      const { userId, code } = input;
-
-      // Verify MFA is enabled
-      const settings = await getMfaSettings(userId);
-      if (!settings || !settings.isEnabled) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "MFA is not enabled for this account.",
-        });
-      }
-
-      // Parse stored hashed backup codes
-      let hashedCodes: string[];
-      try {
-        hashedCodes = JSON.parse(settings.backupCodes);
-      } catch {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to read backup codes.",
-        });
-      }
-
-      // Verify and consume the backup code
-      const result = verifyBackupCode(code, hashedCodes);
-
-      if (!result.valid) {
-        logger.warn({ userId }, "Invalid backup code attempt");
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid backup code.",
-        });
-      }
-
-      // Update stored backup codes (remove the used one)
-      await updateBackupCodes(userId, result.remainingCodes);
-      await updateLastUsed(userId);
-
-      const remainingCount = result.remainingCodes.length;
-
-      logger.info(
-        { userId, remainingBackupCodes: remainingCount },
-        "Backup code used successfully"
-      );
-
-      return {
-        success: true,
-        verified: true,
-        remainingCodes: remainingCount,
       };
     }),
 

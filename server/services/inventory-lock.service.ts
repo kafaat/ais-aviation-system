@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { inventoryLocks, flights } from "../../drizzle/schema";
-import { eq, and, lt, sql } from "drizzle-orm";
+import type { SettlementTx } from "./booking-settlement.service";
+import { eq, and, lt, gt, sql } from "drizzle-orm";
 
 /**
  * Inventory Lock Service
@@ -18,18 +19,17 @@ export async function createInventoryLock(
   numberOfSeats: number,
   cabinClass: "economy" | "business",
   sessionId: string,
-  userId?: number
+  userId?: number,
+  transaction?: SettlementTx
 ): Promise<{ lockId: number; expiresAt: Date }> {
   try {
-    const database = await getDb();
+    const database = transaction || (await getDb());
     if (!database) throw new Error("Database not available");
-
-    await releaseExpiredLocks();
 
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + LOCK_DURATION_MINUTES);
 
-    const result = await database.transaction(async tx => {
+    const create = async (tx: SettlementTx) => {
       const [flight] = await tx
         .select({
           economyAvailable: flights.economyAvailable,
@@ -52,20 +52,23 @@ export async function createInventoryLock(
           ? flight.economyAvailable
           : flight.businessAvailable;
 
-      const [lockResult] = await tx
-        .select({
-          lockedSeats: sql<number>`COALESCE(SUM(${inventoryLocks.numberOfSeats}), 0)`,
-        })
+      const activeLocks = await tx
+        .select({ numberOfSeats: inventoryLocks.numberOfSeats })
         .from(inventoryLocks)
         .where(
           and(
             eq(inventoryLocks.flightId, flightId),
             eq(inventoryLocks.cabinClass, cabinClass),
-            eq(inventoryLocks.status, "active")
+            eq(inventoryLocks.status, "active"),
+            gt(inventoryLocks.expiresAt, new Date())
           )
-        );
+        )
+        .for("update");
 
-      const lockedSeats = lockResult?.lockedSeats || 0;
+      const lockedSeats = activeLocks.reduce(
+        (sum, lock) => sum + lock.numberOfSeats,
+        0
+      );
       const available = Math.max(0, currentAvailable - lockedSeats);
 
       if (available < numberOfSeats) {
@@ -85,8 +88,11 @@ export async function createInventoryLock(
         expiresAt,
       });
 
-      return { lockId: (insertResult as any).insertId };
-    });
+      return { lockId: insertResult.insertId };
+    };
+    const result = transaction
+      ? await create(transaction)
+      : await database.transaction(create);
 
     return {
       lockId: result.lockId,
@@ -232,7 +238,8 @@ export async function getAvailableSeats(
         and(
           eq(inventoryLocks.flightId, flightId),
           eq(inventoryLocks.cabinClass, cabinClass),
-          eq(inventoryLocks.status, "active")
+          eq(inventoryLocks.status, "active"),
+          gt(inventoryLocks.expiresAt, new Date())
         )
       );
 
@@ -271,7 +278,8 @@ export async function verifyLock(
         and(
           eq(inventoryLocks.id, lockId),
           eq(inventoryLocks.sessionId, sessionId),
-          eq(inventoryLocks.status, "active")
+          eq(inventoryLocks.status, "active"),
+          gt(inventoryLocks.expiresAt, new Date())
         )
       )
       .limit(1);
@@ -304,22 +312,24 @@ export async function extendLock(
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
-    // Verify lock first
-    const isValid = await verifyLock(lockId, sessionId);
-    if (!isValid) {
-      return null;
-    }
-
-    // Extend by another 15 minutes
-    const newExpiresAt = new Date();
-    newExpiresAt.setMinutes(newExpiresAt.getMinutes() + LOCK_DURATION_MINUTES);
-
-    await database
+    const now = new Date();
+    const newExpiresAt = new Date(
+      now.getTime() + LOCK_DURATION_MINUTES * 60_000
+    );
+    // One current UPDATE prevents extending a hold that was released,
+    // converted or expired between validation and writing.
+    const [updated] = await database
       .update(inventoryLocks)
       .set({ expiresAt: newExpiresAt })
-      .where(eq(inventoryLocks.id, lockId));
-
-    return newExpiresAt;
+      .where(
+        and(
+          eq(inventoryLocks.id, lockId),
+          eq(inventoryLocks.sessionId, sessionId),
+          eq(inventoryLocks.status, "active"),
+          gt(inventoryLocks.expiresAt, now)
+        )
+      );
+    return updated.affectedRows === 1 ? newExpiresAt : null;
   } catch (error) {
     console.error("Error extending lock:", error);
     return null;

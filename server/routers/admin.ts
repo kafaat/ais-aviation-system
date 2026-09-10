@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { adminProcedure, router } from "../_core/trpc";
+import { adminProcedure, airlineAdminProcedure, router } from "../_core/trpc";
+import { isAdmin } from "../services/rbac.service";
+import { tenantCondition } from "../services/tenant-scope.service";
 import * as db from "../db";
 import * as flightStatusService from "../services/flight-status.service";
 import * as metricsService from "../services/metrics.service";
@@ -72,27 +74,30 @@ export const adminRouter = router({
   /**
    * Update flight availability
    */
-  updateFlightAvailability: adminProcedure
+  updateFlightAvailability: airlineAdminProcedure
     .input(
       z.object({
         flightId: z.number(),
         cabinClass: z.enum(["economy", "business"]),
-        seats: z.number(),
+        seats: z.number().int().min(0),
       })
     )
-    .mutation(async ({ input }) => {
-      await db.updateFlightAvailability(
+    .mutation(async ({ ctx, input }) => {
+      const updated = await db.updateFlightAvailability(
         input.flightId,
         input.cabinClass,
-        input.seats
+        input.seats,
+        isAdmin(ctx.user.role) ? undefined : ctx.tenantId!
       );
+      if (!updated)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
       return { success: true };
     }),
 
   /**
    * Get all bookings (admin view)
    */
-  getAllBookings: adminProcedure.query(async () => {
+  getAllBookings: airlineAdminProcedure.query(async ({ ctx }) => {
     const database = await db.getDb();
     if (!database)
       throw new TRPCError({
@@ -131,6 +136,11 @@ export const adminRouter = router({
       .innerJoin(flights, eq(bookings.flightId, flights.id))
       .innerJoin(airports, eq(flights.originId, airports.id))
       .innerJoin(sql`airports as dest`, sql`${flights.destinationId} = dest.id`)
+      .where(
+        isAdmin(ctx.user.role)
+          ? undefined
+          : tenantCondition(bookings.tenantId, ctx.tenantId)
+      )
       .orderBy(desc(bookings.createdAt));
 
     return result;

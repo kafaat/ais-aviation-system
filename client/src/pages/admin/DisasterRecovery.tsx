@@ -366,8 +366,11 @@ function getComponentIcon(component: string) {
 
 function OverviewTab() {
   const { t } = useTranslation();
-  const { data: dashboard, isLoading } =
-    trpc.disasterRecovery.getDashboard.useQuery();
+  const {
+    data: dashboard,
+    isLoading,
+    error,
+  } = trpc.disasterRecovery.getDashboard.useQuery();
 
   if (isLoading) {
     return (
@@ -384,7 +387,8 @@ function OverviewTab() {
   if (!dashboard) {
     return (
       <Card className="p-6 text-center text-muted-foreground shadow-sm rounded-xl">
-        {t("dr.overview.noData", "No dashboard data available")}
+        {error?.message ||
+          t("dr.overview.noData", "No dashboard data available")}
       </Card>
     );
   }

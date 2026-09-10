@@ -25,7 +25,7 @@ export function sentryErrorMiddleware(
     scope.setTag("method", req.method);
 
     // Add request details
-    scope.setExtra("query", req.query);
+    // Query values may contain serialized tRPC input, including credentials.
     scope.setExtra("body", sanitizeBody(req.body));
     scope.setExtra("headers", sanitizeHeaders(req.headers));
 
@@ -99,7 +99,8 @@ export function errorResponseMiddleware(
  * Sanitize request body to remove sensitive data
  */
 function sanitizeBody(body: unknown, depth: number = 0): unknown {
-  if (!body || typeof body !== "object" || depth > 5) {
+  if (depth > 5) return "[REDACTED]";
+  if (!body || typeof body !== "object") {
     return body;
   }
 
@@ -111,11 +112,14 @@ function sanitizeBody(body: unknown, depth: number = 0): unknown {
     "password",
     "token",
     "secret",
-    "apiKey",
-    "apiSecret",
+    "apikey",
+    "apisecret",
     "authorization",
-    "creditCard",
-    "cardNumber",
+    "creditcard",
+    "cardnumber",
+    "mfacode",
+    "backupcode",
+    "totp",
     "cvv",
     "ssn",
   ];
@@ -123,7 +127,7 @@ function sanitizeBody(body: unknown, depth: number = 0): unknown {
   const sanitized = { ...body } as Record<string, unknown>;
 
   for (const key of Object.keys(sanitized)) {
-    const lowerKey = key.toLowerCase();
+    const lowerKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
     if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
       sanitized[key] = "[REDACTED]";
     } else if (typeof sanitized[key] === "object" && sanitized[key] !== null) {
@@ -150,8 +154,8 @@ function sanitizeHeaders(
 
   const sanitized = { ...headers };
 
-  for (const header of sensitiveHeaders) {
-    if (sanitized[header]) {
+  for (const header of Object.keys(sanitized)) {
+    if (sensitiveHeaders.includes(header.toLowerCase())) {
       sanitized[header] = "[REDACTED]";
     }
   }

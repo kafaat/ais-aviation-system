@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
@@ -11,6 +12,7 @@ export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath } = options ?? {};
   const resolvedRedirectPath = redirectPath ?? "/login";
   const utils = trpc.useUtils();
+  const queryClient = useQueryClient();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
     retry: false,
@@ -36,10 +38,15 @@ export function useAuth(options?: UseAuthOptions) {
       }
       throw error;
     } finally {
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      localStorage.removeItem("manus-runtime-user-info");
+      navigator.serviceWorker?.controller?.postMessage({
+        type: "CLEAR_PRIVATE_DATA",
+      });
       utils.auth.me.setData(undefined, null);
-      await utils.auth.me.invalidate();
     }
-  }, [logoutMutation, utils]);
+  }, [logoutMutation, utils, queryClient]);
 
   const state = useMemo(() => {
     return {

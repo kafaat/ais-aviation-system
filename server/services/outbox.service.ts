@@ -105,7 +105,7 @@ export async function getPendingEvents(
  *
  * Runs `SELECT ... FOR UPDATE SKIP LOCKED` + `UPDATE status='processing'` in
  * one transaction, so concurrent relay instances (multiple app replicas, cron
- * overlap) each get a disjoint set of rows and no event is published twice.
+ * overlap) each get a disjoint set of rows and no two workers initially own the same claim.
  * Rows left in `processing` by a crashed worker are reclaimed after
  * {@link OUTBOX_CLAIM_TIMEOUT_MS}.
  */
@@ -115,6 +115,7 @@ export async function claimPendingEvents(
 ): Promise<OutboxEvent[]> {
   const db = getDbOrThrow();
   const now = new Date();
+  const leaseToken = randomUUID();
 
   return await db.transaction(async tx => {
     const rows = await tx
@@ -129,7 +130,7 @@ export async function claimPendingEvents(
 
     await tx
       .update(outbox)
-      .set({ status: "processing", lockedAt: now })
+      .set({ status: "processing", lockedAt: now, leaseToken })
       .where(
         inArray(
           outbox.id,
@@ -141,36 +142,63 @@ export async function claimPendingEvents(
       ...r,
       status: "processing" as const,
       lockedAt: now,
+      leaseToken,
     }));
   });
 }
 
-export async function markPublished(ids: number[]): Promise<void> {
-  if (ids.length === 0) return;
+export async function markPublished(
+  events: Pick<OutboxEvent, "id" | "leaseToken">[]
+): Promise<number> {
   const db = getDbOrThrow();
-  await db
-    .update(outbox)
-    .set({ status: "published", publishedAt: new Date(), lockedAt: null })
-    .where(inArray(outbox.id, ids));
+  let published = 0;
+  for (const event of events) {
+    if (!event.leaseToken) continue;
+    const [result] = await db
+      .update(outbox)
+      .set({
+        status: "published",
+        publishedAt: new Date(),
+        lockedAt: null,
+        leaseToken: null,
+      })
+      .where(
+        and(
+          eq(outbox.id, event.id),
+          eq(outbox.status, "processing"),
+          eq(outbox.leaseToken, event.leaseToken)
+        )
+      );
+    published += result.affectedRows;
+  }
+  return published;
 }
 
 export async function markFailed(
   id: number,
   error: string,
+  leaseToken: string,
   maxAttempts = DEFAULT_MAX_ATTEMPTS
 ): Promise<void> {
   const db = getDbOrThrow();
-  // Increment attempts and release the claim; flip to 'failed' once attempts
-  // reach the cap, otherwise back to 'pending' for the next relay tick.
   await db
     .update(outbox)
     .set({
+      // MySQL evaluates single-table assignments left to right: inspect the old
+      // count before incrementing it, so the fifth failure consumes five tries.
+      status: sql`CASE WHEN ${outbox.attempts} + 1 >= ${maxAttempts} THEN 'failed' ELSE 'pending' END`,
       attempts: sql`${outbox.attempts} + 1`,
       lastError: error.slice(0, 1000),
       lockedAt: null,
-      status: sql`CASE WHEN ${outbox.attempts} + 1 >= ${maxAttempts} THEN 'failed' ELSE 'pending' END`,
+      leaseToken: null,
     })
-    .where(eq(outbox.id, id));
+    .where(
+      and(
+        eq(outbox.id, id),
+        eq(outbox.status, "processing"),
+        eq(outbox.leaseToken, leaseToken)
+      )
+    );
 }
 
 export interface RelayResult {
@@ -219,25 +247,54 @@ export async function relayOutbox(
 
   const { publishedIds, failed } = await processEvents(events, publisher);
 
-  await markPublished(publishedIds);
+  const published = await markPublished(
+    events.filter(event => publishedIds.includes(event.id))
+  );
   for (const f of failed) {
-    await markFailed(f.id, f.error, maxAttempts);
+    const claim = events.find(event => event.id === f.id);
+    if (claim?.leaseToken)
+      await markFailed(f.id, f.error, claim.leaseToken, maxAttempts);
   }
 
-  return { published: publishedIds.length, failed: failed.length };
+  return { published, failed: failed.length };
 }
 
-/**
- * Default publisher used until a real bus (Kafka/NATS) is wired. It logs the
- * event so the relay is exercised end-to-end and swapping in a real publisher
- * later is a one-line change.
- */
-export const loggingPublisher: OutboxPublisher = event => {
-  console.info(
-    `[outbox] publish ${event.eventType} (${event.eventId}) ` +
-      `aggregate=${event.aggregateType}:${event.aggregateId} tenant=${event.tenantId ?? "-"}`
-  );
-  return Promise.resolve();
+/** Delivery is at least once; downstream receivers deduplicate the stable eventId. */
+export const configuredPublisher: OutboxPublisher = async event => {
+  if (event.eventType === "booking.confirmed") {
+    const { sendConfirmationAndAwardMiles } =
+      await import("../webhooks/stripe");
+    await sendConfirmationAndAwardMiles(Number(event.aggregateId));
+    return;
+  }
+  const endpoint = process.env.OUTBOX_PUBLISH_URL;
+  const token = process.env.OUTBOX_PUBLISH_TOKEN;
+  if (!endpoint || !token) throw new Error("Outbox receiver is not configured");
+  if (
+    process.env.NODE_ENV === "production" &&
+    new URL(endpoint).protocol !== "https:"
+  )
+    throw new Error("Outbox receiver requires HTTPS");
+  const response = await fetch(endpoint, {
+    method: "POST",
+    redirect: "error",
+    signal: AbortSignal.timeout(15000),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "Idempotency-Key": event.eventId,
+    },
+    body: JSON.stringify(event),
+  });
+  if (!response.ok)
+    throw new Error(
+      `Outbox receiver rejected delivery: HTTP ${response.status}`
+    );
+};
+
+/** Retained only to make legacy callers fail visibly instead of discarding events. */
+export const loggingPublisher: OutboxPublisher = async () => {
+  throw new Error("Logging is not event delivery");
 };
 
 /** Convenience entry point for the cron/worker tick. */
@@ -245,5 +302,5 @@ export async function runOutboxRelay(): Promise<{
   published: number;
   failed: number;
 }> {
-  return await relayOutbox(loggingPublisher);
+  return await relayOutbox(configuredPublisher);
 }

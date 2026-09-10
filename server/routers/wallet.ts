@@ -26,7 +26,7 @@ export const walletRouter = router({
   topUp: protectedProcedure
     .input(
       z.object({
-        amount: z.number().min(1000).max(1000000), // 10 SAR to 10,000 SAR in cents
+        amount: z.number().int().min(1000).max(1000000), // 10 SAR to 10,000 SAR in cents
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -47,19 +47,12 @@ export const walletRouter = router({
   pay: protectedProcedure
     .input(
       z.object({
-        amount: z.number().min(1),
-        bookingId: z.number().optional(),
-        description: z.string().optional(),
+        bookingId: z.number().int().positive(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        return await payFromWallet(
-          ctx.user.id,
-          input.amount,
-          input.description || "Wallet payment",
-          input.bookingId
-        );
+        return await payFromWallet(ctx.user.id, input.bookingId);
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",

@@ -5,7 +5,7 @@
  * with origin/destination selection and date picker.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SearchForm, type Airport } from "../SearchForm";
@@ -56,10 +56,18 @@ const mockAirports: Airport[] = [
 // ============================================================================
 
 describe("SearchForm", () => {
-  let onOriginChange: ReturnType<typeof vi.fn>;
-  let onDestinationChange: ReturnType<typeof vi.fn>;
-  let onDateChange: ReturnType<typeof vi.fn>;
-  let onSearch: ReturnType<typeof vi.fn>;
+  let onOriginChange: Mock<
+    NonNullable<React.ComponentProps<typeof SearchForm>["onOriginChange"]>
+  >;
+  let onDestinationChange: Mock<
+    NonNullable<React.ComponentProps<typeof SearchForm>["onDestinationChange"]>
+  >;
+  let onDateChange: Mock<
+    NonNullable<React.ComponentProps<typeof SearchForm>["onDateChange"]>
+  >;
+  let onSearch: Mock<
+    NonNullable<React.ComponentProps<typeof SearchForm>["onSearch"]>
+  >;
 
   beforeEach(() => {
     onOriginChange = vi.fn();

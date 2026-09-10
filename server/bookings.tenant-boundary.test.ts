@@ -11,7 +11,7 @@ const serviceSource = readFileSync(
 describe("booking tenant boundary", () => {
   it("stamps tenant identity onto booking and passenger writes", () => {
     expect(serviceSource).toContain("tenantId?: number | null");
-    expect(serviceSource).toContain("{ tenantId: input.tenantId }");
+    expect(serviceSource).toContain("tenantId: currentFlight.tenantId");
     expect(routerSource).toContain("tenantId: ctx.tenantId");
   });
 
@@ -32,6 +32,6 @@ describe("booking tenant boundary", () => {
 
   it("binds cancellation inventory restoration to the tenant", () => {
     expect(serviceSource).toContain("eq(bookings.tenantId, tenantId)");
-    expect(serviceSource).toContain("eq(flights.tenantId, tenantId)");
+    expect(serviceSource).toContain("await releaseBookingSeats(tx, current)");
   });
 });

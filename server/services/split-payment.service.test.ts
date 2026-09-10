@@ -191,7 +191,8 @@ describe("Split Payment Service", () => {
     it("should calculate correct expiration date", () => {
       const days = 7;
       const now = new Date();
-      const expirationDate = new Date();
+      // Compare from one instant; a second clock read can round 7 days + 1ms to 8.
+      const expirationDate = new Date(now);
       expirationDate.setDate(expirationDate.getDate() + days);
 
       const diffTime = expirationDate.getTime() - now.getTime();
@@ -205,7 +206,7 @@ describe("Split Payment Service", () => {
 
       testPeriods.forEach(days => {
         const now = new Date();
-        const expiration = new Date();
+        const expiration = new Date(now);
         expiration.setDate(expiration.getDate() + days);
 
         const diffTime = expiration.getTime() - now.getTime();

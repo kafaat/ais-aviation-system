@@ -52,8 +52,11 @@ CMD ["node", "--import", "tsx", "scripts/db/migrate.ts", "migrate"]
 
 # Production image
 FROM base AS runner
+# The runtime executes bundled Node entrypoints only. Do not ship package-manager
+# dependency trees (npm/corepack/yarn) that were the source of the audited image CVEs.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn* && \
+    rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Copy production dependencies only (smaller image)
 COPY --from=prod-deps /app/node_modules ./node_modules

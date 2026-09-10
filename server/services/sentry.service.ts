@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { redactTelemetryRequest } from "../../shared/telemetry-privacy";
 import type { Express, Request, Response, NextFunction } from "express";
 
 /**
@@ -51,6 +52,7 @@ export function initSentry(_app?: Express): void {
       release: config.release,
       tracesSampleRate: config.tracesSampleRate,
       profilesSampleRate: config.profilesSampleRate,
+      sendDefaultPii: false,
       // Enable integration for Express
       integrations: [
         // Capture errors from async handlers
@@ -73,16 +75,11 @@ export function initSentry(_app?: Express): void {
           }
         }
 
-        return event;
+        return redactTelemetryRequest(event);
       },
       // Sanitize sensitive data
       beforeSendTransaction(event) {
-        // Remove sensitive headers
-        if (event.request?.headers) {
-          delete event.request.headers["authorization"];
-          delete event.request.headers["cookie"];
-        }
-        return event;
+        return redactTelemetryRequest(event);
       },
     });
 
@@ -117,7 +114,7 @@ export function sentryErrorHandler(): (
       scope.setExtra("requestId", req.id);
       scope.setExtra("path", req.path);
       scope.setExtra("method", req.method);
-      scope.setExtra("query", req.query);
+      // Query values may contain serialized tRPC credentials; keep only the path.
 
       // Add user information if available
       if ((req as Request & { user?: { id: string; email?: string } }).user) {

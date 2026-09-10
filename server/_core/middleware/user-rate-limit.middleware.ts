@@ -36,23 +36,8 @@ interface RateLimitRequest extends Request {
  * Extract client IP from request
  */
 function getClientIp(req: Request): string {
-  // Check for forwarded headers (when behind proxy/load balancer)
-  const forwardedFor = req.headers["x-forwarded-for"];
-  if (forwardedFor) {
-    const ips = Array.isArray(forwardedFor)
-      ? forwardedFor[0]
-      : forwardedFor.split(",")[0];
-    return ips.trim();
-  }
-
-  // Check for real IP header (nginx)
-  const realIp = req.headers["x-real-ip"];
-  if (realIp) {
-    return Array.isArray(realIp) ? realIp[0] : realIp;
-  }
-
-  // Fall back to socket address
-  return req.socket?.remoteAddress || req.ip || "unknown";
+  // Express applies only explicitly trusted proxy hops to req.ip.
+  return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
 /**

@@ -1,7 +1,7 @@
 // AIS Aviation System - Service Worker
 // Provides offline support, caching strategies, background sync, and push notifications
 
-const CACHE_NAME = "ais-v1";
+const CACHE_NAME = "ais-public-v2";
 const OFFLINE_URL = "/offline.html";
 
 // Essential assets to pre-cache during install
@@ -69,7 +69,7 @@ self.addEventListener("activate", event => {
       .then(cacheNames => {
         return Promise.all(
           cacheNames
-            .filter(name => name !== CACHE_NAME)
+            .filter(name => name.startsWith("ais-") && name !== CACHE_NAME)
             .map(name => {
               console.info(`[SW] Deleting old cache: ${name}`);
               return caches.delete(name);
@@ -85,7 +85,7 @@ self.addEventListener("activate", event => {
 
 // ─── Fetch Event ────────────────────────────────────────────────────────────────
 // Route requests to the appropriate caching strategy:
-// - API calls: network-first (freshness matters)
+// - API calls: network-only (session data must not survive logout)
 // - Static assets: cache-first (immutable after build)
 // - Navigation: network-first with offline fallback
 self.addEventListener("fetch", event => {
@@ -104,16 +104,37 @@ self.addEventListener("fetch", event => {
 
   // Strategy routing
   if (isApiRequest(url)) {
-    event.respondWith(networkFirstStrategy(request));
+    event.respondWith(networkOnlyStrategy(request));
   } else if (isStaticAsset(url)) {
     event.respondWith(cacheFirstStrategy(request));
   } else if (request.mode === "navigate") {
     event.respondWith(navigationStrategy(request));
   } else {
-    // Default: network-first for anything else
-    event.respondWith(networkFirstStrategy(request));
+    // Unclassified dynamic responses may be private.
+    event.respondWith(networkOnlyStrategy(request));
   }
 });
+
+/** Session-dependent requests are never stored or retrieved from CacheStorage. */
+async function networkOnlyStrategy(request) {
+  try {
+    return await fetch(request, { cache: "no-store" });
+  } catch (_error) {
+    return new Response(
+      JSON.stringify({
+        error: "OFFLINE",
+        message: "Connect to view this data.",
+      }),
+      {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+  }
+}
 
 // ─── Caching Strategies ─────────────────────────────────────────────────────────
 
@@ -151,6 +172,7 @@ async function cacheFirstStrategy(request) {
  * Best for API calls and dynamic content where freshness is critical.
  */
 async function networkFirstStrategy(request) {
+  if (isApiRequest(new URL(request.url))) return networkOnlyStrategy(request);
   try {
     const networkResponse = await fetch(request);
     if (networkResponse.ok) {
@@ -193,16 +215,17 @@ async function networkFirstStrategy(request) {
  * serve the dedicated offline page.
  */
 async function navigationStrategy(request) {
+  const publicShell = new URL(request.url).pathname === "/";
   try {
     const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
+    if (networkResponse.ok && publicShell) {
       const cache = await caches.open(CACHE_NAME);
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
   } catch (_error) {
     // Try to serve a cached version of the requested page
-    const cachedResponse = await caches.match(request);
+    const cachedResponse = publicShell ? await caches.match(request) : null;
     if (cachedResponse) {
       return cachedResponse;
     }
@@ -235,9 +258,7 @@ async function navigationStrategy(request) {
 
 /** Check if the URL is an API request */
 function isApiRequest(url) {
-  return (
-    url.pathname.startsWith("/api/trpc/") || url.pathname.startsWith("/api/")
-  );
+  return url.pathname === "/api" || url.pathname.startsWith("/api/");
 }
 
 /** Check if the URL points to a static asset based on file extension */
@@ -436,6 +457,20 @@ self.addEventListener("message", event => {
         type: "VERSION",
         version: CACHE_NAME,
       });
+      break;
+
+    case "CLEAR_PRIVATE_DATA":
+      event.waitUntil(
+        caches
+          .keys()
+          .then(names =>
+            Promise.all(
+              names
+                .filter(name => name.startsWith("ais-"))
+                .map(name => caches.delete(name))
+            )
+          )
+      );
       break;
 
     case "CLEAR_CACHE":

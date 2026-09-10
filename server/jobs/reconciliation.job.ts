@@ -80,7 +80,7 @@ export async function reconciliationJob(options?: {
  * Run reconciliation from command line.
  * Usage: npx ts-node server/jobs/reconciliation.job.ts
  */
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.info("=".repeat(60));
   console.info("Stripe Reconciliation Job - Manual Run");
   console.info("=".repeat(60));
@@ -101,9 +101,4 @@ async function main(): Promise<void> {
     console.error("Job failed:", error);
     process.exit(1);
   }
-}
-
-// Run if executed directly
-if (require.main === module) {
-  main();
 }

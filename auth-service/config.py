@@ -41,6 +41,15 @@ class Settings(BaseSettings):
     # Owner (auto-admin)
     OWNER_EMAIL: str = ""
 
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        # Rewrite only a bare scheme. "pymysql://" also contains "mysql://",
+        # so substring replacement corrupts already qualified SQLAlchemy URLs.
+        if value.startswith("mysql://"):
+            return "mysql+pymysql://" + value[len("mysql://"):]
+        return value
+
     @field_validator("JWT_SECRET")
     @classmethod
     def validate_jwt_secret(cls, value: str) -> str:

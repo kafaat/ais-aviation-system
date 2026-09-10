@@ -204,6 +204,8 @@ try {
     `${database}_mismatch`,
     `${database}_partial`,
     `${database}_myisam`,
+    `${database}_wallet`,
+    `${database}_booking`,
   ]) {
     await admin.query(`CREATE DATABASE \`${name}\``);
     scratch.push(name);
@@ -255,6 +257,68 @@ try {
   console.info(
     "PASS: baseline refuses a database that differs from the final snapshot"
   );
+
+  // A schema-pushed database can have the final columns while missing the data
+  // changes from 0014. Refuse adoption before creating a journal, leave its
+  // balances/bookings intact, then prove an explicitly reconciled fixture can
+  // be adopted. The repair statements below run only in disposable test DBs.
+  for (const kind of ["wallet", "booking"] as const) {
+    const financialUrl = scratchUrl(`${database}_${kind}`);
+    const financial = await createConnection(financialUrl);
+    try {
+      if (kind === "wallet")
+        await financial.query(
+          "INSERT INTO wallets (userId, balance, currency, status) VALUES (1, 12345, 'SAR', 'active')"
+        );
+      else
+        await financial.query(
+          "INSERT INTO bookings (userId, flightId, bookingReference, pnr, status, paymentStatus, totalAmount, cabinClass, numberOfPassengers) VALUES (1, 1, 'BASE01', 'BASE02', 'confirmed', 'paid', 12345, 'economy', 1)"
+        );
+      const table = kind === "wallet" ? "wallets" : "bookings";
+      const contents = async () =>
+        JSON.stringify(
+          (await financial.query(`SELECT * FROM \`${table}\` ORDER BY id`))[0]
+        );
+      const beforeData = await contents();
+      const beforeSchema = await readDatabaseContract(financial);
+      await assert.rejects(
+        runMigration("baseline", financialUrl),
+        /BASELINE_DATA_REVIEW_REQUIRED/
+      );
+      assert.equal(
+        await contents(),
+        beforeData,
+        "baseline never repairs application data"
+      );
+      assert.deepEqual(await readDatabaseContract(financial), beforeSchema);
+      const [absent] = await financial.query<RowDataPacket[]>(
+        "SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '__drizzle_migrations'"
+      );
+      assert.equal(
+        Number(absent[0].n),
+        0,
+        "data refusal must not create the journal"
+      );
+      await financial.query(
+        kind === "wallet"
+          ? "UPDATE wallets SET status = 'frozen' WHERE userId = 1"
+          : "UPDATE bookings SET seatsReserved = TRUE WHERE bookingReference = 'BASE01'"
+      );
+      const reviewed = await contents();
+      await runMigration("baseline", financialUrl);
+      await runMigration("verify", financialUrl);
+      assert.equal(
+        await contents(),
+        reviewed,
+        "adoption preserves reviewed data"
+      );
+      console.info(
+        `PASS: baseline refuses unresolved legacy ${kind} before journal creation and accepts explicit reconciliation`
+      );
+    } finally {
+      await financial.end();
+    }
+  }
 
   // A journal written half-way would strand the database: baseline would refuse
   // the retry as already journaled and migrate would read the surviving rows as

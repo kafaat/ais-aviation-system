@@ -197,11 +197,3 @@ export async function main(): Promise<void> {
   );
   process.exit(result.errors.length > 0 ? 1 : 0);
 }
-
-// If running as standalone script
-if (require.main === module) {
-  main().catch(error => {
-    console.error("[Check-In Reminder Job] Failed:", error);
-    process.exit(1);
-  });
-}

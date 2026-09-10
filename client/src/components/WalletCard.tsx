@@ -24,8 +24,6 @@ export function WalletCard() {
   const [customAmount, setCustomAmount] = useState("");
   const [showHistory, setShowHistory] = useState(false);
 
-  const utils = trpc.useUtils();
-
   const { data: balance, isLoading } = trpc.wallet.balance.useQuery(undefined, {
     retry: false,
   });
@@ -37,14 +35,8 @@ export function WalletCard() {
 
   const topUp = trpc.wallet.topUp.useMutation({
     onSuccess: data => {
-      toast.success(
-        t("wallet.topUpSuccess", {
-          amount: (data.transactionAmount / 100).toFixed(0),
-        })
-      );
-      utils.wallet.balance.invalidate();
-      utils.wallet.transactions.invalidate();
-      setCustomAmount("");
+      if (data.url) window.location.assign(data.url);
+      else toast.error(t("wallet.topUpError"));
     },
     onError: error => {
       toast.error(error.message);

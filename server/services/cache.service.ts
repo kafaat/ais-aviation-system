@@ -533,13 +533,13 @@ class CacheService {
     windowSeconds: number
   ): Promise<{ allowed: boolean; remaining: number }> {
     if (!this.isConnected()) {
-      // If Redis is down, allow the request
-      return { allowed: true, remaining: limit };
+      // Let the caller apply its bounded fallback or fail closed.
+      throw new Error("Redis rate limiter unavailable");
     }
 
     try {
       const client = this.client;
-      if (!client) return { allowed: true, remaining: limit };
+      if (!client) throw new Error("Redis rate limiter unavailable");
       const rateLimitKey = `${CACHE_PREFIX}:ratelimit:${key}`;
 
       await client.set(rateLimitKey, 0, "EX", windowSeconds, "NX");
@@ -559,7 +559,7 @@ class CacheService {
       return { allowed, remaining };
     } catch (error) {
       logger.error({ key, error }, "Rate limit check error");
-      return { allowed: true, remaining: limit };
+      throw error;
     }
   }
 

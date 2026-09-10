@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   sendBookingConfirmation,
   sendRefundConfirmation,
@@ -14,9 +14,25 @@ import {
   type EmailLanguage,
 } from "../../services/email.service";
 
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+
 describe("Email Multi-Language Support", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("RESEND_API_KEY", "synthetic-email-key");
+    vi.stubEnv("EMAIL_FROM", "sender@example.test");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ id: "synthetic-provider-receipt" }), {
+            status: 200,
+          })
+      )
+    );
     // Suppress console output from email service
     vi.spyOn(console, "log").mockImplementation(() => {});
     vi.spyOn(console, "error").mockImplementation(() => {});

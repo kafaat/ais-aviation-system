@@ -46,7 +46,7 @@ export interface AuthState {
 }
 
 export interface AuthContextValue extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, mfaCode?: string) => Promise<void>;
   logout: () => Promise<void>;
   logoutAllDevices: () => Promise<void>;
   refreshToken: () => Promise<string | null>;
@@ -109,6 +109,10 @@ function storeTokens(
 }
 
 function clearStoredTokens() {
+  if (typeof navigator !== "undefined")
+    navigator.serviceWorker?.controller?.postMessage({
+      type: "CLEAR_PRIVATE_DATA",
+    });
   try {
     localStorage.removeItem(AUTH_STORAGE_KEYS.ACCESS_TOKEN);
     localStorage.removeItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
@@ -132,7 +136,8 @@ const API_BASE = "/api/trpc";
 
 async function apiLogin(
   email: string,
-  password: string
+  password: string,
+  mfaCode?: string
 ): Promise<LoginResponse> {
   const response = await fetch(`${API_BASE}/auth.login`, {
     method: "POST",
@@ -152,9 +157,28 @@ async function apiLogin(
   const data = await response.json();
 
   if (!response.ok || data.error) {
-    throw new Error(data.error?.message || "Login failed");
+    throw new Error(
+      data.error?.json?.message || data.error?.message || "Login failed"
+    );
   }
 
+  if (data.result.data.json.mfaRequired) {
+    if (!mfaCode) throw new Error("MFA_REQUIRED");
+    const verified = await fetch(`${API_BASE}/auth.completeMfa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        json: {
+          challengeToken: data.result.data.json.challengeToken,
+          code: mfaCode,
+        },
+      }),
+    });
+    const result = await verified.json();
+    if (!verified.ok || result.error)
+      throw new Error(result.error?.json?.message || "MFA verification failed");
+    return result.result.data.json;
+  }
   return data.result.data.json;
 }
 
@@ -183,18 +207,20 @@ async function apiRefreshToken(
   return data.result.data.json;
 }
 
-async function apiLogout(refreshTokenValue: string): Promise<void> {
-  try {
-    await fetch(`${API_BASE}/auth.logout`, {
+async function apiLogout(refreshTokenValue?: string | null): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/${refreshTokenValue ? "auth.logout" : "auth.logoutCookie"}`,
+    {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        json: { refreshToken: refreshTokenValue },
+        json: refreshTokenValue ? { refreshToken: refreshTokenValue } : null,
       }),
-    });
-  } catch {
-    // Ignore logout errors
-  }
+    }
+  );
+  if (!response.ok)
+    throw new Error("Unable to revoke session. Please retry logout.");
 }
 
 // ============================================================================
@@ -343,11 +369,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Login function
   const login = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, mfaCode?: string) => {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
       try {
-        const response = await apiLogin(email, password);
+        const response = await apiLogin(email, password, mfaCode);
 
         // Store tokens
         storeTokens(
@@ -392,9 +418,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     // Call logout API if we have a refresh token
-    if (stored.refreshToken) {
-      await apiLogout(stored.refreshToken);
-    }
+    await apiLogout(stored.refreshToken);
 
     // Clear storage
     clearStoredTokens();

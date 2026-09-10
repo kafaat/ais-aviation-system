@@ -1,8 +1,10 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME } from "@shared/const";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { getMfaSettings, createMfaChallenge } from "../services/mfa.service";
+import { SESSION_MAX_AGE_MS } from "../services/mobile-auth-v2.service";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -36,15 +38,26 @@ export function registerOAuthRoutes(app: Express) {
         lastSignedIn: new Date(),
       });
 
+      const user = await db.getUserByOpenId(userInfo.openId);
+      if (!user) throw new Error("OAuth user synchronization failed");
+      if ((await getMfaSettings(user.id))?.isEnabled) {
+        const challenge = await createMfaChallenge(user.id);
+        res.redirect(
+          302,
+          `/login?mfaChallenge=${encodeURIComponent(challenge)}`
+        );
+        return;
+      }
+
       const sessionToken = await sdk.createSessionToken(userInfo.openId, {
         name: userInfo.name || "",
-        expiresInMs: ONE_YEAR_MS,
+        expiresInMs: SESSION_MAX_AGE_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, {
         ...cookieOptions,
-        maxAge: ONE_YEAR_MS,
+        maxAge: SESSION_MAX_AGE_MS,
       });
 
       res.redirect(302, "/");

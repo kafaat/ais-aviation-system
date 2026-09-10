@@ -58,6 +58,9 @@ describe.skipIf(!dbAvailable)("User Preferences Service", () => {
     expect(result.preferredCabinClass).toBe("economy");
     expect(result.mealPreference).toBe("vegetarian");
     expect(result.extraLegroom).toBe(true);
+    expect(result.smsNotifications).toBe(false);
+    expect(result.emailNotifications).toBe(true);
+    expect(result.autoCheckIn).toBe(false);
   });
 
   it("should retrieve existing user preferences", async () => {
@@ -141,5 +144,8 @@ describe.skipIf(!dbAvailable)("User Preferences Service", () => {
     expect(result).toBeDefined();
     expect(result.preferredSeatType).toBe("middle");
     expect(result.preferredCabinClass).toBe("business");
+    expect(result.wheelchairAssistance).toBe(false);
+    expect(result.extraLegroom).toBe(false);
+    expect(result.smsNotifications).toBe(false);
   });
 });

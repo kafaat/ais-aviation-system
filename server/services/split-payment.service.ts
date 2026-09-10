@@ -15,6 +15,7 @@ import {
   InsertPaymentSplit,
 } from "../../drizzle/schema";
 import { sendSplitPaymentRequest } from "./email.service";
+import { assertNoCollectionReview } from "./booking-settlement.service";
 import * as crypto from "crypto";
 
 // ============================================================================
@@ -493,6 +494,7 @@ export async function processPayerPayment(
   }
 
   // Create Stripe checkout session
+  await assertNoCollectionReview(db, booking.id);
   const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
 
   const session = await stripe.checkout.sessions.create({
@@ -520,6 +522,14 @@ export async function processPayerPayment(
       paymentToken,
       type: "split_payment",
     },
+    payment_intent_data: {
+      metadata: {
+        splitId: split.id.toString(),
+        bookingId: split.bookingId.toString(),
+        paymentToken,
+        type: "split_payment",
+      },
+    },
   });
 
   // Update split with checkout session ID
@@ -540,57 +550,10 @@ export async function processPayerPayment(
  * are paid, and update the booking status if so.
  */
 export async function markSplitPaid(
-  splitId: number,
-  paymentIntentId: string
-): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  await db.transaction(async tx => {
-    // Mark this split as paid
-    await tx
-      .update(paymentSplits)
-      .set({
-        status: "paid",
-        stripePaymentIntentId: paymentIntentId,
-        paidAt: new Date(),
-      })
-      .where(eq(paymentSplits.id, splitId));
-
-    // Re-fetch the split to get its bookingId
-    const [split] = await tx
-      .select()
-      .from(paymentSplits)
-      .where(eq(paymentSplits.id, splitId))
-      .limit(1);
-
-    if (split) {
-      // Check if all active splits for this booking are now paid
-      const activeSplits = await tx
-        .select()
-        .from(paymentSplits)
-        .where(
-          and(
-            eq(paymentSplits.bookingId, split.bookingId),
-            sql`${paymentSplits.status} NOT IN ('cancelled', 'expired')`
-          )
-        );
-
-      const allPaid =
-        activeSplits.length > 0 && activeSplits.every(s => s.status === "paid");
-
-      if (allPaid) {
-        // Update booking status to confirmed
-        await tx
-          .update(bookings)
-          .set({
-            paymentStatus: "paid",
-            status: "confirmed",
-          })
-          .where(eq(bookings.id, split.bookingId));
-      }
-    }
-  });
+  _splitId: number,
+  _paymentIntentId: string
+): Promise<never> {
+  throw new Error("Use the provider-verified canonical settlement processor");
 }
 
 /**

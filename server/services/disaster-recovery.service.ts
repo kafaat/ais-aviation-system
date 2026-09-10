@@ -1,3 +1,4 @@
+import { requireDemoCapability } from "./demo-capability";
 /**
  * Disaster Recovery / Business Continuity (DR/BCP) Service
  *
@@ -351,7 +352,7 @@ function ensureDefaultRunbooks(): void {
           order: 2,
           title: "Activate fallback network paths",
           description:
-            "Switch to backup network routes. If auth-service is unreachable, enable local JWT verification fallback. If Redis is down, memory cache will activate automatically.",
+            "Switch to backup network routes. If auth-service is unreachable, reject new password logins and restore the service; never bypass credential verification. If Redis is down, memory cache will activate automatically.",
           estimatedMinutes: 10,
           responsible: "On-call Network Engineer",
           automated: false,
@@ -584,6 +585,7 @@ export function getBackupStatus(): {
   }[];
   overall: "healthy" | "warning" | "critical";
 } {
+  requireDemoCapability("Disaster recovery simulation");
   ensureSeedData();
 
   const components: BackupComponent[] = [
@@ -653,6 +655,7 @@ export function triggerBackup(
   backupType: BackupType,
   component: BackupComponent
 ): BackupRecord {
+  requireDemoCapability("Disaster recovery simulation");
   ensureSeedData();
 
   const now = new Date();
@@ -704,6 +707,7 @@ export function triggerBackup(
  * Get backup schedule configuration
  */
 export function getBackupSchedule(): BackupScheduleEntry[] {
+  requireDemoCapability("Disaster recovery simulation");
   ensureSeedData();
 
   const now = new Date();
@@ -956,6 +960,7 @@ export async function testFailover(
   component: string,
   testedBy: string
 ): Promise<DRTest> {
+  requireDemoCapability("Disaster recovery simulation");
   ensureSeedData();
   ensureDefaultRunbooks();
 
@@ -1081,6 +1086,7 @@ export async function testFailover(
  * Get the history of failover tests
  */
 export function getFailoverTestHistory(): DRTest[] {
+  requireDemoCapability("Disaster recovery simulation");
   return [...drTests].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
@@ -1094,6 +1100,7 @@ export function getFailoverTestHistory(): DRTest[] {
  * Calculate current Recovery Point Objective (time since last successful backup)
  */
 export function calculateRPO(): RPOResult {
+  requireDemoCapability("Disaster recovery simulation");
   ensureSeedData();
 
   const TARGET_RPO_MINUTES = 15;
@@ -1142,6 +1149,7 @@ export function calculateRPO(): RPOResult {
  * Calculate estimated Recovery Time Objective
  */
 export async function calculateRTO(): Promise<RTOResult> {
+  requireDemoCapability("Disaster recovery simulation");
   const TARGET_RTO_MINUTES = 60;
 
   const componentEstimates = [
@@ -1214,6 +1222,7 @@ export async function calculateRTO(): Promise<RTOResult> {
  * Get overall DR health dashboard data
  */
 export async function getDRDashboard(): Promise<DRDashboard> {
+  requireDemoCapability("Disaster recovery simulation");
   ensureSeedData();
   ensureDefaultRunbooks();
 
@@ -1369,6 +1378,7 @@ export function createIncident(
   description: string,
   impactAssessment?: string
 ): DRIncident {
+  requireDemoCapability("Disaster recovery simulation");
   const now = new Date().toISOString();
   const incident: DRIncident = {
     id: nextIncidentId++,
@@ -1396,6 +1406,7 @@ export function resolveIncident(
   resolution: string,
   postmortemUrl?: string
 ): DRIncident {
+  requireDemoCapability("Disaster recovery simulation");
   const incident = drIncidents.find(i => i.id === incidentId);
   if (!incident) {
     throw new TRPCError({
@@ -1418,6 +1429,7 @@ export function resolveIncident(
  * Get all incidents, optionally filtered by status
  */
 export function getIncidents(statusFilter?: IncidentStatus): DRIncident[] {
+  requireDemoCapability("Disaster recovery simulation");
   let results = [...drIncidents];
   if (statusFilter) {
     results = results.filter(i => i.status === statusFilter);
@@ -1461,6 +1473,7 @@ export function updateRunbook(
     reviewedBy?: string;
   }
 ): DRRunbook {
+  requireDemoCapability("Disaster recovery simulation");
   ensureDefaultRunbooks();
 
   const runbook = drRunbooks.find(r => r.id === id);

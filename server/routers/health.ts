@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import {
   performHealthChecks,
@@ -50,6 +51,12 @@ export const healthRouter = router({
     .output(z.object({ ready: z.boolean() }))
     .query(async () => {
       const ready = await isReady();
+      if (!ready) {
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message: "Service is not ready",
+        });
+      }
       return { ready };
     }),
 

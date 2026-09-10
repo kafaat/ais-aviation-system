@@ -25,6 +25,8 @@ function event(id: number): OutboxEvent {
     lastError: null,
     createdAt: new Date(),
     publishedAt: null,
+    lockedAt: null,
+    leaseToken: null,
   };
 }
 
@@ -98,7 +100,7 @@ function fakeDb(rows: OutboxEvent[]) {
   }));
 
   const rootSets: unknown[] = [];
-  const rootWhere = vi.fn(() => Promise.resolve());
+  const rootWhere = vi.fn(() => Promise.resolve([{ affectedRows: 1 }]));
   const rootUpdate = vi.fn(() => ({
     set: (v: unknown) => {
       rootSets.push(v);
@@ -179,7 +181,9 @@ describe("relayOutbox", () => {
 });
 
 describe("loggingPublisher", () => {
-  it("publishes (logs) without throwing", async () => {
-    await expect(loggingPublisher(event(1))).resolves.toBeUndefined();
+  it("cannot discard an event by logging it", async () => {
+    await expect(loggingPublisher(event(1))).rejects.toThrow(
+      "Logging is not event delivery"
+    );
   });
 });

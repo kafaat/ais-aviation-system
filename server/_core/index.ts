@@ -14,10 +14,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { handleStripeWebhook } from "../webhooks/stripe";
 import { webhookLimiter } from "./rateLimiter";
-import {
-  createUserRateLimitMiddleware,
-  createStrictRateLimitMiddleware,
-} from "./middleware/user-rate-limit.middleware";
+import { createUserRateLimitMiddleware } from "./middleware/user-rate-limit.middleware";
 import {
   sentryErrorMiddleware,
   errorResponseMiddleware,
@@ -32,6 +29,7 @@ import {
 import { getPrometheusMetrics } from "../services/apm.service";
 import { createServiceLogger } from "./logger";
 import { getOpenApiDocument } from "../openapi";
+import { createRestMiddleware } from "./rest";
 
 // Create server-specific logger
 const log = createServiceLogger("server");
@@ -63,6 +61,19 @@ async function startServer() {
   startSystemMetricsCollection(15000);
 
   const app = express();
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
+  // Configure trusted proxy addresses/CIDRs explicitly; never trust arbitrary headers.
+  if (process.env.TRUSTED_PROXIES) {
+    app.set(
+      "trust proxy",
+      process.env.TRUSTED_PROXIES.split(",")
+        .map(value => value.trim())
+        .filter(Boolean)
+    );
+  }
   const server = createServer(app);
 
   // Stripe webhook MUST be registered BEFORE express.json() to preserve raw body
@@ -184,9 +195,12 @@ async function startServer() {
 
   // Serve OpenAPI specification as JSON (lazy generation)
   app.get("/api/openapi.json", async (_req, res) => {
-    const doc = await getOpenApiDocument();
-    res.setHeader("Content-Type", "application/json");
-    res.json(doc);
+    try {
+      res.json(await getOpenApiDocument());
+    } catch (error) {
+      log.error({ error }, "OpenAPI generation failed");
+      res.status(503).json({ error: "OpenAPI documentation unavailable" });
+    }
   });
 
   // Swagger UI options
@@ -217,44 +231,21 @@ async function startServer() {
     swaggerUi.setup(null, swaggerUiOptions)
   );
 
-  // OpenAPI REST endpoints - initialized lazily to avoid startup crash
-  // from trpc-openapi "Unknown procedure type" error
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let restMiddleware: any = null;
-  app.use("/api/rest", async (req, res, next) => {
-    try {
-      if (!restMiddleware) {
-        const { createOpenApiExpressMiddleware } = await import("trpc-openapi");
-        restMiddleware = createOpenApiExpressMiddleware({
-          router: appRouter,
-          createContext,
-          maxBodySize: 50 * 1024 * 1024,
-          responseMeta: undefined,
-          onError: ({ error, path }: { error: Error; path: string }) => {
-            log.error({ error: error.message, path }, "OpenAPI REST error");
-          },
-        });
-      }
-      restMiddleware(req, res, next);
-    } catch (error) {
-      log.warn(
-        { error: error instanceof Error ? error.message : error },
-        "OpenAPI REST endpoint error"
-      );
-      res.status(503).json({
-        error: "REST API temporarily unavailable. Use /api/trpc instead.",
-      });
-    }
-  });
+  app.use(
+    "/api/rest",
+    createUserRateLimitMiddleware({
+      scope: "api",
+      skipInDevelopment: true,
+      authenticateUser: true,
+    }),
+    createRestMiddleware({
+      router: appRouter,
+      createContext,
+      onError: (error, path) => log.error({ error, path }, "REST error"),
+    })
+  );
 
-  // Auth endpoints get stricter rate limiting
-  app.use("/api/trpc/auth", createStrictRateLimitMiddleware("auth"));
-
-  // Payment endpoints get stricter rate limiting
-  app.use("/api/trpc/payments", createStrictRateLimitMiddleware("payment"));
-
-  // Booking creation gets stricter rate limiting
-  app.use("/api/trpc/bookings", createStrictRateLimitMiddleware("booking"));
+  // Sensitive procedure limits run inside tRPC, including every batch member.
 
   // tRPC API with per-user rate limiting
   // Uses user ID for authenticated users, IP for anonymous users

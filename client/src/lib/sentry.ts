@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/react";
+import { redactTelemetryRequest } from "@shared/telemetry-privacy";
 
 /**
  * Sentry Client Configuration
@@ -70,9 +71,9 @@ export function initSentry(): void {
         // Session replay for debugging
         Sentry.replayIntegration({
           // Mask all text content by default for privacy
-          maskAllText: false,
+          maskAllText: true,
           // Block all media for privacy
-          blockAllMedia: false,
+          blockAllMedia: true,
         }),
       ],
 
@@ -104,8 +105,9 @@ export function initSentry(): void {
           }
         }
 
-        return event;
+        return redactTelemetryRequest(event);
       },
+      beforeSendTransaction: redactTelemetryRequest,
 
       // Add custom tags to all events
       initialScope: {

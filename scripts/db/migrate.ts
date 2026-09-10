@@ -21,14 +21,35 @@ import { assertSnapshotMatchesSchema } from "./snapshot-check";
 
 export type MigrationCommand = "migrate" | "preflight" | "verify" | "baseline";
 
+// Schema equality cannot prove that the financial backfill was applied. An
+// unjournaled database with active legacy balances or unmarked paid bookings
+// needs an operator's data review; baseline must never silently skip that work.
+async function assertBaselineDataReady(
+  connection: Connection,
+  target: Contract
+): Promise<void> {
+  if (!target.bookings?.columns.seatsReserved) return;
+  const [wallets] = await connection.query<RowDataPacket[]>(
+    "SELECT COUNT(*) AS n FROM `wallets` WHERE balance > 0 AND status = 'active'"
+  );
+  const [bookings] = await connection.query<RowDataPacket[]>(
+    "SELECT COUNT(*) AS n FROM `bookings` WHERE status IN ('confirmed', 'completed') AND paymentStatus = 'paid' AND seatsReserved = FALSE"
+  );
+  if (Number(wallets[0].n) || Number(bookings[0].n))
+    throw new Error(
+      `BASELINE_DATA_REVIEW_REQUIRED: no application data repaired; ${wallets[0].n} active positive-balance wallet(s) and ${bookings[0].n} unmarked paid booking(s). Review legacy funding and inventory before adopting the journal; see docs/migrations/0014-transactional-audit.md`
+    );
+}
+
 /**
  * Adopt a database that already carries the final schema but has no journal,
  * typically one provisioned by `drizzle-kit push` before the migration history
  * became authoritative. Journal rows are written; no application DDL is emitted.
  *
  * The adoption is refused unless the live schema matches the final snapshot
- * exactly, in both directions, so an adopted database is indistinguishable from
- * one built by replaying every migration. A database that differs in any object
+ * exactly, in both directions, and the financial backfill conditions have been
+ * resolved. Matching DDL alone cannot prove historical data changes occurred.
+ * A database that differs in any object
  * must be reconciled from its actual state first: this never rewrites history,
  * never creates or alters application objects, and never repairs data.
  *
@@ -58,6 +79,7 @@ export async function adoptJournal(
     throw new Error(
       `BASELINE_SCHEMA_MISMATCH: no DDL executed; the database must already match the final snapshot exactly\n${gaps.join("\n")}`
     );
+  await assertBaselineDataReady(connection, target);
   // MySQL commits implicitly on DDL, so the journal table is created before the
   // transaction opens. An empty journal table is indistinguishable from none:
   // appliedMigrationCount reads zero rows, so a rolled-back attempt stays
@@ -91,6 +113,7 @@ export async function adoptJournal(
     const after = differences(target, await readDatabaseContract(connection));
     if (after.length)
       throw new Error(`BASELINE_RESULT_DRIFT:\n${after.join("\n")}`);
+    await assertBaselineDataReady(connection, target);
     await connection.commit();
     console.info(
       JSON.stringify({

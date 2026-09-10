@@ -142,6 +142,12 @@ jobs:
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
         run: pnpm run db:migrate
+      - name: Verify migrated schema
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+        run: |
+          pnpm run db:verify
+          pnpm run db:verify-catalog
 
       - name: Run tests with coverage
         env:
@@ -337,6 +343,12 @@ jobs:
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
         run: pnpm run db:migrate
+      - name: Verify migrated schema
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
+        run: |
+          pnpm run db:verify
+          pnpm run db:verify-catalog
 
       - name: Setup Python for auth service
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -345,6 +357,9 @@ jobs:
 
       - name: Install auth service dependencies
         run: pip install -r auth-service/requirements.txt
+
+      - name: Verify auth database URL configuration
+        run: python -m unittest discover -s auth-service -p 'test_config.py' -v
 
       - name: Start auth service
         env:
@@ -584,6 +599,7 @@ jobs:
           context: .
           file: ./Dockerfile.prod
           push: true
+          pull: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -600,9 +616,19 @@ jobs:
           file: ./Dockerfile.prod
           target: migrator
           push: true
+          pull: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Build and push auth service image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./auth-service
+          file: ./auth-service/Dockerfile
+          push: true
+          pull: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}
 
       - name: Generate SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
@@ -695,6 +721,12 @@ jobs:
             --namespace=ais-staging \
             --from-literal=DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.STAGING_JWT_SECRET }}" \
+            --from-literal=CSRF_SECRET="${{ secrets.STAGING_CSRF_SECRET }}" \
+            --from-literal=AUTH_SERVICE_URL="http://ais-auth:8000" \
+            --from-literal=RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
+            --from-literal=EMAIL_FROM="${{ vars.EMAIL_FROM }}" \
+            --from-literal=OUTBOX_PUBLISH_URL="${{ vars.OUTBOX_PUBLISH_URL }}" \
+            --from-literal=OUTBOX_PUBLISH_TOKEN="${{ secrets.OUTBOX_PUBLISH_TOKEN }}" \
             --from-literal=STRIPE_SECRET_KEY="${{ secrets.STAGING_STRIPE_SECRET_KEY }}" \
             --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}" \
             --from-literal=REDIS_URL="${{ secrets.STAGING_REDIS_URL }}" \
@@ -717,8 +749,10 @@ jobs:
         if: steps.staging-kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-staging"
           export REPLICAS="2"
+          envsubst < k8s/base/background.yaml | kubectl apply -f -
           envsubst < k8s/base/deployment.yaml | kubectl apply -f -
           envsubst < k8s/base/service.yaml | kubectl apply -f -
           envsubst < k8s/overlays/staging/ingress.yaml | kubectl apply -f -
@@ -851,24 +885,28 @@ jobs:
             --namespace=ais-production \
             --from-literal=DATABASE_URL="${{ secrets.PRODUCTION_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.PRODUCTION_JWT_SECRET }}" \
+            --from-literal=CSRF_SECRET="${{ secrets.PRODUCTION_CSRF_SECRET }}" \
+            --from-literal=AUTH_SERVICE_URL="http://ais-auth:8000" \
+            --from-literal=RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
+            --from-literal=EMAIL_FROM="${{ vars.EMAIL_FROM }}" \
+            --from-literal=OUTBOX_PUBLISH_URL="${{ vars.OUTBOX_PUBLISH_URL }}" \
+            --from-literal=OUTBOX_PUBLISH_TOKEN="${{ secrets.OUTBOX_PUBLISH_TOKEN }}" \
             --from-literal=STRIPE_SECRET_KEY="${{ secrets.PRODUCTION_STRIPE_SECRET_KEY }}" \
             --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.PRODUCTION_STRIPE_WEBHOOK_SECRET }}" \
             --from-literal=REDIS_URL="${{ secrets.PRODUCTION_REDIS_URL }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Backup database before migration
+      - name: Persist database backup before migration
         if: steps.kube-config.outputs.configured == 'true' && vars.ENABLE_DB_BACKUP == 'true'
+        env:
+          BACKUP_PVC: ${{ vars.PRODUCTION_BACKUP_PVC }}
+          BACKUP_CREDENTIAL_SECRET: ${{ vars.PRODUCTION_BACKUP_CREDENTIAL_SECRET }}
+          BACKUP_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          echo "Creating database backup before migration..."
-          kubectl run db-backup-${{ github.run_id }} \
-            --namespace=ais-production \
-            --image=mysql:8.0 \
-            --restart=Never \
-            --rm \
-            --wait \
-            --timeout=600s \
-            --env="MYSQL_PWD=${{ secrets.PRODUCTION_DB_PASSWORD }}" \
-            --command -- sh -c "mysqldump -h ${{ secrets.PRODUCTION_DB_HOST }} -u ${{ secrets.PRODUCTION_DB_USER }} ${{ secrets.PRODUCTION_DB_NAME }} > /tmp/backup.sql && echo 'Backup completed'"
+          set -euo pipefail
+          python3 scripts/k8s-backup-job.py | kubectl apply -f -
+          kubectl wait --namespace=ais-production --for=condition=complete "job/db-backup-$BACKUP_RUN_ID" --timeout=600s
+          kubectl logs --namespace=ais-production "job/db-backup-$BACKUP_RUN_ID"
 
       - name: Run database migrations
         if: steps.kube-config.outputs.configured == 'true'
@@ -895,8 +933,10 @@ jobs:
         if: steps.kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-production"
           export REPLICAS="3"
+          envsubst < k8s/base/background.yaml | kubectl apply -f -
           envsubst < k8s/base/deployment.yaml | kubectl apply -f -
           kubectl rollout status deployment/ais-api \
             --namespace=ais-production \
@@ -921,6 +961,7 @@ jobs:
         if: steps.kube-config.outputs.configured == 'true'
         run: |
           export IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ needs.build.outputs.sha_short }}"
+          export AUTH_IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}"
           export NAMESPACE="ais-production"
           envsubst < k8s/base/service.yaml | kubectl apply -f -
           envsubst < k8s/overlays/production/ingress.yaml | kubectl apply -f -
@@ -1096,13 +1137,15 @@ jobs:
           scp docker-compose.production.yml ${DEPLOY_USER}@${DEPLOY_HOST}:~/ais-aviation/
           ssh ${DEPLOY_USER}@${DEPLOY_HOST} << ENDSSH
             cd ~/ais-aviation
-            docker pull ${IMAGE_TAG}
+            set -e
             export IMAGE_TAG=${IMAGE_TAG}
-            docker-compose -f docker-compose.production.yml up -d --no-deps api1
-            sleep 15
-            docker-compose -f docker-compose.production.yml up -d --no-deps api2
-            sleep 15
-            docker-compose -f docker-compose.production.yml up -d --no-deps api3
+            export MIGRATOR_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }}
+            export AUTH_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-auth:sha-${{ needs.build.outputs.sha_short }}
+            docker compose -f docker-compose.production.yml pull api1 api2 api3 worker auth-service migrator
+            docker compose -f docker-compose.production.yml up -d --wait mysql redis
+            docker compose -f docker-compose.production.yml run --rm --no-deps migrator
+            docker compose -f docker-compose.production.yml up -d --no-deps --wait auth-service
+            docker compose -f docker-compose.production.yml up -d --no-deps --wait worker api1 api2 api3
             docker image prune -f
             echo "Deployment completed"
           ENDSSH
@@ -1110,7 +1153,7 @@ jobs:
       - name: Verify deployment
         run: |
           for i in {1..10}; do
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }}/api/trpc/health.live)
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.PRODUCTION_URL }}/api/trpc/health.ready)
             if [ "$HTTP_STATUS" == "200" ]; then
               echo "Deployment verified successfully"
               exit 0

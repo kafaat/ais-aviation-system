@@ -20,20 +20,24 @@ export default defineConfig(({ mode }) => {
       },
     },
     test: {
-      // Default environment for server tests
-      environment: "node",
-      include: [
-        "server/**/*.test.ts",
-        "server/**/*.spec.ts",
-        "client/**/*.test.tsx",
-        "client/**/*.test.ts",
-      ],
-      // Configure different environments per file pattern
-      environmentMatchGlobs: [
-        // Use jsdom for client-side tests
-        ["client/**/*.test.{ts,tsx}", "jsdom"],
-        // Use node for server-side tests
-        ["server/**/*.test.ts", "node"],
+      // Each project inherits the shared aliases, plugins, setup and environment.
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: "server",
+            environment: "node",
+            include: ["server/**/*.test.ts", "server/**/*.spec.ts"],
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: "client",
+            environment: "jsdom",
+            include: ["client/**/*.test.tsx", "client/**/*.test.ts"],
+          },
+        },
       ],
       // Setup file with conditional browser checks
       setupFiles: ["./client/src/test/setup.ts"],
@@ -133,10 +137,7 @@ export default defineConfig(({ mode }) => {
         clean: true,
         // Skip files with no code coverage
         skipFull: false,
-        // Report files with no tests
-        all: true,
-        // Process coverage for files even if no tests hit them
-        extension: [".ts", ".tsx"],
+        // Explicit include above also covers files that no test imports.
         // Watermarks for coverage colors in HTML report
         // [yellow threshold, green threshold]
         watermarks: {

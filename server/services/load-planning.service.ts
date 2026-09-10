@@ -16,6 +16,7 @@ import {
   aircraftTypes,
   baggageItems,
   loadPlans,
+  loadPlanDetails,
 } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -268,20 +269,69 @@ async function getFlightLoadData(flightId: number) {
 }
 
 // ============================================================================
-// In-memory store for detailed load plans (simulates extended load plan tables)
-// In production these would be in the cargoCompartments / loadPlanItems tables
-// ============================================================================
-
+// Detailed plans are durable snapshots with optimistic version checks.
 interface StoredLoadPlan {
   plan: DetailedLoadPlan;
   nextItemId: number;
+  version: number;
 }
 
-const loadPlanStore = new Map<number, StoredLoadPlan>();
-let nextPlanId = 100000;
+async function getStoredPlan(
+  flightId: number
+): Promise<StoredLoadPlan | undefined> {
+  const db = await requireDb();
+  const [row] = await db
+    .select()
+    .from(loadPlanDetails)
+    .where(eq(loadPlanDetails.flightId, flightId))
+    .limit(1);
+  return row
+    ? { ...(row.data as Omit<StoredLoadPlan, "version">), version: row.version }
+    : undefined;
+}
 
-function getStoredPlan(flightId: number): StoredLoadPlan | undefined {
-  return loadPlanStore.get(flightId);
+async function saveStoredPlan(flightId: number, stored: StoredLoadPlan) {
+  const db = await requireDb();
+  const data = { plan: stored.plan, nextItemId: stored.nextItemId };
+  await db.transaction(async tx => {
+    if (!stored.version)
+      await tx.insert(loadPlanDetails).values({ flightId, version: 1, data });
+    else {
+      const [updated] = await tx
+        .update(loadPlanDetails)
+        .set({ data, version: stored.version + 1 })
+        .where(
+          and(
+            eq(loadPlanDetails.flightId, flightId),
+            eq(loadPlanDetails.version, stored.version)
+          )
+        );
+      if (updated.affectedRows !== 1)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "Load plan was updated by another operator. Reload and retry.",
+        });
+    }
+    if (stored.plan.status === "finalized") {
+      const [summary] = await tx
+        .select()
+        .from(loadPlans)
+        .where(eq(loadPlans.flightId, flightId))
+        .orderBy(sql`${loadPlans.createdAt} DESC`)
+        .limit(1);
+      if (summary)
+        await tx
+          .update(loadPlans)
+          .set({
+            status: "finalized",
+            finalizedBy: stored.plan.finalizedBy,
+            finalizedAt: new Date(stored.plan.finalizedAt!),
+          })
+          .where(eq(loadPlans.id, summary.id));
+    }
+  });
+  stored.version++;
 }
 
 function recalcPlanTotals(stored: StoredLoadPlan) {
@@ -338,7 +388,7 @@ export async function createLoadPlan(flightId: number) {
   const db = await requireDb();
 
   // Check for existing detailed load plan
-  const existing = getStoredPlan(flightId);
+  const existing = await getStoredPlan(flightId);
   if (
     existing &&
     (existing.plan.status === "finalized" ||
@@ -424,7 +474,7 @@ export async function createLoadPlan(flightId: number) {
   // Build compartments with IDs
   const compartments: CargoCompartment[] = layoutTemplate.map((tmpl, idx) => ({
     ...tmpl,
-    id: nextPlanId * 100 + idx + 1,
+    id: flightId * 100 + idx + 1,
     aircraftTypeId: validAircraftTypeId,
     createdAt: new Date().toISOString(),
   }));
@@ -436,7 +486,7 @@ export async function createLoadPlan(flightId: number) {
   if (baggageCount > 0) {
     items.push({
       id: itemIdCounter++,
-      loadPlanId: nextPlanId,
+      loadPlanId: flightId,
       compartmentId: null, // unassigned initially
       itemType: "baggage",
       description: `Checked baggage (${baggageCount} pieces)`,
@@ -462,7 +512,7 @@ export async function createLoadPlan(flightId: number) {
   );
 
   const plan: DetailedLoadPlan = {
-    id: nextPlanId++,
+    id: flightId,
     flightId,
     aircraftTypeId,
     status: "draft",
@@ -480,8 +530,12 @@ export async function createLoadPlan(flightId: number) {
     updatedAt: new Date().toISOString(),
   };
 
-  const stored: StoredLoadPlan = { plan, nextItemId: itemIdCounter };
-  loadPlanStore.set(flightId, stored);
+  const stored: StoredLoadPlan = {
+    plan,
+    nextItemId: itemIdCounter,
+    version: existing?.version || 0,
+  };
+  await saveStoredPlan(flightId, stored);
 
   return plan;
 }
@@ -489,8 +543,8 @@ export async function createLoadPlan(flightId: number) {
 /**
  * Get the current detailed load plan for a flight.
  */
-export function getLoadPlan(flightId: number) {
-  const stored = getStoredPlan(flightId);
+export async function getLoadPlan(flightId: number) {
+  const stored = await getStoredPlan(flightId);
   if (!stored) {
     return null;
   }
@@ -500,12 +554,12 @@ export function getLoadPlan(flightId: number) {
 /**
  * Assign an item (baggage, cargo, mail) to a specific compartment.
  */
-export function assignCompartment(
+export async function assignCompartment(
   flightId: number,
   itemId: number,
   compartmentId: number
 ) {
-  const stored = getStoredPlan(flightId);
+  const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -538,6 +592,8 @@ export function assignCompartment(
     });
   }
 
+  if (item.compartmentId === compartmentId) return stored.plan;
+
   // Check weight capacity
   const newWeight = compartment.totalWeight + item.weight;
   if (newWeight > compartment.compartment.maxWeight) {
@@ -560,6 +616,7 @@ export function assignCompartment(
   item.compartmentId = compartmentId;
 
   recalcPlanTotals(stored);
+  await saveStoredPlan(flightId, stored);
 
   return stored.plan;
 }
@@ -568,8 +625,8 @@ export function assignCompartment(
  * Optimize load distribution for CG balance.
  * Distributes unassigned items across compartments to achieve balanced loading.
  */
-export function optimizeDistribution(flightId: number) {
-  const stored = getStoredPlan(flightId);
+export async function optimizeDistribution(flightId: number) {
+  const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -708,6 +765,7 @@ export function optimizeDistribution(flightId: number) {
 
   plan.status = "optimized";
   recalcPlanTotals(stored);
+  await saveStoredPlan(flightId, stored);
 
   return plan;
 }
@@ -717,7 +775,7 @@ export function optimizeDistribution(flightId: number) {
  */
 export async function validateLoadPlan(flightId: number) {
   const db = await requireDb();
-  const stored = getStoredPlan(flightId);
+  const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -861,12 +919,12 @@ export async function validateLoadPlan(flightId: number) {
  * Update bulk cargo weight for a specific compartment.
  * Adds or updates a cargo item in the specified compartment.
  */
-export function updateBulkLoad(
+export async function updateBulkLoad(
   flightId: number,
   compartmentCode: string,
   weight: number
 ) {
-  const stored = getStoredPlan(flightId);
+  const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -927,6 +985,7 @@ export function updateBulkLoad(
   }
 
   recalcPlanTotals(stored);
+  await saveStoredPlan(flightId, stored);
 
   return stored.plan;
 }
@@ -994,8 +1053,8 @@ export async function getCompartmentLayout(aircraftTypeId: number) {
 /**
  * Calculate ULD (Unit Load Device) requirements for the load plan.
  */
-export function calculateULD(flightId: number) {
-  const stored = getStoredPlan(flightId);
+export async function calculateULD(flightId: number) {
+  const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -1161,7 +1220,7 @@ export function calculateULD(flightId: number) {
  * Finalize the load plan for departure. Locks the plan and records who finalized it.
  */
 export async function finalizeLoadPlan(flightId: number, userId: number) {
-  const stored = getStoredPlan(flightId);
+  const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -1192,25 +1251,7 @@ export async function finalizeLoadPlan(flightId: number, userId: number) {
   plan.finalizedBy = userId;
   plan.updatedAt = new Date().toISOString();
 
-  // Also update the loadPlans table in DB if one exists
-  const db = await requireDb();
-  const [existingDbPlan] = await db
-    .select()
-    .from(loadPlans)
-    .where(eq(loadPlans.flightId, flightId))
-    .orderBy(sql`${loadPlans.createdAt} DESC`)
-    .limit(1);
-
-  if (existingDbPlan) {
-    await db
-      .update(loadPlans)
-      .set({
-        status: "finalized",
-        finalizedBy: userId,
-        finalizedAt: new Date(),
-      })
-      .where(eq(loadPlans.id, existingDbPlan.id));
-  }
+  await saveStoredPlan(flightId, stored);
 
   return {
     success: true,
@@ -1222,7 +1263,7 @@ export async function finalizeLoadPlan(flightId: number, userId: number) {
  * Amend a finalized load plan (LIR - Last Info Received).
  * Allows post-close changes such as offloading, adding last-minute items, or weight corrections.
  */
-export function amendLoadPlan(
+export async function amendLoadPlan(
   flightId: number,
   changes: Array<{
     action: "add" | "remove" | "update_weight" | "move";
@@ -1239,7 +1280,7 @@ export function amendLoadPlan(
     newCompartmentCode?: string;
   }>
 ) {
-  const stored = getStoredPlan(flightId);
+  const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -1377,6 +1418,7 @@ export function amendLoadPlan(
   plan.status = "amended";
   plan.lastAmendedAt = new Date().toISOString();
   recalcPlanTotals(stored);
+  await saveStoredPlan(flightId, stored);
 
   return {
     plan,

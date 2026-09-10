@@ -32,7 +32,7 @@ import { useTranslation } from "react-i18next";
 
 interface MFAVerifyProps {
   /** The user ID to verify MFA for (from password auth step) */
-  userId: number;
+  challengeToken: string;
   /** Callback on successful MFA verification */
   onVerified: () => void;
   /** Callback to go back (e.g., to login form) */
@@ -109,7 +109,7 @@ type Lang = "en" | "ar";
 // ============================================================================
 
 export function MFAVerify({
-  userId,
+  challengeToken,
   onVerified,
   onBack,
   className,
@@ -123,7 +123,7 @@ export function MFAVerify({
   const [totpCode, setTotpCode] = useState("");
   const [backupCode, setBackupCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [remainingCodes, setRemainingCodes] = useState<number | null>(null);
+  const [remainingCodes] = useState<number | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -136,7 +136,7 @@ export function MFAVerify({
   }, [mode]);
 
   // TOTP verification mutation
-  const verifyLoginMutation = trpc.mfa.verifyLogin.useMutation({
+  const verifyLoginMutation = trpc.auth.completeMfa.useMutation({
     onSuccess: () => {
       setError(null);
       onVerified();
@@ -149,16 +149,9 @@ export function MFAVerify({
   });
 
   // Backup code mutation
-  const useBackupCodeMutation = trpc.mfa.useBackupCode.useMutation({
-    onSuccess: (data: {
-      success: boolean;
-      verified: boolean;
-      remainingCodes?: number;
-    }) => {
+  const useBackupCodeMutation = trpc.auth.completeMfa.useMutation({
+    onSuccess: () => {
       setError(null);
-      if (data.remainingCodes !== undefined) {
-        setRemainingCodes(data.remainingCodes);
-      }
       onVerified();
     },
     onError: (err: { message?: string }) => {
@@ -180,10 +173,10 @@ export function MFAVerify({
 
       // Auto-submit when 6 digits are entered
       if (cleaned.length === 6) {
-        verifyLoginMutation.mutate({ userId, token: cleaned });
+        verifyLoginMutation.mutate({ challengeToken, code: cleaned });
       }
     },
-    [userId, verifyLoginMutation]
+    [challengeToken, verifyLoginMutation]
   );
 
   // Handle backup code input
@@ -198,7 +191,7 @@ export function MFAVerify({
 
   const handleSubmitBackup = () => {
     if (backupCode.length !== 8) return;
-    useBackupCodeMutation.mutate({ userId, code: backupCode });
+    useBackupCodeMutation.mutate({ challengeToken, code: backupCode });
   };
 
   const toggleMode = () => {

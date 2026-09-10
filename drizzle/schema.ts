@@ -43,6 +43,20 @@ export const tenants = mysqlTable(
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = typeof tenants.$inferInsert;
 
+/** Encrypted TOTP settings; shared by setup and the login challenge. */
+export const mfaSettings = mysqlTable("mfa_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  secret: text("secret").notNull(),
+  isEnabled: boolean("isEnabled").default(false).notNull(),
+  backupCodes: text("backupCodes").notNull(),
+  enabledAt: timestamp("enabledAt"),
+  lastUsedAt: timestamp("lastUsedAt"),
+  lastUsedStep: int("lastUsedStep"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 /**
  * Core user table backing auth flow.
  */
@@ -229,6 +243,8 @@ export const bookings = mysqlTable(
     ])
       .default("pending")
       .notNull(),
+    inventoryLockId: int("inventoryLockId").unique(),
+    seatsReserved: boolean("seatsReserved").default(false).notNull(),
     totalAmount: int("totalAmount").notNull(), // Total price in SAR cents
     paymentStatus: mysqlEnum("paymentStatus", [
       "pending",
@@ -1202,6 +1218,32 @@ export type InsertStripeEvent = typeof stripeEvents.$inferInsert;
  * Financial Ledger
  * Complete audit trail of all financial transactions
  */
+/** Provider collection authority; keyed by immutable payment reference. */
+export const paymentReceipts = mysqlTable("payment_receipts", {
+  paymentIntentId: varchar("paymentIntentId", { length: 255 }).primaryKey(),
+  kind: mysqlEnum("kind", [
+    "booking",
+    "split_payment",
+    "modification",
+    "wallet_topup",
+  ]).notNull(),
+  bookingId: int("bookingId"),
+  userId: int("userId").notNull(),
+  targetId: int("targetId").notNull(),
+  amount: int("amount").notNull(),
+  currency: varchar("currency", { length: 3 }).notNull(),
+  refundedAmount: int("refundedAmount").default(0).notNull(),
+  settlementStatus: mysqlEnum("settlementStatus", [
+    "applied",
+    "review_required",
+    "review_refunded",
+  ])
+    .default("applied")
+    .notNull(),
+  settlementError: varchar("settlementError", { length: 255 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
 export const financialLedger = mysqlTable(
   "financial_ledger",
   {
@@ -1261,6 +1303,9 @@ export const refreshTokens = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     userId: int("userId").notNull(),
+    // NULL identifies legacy sessions, which must sign in again after upgrade.
+    familyId: varchar("familyId", { length: 64 }),
+    mfaVerified: boolean("mfaVerified").default(false).notNull(),
     token: varchar("token", { length: 500 }).notNull().unique(),
     deviceInfo: text("deviceInfo"), // JSON: device type, OS, app version
     ipAddress: varchar("ipAddress", { length: 45 }),
@@ -1271,6 +1316,10 @@ export const refreshTokens = mysqlTable(
   },
   table => ({
     userIdIdx: index("refresh_tokens_user_id_idx").on(table.userId),
+    familyIdx: index("refresh_tokens_family_idx").on(
+      table.familyId,
+      table.revokedAt
+    ),
     tokenIdx: index("refresh_tokens_token_idx").on(table.token),
     expiresAtIdx: index("refresh_tokens_expires_at_idx").on(table.expiresAt),
   })
@@ -1278,6 +1327,17 @@ export const refreshTokens = mysqlTable(
 
 export type RefreshToken = typeof refreshTokens.$inferSelect;
 export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
+
+/** Password/OAuth verification grants only this short-lived, single-use challenge. */
+export const mfaChallenges = mysqlTable("mfa_challenges", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  attempts: int("attempts").default(0).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  consumedAt: timestamp("consumedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
 
 /**
  * Idempotency Requests
@@ -5388,6 +5448,7 @@ export const outbox = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     // When the row was claimed; stale claims (worker crashed) are reclaimed
     // after OUTBOX_CLAIM_TIMEOUT.
+    leaseToken: varchar("leaseToken", { length: 36 }),
     lockedAt: timestamp("lockedAt"),
     publishedAt: timestamp("publishedAt"),
   },
@@ -5403,3 +5464,11 @@ export const outbox = mysqlTable(
 
 export type OutboxEvent = typeof outbox.$inferSelect;
 export type InsertOutboxEvent = typeof outbox.$inferInsert;
+
+/** Durable detailed plans; version prevents stale concurrent writers. */
+export const loadPlanDetails = mysqlTable("load_plan_details", {
+  flightId: int("flightId").primaryKey(),
+  version: int("version").default(1).notNull(),
+  data: json("data").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});

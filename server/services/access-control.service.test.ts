@@ -131,8 +131,8 @@ describe("access-control.service — tenant isolation", () => {
       expect(() => assertTenant(7, null)).toThrow();
     });
 
-    it("allows legacy/unassigned (null) resource tenant through", () => {
-      expect(() => assertTenant(null, 8)).not.toThrow();
+    it("rejects legacy/unassigned resources on tenant request paths", () => {
+      expect(() => assertTenant(null, 8)).toThrow();
     });
 
     it("lets admins cross tenants", () => {

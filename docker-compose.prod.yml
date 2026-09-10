@@ -12,6 +12,8 @@ services:
     environment:
       AUTH_SERVICE_URL: http://auth-service:8000
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
@@ -40,9 +42,17 @@ services:
       context: .
       dockerfile: Dockerfile.prod
     command: node dist/worker.js
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/ais-worker-ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 40s
     env_file:
       - .env.prod
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
@@ -53,6 +63,18 @@ services:
         limits:
           cpus: "1"
           memory: 1G
+
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: migrator
+    env_file:
+      - .env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
 
   db:
     image: mysql:8.0
@@ -114,6 +136,8 @@ services:
     environment:
       DATABASE_URL: mysql+pymysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}
     depends_on:
+      migrator:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
     restart: unless-stopped
