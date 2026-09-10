@@ -5,6 +5,7 @@
  * load planning, and crew management.
  */
 
+import { requireDemoCapability } from "./demo-capability";
 import { getDb } from "../db";
 import {
   flights,
@@ -22,7 +23,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
-// Standard passenger weights (IATA standard averages)
+// Illustrative passenger weights for the development-only W&B simulation.
 // ============================================================================
 const STANDARD_WEIGHTS = {
   adult: 84, // kg (including hand baggage)
@@ -476,6 +477,7 @@ export async function calculateWeightAndBalance(input: {
   fuelWeight: number;
   cargoDistribution?: Array<{ zone: string; weight: number }>;
 }) {
+  requireDemoCapability("Weight and balance simulation");
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -676,6 +678,7 @@ export async function createLoadPlan(input: {
   fuelWeight: number;
   cargoDistribution?: Array<{ zone: string; weight: number }>;
 }) {
+  requireDemoCapability("Weight and balance simulation");
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -715,6 +718,7 @@ export async function createLoadPlan(input: {
 }
 
 export async function getLoadPlan(flightId: number) {
+  requireDemoCapability("Weight and balance simulation");
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -761,6 +765,7 @@ export async function getLoadPlan(flightId: number) {
 }
 
 export async function approveLoadPlan(loadPlanId: number, approvedBy: number) {
+  requireDemoCapability("Weight and balance simulation");
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -795,6 +800,7 @@ export async function finalizeLoadPlan(
   loadPlanId: number,
   finalizedBy: number
 ) {
+  requireDemoCapability("Weight and balance simulation");
   const db = await getDb();
   if (!db)
     throw new TRPCError({

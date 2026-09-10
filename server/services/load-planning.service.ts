@@ -8,6 +8,7 @@
  * compartment-level granularity with ULD calculations.
  */
 
+import { requireDemoCapability } from "./demo-capability";
 import { getDb } from "../db";
 import {
   flights,
@@ -385,6 +386,7 @@ function recalcPlanTotals(stored: StoredLoadPlan) {
  * Generates initial items from passenger baggage data and sets up compartments.
  */
 export async function createLoadPlan(flightId: number) {
+  requireDemoCapability("Load planning simulation");
   const db = await requireDb();
 
   // Check for existing detailed load plan
@@ -544,6 +546,7 @@ export async function createLoadPlan(flightId: number) {
  * Get the current detailed load plan for a flight.
  */
 export async function getLoadPlan(flightId: number) {
+  requireDemoCapability("Load planning simulation");
   const stored = await getStoredPlan(flightId);
   if (!stored) {
     return null;
@@ -559,6 +562,7 @@ export async function assignCompartment(
   itemId: number,
   compartmentId: number
 ) {
+  requireDemoCapability("Load planning simulation");
   const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
@@ -626,6 +630,7 @@ export async function assignCompartment(
  * Distributes unassigned items across compartments to achieve balanced loading.
  */
 export async function optimizeDistribution(flightId: number) {
+  requireDemoCapability("Load planning simulation");
   const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
@@ -774,6 +779,7 @@ export async function optimizeDistribution(flightId: number) {
  * Validate the load plan against weight limits, volume limits, and CG envelope.
  */
 export async function validateLoadPlan(flightId: number) {
+  requireDemoCapability("Load planning simulation");
   const db = await requireDb();
   const stored = await getStoredPlan(flightId);
   if (!stored) {
@@ -924,6 +930,7 @@ export async function updateBulkLoad(
   compartmentCode: string,
   weight: number
 ) {
+  requireDemoCapability("Load planning simulation");
   const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
@@ -994,6 +1001,7 @@ export async function updateBulkLoad(
  * Get cargo compartment layout for an aircraft type.
  */
 export async function getCompartmentLayout(aircraftTypeId: number) {
+  requireDemoCapability("Load planning simulation");
   const db = await requireDb();
 
   const [aircraft] = await db
@@ -1054,6 +1062,7 @@ export async function getCompartmentLayout(aircraftTypeId: number) {
  * Calculate ULD (Unit Load Device) requirements for the load plan.
  */
 export async function calculateULD(flightId: number) {
+  requireDemoCapability("Load planning simulation");
   const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
@@ -1220,6 +1229,7 @@ export async function calculateULD(flightId: number) {
  * Finalize the load plan for departure. Locks the plan and records who finalized it.
  */
 export async function finalizeLoadPlan(flightId: number, userId: number) {
+  requireDemoCapability("Load planning simulation");
   const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({
@@ -1280,6 +1290,7 @@ export async function amendLoadPlan(
     newCompartmentCode?: string;
   }>
 ) {
+  requireDemoCapability("Load planning simulation");
   const stored = await getStoredPlan(flightId);
   if (!stored) {
     throw new TRPCError({

@@ -37,7 +37,7 @@ export const biometricRouter = router({
         input.passengerId,
         input.biometricType,
         input.templateHash,
-        ctx.user.id,
+        { userId: ctx.user.id, role: ctx.user.role, tenantId: ctx.tenantId },
         input.consentGiven
       );
     }),
@@ -59,11 +59,12 @@ export const biometricRouter = router({
         deviceId: z.string().max(100).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       return await biometricService.verifyIdentity(
         input.passengerId,
         input.biometricType,
         input.templateHash,
+        { userId: ctx.user.id, role: ctx.user.role, tenantId: ctx.tenantId },
         input.gateId ?? null,
         input.deviceId ?? null
       );
@@ -74,7 +75,7 @@ export const biometricRouter = router({
   // ========================================================================
 
   /**
-   * Generate a one-time boarding token after biometric verification.
+   * Generate a development-only boarding token after simulated verification.
    * The passenger must have a recent successful verification.
    */
   getBoardingToken: protectedProcedure
@@ -84,10 +85,11 @@ export const biometricRouter = router({
         flightId: z.number().int().positive(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       return await biometricService.getBoardingToken(
         input.passengerId,
-        input.flightId
+        input.flightId,
+        { userId: ctx.user.id, role: ctx.user.role, tenantId: ctx.tenantId }
       );
     }),
 
@@ -104,8 +106,12 @@ export const biometricRouter = router({
         passengerId: z.number().int().positive(),
       })
     )
-    .query(async ({ input }) => {
-      return await biometricService.getEnrollmentStatus(input.passengerId);
+    .query(async ({ input, ctx }) => {
+      return await biometricService.getEnrollmentStatus(input.passengerId, {
+        userId: ctx.user.id,
+        role: ctx.user.role,
+        tenantId: ctx.tenantId,
+      });
     }),
 
   // ========================================================================
@@ -113,7 +119,7 @@ export const biometricRouter = router({
   // ========================================================================
 
   /**
-   * Revoke a passenger's biometric enrollment (right to erasure).
+   * Revoke a passenger's demo biometric enrollment and clear its template.
    * Optionally specify a biometric type to revoke only that type.
    */
   revokeEnrollment: protectedProcedure
@@ -123,9 +129,10 @@ export const biometricRouter = router({
         biometricType: z.enum(["face", "fingerprint", "iris"]).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       return await biometricService.revokeEnrollment(
         input.passengerId,
+        { userId: ctx.user.id, role: ctx.user.role, tenantId: ctx.tenantId },
         input.biometricType
       );
     }),
