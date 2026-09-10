@@ -20,7 +20,8 @@ import {
   overbookingConfig as overbookingConfigTable,
   deniedBoardingRecords,
 } from "../../../drizzle/schema";
-import { eq, and, gte, sql, lt, desc, asc } from "drizzle-orm";
+import { eq, and, gte, sql, lt, desc, asc, inArray } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 
 // ============================================================================
 // Types & Interfaces
@@ -311,9 +312,13 @@ async function createSeatHold(
 }
 
 /**
- * Release a seat hold
+ * Release an authenticated user's seat hold.
+ * The owner and active state are also checked at the write boundary.
  */
-export async function releaseSeatHold(holdId: number): Promise<void> {
+export async function releaseSeatHold(
+  holdId: number,
+  userId: number
+): Promise<void> {
   const database = await getDb();
   if (!database) {
     throw new Error("Database connection not available");
@@ -327,19 +332,36 @@ export async function releaseSeatHold(holdId: number): Promise<void> {
     .limit(1);
 
   if (!hold) {
-    throw new Error(`Seat hold ${holdId} not found`);
+    throw new TRPCError({ code: "NOT_FOUND", message: "Seat hold not found" });
   }
+
+  if (hold.userId !== userId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+  }
+
+  if (hold.status === "released") return;
 
   if (hold.status !== "active") {
-    throw new Error(
-      `Seat hold ${holdId} is not active (status: ${hold.status})`
-    );
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Seat hold is not active",
+    });
   }
 
-  await database
+  const [result] = await database
     .update(seatHolds)
     .set({ status: "released", updatedAt: new Date() })
-    .where(eq(seatHolds.id, holdId));
+    .where(
+      and(
+        eq(seatHolds.id, holdId),
+        eq(seatHolds.userId, userId),
+        eq(seatHolds.status, "active")
+      )
+    );
+
+  if (result.affectedRows !== 1) {
+    throw new TRPCError({ code: "CONFLICT", message: "Seat hold changed" });
+  }
 
   console.info(`[Inventory] Seat hold released: id=${holdId}`);
 
@@ -532,7 +554,7 @@ export async function processWaitlist(
       break;
     }
 
-    await database
+    const [result] = await database
       .update(waitlist)
       .set({
         status: "offered",
@@ -540,7 +562,10 @@ export async function processWaitlist(
         offerExpiresAt: offerExpiresAt,
         updatedAt: new Date(),
       })
-      .where(eq(waitlist.id, entry.id));
+      .where(and(eq(waitlist.id, entry.id), eq(waitlist.status, "waiting")));
+
+    // A passenger may have cancelled after the candidate list was read.
+    if (result.affectedRows !== 1) continue;
 
     seatsOffered += entry.seats;
 
@@ -553,28 +578,63 @@ export async function processWaitlist(
 }
 
 /**
- * Remove from waitlist
+ * Cancel an authenticated user's waiting or offered entry.
+ * This passenger operation cannot confirm a booking or expire an offer.
  */
 export async function removeFromWaitlist(
   waitlistId: number,
-  reason: "confirmed" | "cancelled" | "expired"
+  userId: number
 ): Promise<void> {
   const database = await getDb();
   if (!database) {
     throw new Error("Database connection not available");
   }
 
-  await database
+  const [entry] = await database
+    .select()
+    .from(waitlist)
+    .where(eq(waitlist.id, waitlistId))
+    .limit(1);
+
+  if (!entry) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Waitlist entry not found",
+    });
+  }
+  if (entry.userId !== userId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+  }
+  if (entry.status === "cancelled") return;
+  if (entry.status !== "waiting" && entry.status !== "offered") {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Waitlist entry is closed",
+    });
+  }
+
+  const [result] = await database
     .update(waitlist)
     .set({
-      status: reason,
+      status: "cancelled",
       updatedAt: new Date(),
     })
-    .where(eq(waitlist.id, waitlistId));
+    .where(
+      and(
+        eq(waitlist.id, waitlistId),
+        eq(waitlist.userId, userId),
+        inArray(waitlist.status, ["waiting", "offered"])
+      )
+    );
 
-  console.info(
-    `[Inventory] Waitlist entry removed: id=${waitlistId}, reason=${reason}`
-  );
+  if (result.affectedRows !== 1) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Waitlist entry changed",
+    });
+  }
+
+  console.info(`[Inventory] Waitlist entry cancelled: id=${waitlistId}`);
 }
 
 // ============================================================================

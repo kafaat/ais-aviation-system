@@ -716,9 +716,18 @@ jobs:
 
       - name: Create/Update secrets
         if: steps.staging-kube-config.outputs.configured == 'true'
+        env:
+          SMS_PROVIDER: ${{ vars.SMS_PROVIDER }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
         run: |
           kubectl create secret generic ais-secrets \
             --namespace=ais-staging \
+            --from-literal=SMS_PROVIDER="$SMS_PROVIDER" \
+            --from-literal=TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
+            --from-literal=TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
+            --from-literal=TWILIO_PHONE_NUMBER="$TWILIO_PHONE_NUMBER" \
             --from-literal=DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.STAGING_JWT_SECRET }}" \
             --from-literal=CSRF_SECRET="${{ secrets.STAGING_CSRF_SECRET }}" \
@@ -880,9 +889,18 @@ jobs:
 
       - name: Create/Update secrets
         if: steps.kube-config.outputs.configured == 'true'
+        env:
+          SMS_PROVIDER: ${{ vars.SMS_PROVIDER }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
         run: |
           kubectl create secret generic ais-secrets \
             --namespace=ais-production \
+            --from-literal=SMS_PROVIDER="$SMS_PROVIDER" \
+            --from-literal=TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
+            --from-literal=TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
+            --from-literal=TWILIO_PHONE_NUMBER="$TWILIO_PHONE_NUMBER" \
             --from-literal=DATABASE_URL="${{ secrets.PRODUCTION_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.PRODUCTION_JWT_SECRET }}" \
             --from-literal=CSRF_SECRET="${{ secrets.PRODUCTION_CSRF_SECRET }}" \

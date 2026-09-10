@@ -122,6 +122,14 @@ interface SMSProvider {
   send(message: SMSMessage): Promise<SMSResult>;
 }
 
+class UnavailableSMSProvider implements SMSProvider {
+  constructor(private readonly error: string) {}
+
+  send(): Promise<SMSResult> {
+    return Promise.resolve({ success: false, error: this.error });
+  }
+}
+
 // ============================================================================
 // Mock SMS Provider (for development/testing)
 // ============================================================================
@@ -165,8 +173,7 @@ class TwilioSMSProvider implements SMSProvider {
 
   async send(message: SMSMessage): Promise<SMSResult> {
     if (!this.accountSid || !this.authToken || !this.fromNumber) {
-      console.warn("[TwilioSMS] Missing credentials, using mock provider");
-      return new MockSMSProvider().send(message);
+      return { success: false, error: "Twilio SMS credentials are incomplete" };
     }
 
     try {
@@ -193,6 +200,12 @@ class TwilioSMSProvider implements SMSProvider {
         const data = await response.json();
 
         if (response.ok) {
+          if (typeof data.sid !== "string" || !data.sid.trim()) {
+            return {
+              success: false,
+              error: "Twilio did not return a message ID",
+            };
+          }
           return { success: true, messageId: data.sid };
         }
         // Twilio responded with an error -> reachable, business error.
@@ -215,10 +228,16 @@ class TwilioSMSProvider implements SMSProvider {
  * Get SMS provider based on configuration
  */
 function getSMSProvider(): SMSProvider {
-  if (process.env.SMS_PROVIDER === "twilio") {
+  const name = getProviderName();
+  if (name === "twilio") {
     return new TwilioSMSProvider();
   }
-  return new MockSMSProvider();
+  if (name === "mock" && process.env.NODE_ENV !== "production") {
+    return new MockSMSProvider();
+  }
+  return new UnavailableSMSProvider(
+    "SMS is unavailable: configure SMS_PROVIDER=twilio and Twilio credentials; mock SMS is prohibited in production"
+  );
 }
 
 /**
@@ -254,7 +273,10 @@ export function formatPhoneNumber(
  * Get the current SMS provider name
  */
 function getProviderName(): string {
-  return process.env.SMS_PROVIDER === "twilio" ? "twilio" : "mock";
+  return (
+    process.env.SMS_PROVIDER?.trim() ||
+    (process.env.NODE_ENV === "production" ? "unconfigured" : "mock")
+  );
 }
 
 /**
