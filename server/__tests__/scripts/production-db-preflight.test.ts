@@ -6,6 +6,7 @@ import {
   assertApprovedSha,
   parseArgs,
   readGitSha,
+  shouldRunCli,
   writePreflightReport,
 } from "../../../scripts/ci/production-db-preflight";
 
@@ -57,6 +58,26 @@ describe("assertApprovedSha", () => {
         "61754aedb29315949c8cc93b6895845974ccc608"
       )
     ).toThrow(/APPROVED_SHA_MISMATCH/);
+  });
+});
+
+describe("shouldRunCli", () => {
+  it("only enables the CLI entrypoint when the explicit run flag is present", () => {
+    expect(
+      shouldRunCli([
+        "node",
+        "scripts/ci/production-db-preflight.ts",
+        "--run",
+        "--target-sha=61754aedb29315949c8cc93b6895845974ccc608",
+      ])
+    ).toBe(true);
+    expect(
+      shouldRunCli([
+        "node",
+        "scripts/ci/production-db-preflight.ts",
+        "--target-sha=61754aedb29315949c8cc93b6895845974ccc608",
+      ])
+    ).toBe(false);
   });
 });
 

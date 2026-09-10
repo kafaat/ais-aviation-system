@@ -481,7 +481,11 @@ export async function main(): Promise<void> {
   await writePreflightReport(options, databaseUrl);
 }
 
-if (process.argv.includes("--run")) {
+export function shouldRunCli(argv: string[]): boolean {
+  return argv.includes("--run");
+}
+
+if (shouldRunCli(process.argv)) {
   main().catch(error => {
     console.error(
       error instanceof Error
