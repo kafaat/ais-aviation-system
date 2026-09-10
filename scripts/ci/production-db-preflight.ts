@@ -447,7 +447,19 @@ export async function writePreflightReport(
       );
     }
 
-    console.info(JSON.stringify(report, null, 2));
+    console.info(
+      JSON.stringify({
+        classification: report.classification,
+        requestedSha: report.requestedSha,
+        checkedOutSha: report.checkedOutSha,
+        productionContext: report.productionContext,
+        actualMigrationCount: report.database.actualMigrationCount,
+        verifiedAppliedCount: report.database.verifiedAppliedCount,
+        pendingMigrationCount: report.database.pendingMigrationCount,
+        preflightStatus: report.preflight.status,
+        reportDir: options.reportDir,
+      })
+    );
 
     if (preflightError) {
       process.exitCode = 1;
