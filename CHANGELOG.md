@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.22.2
+
+### Bug Fixes
+
+- fix: contain production simulations and authorize biometric passengers (3d6e3c8)
+- fix(ci): derive preservation expectations from applied migration history (dbf0693)
+
+### Other Changes
+
+- Merge pull request #135 from kafaat/fix/review-production-simulation-boundaries (52fa789)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.1...v1.22.2
+
+---
+
 ## What's Changed in v1.22.1
 
 ### Bug Fixes
