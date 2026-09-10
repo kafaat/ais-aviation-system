@@ -339,7 +339,7 @@ export const ndcRouter = router({
   /**
    * NDC OrderCancel - Cancel an existing order
    *
-   * Cancels the order and initiates any applicable refund processing.
+   * Cancels the owned itinerary and releases resources. Refunds require the separate verified payment workflow.
    * A reason must be provided for audit and compliance purposes.
    */
   cancelOrder: protectedProcedure
@@ -350,7 +350,7 @@ export const ndcRouter = router({
         tags: ["NDC"],
         summary: "Cancel an order",
         description:
-          "Cancel an NDC order. Cancellation fees and refund eligibility depend on the fare rules and timing. A cancellation reason is required for compliance tracking.",
+          "Cancel the owned NDC itinerary and release its resources. This does not refund collected funds; refunds use the verified payment workflow.",
         protect: true,
       },
     })
@@ -400,7 +400,7 @@ export const ndcRouter = router({
         tags: ["NDC"],
         summary: "Modify an order",
         description:
-          "Modify an existing NDC order. Supports date changes, cabin class upgrades/downgrades, and passenger detail updates. Change fees and fare differences may apply based on fare rules.",
+          "Unavailable until integrated exchange, inventory, passenger and financial settlement acceptance. Returns PRECONDITION_FAILED without changing the order.",
         protect: true,
       },
     })
@@ -492,7 +492,7 @@ export const ndcRouter = router({
         tags: ["NDC"],
         summary: "Add ancillary services to order",
         description:
-          "Add ancillary services such as extra baggage, meal preferences, seat upgrades, or lounge access to an existing NDC order. Services can be scoped to specific passengers or flight segments.",
+          "Unavailable until ancillary invoice settlement and EMD issuance are integrated. Returns PRECONDITION_FAILED without changing the order.",
         protect: true,
       },
     })

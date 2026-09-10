@@ -9,6 +9,9 @@ import {
   paymentReceipts,
   bookingSegments,
   seatHolds,
+  seatInventory,
+  passengers,
+  ndcOrders,
   type Booking,
 } from "../../drizzle/schema";
 import type { getDb } from "../db";
@@ -104,6 +107,16 @@ async function applyFundedBooking(
       .set({ status: "confirmed", seatsReserved: true })
       .where(eq(bookingSegments.bookingId, booking.id));
   await tx
+    .update(ndcOrders)
+    .set({
+      status: "confirmed",
+      lastServicingAction: "PaymentConfirmed",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(eq(ndcOrders.bookingId, booking.id), eq(ndcOrders.status, "pending"))
+    );
+  await tx
     .update(bookings)
     .set({
       status: "confirmed",
@@ -195,8 +208,11 @@ export async function reserveSeats(
     );
 }
 
-export async function releaseBookingSeats(tx: SettlementTx, booking: Booking) {
-  if (!booking.seatsReserved) return;
+export async function releaseBookingSeats(
+  tx: SettlementTx,
+  booking: Booking,
+  terminalState: "cancelled" | "refunded" = "cancelled"
+) {
   const segments = await tx
     .select()
     .from(bookingSegments)
@@ -208,7 +224,9 @@ export async function releaseBookingSeats(tx: SettlementTx, booking: Booking) {
   // restoration of seats that those historical segments did not reserve.
   for (const segment of reserved.length
     ? reserved
-    : [{ flightId: booking.flightId }]) {
+    : booking.seatsReserved
+      ? [{ flightId: booking.flightId }]
+      : []) {
     await restoreSeats(
       tx,
       segment.flightId,
@@ -219,11 +237,48 @@ export async function releaseBookingSeats(tx: SettlementTx, booking: Booking) {
   if (segments.length)
     await tx
       .update(bookingSegments)
-      .set({ seatsReserved: false })
+      .set({ seatsReserved: false, status: "cancelled" })
       .where(eq(bookingSegments.bookingId, booking.id));
   await tx
+    .update(ndcOrders)
+    .set({
+      status: terminalState,
+      lastServicingAction:
+        terminalState === "refunded" ? "PaymentRefunded" : "BookingCancelled",
+      updatedAt: new Date(),
+    })
+    .where(eq(ndcOrders.bookingId, booking.id));
+  // Both callers terminate the itinerary (cancellation or full refund).
+  // Return physical seat assignments as well, preserving airline blocks.
+  const cleared = {
+    bookingId: null,
+    passengerId: null,
+    assignedAt: null,
+    checkedInAt: null,
+    boardingPassIssued: false,
+    boardingGroup: null,
+    boardingSequence: null,
+  };
+  await tx
+    .update(seatInventory)
+    .set({ ...cleared, status: "available" })
+    .where(
+      and(
+        eq(seatInventory.bookingId, booking.id),
+        inArray(seatInventory.status, ["held", "occupied", "checked_in"])
+      )
+    );
+  await tx
+    .update(seatInventory)
+    .set(cleared)
+    .where(eq(seatInventory.bookingId, booking.id));
+  await tx
+    .update(passengers)
+    .set({ seatNumber: null })
+    .where(eq(passengers.bookingId, booking.id));
+  await tx
     .update(bookings)
-    .set({ seatsReserved: false })
+    .set({ seatsReserved: false, checkedIn: false })
     .where(eq(bookings.id, booking.id));
 }
 

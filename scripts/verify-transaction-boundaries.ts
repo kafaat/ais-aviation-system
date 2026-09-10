@@ -25,6 +25,8 @@ const deadline = setTimeout(() => {
 deadline.unref();
 const { getDb, closePool } = await import("../server/db");
 const { cacheService } = await import("../server/services/cache.service");
+const { redisCacheService } =
+  await import("../server/services/redis-cache.service");
 const { settleVerifiedPayment, settleVerifiedRefund } =
   await import("../server/services/payment-settlement.service");
 const { payFromWallet } = await import("../server/services/wallet.service");
@@ -403,7 +405,13 @@ try {
       await writeFile(process.argv[2], JSON.stringify(report, null, 2));
     console.info(JSON.stringify(report));
   } finally {
-    await Promise.allSettled([cacheService.disconnect(), closePool()]);
+    // Multi-city pricing also loads the flight cache, which owns a Redis client
+    // and cleanup interval. Close both caches so successful checks can exit.
+    await Promise.allSettled([
+      cacheService.disconnect(),
+      redisCacheService.shutdown(),
+      closePool(),
+    ]);
     clearTimeout(deadline);
   }
 }

@@ -1,6 +1,14 @@
 /** Technical ownership and evidence requirements, not a claim of operational certification. */
 export const capabilityCatalog = [
   {
+    id: "ndcServicing",
+    implementation: "blocked",
+    owner: "ndc.service",
+    consumer: "ndc.changeOrder and ndc.addServices",
+    requirement:
+      "Idempotent quoted exchange, all-segment inventory, passenger synchronization, verified fare/ancillary settlement and EMD issuance",
+  },
+  {
     id: "kioskHardware",
     implementation: "blocked",
     owner: "kiosk.service",

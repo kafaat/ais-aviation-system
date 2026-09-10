@@ -562,7 +562,7 @@ export async function settleVerifiedRefund(
     const allRefunded =
       receipts.length > 0 && receipts.every(r => r.amount === r.refundedAmount);
     if (allRefunded) {
-      await releaseBookingSeats(tx, booking);
+      await releaseBookingSeats(tx, booking, "refunded");
       await tx
         .update(bookings)
         .set({ status: "cancelled", paymentStatus: "refunded" })

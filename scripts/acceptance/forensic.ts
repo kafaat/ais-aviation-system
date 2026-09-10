@@ -24,9 +24,10 @@ export async function verifyForensicWorkflows(
     await import("../../server/services/bag-drop.service");
   const { createExportJob, readExportContent } =
     await import("../../server/services/data-warehouse.service");
-  const { settleVerifiedPayment } =
+  const { settleVerifiedPayment, settleVerifiedRefund } =
     await import("../../server/services/payment-settlement.service");
-  const { createOrder } = await import("../../server/services/ndc.service");
+  const { createOrder, cancelOrder } =
+    await import("../../server/services/ndc.service");
   const base = ownerId + 20;
   const departure = new Date("2035-01-01T10:00:00Z");
   const [template] = await db
@@ -385,6 +386,82 @@ export async function verifyForensicWorkflows(
             .where(eq(schema.passengers.bookingId, order.bookingId))
         ).length,
         1
+      );
+      const before = await Promise.all([
+        inventory(base + 2),
+        inventory(base + 3),
+      ]);
+      await db.transaction(tx =>
+        settleVerifiedPayment(tx, {
+          paymentIntentId: "pi_ci_ndc",
+          amount: 20000,
+          currency: "sar",
+          eventId: randomUUID(),
+          metadata: {
+            bookingId: String(order.bookingId),
+            userId: String(ownerId),
+          },
+        })
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(schema.ndcOrders)
+            .where(eq(schema.ndcOrders.id, order.id))
+        )[0].status,
+        "confirmed"
+      );
+      await assert.rejects(
+        cancelOrder({ orderId: order.orderId, userId: ownerId + 1 })
+      );
+      await Promise.all([
+        cancelOrder({ orderId: order.orderId, userId: ownerId }),
+        cancelOrder({ orderId: order.orderId, userId: ownerId }),
+      ]);
+      assert.deepEqual(
+        await Promise.all([inventory(base + 2), inventory(base + 3)]),
+        before
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(schema.bookings)
+            .where(eq(schema.bookings.id, order.bookingId))
+        )[0].paymentStatus,
+        "paid"
+      );
+      await db.transaction(tx =>
+        settleVerifiedRefund(tx, {
+          paymentIntentId: "pi_ci_ndc",
+          chargeId: "ch_ci_ndc",
+          amount: 20000,
+          amountRefunded: 20000,
+          currency: "sar",
+          eventId: randomUUID(),
+        })
+      );
+      assert.deepEqual(
+        await Promise.all([inventory(base + 2), inventory(base + 3)]),
+        before
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(schema.ndcOrders)
+            .where(eq(schema.ndcOrders.id, order.id))
+        )[0].status,
+        "refunded"
+      );
+      assert(
+        (
+          await db
+            .select()
+            .from(schema.bookingSegments)
+            .where(eq(schema.bookingSegments.bookingId, order.bookingId))
+        ).every(leg => leg.status === "cancelled" && !leg.seatsReserved)
       );
     }
   );

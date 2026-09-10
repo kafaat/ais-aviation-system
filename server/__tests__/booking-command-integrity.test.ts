@@ -92,9 +92,11 @@ beforeEach(() => {
     ],
   });
   boundary.db = fixture.db;
-  boundary.getFlight.mockImplementation(async id =>
-    fixture.rows("flights").find(f => f.id === id)
-  );
+  boundary.getFlight
+    .mockReset()
+    .mockImplementation(async id =>
+      fixture.rows("flights").find(f => f.id === id)
+    );
 });
 
 describe("atomic booking commands", () => {
@@ -382,4 +384,157 @@ it("preserves optional properties and dates in committed command responses", asy
   });
   expect(retry).toStrictEqual(first);
   expect((await findCompletedCommand(command))?.response).toStrictEqual(first);
+});
+
+it("full refund closes every segment and releases physical seats without removing airline blocks", async () => {
+  const { settleVerifiedPayment, settleVerifiedRefund } =
+    await import("../services/payment-settlement.service");
+  const { seatInventory, ndcOrders } = await import("../../drizzle/schema");
+  const result = await createMultiCityBooking({
+    ...input,
+    segments: [11, 12].map(flightId => ({
+      flightId,
+      departureDate: new Date("2030-01-01"),
+    })),
+  });
+  await fixture.db
+    .insert(ndcOrders)
+    .values({ bookingId: result.bookingId, status: "pending" });
+  await fixture.db.transaction((tx: any) =>
+    settleVerifiedPayment(tx, {
+      paymentIntentId: "pi_refund_legs",
+      amount: result.totalAmount,
+      currency: "sar",
+      eventId: "evt_fund_legs",
+      metadata: { bookingId: String(result.bookingId), userId: "1" },
+    })
+  );
+  expect(fixture.rows("ndc_orders")[0].status).toBe("confirmed");
+  await fixture.db.insert(seatInventory).values([
+    {
+      flightId: 11,
+      bookingId: result.bookingId,
+      passengerId: 1,
+      status: "checked_in",
+      boardingPassIssued: true,
+    },
+    {
+      flightId: 12,
+      bookingId: result.bookingId,
+      passengerId: 1,
+      status: "blocked",
+      boardingPassIssued: false,
+    },
+  ]);
+  const refund = {
+    paymentIntentId: "pi_refund_legs",
+    chargeId: "ch_refund_legs",
+    amount: result.totalAmount,
+    amountRefunded: result.totalAmount,
+    currency: "sar",
+    eventId: "evt_refund_legs",
+  };
+  await fixture.db.transaction((tx: any) => settleVerifiedRefund(tx, refund));
+  await fixture.db.transaction((tx: any) => settleVerifiedRefund(tx, refund));
+  expect(fixture.rows("ndc_orders")[0].status).toBe("refunded");
+  expect(
+    fixture.rows("flights").map(flight => flight.economyAvailable)
+  ).toEqual([2, 2]);
+  expect(
+    fixture
+      .rows("booking_segments")
+      .every(
+        segment => segment.status === "cancelled" && !segment.seatsReserved
+      )
+  ).toBe(true);
+  expect(
+    fixture
+      .rows("seat_inventory")
+      .map(seat => [seat.status, seat.bookingId, seat.boardingPassIssued])
+  ).toEqual([
+    ["available", null, false],
+    ["blocked", null, false],
+  ]);
+});
+
+describe("NDC terminal command boundaries", () => {
+  async function seedOrder() {
+    const result = await createMultiCityBooking({
+      ...input,
+      segments: [11, 12].map(flightId => ({
+        flightId,
+        departureDate: new Date("2030-01-01"),
+      })),
+    });
+    const schema = await import("../../drizzle/schema");
+    await fixture.db.insert(schema.ndcOrders).values({
+      orderId: "ndc-terminal",
+      offerId: "offer-terminal",
+      bookingId: result.bookingId,
+      airlineId: 1,
+      status: "pending",
+      servicingHistory: "[]",
+      passengers: "[]",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await fixture.db
+      .insert(schema.ndcOffers)
+      .values({ offerId: "offer-terminal", status: "ordered" });
+    return result;
+  }
+  it("checks ownership before cancelling and restores all legs once on replay", async () => {
+    await seedOrder();
+    const { cancelOrder } = await import("../services/ndc.service");
+    await fixture.db.transaction((tx: any) =>
+      confirmFundedBooking(tx, fixture.rows("bookings")[0])
+    );
+    await expect(
+      cancelOrder({ orderId: "ndc-terminal", userId: 2 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(fixture.rows("flights").map(f => f.economyAvailable)).toEqual([
+      1, 1,
+    ]);
+    await cancelOrder({ orderId: "ndc-terminal", userId: 1 });
+    await cancelOrder({ orderId: "ndc-terminal", userId: 1 });
+    expect(fixture.rows("flights").map(f => f.economyAvailable)).toEqual([
+      2, 2,
+    ]);
+    expect(fixture.rows("ndc_orders")[0].status).toBe("cancelled");
+    expect(fixture.rows("bookings")[0].paymentStatus).toBe("paid");
+    expect(
+      fixture.rows("outbox").filter(e => e.eventType === "NdcOrderCancelled")
+    ).toHaveLength(1);
+  });
+  it("rolls back the order and held capacity if cancellation cannot persist its event", async () => {
+    await seedOrder();
+    fixture.failInsert("outbox");
+    const { cancelOrder } = await import("../services/ndc.service");
+    await expect(
+      cancelOrder({ orderId: "ndc-terminal", userId: 1 })
+    ).rejects.toThrow("Injected");
+    expect(fixture.rows("ndc_orders")[0].status).toBe("pending");
+    expect(fixture.rows("bookings")[0].status).toBe("pending");
+    expect(
+      fixture.rows("inventory_locks").every(h => h.status === "active")
+    ).toBe(true);
+  });
+  it("refuses unintegrated exchange and ancillary writes without issuing fake EMDs", async () => {
+    await seedOrder();
+    const { changeOrder, serviceOrder } =
+      await import("../services/ndc.service");
+    await expect(
+      changeOrder({
+        orderId: "ndc-terminal",
+        userId: 1,
+        changes: { newCabinClass: "business" },
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await expect(
+      serviceOrder("ndc-terminal", [{ serviceCode: "BAG", quantity: 1 }])
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(fixture.rows("bookings")[0].cabinClass).toBe("economy");
+    expect(fixture.rows("booking_ancillaries")).toHaveLength(0);
+    expect(fixture.rows("ndc_orders")[0].emdNumbers).toBeUndefined();
+  });
 });

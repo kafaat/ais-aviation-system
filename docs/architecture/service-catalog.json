@@ -319,6 +319,7 @@
       "consumers": [
         "server/routers/payments.ts",
         "server/services/bookings.service.ts",
+        "server/services/ndc.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/split-payment.service.ts",
@@ -337,7 +338,10 @@
           "bookings",
           "flights",
           "inventoryLocks",
-          "seatHolds"
+          "ndcOrders",
+          "passengers",
+          "seatHolds",
+          "seatInventory"
         ]
       },
       "replacement": null
@@ -1633,6 +1637,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/booking-settlement.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/inventory-lock.service.ts",
         "server/services/ndc-order-state.ts",
@@ -1644,7 +1649,6 @@
         "reads": [
           "airlines",
           "airports",
-          "ancillaryServices",
           "bookings",
           "fareClasses",
           "flights",
@@ -1652,10 +1656,8 @@
           "ndcOrders"
         ],
         "writes": [
-          "bookingAncillaries",
           "bookingSegments",
           "bookings",
-          "flights",
           "ndcOffers",
           "ndcOrders",
           "passengers"
