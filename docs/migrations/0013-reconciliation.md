@@ -64,16 +64,34 @@ access for the first two steps. Do not put credentials in a report or commit.
    their actual state. Do not mark 0013 applied, rewrite old hashes, or blindly
    execute the CREATE TABLE statements over those objects. No production
    inventory was available while preparing this change.
-4. If NULL/unique conflicts appear, resolve them through a separately reviewed
+4. A database provisioned by push reports every table as drift, because it has
+   no journal at all rather than a partial one. When, and only when, the
+   inventory from step 3 shows no object missing and none extra against 0013,
+   adopt the existing schema instead of replaying it:
+   `node --import tsx scripts/db/migrate.ts baseline`. This writes journal rows
+   only. It refuses with BASELINE_SCHEMA_MISMATCH unless the live schema matches
+   the final snapshot exactly in both directions, refuses with
+   BASELINE_ALREADY_JOURNALED on any journaled database, and emits no
+   application DDL in either case. Follow it with `verify`. A database that does
+   differ from 0013 is not a baseline candidate and returns to step 3.
+   The journal rows are written in one transaction and rolled back as a unit on
+   any failure, which requires a transactional journal table. Adoption creates
+   `__drizzle_migrations` as InnoDB, and refuses with BASELINE_JOURNAL_ENGINE,
+   before writing anything, if an existing one uses another engine. Convert it
+   with `ALTER TABLE __drizzle_migrations ENGINE=InnoDB` and retry.
+5. If NULL/unique conflicts appear, resolve them through a separately reviewed
    data repair, then repeat preflight. No automatic deduplication is provided.
-5. With application writes stopped and a successful preflight, run
+6. With application writes stopped and a successful preflight, run
    `node --import tsx scripts/db/migrate.ts migrate`, followed by
    `node --import tsx scripts/db/migrate.ts verify` before restarting writers.
+   A database adopted in step 4 is already at 0013; `migrate` is then a no-op
+   and `verify` is the confirmation.
 
 The deployed images contain no npm/npx or pnpm installers. The migrator retains
 local tsx and Drizzle, and its offline image check loads the guarded entrypoint
 and verifies all schema exports. In a development checkout, the equivalent
-`pnpm db:preflight`, `pnpm db:migrate` and `pnpm db:verify` shortcuts remain available.
+`pnpm db:preflight`, `pnpm db:baseline`, `pnpm db:migrate` and `pnpm db:verify`
+shortcuts remain available.
 Both final images must pass the HIGH/CRITICAL Trivy gate in pull requests and
 the publishing workflow. Security reports are retained with Docker build evidence.
 

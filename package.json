@@ -38,6 +38,7 @@
     "test:e2e:codegen": "playwright codegen",
     "test:e2e:install": "playwright install --with-deps",
     "prepare": "git config core.hooksPath .hooks || true",
+    "db:baseline": "node --import tsx scripts/db/migrate.ts baseline",
     "db:preflight": "node --import tsx scripts/db/migrate.ts preflight",
     "db:verify": "node --import tsx scripts/db/migrate.ts verify",
     "db:test-migrations": "node --import tsx scripts/db/replay-acceptance.ts"
