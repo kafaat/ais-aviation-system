@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.22.0
+
+### Features
+
+- feat(migrations): adopt an unjournaled database without replaying its schema (0dc23eb)
+
+### Bug Fixes
+
+- fix(migrations): write the adopted journal in one transaction (b0157ac)
+- fix(migrations): require a transactional journal before adoption (54f0f0f)
+- fix(ci): integrate baseline adoption with verified main (5d3be3e)
+
+### Other Changes
+
+- Merge pull request #131 from kafaat/claude/project-exploration-JWCKA (a5c754f)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.21.2...v1.22.0
+
+---
+
 ## What's Changed in v1.21.2
 
 ### Bug Fixes
