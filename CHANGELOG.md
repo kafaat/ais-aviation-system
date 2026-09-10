@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.22.4
+
+### Bug Fixes
+
+- fix: close forensic booking and operational integration gaps (45eb18d)
+- fix: preserve command response fidelity and validate integration HTTP boundaries (5b913f5)
+- fix: reconcile NDC cancellation and refunds across all resources (c37a5d1)
+
+### Other Changes
+
+- Merge pull request #137 from kafaat/fix/forensic-remaining-gaps (2e5cf25)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.3...v1.22.4
+
+---
+
 ## What's Changed in v1.22.3
 
 ### Bug Fixes
