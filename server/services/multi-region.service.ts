@@ -12,6 +12,7 @@
  * @version 1.0.0
  */
 
+import { requireDemoCapability } from "./demo-capability";
 import { TRPCError } from "@trpc/server";
 import { createServiceLogger } from "../_core/logger";
 import {
@@ -137,6 +138,7 @@ export function getRegionConfig(): {
   config: MultiRegionConfig;
   currentRegion: Region | undefined;
 } {
+  requireDemoCapability("Multi-region simulation");
   const currentRegionId = getCurrentRegionId();
   const currentRegion = regions.find(r => r.id === currentRegionId);
 
@@ -153,6 +155,7 @@ export function getRegionConfig(): {
  * List all configured regions with their current status.
  */
 export function getRegions(): Region[] {
+  requireDemoCapability("Multi-region simulation");
   log.info({ count: regions.length }, "Listed all regions");
   return regions;
 }
@@ -173,6 +176,7 @@ export async function getRegionHealth(regionId: string): Promise<{
   };
   lastChecked: string;
 }> {
+  requireDemoCapability("Multi-region simulation");
   const region = regions.find(r => r.id === regionId);
   if (!region) {
     throw new TRPCError({
@@ -266,6 +270,7 @@ export function getRegionLatency(): {
   }>;
   measuredAt: string;
 } {
+  requireDemoCapability("Multi-region simulation");
   const activeRegions = regions.filter(r => r.isActive);
   const matrix: Array<{
     from: string;
@@ -311,6 +316,7 @@ export function routeRequest(
   reason: string;
   alternatives: Array<{ regionId: string; estimatedLatencyMs: number }>;
 } {
+  requireDemoCapability("Multi-region simulation");
   const activeRegions = regions.filter(
     r => r.isActive && r.healthStatus !== "down"
   );
@@ -453,6 +459,7 @@ export async function syncData(
   targetRegion: string,
   dataType: "users" | "bookings" | "flights" | "all"
 ): Promise<RegionSyncStatus> {
+  requireDemoCapability("Multi-region simulation");
   const source = regions.find(r => r.id === sourceRegion);
   const target = regions.find(r => r.id === targetRegion);
 
@@ -556,6 +563,7 @@ export function getReplicationStatus(): {
     maxLagSeconds: number;
   };
 } {
+  requireDemoCapability("Multi-region simulation");
   const summary = {
     totalPairs: syncStatuses.length,
     synced: syncStatuses.filter(s => s.status === "synced").length,
@@ -599,6 +607,7 @@ export async function failoverToRegion(
   reason: string = "Manual failover",
   triggeredBy: "auto" | "manual" = "manual"
 ): Promise<FailoverEvent> {
+  requireDemoCapability("Multi-region simulation");
   const targetRegion = regions.find(r => r.id === regionId);
   if (!targetRegion) {
     throw new TRPCError({
@@ -734,6 +743,7 @@ export async function failoverToRegion(
  * Get the history of all failover events, most recent first.
  */
 export function getFailoverHistory(): FailoverEvent[] {
+  requireDemoCapability("Multi-region simulation");
   log.info({ count: failoverEvents.length }, "Retrieved failover history");
   return [...failoverEvents].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -749,6 +759,7 @@ export function updateRegion(
     Pick<Region, "isActive" | "maxCapacity" | "name" | "endpoint">
   >
 ): Region {
+  requireDemoCapability("Multi-region simulation");
   const region = regions.find(r => r.id === regionId);
   if (!region) {
     throw new TRPCError({

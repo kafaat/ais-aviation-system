@@ -1,20 +1,44 @@
 /**
  * Biometric Boarding Service
  *
- * Handles biometric enrollment, identity verification, boarding token generation,
- * gate readiness checks, and audit logging for biometric boarding operations.
+ * Development-only simulation of enrollment, matching, boarding tokens,
+ * gate readiness and events. There is no verified biometric/hardware adapter.
  *
- * Schema types are defined inline as this service manages its own domain tables:
+ * Types describe in-memory demo collections, not persistent domain tables:
  * - biometricEnrollments: Stores passenger biometric templates and consent records
  * - biometricEvents: Audit trail for all biometric operations
  * - biometricGates: Gate hardware status and configuration
  */
 
+import { requireDemoCapability } from "./demo-capability";
 import { getDb } from "../db";
 import { passengers, bookings } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
+import { assertPassengerOwnership } from "./access-control.service";
+
+/** Trusted request context, never accepted from the client payload. */
+export interface BiometricActor {
+  userId: number;
+  role: string;
+  tenantId: number | null;
+}
+
+async function assertBiometricPassengerAccess(
+  passengerId: number,
+  actor: BiometricActor
+) {
+  if (!actor || !Number.isSafeInteger(actor.userId) || actor.userId <= 0) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Authentication required",
+    });
+  }
+  await assertPassengerOwnership(passengerId, actor.userId, actor.role, {
+    tenantId: actor.tenantId,
+  });
+}
 
 // ============================================================================
 // Inline Schema Types
@@ -113,36 +137,16 @@ export async function enrollPassenger(
   passengerId: number,
   biometricType: BiometricType,
   templateHash: string,
-  userId: number,
+  actor: BiometricActor,
   consentGiven: boolean
 ): Promise<BiometricEnrollment> {
+  requireDemoCapability("Biometric boarding demo");
+  await assertBiometricPassengerAccess(passengerId, actor);
   if (!consentGiven) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message:
         "Biometric enrollment requires explicit consent. User must agree to biometric data collection and processing.",
-    });
-  }
-
-  // Validate passenger exists
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(eq(passengers.id, passengerId))
-    .limit(1);
-
-  if (!passenger) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found",
     });
   }
 
@@ -168,7 +172,7 @@ export async function enrollPassenger(
   const enrollment: BiometricEnrollment = {
     id: nextEnrollmentId++,
     passengerId,
-    userId,
+    userId: actor.userId,
     biometricType,
     templateHash,
     consentGiven: true,
@@ -204,6 +208,7 @@ export async function verifyIdentity(
   passengerId: number,
   biometricType: BiometricType,
   templateHash: string,
+  actor: BiometricActor,
   gateId?: number | null,
   deviceId?: string | null
 ): Promise<{
@@ -212,6 +217,8 @@ export async function verifyIdentity(
   enrollmentId: number;
   processingTimeMs: number;
 }> {
+  requireDemoCapability("Biometric boarding demo");
+  await assertBiometricPassengerAccess(passengerId, actor);
   const startTime = Date.now();
 
   const enrollment = enrollments.find(
@@ -282,18 +289,21 @@ export async function verifyIdentity(
 // ============================================================================
 
 /**
- * Generate a one-time boarding token for a passenger after biometric verification.
- * The token is valid for a limited time and can only be used once.
+ * Generate a demo boarding token after simulated verification.
+ * Tokens carry expiry metadata; no production redemption/one-time-use adapter exists.
  */
 export async function getBoardingToken(
   passengerId: number,
-  flightId: number
+  flightId: number,
+  actor: BiometricActor
 ): Promise<{
   token: string;
   expiresAt: Date;
   passengerId: number;
   flightId: number;
 }> {
+  requireDemoCapability("Biometric boarding demo");
+  await assertBiometricPassengerAccess(passengerId, actor);
   // Verify passenger has an active enrollment
   const activeEnrollment = enrollments.find(
     e => e.passengerId === passengerId && e.status === "active"
@@ -357,7 +367,7 @@ export async function getBoardingToken(
     });
   }
 
-  // Generate cryptographically secure one-time token
+  // Generate a random demo token; this is not a production boarding credential.
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(
     Date.now() + BOARDING_TOKEN_VALIDITY_MINUTES * 60 * 1000
@@ -384,7 +394,10 @@ export async function getBoardingToken(
 /**
  * Get the enrollment status for a passenger across all biometric types.
  */
-export function getEnrollmentStatus(passengerId: number): {
+export async function getEnrollmentStatus(
+  passengerId: number,
+  actor: BiometricActor
+): Promise<{
   passengerId: number;
   enrollments: Array<{
     id: number;
@@ -394,7 +407,9 @@ export function getEnrollmentStatus(passengerId: number): {
     expiresAt: Date;
   }>;
   hasActiveEnrollment: boolean;
-} {
+}> {
+  requireDemoCapability("Biometric boarding demo");
+  await assertBiometricPassengerAccess(passengerId, actor);
   const passengerEnrollments = enrollments
     .filter(e => e.passengerId === passengerId)
     .map(e => ({
@@ -418,12 +433,15 @@ export function getEnrollmentStatus(passengerId: number): {
 
 /**
  * Revoke a passenger's biometric enrollment and delete stored template data.
- * This implements the right to erasure for biometric data.
+ * This clears the active demo template; it is not a production erasure workflow.
  */
-export function revokeEnrollment(
+export async function revokeEnrollment(
   passengerId: number,
+  actor: BiometricActor,
   biometricType?: BiometricType
-): { revoked: number } {
+): Promise<{ revoked: number }> {
+  requireDemoCapability("Biometric boarding demo");
+  await assertBiometricPassengerAccess(passengerId, actor);
   let revokedCount = 0;
 
   for (const enrollment of enrollments) {
@@ -465,6 +483,7 @@ export async function getFlightBiometricStats(flightId: number): Promise<{
   averageProcessingTimeMs: number;
   biometricBoardingRate: number;
 }> {
+  requireDemoCapability("Biometric boarding demo");
   // Get total passengers for the flight
   const db = await getDb();
   if (!db) {
@@ -550,6 +569,7 @@ export function getGateReadiness(gateId: number): {
   lastCalibration: Date | null;
   issues: string[];
 } {
+  requireDemoCapability("Biometric boarding demo");
   const gate = gates.find(g => g.gateId === gateId);
 
   if (!gate) {
@@ -610,6 +630,7 @@ export function configureGate(input: {
   status: GateStatus;
   firmwareVersion?: string;
 }): BiometricGate {
+  requireDemoCapability("Biometric boarding demo");
   const now = new Date();
 
   const existingGate = gates.find(g => g.gateId === input.gateId);
@@ -665,6 +686,7 @@ export async function logBiometricEvent(
     deviceId?: string;
   }
 ): Promise<BiometricEvent> {
+  requireDemoCapability("Biometric boarding demo");
   const event: BiometricEvent = {
     id: nextEventId++,
     passengerId,
@@ -696,6 +718,7 @@ export function getBiometricEvents(filters?: {
   events: BiometricEvent[];
   total: number;
 } {
+  requireDemoCapability("Biometric boarding demo");
   let filtered = [...events];
 
   if (filters?.passengerId) {

@@ -93,6 +93,8 @@ describe("operational truth", () => {
   });
 
   it("reads and writes load plans through persistence, rejecting concurrent stale writes", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("AIS_ENABLE_DEMOS", "true");
     const compartment = {
       id: 10,
       maxWeight: 10000,

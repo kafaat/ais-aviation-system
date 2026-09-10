@@ -1,6 +1,10 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["scripts/verify-transaction-boundaries.ts"],
+  "include": [
+    "scripts/verify-transaction-boundaries.ts",
+    "scripts/migration-preservation-check.ts",
+    "scripts/db/replay-acceptance.ts"
+  ],
   "exclude": ["node_modules"],
   "compilerOptions": { "incremental": false }
 }

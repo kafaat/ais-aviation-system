@@ -2,6 +2,12 @@
 import mysql from "mysql2/promise";
 import { readFile, writeFile } from "node:fs/promises";
 import assert from "node:assert/strict";
+import { appliedMigrationCount, readHistory } from "./db/schema-contract";
+import {
+  assertFinancialPreservation,
+  captureMigrationState,
+  financialBackfillPending,
+} from "./db/migration-preservation";
 const [mode, artifact] = process.argv.slice(2);
 if (
   !["seed", "verify"].includes(mode) ||
@@ -23,17 +29,17 @@ const tables = [
   "payments",
 ];
 const bookingCases = [
-  { status: "confirmed", payment: "paid", reserved: true },
-  { status: "completed", payment: "paid", reserved: true },
-  { status: "cancelled", payment: "paid", reserved: false },
-  { status: "confirmed", payment: "pending", reserved: false },
+  { status: "confirmed", payment: "paid" },
+  { status: "completed", payment: "paid" },
+  { status: "cancelled", payment: "paid" },
+  { status: "confirmed", payment: "pending" },
 ];
 const walletCases = [
-  { balance: 12345, status: "active", expected: "frozen" },
-  { balance: 0, status: "active", expected: "active" },
-  { balance: 12345, status: "frozen", expected: "frozen" },
-  { balance: -50, status: "active", expected: "active" },
-  { balance: 12345, status: "closed", expected: "closed" },
+  { balance: 12345, status: "active" },
+  { balance: 0, status: "active" },
+  { balance: 12345, status: "frozen" },
+  { balance: -50, status: "active" },
+  { balance: 12345, status: "closed" },
 ];
 const financialRows = async (table: "bookings" | "wallets", count: number) => {
   const [rows] = await db.execute<mysql.RowDataPacket[]>(
@@ -43,6 +49,8 @@ const financialRows = async (table: "bookings" | "wallets", count: number) => {
   return JSON.parse(JSON.stringify(rows)) as Record<string, unknown>[];
 };
 try {
+  const history = readHistory();
+  const applied = await appliedMigrationCount(db, history);
   if (mode === "seed") {
     await db.beginTransaction();
     await db.execute(
@@ -92,7 +100,9 @@ try {
         [id + offset + 1, id + offset + 1, item.balance, item.status]
       );
     await db.commit();
-    const snapshot: Record<string, unknown> = {};
+    const snapshot: Record<string, unknown> = {
+      migrationState: captureMigrationState(history, applied),
+    };
     for (const table of tables) {
       const [rows] = await db.execute(
         `SELECT * FROM \`${table}\` WHERE id = ?`,
@@ -112,6 +122,11 @@ try {
     console.info("Seeded and snapshotted seven nonempty core tables");
   } else {
     const before = JSON.parse(await readFile(artifact, "utf8"));
+    assert.equal(applied, history.length, "Target migrations are incomplete");
+    const backfillPending = financialBackfillPending(
+      before.migrationState,
+      history
+    );
     for (const table of tables) {
       const [rows] = await db.execute<mysql.RowDataPacket[]>(
         `SELECT * FROM \`${table}\` WHERE id = ?`,
@@ -129,37 +144,18 @@ try {
     };
     assert.equal(financial.bookings.length, bookingCases.length);
     assert.equal(financial.wallets.length, walletCases.length);
-    for (const [table, key] of [
-      ["bookings", "financialBookings"],
-      ["wallets", "financialWallets"],
-    ] as const) {
-      for (const [index, row] of financial[table].entries()) {
-        for (const [column, value] of Object.entries(before[key][index])) {
-          if (
-            column === "updatedAt" ||
-            (table === "wallets" && column === "status") ||
-            (table === "bookings" && column === "seatsReserved")
-          )
-            continue;
-          assert.deepEqual(
-            row[column],
-            value,
-            `Preserve financial ${table}.${column}`
-          );
-        }
-      }
-    }
-    for (const [index, row] of financial.bookings.entries())
-      assert.equal(Boolean(row.seatsReserved), bookingCases[index].reserved);
-    for (const [index, row] of financial.wallets.entries()) {
-      assert.equal(row.status, walletCases[index].expected);
-      assert.equal(row.balance, walletCases[index].balance);
-    }
+    assertFinancialPreservation(
+      { bookings: before.financialBookings, wallets: before.financialWallets },
+      financial,
+      backfillPending
+    );
     console.info(
       "All original column values survived the upgrade in seven core tables"
     );
     console.info(
-      "Legacy wallet freezing and paid booking inventory backfill verified without changing funds or unrelated rows"
+      backfillPending
+        ? "Verified the pending 0014 financial backfill without changing funds or unrelated rows"
+        : "Verified financial values are unchanged: 0014 was already applied before seeding"
     );
   }
 } finally {

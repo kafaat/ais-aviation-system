@@ -2,6 +2,7 @@
 // the database named in DATABASE_URL. Run against a disposable CI MySQL service.
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import {
   mkdtempSync,
   mkdirSync,
@@ -53,25 +54,28 @@ try {
     "reconciliation must follow the historical migrations"
   );
   mkdirSync(join(directory, "meta"));
-  writeFileSync(
-    join(directory, "meta/_journal.json"),
-    JSON.stringify({
-      version: "7",
-      dialect: "mysql",
-      entries: history.slice(0, boundary).map(({ idx, tag, when }) => ({
-        idx,
-        tag,
-        when,
-        version: "5",
-        breakpoints: true,
-      })),
-    })
-  );
-  for (const m of history.slice(0, boundary))
-    copyFileSync(
-      join("drizzle", `${m.tag}.sql`),
-      join(directory, `${m.tag}.sql`)
+  const materializePrefix = (count: number) => {
+    writeFileSync(
+      join(directory, "meta/_journal.json"),
+      JSON.stringify({
+        version: "7",
+        dialect: "mysql",
+        entries: history.slice(0, count).map(({ idx, tag, when }) => ({
+          idx,
+          tag,
+          when,
+          version: "5",
+          breakpoints: true,
+        })),
+      })
     );
+    for (const m of history.slice(0, count))
+      copyFileSync(
+        join("drizzle", `${m.tag}.sql`),
+        join(directory, `${m.tag}.sql`)
+      );
+  };
+  materializePrefix(boundary);
   await migrate(drizzle(connection), { migrationsFolder: directory });
   assert.deepEqual(
     differences(
@@ -147,8 +151,34 @@ try {
     "INSERT INTO favorite_flights (userId, originId, destinationId, airlineId) VALUES (1, 1, 2, NULL), (1, 1, 2, NULL)"
   );
   await runMigration("preflight", testUrl.href);
+  // Exercise the preservation CLI across the real financial migration even
+  // after every reachable release already includes 0014.
+  const financialBoundary = history.findIndex(
+    m => m.tag === "0014_transactional_audit_forward"
+  );
+  assert.ok(financialBoundary > boundary);
+  materializePrefix(financialBoundary);
+  await migrate(drizzle(connection), { migrationsFolder: directory });
+  const preserve = (mode: "seed" | "verify", url: string, artifact: string) =>
+    execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "scripts/migration-preservation-check.ts",
+        mode,
+        artifact,
+      ],
+      { env: { ...process.env, DATABASE_URL: url }, stdio: "inherit" }
+    );
+  const legacyArtifact = join(directory, "legacy-financial-before.json");
+  preserve("seed", testUrl.href, legacyArtifact);
   await runMigration("migrate", testUrl.href);
   await runMigration("verify", testUrl.href);
+  preserve("verify", testUrl.href, legacyArtifact);
+  console.info(
+    "PASS: preservation CLI verifies the actual 0014 financial backfill"
+  );
   const [sentinel] = await connection.query<RowDataPacket[]>(
     "SELECT name FROM users WHERE openId = 'migration-sentinel'"
   );
@@ -165,6 +195,22 @@ try {
   assert.equal(await fingerprint(), after);
   console.info(
     "PASS: populated upgrade, NULL uniqueness semantics, row preservation and idempotent replay"
+  );
+
+  // Data inserted after 0014 must stay unchanged on a migration replay. In
+  // particular, it must not be treated as legacy funding/inventory a second time.
+  const currentDatabase = `${database}_preserve_current`;
+  await admin.query(`CREATE DATABASE \`${currentDatabase}\``);
+  scratch.push(currentDatabase);
+  const currentUrl = new URL(testUrl.href);
+  currentUrl.pathname = `/${currentDatabase}`;
+  const currentArtifact = join(directory, "current-financial-before.json");
+  await runMigration("migrate", currentUrl.href);
+  preserve("seed", currentUrl.href, currentArtifact);
+  await runMigration("migrate", currentUrl.href);
+  preserve("verify", currentUrl.href, currentArtifact);
+  console.info(
+    "PASS: preservation CLI verifies fresh data after 0014 on a no-op upgrade"
   );
 
   await connection.query("DROP INDEX user_flight_unique ON flight_reviews");

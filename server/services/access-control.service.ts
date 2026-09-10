@@ -106,18 +106,26 @@ export async function assertSplitOwnership(
 /**
  * Assert that a passenger exists and belongs to a booking owned by the caller
  * (or the caller is an admin).
+ * When scope is supplied, both passenger and booking must belong to that tenant.
+ * Unassigned records fail closed; the existing platform-admin override applies.
  *
  * @returns the bookingId the passenger is attached to
  */
 export async function assertPassengerOwnership(
   passengerId: number,
   userId: number,
-  userRole?: string
+  userRole?: string,
+  scope?: { tenantId: number | null }
 ): Promise<number> {
   const db = await getDbOrThrow();
 
   const [row] = await db
-    .select({ bookingId: passengers.bookingId, ownerId: bookings.userId })
+    .select({
+      bookingId: passengers.bookingId,
+      ownerId: bookings.userId,
+      passengerTenantId: passengers.tenantId,
+      bookingTenantId: bookings.tenantId,
+    })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
     .where(eq(passengers.id, passengerId))
@@ -129,6 +137,11 @@ export async function assertPassengerOwnership(
 
   if (row.ownerId !== userId && !(userRole && isAdmin(userRole))) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+  }
+
+  if (scope) {
+    assertTenant(row.passengerTenantId, scope.tenantId, userRole);
+    assertTenant(row.bookingTenantId, scope.tenantId, userRole);
   }
 
   return row.bookingId;

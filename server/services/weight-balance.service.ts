@@ -1,11 +1,12 @@
 /**
  * Weight & Balance Service
  *
- * Comprehensive weight and balance calculations for flight operations.
- * Implements IATA standard load sheet generation, CG calculations,
- * trim settings, and weight limit verification.
+ * Development simulation of load sheets, CG, trim and weight limit checks.
+ * Uses illustrative weights, arms and fuel assumptions; it is not an approved
+ * aircraft performance model and cannot be used to release a flight.
  */
 
+import { requireDemoCapability } from "./demo-capability";
 import { getDb } from "../db";
 import {
   flights,
@@ -88,13 +89,13 @@ export interface FlightWeightBalance {
 }
 
 // ============================================================================
-// IATA Standard Passenger Weights (kg, including hand baggage)
-// Per IATA AHM 515 / AHM 560
+// Illustrative passenger weights (kg, including hand baggage).
+// These fixtures do not establish an operator-approved mass policy.
 // ============================================================================
 
 const DEFAULT_STANDARD_WEIGHTS = {
-  male: 88, // kg (IATA standard male with hand baggage)
-  female: 70, // kg (IATA standard female with hand baggage)
+  male: 88, // kg with hand baggage
+  female: 70, // kg with hand baggage
   child: 35, // kg (2-11 years)
   infant: 10, // kg (under 2 years)
   bag: 15, // kg average checked bag weight
@@ -172,6 +173,7 @@ async function getFlightWithAircraft(flightId: number) {
 export async function getAircraftLimits(
   aircraftTypeId: number
 ): Promise<AircraftWeightLimits> {
+  requireDemoCapability("Weight and balance simulation");
   // Check cache first
   const cached = weightLimitsCache.get(aircraftTypeId);
   if (cached) return cached;
@@ -237,6 +239,7 @@ export async function updateAircraftLimits(
     >
   >
 ): Promise<AircraftWeightLimits> {
+  requireDemoCapability("Weight and balance simulation");
   // Ensure the aircraft type exists
   const currentLimits = await getAircraftLimits(aircraftTypeId);
 
@@ -272,7 +275,7 @@ export async function updateAircraftLimits(
 // ============================================================================
 
 /**
- * Calculate total passenger weight for a flight using IATA standard weights.
+ * Calculate demo passenger weight using the illustrative fixture weights.
  * Queries confirmed/completed bookings and groups passengers by type and gender.
  */
 export async function calculatePassengerWeight(flightId: number): Promise<{
@@ -285,6 +288,7 @@ export async function calculatePassengerWeight(flightId: number): Promise<{
     infants: { count: number; weight: number };
   };
 }> {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   const paxResult = await db
@@ -357,6 +361,7 @@ export async function calculateBaggageWeight(flightId: number): Promise<{
   estimatedCarryOnWeight: number;
   carryOnCount: number;
 }> {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   // Get checked baggage from baggage_items
@@ -394,7 +399,7 @@ export async function calculateBaggageWeight(flightId: number): Promise<{
     );
 
   const carryOnCount = Number(paxCount?.count ?? 0);
-  // Carry-on weight is included in standard passenger weights per IATA,
+  // Carry-on weight is included in the illustrative passenger weights,
   // so we track it as 0 additional weight to avoid double-counting
   const estimatedCarryOnWeight = 0;
 
@@ -419,6 +424,7 @@ export async function calculateCargoWeight(flightId: number): Promise<{
   totalWeight: number;
   zones: Array<{ zone: string; weight: number; maxWeight: number }>;
 }> {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   // Get latest load plan for this flight to extract cargo distribution
@@ -501,6 +507,7 @@ export function calculateFuelWeight(
   };
   fuelDensity: number;
 } {
+  requireDemoCapability("Weight and balance simulation");
   // Standard Jet A-1 fuel density: approximately 0.8 kg/L
   const fuelDensity = 0.8;
 
@@ -556,6 +563,7 @@ export async function calculateCenterOfGravity(flightId: number): Promise<{
     total: { weight: number; moment: number };
   };
 }> {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   // Get load plan to extract weights
@@ -674,6 +682,7 @@ export async function checkWeightLimits(flightId: number): Promise<{
   warnings: string[];
   errors: string[];
 }> {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   const [plan] = await db
@@ -869,6 +878,7 @@ export async function calculateTrimSettings(flightId: number): Promise<{
   macPercent: number;
   notes: string[];
 }> {
+  requireDemoCapability("Weight and balance simulation");
   const cg = await calculateCenterOfGravity(flightId);
 
   // Simplified trim calculation based on CG position
@@ -963,6 +973,7 @@ export async function calculateFlightWeightBalance(
     status?: "preliminary" | "final" | "amended";
   }
 ): Promise<FlightWeightBalance & { details: ReturnType<typeof buildDetails> }> {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   // Validate flight exists
@@ -1266,9 +1277,9 @@ function buildDetails(data: {
 // ============================================================================
 
 /**
- * Generate an IATA-standard load sheet for a flight.
+ * Generate a development-only load sheet for a flight.
  *
- * The load sheet includes all required data per IATA AHM 515:
+ * The illustrative output includes:
  * - Flight identification
  * - Passenger counts by category
  * - Weight summary (OEW, payload, fuel, TOW, LW)
@@ -1332,6 +1343,7 @@ export async function generateLoadSheet(flightId: number): Promise<{
   };
   remarks: string[];
 }> {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   // Get flight details
@@ -1557,6 +1569,7 @@ export async function getWeightHistory(flightId: number): Promise<
     createdAt: Date;
   }>
 > {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   const history = await db
@@ -1594,6 +1607,7 @@ export async function getWeightHistory(flightId: number): Promise<
 export async function getFlightWeightBalance(
   flightId: number
 ): Promise<FlightWeightBalance | null> {
+  requireDemoCapability("Weight and balance simulation");
   const db = await requireDb();
 
   const [plan] = await db
