@@ -764,10 +764,7 @@ async function main(): Promise<void> {
   await runPreflight();
 }
 
-const executedScriptPath = process.argv[1] ? resolve(process.argv[1]) : null;
-const currentScriptPath = fileURLToPath(import.meta.url);
-
-if (executedScriptPath === currentScriptPath) {
+if (process.argv[2] === "preflight") {
   main().catch(error => {
     console.error(error instanceof Error ? error.message : error);
     process.exit(1);
