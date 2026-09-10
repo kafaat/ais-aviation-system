@@ -212,7 +212,10 @@ export async function readDatabaseContract(
     "SELECT TABLE_NAME, TABLE_TYPE, ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()"
   );
   const result: Contract = {};
-  for (const t of tables) {
+  // Fingerprints must not depend on MySQL's metadata row order.
+  for (const t of tables.sort((a, b) =>
+    a.TABLE_NAME < b.TABLE_NAME ? -1 : a.TABLE_NAME > b.TABLE_NAME ? 1 : 0
+  )) {
     if (t.TABLE_NAME === "__drizzle_migrations") continue;
     if (t.TABLE_TYPE !== "BASE TABLE" || t.ENGINE !== "InnoDB")
       throw new Error(`UNSUPPORTED_DATABASE_OBJECT: ${t.TABLE_NAME}`);

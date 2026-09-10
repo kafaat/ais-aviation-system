@@ -1,5 +1,71 @@
 # Changelog
 
+## What's Changed in v1.21.2
+
+### Bug Fixes
+
+- fix(migrations): reconcile schema and enforce guarded MySQL replay (defb20d)
+- fix: remove unused npm from deployed images and scan both targets (4176902)
+- fix: patch migration toolchain and exclude deployed installers (540f93c)
+- fix(ci): reconcile migration branch with production preflight bootstrap (322632d)
+- fix(migrations): stabilize schema fingerprint table order (b139cd1)
+
+### Other Changes
+
+- test(migrations): measure schema snapshot drift (4f97d8d)
+- style(migrations): format drift guard (5387205)
+- test: fail explicitly when deployed installer commands remain (cb2fa3e)
+- test: read JSON installation metadata emitted by pinned pnpm (518342f)
+- Merge pull request #129 from kafaat/fix/migration-schema-snapshot-reconciliation-20260909 (b550494)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.21.1...v1.21.2
+
+---
+
+## What's Changed in v1.21.1
+
+### Bug Fixes
+
+- fix(docker): remove unused npm from the runtime image (a044f9e)
+
+### Other Changes
+
+- Merge pull request #134 from kafaat/fix/runtime-image-npm-cves-20260910 (0e08b04)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.21.0...v1.21.1
+
+---
+
+## What's Changed in v1.21.0
+
+### Features
+
+- feat: add production database preflight automation (6b76a0b)
+- feat: wrap approved db preflight tool (874c615)
+
+### Bug Fixes
+
+- fix: harden preflight schema inspection (3c6c184)
+- fix: ensure preflight entrypoint runs under tsx (61754ae)
+- fix: wrap approved production preflight tool (acf87ba)
+- fix: harden production preflight wrapper safeguards (af29a86)
+- fix: always honor preflight run flag (4c1537a)
+- fix: harden approved preflight checkout (fb3a2ce)
+- fix(ci): fail preflight reports on incomplete or drifting evidence (56b4445)
+
+### Other Changes
+
+- test: finalize production preflight validation (e8cb049)
+- test: finalize approved preflight wrapper flow (bdda9e6)
+- test: add preflight context injection guard (8e92bf4)
+- test: cover preflight run gate (cfdb79a)
+- style: format workflow hardening test (10813f2)
+- Merge pull request #132 from kafaat/copilot/setup-copilot-production-checks (18237aa)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.20.26...v1.21.0
+
+---
+
 ## What's Changed in v1.20.26
 
 ### Bug Fixes
