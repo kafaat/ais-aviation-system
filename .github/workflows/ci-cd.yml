@@ -141,7 +141,7 @@ jobs:
       - name: Run database migrations
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
-        run: pnpm exec drizzle-kit push --force
+        run: pnpm run db:migrate
 
       - name: Run tests with coverage
         env:
@@ -336,7 +336,7 @@ jobs:
       - name: Run database migrations
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
-        run: pnpm exec drizzle-kit push --force
+        run: pnpm run db:migrate
 
       - name: Setup Python for auth service
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -626,6 +626,14 @@ jobs:
           exit-code: "1"
           severity: "CRITICAL,HIGH"
 
+      - name: Scan migrator image for vulnerabilities
+        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrator:sha-${{ needs.build.outputs.sha_short }}
+          format: "table"
+          exit-code: "1"
+          severity: "CRITICAL,HIGH"
+
   # =============================================================================
   # STAGE 6: Deploy to Staging
   # =============================================================================
@@ -703,7 +711,7 @@ jobs:
             --wait \
             --timeout=300s \
             --env="DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" \
-            --command -- npx drizzle-kit migrate
+            --command -- node --import tsx scripts/db/migrate.ts migrate
 
       - name: Deploy to Kubernetes
         if: steps.staging-kube-config.outputs.configured == 'true'
@@ -873,7 +881,7 @@ jobs:
             --wait \
             --timeout=300s \
             --env="DATABASE_URL=${{ secrets.PRODUCTION_DATABASE_URL }}" \
-            --command -- npx drizzle-kit migrate
+            --command -- node --import tsx scripts/db/migrate.ts migrate
 
       - name: Save current deployment for rollback
         if: steps.kube-config.outputs.configured == 'true'
