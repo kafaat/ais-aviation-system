@@ -384,6 +384,8 @@ try {
   );
   const { verifyForensicWorkflows } = await import("./acceptance/forensic");
   await verifyForensicWorkflows(db, id, check);
+  const { verifyDataAudit } = await import("./acceptance/data-audit");
+  await verifyDataAudit(db, id, check);
   completed = true;
 } finally {
   const report = {

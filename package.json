@@ -43,6 +43,7 @@
     "db:verify": "node --import tsx scripts/db/migrate.ts verify",
     "db:test-migrations": "node --import tsx scripts/db/replay-acceptance.ts",
     "db:verify-catalog": "tsx scripts/verify-database-schema.ts",
+    "db:audit-data": "node --import tsx scripts/ci/forensic-data-audit.ts",
     "test:acceptance": "node --import tsx scripts/verify-transaction-boundaries.ts"
   },
   "dependencies": {
