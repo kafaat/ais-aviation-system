@@ -4,19 +4,28 @@ import {
   classifyDeviations,
   comparePreflightState,
   defaultsEquivalent,
-  parseDeclaredSchemaTables,
+  extractDeclaredSchemaTables,
+  parseDatabaseConnectionConfig,
   typesEquivalent,
 } from "../../../scripts/db/migrate";
+import { mysqlTable, int } from "drizzle-orm/mysql-core";
 
-describe("parseDeclaredSchemaTables", () => {
-  it("extracts unique table names from drizzle/schema.ts source", () => {
-    const source = `
-      export const users = mysqlTable("users", {});
-      export const bookings = mysqlTable("bookings", {});
-      export const usersCopy = mysqlTable("users", {});
-    `;
+describe("extractDeclaredSchemaTables", () => {
+  it("extracts unique table names from Drizzle table exports", () => {
+    const schemaModule = {
+      users: mysqlTable("users", {
+        id: int("id"),
+      }),
+      bookings: mysqlTable("bookings", {
+        id: int("id"),
+      }),
+      notATable: "ignore-me",
+    };
 
-    expect(parseDeclaredSchemaTables(source)).toEqual(["bookings", "users"]);
+    expect(extractDeclaredSchemaTables(schemaModule)).toEqual([
+      "bookings",
+      "users",
+    ]);
   });
 });
 
@@ -129,6 +138,17 @@ describe("schema comparison helpers", () => {
   it("treats boolean aliases and normalized timestamp defaults as equivalent", () => {
     expect(typesEquivalent("boolean", "tinyint(1)")).toBe(true);
     expect(defaultsEquivalent("(now())", "CURRENT_TIMESTAMP")).toBe(true);
+  });
+
+  it("enforces TLS when the connection URL requires it", () => {
+    const { connectionConfig, sslRequested } = parseDatabaseConnectionConfig(
+      "mysql://readonly@example.com:3306/ais?sslmode=require"
+    );
+
+    expect(sslRequested).toBe(true);
+    expect(connectionConfig.ssl).toEqual({});
+    expect(connectionConfig.user).toBe("readonly");
+    expect(connectionConfig.database).toBe("ais");
   });
 });
 

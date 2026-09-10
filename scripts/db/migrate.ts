@@ -2,7 +2,8 @@
 
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { getTableName, isTable } from "drizzle-orm/table";
 import mysql from "mysql2/promise";
 
 type JournalEntry = {
@@ -100,12 +101,53 @@ function getRepoRoot(): string {
   return resolve(scriptDir, "..", "..");
 }
 
-function parseDeclaredSchemaTables(schemaSource: string): string[] {
-  const matches = Array.from(
-    schemaSource.matchAll(/mysqlTable\(\s*"([^"]+)"/g),
-    match => match[1]
-  );
-  return [...new Set(matches)].sort();
+function extractDeclaredSchemaTables(
+  schemaModule: Record<string, unknown>
+): string[] {
+  const tableNames = Object.values(schemaModule)
+    .filter(isTable)
+    .map(table => getTableName(table))
+    .filter(tableName => !SYSTEM_TABLES.has(tableName));
+
+  return [...new Set(tableNames)].sort();
+}
+
+function sslModeRequiresTls(value: string | null): boolean {
+  if (!value) {
+    return false;
+  }
+
+  return new Set([
+    "1",
+    "true",
+    "require",
+    "required",
+    "verify-ca",
+    "verify-full",
+  ]).has(value.trim().toLowerCase());
+}
+
+function parseDatabaseConnectionConfig(databaseUrl: string): {
+  connectionConfig: mysql.ConnectionOptions;
+  sslRequested: boolean;
+} {
+  const url = new URL(databaseUrl);
+  const sslRequested =
+    sslModeRequiresTls(url.searchParams.get("ssl")) ||
+    sslModeRequiresTls(url.searchParams.get("sslmode")) ||
+    sslModeRequiresTls(url.searchParams.get("tls"));
+
+  return {
+    connectionConfig: {
+      host: url.hostname,
+      port: url.port ? Number(url.port) : 3306,
+      user: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+      database: decodeURIComponent(url.pathname.replace(/^\//, "")),
+      ssl: sslRequested ? {} : undefined,
+    },
+    sslRequested,
+  };
 }
 
 function normalizeType(value: string): string {
@@ -164,16 +206,16 @@ async function loadAuthoritativeMetadata(repoRoot: string): Promise<{
   journalPath: string;
 }> {
   const drizzleDir = join(repoRoot, "drizzle");
-  const schemaPath = join(drizzleDir, "schema.ts");
   const journalPath = join(drizzleDir, "meta", "_journal.json");
 
-  const [schemaSource, journalSource, drizzleEntries] = await Promise.all([
-    readFile(schemaPath, "utf8"),
+  const schemaModulePath = pathToFileURL(join(drizzleDir, "schema.ts")).href;
+  const [schemaModule, journalSource, drizzleEntries] = await Promise.all([
+    import(schemaModulePath),
     readFile(journalPath, "utf8"),
     readdir(drizzleDir),
   ]);
 
-  const declaredSchemaTables = parseDeclaredSchemaTables(schemaSource);
+  const declaredSchemaTables = extractDeclaredSchemaTables(schemaModule);
   const executableMigrations = drizzleEntries
     .filter(name => /^\d{4}_.+\.sql$/.test(name))
     .sort();
@@ -614,9 +656,10 @@ async function runPreflight(): Promise<void> {
   const productionContext = process.env.PREFLIGHT_CONTEXT ?? "production";
   const githubEnvironment = process.env.GITHUB_ENVIRONMENT_NAME ?? null;
   const gitSha = process.env.GITHUB_SHA ?? "unknown";
-  const sslRequested = new URL(databaseUrl).searchParams.get("ssl") === "true";
+  const { connectionConfig, sslRequested } =
+    parseDatabaseConnectionConfig(databaseUrl);
 
-  const connection = await mysql.createConnection(databaseUrl);
+  const connection = await mysql.createConnection(connectionConfig);
   try {
     const actual = await queryActualSchema(connection);
     const deviations = comparePreflightState({
@@ -736,7 +779,8 @@ export {
   classifyDeviations,
   comparePreflightState,
   defaultsEquivalent,
+  extractDeclaredSchemaTables,
   normalizeDefault,
-  parseDeclaredSchemaTables,
+  parseDatabaseConnectionConfig,
   typesEquivalent,
 };
