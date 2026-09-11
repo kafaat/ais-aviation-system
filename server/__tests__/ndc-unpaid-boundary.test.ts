@@ -251,6 +251,12 @@ describe("unpaid NDC invoice commands", () => {
     const result = await replace();
     expect(await replace()).toEqual(result);
     expect(result.offerId).toBe("NEW");
+    expect(
+      fixture
+        .rows("inventory_locks")
+        .filter(h => h.status === "active")
+        .every(h => h.sessionId.length <= 64)
+    ).toBe(true);
     expect(result.totalAmount).toBe(12000);
     expect(fixture.rows("bookings")[0]).toMatchObject({
       cabinClass: "business",

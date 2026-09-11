@@ -291,7 +291,7 @@ async function replaceItinerary(
       s.flightId,
       booking.numberOfPassengers,
       offer.cabinClass as "economy" | "business",
-      `ndc-change:${calculateRequestHash(input)}`,
+      calculateRequestHash({ scope: "ndc.order.change", request: input }),
       input.userId,
       tx
     );

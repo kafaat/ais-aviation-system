@@ -225,7 +225,7 @@ export async function verifyUnpaidInvoices(
         .update(schema.flights)
         .set({ businessAvailable: 0 })
         .where(eq(schema.flights.id, base + 3));
-      await assert.rejects(changeOrder(command));
+      await assert.rejects(changeOrder(command), { code: "BAD_REQUEST" });
       assert.deepEqual(
         await db
           .select()
