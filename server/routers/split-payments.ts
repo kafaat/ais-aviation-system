@@ -19,13 +19,16 @@ import {
 const splitPayerSchema = z.object({
   email: z.string().email("Invalid email address"),
   name: z.string().min(1, "Name is required"),
-  amount: z.number().positive("Amount must be positive"),
+  amount: z.number().int().positive("Amount must be positive"),
 });
 
 const initiateSplitPaymentSchema = z.object({
   bookingId: z.number().positive(),
-  splits: z.array(splitPayerSchema).min(2, "At least 2 payers required"),
-  expirationDays: z.number().min(1).max(30).optional(),
+  splits: z
+    .array(splitPayerSchema)
+    .min(2, "At least 2 payers required")
+    .max(20),
+  expirationDays: z.number().int().min(1).max(30).optional(),
 });
 
 export const splitPaymentsRouter = router({
@@ -94,7 +97,10 @@ export const splitPaymentsRouter = router({
         });
       }
 
-      return await splitPaymentService.initiateSplitPayment(input);
+      return await splitPaymentService.initiateSplitPayment({
+        ...input,
+        userId: ctx.user.id,
+      });
     }),
 
   /**

@@ -1,10 +1,13 @@
-import { cancelBookingResources } from "./booking-settlement.service";
+import {
+  cancelBookingResources,
+  type SettlementTx,
+} from "./booking-settlement.service";
 import { assertTenantOperational } from "./tenant.service";
 import { allocateProportional } from "./seat-economics.service";
 import { createInventoryLock } from "./inventory-lock.service";
 import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import { TRPCError } from "@trpc/server";
-import { eq, and, gte, lte, desc, asc, lt, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, lt, sql, inArray } from "drizzle-orm";
 import { getDb, generateBookingReference } from "../db";
 import { canTransitionTo, type NdcOrderStatus } from "./ndc-order-state";
 import { recordEvent } from "./outbox.service";
@@ -175,6 +178,7 @@ export interface CreateOrderInput {
 
 /** Input for NDC OrderChange */
 export interface ChangeOrderInput {
+  replacementOfferId?: string;
   newDepartureDate?: Date | string;
   newCabinClass?: string;
   passengerUpdates?: Array<{
@@ -492,10 +496,11 @@ function buildDefaultBundledServices(
  * Resolve the userId that owns an NDC order, by looking up the linked booking.
  */
 async function resolveOrderUserId(
-  bookingId: number | null
+  bookingId: number | null,
+  transaction?: SettlementTx
 ): Promise<number | undefined> {
   if (!bookingId) return undefined;
-  const db = await getDb();
+  const db = transaction ?? getDb();
   if (!db) return undefined;
   const results = await db
     .select({ userId: bookings.userId })
@@ -1186,8 +1191,11 @@ export async function createOrder(
  * @param orderId - The unique NDC order identifier
  * @returns The complete order response
  */
-export async function getOrder(orderId: string): Promise<NdcOrderResponse> {
-  const db = await getDb();
+export async function getOrder(
+  orderId: string,
+  transaction?: SettlementTx
+): Promise<NdcOrderResponse> {
+  const db = transaction ?? getDb();
   if (!db)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -1221,7 +1229,7 @@ export async function getOrder(orderId: string): Promise<NdcOrderResponse> {
   };
 
   // Resolve the owning userId from the linked booking
-  const userId = await resolveOrderUserId(order.bookingId);
+  const userId = await resolveOrderUserId(order.bookingId, db);
 
   return {
     orderId: order.orderId,
@@ -1384,56 +1392,56 @@ export async function cancelOrder(
   return getOrder(orderId);
 }
 
-/** NDC exchanges require a quoted, idempotent inventory/payment/document transaction.
- * The earlier implementation changed the booking without reconciling those owners. */
+/** Local unpaid servicing delegates to the invoice and inventory owners. */
 export async function changeOrder(
-  _orderIdOrParams:
+  input:
     | string
-    | { orderId: string; userId?: number; changes: ChangeOrderInput },
+    | {
+        orderId: string;
+        userId?: number;
+        idempotencyKey?: string;
+        changes: ChangeOrderInput;
+      },
   _changesArg?: ChangeOrderInput
 ): Promise<NdcOrderResponse> {
-  throw new TRPCError({
-    code: "PRECONDITION_FAILED",
-    message:
-      "NDC order changes require an integrated exchange, passenger synchronization and settlement workflow",
+  if (typeof input === "string" || !input.userId || !input.idempotencyKey)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Authenticated owner and idempotency key are required for unpaid NDC servicing",
+    });
+  const { changeUnpaidOrder } = await import("./ndc-unpaid.service");
+  return changeUnpaidOrder({
+    ...input,
+    userId: input.userId,
+    idempotencyKey: input.idempotencyKey,
   });
 }
-
-/** No ancillary charge or EMD is issued without the central invoice/payment workflow. */
 export async function serviceOrder(
-  _orderId: string,
-  _services: ServiceOrderInput[]
+  input:
+    | string
+    | {
+        orderId: string;
+        userId?: number;
+        idempotencyKey?: string;
+        services: ServiceOrderInput[];
+      },
+  _services?: ServiceOrderInput[]
 ): Promise<NdcOrderResponse> {
-  throw new TRPCError({
-    code: "PRECONDITION_FAILED",
-    message:
-      "NDC ancillary servicing requires verified invoice settlement and an EMD issuer",
+  if (typeof input === "string" || !input.userId || !input.idempotencyKey)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Authenticated owner and idempotency key are required for unpaid NDC servicing",
+    });
+  const { serviceUnpaidOrder } = await import("./ndc-unpaid.service");
+  return serviceUnpaidOrder({
+    ...input,
+    userId: input.userId,
+    idempotencyKey: input.idempotencyKey,
   });
 }
-
-/**
- * Alias for serviceOrder -- used by the NDC router as "addServices".
- * Accepts either positional args or an object with orderId, userId, and services.
- *
- * @param orderIdOrParams - Order ID string or object with orderId + services
- * @param servicesArg - Services array (when first arg is a string)
- * @returns The updated order response
- */
-export function addServices(
-  orderIdOrParams:
-    | string
-    | { orderId: string; userId?: number; services: ServiceOrderInput[] },
-  servicesArg?: ServiceOrderInput[]
-): Promise<NdcOrderResponse> {
-  const orderId =
-    typeof orderIdOrParams === "string"
-      ? orderIdOrParams
-      : orderIdOrParams.orderId;
-  const services =
-    servicesArg ??
-    (typeof orderIdOrParams === "object" ? orderIdOrParams.services : []);
-  return serviceOrder(orderId, services);
-}
+export const addServices = serviceOrder;
 
 /**
  * Get order history for an airline, with optional filters.
@@ -1548,7 +1556,8 @@ export async function getOrderHistory(
  * @returns Orders with total count
  */
 export async function listOrders(
-  filters: OrderHistoryFilters
+  filters: OrderHistoryFilters,
+  ownerUserId?: number
 ): Promise<{ orders: NdcOrderResponse[]; total: number }> {
   const db = await getDb();
   if (!db)
@@ -1558,6 +1567,19 @@ export async function listOrders(
     });
 
   const conditions: ReturnType<typeof eq>[] = [];
+  if (ownerUserId != null) {
+    if (!Number.isSafeInteger(ownerUserId) || ownerUserId <= 0)
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    conditions.push(
+      inArray(
+        ndcOrders.bookingId,
+        db
+          .select({ id: bookings.id })
+          .from(bookings)
+          .where(eq(bookings.userId, ownerUserId))
+      )
+    );
+  }
 
   if (filters.airlineId) {
     conditions.push(eq(ndcOrders.airlineId, filters.airlineId));
@@ -2098,4 +2120,9 @@ export function validateNdcRequest(request: {
     valid: errors.length === 0,
     errors,
   };
+}
+
+/** Customer history is scoped by booking ownership, never by an airline ID. */
+export function getOwnedOrderHistory(userId: number) {
+  return listOrders({}, userId);
 }

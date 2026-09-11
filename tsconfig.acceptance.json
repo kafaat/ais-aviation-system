@@ -3,8 +3,11 @@
   "include": [
     "scripts/verify-transaction-boundaries.ts",
     "scripts/migration-preservation-check.ts",
-    "scripts/db/replay-acceptance.ts"
+    "scripts/db/replay-acceptance.ts",
+    "scripts/acceptance/stripe-checkout.ts"
   ],
   "exclude": ["node_modules"],
-  "compilerOptions": { "incremental": false }
+  "compilerOptions": {
+    "incremental": false
+  }
 }

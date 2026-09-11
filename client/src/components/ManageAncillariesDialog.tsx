@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import {
@@ -94,13 +94,19 @@ export function ManageAncillariesDialog({
     },
   });
 
+  const pendingCommands = useRef(new Map<string, string>());
   const handleAddService = async (serviceId: number, _price: number) => {
     const quantity = selectedServices[serviceId] || 1;
+    const signature = JSON.stringify([bookingId, serviceId, quantity]);
+    const key = pendingCommands.current.get(signature) ?? crypto.randomUUID();
+    pendingCommands.current.set(signature, key);
     await addAncillary.mutateAsync({
+      idempotencyKey: key,
       bookingId,
       ancillaryServiceId: serviceId,
       quantity,
     });
+    pendingCommands.current.delete(signature);
     setSelectedServices(prev => ({ ...prev, [serviceId]: 0 }));
   };
 

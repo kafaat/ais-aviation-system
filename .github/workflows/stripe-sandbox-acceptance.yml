@@ -1,0 +1,51 @@
+name: Stripe Sandbox Acceptance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checkout-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: ais_stripe_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_password"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - name: Require a Stripe test key
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: |
+          node -e 'if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")) { console.error("Configure STRIPE_TEST_SECRET_KEY with an sk_test_ key; provider acceptance cannot be skipped."); process.exit(1); }'
+      - run: pnpm install --frozen-lockfile
+      - name: Apply committed migrations to an isolated database
+        env:
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_stripe_test
+        run: pnpm db:migrate
+      - name: Verify the real Stripe test checkout contract
+        env:
+          NODE_ENV: test
+          AIS_DISPOSABLE_DATABASE: "true"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_stripe_test
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+        run: node --import tsx scripts/acceptance/stripe-checkout.ts "$RUNNER_TEMP/stripe-acceptance.json"
+      - name: Preserve provider evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: stripe-sandbox-evidence
+          path: ${{ runner.temp }}/stripe-acceptance.json
+          if-no-files-found: warn
+          retention-days: 14

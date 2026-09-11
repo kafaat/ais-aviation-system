@@ -172,6 +172,14 @@ export function transactionMemory(seed: Record<string, any[]>) {
         return chain;
       },
     }),
+    delete: (table: any) => ({
+      where: async (predicate: any) => {
+        const original = rows(table);
+        const retained = original.filter(row => !filter(predicate, row));
+        data[getTableName(table)] = retained;
+        return [{ affectedRows: original.length - retained.length }];
+      },
+    }),
     update: (table: any) => ({
       set: (values: any) => ({
         where: async (predicate: any) => {

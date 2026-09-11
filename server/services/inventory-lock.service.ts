@@ -103,9 +103,12 @@ export async function createInventoryLock(
 /**
  * Release a lock (when user cancels or completes booking)
  */
-export async function releaseInventoryLock(lockId: number): Promise<void> {
+export async function releaseInventoryLock(
+  lockId: number,
+  transaction?: SettlementTx
+): Promise<void> {
   try {
-    const database = await getDb();
+    const database = transaction ?? getDb();
     if (!database) throw new Error("Database not available");
 
     await database

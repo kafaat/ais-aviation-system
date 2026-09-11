@@ -1,3 +1,7 @@
+import {
+  createBookingCheckout,
+  expireBookingCheckout,
+} from "../services/booking-checkout.service";
 import { responseContracts } from "../contracts/payments";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -11,7 +15,6 @@ import { stripe } from "../stripe";
 import { getDb } from "../db";
 import { bookings, bookingModifications } from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
-import { auditPayment } from "../services/audit.service";
 import { assertNoCollectionReview } from "../services/booking-settlement.service";
 import {
   listSettlementReviews,
@@ -79,6 +82,22 @@ export const paymentsRouter = router({
     .mutation(({ input, ctx }) =>
       requestSettlementReviewRefund(input.paymentIntentId, ctx.user.id)
     ),
+  expireCheckoutSession: protectedProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/payments/checkout/{bookingId}/expire",
+        tags: ["Payments"],
+        summary: "Expire an unpaid checkout before editing its invoice",
+        protect: true,
+      },
+    })
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(z.object({ status: z.literal("expired") }))
+    .mutation(({ ctx, input }) =>
+      expireBookingCheckout(input.bookingId, ctx.user.id)
+    ),
+
   /**
    * Get all available payment providers
    */
@@ -130,160 +149,21 @@ export const paymentsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const database = await getDb();
-      if (!database)
+      if (input.provider !== "stripe")
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
+          code: "PRECONDITION_FAILED",
+          message: "Provider settlement integration is not available",
         });
-
-      // Get booking details
-      const bookingResult = await database
-        .select()
-        .from(bookings)
-        .where(eq(bookings.id, input.bookingId))
-        .limit(1);
-
-      const bookingData = bookingResult[0];
-      if (!bookingData) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Booking not found",
-        });
-      }
-
-      // Verify ownership
-      if (bookingData.userId !== ctx.user.id) {
-        throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-      }
-
-      // Check if already paid
-      await assertNoCollectionReview(database, bookingData.id);
-      if (
-        bookingData.status !== "pending" ||
-        bookingData.paymentStatus === "paid"
-      ) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Booking is already paid",
-        });
-      }
-
-      const appBaseUrl =
-        ctx.req.headers.origin ||
-        process.env.VITE_APP_URL ||
-        `${ctx.req.protocol}://${ctx.req.get("host")}`;
-
-      const providerId = (input.provider || "stripe") as PaymentProviderType;
-
-      // Use legacy Stripe flow for backward compatibility when provider is stripe
-      if (providerId === "stripe") {
-        const productName = `Flight Booking - ${bookingData.bookingReference}`;
-        const productDescription = `PNR: ${bookingData.pnr}`;
-
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ["card"],
-          line_items: [
-            {
-              price_data: {
-                currency: "sar",
-                product_data: {
-                  name: productName,
-                  description: `${productDescription} - ${bookingData.numberOfPassengers} passenger(s) - Ref: ${bookingData.bookingReference}`,
-                  metadata: {
-                    bookingReference: bookingData.bookingReference,
-                    pnr: bookingData.pnr,
-                  },
-                },
-                unit_amount: bookingData.totalAmount,
-              },
-              quantity: 1,
-            },
-          ],
-          mode: "payment",
-          success_url: `${appBaseUrl}/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true`,
-          cancel_url: `${appBaseUrl}/booking/${input.bookingId}?canceled=true`,
-          customer_email: ctx.user.email || undefined,
-          client_reference_id: ctx.user.id.toString(),
-          metadata: {
-            type: "booking",
-            bookingId: input.bookingId.toString(),
-            userId: ctx.user.id.toString(),
-            bookingReference: bookingData.bookingReference,
-            customerEmail: ctx.user.email || "",
-            customerName: ctx.user.name || "",
-          },
-          payment_intent_data: {
-            metadata: {
-              type: "booking",
-              bookingId: input.bookingId.toString(),
-              userId: ctx.user.id.toString(),
-              bookingReference: bookingData.bookingReference,
-              customerEmail: ctx.user.email || "",
-              customerName: ctx.user.name || "",
-            },
-          },
-          allow_promotion_codes: false,
-        });
-
-        await database
-          .update(bookings)
-          .set({ stripeCheckoutSessionId: session.id })
-          .where(eq(bookings.id, input.bookingId));
-
-        await auditPayment(
-          input.bookingId,
-          bookingData.bookingReference,
-          bookingData.totalAmount,
-          "PAYMENT_INITIATED",
-          ctx.user.id,
-          session.id,
-          ctx.req.ip,
-          ctx.req.headers["x-request-id"] as string
-        );
-
-        return {
-          provider: "stripe",
-          sessionId: session.id,
-          url: session.url,
-        };
-      }
-
-      // Use multi-provider flow for other providers
-      const result = await createCheckoutWithProvider(providerId, {
+      return createBookingCheckout({
         bookingId: input.bookingId,
         userId: ctx.user.id,
-        amount: bookingData.totalAmount,
-        currency: "SAR",
-        customerEmail: ctx.user.email || undefined,
-        customerName: ctx.user.name || undefined,
-        bookingReference: bookingData.bookingReference,
-        pnr: bookingData.pnr,
-        description: `Flight Booking - ${bookingData.bookingReference}`,
-        successUrl: `${appBaseUrl}/my-bookings?provider=${providerId}&success=true`,
-        cancelUrl: `${appBaseUrl}/booking/${input.bookingId}?canceled=true`,
-        metadata: {
-          bookingId: input.bookingId.toString(),
-          userId: ctx.user.id.toString(),
-        },
+        email: ctx.user.email,
+        name: ctx.user.name,
+        appBaseUrl:
+          process.env.VITE_APP_URL ||
+          ctx.req.headers.origin ||
+          `${ctx.req.protocol}://${ctx.req.get("host")}`,
       });
-
-      await auditPayment(
-        input.bookingId,
-        bookingData.bookingReference,
-        bookingData.totalAmount,
-        "PAYMENT_INITIATED",
-        ctx.user.id,
-        result.sessionId,
-        ctx.req.ip,
-        ctx.req.headers["x-request-id"] as string
-      );
-
-      return {
-        provider: result.provider,
-        sessionId: result.sessionId,
-        url: result.url,
-      };
     }),
 
   /**

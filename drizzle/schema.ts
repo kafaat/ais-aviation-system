@@ -5480,3 +5480,19 @@ export const loadPlanDetails = mysqlTable("load_plan_details", {
 
 // Canonical operational schemas used by services and migration generation.
 export * from "./operations-schema";
+
+/** Durable checkout intent; its presence freezes the unpaid invoice until verified expiry. */
+export const bookingCheckoutRequests = mysqlTable("booking_checkout_requests", {
+  bookingId: int("bookingId").primaryKey(),
+  userId: int("userId").notNull(),
+  requestId: varchar("requestId", { length: 64 }).notNull().unique(),
+  invoiceHash: varchar("invoiceHash", { length: 64 }).notNull(),
+  requestPayload: text("requestPayload").notNull(),
+  status: mysqlEnum("status", ["creating", "ready", "expired"])
+    .default("creating")
+    .notNull(),
+  sessionId: varchar("sessionId", { length: 255 }).unique(),
+  checkoutUrl: text("checkoutUrl"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});

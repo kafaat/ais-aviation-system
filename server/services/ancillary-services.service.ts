@@ -1,3 +1,11 @@
+import {
+  lockEditableInvoice,
+  insertInvoiceAncillary,
+  setInvoiceTotal,
+  invoiceBlocked,
+  type InvoiceActor,
+} from "./booking-invoice.service";
+import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import { eq, and } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -5,7 +13,6 @@ import {
   ancillaryServices,
   bookingAncillaries,
   type InsertAncillaryService,
-  type InsertBookingAncillary,
 } from "../../drizzle/schema";
 
 /**
@@ -114,53 +121,27 @@ export async function deactivateAncillaryService(id: number) {
 /**
  * Add ancillary to booking
  */
-export async function addAncillaryToBooking(data: {
-  bookingId: number;
-  passengerId?: number;
-  ancillaryServiceId: number;
-  quantity?: number;
-  metadata?: any;
-}) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get ancillary service details
-  const service = await getAncillaryById(data.ancillaryServiceId);
-  if (!service)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Ancillary service not found",
-    });
-  if (!service.available)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Ancillary service not available",
-    });
-
-  const quantity = data.quantity || 1;
-  const totalPrice = service.price * quantity;
-
-  const ancillaryData: InsertBookingAncillary = {
-    bookingId: data.bookingId,
-    passengerId: data.passengerId,
-    ancillaryServiceId: data.ancillaryServiceId,
-    quantity,
-    unitPrice: service.price,
-    totalPrice,
-    status: "active",
-    metadata: data.metadata ? JSON.stringify(data.metadata) : null,
-  };
-
-  const [result] = await db.insert(bookingAncillaries).values(ancillaryData);
-  return {
-    id: Number((result as any).insertId),
-    totalPrice,
-    service,
-  };
+export async function addAncillaryToBooking(
+  data: {
+    bookingId: number;
+    passengerId?: number;
+    ancillaryServiceId: number;
+    quantity?: number;
+    metadata?: unknown;
+    idempotencyKey: string;
+  },
+  actor: InvoiceActor
+) {
+  return withTransactionalIdempotency({
+    scope: "booking.ancillary.add",
+    key: data.idempotencyKey,
+    userId: actor.userId,
+    request: data,
+    run: async tx => {
+      const booking = await lockEditableInvoice(tx, data.bookingId, actor);
+      return insertInvoiceAncillary(tx, booking, data);
+    },
+  });
 }
 
 /**
@@ -222,20 +203,48 @@ export async function calculateAncillariesTotalCost(
 /**
  * Remove ancillary from booking
  */
-export async function removeAncillaryFromBooking(ancillaryId: number) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  await db
-    .update(bookingAncillaries)
-    .set({ status: "cancelled", updatedAt: new Date() })
-    .where(eq(bookingAncillaries.id, ancillaryId));
-
-  return true;
+export async function removeAncillaryFromBooking(
+  ancillaryId: number,
+  actor: InvoiceActor
+) {
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.transaction(async tx => {
+    const [identity] = await tx
+      .select()
+      .from(bookingAncillaries)
+      .where(eq(bookingAncillaries.id, ancillaryId));
+    if (!identity)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Ancillary not found",
+      });
+    const booking = await lockEditableInvoice(tx, identity.bookingId, actor);
+    const [ancillary] = await tx
+      .select()
+      .from(bookingAncillaries)
+      .where(eq(bookingAncillaries.id, ancillaryId))
+      .for("update");
+    if (!ancillary || ancillary.bookingId !== booking.id)
+      throw invoiceBlocked("Ancillary identity changed");
+    if (ancillary.status === "cancelled") return true;
+    if (
+      ancillary.status !== "active" ||
+      ancillary.totalPrice !== ancillary.quantity * ancillary.unitPrice ||
+      ancillary.totalPrice < 0
+    )
+      throw invoiceBlocked("Ancillary charge requires reconciliation");
+    await tx
+      .update(bookingAncillaries)
+      .set({ status: "cancelled", updatedAt: new Date() })
+      .where(eq(bookingAncillaries.id, ancillaryId));
+    await setInvoiceTotal(
+      tx,
+      booking,
+      booking.totalAmount - ancillary.totalPrice
+    );
+    return true;
+  });
 }
 
 /**
