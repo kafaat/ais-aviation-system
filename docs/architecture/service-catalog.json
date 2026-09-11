@@ -2492,10 +2492,20 @@
       "lifecycle": "active",
       "technicalOwner": "server/services/refunds-stats.service.ts",
       "accountableOwner": null,
-      "consumers": ["server/routers/refunds.ts"],
+      "consumers": [
+        "server/routers/refunds.ts",
+        "server/services/report-export.service.ts"
+      ],
       "dependencies": ["drizzle/schema.ts", "server/db.ts"],
       "tableExpressions": {
-        "reads": ["bookings"],
+        "reads": [
+          "bookingRefundItems",
+          "bookingRefundPlans",
+          "bookings",
+          "financialLedger",
+          "flights",
+          "users"
+        ],
         "writes": []
       },
       "replacement": null
@@ -2534,7 +2544,11 @@
       "technicalOwner": "server/services/report-export.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/reports.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/refunds-stats.service.ts"
+      ],
       "tableExpressions": {
         "reads": ["airlines", "bookings", "flights", "users"],
         "writes": []

@@ -115,6 +115,11 @@ export const responseContracts = {
     totalRefundedAmount: outputNumber,
     pendingRefunds: outputNumber,
     completedRefunds: outputNumber,
+    refundedBookings: outputNumber,
+    pendingRefundAmount: outputNumber,
+    reviewRequiredRefunds: outputNumber,
+    reviewRequiredAmount: outputNumber,
+    retainedCancellationFees: outputNumber,
     refundRate: outputNumber,
   }),
   getHistory: z.array(

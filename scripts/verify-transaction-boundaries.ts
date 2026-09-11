@@ -390,6 +390,9 @@ try {
   await verifySplitLifecycle(db, id, check);
   const { verifySplitRefunds } = await import("./acceptance/split-refunds");
   await verifySplitRefunds(db, id, check);
+  const { verifyRefundReporting } =
+    await import("./acceptance/refund-reporting");
+  await verifyRefundReporting(db, id, check);
   const { verifyDataAudit } = await import("./acceptance/data-audit");
   await verifyDataAudit(db, id, check);
   completed = true;
