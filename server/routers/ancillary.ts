@@ -89,7 +89,8 @@ export const ancillaryRouter = router({
         bookingId: z.number(),
         passengerId: z.number().optional(),
         ancillaryServiceId: z.number(),
-        quantity: z.number().min(1).max(10).optional(),
+        quantity: z.number().int().min(1).max(10).optional(),
+        idempotencyKey: z.string().min(1).max(255),
         metadata: z.any().optional(),
       })
     )
@@ -122,7 +123,10 @@ export const ancillaryRouter = router({
         });
       }
 
-      return await ancillaryService.addAncillaryToBooking(input);
+      return await ancillaryService.addAncillaryToBooking(input, {
+        userId: ctx.user.id,
+        admin: ctx.user.role === "admin",
+      });
     }),
 
   /**
@@ -206,7 +210,8 @@ export const ancillaryRouter = router({
       }
 
       return await ancillaryService.removeAncillaryFromBooking(
-        input.ancillaryId
+        input.ancillaryId,
+        { userId: ctx.user.id, admin: ctx.user.role === "admin" }
       );
     }),
 

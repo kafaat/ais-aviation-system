@@ -1,12 +1,20 @@
 /** Technical ownership and evidence requirements, not a claim of operational certification. */
 export const capabilityCatalog = [
   {
-    id: "ndcServicing",
+    id: "ndcUnpaidServicing",
+    implementation: "implemented",
+    owner: "ndc-unpaid.service and booking-invoice.service",
+    consumer: "ndc.changeOrder and ndc.addServices",
+    requirement:
+      "Unpaid pending invoice, no active checkout, same airline/tenant SAR economy or business offer, canonical passengers; no EMD or external fulfillment certification",
+  },
+  {
+    id: "ndcPaidServicing",
     implementation: "blocked",
     owner: "ndc.service",
     consumer: "ndc.changeOrder and ndc.addServices",
     requirement:
-      "Idempotent quoted exchange, all-segment inventory, passenger synchronization, verified fare/ancillary settlement and EMD issuance",
+      "Paid/ticketed exchange, verified fare difference settlement, travel-document servicing and contracted EMD issuance",
   },
   {
     id: "kioskHardware",

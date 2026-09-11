@@ -8,6 +8,7 @@ import {
   financialLedger,
 } from "../../drizzle/schema";
 import { stripe } from "../stripe";
+import { assertNoActiveCheckout } from "./booking-checkout.service";
 import {
   confirmFundedBooking,
   assertNoCollectionReview,
@@ -153,9 +154,14 @@ export async function payFromWallet(userId: number, bookingId: number) {
       .limit(1);
     if (existing)
       return { balance: existing.balanceAfter, amountPaid: -existing.amount };
-    if (booking.status !== "pending" || booking.paymentStatus === "paid")
+    if (
+      booking.status !== "pending" ||
+      booking.paymentStatus !== "pending" ||
+      booking.seatsReserved
+    )
       throw new Error("Booking is not payable");
     await assertNoCollectionReview(tx, bookingId);
+    await assertNoActiveCheckout(tx, booking);
     const shares = await tx
       .select()
       .from(paymentSplits)

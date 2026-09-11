@@ -14,6 +14,9 @@ import {
   airports,
   InsertPaymentSplit,
 } from "../../drizzle/schema";
+import { assertNoActiveCheckout } from "./booking-checkout.service";
+import { assertTenantOperational } from "./tenant.service";
+import { recordEvent } from "./outbox.service";
 import { sendSplitPaymentRequest } from "./email.service";
 import { assertNoCollectionReview } from "./booking-settlement.service";
 import * as crypto from "crypto";
@@ -30,6 +33,7 @@ export interface SplitPayerInput {
 
 export interface InitiateSplitPaymentInput {
   bookingId: number;
+  userId: number;
   splits: SplitPayerInput[];
   expirationDays?: number; // Days until payment requests expire (default: 7)
 }
@@ -110,100 +114,130 @@ export async function initiateSplitPayment(
 
   const { bookingId, splits, expirationDays = DEFAULT_EXPIRATION_DAYS } = input;
 
-  // Validate booking exists and is pending payment
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
+  return db.transaction(async tx => {
+    // All payment rails and invoice editors serialize on the owned booking.
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1)
+      .for("update");
 
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Booking not found",
-    });
-  }
-
-  if (booking.paymentStatus === "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Booking is already paid",
-    });
-  }
-
-  // Check if split payment already exists for this booking
-  const existingSplits = await db
-    .select()
-    .from(paymentSplits)
-    .where(
-      and(
-        eq(paymentSplits.bookingId, bookingId),
-        sql`${paymentSplits.status} NOT IN ('cancelled', 'expired')`
-      )
-    );
-
-  if (existingSplits.length > 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "Split payment already exists for this booking. Cancel existing splits first.",
-    });
-  }
-
-  // Validate splits
-  if (splits.length < 2) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "At least 2 payers are required for split payment",
-    });
-  }
-
-  // Validate total amount matches booking
-  const totalSplitAmount = splits.reduce((sum, s) => sum + s.amount, 0);
-  if (totalSplitAmount !== booking.totalAmount) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Split amounts (${totalSplitAmount}) must equal booking total (${booking.totalAmount})`,
-    });
-  }
-
-  // Validate minimum amounts
-  for (const split of splits) {
-    if (split.amount < MIN_SPLIT_AMOUNT) {
+    if (!booking || booking.userId !== input.userId) {
       throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Each split must be at least ${MIN_SPLIT_AMOUNT / 100} SAR`,
+        code: "NOT_FOUND",
+        message: "Booking not found",
       });
     }
-  }
 
-  const expiresAt = calculateExpirationDate(expirationDays);
-  const splitIds: number[] = [];
+    if (
+      booking.status !== "pending" ||
+      booking.paymentStatus !== "pending" ||
+      booking.seatsReserved
+    ) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Booking is already paid",
+      });
+    }
 
-  // Create split records
-  for (const split of splits) {
-    const percentage = ((split.amount / booking.totalAmount) * 100).toFixed(2);
-    const paymentToken = generatePaymentToken();
+    await assertTenantOperational(tx, booking.tenantId);
+    await assertNoCollectionReview(tx, bookingId);
+    await assertNoActiveCheckout(tx, booking);
+    if (
+      !Number.isInteger(expirationDays) ||
+      expirationDays < 1 ||
+      expirationDays > 30
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Expiration must be 1 to 30 whole days",
+      });
 
-    const splitData: InsertPaymentSplit = {
-      bookingId,
-      payerEmail: split.email,
-      payerName: split.name,
-      amount: split.amount,
-      percentage,
-      status: "pending",
-      paymentToken,
-      expiresAt,
-    };
+    // Check if split payment already exists for this booking
+    const existingSplits = await tx
+      .select()
+      .from(paymentSplits)
+      .where(
+        and(
+          eq(paymentSplits.bookingId, bookingId),
+          sql`${paymentSplits.status} NOT IN ('cancelled', 'expired')`
+        )
+      );
 
-    const result = await db.insert(paymentSplits).values(splitData);
-    const insertId = Number(
-      (result as unknown as { insertId: number }).insertId
-    );
-    splitIds.push(insertId);
-  }
+    if (existingSplits.length > 0) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message:
+          "Split payment already exists for this booking. Cancel existing splits first.",
+      });
+    }
 
-  return { splitIds, totalAmount: booking.totalAmount };
+    // Validate splits
+    if (splits.length < 2 || splits.length > 20) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "At least 2 payers are required for split payment",
+      });
+    }
+
+    // Validate total amount matches booking
+    const totalSplitAmount = splits.reduce((sum, s) => sum + s.amount, 0);
+    if (totalSplitAmount !== booking.totalAmount) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Split amounts (${totalSplitAmount}) must equal booking total (${booking.totalAmount})`,
+      });
+    }
+
+    // Validate minimum amounts
+    for (const split of splits) {
+      if (
+        !Number.isSafeInteger(split.amount) ||
+        split.amount < MIN_SPLIT_AMOUNT
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Each split must be at least ${MIN_SPLIT_AMOUNT / 100} SAR`,
+        });
+      }
+    }
+
+    const expiresAt = calculateExpirationDate(expirationDays);
+    const splitIds: number[] = [];
+
+    // Create split records
+    for (const split of splits) {
+      const percentage = ((split.amount / booking.totalAmount) * 100).toFixed(
+        2
+      );
+      const paymentToken = generatePaymentToken();
+
+      const splitData: InsertPaymentSplit = {
+        bookingId,
+        payerEmail: split.email,
+        payerName: split.name,
+        amount: split.amount,
+        percentage,
+        status: "pending",
+        paymentToken,
+        expiresAt,
+      };
+
+      const result = await tx.insert(paymentSplits).values(splitData);
+      const insertId = Number(result[0].insertId);
+      splitIds.push(insertId);
+    }
+
+    await recordEvent(tx, {
+      aggregateType: "booking",
+      aggregateId: bookingId,
+      tenantId: booking.tenantId,
+      eventType: "booking.split_payment_created",
+      payload: { bookingId, splitIds, totalAmount: booking.totalAmount },
+    });
+    return { splitIds, totalAmount: booking.totalAmount };
+  });
 }
 
 /**

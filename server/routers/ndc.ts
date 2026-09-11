@@ -73,6 +73,8 @@ const serviceItemSchema = z.object({
     .string()
     .optional()
     .describe("Flight segment ID this service applies to"),
+  passengerIndex: z.number().int().min(0).max(8).optional(),
+  quantity: z.number().int().min(1).max(10).optional(),
 });
 
 // ============================================================================
@@ -400,15 +402,18 @@ export const ndcRouter = router({
         tags: ["NDC"],
         summary: "Modify an order",
         description:
-          "Unavailable until integrated exchange, inventory, passenger and financial settlement acceptance. Returns PRECONDITION_FAILED without changing the order.",
+          "Amend an owned unpaid unticketed invoice. Date/cabin changes require a fresh replacementOfferId; active checkout must first be expired. Paid exchanges remain unavailable.",
         protect: true,
       },
     })
     .input(
       z.object({
         orderId: z.string().min(1).describe("NDC order identifier to modify"),
+        idempotencyKey: z.string().min(1).max(255),
         changes: z
           .object({
+            replacementOfferId: z.string().min(1).max(255).optional(),
+            contactInfoUpdate: contactInfoSchema.partial().optional(),
             newDepartureDate: z
               .string()
               .regex(
@@ -426,7 +431,9 @@ export const ndcRouter = router({
                   passengerId: z
                     .string()
                     .min(1)
-                    .describe("Passenger ID to update"),
+                    .describe("Canonical passenger ID to update")
+                    .optional(),
+                  index: z.number().int().min(0).max(8).optional(),
                   firstName: z
                     .string()
                     .optional()
@@ -455,6 +462,7 @@ export const ndcRouter = router({
           orderId: input.orderId,
           userId: ctx.user.id,
           changes: input.changes,
+          idempotencyKey: input.idempotencyKey,
         });
 
         return {
@@ -492,15 +500,17 @@ export const ndcRouter = router({
         tags: ["NDC"],
         summary: "Add ancillary services to order",
         description:
-          "Unavailable until ancillary invoice settlement and EMD issuance are integrated. Returns PRECONDITION_FAILED without changing the order.",
+          "Add locally catalogued baggage, meals or priority boarding to an unpaid invoice. Prices and ownership are verified; this operation does not collect payment or issue an EMD.",
         protect: true,
       },
     })
     .input(
       z.object({
         orderId: z.string().min(1).describe("NDC order identifier"),
+        idempotencyKey: z.string().min(1).max(255),
         services: z
           .array(serviceItemSchema)
+          .max(20)
           .min(1)
           .describe("Ancillary services to add"),
       })
@@ -512,6 +522,7 @@ export const ndcRouter = router({
           orderId: input.orderId,
           userId: ctx.user.id,
           services: input.services,
+          idempotencyKey: input.idempotencyKey,
         });
 
         return {
@@ -638,7 +649,7 @@ export const ndcRouter = router({
     .output(responseContracts["getOrderHistory"])
     .query(async ({ ctx }) => {
       try {
-        const orders = await ndcService.getOrderHistory(ctx.user.id);
+        const orders = await ndcService.getOwnedOrderHistory(ctx.user.id);
 
         return {
           success: true,

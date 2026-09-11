@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Card } from "./ui/card";
@@ -56,20 +56,25 @@ export function MealPreOrder({
     },
   });
 
+  const pendingCommands = useRef(new Map<string, string>());
   const handleSelectMeal = async (meal: MealOption) => {
-    setSelectedMealId(meal.id);
-    onMealSelected?.(meal.id);
-
+    const signature = JSON.stringify([bookingId, passengerId, meal.id]);
+    const key = pendingCommands.current.get(signature) ?? crypto.randomUUID();
+    pendingCommands.current.set(signature, key);
     await addToBooking.mutateAsync({
+      idempotencyKey: key,
       bookingId,
       ancillaryServiceId: meal.id,
       quantity: 1,
       passengerId,
-      metadata: JSON.stringify({
+      metadata: {
         mealCode: meal.code,
         mealName: meal.name,
-      }),
+      },
     });
+    pendingCommands.current.delete(signature);
+    setSelectedMealId(meal.id);
+    onMealSelected?.(meal.id);
   };
 
   if (isLoading) {

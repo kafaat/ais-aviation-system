@@ -132,6 +132,24 @@ export default defineConfig(({ mode }) => {
           functions: 0,
           branches: 0,
           statements: 0,
+          "server/services/booking-checkout.service.ts": {
+            lines: 80,
+            statements: 80,
+            functions: 85,
+            branches: 75,
+          },
+          "server/services/booking-invoice.service.ts": {
+            lines: 80,
+            statements: 80,
+            functions: 85,
+            branches: 75,
+          },
+          "server/services/ndc-unpaid.service.ts": {
+            lines: 80,
+            statements: 80,
+            functions: 85,
+            branches: 75,
+          },
         },
         // Clean coverage folder before running tests
         clean: true,

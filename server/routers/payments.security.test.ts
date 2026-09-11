@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { transactionMemory } from "../__tests__/helpers/transaction-memory";
 import type { TrpcContext } from "../_core/context";
 import { paymentsRouter } from "./payments";
 
@@ -62,6 +63,7 @@ function context(role: "user" | "admin" | null = "user"): TrpcContext {
   };
 }
 
+let fixture: ReturnType<typeof transactionMemory>;
 const booking = {
   status: "pending",
   id: 10,
@@ -77,17 +79,17 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.getBookingByIdWithDetails.mockResolvedValue(booking);
   mocks.createPayment.mockResolvedValue([{ insertId: 99 }]);
-  mocks.limit.mockResolvedValue([booking]);
-  mocks.getDb.mockResolvedValue({
-    select: () => ({
-      from: () => ({ where: () => ({ limit: mocks.limit }) }),
-    }),
-  });
-  mocks.providerCheckout.mockResolvedValue({
-    provider: "hyperpay",
-    sessionId: "test-session",
-    url: "https://payments.example.test/checkout",
-  });
+  fixture = transactionMemory({ bookings: [booking] });
+  mocks.getDb.mockReturnValue(fixture.db);
+  mocks.checkout.mockImplementation(async (request: any) => ({
+    id: "cs_test_owner",
+    url: "https://checkout.stripe.com/test",
+    status: "open",
+    payment_status: "unpaid",
+    currency: "sar",
+    amount_total: request.line_items[0].price_data.unit_amount,
+    metadata: request.metadata,
+  }));
 });
 
 function expectNoPaymentSideEffects() {
@@ -137,50 +139,53 @@ describe("payment authority boundary", () => {
     expectNoPaymentSideEffects();
   });
 
-  it("preserves provider checkout using the stored booking total", async () => {
-    mocks.limit.mockResolvedValueOnce([booking]).mockResolvedValueOnce([]);
-    const caller = paymentsRouter.createCaller(context());
-
-    const result = await caller.createCheckoutSession({
-      bookingId: booking.id,
-      provider: "hyperpay",
-    });
-
-    expect(result.sessionId).toBe("test-session");
-    expect(mocks.providerCheckout).toHaveBeenCalledWith(
-      "hyperpay",
-      expect.objectContaining({
-        bookingId: booking.id,
-        userId: 1,
-        amount: booking.totalAmount,
-      })
-    );
-    expect(mocks.updateBookingStatus).not.toHaveBeenCalled();
+  it("creates Stripe checkout from the stored total without settling the booking", async () => {
+    const result = await paymentsRouter
+      .createCaller(context())
+      .createCheckoutSession({ bookingId: 10 });
+    expect(result.sessionId).toBe("cs_test_owner");
+    expect(
+      mocks.checkout.mock.calls[0][0].line_items[0].price_data.unit_amount
+    ).toBe(12345);
+    expect(fixture.rows("booking_checkout_requests")[0].status).toBe("ready");
+    expect(fixture.rows("bookings")[0].paymentStatus).toBe("pending");
   });
-
-  it("blocks another checkout while verified funds await review", async () => {
-    mocks.limit
-      .mockResolvedValueOnce([booking])
-      .mockResolvedValueOnce([{ id: "pi_review" }]);
+  it("rejects a provider without integrated settlement before external calls", async () => {
     await expect(
       paymentsRouter
         .createCaller(context())
-        .createCheckoutSession({ bookingId: booking.id, provider: "hyperpay" })
+        .createCheckoutSession({ bookingId: 10, provider: "hyperpay" })
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-    expect(mocks.providerCheckout).not.toHaveBeenCalled();
-    expect(mocks.checkout).not.toHaveBeenCalled();
+    expectNoPaymentSideEffects();
   });
-
-  it("rejects checkout of another user's booking", async () => {
-    mocks.limit.mockResolvedValue([{ ...booking, userId: 2 }]);
-    const caller = paymentsRouter.createCaller(context());
-
+  it("blocks another checkout while verified funds await review", async () => {
+    fixture = transactionMemory({
+      bookings: [booking],
+      payment_receipts: [
+        {
+          bookingId: 10,
+          paymentIntentId: "pi_review",
+          settlementStatus: "review_required",
+        },
+      ],
+    });
+    mocks.getDb.mockReturnValue(fixture.db);
     await expect(
-      caller.createCheckoutSession({ bookingId: 10, provider: "hyperpay" })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
-
-    expect(mocks.providerCheckout).not.toHaveBeenCalled();
+      paymentsRouter
+        .createCaller(context())
+        .createCheckoutSession({ bookingId: 10 })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
     expect(mocks.checkout).not.toHaveBeenCalled();
-    expect(mocks.auditPayment).not.toHaveBeenCalled();
+    expect(fixture.rows("booking_checkout_requests")).toHaveLength(0);
+  });
+  it("rejects checkout of another user's booking without a provider call", async () => {
+    fixture.rows("bookings")[0].userId = 2;
+    await expect(
+      paymentsRouter
+        .createCaller(context())
+        .createCheckoutSession({ bookingId: 10 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(mocks.checkout).not.toHaveBeenCalled();
+    expect(fixture.rows("booking_checkout_requests")).toHaveLength(0);
   });
 });

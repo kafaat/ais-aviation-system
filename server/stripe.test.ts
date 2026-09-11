@@ -2,7 +2,7 @@ import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { getDb } from "./db";
-import { bookings } from "../drizzle/schema";
+import { bookings, bookingCheckoutRequests } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
@@ -72,6 +72,12 @@ describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
     if (!db) return;
 
     try {
+      const { expireBookingCheckout } =
+        await import("./services/booking-checkout.service");
+      await expireBookingCheckout(testBookingId, 1);
+      await db
+        .delete(bookingCheckoutRequests)
+        .where(eq(bookingCheckoutRequests.bookingId, testBookingId));
       await db.delete(bookings).where(eq(bookings.id, testBookingId));
     } catch (error) {
       console.error("Error cleaning up test data:", error);
@@ -100,20 +106,20 @@ describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
     await db
       .update(bookings)
       .set({ paymentStatus: "paid" })
-      .where({ id: testBookingId });
+      .where(eq(bookings.id, testBookingId));
 
     const { ctx } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
 
     await expect(
       caller.payments.createCheckoutSession({ bookingId: testBookingId })
-    ).rejects.toThrow("already paid");
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
 
     // Reset for other tests
     await db
       .update(bookings)
       .set({ paymentStatus: "pending" })
-      .where({ id: testBookingId });
+      .where(eq(bookings.id, testBookingId));
   });
 
   it("prevents unauthorized access to booking", async () => {
@@ -125,6 +131,6 @@ describe.skipIf(!hasRealStripeKey)("Stripe Payment Integration", () => {
 
     await expect(
       caller.payments.createCheckoutSession({ bookingId: testBookingId })
-    ).rejects.toThrow("Access denied");
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });
