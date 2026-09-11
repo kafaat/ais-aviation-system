@@ -328,6 +328,9 @@ describe("durable split checkout lifecycle", () => {
       "no longer payable"
     );
     expect(rows()[0].status).toBe("pending");
+    rows()[0].status = "paid";
+    await expect(getPayerPaymentDetails(token)).resolves.toBeNull();
+    expect(rows()[0].status).toBe("paid");
   });
   it.each(["failed", "cancelled"])(
     "blocks wallet and a new split plan for unresolved %s checkout",
@@ -373,6 +376,18 @@ describe("durable split checkout lifecycle", () => {
 });
 
 describe("split collection and refund authority", () => {
+  it("routes legacy paid shares without receipts to review instead of leaving all-paid state silently pending", async () => {
+    rows()[0].status = "paid";
+    rows()[0].stripePaymentIntentId = "pi_legacy_without_receipt";
+    await collect(2);
+    expect(fixture.rows("bookings")[0].status).toBe("pending");
+    expect(fixture.rows("payment_receipts")[0].settlementStatus).toBe(
+      "review_required"
+    );
+    expect(fixture.rows("outbox")[0].eventType).toBe(
+      "payment.settlement_review_required"
+    );
+  });
   it("records distinct duplicate charges for review, while exact replays have no effect", async () => {
     await collect(1);
     await collect(1);

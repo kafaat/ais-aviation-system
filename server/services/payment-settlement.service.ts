@@ -224,6 +224,14 @@ export async function settleVerifiedPayment(
       );
     });
     if (funded) await confirmCollectedBooking(tx, booking, payment);
+    else if (active.every(s => s.id === split.id || s.status === "paid"))
+      await requireCollectionReview(
+        tx,
+        payment,
+        booking,
+        "Paid split state lacks matching verified funding receipts",
+        true
+      );
     return;
   }
 

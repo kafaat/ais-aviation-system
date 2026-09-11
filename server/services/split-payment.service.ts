@@ -420,12 +420,7 @@ export async function getPayerPaymentDetails(
   }
 
   // Reading an expired link must never overwrite a concurrent paid state.
-  if (
-    split.status !== "paid" &&
-    split.expiresAt &&
-    new Date() > split.expiresAt
-  )
-    return null;
+  if (split.expiresAt && new Date() > split.expiresAt) return null;
 
   // Get booking and flight details
   const [booking] = await db
