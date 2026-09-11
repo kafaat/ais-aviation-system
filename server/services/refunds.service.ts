@@ -1,8 +1,14 @@
 import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 import { getDb } from "../db";
-import { bookings, payments, users, flights } from "../../drizzle/schema";
-import { and, eq, sql } from "drizzle-orm";
+import {
+  bookings,
+  payments,
+  users,
+  flights,
+  paymentSplits,
+} from "../../drizzle/schema";
+import { and, eq, sql, isNotNull } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
 import { trackRefundIssued } from "./metrics.service";
@@ -45,6 +51,25 @@ async function listActiveRefunds(
 
 function sumRefundAmounts(refunds: Stripe.Refund[]): number {
   return refunds.reduce((total, refund) => total + refund.amount, 0);
+}
+
+const splitRefundReason =
+  "Split-funded bookings require refunds to each original payer; single-payment refund is unavailable";
+async function hasSplitFunding(
+  database: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  bookingId: number
+) {
+  const [split] = await database
+    .select({ id: paymentSplits.id })
+    .from(paymentSplits)
+    .where(
+      and(
+        eq(paymentSplits.bookingId, bookingId),
+        isNotNull(paymentSplits.stripePaymentIntentId)
+      )
+    )
+    .limit(1);
+  return Boolean(split);
 }
 
 /**
@@ -110,6 +135,13 @@ export async function createRefund(
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "No payment intent found for this booking",
+      });
+    }
+
+    if (await hasSplitFunding(database, booking.id)) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: splitRefundReason,
       });
     }
 
@@ -391,6 +423,10 @@ export async function isBookingRefundable(bookingId: number): Promise<{
 
     if (!booking.stripePaymentIntentId) {
       return { refundable: false, reason: "No payment intent found" };
+    }
+
+    if (await hasSplitFunding(database, booking.id)) {
+      return { refundable: false, reason: splitRefundReason };
     }
 
     const activeRefunds = await listActiveRefunds(

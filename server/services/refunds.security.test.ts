@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createRefund, type RefundActor } from "./refunds.service";
+import {
+  createRefund,
+  isBookingRefundable,
+  type RefundActor,
+} from "./refunds.service";
 
 const mocks = vi.hoisted(() => ({
   getDb: vi.fn(),
@@ -90,6 +94,7 @@ beforeEach(() => {
   };
   mocks.limit
     .mockResolvedValueOnce([booking])
+    .mockResolvedValueOnce([])
     .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])
     .mockResolvedValueOnce([booking])
     .mockResolvedValueOnce([])
@@ -181,6 +186,28 @@ describe("refund service authorization", () => {
 });
 
 describe("refund amount validation", () => {
+  it("refuses to refund a split-funded invoice using the last payer's intent", async () => {
+    mocks.limit
+      .mockReset()
+      .mockResolvedValueOnce([booking])
+      .mockResolvedValueOnce([{ id: 4 }]);
+    await expect(createRefund(input, owner)).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    expectNoFinancialWrites();
+    expect(mocks.listRefunds).not.toHaveBeenCalled();
+  });
+  it("reports split funding as requiring per-payer refunds before calling Stripe", async () => {
+    mocks.limit
+      .mockReset()
+      .mockResolvedValueOnce([booking])
+      .mockResolvedValueOnce([{ id: 4 }]);
+    expect(await isBookingRefundable(booking.id)).toMatchObject({
+      refundable: false,
+      reason: expect.stringContaining("each original payer"),
+    });
+    expect(mocks.listRefunds).not.toHaveBeenCalled();
+  });
   it.each([0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
     "rejects invalid admin override %s before DB access",
     async amount => {

@@ -258,6 +258,7 @@ export const bookings = mysqlTable(
     stripeCheckoutSessionId: varchar("stripeCheckoutSessionId", {
       length: 255,
     }),
+
     idempotencyKey: varchar("idempotencyKey", { length: 255 }).unique(), // For preventing duplicate bookings
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
     numberOfPassengers: int("numberOfPassengers").default(1).notNull(),
@@ -2572,6 +2573,17 @@ export const paymentSplits = mysqlTable(
     stripeCheckoutSessionId: varchar("stripeCheckoutSessionId", {
       length: 255,
     }),
+
+    // Persist the exact provider request before calling Stripe. NULL denotes
+    // legacy data and must not be treated as proof that no session exists.
+    checkoutRequestId: varchar("checkoutRequestId", { length: 64 }).unique(),
+    checkoutRequestPayload: text("checkoutRequestPayload"),
+    checkoutRequestedAt: timestamp("checkoutRequestedAt"),
+    checkoutStatus: mysqlEnum("checkoutStatus", [
+      "creating",
+      "ready",
+      "expired",
+    ]),
 
     // Payment token for payer access (unique link)
     paymentToken: varchar("paymentToken", { length: 64 }).notNull().unique(),

@@ -20,6 +20,7 @@ import {
   type SettlementTx,
 } from "./booking-settlement.service";
 import { recordEvent } from "./outbox.service";
+import { isActiveSplitPayment } from "./booking-checkout.service";
 
 export interface VerifiedPayment {
   paymentIntentId: string;
@@ -136,13 +137,15 @@ export async function settleVerifiedPayment(
       )
       .limit(1)
       .for("update");
-    if (
-      !split ||
-      !["pending", "email_sent", "failed"].includes(split.status) ||
-      booking.status !== "pending"
-    )
-      throw new Error("Split is not payable");
+    if (!split) throw new Error("Payment split/booking mismatch");
     assertCollectedAmount(amount, split.amount, currency);
+    // Legacy same-intent replays are harmless; a different collected intent is
+    // a real additional charge and must be retained for reconciliation.
+    if (
+      split.status === "paid" &&
+      split.stripePaymentIntentId === paymentIntentId
+    )
+      return;
     await recordReceipt(
       tx,
       payment,
@@ -151,6 +154,51 @@ export async function settleVerifiedPayment(
       booking.userId,
       booking.id
     );
+    const shares = await tx
+      .select()
+      .from(paymentSplits)
+      .where(eq(paymentSplits.bookingId, booking.id));
+    const active = shares.filter(s =>
+      ["paid", "pending", "email_sent", "failed"].includes(s.status)
+    );
+    const receipts = await tx
+      .select()
+      .from(paymentReceipts)
+      .where(eq(paymentReceipts.bookingId, booking.id));
+    const requestMetadata = split.checkoutRequestPayload
+      ? (
+          JSON.parse(split.checkoutRequestPayload) as {
+            metadata?: Record<string, string>;
+          }
+        ).metadata
+      : undefined;
+    const mismatchedClaim =
+      split.checkoutRequestId &&
+      (meta.checkoutRequestId !== split.checkoutRequestId ||
+        !requestMetadata?.invoiceHash ||
+        meta.invoiceHash !== requestMetadata.invoiceHash);
+    if (
+      !["pending", "email_sent", "failed"].includes(split.status) ||
+      booking.status !== "pending" ||
+      booking.paymentStatus !== "pending" ||
+      booking.seatsReserved ||
+      mismatchedClaim ||
+      active.length < 2 ||
+      active.reduce((sum, s) => sum + s.amount, 0) !== booking.totalAmount ||
+      receipts.some(
+        r =>
+          (r.refundedAmount > 0 && r.settlementStatus !== "review_refunded") ||
+          r.settlementStatus === "review_required"
+      )
+    ) {
+      await requireCollectionReview(
+        tx,
+        payment,
+        booking,
+        "Split collection conflicts with its current payment plan"
+      );
+      return;
+    }
     await tx
       .update(paymentSplits)
       .set({
@@ -159,27 +207,31 @@ export async function settleVerifiedPayment(
         paidAt: new Date(),
       })
       .where(eq(paymentSplits.id, split.id));
-    const shares = await tx
-      .select()
-      .from(paymentSplits)
-      .where(
-        and(
-          eq(paymentSplits.bookingId, booking.id),
-          inArray(paymentSplits.status, [
-            "paid",
-            "pending",
-            "email_sent",
-            "failed",
-          ])
+    const funded = active.every(s => {
+      const intent =
+        s.id === split.id ? paymentIntentId : s.stripePaymentIntentId;
+      return (
+        (s.id === split.id || s.status === "paid") &&
+        receipts.some(
+          r =>
+            r.kind === "split_payment" &&
+            r.targetId === s.id &&
+            r.paymentIntentId === intent &&
+            r.amount === s.amount &&
+            r.refundedAmount === 0 &&
+            r.settlementStatus === "applied"
         )
       );
-    const paid = shares
-      .filter(s => s.status === "paid")
-      .reduce((sum, s) => sum + s.amount, 0);
-    if (paid > booking.totalAmount)
-      throw new Error("Split payments exceed booking amount");
-    if (paid === booking.totalAmount && shares.every(s => s.status === "paid"))
-      await confirmCollectedBooking(tx, booking, payment);
+    });
+    if (funded) await confirmCollectedBooking(tx, booking, payment);
+    else if (active.every(s => s.id === split.id || s.status === "paid"))
+      await requireCollectionReview(
+        tx,
+        payment,
+        booking,
+        "Paid split state lacks matching verified funding receipts",
+        true
+      );
     return;
   }
 
@@ -286,12 +338,7 @@ export async function settleVerifiedPayment(
   const shares = await tx
     .select()
     .from(paymentSplits)
-    .where(
-      and(
-        eq(paymentSplits.bookingId, booking.id),
-        inArray(paymentSplits.status, ["paid", "pending", "email_sent"])
-      )
-    );
+    .where(eq(paymentSplits.bookingId, booking.id));
   await recordReceipt(
     tx,
     payment,
@@ -300,7 +347,7 @@ export async function settleVerifiedPayment(
     booking.userId,
     booking.id
   );
-  if (shares.length) {
+  if (shares.some(isActiveSplitPayment)) {
     await requireCollectionReview(
       tx,
       payment,
@@ -389,6 +436,10 @@ async function hasReceipt(tx: SettlementTx, payment: VerifiedPayment) {
   if (
     existing.kind !== kind ||
     existing.targetId !== target ||
+    (kind !== "wallet_topup" &&
+      existing.bookingId !== Number(payment.metadata.bookingId)) ||
+    (payment.metadata.userId &&
+      existing.userId !== Number(payment.metadata.userId)) ||
     existing.amount !== payment.amount ||
     existing.currency.toUpperCase() !== payment.currency.toUpperCase()
   ) {
@@ -567,6 +618,27 @@ export async function settleVerifiedRefund(
         .update(bookings)
         .set({ status: "cancelled", paymentStatus: "refunded" })
         .where(eq(bookings.id, booking.id));
+    } else if (
+      receipt.kind === "split_payment" &&
+      booking.status === "pending"
+    ) {
+      await requireCollectionReview(
+        tx,
+        {
+          paymentIntentId: input.paymentIntentId,
+          amount: receipt.amount,
+          currency: receipt.currency,
+          eventId: input.eventId,
+          metadata: {
+            type: "split_payment",
+            bookingId: String(booking.id),
+            splitId: String(receipt.targetId),
+          },
+        },
+        booking,
+        "Split funding was refunded before booking confirmation",
+        true
+      );
     }
   }
   if (input.amountRefunded === receipt.amount && receipt.bookingId) {
@@ -585,6 +657,7 @@ export async function settleVerifiedRefund(
     aggregateType: "payment",
     aggregateId: input.paymentIntentId,
     eventType: "payment.refunded",
+    tenantId: ownerBooking?.tenantId,
     payload: {
       userId: receipt.userId,
       bookingId: receipt.bookingId,
