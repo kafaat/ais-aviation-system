@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.22.5
+
+### Bug Fixes
+
+- fix: make historical data reconciliation measurable and read only (0db3b11)
+- fix: serialize invoice payment and unpaid NDC servicing (28e596a)
+- fix: satisfy invoice closure formatting and import gates (b8dc9b8)
+- fix: fit replacement hold identity to the persisted column (0e38644)
+- fix: consolidate the NDC settlement import (95fc6b4)
+
+### Other Changes
+
+- test: isolate invoice fixtures from nonexistent booking sentinels (c6f1784)
+- Merge pull request #138 from kafaat/fix/sequential-operational-closure (b891130)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.4...v1.22.5
+
+---
+
 ## What's Changed in v1.22.4
 
 ### Bug Fixes
