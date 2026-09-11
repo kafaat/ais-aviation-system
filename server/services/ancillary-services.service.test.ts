@@ -23,25 +23,13 @@ const dbAvailable = await isDatabaseAvailable();
 
 describe.skipIf(!dbAvailable)("Ancillary Services Service", () => {
   let testServiceId: number;
-  const testBookingId = 999999;
+  let testBookingId: number;
+  let otherBookingId: number;
+  let testFlightId: number;
 
   beforeAll(async () => {
     const db = getDb()!;
-    await db.insert(bookings).values(
-      [0, 1].map(n => ({
-        id: testBookingId + n,
-        userId: 1,
-        flightId: testBookingId,
-        bookingReference: `AC${n}001`,
-        pnr: `AP${n}001`,
-        totalAmount: 50000,
-        status: "pending" as const,
-        cabinClass: "economy" as const,
-        numberOfPassengers: 1,
-      }))
-    );
-    await db.insert(flights).values({
-      id: testBookingId,
+    const [flight] = await db.insert(flights).values({
       flightNumber: "AC100",
       airlineId: 1,
       originId: 1,
@@ -55,6 +43,22 @@ describe.skipIf(!dbAvailable)("Ancillary Services Service", () => {
       businessSeats: 10,
       businessAvailable: 10,
     });
+    testFlightId = flight.insertId;
+    const ids: number[] = [];
+    for (const n of [0, 1]) {
+      const [booking] = await db.insert(bookings).values({
+        userId: 1,
+        flightId: testFlightId,
+        bookingReference: `AC${n}001`,
+        pnr: `AP${n}001`,
+        totalAmount: 50000,
+        status: "pending",
+        cabinClass: "economy",
+        numberOfPassengers: 1,
+      });
+      ids.push(booking.insertId);
+    }
+    [testBookingId, otherBookingId] = ids;
     // Create a test ancillary service
     testServiceId = await createAncillaryService({
       code: "TEST_BAG_20KG",
@@ -70,9 +74,9 @@ describe.skipIf(!dbAvailable)("Ancillary Services Service", () => {
   afterAll(async () => {
     const cleanup = getDb();
     if (cleanup) {
-      for (const id of [testBookingId, testBookingId + 1])
+      for (const id of [testBookingId, otherBookingId])
         await cleanup.delete(bookings).where(eq(bookings.id, id));
-      await cleanup.delete(flights).where(eq(flights.id, testBookingId));
+      await cleanup.delete(flights).where(eq(flights.id, testFlightId));
     }
     // Cleanup
     const db = await getDb();
@@ -192,7 +196,7 @@ describe.skipIf(!dbAvailable)("Ancillary Services Service", () => {
     const metadata = { seatNumber: "12A", preference: "window" };
     const result = await addAncillaryToBooking(
       {
-        bookingId: testBookingId + 1,
+        bookingId: otherBookingId,
         ancillaryServiceId: testServiceId,
         quantity: 1,
         metadata,
@@ -203,7 +207,7 @@ describe.skipIf(!dbAvailable)("Ancillary Services Service", () => {
 
     expect(result).toBeDefined();
 
-    const ancillaries = await getBookingAncillaries(testBookingId + 1);
+    const ancillaries = await getBookingAncillaries(otherBookingId);
     expect(ancillaries[0].metadata.preferences).toEqual(metadata);
 
     // Cleanup
@@ -211,7 +215,7 @@ describe.skipIf(!dbAvailable)("Ancillary Services Service", () => {
     if (db) {
       await db
         .delete(bookingAncillaries)
-        .where(eq(bookingAncillaries.bookingId, testBookingId + 1));
+        .where(eq(bookingAncillaries.bookingId, otherBookingId));
     }
   });
 });
