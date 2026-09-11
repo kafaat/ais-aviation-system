@@ -69,7 +69,9 @@ async function reporting<T>(
     return await read(await database());
   } catch (error) {
     if (error instanceof TRPCError) throw error;
-    const code = (error as { code?: unknown })?.code;
+    const code =
+      (error as { cause?: { code?: unknown } })?.cause?.code ??
+      (error as { code?: unknown })?.code;
     console.error(
       "[refund-reporting] Query failed",
       typeof code === "string" && /^ER_[A-Z0-9_]+$/.test(code)
@@ -157,10 +159,11 @@ export async function getRefundStats(): Promise<RefundStats> {
           refundRate: allCount > 0 ? (bookingCount / allCount) * 100 : 0,
         };
       },
+      // This Drizzle version joins transaction-start options without commas.
+      // REPEATABLE READ establishes the shared snapshot at the first SELECT.
       {
         isolationLevel: "repeatable read",
         accessMode: "read only",
-        withConsistentSnapshot: true,
       }
     )
   );

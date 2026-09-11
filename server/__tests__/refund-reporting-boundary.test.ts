@@ -123,7 +123,6 @@ describe("refund reporting money and failure boundaries", () => {
     expect(db.transaction).toHaveBeenCalledWith(expect.any(Function), {
       isolationLevel: "repeatable read",
       accessMode: "read only",
-      withConsistentSnapshot: true,
     });
     expect(responseContracts.getStats.parse(stats)).toEqual(stats);
   });
@@ -172,6 +171,24 @@ describe("refund reporting money and failure boundaries", () => {
       });
     }
   );
+  it("reports a nested driver's safe code without logging its SQL or credentials", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    state.db = {
+      transaction: () => {
+        throw new Error("private SQL and password", {
+          cause: { code: "ER_PARSE_ERROR", sql: "private SQL" },
+        });
+      },
+    };
+    await expect(getRefundStats()).rejects.toMatchObject({
+      message: "Refund reporting unavailable",
+    });
+    expect(log).toHaveBeenCalledWith(
+      "[refund-reporting] Query failed",
+      "ER_PARSE_ERROR"
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/private|password/);
+  });
   it("rejects unavailable storage", async () => {
     state.db = null;
     await expect(getRefundHistory({})).rejects.toMatchObject({
