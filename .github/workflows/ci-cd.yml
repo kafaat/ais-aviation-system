@@ -65,8 +65,11 @@ jobs:
           fi
           echo "All files are properly formatted."
 
+      # Warnings are capped at the count measured when the cap was introduced, so
+      # the backlog can shrink but not grow. Lower the number in package.json when
+      # you clear warnings; never raise it to make a new one pass.
       - name: Run ESLint
-        run: pnpm lint
+        run: pnpm lint:ci
 
       - name: Run TypeScript check
         run: pnpm run check
@@ -929,10 +932,16 @@ jobs:
           BACKUP_PVC: ${{ vars.PRODUCTION_BACKUP_PVC }}
           BACKUP_CREDENTIAL_SECRET: ${{ vars.PRODUCTION_BACKUP_CREDENTIAL_SECRET }}
           BACKUP_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          BACKUP_IMAGE: ${{ vars.PRODUCTION_BACKUP_IMAGE }}
+          BACKUP_DEADLINE_SECONDS: ${{ vars.PRODUCTION_BACKUP_DEADLINE_SECONDS }}
         run: |
           set -euo pipefail
-          python3 scripts/k8s-backup-job.py | kubectl apply -f -
-          kubectl wait --namespace=ais-production --for=condition=complete "job/db-backup-$BACKUP_RUN_ID" --timeout=600s
+          python3 scripts/k8s-backup-job.py > backup-job.json
+          # Wait past the Job's own deadline rather than a separate constant, so a
+          # dump is never reported failed here while it is still running there.
+          deadline=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["spec"]["activeDeadlineSeconds"])' < backup-job.json)
+          kubectl apply -f backup-job.json
+          kubectl wait --namespace=ais-production --for=condition=complete "job/db-backup-$BACKUP_RUN_ID" --timeout="$((deadline + 60))s"
           kubectl logs --namespace=ais-production "job/db-backup-$BACKUP_RUN_ID"
 
       - name: Run database migrations

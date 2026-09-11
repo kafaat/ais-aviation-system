@@ -57,6 +57,23 @@ is complete only when both its `.sql` and matching `.sql.sha256` file are presen
 Failed or interrupted attempts require investigation before operators remove any
 remaining lock or incomplete file. Neither is evidence of a valid backup.
 
+The Job runs as uid/gid 999 with `runAsNonRoot`, a read-only root filesystem, all
+capabilities dropped, no privilege escalation, the default seccomp profile and
+declared CPU/memory requests and limits. `fsGroup` is set to the same id, so the
+PVC must be group-writable by it; a volume whose contents were written by root
+under an earlier revision needs its ownership corrected before the first non-root
+run. Only `/backup` and an ephemeral `/tmp` are writable.
+
+Two optional repository variables size the Job. `PRODUCTION_BACKUP_DEADLINE_SECONDS`
+sets `activeDeadlineSeconds` (default 3600, accepted range 300–43200); with
+`backoffLimit: 0` there is no retry, so measure a real dump and leave margin
+rather than discovering the limit during an incident. The deployment step derives
+its own `kubectl wait` timeout from whatever this produces. `PRODUCTION_BACKUP_IMAGE`
+overrides the `mysql:8.0` default and should carry a `@sha256:` digest in
+production, since the default tag is mutable; obtain one with
+`docker buildx imagetools inspect mysql:8.0`. Both variables fall back to the
+default when unset or empty.
+
 This is a logical database backup, with GTID restoration deliberately disabled.
 `--single-transaction` provides an InnoDB snapshot; concurrent schema changes must
 be stopped during capture. Routine, trigger and event privileges must be granted
