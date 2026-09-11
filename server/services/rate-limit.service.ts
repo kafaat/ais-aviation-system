@@ -160,7 +160,7 @@ interface InMemoryRateLimitEntry {
 const inMemoryStore = new Map<string, InMemoryRateLimitEntry>();
 
 // Cleanup expired entries every 5 minutes
-setInterval(
+const cleanupInterval = setInterval(
   () => {
     const now = Date.now();
     for (const [key, entry] of inMemoryStore.entries()) {
@@ -171,6 +171,8 @@ setInterval(
   },
   5 * 60 * 1000
 );
+// Housekeeping must not keep a drained HTTP server or CLI caller alive.
+cleanupInterval.unref();
 
 /**
  * Per-User Rate Limit Service
