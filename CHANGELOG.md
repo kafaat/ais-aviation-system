@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.22.8
+
+### Bug Fixes
+
+- fix: reconcile refund dashboards and exports with posted ledger (43f8d0a)
+- fix: start supported read-only refund reporting snapshots (bc912f4)
+- fix: let drained API callers exit after rate-limit cleanup (4cad234)
+
+### Other Changes
+
+- Merge pull request #141 from kafaat/fix/refund-reporting-ledger (414b57f)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.7...v1.22.8
+
+---
+
 ## What's Changed in v1.22.7
 
 ### Bug Fixes
