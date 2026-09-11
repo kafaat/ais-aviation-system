@@ -680,7 +680,7 @@
     "refunds": "Refunds",
     "bookingsReport": "Bookings Report",
     "bookingsReportDesc": "Export booking data with passenger and payment details",
-    "revenueReport": "Revenue Report",
+    "revenueReport": "Posted Booking Collections",
     "revenueReportDesc": "Daily revenue report with confirmed payments",
     "flightsReport": "Flights Report",
     "flightsReportDesc": "Occupancy rates and estimated revenue per flight",
@@ -721,7 +721,11 @@
     "pending": "Pending",
     "confirmed": "Confirmed",
     "cancelled": "Cancelled",
-    "completed": "Completed"
+    "completed": "Completed",
+    "postedLedgerDescription": "Posted booking collections and refunds in SAR by UTC transaction date. Includes wallet settlements; earned revenue and bank reconciliation are unavailable.",
+    "postedDaily": "Daily posted collections",
+    "activeBookings": "Bookings with posted movements (distinct per day)",
+    "postedNet": "Net posted amount"
   },
   "favorites": {
     "title": "Favorite Routes",

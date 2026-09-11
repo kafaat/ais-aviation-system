@@ -18,6 +18,46 @@ import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
 import { getRefundExportRows } from "./refunds-stats.service";
+import {
+  getFinancialExport,
+  type FinancialGroup,
+} from "./booking-financial-reporting.service";
+
+function financialSAR(value: number) {
+  const n = BigInt(value);
+  const abs = n < 0n ? -n : n;
+  return `${n < 0n ? "-" : ""}${abs / 100n}.${String(abs % 100n).padStart(2, "0")}`;
+}
+const financialHeaders = [
+  "Schema Version",
+  "Basis",
+  "Currency",
+  "Date (UTC)",
+  "Posted Collections (SAR)",
+  "Posted Refunds (SAR)",
+  "Net Posted Amount (SAR)",
+  "Collection Entries",
+  "Refund Entries",
+  "Active Bookings (distinct/day)",
+  "Unmatched Collection Entries",
+  "Collections Under Review (SAR)",
+];
+function financialCells(r: FinancialGroup) {
+  return [
+    2,
+    "posted_booking_ledger",
+    "SAR",
+    r.date,
+    financialSAR(r.collectedAmount),
+    financialSAR(r.refundedAmount),
+    financialSAR(r.netAmount),
+    r.collectionEntries,
+    r.refundEntries,
+    r.activeBookings,
+    r.unmatchedCollectionEntries,
+    financialSAR(r.reviewCollectionAmount),
+  ];
+}
 
 /**
  * Build an .xlsx buffer from named sheets given as arrays-of-arrays.
@@ -190,49 +230,12 @@ export async function exportBookingsToCSV(
 export async function exportRevenueToCSV(
   filters: ReportFilters
 ): Promise<string> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const startDate =
-    filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const endDate = filters.endDate || new Date();
-
-  const results = await db
-    .select({
-      date: sql<string>`DATE(${bookings.createdAt})`,
-      totalBookings: sql<number>`COUNT(*)`,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
-      confirmedRevenue: sql<number>`SUM(CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END)`,
-      refundedAmount: sql<number>`SUM(CASE WHEN ${bookings.paymentStatus} = 'refunded' THEN ${bookings.totalAmount} ELSE 0 END)`,
-    })
-    .from(bookings)
-    .where(
-      and(gte(bookings.createdAt, startDate), lte(bookings.createdAt, endDate))
-    )
-    .groupBy(sql`DATE(${bookings.createdAt})`)
-    .orderBy(sql`DATE(${bookings.createdAt})`);
-
-  const headers = [
-    "Date",
-    "Total Bookings",
-    "Total Revenue (SAR)",
-    "Confirmed Revenue (SAR)",
-    "Refunded Amount (SAR)",
-  ];
-
-  const rows = results.map(row => [
-    row.date,
-    String(row.totalBookings || 0),
-    ((Number(row.totalRevenue) || 0) / 100).toFixed(2),
-    ((Number(row.confirmedRevenue) || 0) / 100).toFixed(2),
-    ((Number(row.refundedAmount) || 0) / 100).toFixed(2),
-  ]);
-
-  return [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
+  const report = await getFinancialExport(filters);
+  return [
+    financialHeaders.join(","),
+    // These cells are constants, validated numbers and generated ISO dates.
+    ...report.rows.map(r => financialCells(r).map(String).join(",")),
+  ].join("\n");
 }
 
 /**
@@ -421,110 +424,55 @@ export async function generateBookingsPDF(
 export async function generateRevenuePDF(
   filters: ReportFilters
 ): Promise<Buffer> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const startDate =
-    filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const endDate = filters.endDate || new Date();
-
-  const dailyRevenue = await db
-    .select({
-      date: sql<string>`DATE(${bookings.createdAt})`,
-      revenue: sql<number>`SUM(${bookings.totalAmount})`,
-      bookings: sql<number>`COUNT(*)`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        gte(bookings.createdAt, startDate),
-        lte(bookings.createdAt, endDate),
-        eq(bookings.status, "confirmed")
-      )
-    )
-    .groupBy(sql`DATE(${bookings.createdAt})`)
-    .orderBy(sql`DATE(${bookings.createdAt})`);
-
+  const report = await getFinancialExport(filters);
+  const total = report.totals;
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50 });
     const chunks: Buffer[] = [];
-
     doc.on("data", chunk => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
-
-    // Title
+    doc.fontSize(20).text("AIS Aviation - Posted Booking Collections");
     doc
-      .fontSize(24)
-      .text("تقرير الإيرادات - AIS Aviation", { align: "center" });
-    doc.moveDown();
-    doc.fontSize(12).text(`Revenue Report - AIS Aviation`, { align: "center" });
-    doc.moveDown(2);
-
-    // Date range
-    doc
-      .fontSize(12)
-      .text(
-        `Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
-        { align: "center" }
-      );
-    doc.moveDown(2);
-
-    // Total revenue
-    const totalRevenue = dailyRevenue.reduce(
-      (sum, row) => sum + (Number(row.revenue) || 0),
-      0
-    );
-    const totalBookings = dailyRevenue.reduce(
-      (sum, row) => sum + (row.bookings || 0),
-      0
-    );
-
-    doc.fontSize(16).text("Summary / ملخص", { underline: true });
-    doc.moveDown();
-    doc
-      .fontSize(14)
-      .text(
-        `Total Revenue / إجمالي الإيرادات: ${(totalRevenue / 100).toFixed(2)} SAR`
-      );
-    doc.text(`Total Confirmed Bookings / الحجوزات المؤكدة: ${totalBookings}`);
-    doc.moveDown(2);
-
-    // Daily breakdown
-    doc
-      .fontSize(16)
-      .text("Daily Breakdown / التفصيل اليومي", { underline: true });
-    doc.moveDown();
-
-    dailyRevenue.slice(0, 30).forEach(row => {
-      doc
-        .fontSize(10)
-        .text(
-          `${row.date}: ${(Number(row.revenue) / 100).toFixed(2)} SAR (${row.bookings} bookings)`
-        );
-    });
-
-    // Footer
-    doc
+      .moveDown()
       .fontSize(10)
       .text(
-        `Generated on ${new Date().toISOString()}`,
-        50,
-        doc.page.height - 50,
-        { align: "center" }
+        "Basis: posted SAR booking ledger; UTC transaction dates; schema version 2."
       );
-
+    doc.text(
+      "Includes wallet booking settlements. Not bank reconciliation or recognized revenue."
+    );
+    doc.text(
+      `Period: ${filters.startDate?.toISOString() ?? "All time"} to ${filters.endDate?.toISOString() ?? "Unbounded"}`
+    );
+    doc
+      .moveDown()
+      .fontSize(12)
+      .text(`Posted Collections: ${financialSAR(total.collectedAmount)} SAR`);
+    doc.text(`Posted Refunds: ${financialSAR(total.refundedAmount)} SAR`);
+    doc.text(`Net Posted Amount: ${financialSAR(total.netAmount)} SAR`);
+    doc.text(`Active Bookings (distinct/period): ${total.activeBookings}`);
+    doc.text(
+      `Unmatched Collection Entries: ${total.unmatchedCollectionEntries}`
+    );
+    doc.text(
+      `Collections Under Review: ${financialSAR(total.reviewCollectionAmount)} SAR`
+    );
+    doc
+      .moveDown()
+      .fontSize(10)
+      .text(
+        "Daily amounts: collections / refunds / net (SAR). Daily booking counts are not additive."
+      );
+    for (const r of report.rows) {
+      if (doc.y > 710) doc.addPage();
+      doc.text(
+        `${r.date}: ${financialSAR(r.collectedAmount)} / ${financialSAR(r.refundedAmount)} / ${financialSAR(r.netAmount)}; ${r.activeBookings} bookings`
+      );
+    }
     doc.end();
   });
 }
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
 
 /**
  * Escape CSV field value
@@ -697,101 +645,42 @@ export async function exportBookingsToExcel(
 export async function exportRevenueToExcel(
   filters: ReportFilters
 ): Promise<Buffer> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const startDate =
-    filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const endDate = filters.endDate || new Date();
-
-  const results = await db
-    .select({
-      date: sql<string>`DATE(${bookings.createdAt})`,
-      totalBookings: sql<number>`COUNT(*)`,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
-      confirmedRevenue: sql<number>`SUM(CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END)`,
-      refundedAmount: sql<number>`SUM(CASE WHEN ${bookings.paymentStatus} = 'refunded' THEN ${bookings.totalAmount} ELSE 0 END)`,
-    })
-    .from(bookings)
-    .where(
-      and(gte(bookings.createdAt, startDate), lte(bookings.createdAt, endDate))
-    )
-    .groupBy(sql`DATE(${bookings.createdAt})`)
-    .orderBy(sql`DATE(${bookings.createdAt})`);
-
-  // Calculate totals
-  const totals = results.reduce(
-    (acc, row) => ({
-      totalBookings: acc.totalBookings + (row.totalBookings || 0),
-      totalRevenue: acc.totalRevenue + (Number(row.totalRevenue) || 0),
-      confirmedRevenue:
-        acc.confirmedRevenue + (Number(row.confirmedRevenue) || 0),
-      refundedAmount: acc.refundedAmount + (Number(row.refundedAmount) || 0),
-    }),
-    {
-      totalBookings: 0,
-      totalRevenue: 0,
-      confirmedRevenue: 0,
-      refundedAmount: 0,
-    }
-  );
-
-  // Create summary sheet
-  const summaryData = [
-    ["AIS Aviation System - Revenue Report"],
-    [],
-    [
-      "Report Period:",
-      startDate.toLocaleDateString(),
-      "-",
-      endDate.toLocaleDateString(),
-    ],
-    ["Generated:", new Date().toISOString()],
-    [],
-    ["Summary Statistics"],
-    ["Total Bookings:", totals.totalBookings],
-    ["Total Revenue (SAR):", (totals.totalRevenue / 100).toFixed(2)],
-    ["Confirmed Revenue (SAR):", (totals.confirmedRevenue / 100).toFixed(2)],
-    ["Refunded Amount (SAR):", (totals.refundedAmount / 100).toFixed(2)],
-    [
-      "Net Revenue (SAR):",
-      ((totals.confirmedRevenue - totals.refundedAmount) / 100).toFixed(2),
-    ],
-  ];
-
-  // Create detail sheet
-  const headers = [
-    "Date",
-    "Total Bookings",
-    "Total Revenue (SAR)",
-    "Confirmed Revenue (SAR)",
-    "Refunded Amount (SAR)",
-    "Net Revenue (SAR)",
-  ];
-
-  const detailData = [
-    headers,
-    ...results.map(row => [
-      row.date,
-      row.totalBookings || 0,
-      ((Number(row.totalRevenue) || 0) / 100).toFixed(2),
-      ((Number(row.confirmedRevenue) || 0) / 100).toFixed(2),
-      ((Number(row.refundedAmount) || 0) / 100).toFixed(2),
-      (
-        ((Number(row.confirmedRevenue) || 0) -
-          (Number(row.refundedAmount) || 0)) /
-        100
-      ).toFixed(2),
-    ]),
-  ];
-
+  const report = await getFinancialExport(filters);
+  const total = report.totals;
   return buildXlsxBuffer([
-    { name: "Summary", rows: summaryData },
-    { name: "Daily Revenue", rows: detailData },
+    {
+      name: "Summary",
+      rows: [
+        ["AIS Aviation - Posted Booking Collections"],
+        ["Schema Version", report.schemaVersion],
+        ["Basis", report.basis],
+        ["Currency", report.currency],
+        ["Period Basis", report.periodBasis],
+        ["Start", filters.startDate?.toISOString() ?? "All time"],
+        ["End", filters.endDate?.toISOString() ?? "Unbounded"],
+        ["Posted Collections (SAR)", financialSAR(total.collectedAmount)],
+        ["Posted Refunds (SAR)", financialSAR(total.refundedAmount)],
+        ["Net Posted Amount (SAR)", financialSAR(total.netAmount)],
+        ["Active Bookings (distinct/period)", total.activeBookings],
+        ["Unmatched Collection Entries", total.unmatchedCollectionEntries],
+        [
+          "Collections Under Review (SAR)",
+          financialSAR(total.reviewCollectionAmount),
+        ],
+        [
+          "Recognized Revenue",
+          "Unavailable: recognition journal and allocation evidence required",
+        ],
+        [
+          "Scope",
+          "Posted SAR booking collections include wallet settlements; not bank reconciliation or earned revenue",
+        ],
+      ],
+    },
+    {
+      name: "Daily Settlements",
+      rows: [financialHeaders, ...report.rows.map(financialCells)],
+    },
   ]);
 }
 

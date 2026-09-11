@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
+import { getFinancialExport } from "./booking-financial-reporting.service";
 import {
   bookings,
   flights,
@@ -447,101 +448,108 @@ export async function exportFlightsData(
 export async function exportRevenueData(
   options: ExportOptions
 ): Promise<ExportResult> {
-  const db = await getDb();
-  if (!db) {
+  // Aggregates are complete period snapshots, not an append-only event feed.
+  // Reject an incremental request rather than silently emitting a full replay.
+  if (options.incremental || options.lastExportTimestamp)
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      code: "BAD_REQUEST",
+      message:
+        "Financial aggregates require a full period snapshot; incremental export is unsupported",
     });
-  }
-
-  const { dateRange, format } = options;
-
-  // Revenue by route and class
-  const results = await db
-    .select({
-      date: sql<string>`DATE(${bookings.createdAt})`,
-      originCode: sql<string>`origin_airport.code`,
-      originCity: sql<string>`origin_airport.city`,
-      destinationCode: sql<string>`dest_airport.code`,
-      destinationCity: sql<string>`dest_airport.city`,
-      airlineCode: airlines.code,
-      cabinClass: bookings.cabinClass,
-      totalBookings: sql<number>`COUNT(*)`,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
-      confirmedRevenue: sql<number>`SUM(CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END)`,
-      cancelledRevenue: sql<number>`SUM(CASE WHEN ${bookings.status} = 'cancelled' THEN ${bookings.totalAmount} ELSE 0 END)`,
-      refundedRevenue: sql<number>`SUM(CASE WHEN ${bookings.paymentStatus} = 'refunded' THEN ${bookings.totalAmount} ELSE 0 END)`,
-      totalPassengers: sql<number>`SUM(${bookings.numberOfPassengers})`,
-      avgTicketPrice: sql<number>`AVG(${bookings.totalAmount})`,
-    })
-    .from(bookings)
-    .leftJoin(flights, eq(bookings.flightId, flights.id))
-    .leftJoin(airlines, eq(flights.airlineId, airlines.id))
-    .leftJoin(
-      sql`${airports} AS origin_airport`,
-      sql`origin_airport.id = ${flights.originId}`
-    )
-    .leftJoin(
-      sql`${airports} AS dest_airport`,
-      sql`dest_airport.id = ${flights.destinationId}`
-    )
-    .where(
-      and(
-        gte(bookings.createdAt, dateRange.startDate),
-        lte(bookings.createdAt, dateRange.endDate)
-      )
-    )
-    .groupBy(
-      sql`DATE(${bookings.createdAt})`,
-      sql`origin_airport.code`,
-      sql`origin_airport.city`,
-      sql`dest_airport.code`,
-      sql`dest_airport.city`,
-      airlines.code,
-      bookings.cabinClass
-    )
-    .orderBy(sql`DATE(${bookings.createdAt})`);
-
+  const report = await getFinancialExport(options.dateRange, "warehouse");
+  const records = report.rows.map(r => ({
+    schemaVersion: 2,
+    basis: report.basis,
+    currency: report.currency,
+    periodBasis: report.periodBasis,
+    periodStart: options.dateRange.startDate.toISOString(),
+    periodEnd: options.dateRange.endDate.toISOString(),
+    snapshotSemantics: "replace_period_snapshot",
+    date: r.date,
+    itineraryType: r.itineraryType,
+    originCode: r.originCode,
+    originCity: r.originCity,
+    destinationCode: r.destinationCode,
+    destinationCity: r.destinationCity,
+    airlineCode: r.airlineCode,
+    cabinClass: r.cabinClass,
+    channel: r.channel,
+    postedCollectedAmountMinor: r.collectedAmount,
+    postedRefundedAmountMinor: r.refundedAmount,
+    netPostedAmountMinor: r.netAmount,
+    activeBookings: r.activeBookings,
+    collectionEntries: r.collectionEntries,
+    refundEntries: r.refundEntries,
+    unmatchedCollectionEntries: r.unmatchedCollectionEntries,
+    reviewCollectionAmountMinor: r.reviewCollectionAmount,
+    recognizedRevenueMinor: null,
+    recognitionStatus: report.recognitionStatus,
+  }));
   const headers = [
+    "schemaVersion",
+    "basis",
+    "currency",
+    "periodBasis",
+    "periodStart",
+    "periodEnd",
+    "snapshotSemantics",
     "date",
+    "itineraryType",
     "originCode",
     "originCity",
     "destinationCode",
     "destinationCity",
     "airlineCode",
     "cabinClass",
-    "totalBookings",
-    "totalRevenue",
-    "confirmedRevenue",
-    "cancelledRevenue",
-    "refundedRevenue",
-    "totalPassengers",
-    "avgTicketPrice",
+    "channel",
+    "postedCollectedAmountMinor",
+    "postedRefundedAmountMinor",
+    "netPostedAmountMinor",
+    "activeBookings",
+    "collectionEntries",
+    "refundEntries",
+    "unmatchedCollectionEntries",
+    "reviewCollectionAmountMinor",
+    "recognizedRevenueMinor",
+    "recognitionStatus",
   ];
-
-  const data = formatExportData(results, format, headers, row => [
-    row.date || "",
-    row.originCode || "",
-    row.originCity || "",
-    row.destinationCode || "",
-    row.destinationCity || "",
-    row.airlineCode || "",
-    row.cabinClass || "",
-    String(row.totalBookings || 0),
-    String(row.totalRevenue || 0),
-    String(row.confirmedRevenue || 0),
-    String(row.cancelledRevenue || 0),
-    String(row.refundedRevenue || 0),
-    String(row.totalPassengers || 0),
-    String(Math.round(Number(row.avgTicketPrice) || 0)),
-  ]);
-
-  return {
-    data,
-    recordCount: results.length,
-    fileSize: Buffer.byteLength(data, "utf-8"),
-  };
+  let data: string;
+  if (options.format === "json") data = JSON.stringify(records, null, 2);
+  else if (options.format === "jsonl")
+    data = records.map(r => JSON.stringify(r)).join("\n");
+  else if (options.format === "csv")
+    data = [
+      headers.join(","),
+      ...records.map(r =>
+        headers
+          .map(key => {
+            const value = (r as Record<string, unknown>)[key];
+            // Numeric negative cash movements remain numbers. Only text can be a formula.
+            let text = value === null ? "" : String(value);
+            if (
+              typeof value === "string" &&
+              (/^[\s\u0000-\u001f]*[=+@-]/.test(text) || /^[\t\r\n]/.test(text))
+            )
+              text = "'" + text;
+            return /[,"\r\n]/.test(text)
+              ? `"${text.replace(/"/g, '""')}"`
+              : text;
+          })
+          .join(",")
+      ),
+    ].join("\n");
+  else
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Unsupported financial export format",
+    });
+  const fileSize = Buffer.byteLength(data, "utf8");
+  if (fileSize > MAX_EXPORT_BYTES)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Financial export exceeds 8 MiB; narrow the period",
+    });
+  return { data, recordCount: records.length, fileSize };
 }
 
 // ============================================================================

@@ -29,6 +29,36 @@ vi.mock("../db", () => ({
   getDb: vi.fn(),
 }));
 
+vi.mock("./booking-financial-reporting.service", () => ({
+  getFinancialExport: vi.fn(async () => ({
+    schemaVersion: 2,
+    basis: "posted_booking_ledger",
+    currency: "SAR",
+    periodBasis: "ledger_transaction_date_utc",
+    totals: {
+      collectedAmount: 10001,
+      refundedAmount: 7501,
+      netAmount: 2500,
+      activeBookings: 1,
+      unmatchedCollectionEntries: 0,
+      reviewCollectionAmount: 0,
+    },
+    rows: [
+      {
+        date: "2024-01-10",
+        collectedAmount: 10001,
+        refundedAmount: 7501,
+        netAmount: 2500,
+        activeBookings: 1,
+        collectionEntries: 2,
+        refundEntries: 2,
+        unmatchedCollectionEntries: 0,
+        reviewCollectionAmount: 0,
+      },
+    ],
+  })),
+}));
+
 // Import after mocking
 import { getDb } from "../db";
 import {
@@ -259,8 +289,8 @@ describe("Report Export Service", () => {
         const csv = await exportRevenueToCSV({});
 
         expect(csv).toContain("Date");
-        expect(csv).toContain("Total Bookings");
-        expect(csv).toContain("Total Revenue (SAR)");
+        expect(csv).toContain("Active Bookings");
+        expect(csv).toContain("Posted Collections (SAR)");
         expect(csv).toContain("2024-01-10");
       });
     });
@@ -361,7 +391,7 @@ describe("Report Export Service", () => {
 
         const workbook = await readWorkbook(buffer);
         expect(workbook.sheetNames).toContain("Summary");
-        expect(workbook.sheetNames).toContain("Daily Revenue");
+        expect(workbook.sheetNames).toContain("Daily Settlements");
       });
     });
 

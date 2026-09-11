@@ -289,7 +289,10 @@ export default function ReportsDashboard() {
             <CardHeader>
               <CardTitle>{t("reports.revenueReport")}</CardTitle>
               <CardDescription>
-                {t("reports.revenueReportDesc")}
+                {t(
+                  "reports.postedLedgerDescription",
+                  "Posted booking collections and refunds in SAR by UTC transaction date. Includes wallet settlements; not earned revenue or bank reconciliation."
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -298,9 +301,9 @@ export default function ReportsDashboard() {
                   {t("reports.revenueIncludes")}:
                 </p>
                 <ul className="list-disc list-inside text-sm space-y-1">
-                  <li>{t("reports.dailyRevenue")}</li>
-                  <li>{t("reports.totalBookings")}</li>
-                  <li>{t("reports.confirmedRevenue")}</li>
+                  <li>{t("reports.postedDaily")}</li>
+                  <li>{t("reports.activeBookings")}</li>
+                  <li>{t("reports.postedNet", "Net posted amount")}</li>
                   <li>{t("reports.refundedAmount")}</li>
                 </ul>
               </div>

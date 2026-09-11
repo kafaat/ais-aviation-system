@@ -338,6 +338,23 @@
       "replacement": null
     },
     {
+      "file": "server/services/booking-financial-reporting.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/booking-financial-reporting.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/services/data-warehouse.service.ts",
+        "server/services/report-export.service.ts",
+        "server/services/revenue-accounting.service.ts"
+      ],
+      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/booking-invoice.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/booking-invoice.service.ts",
@@ -716,6 +733,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/booking-financial-reporting.service.ts",
         "server/services/rbac.service.ts"
       ],
       "tableExpressions": {
@@ -2547,6 +2565,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/booking-financial-reporting.service.ts",
         "server/services/refunds-stats.service.ts"
       ],
       "tableExpressions": {
@@ -2561,18 +2580,11 @@
       "technicalOwner": "server/services/revenue-accounting.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/revenue-accounting.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "server/services/booking-financial-reporting.service.ts"
+      ],
       "tableExpressions": {
-        "reads": [
-          "agentBookings",
-          "airports",
-          "ancillaryServices",
-          "bookingAncillaries",
-          "bookings",
-          "corporateBookings",
-          "flights",
-          "payments"
-        ],
+        "reads": [],
         "writes": []
       },
       "replacement": null

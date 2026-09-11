@@ -25,12 +25,15 @@ import {
 } from "../services/report-export.service";
 
 // Date-only exports include the complete UTC end day; ISO instants stay exact.
-const refundDate = z
+const financialDate = z
   .string()
   .date()
   .or(z.string().datetime({ offset: true }));
-const refundPeriodInput = z
-  .object({ startDate: refundDate.optional(), endDate: refundDate.optional() })
+const financialPeriodInput = z
+  .object({
+    startDate: financialDate.optional(),
+    endDate: financialDate.optional(),
+  })
   .transform((input, ctx) => {
     const startDate = input.startDate ? new Date(input.startDate) : undefined;
     const endDate = input.endDate
@@ -43,7 +46,7 @@ const refundPeriodInput = z
     if (startDate && endDate && startDate > endDate) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Refund report start must precede end",
+        message: "Financial report start must precede end",
       });
       return z.NEVER;
     }
@@ -84,18 +87,10 @@ export const reportsRouter = router({
    * Export revenue report to CSV
    */
   exportRevenueCSV: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(financialPeriodInput)
     .output(responseContracts["exportRevenueCSV"])
     .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
+      const filters = input;
 
       const csv = await exportRevenueToCSV(filters);
       const filename = getReportFilename("revenue", "csv");
@@ -168,18 +163,10 @@ export const reportsRouter = router({
    * Generate revenue PDF report
    */
   generateRevenuePDF: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(financialPeriodInput)
     .output(responseContracts["generateRevenuePDF"])
     .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
+      const filters = input;
 
       const pdfBuffer = await generateRevenuePDF(filters);
       const filename = getReportFilename("revenue-report", "pdf");
@@ -231,18 +218,10 @@ export const reportsRouter = router({
    * Export revenue report to Excel
    */
   exportRevenueExcel: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(financialPeriodInput)
     .output(responseContracts["exportRevenueExcel"])
     .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
+      const filters = input;
 
       const excelBuffer = await exportRevenueToExcel(filters);
       const filename = getReportFilename("revenue", "xlsx");
@@ -321,7 +300,7 @@ export const reportsRouter = router({
    * Export refunds report to CSV
    */
   exportRefundsCSV: adminProcedure
-    .input(refundPeriodInput)
+    .input(financialPeriodInput)
     .output(responseContracts["exportRefundsCSV"])
     .mutation(async ({ input: filters }) => {
       const csv = await exportRefundsToCSV(filters);
@@ -338,7 +317,7 @@ export const reportsRouter = router({
    * Export refunds report to Excel
    */
   exportRefundsExcel: adminProcedure
-    .input(refundPeriodInput)
+    .input(financialPeriodInput)
     .output(responseContracts["exportRefundsExcel"])
     .mutation(async ({ input: filters }) => {
       const excelBuffer = await exportRefundsToExcel(filters);
@@ -357,7 +336,7 @@ export const reportsRouter = router({
    * Generate refunds PDF report
    */
   generateRefundsPDF: adminProcedure
-    .input(refundPeriodInput)
+    .input(financialPeriodInput)
     .output(responseContracts["generateRefundsPDF"])
     .mutation(async ({ input: filters }) => {
       const pdfBuffer = await generateRefundsPDF(filters);

@@ -119,13 +119,13 @@ export const revenueAccountingRouter = router({
     }),
 
   /**
-   * Generate a monthly revenue reconciliation report
+   * Generate a current monthly financial preview; does not finalize or persist accounts
    */
   generateReport: adminProcedure
     .input(
       z.object({
-        month: z.number().min(1).max(12),
-        year: z.number().min(2020).max(2100),
+        month: z.number().int().min(1).max(12),
+        year: z.number().int().min(2020).max(2100),
       })
     )
     .output(responseContracts["generateReport"])
@@ -138,13 +138,13 @@ export const revenueAccountingRouter = router({
     }),
 
   /**
-   * List previously generated revenue reports
+   * List available monthly financial previews
    */
   getReports: adminProcedure
     .input(
       z
         .object({
-          limit: z.number().min(1).max(50).default(12),
+          limit: z.number().int().min(1).max(50).default(12),
         })
         .optional()
     )
@@ -162,7 +162,7 @@ export const revenueAccountingRouter = router({
         .object({
           startDate: z.date().optional(),
           endDate: z.date().optional(),
-          limit: z.number().min(1).max(50).default(20),
+          limit: z.number().int().min(1).max(50).default(20),
         })
         .optional()
     )

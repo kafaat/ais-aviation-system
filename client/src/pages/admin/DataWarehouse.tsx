@@ -93,7 +93,7 @@ interface CreateScheduleForm {
 const EXPORT_TYPE_LABELS: Record<ExportType, string> = {
   bookings: "Bookings",
   flights: "Flights",
-  revenue: "Revenue",
+  revenue: "Posted booking collections (SAR)",
   customers: "Customer Analytics",
   operational: "Operational Metrics",
 };
@@ -294,7 +294,19 @@ export default function DataWarehouse() {
   // ---------- Mutations ----------
 
   const createExportMutation = trpc.dataWarehouse.createExport.useMutation({
-    onSuccess: (data: { recordCount: number }) => {
+    onSuccess: (data: {
+      recordCount: number;
+      status: string;
+      errorMessage?: string | null;
+    }) => {
+      if (data.status !== "completed") {
+        toast.error(
+          data.errorMessage ||
+            "Export did not complete; review the export status."
+        );
+        refetchExports();
+        return;
+      }
       toast.success(
         `Export created: ${data.recordCount.toLocaleString()} records exported`
       );
@@ -368,7 +380,7 @@ export default function DataWarehouse() {
     createExportMutation.mutate({
       exportType: exportForm.exportType,
       startDate: new Date(exportForm.startDate),
-      endDate: new Date(exportForm.endDate),
+      endDate: new Date(`${exportForm.endDate}T23:59:59.999Z`),
       format: exportForm.format,
       incremental: exportForm.incremental,
     });
@@ -936,6 +948,7 @@ export default function DataWarehouse() {
                   setExportForm(prev => ({
                     ...prev,
                     exportType: val as ExportType,
+                    incremental: val === "revenue" ? false : prev.incremental,
                   }))
                 }
               >
@@ -1008,13 +1021,16 @@ export default function DataWarehouse() {
             <div className="flex items-center gap-2">
               <Switch
                 id="incremental"
+                disabled={exportForm.exportType === "revenue"}
                 checked={exportForm.incremental}
                 onCheckedChange={val =>
                   setExportForm(prev => ({ ...prev, incremental: val }))
                 }
               />
               <Label htmlFor="incremental">
-                Incremental export (only changed records)
+                {exportForm.exportType === "revenue"
+                  ? "Financial data is a complete period snapshot, in SAR minor units; not an incremental feed or earned revenue."
+                  : "Incremental export (only changed records)"}
               </Label>
             </div>
           </div>
