@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.22.9
+
+### Bug Fixes
+
+- fix: isolate financial status polling from mutation quotas (e5f5074)
+
+### Other Changes
+
+- Merge pull request #142 from kafaat/fix/payment-read-rate-limits (5dca17b)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.8...v1.22.9
+
+---
+
 ## What's Changed in v1.22.8
 
 ### Bug Fixes
