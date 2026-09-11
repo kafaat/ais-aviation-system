@@ -29,6 +29,16 @@ export async function cleanupExpiredLocks() {
 
 export const PERIODIC_JOB_CATALOG = [
   {
+    name: "splitRefunds",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { processPendingSplitRefunds } =
+        await import("./split-refund.service");
+      await processPendingSplitRefunds();
+    },
+  },
+  {
     name: "bagDropExpiry",
     cron: "* * * * *",
     periodMs: 60_000,

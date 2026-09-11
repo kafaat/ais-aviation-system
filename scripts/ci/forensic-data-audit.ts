@@ -11,6 +11,24 @@ import { execFileSync } from "node:child_process";
 /** Canonical read-only findings. The SQL handoff is generated from this registry. */
 export const forensicFindings = [
   {
+    id: "split_refund_under_review",
+    severity: "error",
+    owner: "split-refund",
+    sql: "SELECT bookingId AS recordId FROM booking_refund_plans WHERE status = 'review_required'",
+  },
+  {
+    id: "split_refund_allocation_mismatch",
+    severity: "error",
+    owner: "split-refund",
+    sql: "SELECT p.bookingId AS recordId FROM booking_refund_plans p LEFT JOIN bookings b ON b.id = p.bookingId LEFT JOIN (SELECT bookingId, COUNT(*) AS itemCount, SUM(collectedAmount) AS collectedTotal, SUM(refundAmount) AS refundTotal, COUNT(DISTINCT planId) AS planCount, MIN(planId) AS planId, SUM(refundAmount <= 0 OR refundAmount > collectedAmount) AS invalidAmounts, SUM(status <> 'succeeded') AS unfinishedItems FROM booking_refund_items GROUP BY bookingId) i ON i.bookingId = p.bookingId WHERE COALESCE(i.itemCount, 0) < 2 OR i.collectedTotal <> p.totalAmount OR i.refundTotal <> p.refundAmount OR p.refundAmount + p.cancellationFee <> p.totalAmount OR i.planCount <> 1 OR i.planId <> p.id OR i.invalidAmounts > 0 OR b.status <> 'cancelled' OR b.status IS NULL OR (p.status = 'completed' AND i.unfinishedItems > 0)",
+  },
+  {
+    id: "split_refund_worker_overdue",
+    severity: "review",
+    owner: "split-refund",
+    sql: "SELECT DISTINCT bookingId AS recordId FROM booking_refund_items WHERE status IN ('queued','requesting','pending') AND nextAttemptAt < DATE_SUB(NOW(), INTERVAL 15 MINUTE)",
+  },
+  {
     id: "booking_missing_owner",
     severity: "error",
     owner: "bookings",

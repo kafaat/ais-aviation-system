@@ -1282,215 +1282,225 @@ export async function checkIn(
   boardingGroup: string;
   boardingSequence: number;
 }> {
-  const db = await requireDb();
-
-  // Verify booking
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(
-      and(
-        eq(bookings.id, bookingId),
-        eq(bookings.flightId, flightId),
-        isNull(bookings.deletedAt)
+  const database = await requireDb();
+  return database.transaction(async db => {
+    // Verify booking
+    const [booking] = await db
+      .select()
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.id, bookingId),
+          eq(bookings.flightId, flightId),
+          isNull(bookings.deletedAt)
+        )
       )
-    )
-    .limit(1);
+      .limit(1)
+      .for("update");
 
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `Booking ${bookingId} not found for flight ${flightId}`,
-    });
-  }
+    if (!booking) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `Booking ${bookingId} not found for flight ${flightId}`,
+      });
+    }
 
-  if (booking.status !== "confirmed" && booking.status !== "completed") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Cannot check in: booking status is '${booking.status}'. Only confirmed bookings can be checked in.`,
-    });
-  }
+    if (booking.status !== "confirmed") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Cannot check in: booking status is '${booking.status}'. Only confirmed bookings can be checked in.`,
+      });
+    }
 
-  if (booking.paymentStatus !== "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot check in: payment is not completed",
-    });
-  }
+    if (booking.paymentStatus !== "paid") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Cannot check in: payment is not completed",
+      });
+    }
 
-  // Verify passenger belongs to booking
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
-
-  if (!passenger) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `Passenger ${passengerId} not found in booking ${bookingId}`,
-    });
-  }
-
-  // Check if already checked in
-  const existingCheckIn = await db
-    .select()
-    .from(seatInventory)
-    .where(
-      and(
-        eq(seatInventory.flightId, flightId),
-        eq(seatInventory.passengerId, passengerId),
-        eq(seatInventory.status, "checked_in")
+    await db
+      .select({ id: flights.id })
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .for("update");
+    // Verify passenger belongs to booking
+    const [passenger] = await db
+      .select()
+      .from(passengers)
+      .where(
+        and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (existingCheckIn.length > 0) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: `Passenger ${passengerId} is already checked in on seat ${existingCheckIn[0].seatNumber}`,
-    });
-  }
+    if (!passenger) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `Passenger ${passengerId} not found in booking ${bookingId}`,
+      });
+    }
 
-  // Determine which seat to use
-  let targetSeatNumber = seatNumber;
-
-  if (!targetSeatNumber) {
-    // Check if passenger already has a seat assigned (occupied but not checked in)
-    const assignedSeat = await db
+    // Check if already checked in
+    const existingCheckIn = await db
       .select()
       .from(seatInventory)
       .where(
         and(
           eq(seatInventory.flightId, flightId),
           eq(seatInventory.passengerId, passengerId),
-          eq(seatInventory.status, "occupied")
+          eq(seatInventory.status, "checked_in")
         )
       )
       .limit(1);
 
-    if (assignedSeat.length > 0) {
-      targetSeatNumber = assignedSeat[0].seatNumber;
-    } else {
-      // Auto-assign a seat based on cabin class
-      const cabinClass =
-        booking.cabinClass === "business" ? "business" : "economy";
-      const autoAssigned = await autoAssignSeat(flightId, cabinClass);
-      targetSeatNumber = autoAssigned.seatNumber;
+    if (existingCheckIn.length > 0) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: `Passenger ${passengerId} is already checked in on seat ${existingCheckIn[0].seatNumber}`,
+      });
     }
-  }
 
-  // If seat is not yet assigned to this passenger, assign it first
-  const [currentSeat] = await db
-    .select()
-    .from(seatInventory)
-    .where(
-      and(
-        eq(seatInventory.flightId, flightId),
-        eq(seatInventory.seatNumber, targetSeatNumber)
+    // Determine which seat to use
+    let targetSeatNumber = seatNumber;
+
+    if (!targetSeatNumber) {
+      // Check if passenger already has a seat assigned (occupied but not checked in)
+      const assignedSeat = await db
+        .select()
+        .from(seatInventory)
+        .where(
+          and(
+            eq(seatInventory.flightId, flightId),
+            eq(seatInventory.passengerId, passengerId),
+            eq(seatInventory.status, "occupied")
+          )
+        )
+        .limit(1);
+
+      if (assignedSeat.length > 0) {
+        targetSeatNumber = assignedSeat[0].seatNumber;
+      } else {
+        // Auto-assign a seat based on cabin class
+        const cabinClass =
+          booking.cabinClass === "business" ? "business" : "economy";
+        const autoAssigned = await autoAssignSeat(flightId, cabinClass);
+        targetSeatNumber = autoAssigned.seatNumber;
+      }
+    }
+
+    // If seat is not yet assigned to this passenger, assign it first
+    const [currentSeat] = await db
+      .select()
+      .from(seatInventory)
+      .where(
+        and(
+          eq(seatInventory.flightId, flightId),
+          eq(seatInventory.seatNumber, targetSeatNumber)
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (!currentSeat) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `Seat ${targetSeatNumber} not found on flight ${flightId}`,
-    });
-  }
+    if (!currentSeat) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `Seat ${targetSeatNumber} not found on flight ${flightId}`,
+      });
+    }
 
-  // If seat is assigned to a different passenger, reject
-  if (
-    currentSeat.passengerId !== null &&
-    currentSeat.passengerId !== passengerId
-  ) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: `Seat ${targetSeatNumber} is assigned to a different passenger`,
-    });
-  }
+    // If seat is assigned to a different passenger, reject
+    if (
+      currentSeat.passengerId !== null &&
+      currentSeat.passengerId !== passengerId
+    ) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: `Seat ${targetSeatNumber} is assigned to a different passenger`,
+      });
+    }
 
-  if (currentSeat.status === "blocked" || currentSeat.status === "restricted") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Seat ${targetSeatNumber} is ${currentSeat.status} and cannot be used for check-in`,
-    });
-  }
+    if (
+      currentSeat.status === "blocked" ||
+      currentSeat.status === "restricted"
+    ) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Seat ${targetSeatNumber} is ${currentSeat.status} and cannot be used for check-in`,
+      });
+    }
 
-  // Generate boarding sequence (next sequential number for this flight)
-  const [seqResult] = await db
-    .select({
-      maxSeq: sql<number>`COALESCE(MAX(${seatInventory.boardingSequence}), 0)`,
-    })
-    .from(seatInventory)
-    .where(eq(seatInventory.flightId, flightId));
+    // Generate boarding sequence (next sequential number for this flight)
+    const [seqResult] = await db
+      .select({
+        maxSeq: sql<number>`COALESCE(MAX(${seatInventory.boardingSequence}), 0)`,
+      })
+      .from(seatInventory)
+      .where(eq(seatInventory.flightId, flightId));
 
-  const boardingSequence = (seqResult?.maxSeq ?? 0) + 1;
-  const boardingGroup = determineBoardingGroup(
-    currentSeat.cabinClass,
-    currentSeat.row
-  );
-
-  // Perform check-in update
-  await db
-    .update(seatInventory)
-    .set({
-      status: "checked_in",
-      bookingId,
-      passengerId,
-      assignedAt: currentSeat.assignedAt ?? new Date(),
-      checkedInAt: new Date(),
-      boardingGroup,
-      boardingSequence,
-    })
-    .where(eq(seatInventory.id, currentSeat.id));
-
-  // Update passenger seat number
-  await db
-    .update(passengers)
-    .set({ seatNumber: targetSeatNumber })
-    .where(eq(passengers.id, passengerId));
-
-  // Mark booking as checked in if all passengers are now checked in
-  const allPassengers = await db
-    .select({ id: passengers.id })
-    .from(passengers)
-    .where(eq(passengers.bookingId, bookingId));
-
-  const checkedInPassengers = await db
-    .select({ cnt: count() })
-    .from(seatInventory)
-    .where(
-      and(
-        eq(seatInventory.flightId, flightId),
-        eq(seatInventory.bookingId, bookingId),
-        eq(seatInventory.status, "checked_in")
-      )
+    const boardingSequence = (seqResult?.maxSeq ?? 0) + 1;
+    const boardingGroup = determineBoardingGroup(
+      currentSeat.cabinClass,
+      currentSeat.row
     );
 
-  // +1 for the passenger we just checked in (if the count doesn't yet reflect it due to timing)
-  const checkedInCount = Number(checkedInPassengers[0]?.cnt ?? 0);
-  if (checkedInCount >= allPassengers.length) {
+    // Perform check-in update
     await db
-      .update(bookings)
-      .set({ checkedIn: true, updatedAt: new Date() })
-      .where(eq(bookings.id, bookingId));
-  }
+      .update(seatInventory)
+      .set({
+        status: "checked_in",
+        bookingId,
+        passengerId,
+        assignedAt: currentSeat.assignedAt ?? new Date(),
+        checkedInAt: new Date(),
+        boardingGroup,
+        boardingSequence,
+      })
+      .where(eq(seatInventory.id, currentSeat.id));
 
-  // Fetch updated seat
-  const [updatedSeat] = await db
-    .select()
-    .from(seatInventory)
-    .where(eq(seatInventory.id, currentSeat.id))
-    .limit(1);
+    // Update passenger seat number
+    await db
+      .update(passengers)
+      .set({ seatNumber: targetSeatNumber })
+      .where(eq(passengers.id, passengerId));
 
-  return {
-    seat: updatedSeat,
-    boardingGroup,
-    boardingSequence,
-  };
+    // Mark booking as checked in if all passengers are now checked in
+    const allPassengers = await db
+      .select({ id: passengers.id })
+      .from(passengers)
+      .where(eq(passengers.bookingId, bookingId));
+
+    const checkedInPassengers = await db
+      .select({ cnt: count() })
+      .from(seatInventory)
+      .where(
+        and(
+          eq(seatInventory.flightId, flightId),
+          eq(seatInventory.bookingId, bookingId),
+          eq(seatInventory.status, "checked_in")
+        )
+      );
+
+    // +1 for the passenger we just checked in (if the count doesn't yet reflect it due to timing)
+    const checkedInCount = Number(checkedInPassengers[0]?.cnt ?? 0);
+    if (checkedInCount >= allPassengers.length) {
+      await db
+        .update(bookings)
+        .set({ checkedIn: true, updatedAt: new Date() })
+        .where(eq(bookings.id, bookingId));
+    }
+
+    // Fetch updated seat
+    const [updatedSeat] = await db
+      .select()
+      .from(seatInventory)
+      .where(eq(seatInventory.id, currentSeat.id))
+      .limit(1);
+
+    return {
+      seat: updatedSeat,
+      boardingGroup,
+      boardingSequence,
+    };
+  });
 }
 
 /**

@@ -388,6 +388,8 @@ try {
   await verifyUnpaidInvoices(db, id, check);
   const { verifySplitLifecycle } = await import("./acceptance/split-lifecycle");
   await verifySplitLifecycle(db, id, check);
+  const { verifySplitRefunds } = await import("./acceptance/split-refunds");
+  await verifySplitRefunds(db, id, check);
   const { verifyDataAudit } = await import("./acceptance/data-audit");
   await verifyDataAudit(db, id, check);
   completed = true;

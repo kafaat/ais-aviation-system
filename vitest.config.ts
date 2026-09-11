@@ -132,6 +132,12 @@ export default defineConfig(({ mode }) => {
           functions: 16,
           branches: 15,
           statements: 20,
+          "server/services/split-refund.service.ts": {
+            lines: 90,
+            statements: 85,
+            functions: 90,
+            branches: 80,
+          },
           "server/services/split-checkout.service.ts": {
             lines: 85,
             statements: 80,

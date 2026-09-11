@@ -1,4 +1,14 @@
 import { useTranslation } from "react-i18next";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { SplitRefundCancellation } from "@/components/SplitRefundCancellation";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +38,22 @@ export default function RefundsDashboard() {
   const { data: history, isLoading: historyLoading } =
     trpc.refunds.getHistory.useQuery({ limit: 20 });
   const { data: trends } = trpc.refunds.getTrends.useQuery();
+  const [cursor, setCursor] = useState<number>();
+  const [filter, setFilter] = useState<
+    "processing" | "completed" | "review_required"
+  >("review_required");
+  const [selected, setSelected] = useState<number | null>(null);
+  const queue = trpc.refunds.splitCancellationQueue.useQuery({
+    beforeBookingId: cursor,
+    status: filter,
+  });
+  const detail = trpc.refunds.splitCancellation.useQuery(
+    { bookingId: selected ?? 0 },
+    {
+      enabled: selected !== null,
+      refetchInterval: selected !== null ? 5000 : false,
+    }
+  );
 
   if (statsLoading) {
     return (
@@ -61,6 +87,82 @@ export default function RefundsDashboard() {
       </div>
 
       {/* Statistics Cards */}
+      <Card className="p-6 space-y-3">
+        <h2 className="text-xl font-semibold">
+          {t("cancelBooking.split.track")}
+        </h2>
+        <select
+          aria-label={t("cancelBooking.split.status")}
+          value={filter}
+          onChange={e => {
+            setFilter(e.target.value as typeof filter);
+            setCursor(undefined);
+          }}
+          className="border rounded p-2 w-full"
+        >
+          {(["review_required", "processing", "completed"] as const).map(s => (
+            <option key={s} value={s}>
+              {t(`cancelBooking.split.plan.${s}`)}
+            </option>
+          ))}
+        </select>
+        {queue.isError && <p role="alert">{queue.error.message}</p>}
+        {queue.data?.items.map(item => (
+          <div
+            className="flex flex-wrap justify-between gap-2 border-t py-2"
+            key={item.bookingId}
+          >
+            <span>
+              #{item.bookingId} — {(item.refundAmount / 100).toFixed(2)}{" "}
+              {t("common.sar")}
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => setSelected(item.bookingId)}
+            >
+              {t("cancelBooking.split.track")}
+            </Button>
+          </div>
+        ))}
+        {!queue.isLoading && queue.data?.items.length === 0 && (
+          <p>{t("admin.refunds.noRefunds")}</p>
+        )}
+        {queue.data?.nextCursor && (
+          <Button
+            variant="outline"
+            onClick={() => setCursor(queue.data!.nextCursor!)}
+          >
+            {t("cancelBooking.split.more")}
+          </Button>
+        )}
+      </Card>
+      <Dialog
+        open={selected !== null}
+        onOpenChange={open => {
+          if (!open) setSelected(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("cancelBooking.split.track")}</DialogTitle>
+            <DialogDescription>#{selected}</DialogDescription>
+          </DialogHeader>
+          {detail.isError && <p role="alert">{detail.error.message}</p>}
+          {detail.data && selected !== null && (
+            <SplitRefundCancellation
+              bookingId={selected}
+              data={detail.data}
+              onRefresh={() => {
+                void detail.refetch();
+                void queue.refetch();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      <p className="text-sm text-muted-foreground">
+        {t("cancelBooking.split.fullRefundStats")}
+      </p>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-6">
           <div className="flex items-center justify-between mb-2">

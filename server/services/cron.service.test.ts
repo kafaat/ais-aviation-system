@@ -49,6 +49,7 @@ describe("cron.service scheduler", () => {
     expect(scheduled.map(t => t.expr).sort()).toEqual(
       [
         "* * * * *",
+        "* * * * *",
         "*/5 * * * *",
         "* * * * *",
         "0 * * * *",
@@ -62,7 +63,7 @@ describe("cron.service scheduler", () => {
   it("is idempotent — a second start does not double-schedule", () => {
     startCronJobs();
     startCronJobs();
-    expect(scheduled).toHaveLength(7);
+    expect(scheduled).toHaveLength(8);
   });
 
   it("stop() halts every scheduled task and allows a clean restart", async () => {
@@ -72,7 +73,7 @@ describe("cron.service scheduler", () => {
     for (const t of tasks) expect(t.stop).toHaveBeenCalledTimes(1);
 
     startCronJobs();
-    expect(scheduled).toHaveLength(14); // every task can restart
+    expect(scheduled).toHaveLength(16); // every task can restart
   });
 
   it("the relay tick actually invokes the outbox relay", async () => {

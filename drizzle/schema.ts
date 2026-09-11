@@ -1245,6 +1245,63 @@ export const paymentReceipts = mysqlTable("payment_receipts", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+/** One immutable cancellation decision per split-funded booking. Money remains
+ * owned by payment_receipts; these rows own provider requests and their status. */
+export const bookingRefundPlans = mysqlTable("booking_refund_plans", {
+  bookingId: int("bookingId").primaryKey(),
+  id: varchar("id", { length: 36 }).notNull().unique(),
+  actorId: int("actorId").notNull(),
+  quoteHash: varchar("quoteHash", { length: 64 }).notNull(),
+  totalAmount: int("totalAmount").notNull(),
+  cancellationFee: int("cancellationFee").notNull(),
+  refundAmount: int("refundAmount").notNull(),
+  policyTier: varchar("policyTier", { length: 16 }).notNull(),
+  reason: varchar("reason", { length: 32 }).notNull(),
+  notes: varchar("notes", { length: 500 }),
+  status: mysqlEnum("status", ["processing", "completed", "review_required"])
+    .default("processing")
+    .notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const bookingRefundItems = mysqlTable(
+  "booking_refund_items",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    planId: varchar("planId", { length: 36 }).notNull(),
+    splitId: int("splitId").notNull().unique(),
+    paymentIntentId: varchar("paymentIntentId", { length: 255 })
+      .notNull()
+      .unique(),
+    collectedAmount: int("collectedAmount").notNull(),
+    refundAmount: int("refundAmount").notNull(),
+    requestPayload: text("requestPayload").notNull(),
+    requestedAt: timestamp("requestedAt"),
+    refundId: varchar("refundId", { length: 255 }).unique(),
+    status: mysqlEnum("status", [
+      "queued",
+      "requesting",
+      "pending",
+      "succeeded",
+      "failed",
+      "review_required",
+    ])
+      .default("queued")
+      .notNull(),
+    providerStatus: varchar("providerStatus", { length: 32 }),
+    errorCode: varchar("errorCode", { length: 64 }),
+    nextAttemptAt: timestamp("nextAttemptAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    bookingIdx: index("refund_items_booking_idx").on(table.bookingId),
+    dueIdx: index("refund_items_due_idx").on(table.status, table.nextAttemptAt),
+  })
+);
+
 export const financialLedger = mysqlTable(
   "financial_ledger",
   {

@@ -397,134 +397,138 @@ export async function performCheckIn(
     baggageCount?: number;
   }
 ) {
-  const db = await getDb();
-  if (!db)
+  const database = await getDb();
+  if (!database)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
 
-  // Verify booking exists and is confirmed
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
+  return database.transaction(async db => {
+    // Verify booking exists and is confirmed
+    const [booking] = await db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1)
+      .for("update");
 
-  if (!booking)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    if (!booking)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
 
-  if (booking.status !== "confirmed" && booking.status !== "completed") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Cannot check in: booking status is '${booking.status}'`,
-    });
-  }
+    if (booking.status !== "confirmed" || booking.paymentStatus !== "paid") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Cannot check in: booking status is '${booking.status}'`,
+      });
+    }
 
-  // Verify passenger belongs to this booking
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
+    // Verify passenger belongs to this booking
+    const [passenger] = await db
+      .select()
+      .from(passengers)
+      .where(
+        and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
+      )
+      .limit(1);
 
-  if (!passenger)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found for this booking",
-    });
+    if (!passenger)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Passenger not found for this booking",
+      });
 
-  // Verify flight is still open for check-in
-  const [flight] = await db
-    .select({
-      id: flights.id,
-      departureTime: flights.departureTime,
-      status: flights.status,
-    })
-    .from(flights)
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
+    // Verify flight is still open for check-in
+    const [flight] = await db
+      .select({
+        id: flights.id,
+        departureTime: flights.departureTime,
+        status: flights.status,
+      })
+      .from(flights)
+      .where(eq(flights.id, booking.flightId))
+      .limit(1)
+      .for("update");
 
-  if (!flight)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    if (!flight)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
 
-  if (flight.status === "cancelled") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot check in: flight has been cancelled",
-    });
-  }
+    if (flight.status === "cancelled") {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Cannot check in: flight has been cancelled",
+      });
+    }
 
-  const now = new Date();
-  const departureTime = new Date(flight.departureTime);
-  const hoursUntilDeparture =
-    (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+    const now = new Date();
+    const departureTime = new Date(flight.departureTime);
+    const hoursUntilDeparture =
+      (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-  if (hoursUntilDeparture < 1) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Check-in is closed (less than 1 hour before departure)",
-    });
-  }
+    if (hoursUntilDeparture < 1) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Check-in is closed (less than 1 hour before departure)",
+      });
+    }
 
-  // Assign seat if provided
-  if (options.seatNumber) {
-    await db.transaction(async tx => {
-      // Check seat is not already taken
-      const [seatTaken] = await tx
-        .select({ id: passengers.id })
-        .from(passengers)
-        .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-        .where(
-          and(
-            eq(bookings.flightId, booking.flightId),
-            eq(passengers.seatNumber, options.seatNumber!),
-            sql`${bookings.status} IN ('confirmed', 'completed')`
+    // Assign seat if provided
+    if (options.seatNumber) {
+      await db.transaction(async tx => {
+        // Check seat is not already taken
+        const [seatTaken] = await tx
+          .select({ id: passengers.id })
+          .from(passengers)
+          .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
+          .where(
+            and(
+              eq(bookings.flightId, booking.flightId),
+              eq(passengers.seatNumber, options.seatNumber!),
+              sql`${bookings.status} IN ('confirmed', 'completed')`
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      if (seatTaken) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: `Seat ${options.seatNumber} is already assigned to another passenger`,
-        });
-      }
+        if (seatTaken) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Seat ${options.seatNumber} is already assigned to another passenger`,
+          });
+        }
 
-      await tx
-        .update(passengers)
-        .set({ seatNumber: options.seatNumber! })
-        .where(eq(passengers.id, passengerId));
+        await tx
+          .update(passengers)
+          .set({ seatNumber: options.seatNumber! })
+          .where(eq(passengers.id, passengerId));
+      });
+    }
+
+    // Mark booking as checked in
+    await db
+      .update(bookings)
+      .set({ checkedIn: true })
+      .where(eq(bookings.id, bookingId));
+
+    // Record session completion
+    await db.insert(kioskSessions).values({
+      bookingId,
+      passengerId,
+      sessionType: "check_in",
+      status: "completed",
+      completedAt: new Date(),
     });
-  }
 
-  // Mark booking as checked in
-  await db
-    .update(bookings)
-    .set({ checkedIn: true })
-    .where(eq(bookings.id, bookingId));
-
-  // Record session completion
-  await db.insert(kioskSessions).values({
-    bookingId,
-    passengerId,
-    sessionType: "check_in",
-    status: "completed",
-    completedAt: new Date(),
+    return {
+      success: true,
+      bookingId,
+      passengerId,
+      passengerName: `${passenger.firstName} ${passenger.lastName}`,
+      seatNumber: options.seatNumber ?? passenger.seatNumber,
+      checkedIn: true,
+      message:
+        "Check-in completed successfully. You may now print your boarding pass.",
+    };
   });
-
-  return {
-    success: true,
-    bookingId,
-    passengerId,
-    passengerName: `${passenger.firstName} ${passenger.lastName}`,
-    seatNumber: options.seatNumber ?? passenger.seatNumber,
-    checkedIn: true,
-    message:
-      "Check-in completed successfully. You may now print your boarding pass.",
-  };
 }
 
 // ============================================================================
@@ -539,93 +543,101 @@ export async function selectSeat(
   passengerId: number,
   seatNumber: string
 ) {
-  const db = await getDb();
-  if (!db)
+  const database = await getDb();
+  if (!database)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
 
-  // Verify booking
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
+  return database.transaction(async db => {
+    // Verify booking
+    const [booking] = await db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1)
+      .for("update");
 
-  if (!booking)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    if (!booking)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
 
-  if (booking.status !== "confirmed" && booking.status !== "completed") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot select seat: booking is not confirmed",
-    });
-  }
-
-  // Verify passenger belongs to this booking
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
-
-  if (!passenger)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found for this booking",
-    });
-
-  const oldSeat = passenger.seatNumber;
-
-  // Check seat availability and assign atomically within a transaction
-  await db.transaction(async tx => {
-    const [seatTaken] = await tx
-      .select({ id: passengers.id })
-      .from(passengers)
-      .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-      .where(
-        and(
-          eq(bookings.flightId, booking.flightId),
-          eq(passengers.seatNumber, seatNumber),
-          sql`${bookings.status} IN ('confirmed', 'completed')`,
-          sql`${passengers.id} != ${passengerId}`
-        )
-      )
-      .limit(1);
-
-    if (seatTaken) {
+    if (booking.status !== "confirmed" || booking.paymentStatus !== "paid") {
       throw new TRPCError({
-        code: "CONFLICT",
-        message: `Seat ${seatNumber} is already taken`,
+        code: "BAD_REQUEST",
+        message: "Cannot select seat: booking is not confirmed",
       });
     }
 
-    // Update the seat assignment
-    await tx
-      .update(passengers)
-      .set({ seatNumber })
-      .where(eq(passengers.id, passengerId));
-  });
+    // Verify passenger belongs to this booking
+    const [passenger] = await db
+      .select()
+      .from(passengers)
+      .where(
+        and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
+      )
+      .limit(1);
 
-  // Track session
-  await db.insert(kioskSessions).values({
-    bookingId,
-    passengerId,
-    sessionType: "seat_change",
-    status: "completed",
-    completedAt: new Date(),
-  });
+    if (!passenger)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Passenger not found for this booking",
+      });
 
-  return {
-    success: true,
-    passengerId,
-    passengerName: `${passenger.firstName} ${passenger.lastName}`,
-    previousSeat: oldSeat,
-    newSeat: seatNumber,
-  };
+    await db
+      .select({ id: flights.id })
+      .from(flights)
+      .where(eq(flights.id, booking.flightId))
+      .for("update");
+    const oldSeat = passenger.seatNumber;
+
+    // Check seat availability and assign atomically within a transaction
+    await db.transaction(async tx => {
+      const [seatTaken] = await tx
+        .select({ id: passengers.id })
+        .from(passengers)
+        .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
+        .where(
+          and(
+            eq(bookings.flightId, booking.flightId),
+            eq(passengers.seatNumber, seatNumber),
+            sql`${bookings.status} IN ('confirmed', 'completed')`,
+            sql`${passengers.id} != ${passengerId}`
+          )
+        )
+        .limit(1);
+
+      if (seatTaken) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Seat ${seatNumber} is already taken`,
+        });
+      }
+
+      // Update the seat assignment
+      await tx
+        .update(passengers)
+        .set({ seatNumber })
+        .where(eq(passengers.id, passengerId));
+    });
+
+    // Track session
+    await db.insert(kioskSessions).values({
+      bookingId,
+      passengerId,
+      sessionType: "seat_change",
+      status: "completed",
+      completedAt: new Date(),
+    });
+
+    return {
+      success: true,
+      passengerId,
+      passengerName: `${passenger.firstName} ${passenger.lastName}`,
+      previousSeat: oldSeat,
+      newSeat: seatNumber,
+    };
+  });
 }
 
 // ============================================================================

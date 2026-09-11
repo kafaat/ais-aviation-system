@@ -17,7 +17,7 @@ export function transactionMemory(seed: Record<string, any[]>) {
     let index = 0;
     const conditions = [
       ...query.sql.matchAll(
-        /`[^`]+`\.`([^`]+)`\s*(=|!=|<>|>=|>|<|in)\s*(\?|\([^)]*\))/g
+        /`[^`]+`\.`([^`]+)`\s*(=|!=|<>|>=|<=|>|<|in)\s*(\?|\([^)]*\))/g
       ),
     ];
     return conditions
@@ -39,6 +39,7 @@ export function transactionMemory(seed: Record<string, any[]>) {
                 ).getTime()
               : value;
         if (op === ">=") return comparable(actual) >= comparable(expected);
+        if (op === "<=") return comparable(actual) <= comparable(expected);
         if (op === ">") return comparable(actual) > comparable(expected);
         return comparable(actual) < comparable(expected);
       })

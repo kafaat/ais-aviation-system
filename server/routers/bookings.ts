@@ -312,44 +312,60 @@ export const bookingsRouter = router({
       const { passengers, bookings } = await import("../../drizzle/schema");
       const { and, eq } = await import("drizzle-orm");
 
-      for (const assignment of input.seatAssignments) {
-        const passengerWhere =
+      await database.transaction(async tx => {
+        const [current] = await tx
+          .select()
+          .from(bookings)
+          .where(eq(bookings.id, input.bookingId))
+          .for("update");
+        if (
+          !current ||
+          current.userId !== ctx.user.id ||
+          current.status !== "confirmed" ||
+          current.paymentStatus !== "paid" ||
+          current.deletedAt
+        )
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Only an owned confirmed paid booking can be checked in",
+          });
+        assertTenantMatch(current.tenantId, ctx.tenantId);
+        for (const assignment of input.seatAssignments) {
+          const passengerWhere =
+            ctx.tenantId == null
+              ? and(
+                  eq(passengers.id, assignment.passengerId),
+                  eq(passengers.bookingId, input.bookingId)
+                )
+              : and(
+                  eq(passengers.id, assignment.passengerId),
+                  eq(passengers.bookingId, input.bookingId),
+                  eq(passengers.tenantId, ctx.tenantId)
+                );
+
+          const updated = await tx
+            .update(passengers)
+            .set({ seatNumber: assignment.seatNumber })
+            .where(passengerWhere);
+
+          if (updated[0].affectedRows !== 1) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Passenger does not belong to this booking",
+            });
+          }
+        }
+
+        const bookingWhere =
           ctx.tenantId == null
-            ? and(
-                eq(passengers.id, assignment.passengerId),
-                eq(passengers.bookingId, input.bookingId)
-              )
+            ? eq(bookings.id, input.bookingId)
             : and(
-                eq(passengers.id, assignment.passengerId),
-                eq(passengers.bookingId, input.bookingId),
-                eq(passengers.tenantId, ctx.tenantId)
+                eq(bookings.id, input.bookingId),
+                eq(bookings.tenantId, ctx.tenantId)
               );
 
-        const updated = await database
-          .update(passengers)
-          .set({ seatNumber: assignment.seatNumber })
-          .where(passengerWhere);
-
-        if (updated[0].affectedRows !== 1) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Passenger does not belong to this booking",
-          });
-        }
-      }
-
-      const bookingWhere =
-        ctx.tenantId == null
-          ? eq(bookings.id, input.bookingId)
-          : and(
-              eq(bookings.id, input.bookingId),
-              eq(bookings.tenantId, ctx.tenantId)
-            );
-
-      await database
-        .update(bookings)
-        .set({ checkedIn: true })
-        .where(bookingWhere);
+        await tx.update(bookings).set({ checkedIn: true }).where(bookingWhere);
+      });
 
       await auditBookingChange(
         input.bookingId,
