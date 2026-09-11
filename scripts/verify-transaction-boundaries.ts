@@ -393,6 +393,9 @@ try {
   const { verifyRefundReporting } =
     await import("./acceptance/refund-reporting");
   await verifyRefundReporting(db, id, check);
+  const { verifyPaymentReadLimits } =
+    await import("./acceptance/payment-read-limits");
+  await verifyPaymentReadLimits(check);
   const { verifyDataAudit } = await import("./acceptance/data-audit");
   await verifyDataAudit(db, id, check);
   completed = true;
