@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.22.7
+
+### Bug Fixes
+
+- fix: make split cancellation refunds durable for every payer (354128a)
+- fix: route compatibility webhooks through canonical settlement (78caf8e)
+- fix: make split refund forensic queries valid on MySQL (c32dc44)
+
+### Other Changes
+
+- Merge pull request #140 from kafaat/fix/split-refund-cancellation (eb30384)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.6...v1.22.7
+
+---
+
 ## What's Changed in v1.22.6
 
 ### Bug Fixes
