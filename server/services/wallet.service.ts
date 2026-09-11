@@ -4,16 +4,18 @@ import {
   wallets,
   walletTransactions,
   bookings,
-  paymentSplits,
   financialLedger,
 } from "../../drizzle/schema";
 import { stripe } from "../stripe";
-import { assertNoActiveCheckout } from "./booking-checkout.service";
+import {
+  assertNoActiveCheckout,
+  assertNoActiveSplitPayment,
+} from "./booking-checkout.service";
 import {
   confirmFundedBooking,
   assertNoCollectionReview,
 } from "./booking-settlement.service";
-import { eq, sql, and, inArray } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 
 /**
  * Get or create a wallet for a user
@@ -162,17 +164,7 @@ export async function payFromWallet(userId: number, bookingId: number) {
       throw new Error("Booking is not payable");
     await assertNoCollectionReview(tx, bookingId);
     await assertNoActiveCheckout(tx, booking);
-    const shares = await tx
-      .select()
-      .from(paymentSplits)
-      .where(
-        and(
-          eq(paymentSplits.bookingId, bookingId),
-          inArray(paymentSplits.status, ["paid", "pending", "email_sent"])
-        )
-      );
-    if (shares.length)
-      throw new Error("Booking has an active split payment plan");
+    await assertNoActiveSplitPayment(tx, bookingId);
     const amount = booking.totalAmount;
     if (!Number.isSafeInteger(amount) || amount <= 0)
       throw new Error("Invalid booking amount");

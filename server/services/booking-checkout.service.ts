@@ -33,6 +33,27 @@ export type CheckoutOwner = {
 };
 const unavailable = (message: string) =>
   new TRPCError({ code: "PRECONDITION_FAILED", message });
+
+/** A failed attempt or a closed local link does not expire a provider session. */
+export function isActiveSplitPayment(split: typeof paymentSplits.$inferSelect) {
+  return (
+    ["paid", "pending", "email_sent", "failed"].includes(split.status) ||
+    (split.checkoutStatus !== "expired" &&
+      Boolean(split.checkoutRequestId || split.stripeCheckoutSessionId))
+  );
+}
+
+export async function assertNoActiveSplitPayment(
+  tx: SettlementTx,
+  bookingId: number
+) {
+  const splits = await tx
+    .select()
+    .from(paymentSplits)
+    .where(eq(paymentSplits.bookingId, bookingId));
+  if (splits.some(isActiveSplitPayment))
+    throw unavailable("Booking has an active or unresolved split payment plan");
+}
 /** Call under the booking row lock before choosing a different payment rail. */
 export async function assertNoActiveCheckout(
   tx: SettlementTx,
@@ -91,10 +112,10 @@ export async function assertInvoiceEditable(
   )
     throw unavailable("Invoice is already in a payment workflow");
   await assertNoActiveCheckout(tx, booking);
+  await assertNoActiveSplitPayment(tx, booking.id);
   for (const [table, column] of [
     [payments, payments.bookingId],
     [paymentReceipts, paymentReceipts.bookingId],
-    [paymentSplits, paymentSplits.bookingId],
     [bookingModifications, bookingModifications.bookingId],
   ] as const) {
     const rows = await tx

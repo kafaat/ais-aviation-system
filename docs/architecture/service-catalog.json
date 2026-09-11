@@ -310,6 +310,8 @@
       "consumers": [
         "server/routers/payments.ts",
         "server/services/booking-invoice.service.ts",
+        "server/services/payment-settlement.service.ts",
+        "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/wallet.service.ts"
       ],
@@ -328,6 +330,7 @@
           "bookingCheckoutRequests",
           "bookingSegments",
           "bookings",
+          "paymentSplits",
           "table"
         ],
         "writes": ["bookingCheckoutRequests", "bookings"]
@@ -393,6 +396,7 @@
         "server/services/ndc.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/queue-v2.service.ts",
+        "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/wallet.service.ts"
       ],
@@ -1179,6 +1183,7 @@
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
         "server/services/queue-v2.service.ts",
+        "server/services/split-checkout.service.ts",
         "server/services/travel-agent.service.ts"
       ],
       "dependencies": [
@@ -1829,6 +1834,7 @@
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
         "server/services/payment-settlement.service.ts",
+        "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/stripe-webhook.service.ts",
         "server/services/tenant.service.ts",
@@ -2046,6 +2052,7 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/services/booking-checkout.service.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/outbox.service.ts"
       ],
@@ -2497,7 +2504,7 @@
         "server/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "flights", "users"],
+        "reads": ["bookings", "flights", "paymentSplits", "users"],
         "writes": []
       },
       "replacement": null
@@ -2779,6 +2786,28 @@
       "replacement": null
     },
     {
+      "file": "server/services/split-checkout.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/split-checkout.service.ts",
+      "accountableOwner": null,
+      "consumers": ["server/services/split-payment.service.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/booking-checkout.service.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/tenant.service.ts",
+        "server/stripe.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["bookings", "paymentReceipts", "paymentSplits"],
+        "writes": ["paymentSplits"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/split-payment.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/split-payment.service.ts",
@@ -2791,11 +2820,17 @@
         "server/services/booking-settlement.service.ts",
         "server/services/email.service.ts",
         "server/services/outbox.service.ts",
-        "server/services/tenant.service.ts",
-        "server/stripe.ts"
+        "server/services/split-checkout.service.ts",
+        "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["airports", "bookings", "flights", "paymentSplits"],
+        "reads": [
+          "airports",
+          "bookings",
+          "flights",
+          "paymentReceipts",
+          "paymentSplits"
+        ],
         "writes": ["paymentSplits"]
       },
       "replacement": null
@@ -2863,6 +2898,7 @@
         "server/services/bookings.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/travel-agent.service.ts"
       ],
@@ -2996,7 +3032,7 @@
         "server/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "paymentSplits", "walletTransactions", "wallets"],
+        "reads": ["bookings", "walletTransactions", "wallets"],
         "writes": ["financialLedger", "walletTransactions", "wallets"]
       },
       "replacement": null

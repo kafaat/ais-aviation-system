@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import * as splitPaymentService from "../services/split-payment.service";
 import { getDb } from "../db";
-import { bookings, paymentSplits } from "../../drizzle/schema";
+import { bookings } from "../../drizzle/schema";
 import {
   assertBookingOwnership,
   assertSplitOwnership,
@@ -245,7 +245,7 @@ export const splitPaymentsRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
       await assertSplitOwnership(input.splitId, ctx.user.id, ctx.user.role);
-      await splitPaymentService.cancelSplit(input.splitId);
+      await splitPaymentService.cancelSplit(input.splitId, ctx.user);
       return { cancelled: true };
     }),
 
@@ -269,7 +269,7 @@ export const splitPaymentsRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Ownership check (IDOR)
       await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
-      await splitPaymentService.cancelAllSplits(input.bookingId);
+      await splitPaymentService.cancelAllSplits(input.bookingId, ctx.user);
       return { cancelled: true };
     }),
 
@@ -305,37 +305,6 @@ export const splitPaymentsRouter = router({
         .nullable()
     )
     .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      // Check payment expiration before fetching full details
-      const [split] = await db
-        .select({
-          expiresAt: paymentSplits.expiresAt,
-          status: paymentSplits.status,
-        })
-        .from(paymentSplits)
-        .where(eq(paymentSplits.paymentToken, input.paymentToken))
-        .limit(1);
-
-      if (!split) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Payment not found",
-        });
-      }
-
-      if (split.expiresAt && new Date() > split.expiresAt) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This payment request has expired",
-        });
-      }
-
       return await splitPaymentService.getPayerPaymentDetails(
         input.paymentToken
       );
@@ -363,37 +332,6 @@ export const splitPaymentsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const db = await getDb();
-      if (!db)
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-
-      // Check payment expiration before creating checkout session
-      const [split] = await db
-        .select({
-          expiresAt: paymentSplits.expiresAt,
-          status: paymentSplits.status,
-        })
-        .from(paymentSplits)
-        .where(eq(paymentSplits.paymentToken, input.paymentToken))
-        .limit(1);
-
-      if (!split) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Payment not found",
-        });
-      }
-
-      if (split.expiresAt && new Date() > split.expiresAt) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "This payment request has expired",
-        });
-      }
-
       return await splitPaymentService.processPayerPayment(input.paymentToken);
     }),
 

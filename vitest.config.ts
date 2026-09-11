@@ -125,13 +125,25 @@ export default defineConfig(({ mode }) => {
           // Setup files
           "**/setup.ts",
         ],
-        // Minimum coverage thresholds
-        // Set to 0 to prevent CI failures while building coverage baseline
+        // Global floor is measured by the complete MySQL-backed CI suite.
+        // Financial authorities additionally have independent per-file gates.
         thresholds: {
-          lines: 0,
-          functions: 0,
-          branches: 0,
-          statements: 0,
+          lines: 20,
+          functions: 16,
+          branches: 15,
+          statements: 20,
+          "server/services/split-checkout.service.ts": {
+            lines: 85,
+            statements: 80,
+            functions: 85,
+            branches: 75,
+          },
+          "server/services/payment-settlement.service.ts": {
+            lines: 85,
+            statements: 80,
+            functions: 90,
+            branches: 75,
+          },
           "server/services/booking-checkout.service.ts": {
             lines: 80,
             statements: 80,

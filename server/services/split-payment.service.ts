@@ -4,17 +4,25 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { getDb } from "../db";
-import { stripe } from "../stripe";
 import {
   paymentSplits,
+  paymentReceipts,
   bookings,
   flights,
   airports,
   InsertPaymentSplit,
 } from "../../drizzle/schema";
-import { assertNoActiveCheckout } from "./booking-checkout.service";
+import {
+  assertNoActiveCheckout,
+  assertNoActiveSplitPayment,
+} from "./booking-checkout.service";
+import {
+  createSplitCheckout,
+  cancelPaymentSplits,
+  type SplitActor,
+} from "./split-checkout.service";
 import { assertTenantOperational } from "./tenant.service";
 import { recordEvent } from "./outbox.service";
 import { sendSplitPaymentRequest } from "./email.service";
@@ -154,24 +162,7 @@ export async function initiateSplitPayment(
         message: "Expiration must be 1 to 30 whole days",
       });
 
-    // Check if split payment already exists for this booking
-    const existingSplits = await tx
-      .select()
-      .from(paymentSplits)
-      .where(
-        and(
-          eq(paymentSplits.bookingId, bookingId),
-          sql`${paymentSplits.status} NOT IN ('cancelled', 'expired')`
-        )
-      );
-
-    if (existingSplits.length > 0) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message:
-          "Split payment already exists for this booking. Cancel existing splits first.",
-      });
-    }
+    await assertNoActiveSplitPayment(tx, bookingId);
 
     // Validate splits
     if (splits.length < 2 || splits.length > 20) {
@@ -270,9 +261,32 @@ export async function getSplitPaymentStatus(
     return null;
   }
 
-  const paidSplits = splits.filter(s => s.status === "paid");
-  const paidAmount = paidSplits.reduce((sum, s) => sum + s.amount, 0);
-  const pendingAmount = booking.totalAmount - paidAmount;
+  const receipts = await db
+    .select()
+    .from(paymentReceipts)
+    .where(
+      and(
+        eq(paymentReceipts.bookingId, bookingId),
+        eq(paymentReceipts.kind, "split_payment")
+      )
+    );
+  const active = splits.filter(
+    s => !["cancelled", "expired"].includes(s.status)
+  );
+  const netFor = (split: typeof paymentSplits.$inferSelect) =>
+    receipts
+      .filter(
+        r =>
+          r.targetId === split.id &&
+          r.paymentIntentId === split.stripePaymentIntentId &&
+          r.settlementStatus === "applied"
+      )
+      .reduce((sum, r) => sum + Math.max(0, r.amount - r.refundedAmount), 0);
+  const paidSplits = active.filter(
+    s => s.status === "paid" && netFor(s) === s.amount
+  );
+  const paidAmount = active.reduce((sum, s) => sum + netFor(s), 0);
+  const pendingAmount = Math.max(0, booking.totalAmount - paidAmount);
 
   return {
     bookingId,
@@ -287,7 +301,12 @@ export async function getSplitPaymentStatus(
       status: s.status,
       paidAt: s.paidAt,
     })),
-    allPaid: paidSplits.length === splits.length,
+    allPaid:
+      booking.status === "confirmed" &&
+      booking.paymentStatus === "paid" &&
+      active.length >= 2 &&
+      paidSplits.length === active.length &&
+      paidAmount === booking.totalAmount,
     paidCount: paidSplits.length,
     totalSplits: splits.length,
     paidAmount,
@@ -316,17 +335,13 @@ export async function sendPaymentRequest(splitId: number): Promise<boolean> {
     });
   }
 
-  if (split.status === "paid") {
+  if (
+    !["pending", "email_sent", "failed"].includes(split.status) ||
+    (split.expiresAt && split.expiresAt.getTime() <= Date.now())
+  ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "This split is already paid",
-    });
-  }
-
-  if (split.status === "cancelled") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "This split has been cancelled",
+      message: "Payment request is no longer payable",
     });
   }
 
@@ -379,14 +394,7 @@ export async function sendPaymentRequest(splitId: number): Promise<boolean> {
   });
 
   if (emailSent) {
-    // Update split status to email_sent
-    await db
-      .update(paymentSplits)
-      .set({
-        status: "email_sent",
-        emailSentAt: new Date(),
-      })
-      .where(eq(paymentSplits.id, splitId));
+    await recordSplitEmailDelivery(splitId);
   }
 
   return emailSent;
@@ -411,16 +419,13 @@ export async function getPayerPaymentDetails(
     return null;
   }
 
-  // Check if expired
-  if (split.expiresAt && new Date() > split.expiresAt) {
-    // Update status to expired
-    await db
-      .update(paymentSplits)
-      .set({ status: "expired" })
-      .where(eq(paymentSplits.id, split.id));
-
+  // Reading an expired link must never overwrite a concurrent paid state.
+  if (
+    split.status !== "paid" &&
+    split.expiresAt &&
+    new Date() > split.expiresAt
+  )
     return null;
-  }
 
   // Get booking and flight details
   const [booking] = await db
@@ -467,115 +472,8 @@ export async function getPayerPaymentDetails(
 /**
  * Process payment for a split using Stripe checkout
  */
-export async function processPayerPayment(
-  paymentToken: string
-): Promise<{ sessionId: string; url: string | null }> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const [split] = await db
-    .select()
-    .from(paymentSplits)
-    .where(eq(paymentSplits.paymentToken, paymentToken))
-    .limit(1);
-
-  if (!split) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Payment not found",
-    });
-  }
-
-  if (split.status === "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "This payment has already been completed",
-    });
-  }
-
-  if (split.status === "cancelled" || split.status === "expired") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "This payment request has been cancelled or expired",
-    });
-  }
-
-  // Check expiration
-  if (split.expiresAt && new Date() > split.expiresAt) {
-    await db
-      .update(paymentSplits)
-      .set({ status: "expired" })
-      .where(eq(paymentSplits.id, split.id));
-
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "This payment request has expired",
-    });
-  }
-
-  // Get booking details
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, split.bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Booking not found",
-    });
-  }
-
-  // Create Stripe checkout session
-  await assertNoCollectionReview(db, booking.id);
-  const baseUrl = process.env.FRONTEND_URL || "http://localhost:3000";
-
-  const session = await stripe.checkout.sessions.create({
-    payment_method_types: ["card"],
-    line_items: [
-      {
-        price_data: {
-          currency: "sar",
-          product_data: {
-            name: `Split Payment - Booking ${booking.bookingReference}`,
-            description: `Your share of flight booking ${booking.bookingReference}`,
-          },
-          unit_amount: split.amount,
-        },
-        quantity: 1,
-      },
-    ],
-    mode: "payment",
-    success_url: `${baseUrl}/pay/${paymentToken}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/pay/${paymentToken}?cancelled=true`,
-    customer_email: split.payerEmail,
-    metadata: {
-      splitId: split.id.toString(),
-      bookingId: split.bookingId.toString(),
-      paymentToken,
-      type: "split_payment",
-    },
-    payment_intent_data: {
-      metadata: {
-        splitId: split.id.toString(),
-        bookingId: split.bookingId.toString(),
-        paymentToken,
-        type: "split_payment",
-      },
-    },
-  });
-
-  // Update split with checkout session ID
-  await db
-    .update(paymentSplits)
-    .set({ stripeCheckoutSessionId: session.id })
-    .where(eq(paymentSplits.id, split.id));
-
-  return {
-    sessionId: session.id,
-    url: session.url,
-  };
+export async function processPayerPayment(paymentToken: string) {
+  return createSplitCheckout(paymentToken);
 }
 
 /**
@@ -593,95 +491,49 @@ export async function markSplitPaid(
 /**
  * Cancel a specific split payment
  */
-export async function cancelSplit(splitId: number): Promise<void> {
-  const db = await getDb();
+export async function cancelSplit(
+  splitId: number,
+  actor: SplitActor
+): Promise<void> {
+  const db = getDb();
   if (!db) throw new Error("Database not available");
-
   const [split] = await db
     .select()
     .from(paymentSplits)
     .where(eq(paymentSplits.id, splitId))
     .limit(1);
-
-  if (!split) {
+  if (!split)
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Payment split not found",
     });
-  }
-
-  if (split.status === "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot cancel a paid split",
-    });
-  }
-
-  await db
-    .update(paymentSplits)
-    .set({ status: "cancelled" })
-    .where(eq(paymentSplits.id, splitId));
+  await cancelPaymentSplits({ bookingId: split.bookingId, splitId }, actor);
 }
 
-/**
- * Cancel all splits for a booking
- */
-export async function cancelAllSplits(bookingId: number): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  // Check if any splits are already paid
-  const paidSplits = await db
-    .select()
-    .from(paymentSplits)
-    .where(
-      and(
-        eq(paymentSplits.bookingId, bookingId),
-        eq(paymentSplits.status, "paid")
-      )
-    );
-
-  if (paidSplits.length > 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "Cannot cancel split payment - some payments have already been made",
-    });
-  }
-
-  await db
-    .update(paymentSplits)
-    .set({ status: "cancelled" })
-    .where(
-      and(
-        eq(paymentSplits.bookingId, bookingId),
-        sql`${paymentSplits.status} NOT IN ('paid', 'cancelled')`
-      )
-    );
+export async function cancelAllSplits(
+  bookingId: number,
+  actor: SplitActor
+): Promise<void> {
+  await cancelPaymentSplits({ bookingId }, actor);
 }
 
-/**
- * Check if all splits for a booking are paid
- */
 export async function checkAllPaid(bookingId: number): Promise<boolean> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  return (await getSplitPaymentStatus(bookingId))?.allPaid ?? false;
+}
 
-  const splits = await db
-    .select()
-    .from(paymentSplits)
+/** Email acknowledgement may update only a still-payable share. */
+export async function recordSplitEmailDelivery(splitId: number) {
+  const db = getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(paymentSplits)
+    .set({ status: "email_sent", emailSentAt: new Date() })
     .where(
       and(
-        eq(paymentSplits.bookingId, bookingId),
-        sql`${paymentSplits.status} NOT IN ('cancelled', 'expired')`
+        eq(paymentSplits.id, splitId),
+        inArray(paymentSplits.status, ["pending", "email_sent", "failed"])
       )
     );
-
-  if (splits.length === 0) {
-    return false;
-  }
-
-  return splits.every(s => s.status === "paid");
 }
 
 /**
@@ -741,43 +593,5 @@ export async function sendAllPaymentRequests(
  * Resend payment request email
  */
 export async function resendPaymentRequest(splitId: number): Promise<boolean> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const [split] = await db
-    .select()
-    .from(paymentSplits)
-    .where(eq(paymentSplits.id, splitId))
-    .limit(1);
-
-  if (!split) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Payment split not found",
-    });
-  }
-
-  if (split.status === "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "This split is already paid",
-    });
-  }
-
-  if (split.status === "cancelled" || split.status === "expired") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "This split has been cancelled or expired",
-    });
-  }
-
-  // Reset status to pending so sendPaymentRequest will work
-  if (split.status === "email_sent" || split.status === "failed") {
-    await db
-      .update(paymentSplits)
-      .set({ status: "pending" })
-      .where(eq(paymentSplits.id, splitId));
-  }
-
-  return await sendPaymentRequest(splitId);
+  return sendPaymentRequest(splitId);
 }

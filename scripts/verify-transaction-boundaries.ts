@@ -386,6 +386,8 @@ try {
   await verifyForensicWorkflows(db, id, check);
   const { verifyUnpaidInvoices } = await import("./acceptance/unpaid-invoices");
   await verifyUnpaidInvoices(db, id, check);
+  const { verifySplitLifecycle } = await import("./acceptance/split-lifecycle");
+  await verifySplitLifecycle(db, id, check);
   const { verifyDataAudit } = await import("./acceptance/data-audit");
   await verifyDataAudit(db, id, check);
   completed = true;
