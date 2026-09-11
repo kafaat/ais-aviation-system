@@ -1,5 +1,7 @@
-import type { SettlementTx } from "./booking-settlement.service";
-import { cancelBookingResources } from "./booking-settlement.service";
+import {
+  cancelBookingResources,
+  type SettlementTx,
+} from "./booking-settlement.service";
 import { assertTenantOperational } from "./tenant.service";
 import { allocateProportional } from "./seat-economics.service";
 import { createInventoryLock } from "./inventory-lock.service";
