@@ -27,17 +27,28 @@ import {
   CheckCircle2,
   RefreshCw,
 } from "lucide-react";
-import { format, subDays } from "date-fns";
-import { ar } from "date-fns/locale";
 import { ExportReportButton } from "@/components/ExportReportButton";
 
 export default function RefundsDashboard() {
-  const { t } = useTranslation();
-  const { data: stats, isLoading: statsLoading } =
-    trpc.refunds.getStats.useQuery();
-  const { data: history, isLoading: historyLoading } =
-    trpc.refunds.getHistory.useQuery({ limit: 20 });
-  const { data: trends } = trpc.refunds.getTrends.useQuery();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: statsError,
+    refetch: refetchStats,
+  } = trpc.refunds.getStats.useQuery();
+  const {
+    data: history,
+    isLoading: historyLoading,
+    isError: historyError,
+    refetch: refetchHistory,
+  } = trpc.refunds.getHistory.useQuery({ limit: 20 });
+  const {
+    data: trends,
+    isError: trendsError,
+    refetch: refetchTrends,
+  } = trpc.refunds.getTrends.useQuery();
   const [cursor, setCursor] = useState<number>();
   const [filter, setFilter] = useState<
     "processing" | "completed" | "review_required"
@@ -71,8 +82,8 @@ export default function RefundsDashboard() {
 
   // Default date filters for export (last 30 days)
   const exportFilters = {
-    startDate: format(subDays(new Date(), 30), "yyyy-MM-dd"),
-    endDate: format(new Date(), "yyyy-MM-dd"),
+    startDate: new Date(Date.now() - 29 * 86400_000).toISOString().slice(0, 10),
+    endDate: new Date().toISOString().slice(0, 10),
   };
 
   return (
@@ -155,74 +166,124 @@ export default function RefundsDashboard() {
               onRefresh={() => {
                 void detail.refetch();
                 void queue.refetch();
+                void refetchStats();
+                void refetchHistory();
+                void refetchTrends();
               }}
             />
           )}
         </DialogContent>
       </Dialog>
       <p className="text-sm text-muted-foreground">
-        {t("cancelBooking.split.fullRefundStats")}
+        {t("admin.refunds.reportingScope")}
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              {t("admin.refunds.totalRefunds")}
-            </p>
-            <RefreshCw className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-3xl font-bold">{stats?.totalRefunds || 0}</p>
-          <p className="text-xs text-muted-foreground mt-2">
-            {t("admin.refunds.allRefunds")}
-          </p>
-        </Card>
+      {statsError && (
+        <div role="alert">
+          <p>{t("admin.refunds.loadError")}</p>
+          <Button onClick={() => void refetchStats()}>
+            {t("admin.refunds.retry")}
+          </Button>
+        </div>
+      )}
+      {stats && !statsError && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t("admin.refunds.totalRefunds")}
+                </p>
+                <RefreshCw className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="text-3xl font-bold">{stats.totalRefunds}</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {t("admin.refunds.allRefunds")}
+              </p>
+            </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              {t("admin.refunds.refundedAmount")}
-            </p>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-3xl font-bold">
-            {((stats?.totalRefundedAmount || 0) / 100).toFixed(2)}
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">
-            {t("common.sar")}
-          </p>
-        </Card>
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t("admin.refunds.refundedAmount")}
+                </p>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="text-3xl font-bold">
+                {(stats.totalRefundedAmount / 100).toFixed(2)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {t("common.sar")}
+              </p>
+            </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              {t("admin.refunds.completedRefunds")}
-            </p>
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-          </div>
-          <p className="text-3xl font-bold">{stats?.completedRefunds || 0}</p>
-          <p className="text-xs text-muted-foreground mt-2">
-            {t("admin.refunds.refundedSuccessfully")}
-          </p>
-        </Card>
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t("admin.refunds.refundedBookings")}
+                </p>
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+              </div>
+              <p className="text-3xl font-bold">{stats.refundedBookings}</p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {t("admin.refunds.bookingCountScope")}
+              </p>
+            </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-muted-foreground">
-              {t("admin.refunds.refundRate")}
-            </p>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-muted-foreground">
+                  {t("admin.refunds.refundRate")}
+                </p>
+                <TrendingDown className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <p className="text-3xl font-bold">
+                {stats.refundRate.toFixed(1)}%
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                {t("admin.refunds.ofTotalBookings")}
+              </p>
+            </Card>
           </div>
-          <p className="text-3xl font-bold">
-            {(stats?.refundRate || 0).toFixed(1)}%
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">
-            {t("admin.refunds.ofTotalBookings")}
-          </p>
-        </Card>
-      </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card className="p-6">
+              <h3>{t("admin.refunds.pendingPayers")}</h3>
+              <p className="text-2xl">{stats.pendingRefunds}</p>
+              <p>
+                {(stats.pendingRefundAmount / 100).toFixed(2)} {t("common.sar")}
+              </p>
+            </Card>
+            <Card className="p-6">
+              <h3>{t("admin.refunds.reviewPayers")}</h3>
+              <p className="text-2xl">{stats.reviewRequiredRefunds}</p>
+              <p>
+                {(stats.reviewRequiredAmount / 100).toFixed(2)}{" "}
+                {t("common.sar")}
+              </p>
+            </Card>
+            <Card className="p-6">
+              <h3>{t("admin.refunds.retainedFees")}</h3>
+              <p className="text-2xl">
+                {(stats.retainedCancellationFees / 100).toFixed(2)}{" "}
+                {t("common.sar")}
+              </p>
+            </Card>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {t("admin.refunds.requestScope")}
+          </p>
+        </>
+      )}
+      {trendsError && (
+        <div role="alert">
+          <p>{t("admin.refunds.trendsError")}</p>
+          <Button onClick={() => void refetchTrends()}>
+            {t("admin.refunds.retry")}
+          </Button>
+        </div>
+      )}
       {/* Refund Trends Chart */}
-      {trends && trends.length > 0 && (
+      {!trendsError && trends && trends.length > 0 && (
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">
             {t("admin.refunds.trendsTitle")}
@@ -235,9 +296,10 @@ export default function RefundsDashboard() {
               >
                 <div className="flex items-center gap-3">
                   <div className="text-sm font-medium">
-                    {format(new Date(trend.date), "dd MMM yyyy", {
-                      locale: ar,
-                    })}
+                    {new Intl.DateTimeFormat(locale, {
+                      dateStyle: "medium",
+                      timeZone: "UTC",
+                    }).format(new Date(trend.date))}
                   </div>
                   <Badge variant="secondary">
                     {trend.count} {t("admin.refunds.refund")}
@@ -262,6 +324,13 @@ export default function RefundsDashboard() {
             {[1, 2, 3, 4, 5].map(i => (
               <Skeleton key={i} className="h-16 w-full" />
             ))}
+          </div>
+        ) : historyError ? (
+          <div role="alert">
+            <p>{t("admin.refunds.historyError")}</p>
+            <Button onClick={() => void refetchHistory()}>
+              {t("admin.refunds.retry")}
+            </Button>
           </div>
         ) : !history || history.length === 0 ? (
           <div className="text-center py-12">
@@ -296,15 +365,17 @@ export default function RefundsDashboard() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {refund.status === "refunded"
-                          ? t("admin.refunds.statusRefunded")
+                        {refund.status === "settled"
+                          ? t("admin.refunds.statusSettled")
                           : refund.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {format(new Date(refund.refundedAt), "PPp", {
-                        locale: ar,
-                      })}
+                      {new Intl.DateTimeFormat(locale, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                        timeZone: "UTC",
+                      }).format(new Date(refund.refundedAt))}
                     </TableCell>
                   </TableRow>
                 ))}

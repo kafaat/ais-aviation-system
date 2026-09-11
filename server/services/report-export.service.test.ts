@@ -122,7 +122,12 @@ describe("Report Export Service", () => {
       bookingReference: "BK003",
       pnr: "GHI789",
       userEmail: "refund@example.com",
-      totalAmount: 75000,
+      id: 101,
+      bookingId: 3,
+      userId: 1,
+      amount: "75000",
+      refundedAtEpoch: new Date("2024-01-14T12:00:00Z").getTime() / 1000,
+      totalAmount: 100000,
       status: "cancelled",
       paymentStatus: "refunded",
       updatedAt: new Date("2024-01-14T12:00:00Z"),
@@ -268,7 +273,9 @@ describe("Report Export Service", () => {
           leftJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           orderBy: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue(mockRefundsData),
+          innerJoin: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          offset: vi.fn().mockResolvedValue(mockRefundsData),
         };
 
         vi.mocked(getDb).mockResolvedValue(
@@ -390,7 +397,9 @@ describe("Report Export Service", () => {
           leftJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
           orderBy: vi.fn().mockReturnThis(),
-          limit: vi.fn().mockResolvedValue(mockRefundsData),
+          innerJoin: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          offset: vi.fn().mockResolvedValue(mockRefundsData),
         };
 
         vi.mocked(getDb).mockResolvedValue(
@@ -470,34 +479,16 @@ describe("Report Export Service", () => {
 
     describe("generateRefundsPDF", () => {
       it("should generate PDF buffer for refunds", async () => {
-        const mockSummary = {
-          totalRefunds: 5,
-          totalAmount: 250000,
-        };
-
-        const mockDailyRefunds = [
-          { date: "2024-01-10", count: 2, amount: 100000 },
-          { date: "2024-01-11", count: 3, amount: 150000 },
-        ];
-
-        // Create a proper mock chain
         const mockDb = {
           select: vi.fn().mockReturnThis(),
           from: vi.fn().mockReturnThis(),
+          innerJoin: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
           where: vi.fn().mockReturnThis(),
-          groupBy: vi.fn().mockReturnThis(),
-          orderBy: vi.fn().mockResolvedValue(mockDailyRefunds),
+          orderBy: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          offset: vi.fn().mockResolvedValue(mockRefundsData),
         };
-
-        // First call returns summary, second call returns daily breakdown
-        let callCount = 0;
-        mockDb.where = vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) {
-            return Promise.resolve([mockSummary]);
-          }
-          return mockDb;
-        });
 
         vi.mocked(getDb).mockResolvedValue(
           mockDb as unknown as ReturnType<typeof getDb>

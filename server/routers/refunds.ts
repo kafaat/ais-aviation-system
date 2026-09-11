@@ -427,9 +427,18 @@ export const refundsRouter = router({
       z.object({
         limit: z
           .number()
+          .int()
+          .min(1)
+          .max(100)
           .optional()
           .describe("Maximum number of records to return"),
-        offset: z.number().optional().describe("Number of records to skip"),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .max(1000000)
+          .optional()
+          .describe("Number of records to skip"),
       })
     )
     .output(responseContracts["getHistory"])

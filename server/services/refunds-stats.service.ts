@@ -1,20 +1,31 @@
+import { TRPCError } from "@trpc/server";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { bookings } from "../../drizzle/schema";
-import { eq, and, gte, sql } from "drizzle-orm";
+import {
+  bookings,
+  bookingRefundItems,
+  bookingRefundPlans,
+  financialLedger,
+  flights,
+  airports,
+  users,
+} from "../../drizzle/schema";
+import type { SettlementTx } from "./booking-settlement.service";
 
-/**
- * Refunds Statistics Service
- * Provides analytics and statistics for refunds
- */
-
+/** Read owner for SAR booking-refund reporting. Posted ledger deltas and
+ * outstanding provider requests are distinct amounts. No provider calls. */
 export interface RefundStats {
   totalRefunds: number;
   totalRefundedAmount: number;
-  pendingRefunds: number;
   completedRefunds: number;
-  refundRate: number; // percentage of bookings that were refunded
+  refundedBookings: number;
+  pendingRefunds: number;
+  pendingRefundAmount: number;
+  reviewRequiredRefunds: number;
+  reviewRequiredAmount: number;
+  retainedCancellationFees: number;
+  refundRate: number;
 }
-
 export interface RefundHistoryItem {
   id: number;
   bookingId: number;
@@ -28,134 +39,239 @@ export interface RefundHistoryItem {
   origin?: string;
   destination?: string;
 }
-
-/**
- * Get overall refund statistics
- */
-export async function getRefundStats(): Promise<RefundStats> {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    // Get total refunded bookings
-    const refundedBookings = await database
-      .select({
-        count: sql<number>`COUNT(*)`,
-        totalAmount: sql<number>`SUM(${bookings.totalAmount})`,
-      })
-      .from(bookings)
-      .where(eq(bookings.paymentStatus, "refunded"));
-
-    // Get total bookings for refund rate calculation
-    const totalBookings = await database
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(bookings);
-
-    const totalRefunds = Number(refundedBookings[0]?.count || 0);
-    const totalRefundedAmount = Number(refundedBookings[0]?.totalAmount || 0);
-    const totalCount = Number(totalBookings[0]?.count || 1); // Avoid division by zero
-
-    return {
-      totalRefunds,
-      totalRefundedAmount,
-      pendingRefunds: 0, // We don't have pending refunds in current implementation
-      completedRefunds: totalRefunds,
-      refundRate: (totalRefunds / totalCount) * 100,
-    };
-  } catch (error) {
-    console.error("Error getting refund stats:", error);
-    return {
-      totalRefunds: 0,
-      totalRefundedAmount: 0,
-      pendingRefunds: 0,
-      completedRefunds: 0,
-      refundRate: 0,
-    };
-  }
+export interface RefundReportPeriod {
+  startDate?: Date;
+  endDate?: Date;
 }
 
-/**
- * Get refund history with pagination
- */
+function integer(value: unknown): number {
+  const n = Number(value);
+  if (value == null || !Number.isSafeInteger(n) || n < 0)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Invalid refund reporting value",
+    });
+  return n;
+}
+async function database() {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  return db;
+}
+async function reporting<T>(
+  read: (db: Awaited<ReturnType<typeof database>>) => Promise<T>
+): Promise<T> {
+  try {
+    return await read(await database());
+  } catch (error) {
+    if (error instanceof TRPCError) throw error;
+    const code = (error as { code?: unknown })?.code;
+    console.error(
+      "[refund-reporting] Query failed",
+      typeof code === "string" && /^ER_[A-Z0-9_]+$/.test(code)
+        ? code
+        : "QUERY_FAILED"
+    );
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Refund reporting unavailable",
+    });
+  }
+}
+function bounds(period: RefundReportPeriod) {
+  for (const value of [period.startDate, period.endDate])
+    if (
+      value !== undefined &&
+      (!(value instanceof Date) || !Number.isFinite(value.getTime()))
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid refund report period",
+      });
+  if (period.startDate && period.endDate && period.startDate > period.endDate)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Refund report start must precede end",
+    });
+}
+function settledWhere(period: RefundReportPeriod = {}) {
+  bounds(period);
+  return and(
+    inArray(financialLedger.type, ["refund", "partial_refund"]),
+    eq(financialLedger.currency, "SAR"),
+    period.startDate
+      ? sql`UNIX_TIMESTAMP(${financialLedger.transactionDate}) >= ${period.startDate.getTime() / 1000}`
+      : undefined,
+    period.endDate
+      ? sql`UNIX_TIMESTAMP(${financialLedger.transactionDate}) <= ${period.endDate.getTime() / 1000}`
+      : undefined
+  );
+}
+
+export async function getRefundStats(): Promise<RefundStats> {
+  return reporting(db =>
+    db.transaction(
+      async tx => {
+        const [settled] = await tx
+          .select({
+            count: sql<string>`COUNT(*)`,
+            bookingCount: sql<string>`COUNT(DISTINCT ${financialLedger.bookingId})`,
+            amount: sql<string>`COALESCE(SUM(${financialLedger.amount} * 100), 0)`,
+          })
+          .from(financialLedger)
+          .innerJoin(bookings, eq(bookings.id, financialLedger.bookingId))
+          .where(settledWhere());
+        const [all] = await tx
+          .select({ count: sql<string>`COUNT(*)` })
+          .from(bookings);
+        const [requests] = await tx
+          .select({
+            pending: sql<string>`COALESCE(SUM(${bookingRefundItems.status} IN ('queued','requesting','pending')), 0)`,
+            pendingAmount: sql<string>`COALESCE(SUM(CASE WHEN ${bookingRefundItems.status} IN ('queued','requesting','pending') THEN ${bookingRefundItems.refundAmount} ELSE 0 END), 0)`,
+            review: sql<string>`COALESCE(SUM(${bookingRefundItems.status} IN ('failed','review_required')), 0)`,
+            reviewAmount: sql<string>`COALESCE(SUM(CASE WHEN ${bookingRefundItems.status} IN ('failed','review_required') THEN ${bookingRefundItems.refundAmount} ELSE 0 END), 0)`,
+          })
+          .from(bookingRefundItems);
+        const [fees] = await tx
+          .select({
+            amount: sql<string>`COALESCE(SUM(${bookingRefundPlans.cancellationFee}), 0)`,
+          })
+          .from(bookingRefundPlans);
+        const count = integer(settled.count);
+        const bookingCount = integer(settled.bookingCount);
+        const allCount = integer(all.count);
+        return {
+          totalRefunds: count,
+          completedRefunds: count,
+          totalRefundedAmount: integer(settled.amount),
+          refundedBookings: bookingCount,
+          pendingRefunds: integer(requests.pending),
+          pendingRefundAmount: integer(requests.pendingAmount),
+          reviewRequiredRefunds: integer(requests.review),
+          reviewRequiredAmount: integer(requests.reviewAmount),
+          retainedCancellationFees: integer(fees.amount),
+          refundRate: allCount > 0 ? (bookingCount / allCount) * 100 : 0,
+        };
+      },
+      {
+        isolationLevel: "repeatable read",
+        accessMode: "read only",
+        withConsistentSnapshot: true,
+      }
+    )
+  );
+}
+
+/** Shared history/export projection: a row is one posted settlement delta.
+ * Date and amount never come from mutable booking status or invoice totals. */
+async function settledRows(
+  db: SettlementTx,
+  period: RefundReportPeriod,
+  limit: number,
+  offset: number
+) {
+  const predicate = settledWhere(period);
+  const rows = await db
+    .select({
+      id: financialLedger.id,
+      bookingId: bookings.id,
+      bookingReference: bookings.bookingReference,
+      pnr: bookings.pnr,
+      userId: bookings.userId,
+      userEmail: users.email,
+      amount: sql<string>`${financialLedger.amount} * 100`,
+      refundedAtEpoch: sql<string>`UNIX_TIMESTAMP(${financialLedger.transactionDate})`,
+      flightNumber: flights.flightNumber,
+      origin: sql<string>`origin_airport.city`,
+      destination: sql<string>`dest_airport.city`,
+    })
+    .from(financialLedger)
+    .innerJoin(bookings, eq(bookings.id, financialLedger.bookingId))
+    .leftJoin(users, eq(users.id, bookings.userId))
+    .leftJoin(flights, eq(flights.id, bookings.flightId))
+    .leftJoin(
+      sql`${airports} AS origin_airport`,
+      sql`origin_airport.id = ${flights.originId}`
+    )
+    .leftJoin(
+      sql`${airports} AS dest_airport`,
+      sql`dest_airport.id = ${flights.destinationId}`
+    )
+    .where(predicate)
+    .orderBy(desc(financialLedger.transactionDate), desc(financialLedger.id))
+    .limit(limit)
+    .offset(offset);
+  return rows.map(({ refundedAtEpoch, ...row }) => ({
+    ...row,
+    refundedAt: new Date(integer(refundedAtEpoch) * 1000),
+    amount: integer(row.amount),
+    status: "settled" as const,
+    userEmail: row.userEmail ?? "",
+    flightNumber: row.flightNumber ?? "",
+    origin: row.origin ?? "",
+    destination: row.destination ?? "",
+  }));
+}
 export async function getRefundHistory(params: {
   limit?: number;
   offset?: number;
 }): Promise<RefundHistoryItem[]> {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    const { limit = 50, offset = 0 } = params;
-
-    const refunds = await database
-      .select({
-        id: bookings.id,
-        bookingId: bookings.id,
-        bookingReference: bookings.bookingReference,
-        pnr: bookings.pnr,
-        userId: bookings.userId,
-        amount: bookings.totalAmount,
-        status: bookings.paymentStatus,
-        refundedAt: bookings.updatedAt,
-      })
-      .from(bookings)
-      .where(eq(bookings.paymentStatus, "refunded"))
-      .orderBy(sql`${bookings.updatedAt} DESC`)
-      .limit(limit)
-      .offset(offset);
-
-    return refunds.map(refund => ({
-      id: refund.id,
-      bookingId: refund.bookingId,
-      bookingReference: refund.bookingReference,
-      pnr: refund.pnr,
-      userId: refund.userId,
-      amount: refund.amount,
-      status: refund.status,
-      refundedAt: refund.refundedAt,
-    }));
-  } catch (error) {
-    console.error("Error getting refund history:", error);
-    return [];
-  }
+  const { limit = 50, offset = 0 } = params;
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 100 ||
+    !Number.isInteger(offset) ||
+    offset < 0 ||
+    offset > 1_000_000
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid refund history page",
+    });
+  return reporting(db => settledRows(db, {}, limit, offset));
 }
-
-/**
- * Get refund trends (daily refunds for the last 30 days)
- */
+export async function getRefundExportRows(period: RefundReportPeriod) {
+  bounds(period);
+  const rows = await reporting(db => settledRows(db, period, 10001, 0));
+  if (rows.length > 10000)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Refund export exceeds 10000 settlements; narrow the date range",
+    });
+  return rows;
+}
 export async function getRefundTrends(): Promise<
   Array<{ date: string; count: number; amount: number }>
 > {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const trends = await database
+  const endDate = new Date();
+  const startDate = new Date(endDate);
+  startDate.setUTCDate(startDate.getUTCDate() - 29);
+  startDate.setUTCHours(0, 0, 0, 0);
+  return reporting(async db => {
+    const rows = await db
       .select({
-        date: sql<string>`DATE(${bookings.updatedAt})`,
-        count: sql<number>`COUNT(*)`,
-        amount: sql<number>`SUM(${bookings.totalAmount})`,
+        day: sql<string>`FLOOR(UNIX_TIMESTAMP(${financialLedger.transactionDate}) / 86400)`,
+        count: sql<string>`COUNT(*)`,
+        amount: sql<string>`COALESCE(SUM(${financialLedger.amount} * 100), 0)`,
       })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.paymentStatus, "refunded"),
-          gte(bookings.updatedAt, thirtyDaysAgo)
-        )
+      .from(financialLedger)
+      .innerJoin(bookings, eq(bookings.id, financialLedger.bookingId))
+      .where(settledWhere({ startDate, endDate }))
+      .groupBy(
+        sql`FLOOR(UNIX_TIMESTAMP(${financialLedger.transactionDate}) / 86400)`
       )
-      .groupBy(sql`DATE(${bookings.updatedAt})`)
-      .orderBy(sql`DATE(${bookings.updatedAt}) ASC`);
-
-    return trends.map(trend => ({
-      date: trend.date,
-      count: Number(trend.count),
-      amount: Number(trend.amount),
+      .orderBy(
+        sql`FLOOR(UNIX_TIMESTAMP(${financialLedger.transactionDate}) / 86400) ASC`
+      );
+    return rows.map(row => ({
+      date: new Date(integer(row.day) * 86400_000).toISOString().slice(0, 10),
+      count: integer(row.count),
+      amount: integer(row.amount),
     }));
-  } catch (error) {
-    console.error("Error getting refund trends:", error);
-    return [];
-  }
+  });
 }

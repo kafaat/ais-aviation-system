@@ -24,6 +24,32 @@ import {
   getReportFilename,
 } from "../services/report-export.service";
 
+// Date-only exports include the complete UTC end day; ISO instants stay exact.
+const refundDate = z
+  .string()
+  .date()
+  .or(z.string().datetime({ offset: true }));
+const refundPeriodInput = z
+  .object({ startDate: refundDate.optional(), endDate: refundDate.optional() })
+  .transform((input, ctx) => {
+    const startDate = input.startDate ? new Date(input.startDate) : undefined;
+    const endDate = input.endDate
+      ? new Date(
+          input.endDate.length === 10
+            ? `${input.endDate}T23:59:59.999Z`
+            : input.endDate
+        )
+      : undefined;
+    if (startDate && endDate && startDate > endDate) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Refund report start must precede end",
+      });
+      return z.NEVER;
+    }
+    return { startDate, endDate };
+  });
+
 export const reportsRouter = router({
   /**
    * Export bookings report to CSV
@@ -295,19 +321,9 @@ export const reportsRouter = router({
    * Export refunds report to CSV
    */
   exportRefundsCSV: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(refundPeriodInput)
     .output(responseContracts["exportRefundsCSV"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const csv = await exportRefundsToCSV(filters);
       const filename = getReportFilename("refunds", "csv");
 
@@ -322,19 +338,9 @@ export const reportsRouter = router({
    * Export refunds report to Excel
    */
   exportRefundsExcel: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(refundPeriodInput)
     .output(responseContracts["exportRefundsExcel"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const excelBuffer = await exportRefundsToExcel(filters);
       const filename = getReportFilename("refunds", "xlsx");
 
@@ -351,19 +357,9 @@ export const reportsRouter = router({
    * Generate refunds PDF report
    */
   generateRefundsPDF: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(refundPeriodInput)
     .output(responseContracts["generateRefundsPDF"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const pdfBuffer = await generateRefundsPDF(filters);
       const filename = getReportFilename("refunds-report", "pdf");
 

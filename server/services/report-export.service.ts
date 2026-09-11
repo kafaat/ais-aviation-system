@@ -17,6 +17,7 @@ import {
 import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import ExcelJS from "exceljs";
+import { getRefundExportRows } from "./refunds-stats.service";
 
 /**
  * Build an .xlsx buffer from named sheets given as arrays-of-arrays.
@@ -529,7 +530,15 @@ export async function generateRevenuePDF(
  * Escape CSV field value
  */
 function escapeCSV(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+  // Spreadsheet applications interpret formula-leading untrusted text on open.
+  if (/^[\s\u0000-\u001f]*[=+@-]/u.test(value) || /^[\t\r\n]/u.test(value))
+    value = "'" + value;
+  if (
+    value.includes(",") ||
+    value.includes('"') ||
+    value.includes("\n") ||
+    value.includes("\r")
+  ) {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;
@@ -935,311 +944,122 @@ export interface RefundsReportRow {
   refundedAt: string;
 }
 
-/**
- * Export refunds report to CSV format
- */
+/** Every refund export uses the same bounded, posted-ledger projection. */
+const refundHeaders = [
+  "Settlement ID",
+  "Booking ID",
+  "Booking Reference",
+  "PNR",
+  "User Email",
+  "Flight Number",
+  "Route",
+  "Refund Amount (SAR)",
+  "Status",
+  "Settlement Date (UTC)",
+];
+type RefundExportRow = Awaited<ReturnType<typeof getRefundExportRows>>[number];
+function refundCells(row: RefundExportRow) {
+  return [
+    String(row.id),
+    String(row.bookingId),
+    row.bookingReference,
+    row.pnr,
+    row.userEmail,
+    row.flightNumber,
+    `${row.origin} - ${row.destination}`,
+    (row.amount / 100).toFixed(2),
+    row.status,
+    row.refundedAt.toISOString(),
+  ];
+}
+function refundSummary(rows: RefundExportRow[]) {
+  const amount = rows.reduce((sum, row) => sum + row.amount, 0);
+  return {
+    count: rows.length,
+    amount,
+    bookings: new Set(rows.map(row => row.bookingId)).size,
+  };
+}
 export async function exportRefundsToCSV(
   filters: ReportFilters
 ): Promise<string> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const conditions = [eq(bookings.paymentStatus, "refunded")];
-  if (filters.startDate) {
-    conditions.push(gte(bookings.updatedAt, filters.startDate));
-  }
-  if (filters.endDate) {
-    conditions.push(lte(bookings.updatedAt, filters.endDate));
-  }
-
-  const results = await db
-    .select({
-      bookingReference: bookings.bookingReference,
-      pnr: bookings.pnr,
-      userEmail: users.email,
-      totalAmount: bookings.totalAmount,
-      status: bookings.status,
-      paymentStatus: bookings.paymentStatus,
-      updatedAt: bookings.updatedAt,
-      flightNumber: flights.flightNumber,
-      origin: sql<string>`origin_airport.city`,
-      destination: sql<string>`dest_airport.city`,
-    })
-    .from(bookings)
-    .leftJoin(users, eq(bookings.userId, users.id))
-    .leftJoin(flights, eq(bookings.flightId, flights.id))
-    .leftJoin(
-      sql`${airports} AS origin_airport`,
-      sql`origin_airport.id = ${flights.originId}`
-    )
-    .leftJoin(
-      sql`${airports} AS dest_airport`,
-      sql`dest_airport.id = ${flights.destinationId}`
-    )
-    .where(and(...conditions))
-    .orderBy(desc(bookings.updatedAt))
-    .limit(10000);
-
-  const headers = [
-    "Booking Reference",
-    "PNR",
-    "User Email",
-    "Flight Number",
-    "Route",
-    "Refund Amount (SAR)",
-    "Status",
-    "Refund Date",
-  ];
-
-  const rows = results.map(row => [
-    row.bookingReference || "",
-    row.pnr || "",
-    row.userEmail || "",
-    row.flightNumber || "",
-    `${row.origin || ""} - ${row.destination || ""}`,
-    ((Number(row.totalAmount) || 0) / 100).toFixed(2),
-    row.paymentStatus || "",
-    row.updatedAt ? new Date(row.updatedAt).toISOString() : "",
-  ]);
-
+  const rows = await getRefundExportRows(filters);
   return [
-    headers.join(","),
-    ...rows.map(row => row.map(escapeCSV).join(",")),
+    refundHeaders.join(","),
+    ...rows.map(row => refundCells(row).map(escapeCSV).join(",")),
   ].join("\n");
 }
-
-/**
- * Export refunds report to Excel format
- */
 export async function exportRefundsToExcel(
   filters: ReportFilters
 ): Promise<Buffer> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const conditions = [eq(bookings.paymentStatus, "refunded")];
-  if (filters.startDate) {
-    conditions.push(gte(bookings.updatedAt, filters.startDate));
-  }
-  if (filters.endDate) {
-    conditions.push(lte(bookings.updatedAt, filters.endDate));
-  }
-
-  const results = await db
-    .select({
-      bookingReference: bookings.bookingReference,
-      pnr: bookings.pnr,
-      userEmail: users.email,
-      totalAmount: bookings.totalAmount,
-      status: bookings.status,
-      paymentStatus: bookings.paymentStatus,
-      updatedAt: bookings.updatedAt,
-      flightNumber: flights.flightNumber,
-      origin: sql<string>`origin_airport.city`,
-      destination: sql<string>`dest_airport.city`,
-    })
-    .from(bookings)
-    .leftJoin(users, eq(bookings.userId, users.id))
-    .leftJoin(flights, eq(bookings.flightId, flights.id))
-    .leftJoin(
-      sql`${airports} AS origin_airport`,
-      sql`origin_airport.id = ${flights.originId}`
-    )
-    .leftJoin(
-      sql`${airports} AS dest_airport`,
-      sql`dest_airport.id = ${flights.destinationId}`
-    )
-    .where(and(...conditions))
-    .orderBy(desc(bookings.updatedAt))
-    .limit(10000);
-
-  // Calculate summary
-  const totalRefunds = results.length;
-  const totalRefundedAmount = results.reduce(
-    (sum, r) => sum + (Number(r.totalAmount) || 0),
-    0
-  );
-
-  // Create summary sheet
-  const summaryData = [
-    ["AIS Aviation System - Refunds Report"],
-    [],
-    [
-      "Report Period:",
-      filters.startDate?.toLocaleDateString() || "All Time",
-      "-",
-      filters.endDate?.toLocaleDateString() || "Present",
-    ],
-    ["Generated:", new Date().toISOString()],
-    [],
-    ["Summary Statistics"],
-    ["Total Refunds:", totalRefunds],
-    ["Total Refunded Amount (SAR):", (totalRefundedAmount / 100).toFixed(2)],
-    [
-      "Average Refund Amount (SAR):",
-      totalRefunds > 0
-        ? (totalRefundedAmount / totalRefunds / 100).toFixed(2)
-        : "0.00",
-    ],
-  ];
-
-  // Create detail sheet
-  const headers = [
-    "Booking Reference",
-    "PNR",
-    "User Email",
-    "Flight Number",
-    "Route",
-    "Refund Amount (SAR)",
-    "Status",
-    "Refund Date",
-  ];
-
-  const detailData = [
-    headers,
-    ...results.map(row => [
-      row.bookingReference || "",
-      row.pnr || "",
-      row.userEmail || "",
-      row.flightNumber || "",
-      `${row.origin || ""} - ${row.destination || ""}`,
-      ((Number(row.totalAmount) || 0) / 100).toFixed(2),
-      row.paymentStatus || "",
-      row.updatedAt ? new Date(row.updatedAt).toISOString() : "",
-    ]),
-  ];
-
+  const rows = await getRefundExportRows(filters);
+  const summary = refundSummary(rows);
   return buildXlsxBuffer([
-    { name: "Summary", rows: summaryData },
-    { name: "Refunds", rows: detailData },
+    {
+      name: "Summary",
+      rows: [
+        ["AIS Aviation System - Refunds Report"],
+        ["Scope", "Posted SAR booking refund settlements (full and partial)"],
+        ["Start (UTC)", filters.startDate?.toISOString() ?? "All time"],
+        ["End (UTC)", filters.endDate?.toISOString() ?? "Present"],
+        ["Generated", new Date().toISOString()],
+        [],
+        ["Settlement Entries", summary.count],
+        ["Refunded Bookings", summary.bookings],
+        ["Total Refunded Amount (SAR)", (summary.amount / 100).toFixed(2)],
+      ],
+    },
+    { name: "Refunds", rows: [refundHeaders, ...rows.map(refundCells)] },
   ]);
 }
-
-/**
- * Generate refunds PDF report
- */
 export async function generateRefundsPDF(
   filters: ReportFilters
 ): Promise<Buffer> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const startDate =
-    filters.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-  const endDate = filters.endDate || new Date();
-
-  const [summary] = await db
-    .select({
-      totalRefunds: sql<number>`COUNT(*)`,
-      totalAmount: sql<number>`SUM(${bookings.totalAmount})`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        eq(bookings.paymentStatus, "refunded"),
-        gte(bookings.updatedAt, startDate),
-        lte(bookings.updatedAt, endDate)
-      )
-    );
-
-  // Get daily breakdown
-  const dailyRefunds = await db
-    .select({
-      date: sql<string>`DATE(${bookings.updatedAt})`,
-      count: sql<number>`COUNT(*)`,
-      amount: sql<number>`SUM(${bookings.totalAmount})`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        eq(bookings.paymentStatus, "refunded"),
-        gte(bookings.updatedAt, startDate),
-        lte(bookings.updatedAt, endDate)
-      )
-    )
-    .groupBy(sql`DATE(${bookings.updatedAt})`)
-    .orderBy(sql`DATE(${bookings.updatedAt})`);
-
+  const rows = await getRefundExportRows(filters);
+  const summary = refundSummary(rows);
+  const days = new Map<string, { count: number; amount: number }>();
+  for (const row of rows) {
+    const key = row.refundedAt.toISOString().slice(0, 10);
+    const day = days.get(key) ?? { count: 0, amount: 0 };
+    day.count++;
+    day.amount += row.amount;
+    days.set(key, day);
+  }
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50 });
     const chunks: Buffer[] = [];
-
     doc.on("data", chunk => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
-
-    // Title
     doc.fontSize(24).text("AIS Aviation - Refunds Report", { align: "center" });
     doc.moveDown();
-    doc.fontSize(12).text("Refunds Report", { align: "center" });
-    doc.moveDown(2);
-
-    // Date range
     doc
-      .fontSize(12)
-      .text(
-        `Period: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`,
-        { align: "center" }
-      );
-    doc.moveDown(2);
-
-    // Summary
+      .fontSize(11)
+      .text("Posted SAR booking refund settlements (full and partial)");
+    doc.text(
+      `Period (UTC): ${filters.startDate?.toISOString() ?? "All time"} - ${filters.endDate?.toISOString() ?? "Present"}`
+    );
+    doc.moveDown();
     doc.fontSize(16).text("Summary", { underline: true });
     doc.moveDown();
-
-    doc.fontSize(12).text(`Total Refunds: ${summary?.totalRefunds || 0}`);
-    doc.text(
-      `Total Refunded Amount: ${((Number(summary?.totalAmount) || 0) / 100).toFixed(2)} SAR`
-    );
-    doc.text(
-      `Average Refund: ${
-        summary?.totalRefunds
-          ? (
-              (Number(summary?.totalAmount) || 0) /
-              summary.totalRefunds /
-              100
-            ).toFixed(2)
-          : "0.00"
-      } SAR`
-    );
-    doc.moveDown(2);
-
-    // Daily breakdown
-    if (dailyRefunds.length > 0) {
-      doc.fontSize(16).text("Daily Breakdown", { underline: true });
+    doc.fontSize(12).text(`Settlement Entries: ${summary.count}`);
+    doc.text(`Refunded Bookings: ${summary.bookings}`);
+    doc.text(`Total Refunded Amount: ${(summary.amount / 100).toFixed(2)} SAR`);
+    if (days.size) {
       doc.moveDown();
-
-      dailyRefunds.slice(0, 30).forEach(row => {
+      doc.fontSize(16).text("Daily Settlements (UTC)", { underline: true });
+      doc.moveDown();
+      for (const [date, day] of [...days].sort(([a], [b]) =>
+        a.localeCompare(b)
+      ))
         doc
           .fontSize(10)
           .text(
-            `${row.date}: ${row.count} refunds - ${(Number(row.amount) / 100).toFixed(2)} SAR`
+            `${date}: ${day.count} entries - ${(day.amount / 100).toFixed(2)} SAR`
           );
-      });
     }
-
-    // Footer
-    doc
-      .fontSize(10)
-      .text(
-        `Generated on ${new Date().toISOString()}`,
-        50,
-        doc.page.height - 50,
-        { align: "center" }
-      );
-
+    doc.moveDown();
+    doc.fontSize(9).text(`Generated on ${new Date().toISOString()}`);
     doc.end();
   });
 }
