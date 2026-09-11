@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.22.6
+
+### Bug Fixes
+
+- fix: make split checkout and collection lifecycle durable (f074e94)
+- fix: surface missing split funding receipts for review (48e563b)
+
+### Other Changes
+
+- Merge pull request #139 from kafaat/fix/split-payment-lifecycle (fa468db)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.5...v1.22.6
+
+---
+
 ## What's Changed in v1.22.5
 
 ### Bug Fixes
