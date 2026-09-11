@@ -63,7 +63,36 @@ export async function verifyDataAudit(
         }
         return result;
       }) as typeof connection.query;
+      const [queuedItem] = await db
+        .select()
+        .from(schema.bookingRefundItems)
+        .where(eq(schema.bookingRefundItems.status, "queued"))
+        .limit(1);
+      assert(queuedItem);
+      const [plan] = await db
+        .select()
+        .from(schema.bookingRefundPlans)
+        .where(eq(schema.bookingRefundPlans.bookingId, queuedItem.bookingId));
+      assert(plan);
       try {
+        const baseline = await inspectForensicData(connection, 1);
+        assert.deepEqual(queryFailures, []);
+        assert.equal(
+          baseline.findings.find(
+            f => f.id === "split_refund_allocation_mismatch"
+          )!.count,
+          0
+        );
+        await db
+          .update(schema.bookingRefundPlans)
+          .set({ refundAmount: plan.refundAmount + 1 })
+          .where(eq(schema.bookingRefundPlans.bookingId, plan.bookingId));
+        await db
+          .update(schema.bookingRefundItems)
+          .set({ nextAttemptAt: new Date(Date.now() - 16 * 60_000) })
+          .where(eq(schema.bookingRefundItems.id, queuedItem.id));
+        const plansBefore = await db.select().from(schema.bookingRefundPlans);
+        const itemsBefore = await db.select().from(schema.bookingRefundItems);
         const report = await inspectForensicData(connection, 1);
         assert(enforced);
         assert.deepEqual(queryFailures, []);
@@ -78,11 +107,44 @@ export async function verifyDataAudit(
         assert.equal(missing.count, 2);
         assert.equal(missing.recordIds.length, 1);
         assert.equal(missing.truncated, true);
+        const allocation = report.findings.find(
+          f => f.id === "split_refund_allocation_mismatch"
+        )!;
+        assert.equal(allocation.count, 1);
+        assert.deepEqual(allocation.recordIds, [plan.bookingId]);
+        const overdue = report.findings.find(
+          f => f.id === "split_refund_worker_overdue"
+        )!;
+        assert.equal(overdue.count, 1);
+        assert.deepEqual(overdue.recordIds, [plan.bookingId]);
+        assert(
+          report.findings.find(f => f.id === "split_refund_under_review")!
+            .count! >= 2
+        );
         assert(!JSON.stringify(report).includes("Synthetic"));
         assert(!JSON.stringify(report).includes("CI123456"));
         assert.deepEqual(await db.select().from(schema.bookings), before);
+        assert.deepEqual(
+          await db.select().from(schema.bookingRefundPlans),
+          plansBefore
+        );
+        assert.deepEqual(
+          await db.select().from(schema.bookingRefundItems),
+          itemsBefore
+        );
       } finally {
         await connection.end();
+        await db
+          .update(schema.bookingRefundPlans)
+          .set({ refundAmount: plan.refundAmount, updatedAt: plan.updatedAt })
+          .where(eq(schema.bookingRefundPlans.bookingId, plan.bookingId));
+        await db
+          .update(schema.bookingRefundItems)
+          .set({
+            nextAttemptAt: queuedItem.nextAttemptAt,
+            updatedAt: queuedItem.updatedAt,
+          })
+          .where(eq(schema.bookingRefundItems.id, queuedItem.id));
       }
       // Keep downstream backup fixtures free of intentionally corrupt identities.
       for (const n of [0, 1])
