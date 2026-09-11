@@ -1,7 +1,66 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const splitRefundShare = z.object({
+  splitId: z.number().int(),
+  payerName: z.string(),
+  paidAmount: z.number().int(),
+  refundAmount: z.number().int(),
+});
+export const splitCancellationContract = z.object({
+  splitFunded: z.boolean(),
+  reason: z.string().nullable(),
+  quote: z
+    .object({
+      quoteHash: z.string(),
+      totalAmount: z.number().int(),
+      cancellationFee: z.number().int(),
+      refundAmount: z.number().int(),
+      refundPercentage: z.number(),
+      tier: z.enum(["full", "high", "medium", "low", "none"]),
+      items: z.array(splitRefundShare),
+    })
+    .nullable(),
+  plan: z
+    .object({
+      id: z.string(),
+      status: z.enum(["processing", "completed", "review_required"]),
+      totalAmount: z.number().int(),
+      cancellationFee: z.number().int(),
+      refundAmount: z.number().int(),
+      items: z.array(
+        splitRefundShare.extend({
+          status: z.enum([
+            "queued",
+            "requesting",
+            "pending",
+            "succeeded",
+            "failed",
+            "review_required",
+          ]),
+          refundedAmount: z.number().int(),
+          refundId: z.string().nullable(),
+          errorCode: z.string().nullable(),
+        })
+      ),
+    })
+    .nullable(),
+});
 export const responseContracts = {
+  splitCancellationQueue: z.object({
+    items: z.array(
+      z.object({
+        bookingId: z.number().int(),
+        status: z.enum(["processing", "completed", "review_required"]),
+        refundAmount: z.number().int(),
+        cancellationFee: z.number().int(),
+      })
+    ),
+    nextCursor: z.number().int().nullable(),
+  }),
+  splitCancellation: splitCancellationContract,
+  cancelSplitBooking: splitCancellationContract,
+  resumeSplitCancellation: splitCancellationContract,
   create: z.object({
     success: z.boolean(),
     refundId: z.string(),

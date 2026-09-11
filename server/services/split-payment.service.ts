@@ -9,6 +9,7 @@ import { getDb } from "../db";
 import {
   paymentSplits,
   paymentReceipts,
+  bookingRefundItems,
   bookings,
   flights,
   airports,
@@ -77,6 +78,11 @@ export interface PayerPaymentDetails {
   amount: number;
   status: string;
   expiresAt: Date | null;
+  cancellation: {
+    status: typeof bookingRefundItems.$inferSelect.status;
+    refundAmount: number;
+    cancellationFee: number;
+  } | null;
 }
 
 // ============================================================================
@@ -448,6 +454,16 @@ export async function getPayerPaymentDetails(
     .where(eq(flights.id, booking.flightId))
     .limit(1);
 
+  const [refund] = await db
+    .select()
+    .from(bookingRefundItems)
+    .where(
+      and(
+        eq(bookingRefundItems.splitId, split.id),
+        eq(bookingRefundItems.bookingId, split.bookingId)
+      )
+    )
+    .limit(1);
   return {
     splitId: split.id,
     bookingReference: booking.bookingReference,
@@ -461,6 +477,13 @@ export async function getPayerPaymentDetails(
     amount: split.amount,
     status: split.status,
     expiresAt: split.expiresAt,
+    cancellation: refund
+      ? {
+          status: refund.status,
+          refundAmount: refund.refundAmount,
+          cancellationFee: refund.collectedAmount - refund.refundAmount,
+        }
+      : null,
   };
 }
 

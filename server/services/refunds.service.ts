@@ -7,6 +7,7 @@ import {
   users,
   flights,
   paymentSplits,
+  paymentReceipts,
 } from "../../drizzle/schema";
 import { and, eq, sql, isNotNull } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
@@ -352,12 +353,24 @@ export async function getRefundDetails(refundId: string, actor: RefundActor) {
       const database = await getDb();
       if (!database) throw new Error("Database not available");
 
+      const [receipt] = await database
+        .select()
+        .from(paymentReceipts)
+        .where(
+          and(
+            eq(paymentReceipts.paymentIntentId, paymentIntentId),
+            eq(paymentReceipts.userId, actor.id)
+          )
+        )
+        .limit(1);
       const [ownedBooking] = await database
         .select({ id: bookings.id })
         .from(bookings)
         .where(
           and(
-            eq(bookings.stripePaymentIntentId, paymentIntentId),
+            receipt?.bookingId
+              ? eq(bookings.id, receipt.bookingId)
+              : eq(bookings.stripePaymentIntentId, paymentIntentId),
             eq(bookings.userId, actor.id)
           )
         )

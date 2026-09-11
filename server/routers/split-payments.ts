@@ -301,6 +301,20 @@ export const splitPaymentsRouter = router({
           amount: z.number(),
           status: z.string(),
           expiresAt: z.date().nullable(),
+          cancellation: z
+            .object({
+              status: z.enum([
+                "queued",
+                "requesting",
+                "pending",
+                "succeeded",
+                "failed",
+                "review_required",
+              ]),
+              refundAmount: z.number().int(),
+              cancellationFee: z.number().int(),
+            })
+            .nullable(),
         })
         .nullable()
     )

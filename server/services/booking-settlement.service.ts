@@ -1,8 +1,10 @@
 import { countActiveHolds } from "./inventory-capacity.service";
-import { and, eq, asc, inArray, sql } from "drizzle-orm";
+import { and, eq, asc, inArray, sql, isNotNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   bookings,
+  bookingRefundPlans,
+  paymentSplits,
   flights,
   inventoryLocks,
   bookingStatusHistory,
@@ -309,6 +311,31 @@ export async function cancelBookingResources(
   if (booking.status === "completed")
     throw new BookingNotPendingError("Completed booking cannot be cancelled");
   await assertNoCollectionReview(tx, booking.id);
+  if (booking.paymentStatus === "paid") {
+    const [splitFunding] = await tx
+      .select()
+      .from(paymentSplits)
+      .where(
+        and(
+          eq(paymentSplits.bookingId, booking.id),
+          isNotNull(paymentSplits.stripePaymentIntentId)
+        )
+      )
+      .limit(1);
+    if (splitFunding) {
+      const [plan] = await tx
+        .select()
+        .from(bookingRefundPlans)
+        .where(eq(bookingRefundPlans.bookingId, booking.id))
+        .limit(1);
+      if (!plan)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Split-funded cancellation requires a refund plan for each payer",
+        });
+    }
+  }
   await releaseBookingSeats(tx, booking);
   const segments = await tx
     .select()

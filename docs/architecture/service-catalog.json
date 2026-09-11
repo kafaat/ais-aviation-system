@@ -398,6 +398,7 @@
         "server/services/queue-v2.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
+        "server/services/split-refund.service.ts",
         "server/services/wallet.service.ts"
       ],
       "dependencies": [
@@ -406,7 +407,13 @@
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookingSegments", "flights", "paymentReceipts"],
+        "reads": [
+          "bookingRefundPlans",
+          "bookingSegments",
+          "flights",
+          "paymentReceipts",
+          "paymentSplits"
+        ],
         "writes": [
           "bookingSegments",
           "bookingStatusHistory",
@@ -537,7 +544,8 @@
       "accountableOwner": null,
       "consumers": [
         "server/routers/refunds.ts",
-        "server/services/refunds.service.ts"
+        "server/services/refunds.service.ts",
+        "server/services/split-refund.service.ts"
       ],
       "dependencies": [],
       "tableExpressions": {
@@ -669,7 +677,8 @@
         "server/services/inventory-lock.service.ts",
         "server/services/outbox.service.ts",
         "server/services/price-alerts.service.ts",
-        "server/services/scheduled-task.service.ts"
+        "server/services/scheduled-task.service.ts",
+        "server/services/split-refund.service.ts"
       ],
       "tableExpressions": {
         "reads": [],
@@ -1184,6 +1193,7 @@
         "server/services/ndc.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/split-checkout.service.ts",
+        "server/services/split-refund.service.ts",
         "server/services/travel-agent.service.ts"
       ],
       "dependencies": [
@@ -1836,6 +1846,7 @@
         "server/services/payment-settlement.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
+        "server/services/split-refund.service.ts",
         "server/services/stripe-webhook.service.ts",
         "server/services/tenant.service.ts",
         "server/services/travel-agent.service.ts"
@@ -2048,6 +2059,7 @@
       "accountableOwner": null,
       "consumers": [
         "server/services/refunds.service.ts",
+        "server/services/split-refund.service.ts",
         "server/webhooks/stripe.ts"
       ],
       "dependencies": [
@@ -2059,6 +2071,7 @@
       "tableExpressions": {
         "reads": [
           "bookingModifications",
+          "bookingRefundItems",
           "bookings",
           "flights",
           "paymentReceipts",
@@ -2504,7 +2517,13 @@
         "server/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "flights", "paymentSplits", "users"],
+        "reads": [
+          "bookings",
+          "flights",
+          "paymentReceipts",
+          "paymentSplits",
+          "users"
+        ],
         "writes": []
       },
       "replacement": null
@@ -2826,12 +2845,52 @@
       "tableExpressions": {
         "reads": [
           "airports",
+          "bookingRefundItems",
           "bookings",
           "flights",
           "paymentReceipts",
           "paymentSplits"
         ],
         "writes": ["paymentSplits"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/split-refund.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/split-refund.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/refunds.ts",
+        "server/services/cron.service.ts",
+        "server/webhooks/stripe.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/services/cancellation-fees.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/payment-settlement.service.ts",
+        "server/stripe.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingRefundItems",
+          "bookingRefundPlans",
+          "bookingSegments",
+          "bookings",
+          "flights",
+          "paymentReceipts",
+          "paymentSplits",
+          "seatInventory"
+        ],
+        "writes": [
+          "bookingAncillaries",
+          "bookingRefundItems",
+          "bookingRefundPlans"
+        ]
       },
       "replacement": null
     },

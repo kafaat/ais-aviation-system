@@ -223,10 +223,11 @@ describe("verified payment settlement", () => {
       amount_refunded: 100000,
       currency: "sar",
     });
-    expect(fixture.lockedTables.slice(0, 2)).toEqual([
-      "bookings",
-      "payment_receipts",
-    ]);
+    expect(
+      fixture.lockedTables
+        .filter(name => ["bookings", "payment_receipts"].includes(name))
+        .slice(0, 2)
+    ).toEqual(["bookings", "payment_receipts"]);
     expect(
       fixture.lockedTables.filter(name => name === "payment_receipts")
     ).toHaveLength(2);

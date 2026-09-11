@@ -17,6 +17,12 @@ import { bookings, flights } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { auditRefund } from "../services/audit.service";
 import { assertBookingOwnership } from "../services/access-control.service";
+import {
+  getSplitRefundCancellation,
+  reserveSplitRefundCancellation,
+  resumeSplitRefundCancellation,
+  listSplitRefundCancellations,
+} from "../services/split-refund.service";
 
 /**
  * Admin-only procedure
@@ -36,6 +42,83 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
  * Handles all refund-related operations
  */
 export const refundsRouter = router({
+  splitCancellationQueue: adminProcedure
+    .input(
+      z.object({
+        beforeBookingId: z.number().int().positive().optional(),
+        status: z
+          .enum(["processing", "completed", "review_required"])
+          .optional(),
+      })
+    )
+    .output(responseContracts.splitCancellationQueue)
+    .query(({ input, ctx }) => listSplitRefundCancellations(input, ctx.user)),
+  splitCancellation: protectedProcedure
+    .meta({
+      openapi: {
+        method: "GET",
+        path: "/bookings/{bookingId}/split-cancellation",
+        tags: ["Refunds"],
+        protect: true,
+        summary: "Preview or track cancellation refunds for each payer",
+      },
+    })
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(responseContracts.splitCancellation)
+    .query(({ input, ctx }) =>
+      getSplitRefundCancellation(input.bookingId, ctx.user)
+    ),
+
+  cancelSplitBooking: protectedProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/bookings/{bookingId}/split-cancellation",
+        tags: ["Refunds"],
+        protect: true,
+        summary: "Cancel with a frozen refund allocation to original payers",
+      },
+    })
+    .input(
+      z
+        .object({
+          bookingId: z.number().int().positive(),
+          quoteHash: z.string().regex(/^[a-f0-9]{64}$/),
+          reason: z
+            .enum(["requested_by_customer", "duplicate"])
+            .default("requested_by_customer"),
+          notes: z.string().max(500).optional(),
+        })
+        .strict()
+    )
+    .output(responseContracts.cancelSplitBooking)
+    .mutation(({ input, ctx }) =>
+      reserveSplitRefundCancellation(input, ctx.user)
+    ),
+
+  resumeSplitCancellation: protectedProcedure
+    .meta({
+      openapi: {
+        method: "POST",
+        path: "/bookings/{bookingId}/split-cancellation/resume",
+        tags: ["Refunds"],
+        protect: true,
+        summary:
+          "Reconcile or resume one payer refund without issuing a duplicate",
+      },
+    })
+    .input(
+      z
+        .object({
+          bookingId: z.number().int().positive(),
+          splitId: z.number().int().positive(),
+        })
+        .strict()
+    )
+    .output(responseContracts.resumeSplitCancellation)
+    .mutation(({ input, ctx }) =>
+      resumeSplitRefundCancellation(input, ctx.user)
+    ),
   /**
    * Create a refund (user can refund their own bookings)
    */

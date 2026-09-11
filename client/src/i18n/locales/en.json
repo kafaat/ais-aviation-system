@@ -2279,6 +2279,34 @@
     "piiWarning": "Personal information was detected and masked for your safety"
   },
   "cancelBooking": {
+    "split": {
+      "track": "Track cancellation refunds",
+      "more": "More cancellations",
+      "fullRefundStats": "The statistics below cover full booking refunds. Use the payer list above to track partial cancellations and pending refunds.",
+      "reserved": "Booking cancelled. Refunds to each payer are queued.",
+      "originalPayers": "Each share returns to its original payment method. Processing continues after you close this window.",
+      "retainedFee": "Retained cancellation fee:",
+      "allocations": "Refund allocation by payer (SAR)",
+      "payer": "Payer",
+      "paid": "Paid (SAR)",
+      "refund": "Refund (SAR)",
+      "status": "Status",
+      "resume": "Check / resume",
+      "actionRequired": "Stripe requires action from the payer.",
+      "plan": {
+        "processing": "Booking cancelled; payer refunds are processing.",
+        "completed": "All planned refunds are confirmed. The cancellation fee is retained.",
+        "review_required": "At least one share needs support review. Other queued shares continue processing."
+      },
+      "item": {
+        "queued": "Queued",
+        "requesting": "Confirming provider outcome",
+        "pending": "Pending with provider",
+        "succeeded": "Refund confirmed",
+        "failed": "Provider failed — contact support",
+        "review_required": "Support review required"
+      }
+    },
     "title": "Cancel Booking & Refund",
     "bookingRef": "Booking Reference: {{ref}}",
     "successMessage": "Booking cancelled and refund processed successfully",

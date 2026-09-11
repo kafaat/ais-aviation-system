@@ -47,7 +47,33 @@ export async function consumeLocalEvent(event: InboxEvent) {
     )
       throw new Error("Event identity conflicts with its stored receipt");
     if (receipt.processedAt) return { duplicate: true };
-    if (["booking.created", "booking.cancelled"].includes(event.eventType)) {
+    const bookingMessages: Record<
+      string,
+      { title: string; message: (reference: string) => string }
+    > = {
+      "booking.created": {
+        title: "Booking Created",
+        message: ref => `Booking ${ref} was created.`,
+      },
+      "booking.cancelled": {
+        title: "Booking Cancelled",
+        message: ref => `Booking ${ref} has been cancelled.`,
+      },
+      "booking.split_refund_completed": {
+        title: "Payer Refunds Confirmed",
+        message: ref =>
+          `All planned payer refunds for booking ${ref} are confirmed. Any agreed cancellation fee is retained.`,
+      },
+      "booking.split_refund_review_required": {
+        title: "Refund Review Required",
+        message: ref =>
+          `A payer refund for booking ${ref} needs support review. Check the cancellation details in My Bookings.`,
+      },
+    };
+    const notification = Object.hasOwn(bookingMessages, event.eventType)
+      ? bookingMessages[event.eventType]
+      : undefined;
+    if (notification) {
       if (event.aggregateType !== "booking")
         throw new Error("Booking event aggregate type mismatch");
       const [booking] = await tx
@@ -62,14 +88,8 @@ export async function consumeLocalEvent(event: InboxEvent) {
         await tx.insert(notifications).values({
           userId: booking.userId,
           type: "booking",
-          title:
-            event.eventType === "booking.created"
-              ? "Booking Created"
-              : "Booking Cancelled",
-          message:
-            event.eventType === "booking.created"
-              ? `Booking ${booking.bookingReference} was created.`
-              : `Booking ${booking.bookingReference} has been cancelled.`,
+          title: notification.title,
+          message: notification.message(booking.bookingReference),
           data: JSON.stringify({
             bookingId: booking.id,
             eventId: event.eventId,

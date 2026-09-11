@@ -806,6 +806,18 @@ export default function MyBookings() {
                               )}
 
                               {/* Book Again Button for Completed/Cancelled Bookings */}
+                              {booking.status === "cancelled" && (
+                                <Button
+                                  variant="outline"
+                                  className="w-full"
+                                  onClick={() => {
+                                    setSelectedBooking(booking);
+                                    setCancelDialogOpen(true);
+                                  }}
+                                >
+                                  {t("cancelBooking.split.track")}
+                                </Button>
+                              )}
                               {(booking.status === "completed" ||
                                 booking.status === "cancelled") && (
                                 <div className="border-t border-slate-100 dark:border-slate-800 pt-3">

@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   bookings,
+  bookingRefundItems,
   flights,
   bookingModifications,
   paymentSplits,
@@ -499,6 +500,7 @@ export async function settleVerifiedRefund(
     amountRefunded: number;
     currency: string;
     eventId: string;
+    refundId?: string;
   }
 ) {
   // Discovery is non-locking. Acquire the same owner locks as collection
@@ -542,6 +544,23 @@ export async function settleVerifiedRefund(
       .for("update");
     if (!ownerBooking || ownerBooking.userId !== hint.userId)
       throw new Error("Refund booking missing");
+  }
+  // Planned split refunds require individual success evidence. A charge's gross
+  // refund aggregate can include pending requests and cannot complete this plan.
+  if (ownerBooking) {
+    const [planned] = await tx
+      .select()
+      .from(bookingRefundItems)
+      .where(eq(bookingRefundItems.paymentIntentId, input.paymentIntentId))
+      .for("update");
+    if (
+      planned &&
+      (!input.refundId ||
+        planned.status !== "succeeded" ||
+        planned.refundId !== input.refundId ||
+        input.amountRefunded !== planned.refundAmount)
+    )
+      return;
   }
   const [receipt] = await tx
     .select()

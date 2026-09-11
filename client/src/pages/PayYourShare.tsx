@@ -201,6 +201,33 @@ export function PayYourShare() {
   }, [wasCancelled, paymentToken, setLocation, t]);
 
   // Handle successful payment return
+  if (paymentDetails?.cancellation) {
+    const cancellation = paymentDetails.cancellation;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardContent className="p-6 space-y-4">
+            <h1 className="text-xl font-bold">
+              {t("cancelBooking.split.track")}
+            </h1>
+            <p>{paymentDetails.payerName}</p>
+            <p role="status">
+              {t(`cancelBooking.split.item.${cancellation.status}`)}
+            </p>
+            <p>
+              {t("cancelBooking.refundAmount")}{" "}
+              {(cancellation.refundAmount / 100).toFixed(2)} {t("common.sar")}
+            </p>
+            <p>
+              {t("cancelBooking.split.retainedFee")}{" "}
+              {(cancellation.cancellationFee / 100).toFixed(2)}{" "}
+              {t("common.sar")}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   if (successStatus && sessionId && paymentDetails) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">

@@ -11,6 +11,24 @@ import { execFileSync } from "node:child_process";
 /** Canonical read-only findings. The SQL handoff is generated from this registry. */
 export const forensicFindings = [
   {
+    id: "split_refund_under_review",
+    severity: "error",
+    owner: "split-refund",
+    sql: "SELECT bookingId AS recordId FROM booking_refund_plans WHERE status = 'review_required'",
+  },
+  {
+    id: "split_refund_allocation_mismatch",
+    severity: "error",
+    owner: "split-refund",
+    sql: "SELECT p.bookingId AS recordId FROM booking_refund_plans p LEFT JOIN booking_refund_items i ON i.bookingId = p.bookingId LEFT JOIN bookings b ON b.id = p.bookingId GROUP BY p.bookingId, p.id, p.totalAmount, p.refundAmount, p.cancellationFee, p.status, b.status HAVING COUNT(i.id) < 2 OR SUM(i.collectedAmount) <> p.totalAmount OR SUM(i.refundAmount) <> p.refundAmount OR p.refundAmount + p.cancellationFee <> p.totalAmount OR SUM(i.planId <> p.id OR i.refundAmount <= 0 OR i.refundAmount > i.collectedAmount) > 0 OR b.status <> 'cancelled' OR b.status IS NULL OR (p.status = 'completed' AND SUM(i.status <> 'succeeded') > 0)",
+  },
+  {
+    id: "split_refund_worker_overdue",
+    severity: "review",
+    owner: "split-refund",
+    sql: "SELECT DISTINCT bookingId AS recordId FROM booking_refund_items WHERE status IN ('queued','requesting','pending') AND nextAttemptAt < DATE_SUB(NOW(), INTERVAL 15 MINUTE)",
+  },
+  {
     id: "booking_missing_owner",
     severity: "error",
     owner: "bookings",

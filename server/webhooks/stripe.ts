@@ -30,6 +30,7 @@ import {
   settleVerifiedRefund,
 } from "../services/payment-settlement.service";
 import { eq, and } from "drizzle-orm";
+import { recordVerifiedSplitRefund } from "../services/split-refund.service";
 import { sendBookingConfirmation } from "../services/email.service";
 import { awardMilesForBooking } from "../services/loyalty.service";
 import { generateETicketForPassenger } from "../services/eticket.service";
@@ -307,6 +308,16 @@ export async function processStripeEvent(
       await handleChargeRefunded(
         tx,
         event.data.object as Stripe.Charge,
+        event.id
+      );
+      return;
+
+    case "refund.created":
+    case "refund.updated":
+    case "refund.failed":
+      await recordVerifiedSplitRefund(
+        tx,
+        event.data.object as Stripe.Refund,
         event.id
       );
       return;
