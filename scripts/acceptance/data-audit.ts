@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { createConnection } from "mysql2/promise";
 import { eq } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
-import { inspectForensicData } from "../ci/forensic-data-audit";
+import {
+  forensicFindings,
+  inspectForensicData,
+} from "../ci/forensic-data-audit";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
 
 /** Called only after the disposable database guard and fixtures have run. */
@@ -29,9 +32,25 @@ export async function verifyDataAudit(
       const before = await db.select().from(schema.bookings);
       const connection = await createConnection(process.env.DATABASE_URL!);
       const query = connection.query.bind(connection);
+      const queryFailures: Array<{ finding: string; code: string }> = [];
       let enforced = false;
       connection.query = (async (sql: string) => {
-        const result = await query(sql);
+        let result;
+        try {
+          result = await query(sql);
+        } catch (error) {
+          // Only fixture diagnostics: never log SQL, driver messages or values.
+          const code = (error as { code?: unknown }).code;
+          queryFailures.push({
+            finding:
+              forensicFindings.find(f => sql.includes(f.sql))?.id ?? "setup",
+            code:
+              typeof code === "string" && /^ER_[A-Z0-9_]+$/.test(code)
+                ? code
+                : "QUERY_FAILED",
+          });
+          throw error;
+        }
         if (sql === "START TRANSACTION READ ONLY") {
           await assert.rejects(
             query(
@@ -47,8 +66,12 @@ export async function verifyDataAudit(
       try {
         const report = await inspectForensicData(connection, 1);
         assert(enforced);
+        assert.deepEqual(queryFailures, []);
+        assert.deepEqual(
+          report.findings.filter(f => f.error !== null).map(f => f.id),
+          []
+        );
         assert.equal(report.status, "review_required");
-        assert(report.findings.every(f => f.error === null));
         const missing = report.findings.find(
           f => f.id === "booking_missing_owner"
         )!;

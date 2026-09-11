@@ -430,7 +430,7 @@
     },
     {
       "file": "server/services/booking-state-machine.service.ts",
-      "lifecycle": "active",
+      "lifecycle": "retired",
       "technicalOwner": "server/services/booking-state-machine.service.ts",
       "accountableOwner": null,
       "consumers": ["server/services/stripe-webhook.service.ts"],
@@ -443,7 +443,7 @@
         "reads": ["bookingStatusHistory"],
         "writes": ["bookingStatusHistory"]
       },
-      "replacement": null
+      "replacement": "server/services/booking-settlement.service.ts"
     },
     {
       "file": "server/services/bookings.service.ts",
@@ -2896,10 +2896,10 @@
     },
     {
       "file": "server/services/stripe-webhook.service.ts",
-      "lifecycle": "active",
+      "lifecycle": "retired",
       "technicalOwner": "server/services/stripe-webhook.service.ts",
       "accountableOwner": null,
-      "consumers": ["server/routers/webhooks.ts"],
+      "consumers": [],
       "dependencies": [
         "drizzle/schema.ts",
         "server/_core/logger.ts",
@@ -2912,7 +2912,7 @@
         "reads": ["bookings", "stripeEvents"],
         "writes": ["bookings", "financialLedger", "payments", "stripeEvents"]
       },
-      "replacement": null
+      "replacement": "server/webhooks/stripe.ts"
     },
     {
       "file": "server/services/stripe/stripe-reconciliation.service.ts",

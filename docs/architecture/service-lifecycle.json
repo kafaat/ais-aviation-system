@@ -8,7 +8,9 @@
     "server/services/payments.service.ts": "server/services/payment-settlement.service.ts",
     "server/services/queue.service.ts": "server/queue/workers/index.ts and server/services/queue-v2.service.ts",
     "server/services/security.service.ts": "server/_core/index.ts and server/middleware/",
-    "server/services/websocket.service.ts": "server/routers/flights.ts statusBatch and client/src/hooks/useFlightStatus.ts"
+    "server/services/websocket.service.ts": "server/routers/flights.ts statusBatch and client/src/hooks/useFlightStatus.ts",
+    "server/services/stripe-webhook.service.ts": "server/webhooks/stripe.ts",
+    "server/services/booking-state-machine.service.ts": "server/services/booking-settlement.service.ts"
   },
   "designOnlySchemas": [
     "user_currency_preferences",

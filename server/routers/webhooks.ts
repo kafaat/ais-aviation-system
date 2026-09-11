@@ -2,13 +2,8 @@ import { responseContracts } from "../contracts/webhooks";
 import { router, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import {
-  verifyWebhookSignature,
-  isEventProcessed,
-  storeStripeEvent,
-  processStripeEvent,
-} from "../services/stripe-webhook.service";
-import { logger } from "../_core/logger";
+import type { Request, Response } from "express";
+import { handleStripeWebhook } from "../webhooks/stripe";
 
 /**
  * Webhooks Router
@@ -27,69 +22,39 @@ export const webhooksRouter = router({
       })
     )
     .output(responseContracts["stripe"])
-    .mutation(async ({ input }) => {
-      try {
-        // 1. Verify webhook signature
-        const event = verifyWebhookSignature(input.body, input.signature);
-
-        logger.info(
-          {
-            eventId: event.id,
-            type: event.type,
-          },
-          "Stripe webhook received"
-        );
-
-        // 2. Check for duplicate (de-duplication)
-        const alreadyProcessed = await isEventProcessed(event.id);
-        if (alreadyProcessed) {
-          logger.info(
-            {
-              eventId: event.id,
-            },
-            "Stripe event already processed (duplicate)"
-          );
-          return {
-            received: true,
-            duplicate: true,
-            eventId: event.id,
-          };
-        }
-
-        // 3. Store event for audit
-        await storeStripeEvent(event);
-
-        // 4. Process event
-        await processStripeEvent(event);
-
-        logger.info(
-          {
-            eventId: event.id,
-            type: event.type,
-          },
-          "Stripe event processed successfully"
-        );
-
-        return {
-          received: true,
-          duplicate: false,
-          eventId: event.id,
-        };
-      } catch (error) {
-        logger.error(
-          {
-            error,
-            signature: input.signature.substring(0, 20) + "...",
-          },
-          "Error processing Stripe webhook"
-        );
-
-        // Return 500 to trigger Stripe retry
+    .mutation(async ({ input, ctx }) => {
+      // Preserve the signed raw body. This compatibility transport delegates all
+      // verification, event claiming and financial writes to the HTTP authority.
+      const request: Request = Object.create(ctx.req, {
+        headers: {
+          value: { ...ctx.req.headers, "stripe-signature": input.signature },
+        },
+        body: { value: Buffer.from(input.body, "utf8") },
+      });
+      let statusCode = 200;
+      let payload: Record<string, unknown> = {};
+      const response = {
+        status(code: number): Response {
+          statusCode = code;
+          return response as Response;
+        },
+        json(body: Record<string, unknown>): Response {
+          payload = body;
+          return response as Response;
+        },
+      };
+      await handleStripeWebhook(request, response as Response);
+      if (statusCode !== 200 || payload.received !== true)
         throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to process webhook",
+          code: statusCode === 400 ? "BAD_REQUEST" : "INTERNAL_SERVER_ERROR",
+          message: "Webhook verification or processing failed",
         });
-      }
+      const event = z.object({ id: z.string() }).parse(JSON.parse(input.body));
+      return {
+        received: true,
+        duplicate: payload.deduplicated === true,
+        eventId: event.id,
+      };
     }),
 
   /**
