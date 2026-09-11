@@ -242,7 +242,31 @@ jobs:
         run: |
           git add package.json CHANGELOG.md
           git commit -m "chore(release): v${{ needs.version.outputs.new_version }}"
-          git push
+
+      # This commit becomes the tip of main, and it is the one commit on main that
+      # no workflow ever runs against: pushes made with GITHUB_TOKEN do not start
+      # new runs, so the gates only ever see the merge commit underneath it. That
+      # is acceptable only while the commit carries no code. Prove it here, before
+      # the push, instead of assuming it.
+      - name: Verify the release commit changes no code
+        run: |
+          set -euo pipefail
+          unexpected=$(git diff --name-only HEAD~1 HEAD | grep -vxE 'CHANGELOG\.md|package\.json' || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::Release commit touches files other than CHANGELOG.md and package.json:"
+            printf '%s\n' "$unexpected" >&2
+            exit 1
+          fi
+          if ! diff <(git show HEAD~1:package.json | jq -S 'del(.version)') \
+                    <(jq -S 'del(.version)' package.json) > /dev/null; then
+            echo "::error::Release commit changes package.json beyond its version field."
+            git --no-pager diff HEAD~1 HEAD -- package.json >&2
+            exit 1
+          fi
+          echo "Release commit is limited to the version bump and changelog."
+
+      - name: Push version bump
+        run: git push
 
       - name: Create and push tag
         run: |
