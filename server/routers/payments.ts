@@ -15,7 +15,6 @@ import { stripe } from "../stripe";
 import { getDb } from "../db";
 import { bookings, bookingModifications } from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
-import { auditPayment } from "../services/audit.service";
 import { assertNoCollectionReview } from "../services/booking-settlement.service";
 import {
   listSettlementReviews,

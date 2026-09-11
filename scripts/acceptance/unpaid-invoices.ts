@@ -25,52 +25,46 @@ export async function verifyUnpaidInvoices(
     .select()
     .from(schema.flights)
     .where(eq(schema.flights.id, ownerId));
-  await db
-    .insert(schema.flights)
-    .values(
-      [0, 1, 2, 3].map(n => ({
-        ...template,
-        id: base + n,
-        flightNumber: `ZX8${n}`,
-        economyAvailable: 10,
-        businessAvailable: 10,
-        departureTime: new Date("2035-01-01T10:00:00Z"),
-        arrivalTime: new Date("2035-01-01T12:00:00Z"),
-      }))
-    );
+  await db.insert(schema.flights).values(
+    [0, 1, 2, 3].map(n => ({
+      ...template,
+      id: base + n,
+      flightNumber: `ZX8${n}`,
+      economyAvailable: 10,
+      businessAvailable: 10,
+      departureTime: new Date("2035-01-01T10:00:00Z"),
+      arrivalTime: new Date("2035-01-01T12:00:00Z"),
+    }))
+  );
   const otherOwner = ownerId + 301;
-  await db
-    .insert(schema.users)
-    .values({
-      id: otherOwner,
-      openId: `ci-invoice-${otherOwner}`,
-      role: "user",
-    });
+  await db.insert(schema.users).values({
+    id: otherOwner,
+    openId: `ci-invoice-${otherOwner}`,
+    role: "user",
+  });
   async function offer(
     ids: number[],
     totalPrice = 10000,
     cabinClass: "economy" | "business" = "economy"
   ) {
     const offerId = `OFF-${randomUUID()}`;
-    await db
-      .insert(schema.ndcOffers)
-      .values({
-        offerId,
-        responseId: "CI-INVOICE",
-        originId: ownerId,
-        destinationId: ownerId + 1,
-        departureDate: new Date("2035-01-01T10:00:00Z"),
-        airlineId: ownerId,
-        cabinClass,
-        totalPrice,
-        basePrice: totalPrice,
-        taxesAndFees: 0,
-        segments: JSON.stringify(
-          ids.map(id => ({ flightId: id, segmentKey: `SEG-${id}` }))
-        ),
-        offerPayload: JSON.stringify({ pricing: { passengerCount: 1 } }),
-        expiresAt: new Date(Date.now() + 600000),
-      });
+    await db.insert(schema.ndcOffers).values({
+      offerId,
+      responseId: "CI-INVOICE",
+      originId: ownerId,
+      destinationId: ownerId + 1,
+      departureDate: new Date("2035-01-01T10:00:00Z"),
+      airlineId: ownerId,
+      cabinClass,
+      totalPrice,
+      basePrice: totalPrice,
+      taxesAndFees: 0,
+      segments: JSON.stringify(
+        ids.map(id => ({ flightId: id, segmentKey: `SEG-${id}` }))
+      ),
+      offerPayload: JSON.stringify({ pricing: { passengerCount: 1 } }),
+      expiresAt: new Date(Date.now() + 600000),
+    });
     return offerId;
   }
   async function create(userId = ownerId) {
@@ -164,16 +158,14 @@ export async function verifyUnpaidInvoices(
   await check(
     "ancillary retries update booking NDC and segment totals once with no fake EMD",
     async () => {
-      const [catalog] = await db
-        .insert(schema.ancillaryServices)
-        .values({
-          code: "CI_BAG_INVOICE",
-          category: "baggage",
-          name: "Synthetic bag request",
-          price: 500,
-          available: true,
-          currency: "SAR",
-        });
+      const [catalog] = await db.insert(schema.ancillaryServices).values({
+        code: "CI_BAG_INVOICE",
+        category: "baggage",
+        name: "Synthetic bag request",
+        price: 500,
+        available: true,
+        currency: "SAR",
+      });
       const command = {
         orderId: order.orderId,
         userId: ownerId,

@@ -238,22 +238,20 @@ export async function insertInvoiceAncillary(
       throw invoiceBlocked("Ancillary is unavailable for this flight");
   }
   const totalPrice = service.price * quantity;
-  const [result] = await tx
-    .insert(bookingAncillaries)
-    .values({
-      bookingId: booking.id,
-      passengerId: data.passengerId,
-      ancillaryServiceId: service.id,
-      quantity,
-      unitPrice: service.price,
-      totalPrice,
-      status: "active",
-      metadata: JSON.stringify({
-        preferences: data.metadata ?? null,
-        flightId: data.flightId ?? null,
-        fulfillment: "pending_payment",
-      }),
-    });
+  const [result] = await tx.insert(bookingAncillaries).values({
+    bookingId: booking.id,
+    passengerId: data.passengerId,
+    ancillaryServiceId: service.id,
+    quantity,
+    unitPrice: service.price,
+    totalPrice,
+    status: "active",
+    metadata: JSON.stringify({
+      preferences: data.metadata ?? null,
+      flightId: data.flightId ?? null,
+      fulfillment: "pending_payment",
+    }),
+  });
   await setInvoiceTotal(tx, booking, booking.totalAmount + totalPrice);
   return { id: Number(result.insertId), totalPrice, service };
 }

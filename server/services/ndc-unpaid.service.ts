@@ -14,14 +14,14 @@ import {
   seatInventory,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
-import type {
-  ChangeOrderInput,
-  ServiceOrderInput,
-  NdcPassengerInfo,
-  NdcSegment,
-  NdcServicingAction,
+import {
+  getOrder,
+  type ChangeOrderInput,
+  type ServiceOrderInput,
+  type NdcPassengerInfo,
+  type NdcSegment,
+  type NdcServicingAction,
 } from "./ndc.service";
-import { getOrder } from "./ndc.service";
 import {
   lockEditableInvoice,
   insertInvoiceAncillary,
