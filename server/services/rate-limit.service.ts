@@ -121,7 +121,14 @@ export const STRICT_RATE_LIMITS: Record<string, RateLimitTier> = {
     windowMs: 60 * 60 * 1000, // 1 hour
   },
 
-  // Payment operations
+  // Payment/refund status reads, shared across the financial routers.
+  paymentRead: {
+    name: "paymentRead",
+    requestsPerWindow: 120,
+    windowMs: 60 * 1000,
+  },
+
+  // Financial writes have a separate quota from status polling.
   payment: {
     name: "payment",
     requestsPerWindow: 10,

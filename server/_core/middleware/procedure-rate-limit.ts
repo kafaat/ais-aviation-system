@@ -2,23 +2,30 @@ import { TRPCError } from "@trpc/server";
 import type { TrpcContext } from "../context";
 import { rateLimitService } from "../../services/rate-limit.service";
 
-export function sensitiveProcedureScope(path: string): string | null {
+type ProcedureKind = "query" | "mutation" | "subscription";
+
+export function sensitiveProcedureScope(
+  path: string,
+  type: ProcedureKind = "mutation"
+): string | null {
   if (/^auth\..*(?:reset|forgot)/i.test(path)) return "passwordReset";
   if (
     /^auth\.(login|register|completeMfa)$/.test(path) ||
     /^mfa\.(setup|verify|disable|regenerateBackupCodes)$/.test(path)
   )
     return "auth";
-  if (/^(payments|wallet|splitPayments|refunds)\./.test(path)) return "payment";
+  if (/^(payments|wallet|splitPayments|refunds)\./.test(path))
+    return type === "query" ? "paymentRead" : "payment";
   if (path === "bookings.create") return "booking";
   return null;
 }
 
 export async function enforceProcedureRateLimit(
   ctx: TrpcContext,
-  path: string
+  path: string,
+  type: ProcedureKind = "mutation"
 ): Promise<void> {
-  const scope = sensitiveProcedureScope(path);
+  const scope = sensitiveProcedureScope(path, type);
   // Trusted in-process callers have no HTTP request. Every transported call does.
   if (!scope || !ctx.req) return;
   const ip = ctx.req.ip || ctx.req.socket?.remoteAddress || "unknown";

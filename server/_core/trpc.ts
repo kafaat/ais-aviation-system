@@ -24,8 +24,8 @@ const t = initTRPC.context<TrpcContext>().meta<OpenApiMeta>().create({
 export const router = t.router;
 export const publicProcedure = t.procedure
   .meta({ restPublic: true })
-  .use(async ({ ctx, path, next }) => {
-    await enforceProcedureRateLimit(ctx, path);
+  .use(async ({ ctx, path, type, next }) => {
+    await enforceProcedureRateLimit(ctx, path, type);
     return next();
   });
 
