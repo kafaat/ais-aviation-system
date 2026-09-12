@@ -96,12 +96,18 @@ try {
         unique: true,
         columns: key.columns.map(c => c.name),
       });
-    for (const key of config.uniqueConstraints)
+    for (const key of config.uniqueConstraints) {
+      const name = key.getName();
+      if (!name)
+        throw new Error(
+          `Unique constraint on ${config.name} has no name to verify against`
+        );
       expected.push({
-        name: key.getName(),
+        name,
         unique: true,
         columns: key.columns.map(c => c.name),
       });
+    }
     const actualIndexes = indexes.filter(row => row.TABLE_NAME === config.name);
     for (const index of expected) {
       const rows = actualIndexes.filter(row => row.INDEX_NAME === index.name);
