@@ -113,6 +113,7 @@ export const dcsRouter = router({
       return await dcsService.assignCrewToFlight({
         ...input,
         assignedBy: ctx.user.id,
+        tenantId: ctx.tenantId,
       });
     }),
 

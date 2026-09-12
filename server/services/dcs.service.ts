@@ -1,3 +1,4 @@
+import { assignCrewWithRules } from "./crew-rule.service";
 /**
  * Departure Control System (DCS) Service
  *
@@ -185,68 +186,15 @@ export async function createCrewMember(data: {
 }
 
 export async function assignCrewToFlight(data: {
+  tenantId?: number | null;
   flightId: number;
   crewMemberId: number;
   role: "captain" | "first_officer" | "purser" | "cabin_crew";
   assignedBy: number;
   notes?: string;
 }) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Check flight exists
-  const [flight] = await db
-    .select()
-    .from(flights)
-    .where(eq(flights.id, data.flightId))
-    .limit(1);
-  if (!flight)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-
-  // Check crew member exists and is active
-  const [crew] = await db
-    .select()
-    .from(crewMembers)
-    .where(eq(crewMembers.id, data.crewMemberId))
-    .limit(1);
-  if (!crew)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Crew member not found",
-    });
-  if (crew.status !== "active") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Crew member is not active",
-    });
-  }
-
-  // Check for duplicate assignment
-  const [existing] = await db
-    .select()
-    .from(crewAssignments)
-    .where(
-      and(
-        eq(crewAssignments.flightId, data.flightId),
-        eq(crewAssignments.crewMemberId, data.crewMemberId),
-        eq(crewAssignments.status, "assigned")
-      )
-    )
-    .limit(1);
-
-  if (existing) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: "Crew member already assigned to this flight",
-    });
-  }
-
-  const [result] = await db.insert(crewAssignments).values(data);
-  return { id: Number(result.insertId) };
+  const result = await assignCrewWithRules(data);
+  return { id: result.id };
 }
 
 export async function getFlightCrew(flightId: number) {

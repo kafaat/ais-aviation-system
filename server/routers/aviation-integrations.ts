@@ -1,3 +1,4 @@
+import { ingestCrewRules } from "../services/crew-rule.service";
 import { ingestBaggageCustody } from "../services/baggage-custody.service";
 import { z } from "zod";
 import { router, publicProcedure, adminProcedure } from "../_core/trpc";
@@ -15,6 +16,17 @@ export const evidenceReceipt = z.object({
   duplicate: z.boolean(),
 });
 export const aviationIntegrationsRouter = router({
+  acceptCrewRules: adminProcedure
+    .input(signedEvidenceInput)
+    .output(evidenceReceipt)
+    .mutation(({ input, ctx }) =>
+      ingestCrewRules(
+        input.envelope,
+        input.signature,
+        ctx.user.id,
+        ctx.tenantId
+      )
+    ),
   ingestBaggage: publicProcedure
     .input(signedEvidenceInput)
     .output(evidenceReceipt)

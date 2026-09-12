@@ -3829,6 +3829,9 @@ export const crewAssignments = mysqlTable(
     status: mysqlEnum("status", ["assigned", "confirmed", "onboard", "removed"])
       .default("assigned")
       .notNull(),
+    dutyStartTime: timestamp("dutyStartTime"),
+    dutyEndTime: timestamp("dutyEndTime"),
+    ruleEvidenceId: int("ruleEvidenceId"),
     notes: text("notes"),
     assignedBy: int("assignedBy"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -5741,4 +5744,23 @@ export const baggageCustodyEvents = mysqlTable(
   t => ({
     journey: index("baggage_custody_journey_idx").on(t.baggageId, t.observedAt),
   })
+);
+
+export const iropsRecoveryPlans = mysqlTable(
+  "irops_recovery_plans",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    eventId: int("eventId").notNull(),
+    tenantId: int("tenantId"),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    digest: varchar("digest", { length: 64 }).notNull(),
+    status: mysqlEnum("status", ["proposed", "approved", "executed"])
+      .default("proposed")
+      .notNull(),
+    approvedBy: int("approvedBy"),
+    expiresAt: timestamp("expiresAt").notNull(),
+    executionEventId: varchar("executionEventId", { length: 36 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({ eventIdx: index("irops_recovery_event_idx").on(t.eventId, t.status) })
 );

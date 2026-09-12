@@ -8,6 +8,7 @@ import {
   notifications,
   flights,
   bookings,
+  bookingSegments,
   passengers,
   airports,
 } from "../../drizzle/schema";
@@ -396,35 +397,30 @@ export async function getAffectedPassengers(flightId: number): Promise<
     .where(eq(flights.id, flightId))
     .limit(1);
 
-  // Check for connecting flights: bookings by the same users on flights
-  // departing from this flight's destination within 24h of arrival
   const userIds = affectedBookings.map(b => b.userId);
-
-  const connectionMap: Map<number, string> = new Map();
+  const connectionMap = new Map<number, string>();
   if (flight) {
-    const twentyFourHoursLater = new Date(flight.arrivalTime);
-    twentyFourHoursLater.setHours(twentyFourHoursLater.getHours() + 24);
-
-    const connectingBookings = await db
+    const connections = await db
       .select({
-        userId: bookings.userId,
+        bookingId: bookingSegments.bookingId,
         flightNumber: flights.flightNumber,
       })
-      .from(bookings)
-      .innerJoin(flights, eq(bookings.flightId, flights.id))
+      .from(bookingSegments)
+      .innerJoin(flights, eq(flights.id, bookingSegments.flightId))
       .where(
         and(
-          inArray(bookings.userId, userIds),
+          inArray(bookingSegments.bookingId, bookingIds),
+          ne(bookingSegments.status, "cancelled"),
           eq(flights.originId, flight.destinationId),
-          ne(bookings.status, "cancelled"),
           gte(flights.departureTime, flight.arrivalTime),
-          lte(flights.departureTime, twentyFourHoursLater)
+          lte(
+            flights.departureTime,
+            new Date(flight.arrivalTime.getTime() + 86400000)
+          ),
+          sql`${bookingSegments.segmentOrder} > (SELECT bs.segmentOrder FROM booking_segments bs WHERE bs.bookingId = ${bookingSegments.bookingId} AND bs.flightId = ${flightId} ORDER BY bs.segmentOrder LIMIT 1)`
         )
       );
-
-    for (const cb of connectingBookings) {
-      connectionMap.set(cb.userId, cb.flightNumber);
-    }
+    for (const c of connections) connectionMap.set(c.bookingId, c.flightNumber);
   }
 
   // Get user emails for contact
@@ -444,7 +440,7 @@ export async function getAffectedPassengers(flightId: number): Promise<
   return affectedPassengers.map(p => {
     const booking = affectedBookings.find(b => b.bookingId === p.bookingId);
     const userId = booking?.userId ?? 0;
-    const connectionFlight = connectionMap.get(userId) ?? null;
+    const connectionFlight = connectionMap.get(p.bookingId) ?? null;
 
     return {
       passengerId: p.id,
@@ -510,19 +506,17 @@ export async function autoTriggerProtection(flightId: number): Promise<{
       for (const actionType of types) {
         const requestKey = `protection:${event.id}:${pax.passengerId}:${actionType}`;
         if (keys.has(requestKey)) continue;
-        await tx
-          .insert(iropsActions)
-          .values({
-            eventId: event.id,
-            requestKey,
-            actionType,
-            targetPassengerId: pax.passengerId,
-            details: {
-              bookingId: pax.bookingId,
-              cabinClass: pax.cabinClass,
-              hasConnection: pax.hasConnection,
-            },
-          });
+        await tx.insert(iropsActions).values({
+          eventId: event.id,
+          requestKey,
+          actionType,
+          targetPassengerId: pax.passengerId,
+          details: {
+            bookingId: pax.bookingId,
+            cabinClass: pax.cabinClass,
+            hasConnection: pax.hasConnection,
+          },
+        });
         actionsCreated++;
       }
     }
@@ -700,28 +694,24 @@ export async function sendMassNotification(
         .where(eq(iropsActions.requestKey, requestKey))
         .limit(1);
       if (old) continue;
-      const [notice] = await tx
-        .insert(notifications)
-        .values({
-          userId,
-          type: "flight",
-          title: "Flight disruption",
-          message,
-          data: JSON.stringify({ flightId, eventId: event.id }),
-        });
+      const [notice] = await tx.insert(notifications).values({
+        userId,
+        type: "flight",
+        title: "Flight disruption",
+        message,
+        data: JSON.stringify({ flightId, eventId: event.id }),
+      });
       if (!notice.insertId) throw new Error("Missing notification receipt");
-      await tx
-        .insert(iropsActions)
-        .values({
-          eventId: event.id,
-          requestKey,
-          actionType: "notification",
-          status: "completed",
-          details: { userId },
-          evidenceType: "in_app_notification",
-          evidenceId: String(notice.insertId),
-          completedAt: new Date(),
-        });
+      await tx.insert(iropsActions).values({
+        eventId: event.id,
+        requestKey,
+        actionType: "notification",
+        status: "completed",
+        details: { userId },
+        evidenceType: "in_app_notification",
+        evidenceId: String(notice.insertId),
+        completedAt: new Date(),
+      });
       await recordEvent(tx, {
         aggregateType: "notification",
         aggregateId: notice.insertId,
@@ -1009,9 +999,7 @@ export async function resolveIROPSEvent(eventId: number): Promise<IROPSEvent> {
   return event;
 }
 
-export async function getIROPSEventDetail(
-  eventId: number
-): Promise<{
+export async function getIROPSEventDetail(eventId: number): Promise<{
   event: IROPSEvent;
   actions: IROPSAction[];
   impact: Awaited<ReturnType<typeof getDisruptionImpact>>;
@@ -1074,66 +1062,16 @@ export async function recordReaccommodation(
  * Compute passenger and connection counts for a flight
  */
 async function computeFlightImpact(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  _db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   flightId: number
 ): Promise<{
   totalPassengers: number;
   connectionsAtRisk: number;
 }> {
-  // Count passengers on active bookings
-  const affectedBookings = await db
-    .select({
-      numberOfPassengers: bookings.numberOfPassengers,
-      userId: bookings.userId,
-    })
-    .from(bookings)
-    .where(and(affectedBooking(flightId), ne(bookings.status, "cancelled")));
-
-  const totalPassengers = affectedBookings.reduce(
-    (sum, b) => sum + b.numberOfPassengers,
-    0
-  );
-
-  // Estimate connections at risk: check if any users have another
-  // booking from the same destination within 24h
-  const userIds = affectedBookings.map(b => b.userId);
-  if (userIds.length === 0) {
-    return { totalPassengers: 0, connectionsAtRisk: 0 };
-  }
-
-  const [flight] = await db
-    .select({
-      arrivalTime: flights.arrivalTime,
-      destinationId: flights.destinationId,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (!flight) {
-    return { totalPassengers, connectionsAtRisk: 0 };
-  }
-
-  const twentyFourHoursLater = new Date(flight.arrivalTime);
-  twentyFourHoursLater.setHours(twentyFourHoursLater.getHours() + 24);
-
-  const connectingBookings = await db
-    .select({ userId: bookings.userId })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(
-      and(
-        inArray(bookings.userId, userIds),
-        eq(flights.originId, flight.destinationId),
-        ne(bookings.status, "cancelled"),
-        gte(flights.departureTime, flight.arrivalTime),
-        lte(flights.departureTime, twentyFourHoursLater)
-      )
-    );
-
+  const affected = await getAffectedPassengers(flightId);
   return {
-    totalPassengers,
-    connectionsAtRisk: connectingBookings.length,
+    totalPassengers: affected.length,
+    connectionsAtRisk: affected.filter(p => p.hasConnection).length,
   };
 }
 

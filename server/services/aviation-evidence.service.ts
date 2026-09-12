@@ -25,6 +25,7 @@ const sourceSchema = z.object({
   capabilities: z.array(z.string()),
   secretEnv: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
   validUntil: z.iso.datetime(),
+  airlineIds: z.array(z.number().int().positive()).optional(),
   deviceIds: z.array(z.string()).optional(),
   airportIds: z.array(z.number().int().positive()).optional(),
 });
