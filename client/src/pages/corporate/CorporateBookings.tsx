@@ -72,7 +72,11 @@ export default function CorporateBookings() {
   const { data: account, isLoading: accountLoading } =
     trpc.corporate.getMyAccount.useQuery();
 
-  const filters: any = {};
+  const filters: {
+    approvalStatus?: ApprovalStatus;
+    costCenter?: string;
+    projectCode?: string;
+  } = {};
   if (statusFilter !== "all") {
     filters.approvalStatus = statusFilter;
   }

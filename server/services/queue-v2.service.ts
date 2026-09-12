@@ -304,11 +304,16 @@ export function startEmailWorker(): Worker {
       try {
         // Import email service dynamically to avoid circular dependencies
         const { sendBookingConfirmation } = await import("./email.service");
+        type BookingConfirmationData = Parameters<
+          typeof sendBookingConfirmation
+        >[0];
 
         switch (type) {
           case "booking-confirmation":
             if (bookingId && data) {
-              await sendBookingConfirmation(data as any);
+              await sendBookingConfirmation(
+                data as unknown as BookingConfirmationData
+              );
             }
             break;
 

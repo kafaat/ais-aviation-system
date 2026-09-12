@@ -51,7 +51,7 @@ function generateToken(
   };
 
   const options: SignOptions = {
-    expiresIn: expiresIn as any,
+    expiresIn: expiresIn as SignOptions["expiresIn"],
     issuer: "ais-aviation",
     audience: "ais-mobile",
   };

@@ -14,6 +14,7 @@
  */
 
 import crypto from "crypto";
+import type { RowDataPacket } from "mysql2";
 import { sql, eq, and, gt, isNull } from "drizzle-orm";
 import {
   mfaChallenges,
@@ -382,7 +383,7 @@ export async function getMfaSettings(
      FROM mfa_settings WHERE userId = ${userId} LIMIT 1`
   );
 
-  const rows = (results as any)[0] as any[];
+  const rows = results[0] as unknown as RowDataPacket[];
   if (!rows || rows.length === 0) {
     return null;
   }

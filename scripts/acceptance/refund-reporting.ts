@@ -133,7 +133,7 @@ export async function verifyRefundReporting(
           tenantId: null,
           req: { headers: {} },
           res: {},
-        } as any);
+        } as unknown as Parameters<typeof reportsRouter.createCaller>[0]);
         const csv = await api.exportRefundsCSV({
           startDate: "2024-01-15",
           endDate: "2024-01-15",

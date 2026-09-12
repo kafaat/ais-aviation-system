@@ -924,7 +924,7 @@ export async function updateCommissionStatus(
       message: "Database not available",
     });
 
-  const updateData: any = {
+  const updateData: Partial<typeof agentBookings.$inferInsert> = {
     commissionStatus: status,
     updatedAt: new Date(),
   };

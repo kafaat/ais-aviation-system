@@ -260,11 +260,11 @@ export default function TravelAgentManagement() {
   const totalAgents = agentsData?.total || 0;
   const activeAgents = agents.filter(a => a.isActive).length;
   const totalRevenue = agents.reduce(
-    (sum: number, a: any) => sum + a.totalRevenue,
+    (sum: number, a: Agent) => sum + a.totalRevenue,
     0
   );
   const totalCommission = agents.reduce(
-    (sum: number, a: any) => sum + a.totalCommission,
+    (sum: number, a: Agent) => sum + a.totalCommission,
     0
   );
 
@@ -310,7 +310,7 @@ export default function TravelAgentManagement() {
             <Plane className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-3xl font-bold">
-            {agents.reduce((sum: number, a: any) => sum + a.totalBookings, 0)}
+            {agents.reduce((sum: number, a: Agent) => sum + a.totalBookings, 0)}
           </p>
           <p className="text-xs text-muted-foreground mt-2">
             {t("travelAgent.admin.allAgents") || "All agents"}

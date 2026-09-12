@@ -314,12 +314,14 @@ export async function withIdempotency<T>(
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-    } catch (insertErr: any) {
+    } catch (insertErr) {
       // Duplicate key error (MySQL error 1062 / ER_DUP_ENTRY)
+      const dbError = insertErr as { code?: string; errno?: number };
       if (
-        insertErr.code === "ER_DUP_ENTRY" ||
-        insertErr.errno === 1062 ||
-        (insertErr.message && insertErr.message.includes("Duplicate entry"))
+        dbError.code === "ER_DUP_ENTRY" ||
+        dbError.errno === 1062 ||
+        (insertErr instanceof Error &&
+          insertErr.message.includes("Duplicate entry"))
       ) {
         throw new AppError(
           ErrorCode.IDEMPOTENCY_IN_PROGRESS,

@@ -6,7 +6,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
-import { eq, desc, and, sql, count } from "drizzle-orm";
+import { eq, desc, and, sql, count, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import { withCircuitBreaker } from "./production.service";
 import {
@@ -763,7 +763,7 @@ export async function getAllSMSLogs(
     } = options;
 
     // Build conditions
-    const conditions: ReturnType<typeof eq>[] = [];
+    const conditions: SQL[] = [];
 
     if (type) {
       conditions.push(eq(smsLogs.type, type));
@@ -774,11 +774,11 @@ export async function getAllSMSLogs(
     }
 
     if (startDate) {
-      conditions.push(sql`${smsLogs.createdAt} >= ${startDate}` as any);
+      conditions.push(sql`${smsLogs.createdAt} >= ${startDate}`);
     }
 
     if (endDate) {
-      conditions.push(sql`${smsLogs.createdAt} <= ${endDate}` as any);
+      conditions.push(sql`${smsLogs.createdAt} <= ${endDate}`);
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

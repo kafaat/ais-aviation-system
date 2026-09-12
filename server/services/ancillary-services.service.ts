@@ -23,7 +23,10 @@ import {
 /**
  * Get all available ancillary services
  */
-export async function getAvailableAncillaries(category?: string) {
+/** The category values the schema actually accepts. */
+type AncillaryCategory = (typeof ancillaryServices.$inferSelect)["category"];
+
+export async function getAvailableAncillaries(category?: AncillaryCategory) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -33,7 +36,7 @@ export async function getAvailableAncillaries(category?: string) {
 
   const conditions = [eq(ancillaryServices.available, true)];
   if (category) {
-    conditions.push(eq(ancillaryServices.category, category as any));
+    conditions.push(eq(ancillaryServices.category, category));
   }
 
   return await db
@@ -251,7 +254,7 @@ export async function removeAncillaryFromBooking(
  * Get ancillaries by category with filters
  */
 export async function getAncillariesByCategory(params: {
-  category: string;
+  category: AncillaryCategory;
   cabinClass?: string;
   airlineId?: number;
 }) {
@@ -267,7 +270,7 @@ export async function getAncillariesByCategory(params: {
     .from(ancillaryServices)
     .where(
       and(
-        eq(ancillaryServices.category, params.category as any),
+        eq(ancillaryServices.category, params.category),
         eq(ancillaryServices.available, true)
       )
     );
