@@ -1,3 +1,4 @@
+import { assertNoOrderRefundPending } from "./order-refunds.service";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, lte, desc, lt } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -106,6 +107,7 @@ export function allocateSplitRefund(
 }
 
 async function quoteFor(tx: SettlementTx, booking: Booking) {
+  await assertNoOrderRefundPending(tx, booking.id);
   if (
     booking.status !== "confirmed" ||
     booking.paymentStatus !== "paid" ||

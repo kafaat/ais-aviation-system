@@ -1,3 +1,4 @@
+import { assertNoOrderRefundPending } from "./order-refunds.service";
 import { TRPCError } from "@trpc/server";
 import Stripe from "stripe";
 import { getDb } from "../db";
@@ -179,6 +180,7 @@ export async function createRefund(
       });
     }
 
+    await assertNoOrderRefundPending(database, booking.id);
     const existingRefunds = await listActiveRefunds(
       booking.stripePaymentIntentId
     );

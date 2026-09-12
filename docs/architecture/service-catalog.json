@@ -368,7 +368,8 @@
       "accountableOwner": null,
       "consumers": [
         "server/services/ancillary-services.service.ts",
-        "server/services/ndc-unpaid.service.ts"
+        "server/services/ndc-unpaid.service.ts",
+        "server/services/order-servicing.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -401,9 +402,15 @@
       "technicalOwner": "server/services/booking-modification.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/modifications.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/retail-offer.service.ts"
+      ],
       "tableExpressions": {
-        "reads": ["bookingModifications", "bookings", "flights"],
+        "reads": ["bookingModifications", "bookings", "passengers"],
         "writes": ["bookingModifications"]
       },
       "replacement": null
@@ -418,6 +425,8 @@
         "server/services/booking-checkout.service.ts",
         "server/services/bookings.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/split-checkout.service.ts",
@@ -698,6 +707,7 @@
         "server/services/bag-drop.service.ts",
         "server/services/data-warehouse.service.ts",
         "server/services/inventory-lock.service.ts",
+        "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
         "server/services/price-alerts.service.ts",
         "server/services/scheduled-task.service.ts",
@@ -1228,11 +1238,13 @@
         "server/services/ancillary-services.service.ts",
         "server/services/aviation-evidence.service.ts",
         "server/services/booking-checkout.service.ts",
+        "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",
         "server/services/event-inbox.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-refund.service.ts",
@@ -1443,7 +1455,9 @@
         "server/services/inventory/inventory.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
-        "server/services/ndc.service.ts"
+        "server/services/ndc.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/order-servicing.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -1710,6 +1724,19 @@
       "replacement": "server/services/mobile-auth-v2.service.ts"
     },
     {
+      "file": "server/services/modification-fee.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/modification-fee.ts",
+      "accountableOwner": null,
+      "consumers": ["server/services/order-servicing.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/multi-city.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/multi-city.service.ts",
@@ -1781,6 +1808,7 @@
         "server/services/inventory-lock.service.ts",
         "server/services/ndc.service.ts",
         "server/services/outbox.service.ts",
+        "server/services/retail-offer.service.ts",
         "server/services/seat-economics.service.ts"
       ],
       "tableExpressions": {
@@ -1899,6 +1927,112 @@
       "replacement": null
     },
     {
+      "file": "server/services/order-refunds.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/order-refunds.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/services/cron.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/refunds.service.ts",
+        "server/services/split-refund.service.ts",
+        "server/webhooks/stripe.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/outbox.service.ts",
+        "server/services/payment-settlement.service.ts",
+        "server/services/split-refund.service.ts",
+        "server/stripe.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingRefundPlans",
+          "bookings",
+          "orderServiceRefunds",
+          "paymentReceipts"
+        ],
+        "writes": ["orderServiceRefunds"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/order-service-checkout.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/order-service-checkout.service.ts",
+      "accountableOwner": null,
+      "consumers": ["server/routers/ndc.ts", "server/routers/payments.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/services/inventory-lock.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/outbox.service.ts",
+        "server/stripe.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingModifications",
+          "bookings",
+          "flights",
+          "inventoryLocks"
+        ],
+        "writes": ["bookingModifications", "inventoryLocks"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/order-servicing.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/order-servicing.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/ndc.ts",
+        "server/services/booking-modification.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/payment-settlement.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/booking-invoice.service.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/inventory-lock.service.ts",
+        "server/services/modification-fee.ts",
+        "server/services/order-refunds.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/retail-offer.service.ts",
+        "server/services/seat-economics.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingAncillaries",
+          "bookingModifications",
+          "bookingSegments",
+          "bookings",
+          "flights",
+          "inventoryLocks",
+          "ndcOrders",
+          "passengers",
+          "retailOffers"
+        ],
+        "writes": [
+          "bookingModifications",
+          "bookingSegments",
+          "bookings",
+          "inventoryLocks",
+          "ndcOrders",
+          "passengers",
+          "seatInventory"
+        ]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/outbox.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/outbox.service.ts",
@@ -1916,6 +2050,9 @@
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/order-refunds.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/pricing-approval.service.ts",
         "server/services/retail-offer.service.ts",
@@ -2133,6 +2270,7 @@
       "technicalOwner": "server/services/payment-settlement.service.ts",
       "accountableOwner": null,
       "consumers": [
+        "server/services/order-refunds.service.ts",
         "server/services/refunds.service.ts",
         "server/services/split-refund.service.ts",
         "server/webhooks/stripe.ts"
@@ -2141,6 +2279,7 @@
         "drizzle/schema.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-settlement.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
@@ -2149,6 +2288,7 @@
           "bookingRefundItems",
           "bookings",
           "flights",
+          "orderServiceRefunds",
           "paymentReceipts",
           "paymentSplits",
           "walletTransactions",
@@ -2642,6 +2782,7 @@
         "server/services/email.service.ts",
         "server/services/metrics.service.ts",
         "server/services/notification.service.ts",
+        "server/services/order-refunds.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/stripe.ts"
       ],
@@ -2681,8 +2822,11 @@
       "accountableOwner": null,
       "consumers": [
         "server/routers/price-quote.ts",
+        "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",
-        "server/services/ndc.service.ts"
+        "server/services/ndc-unpaid.service.ts",
+        "server/services/ndc.service.ts",
+        "server/services/order-servicing.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -2786,6 +2930,7 @@
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/seat-economics-tenant.service.ts"
       ],
       "dependencies": [
@@ -3018,6 +3163,7 @@
       "consumers": [
         "server/routers/refunds.ts",
         "server/services/cron.service.ts",
+        "server/services/order-refunds.service.ts",
         "server/webhooks/stripe.ts"
       ],
       "dependencies": [
@@ -3026,6 +3172,7 @@
         "server/services/booking-settlement.service.ts",
         "server/services/cancellation-fees.service.ts",
         "server/services/idempotency-v2.service.ts",
+        "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/stripe.ts"
@@ -3113,6 +3260,7 @@
         "server/services/multi-city.service.ts",
         "server/services/ndc.service.ts",
         "server/services/operational-events.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/pricing-approval.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",

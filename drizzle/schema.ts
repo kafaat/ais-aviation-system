@@ -640,6 +640,13 @@ export const bookingModifications = mysqlTable(
       "refunded",
     ]).default("pending"),
 
+    servicingPayload: json("servicingPayload").$type<Record<string, unknown>>(),
+    executionEventId: varchar("executionEventId", { length: 36 }),
+    checkoutRequestId: varchar("checkoutRequestId", { length: 36 }),
+    checkoutData: json("checkoutData").$type<Record<string, unknown>>(),
+    checkoutSessionId: varchar("checkoutSessionId", { length: 255 }),
+    checkoutUrl: text("checkoutUrl"),
+
     // Metadata
     reason: text("reason"),
     adminNotes: text("adminNotes"),
@@ -5672,5 +5679,42 @@ export const aviationEvidence = mysqlTable(
       t.kind,
       t.observedAt
     ),
+  })
+);
+
+/** Refund transport intents for order exchanges; financial_ledger remains the money authority. */
+export const orderServiceRefunds = mysqlTable(
+  "order_service_refunds",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    modificationId: int("modificationId").notNull(),
+    paymentIntentId: varchar("paymentIntentId", { length: 255 }).notNull(),
+    amount: int("amount").notNull(),
+    baseRefundedAmount: int("baseRefundedAmount").notNull(),
+    status: mysqlEnum("status", [
+      "queued",
+      "requesting",
+      "pending",
+      "succeeded",
+      "failed",
+      "review_required",
+    ])
+      .default("queued")
+      .notNull(),
+    refundId: varchar("refundId", { length: 255 }),
+    requestedAt: timestamp("requestedAt"),
+    nextAttemptAt: timestamp("nextAttemptAt").defaultNow().notNull(),
+    errorCode: varchar("errorCode", { length: 100 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+  },
+  t => ({
+    modificationPayment: uniqueIndex("order_refund_mod_payment_unique").on(
+      t.modificationId,
+      t.paymentIntentId
+    ),
+    pending: index("order_refund_pending_idx").on(t.status, t.nextAttemptAt),
+    booking: index("order_refund_booking_idx").on(t.bookingId),
   })
 );

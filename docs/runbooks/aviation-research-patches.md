@@ -52,3 +52,13 @@ Demand now means booked departing passengers per flight instance, cabin, airline
 AI multipliers are shadow suggestions; the effective AI multiplier is one. Human-approved base-price changes use the patch-04 executor. The historical outcome is booked demand, not unconstrained latent demand; sell-out censoring and production challenger acceptance still require operator data.
 
 Validation: TypeScript and 25 forecast tests passed, including future-data exclusion, chronological comparison, zero actuals and sparse-data rejection.
+
+## 07 — Paid order servicing
+
+The existing modification screen now requests and reviews an actual fare quote, then explicitly confirms it. Date changes and cabin upgrades delegate to the same paid-servicing authority as `ndc.quotePaidService`. It exchanges a complete local itinerary (up to six connected segments in one cabin), or adds catalog entitlements, using server-priced snapshots, owned passengers, existing invoice/seat owners, preserved modification fees, durable idempotency and an execution event. Itinerary exchange requires reconciled ancillary fulfillment and preserves journey endpoints; the single-flight UI refuses to truncate a multi-leg journey.
+
+Positive differences use a persisted Stripe checkout request and stable provider idempotency key. Checkout extends validated owned holds to the saved provider expiry. Only verified collection applies the change; a late or stale collection is retained for settlement review without moving seats. No-charge confirmation moves all affected capacity and invoice allocations atomically. Lower fares create refund transport intents allocated to original Stripe/split payer receipts. The periodic `orderServiceRefunds` job reconciles provider results and posts through `settleVerifiedRefund`; an expired idempotency window without a known outcome is quarantined. A queued refund is not reported as paid. Wallet/external-funded reductions require their refund authority and cannot be silently redirected to another payer.
+
+Owned quotes can be cancelled; active provider checkout must first be confirmed expired. New paid catalog services create entitlements. Ticket reissue/EMD and physical service fulfillment remain separate provider acceptance states (`awaiting_ticket_reissue` / `entitlement_created`). This series does not invent an airline ticketing acceptance receipt. Existing NDC unpaid exchange also consumes its linked canonical fare snapshot.
+
+Validation: TypeScript and 114 payment/servicing/refund tests passed, covering all-leg exchange, checkout replay, late collection review, no premature refund ledger entry, proportional original-payer allocation, preserved change fees and the existing modification UI's command retry.
