@@ -1,3 +1,11 @@
+import {
+  ingestFlightCost,
+  getFlightEconomics,
+} from "../services/flight-economics-evidence.service";
+import {
+  ingestMaintenance,
+  assignAircraftRotation,
+} from "../services/aircraft-rotation.service";
 import { ingestCrewRules } from "../services/crew-rule.service";
 import { ingestBaggageCustody } from "../services/baggage-custody.service";
 import { z } from "zod";
@@ -16,6 +24,71 @@ export const evidenceReceipt = z.object({
   duplicate: z.boolean(),
 });
 export const aviationIntegrationsRouter = router({
+  ingestFlightCost: publicProcedure
+    .input(signedEvidenceInput)
+    .output(evidenceReceipt)
+    .mutation(({ input }) => ingestFlightCost(input.envelope, input.signature)),
+  ingestMaintenance: publicProcedure
+    .input(signedEvidenceInput)
+    .output(evidenceReceipt)
+    .mutation(({ input }) =>
+      ingestMaintenance(input.envelope, input.signature)
+    ),
+  assignRotation: adminProcedure
+    .input(
+      z.object({
+        flightId: z.number().int().positive(),
+        tailNumber: z.string().regex(/^[A-Z0-9-]{2,20}$/),
+      })
+    )
+    .output(
+      z.object({
+        flightId: z.number(),
+        tailNumber: z.string(),
+        maintenanceEvidenceId: z.number(),
+        receiptId: z.string(),
+        acceptance: z.literal("planning_only_dispatch_required"),
+      })
+    )
+    .mutation(({ input, ctx }) =>
+      assignAircraftRotation(
+        input.flightId,
+        input.tailNumber,
+        ctx.user.id,
+        ctx.tenantId
+      )
+    ),
+  flightEconomics: adminProcedure
+    .input(z.object({ flightId: z.number().int().positive() }))
+    .output(
+      z.object({
+        flightId: z.number(),
+        sourceId: z.string().nullable(),
+        evidenceId: z.number().nullable(),
+        observedAt: z.date().nullable(),
+        currency: z.literal("SAR"),
+        totalCostMinor: z.number().nullable(),
+        recognizedRevenueMinor: z.number().nullable(),
+        operatingResultMinor: z.number().nullable(),
+        availableSeatKm: z.number().nullable(),
+        caskMinor: z.number().nullable(),
+        raskMinor: z.number().nullable(),
+        costs: z
+          .object({
+            fuel: z.number(),
+            crew: z.number(),
+            maintenance: z.number(),
+            airport: z.number(),
+            navigation: z.number(),
+            insurance: z.number(),
+            overhead: z.number(),
+          })
+          .nullable(),
+      })
+    )
+    .query(({ input, ctx }) =>
+      getFlightEconomics(input.flightId, ctx.tenantId)
+    ),
   acceptCrewRules: adminProcedure
     .input(signedEvidenceInput)
     .output(evidenceReceipt)

@@ -116,6 +116,31 @@
       "replacement": null
     },
     {
+      "file": "server/services/aircraft-rotation.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/aircraft-rotation.service.ts",
+      "accountableOwner": null,
+      "consumers": ["server/routers/aviation-integrations.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "aircraftRotations",
+          "airlines",
+          "aviationEvidence",
+          "flights"
+        ],
+        "writes": ["aircraftRotations"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/analytics.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/analytics.service.ts",
@@ -234,8 +259,10 @@
       "accountableOwner": null,
       "consumers": [
         "server/routers/aviation-integrations.ts",
+        "server/services/aircraft-rotation.service.ts",
         "server/services/baggage-custody.service.ts",
         "server/services/crew-rule.service.ts",
+        "server/services/flight-economics-evidence.service.ts",
         "server/services/operational-events.service.ts"
       ],
       "dependencies": [
@@ -1136,6 +1163,26 @@
       "replacement": null
     },
     {
+      "file": "server/services/flight-economics-evidence.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/flight-economics-evidence.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/services/intelligence/economics.agent.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["aviationEvidence", "flights"],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/flight-status.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/flight-status.service.ts",
@@ -1318,6 +1365,7 @@
       "technicalOwner": "server/services/idempotency-v2.service.ts",
       "accountableOwner": null,
       "consumers": [
+        "server/services/aircraft-rotation.service.ts",
         "server/services/ancillary-services.service.ts",
         "server/services/aviation-evidence.service.ts",
         "server/services/booking-checkout.service.ts",
@@ -1375,7 +1423,8 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/_core/logger.ts",
-        "server/db.ts"
+        "server/db.ts",
+        "server/services/flight-economics-evidence.service.ts"
       ],
       "tableExpressions": {
         "reads": ["airports", "bookingSegments", "bookings", "flights"],
@@ -2173,6 +2222,7 @@
       "accountableOwner": null,
       "consumers": [
         "server/services/agent-governance.service.ts",
+        "server/services/aircraft-rotation.service.ts",
         "server/services/aviation-evidence.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-invoice.service.ts",
@@ -3404,6 +3454,7 @@
       "consumers": [
         "server/_core/context.ts",
         "server/routers/tenants.ts",
+        "server/services/aircraft-rotation.service.ts",
         "server/services/baggage-custody.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-invoice.service.ts",

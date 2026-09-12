@@ -5764,3 +5764,20 @@ export const iropsRecoveryPlans = mysqlTable(
   },
   t => ({ eventIdx: index("irops_recovery_event_idx").on(t.eventId, t.status) })
 );
+
+export const aircraftRotations = mysqlTable(
+  "aircraft_rotations",
+  {
+    flightId: int("flightId").primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    tenantId: int("tenantId"),
+    tailNumber: varchar("tailNumber", { length: 20 }).notNull(),
+    maintenanceEvidenceId: int("maintenanceEvidenceId").notNull(),
+    scheduleDigest: varchar("scheduleDigest", { length: 64 }).notNull(),
+    assignedBy: int("assignedBy").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    tailIdx: index("aircraft_rotation_tail_idx").on(t.airlineId, t.tailNumber),
+  })
+);

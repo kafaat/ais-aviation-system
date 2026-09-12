@@ -204,6 +204,13 @@
       "when": 1789240442921,
       "tag": "0028_crew_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1789240715244,
+      "tag": "0029_aircraft_rotation",
+      "breakpoints": true
     }
   ]
 }
