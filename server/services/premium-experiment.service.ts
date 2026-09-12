@@ -1,3 +1,4 @@
+import { requireValue } from "./required-value";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import {
@@ -45,7 +46,7 @@ export async function acceptPremiumPolicy(
     const [f] = await tx
       .select()
       .from(flights)
-      .where(eq(flights.id, e.flightId!))
+      .where(eq(flights.id, requireValue(e.flightId)))
       .for("update");
     if (
       !f ||
@@ -306,9 +307,9 @@ export async function premiumResults(id: string, tenantId: number | null) {
       const values = new Map(assignments.map(a => [a.id, 0]));
       const paid = new Set<string>();
       for (const entry of ledger) {
-        const conversion = conversions.find(
-          c => c.bookingId === entry.bookingId
-        )!;
+        const conversion = requireValue(
+          conversions.find(c => c.bookingId === entry.bookingId)
+        );
         if (entry.currency !== "SAR" || entry.type === "adjustment") {
           unclassified++;
           continue;
@@ -318,14 +319,14 @@ export async function premiumResults(id: string, tenantId: number | null) {
         if (entry.type === "charge") paid.add(conversion.assignmentId);
         values.set(
           conversion.assignmentId,
-          values.get(conversion.assignmentId)! +
+          requireValue(values.get(conversion.assignmentId)) +
             (entry.type === "charge" ? amount : -amount)
         );
       }
       const samples = (variant: "control" | "treatment") =>
         assignments
           .filter(a => a.variant === variant)
-          .map(a => values.get(a.id)!);
+          .map(a => requireValue(values.get(a.id)));
       const arm = (variant: "control" | "treatment") => {
         const a = assignments.filter(a => a.variant === variant),
           sum = samples(variant).reduce((s, n) => s + n, 0);

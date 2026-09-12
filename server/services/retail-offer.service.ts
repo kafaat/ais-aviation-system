@@ -1,3 +1,4 @@
+import { requireValue } from "./required-value";
 import {
   premiumAdjustment,
   recordPremiumConversion,
@@ -11,7 +12,6 @@ import { retailOffers } from "../../drizzle/schema";
 import { calculateFlightPrice } from "./flights.service";
 import { recordEvent } from "./outbox.service";
 import type { SettlementTx } from "./booking-settlement.service";
-
 const passengerType = z.enum(["adult", "child", "infant"]);
 const payloadSchema = z.object({
   experiment: z
@@ -189,7 +189,9 @@ export async function createRetailOffer(
     await tx.insert(retailOffers).values(offer);
     return offer;
   };
-  return transaction ? persist(transaction) : db!.transaction(persist);
+  return transaction
+    ? persist(transaction)
+    : requireValue(db).transaction(persist);
 }
 export function validateRetailOffer(
   offer: RetailOffer,

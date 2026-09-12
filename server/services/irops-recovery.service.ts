@@ -1,3 +1,4 @@
+import { requireValue } from "./required-value";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { and, asc, eq, ne } from "drizzle-orm";
@@ -34,7 +35,6 @@ import { recordReaccommodation } from "./irops.service";
 import { assertTenantOperational } from "./tenant.service";
 import { recordEvent } from "./outbox.service";
 import { storedJson } from "./booking-invoice.service";
-
 export const recoveryInput = z.object({
   eventId: z.number().int().positive(),
   bookingIds: z.array(z.number().int().positive()).min(1).max(20),
@@ -162,7 +162,7 @@ async function readInputs(
         (cabin === "business" ? f.businessAvailable : f.economyAvailable) -
           (await countActiveHolds(tx, f.id, cabin))
       );
-  const old = locked.find(f => f.id === event.flightId)!;
+  const old = requireValue(locked.find(f => f.id === event.flightId));
   for (const r of records) {
     const idx = r.legs.indexOf(old.id),
       prev = locked.find(f => f.id === r.legs[idx - 1]),
@@ -335,9 +335,11 @@ export async function executeRecovery(
     validateRecoverySolution(state.problem, saved.choices);
     for (const choice of saved.choices) {
       if (choice.key === null) continue;
-      const r = state.records.find(r => r.booking.id === choice.bookingId)!;
+      const r = requireValue(
+        state.records.find(r => r.booking.id === choice.bookingId)
+      );
       const newId = Number(choice.key.split(":")[0]),
-        target = state.locked.find(f => f.id === newId)!;
+        target = requireValue(state.locked.find(f => f.id === newId));
       await reserveSeats(
         tx,
         newId,
@@ -400,9 +402,11 @@ export async function executeRecovery(
           {}
         );
         payload.segments = r.legs.map(f => {
-          const flight = state.locked.find(
-            x => x.id === (f === state.event.flightId ? newId : f)
-          )!;
+          const flight = requireValue(
+            state.locked.find(
+              x => x.id === (f === state.event.flightId ? newId : f)
+            )
+          );
           return {
             flightId: flight.id,
             flightNumber: flight.flightNumber,

@@ -21,8 +21,7 @@ import {
 
 import { getDb } from "../../db";
 import { flights } from "../../../drizzle/schema";
-import { eq, and, gte, lte, sql, count } from "drizzle-orm";
-import { createServiceLogger } from "../../_core/logger";
+import { and, gte, lte, sql, count } from "drizzle-orm";
 import type {
   AgentResult,
   IntelligenceContext,
@@ -30,8 +29,6 @@ import type {
   DisruptionForecast,
   OperationalHealth,
 } from "./types";
-
-const log = createServiceLogger("intelligence:operations");
 
 // ============================================================================
 // Constants
@@ -159,12 +156,14 @@ export class OperationsAgent {
   /**
    * Forecast disruptions for upcoming period
    */
-  async forecastDisruptions(
+  forecastDisruptions(
     _context: IntelligenceContext
   ): Promise<AgentResult<DisruptionForecast[]>> {
-    return this.disruptionErrorResult(
-      "No temporally validated disruption model is configured; use observed flight evidence and approved recovery plans",
-      Date.now()
+    return Promise.resolve(
+      this.disruptionErrorResult(
+        "No temporally validated disruption model is configured; use observed flight evidence and approved recovery plans",
+        Date.now()
+      )
     );
   }
 

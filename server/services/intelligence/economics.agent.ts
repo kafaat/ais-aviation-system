@@ -1,3 +1,4 @@
+import { requireValue } from "../required-value";
 import {
   readFlightCosts,
   costTotal,
@@ -18,7 +19,6 @@ import {
  *
  * @module services/intelligence/economics.agent
  */
-
 import { getDb } from "../../db";
 import {
   flights,
@@ -35,13 +35,10 @@ import type {
   RouteEconomics,
   ProfitabilityAnalysis,
 } from "./types";
-
 const log = createServiceLogger("intelligence:economics");
-
 // ============================================================================
 // Constants
 // ============================================================================
-
 /** Aggregate capacities independently from booking multiplicity and retain unknown allocations. */
 export function summarizeRouteActivity(
   flightRows: Array<{
@@ -92,7 +89,7 @@ export function summarizeRouteActivity(
       if (itinerary.length ? !leg : booking.flightId !== flight.id) continue;
       route.bookedSeats += booking.numberOfPassengers;
       const amount = itinerary.length
-        ? leg!.segmentAmount
+        ? requireValue(leg).segmentAmount
         : booking.totalAmount;
       route.revenue =
         route.revenue == null || amount == null ? null : route.revenue + amount;
@@ -101,15 +98,12 @@ export function summarizeRouteActivity(
   }
   return [...routes.values()];
 }
-
 // ============================================================================
 // Economics Agent
 // ============================================================================
-
 export class EconomicsAgent {
   private readonly agentId = "economics-agent-v1";
   private readonly agentName = "Economics Agent";
-
   /**
    * Run full profitability analysis
    */
@@ -119,23 +113,19 @@ export class EconomicsAgent {
     const startTime = Date.now();
     const reasoning: string[] = [];
     const recommendations: AgentRecommendation[] = [];
-
     try {
       const db = await getDb();
       if (!db) {
         return this.errorResult("Database not available", startTime);
       }
-
       // Determine date range
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const startDate = context.scope.dateRange?.start || thirtyDaysAgo;
       const endDate = context.scope.dateRange?.end || now;
-
       reasoning.push(
         `Analyzing period: ${startDate.toISOString().split("T")[0]} to ${endDate.toISOString().split("T")[0]}`
       );
-
       // Read each flight once; never SUM capacity across a one-to-many booking join.
       const flown = await db
         .select()
@@ -201,17 +191,23 @@ export class EconomicsAgent {
       const allRevenue =
         allCosts &&
         flown.every(
-          f => facts.get(f.id)!.payload.recognizedRevenueMinor !== null
+          f =>
+            requireValue(facts.get(f.id)).payload.recognizedRevenueMinor !==
+            null
         );
       const totalCost = allCosts
         ? flown.reduce(
-            (sum, f) => sum + costTotal(facts.get(f.id)!.payload),
+            (sum, f) => sum + costTotal(requireValue(facts.get(f.id)).payload),
             0
           ) / 100
         : null;
       const totalRevenue = allRevenue
         ? flown.reduce(
-            (sum, f) => sum + facts.get(f.id)!.payload.recognizedRevenueMinor!,
+            (sum, f) =>
+              sum +
+              requireValue(
+                requireValue(facts.get(f.id)).payload.recognizedRevenueMinor
+              ),
             0
           ) / 100
         : null;
@@ -224,18 +220,24 @@ export class EconomicsAgent {
         const complete = fs.every(f => facts.has(f.id));
         const cost = complete
           ? fs.reduce(
-              (sum, f) => sum + costTotal(facts.get(f.id)!.payload),
+              (sum, f) =>
+                sum + costTotal(requireValue(facts.get(f.id)).payload),
               0
             ) / 100
           : null;
         const revenue =
           complete &&
           fs.every(
-            f => facts.get(f.id)!.payload.recognizedRevenueMinor !== null
+            f =>
+              requireValue(facts.get(f.id)).payload.recognizedRevenueMinor !==
+              null
           )
             ? fs.reduce(
                 (sum, f) =>
-                  sum + facts.get(f.id)!.payload.recognizedRevenueMinor!,
+                  sum +
+                  requireValue(
+                    requireValue(facts.get(f.id)).payload.recognizedRevenueMinor
+                  ),
                 0
               ) / 100
             : null;
@@ -244,7 +246,7 @@ export class EconomicsAgent {
               (sum, f) =>
                 sum +
                 (f.economySeats + f.businessSeats) *
-                  facts.get(f.id)!.payload.routeDistanceKm,
+                  requireValue(facts.get(f.id)).payload.routeDistanceKm,
               0
             )
           : null;
@@ -322,7 +324,6 @@ export class EconomicsAgent {
         },
         "Economics analysis completed"
       );
-
       return {
         agentId: this.agentId,
         agentName: this.agentName,
@@ -347,7 +348,6 @@ export class EconomicsAgent {
       );
     }
   }
-
   private errorResult(
     message: string,
     startTime: number
@@ -377,5 +377,4 @@ export class EconomicsAgent {
     };
   }
 }
-
 export const economicsAgent = new EconomicsAgent();

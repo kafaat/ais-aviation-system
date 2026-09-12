@@ -115,15 +115,14 @@ export async function createBooking(
     const flightForValidation = await db.getFlightById(input.flightId);
     if (flightForValidation) {
       const minExpiry = new Date(flightForValidation.departureTime);
-      minExpiry.setMonth(minExpiry.getMonth() + 6);
 
       for (const passenger of input.passengers) {
         if (passenger.passportExpiry) {
           const expiry = new Date(passenger.passportExpiry);
-          if (expiry < minExpiry) {
+          if (!Number.isFinite(expiry.getTime()) || expiry < minExpiry) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `Passport for ${passenger.firstName} ${passenger.lastName} expires before the required 6-month validity period after travel date`,
+              message: `Passport for ${passenger.firstName} ${passenger.lastName} is not valid on the travel date; destination-specific requirements require current document review`,
             });
           }
         }
@@ -328,6 +327,7 @@ export async function createBooking(
               lastName: p.lastName,
               dateOfBirth: p.dateOfBirth,
               passportNumber: p.passportNumber,
+              passportExpiry: p.passportExpiry,
               nationality: p.nationality,
             }))
           );

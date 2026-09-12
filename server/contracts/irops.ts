@@ -50,6 +50,8 @@ export const responseContracts = {
         targetPassengerId: z.union([z.null(), outputNumber]),
         status: z.enum(["completed", "pending", "failed", "in_progress"]),
         details: z.record(z.string(), structuredValue),
+        evidenceType: z.string().nullable(),
+        evidenceId: z.string().nullable(),
         createdAt: z.date(),
         completedAt: z.union([z.null(), z.date()]),
       })
@@ -156,6 +158,8 @@ export const responseContracts = {
         targetPassengerId: z.union([z.null(), outputNumber]),
         status: z.enum(["completed", "pending", "failed", "in_progress"]),
         details: z.record(z.string(), structuredValue),
+        evidenceType: z.string().nullable(),
+        evidenceId: z.string().nullable(),
         createdAt: z.date(),
         completedAt: z.union([z.null(), z.date()]),
       })
@@ -217,6 +221,8 @@ export const responseContracts = {
         targetPassengerId: z.union([z.null(), outputNumber]),
         status: z.enum(["completed", "pending", "failed", "in_progress"]),
         details: z.record(z.string(), structuredValue),
+        evidenceType: z.string().nullable(),
+        evidenceId: z.string().nullable(),
         createdAt: z.date(),
         completedAt: z.union([z.null(), z.date()]),
       })

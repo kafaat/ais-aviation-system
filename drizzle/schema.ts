@@ -363,6 +363,7 @@ export const passengers = mysqlTable(
     lastName: varchar("lastName", { length: 100 }).notNull(),
     dateOfBirth: timestamp("dateOfBirth"),
     passportNumber: varchar("passportNumber", { length: 20 }),
+    passportExpiry: timestamp("passportExpiry"),
     nationality: varchar("nationality", { length: 3 }), // ISO country code
     seatNumber: varchar("seatNumber", { length: 5 }), // e.g., "12A"
     ticketNumber: varchar("ticketNumber", { length: 13 }), // IATA 13-digit ticket number

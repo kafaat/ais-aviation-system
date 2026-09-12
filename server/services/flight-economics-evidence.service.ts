@@ -1,3 +1,4 @@
+import { requireValue } from "./required-value";
 import { z } from "zod";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { flights, aviationEvidence } from "../../drizzle/schema";
@@ -46,7 +47,7 @@ export async function ingestFlightCost(e: EvidenceEnvelope, signature: string) {
     const [flight] = await tx
       .select()
       .from(flights)
-      .where(eq(flights.id, e.flightId!))
+      .where(eq(flights.id, requireValue(e.flightId)))
       .for("update");
     if (
       !flight ||

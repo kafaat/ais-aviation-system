@@ -1,3 +1,4 @@
+import { assertTravelClearance } from "./travel-clearance.service";
 /**
  * Seat Map & Check-in Service
  *
@@ -1339,6 +1340,8 @@ export async function checkIn(
         message: `Passenger ${passengerId} not found in booking ${bookingId}`,
       });
     }
+
+    await assertTravelClearance(db, bookingId, passengerId);
 
     // Check if already checked in
     const existingCheckIn = await db

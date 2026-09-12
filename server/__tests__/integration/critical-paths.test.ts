@@ -115,17 +115,17 @@ afterAll(async () => {
     await db
       .delete(financialLedger)
       .where(
-        sql`booking_id IN (SELECT id FROM bookings WHERE user_id = ${testUserId})`
+        sql`${financialLedger.bookingId} IN (SELECT id FROM bookings WHERE ${bookings.userId} = ${testUserId})`
       );
     await db
       .delete(payments)
       .where(
-        sql`booking_id IN (SELECT id FROM bookings WHERE user_id = ${testUserId})`
+        sql`${payments.bookingId} IN (SELECT id FROM bookings WHERE ${bookings.userId} = ${testUserId})`
       );
     await db.delete(stripeEvents).where(sql`id LIKE 'test_critical_%'`);
     await db
       .delete(idempotencyRequests)
-      .where(sql`idempotency_key LIKE 'test_critical_%'`);
+      .where(sql`${idempotencyRequests.idempotencyKey} LIKE 'test_critical_%'`);
     await db.delete(bookings).where(eq(bookings.userId, testUserId));
     if (testUserId) await db.delete(users).where(eq(users.id, testUserId));
     if (testFlightId)

@@ -1084,6 +1084,9 @@ export async function createOrder(
         lastName: p.lastName,
         dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : undefined,
         passportNumber: p.passportNumber,
+        passportExpiry: p.passportExpiry
+          ? new Date(p.passportExpiry)
+          : undefined,
         nationality: p.nationality,
       }));
 

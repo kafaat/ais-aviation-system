@@ -27,9 +27,7 @@ export interface UpgradeCabinInput {
   reason?: string;
   idempotencyKey?: string;
 }
-async function requestService(
-  input: ChangeFlightDateInput | UpgradeCabinInput
-) {
+function requestService(input: ChangeFlightDateInput | UpgradeCabinInput) {
   const key = input.idempotencyKey ?? randomUUID();
   return withTransactionalIdempotency({
     scope: "booking.modification.quote",

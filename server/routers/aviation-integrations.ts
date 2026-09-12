@@ -1,3 +1,8 @@
+import { ingestTravelEvidence } from "../services/travel-evidence.service";
+import {
+  ingestTravelClearance,
+  getClearanceContext,
+} from "../services/travel-clearance.service";
 import {
   acceptPremiumPolicy,
   pausePremiumPolicy,
@@ -29,6 +34,38 @@ export const evidenceReceipt = z.object({
   duplicate: z.boolean(),
 });
 export const aviationIntegrationsRouter = router({
+  ingestTravelEvidence: publicProcedure
+    .input(signedEvidenceInput)
+    .output(evidenceReceipt)
+    .mutation(({ input }) =>
+      ingestTravelEvidence(input.envelope, input.signature)
+    ),
+  ingestTravelClearance: publicProcedure
+    .input(signedEvidenceInput)
+    .output(evidenceReceipt)
+    .mutation(({ input }) =>
+      ingestTravelClearance(input.envelope, input.signature)
+    ),
+  clearanceContext: adminProcedure
+    .input(
+      z.object({
+        bookingId: z.number().int().positive(),
+        passengerId: z.number().int().positive(),
+      })
+    )
+    .output(
+      z.object({
+        bookingId: z.number(),
+        passengerId: z.number(),
+        flightId: z.number(),
+        documentDigest: z.string(),
+        itineraryDigest: z.string(),
+        international: z.boolean(),
+      })
+    )
+    .query(({ input, ctx }) =>
+      getClearanceContext(input.bookingId, input.passengerId, ctx.tenantId)
+    ),
   acceptPremiumPolicy: adminProcedure
     .input(signedEvidenceInput)
     .output(z.object({ id: z.string().uuid(), evidenceId: z.number() }))

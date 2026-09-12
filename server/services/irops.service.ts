@@ -84,6 +84,8 @@ export interface IROPSAction {
   details: Record<string, unknown>;
   createdAt: Date;
   completedAt: Date | null;
+  evidenceType: string | null;
+  evidenceId: string | null;
 }
 
 /**

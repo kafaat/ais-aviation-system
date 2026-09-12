@@ -1,3 +1,4 @@
+import { assertTravelClearance } from "./travel-clearance.service";
 export {
   kioskDevices,
   kioskSessions,
@@ -471,6 +472,8 @@ export async function performCheckIn(
         message: "Check-in is closed (less than 1 hour before departure)",
       });
     }
+
+    await assertTravelClearance(db, bookingId, passengerId);
 
     // Assign seat if provided
     if (options.seatNumber) {

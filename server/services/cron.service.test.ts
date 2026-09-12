@@ -17,6 +17,9 @@ vi.mock("node-cron", () => ({
 }));
 
 vi.mock("../db");
+vi.mock("./order-refunds.service", () => ({
+  processPendingOrderRefunds: vi.fn(async () => ({ processed: 0 })),
+}));
 vi.mock("./scheduled-task.service", () => ({
   runScheduledTask: vi.fn(async (_name, _tick, run) => {
     await run();
@@ -32,6 +35,7 @@ import {
   stopCronJobs,
   PERIODIC_JOB_CATALOG,
 } from "./cron.service";
+import { processPendingOrderRefunds } from "./order-refunds.service";
 import { runOutboxRelay } from "./outbox.service";
 
 beforeEach(() => {
@@ -50,6 +54,7 @@ describe("cron.service scheduler", () => {
       [
         "* * * * *",
         "* * * * *",
+        "* * * * *",
         "*/5 * * * *",
         "* * * * *",
         "0 * * * *",
@@ -63,7 +68,7 @@ describe("cron.service scheduler", () => {
   it("is idempotent — a second start does not double-schedule", () => {
     startCronJobs();
     startCronJobs();
-    expect(scheduled).toHaveLength(8);
+    expect(scheduled).toHaveLength(9);
   });
 
   it("stop() halts every scheduled task and allows a clean restart", async () => {
@@ -73,9 +78,18 @@ describe("cron.service scheduler", () => {
     for (const t of tasks) expect(t.stop).toHaveBeenCalledTimes(1);
 
     startCronJobs();
-    expect(scheduled).toHaveLength(16); // every task can restart
+    expect(scheduled).toHaveLength(18); // every task can restart
   });
 
+  it("runs durable order refund work from its scheduled tick", async () => {
+    startCronJobs();
+    const index = PERIODIC_JOB_CATALOG.findIndex(
+      j => j.name === "orderServiceRefunds"
+    );
+    expect(index).toBeGreaterThanOrEqual(0);
+    await scheduled[index].fn();
+    expect(processPendingOrderRefunds).toHaveBeenCalledTimes(1);
+  });
   it("the relay tick actually invokes the outbox relay", async () => {
     startCronJobs();
     const relayTask =
