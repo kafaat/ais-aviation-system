@@ -136,6 +136,13 @@ class BackupJobTest(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.valid(BACKUP_IMAGE=value)
 
+    def test_default_image_is_pinned_to_a_digest(self):
+        # A mutable tag means two runs of the same reviewed code can dump with
+        # different mysql clients, so the default carries an immutable digest.
+        image = self.valid()["spec"]["template"]["spec"]["containers"][0]["image"]
+        self.assertEqual(image, backup_job.DEFAULT_IMAGE)
+        self.assertRegex(image, r"^mysql:[\w.\-]+@sha256:[a-f0-9]{64}$")
+
 
 if __name__ == "__main__":
     unittest.main()
