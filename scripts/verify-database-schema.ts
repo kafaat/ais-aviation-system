@@ -78,12 +78,17 @@ try {
           unique: true,
           columns: [column.name],
         });
-      if (column.isUnique)
+      if (column.isUnique) {
+        if (!column.uniqueName)
+          throw new Error(
+            `Column ${column.name} is unique but has no constraint name to verify`
+          );
         expected.push({
-          name: column.uniqueName!,
+          name: column.uniqueName,
           unique: true,
           columns: [column.name],
         });
+      }
     }
     for (const key of config.primaryKeys)
       expected.push({
@@ -91,12 +96,18 @@ try {
         unique: true,
         columns: key.columns.map(c => c.name),
       });
-    for (const key of config.uniqueConstraints)
+    for (const key of config.uniqueConstraints) {
+      const name = key.getName();
+      if (!name)
+        throw new Error(
+          `Unique constraint on ${config.name} has no name to verify against`
+        );
       expected.push({
-        name: key.getName(),
+        name,
         unique: true,
         columns: key.columns.map(c => c.name),
       });
+    }
     const actualIndexes = indexes.filter(row => row.TABLE_NAME === config.name);
     for (const index of expected) {
       const rows = actualIndexes.filter(row => row.INDEX_NAME === index.name);

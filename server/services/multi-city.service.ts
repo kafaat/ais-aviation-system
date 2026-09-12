@@ -127,6 +127,27 @@ const MIN_SEGMENTS = 2;
  * Search for flights for multiple city segments
  * Returns available flights for each segment independently
  */
+/**
+ * The hold map is filled from the same segment list it is read back with, but
+ * nothing enforced that. Surface a held-inventory failure rather than reading
+ * undefined off a missing entry.
+ */
+function requireHold(
+  held: Map<
+    number,
+    { lockId: number; tenantId: number | null; departureTime: Date }
+  >,
+  flightId: number
+) {
+  const hold = held.get(flightId);
+  if (!hold)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `Inventory hold missing for flight ${flightId}`,
+    });
+  return hold;
+}
+
 export async function searchMultiCityFlights(
   segments: MultiCitySegment[]
 ): Promise<MultiCitySearchResult[]> {
@@ -381,7 +402,7 @@ export async function createMultiCityBooking(
             departureTime: flight.departureTime,
           });
         }
-        const first = held.get(input.segments[0].flightId)!;
+        const first = requireHold(held, input.segments[0].flightId);
         // Create the main booking record
         // For multi-city, we use the first segment's flight as the primary flightId
         const bookingResult = await tx.insert(bookings).values({
@@ -424,8 +445,8 @@ export async function createMultiCityBooking(
             segmentOrder: i + 1,
             segmentAmount: segmentAmounts[i],
             flightId: segment.flightId,
-            departureDate: held.get(segment.flightId)!.departureTime,
-            inventoryLockId: held.get(segment.flightId)!.lockId,
+            departureDate: requireHold(held, segment.flightId).departureTime,
+            inventoryLockId: requireHold(held, segment.flightId).lockId,
             status: "pending",
           });
 

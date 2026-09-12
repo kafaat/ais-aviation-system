@@ -18,7 +18,8 @@ const candidates = await db
   .where(isNotNull(bookings.stripePaymentIntentId));
 const report = [];
 for (const booking of candidates) {
-  const id = booking.stripePaymentIntentId!;
+  const id = booking.stripePaymentIntentId;
+  if (!id) continue;
   const payment = await stripe.paymentIntents.retrieve(id, {
     expand: ["latest_charge"],
   });

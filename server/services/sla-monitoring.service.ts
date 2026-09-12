@@ -680,9 +680,23 @@ export function checkSLACompliance(service: string): SLAComplianceResult[] {
     let currentValue: number;
 
     switch (target.metricType) {
-      case "uptime":
-        currentValue = calculateUptime(service, dateRange)!;
+      case "uptime": {
+        const uptime = calculateUptime(service, dateRange);
+        if (uptime == null) {
+          results.push({
+            serviceName: service,
+            metricType: target.metricType,
+            targetValue: target.targetValue,
+            currentValue: null,
+            isCompliant: null,
+            margin: null,
+            severity: null,
+          });
+          continue;
+        }
+        currentValue = uptime;
         break;
+      }
       case "response_time": {
         const rtStats = calculateResponseTime(service, dateRange);
         currentValue = rtStats.avg;
@@ -751,10 +765,11 @@ export function getSystemHealth(): SystemHealthSummary {
   const services = slaStore.getServiceNames().map(getServiceStatus);
   const incomplete =
     !services.length || services.some(s => s.status === "unknown");
+  const uptimes = services.flatMap(s => (s.uptime == null ? [] : [s.uptime]));
   const uptimeAverage =
-    incomplete || services.some(s => s.uptime == null)
+    incomplete || uptimes.length !== services.length
       ? null
-      : services.reduce((sum, s) => sum + s.uptime!, 0) / services.length;
+      : uptimes.reduce((sum, u) => sum + u, 0) / services.length;
   const slaCompliance = incomplete
     ? null
     : (services.filter(s => s.slaCompliant).length / services.length) * 100;

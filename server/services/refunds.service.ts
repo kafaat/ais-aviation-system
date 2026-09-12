@@ -232,9 +232,8 @@ export async function createRefund(
       });
     }
 
-    const refundsAfterOperation = await listActiveRefunds(
-      booking.stripePaymentIntentId
-    );
+    const paymentIntentId = booking.stripePaymentIntentId;
+    const refundsAfterOperation = await listActiveRefunds(paymentIntentId);
     const cumulativeRefundedAmount = sumRefundAmounts(refundsAfterOperation);
 
     if (refund.status === "succeeded") {
@@ -244,7 +243,7 @@ export async function createRefund(
       const charge = await stripe.charges.retrieve(chargeId);
       await database.transaction(tx =>
         settleVerifiedRefund(tx, {
-          paymentIntentId: booking.stripePaymentIntentId!,
+          paymentIntentId,
           chargeId,
           amount: charge.amount,
           amountRefunded: charge.amount_refunded,

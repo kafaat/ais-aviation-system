@@ -105,9 +105,7 @@ export function summarizeRouteActivity(
       const leg = itinerary.find(s => s.flightId === flight.id);
       if (itinerary.length ? !leg : booking.flightId !== flight.id) continue;
       route.bookedSeats += booking.numberOfPassengers;
-      const amount = itinerary.length
-        ? leg!.segmentAmount
-        : booking.totalAmount;
+      const amount = leg ? leg.segmentAmount : booking.totalAmount;
       route.revenue =
         route.revenue == null || amount == null ? null : route.revenue + amount;
     }

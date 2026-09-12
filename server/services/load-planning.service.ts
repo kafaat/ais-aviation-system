@@ -327,7 +327,7 @@ async function saveStoredPlan(flightId: number, stored: StoredLoadPlan) {
           .set({
             status: "finalized",
             finalizedBy: stored.plan.finalizedBy,
-            finalizedAt: new Date(stored.plan.finalizedAt!),
+            finalizedAt: new Date(stored.plan.finalizedAt ?? Date.now()),
           })
           .where(eq(loadPlans.id, summary.id));
     }

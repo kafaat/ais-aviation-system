@@ -597,7 +597,8 @@ export async function settleVerifiedRefund(
     description: "Verified refund delta",
   });
   if (receipt.kind === "wallet_topup") {
-    const wallet = ownerWallet!;
+    const wallet = ownerWallet;
+    if (!wallet) throw new Error("Refund wallet missing");
     const balance = wallet.balance - delta;
     await tx
       .update(wallets)
@@ -617,7 +618,8 @@ export async function settleVerifiedRefund(
     receipt.kind !== "modification" &&
     receipt.settlementStatus === "applied"
   ) {
-    const booking = ownerBooking!;
+    const booking = ownerBooking;
+    if (!booking) throw new Error("Refund booking missing");
     const receipts = await tx
       .select()
       .from(paymentReceipts)
