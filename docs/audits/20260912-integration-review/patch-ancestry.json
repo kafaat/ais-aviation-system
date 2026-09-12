@@ -1,0 +1,102 @@
+{
+  "main": "3a140729b7ff68ab8bf917c8031b09a2af5383d2",
+  "count": 12,
+  "checks": [
+    {
+      "sequence": 1,
+      "originalBundleCommit": "d4659f67f8354b5b38fccdd97af3541cb54eef1a",
+      "mergedCommit": "9903f65a11f1a8a49d95d7a740396972eddad525",
+      "subject": "fix(finance): separate invoices from posted collections and refunds",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 2,
+      "originalBundleCommit": "70c62e826ad1724142af97db8e2dbea6f2c14856",
+      "mergedCommit": "169c4714ed40ea553339041642882c68ff5b42da",
+      "subject": "fix(irops): persist recovery plans and require execution evidence",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 3,
+      "originalBundleCommit": "9f6c392fed76d770454fe11a6b3b140e09e7647b",
+      "mergedCommit": "8834541cbddcb3f9742dc8a4b01f29c3d15ace40",
+      "subject": "feat(retail): bind bookings and NDC offers to persisted fare snapshots",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 4,
+      "originalBundleCommit": "fdf9e95fa9f25fe1dd197ed6f27d858f838f5fd4",
+      "mergedCommit": "ec13a844cc3d68fb4d1ffb2067d0d0abea5eaa2c",
+      "subject": "fix(agents): bind human price approvals to atomic execution receipts",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 5,
+      "originalBundleCommit": "a1009e01d56a4f31547dcdcd5b26349e7a0fac6a",
+      "mergedCommit": "406a270c1000d0bcbb9bc37b6099899153619d9f",
+      "subject": "feat(operations): ingest signed flight events and report observed performance",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 6,
+      "originalBundleCommit": "abaedd9401d368c60fc99729d1e516993cb0a0f7",
+      "mergedCommit": "b9b5e6f7b455dcd5d009a0b9aade9a66de31a433",
+      "subject": "fix(forecasting): evaluate temporal baselines and preserve unknown accuracy",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 7,
+      "originalBundleCommit": "168218b74bc9452d85af6c102838386d158abaf3",
+      "mergedCommit": "32268225267eff83791f8777afe4732ad43cb66e",
+      "subject": "feat(orders): settle paid itinerary exchanges and original-payer refunds",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 8,
+      "originalBundleCommit": "642718f60eadfbec3aa2976465f663620f097442",
+      "mergedCommit": "1f7743f35a16e6aa778b121c9bb5d35d6d5c6945",
+      "subject": "feat(baggage): persist verified custody chains across journey legs",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 9,
+      "originalBundleCommit": "64a0b57f4afc18ac40b6f19b77c49a6e2142dd62",
+      "mergedCommit": "3ba1cada890a133a14f85b0cb4910d7c36981193",
+      "subject": "feat(recovery): apply operator crew rules and approved inventory recovery",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 10,
+      "originalBundleCommit": "aefc60e24906a03d3a761c5e28c80a38001bc5d3",
+      "mergedCommit": "532a503731361ec84621acf83e18c61a36bed266",
+      "subject": "feat(economics): consume closed cost snapshots and maintenance-backed rotations",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 11,
+      "originalBundleCommit": "527927fd868aa403c952af0bf5957f28f2bbd7be",
+      "mergedCommit": "977c3598b84a87a10c53e3a7caefbf9f4be730f1",
+      "subject": "feat(retail): govern premium discounts and measure persistent experiment cohorts",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    },
+    {
+      "sequence": 12,
+      "originalBundleCommit": "d814f5fbf2dc4387bc164ac0c948e0dee1f6166a",
+      "mergedCommit": "b1ce178ceae15f83ccc930bd64fb3044e68307cb",
+      "subject": "feat(travel): source emissions and traveler rules and enforce document clearance",
+      "identicalTree": true,
+      "ancestorOfReviewedMain": true
+    }
+  ]
+}
