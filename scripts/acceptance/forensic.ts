@@ -202,7 +202,7 @@ export async function verifyForensicWorkflows(
   );
   await check(
     "idempotency claim and business write share rollback and serialize concurrent retries",
-    () => {
+    async () => {
       const command = {
         scope: "ci.command",
         key: "stable",
