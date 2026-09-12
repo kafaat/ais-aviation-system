@@ -25,6 +25,8 @@ const sourceSchema = z.object({
   capabilities: z.array(z.string()),
   secretEnv: z.string().regex(/^[A-Z][A-Z0-9_]+$/),
   validUntil: z.iso.datetime(),
+  deviceIds: z.array(z.string()).optional(),
+  airportIds: z.array(z.number().int().positive()).optional(),
 });
 export type AviationSource = z.infer<typeof sourceSchema>;
 /** No credentials or source registration are accepted from the ingestion request. */

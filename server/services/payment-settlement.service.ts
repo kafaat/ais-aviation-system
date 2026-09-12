@@ -1,3 +1,4 @@
+import { BaggageCustodyConflict } from "./baggage-custody.service";
 import {
   applyPaidOrderModification,
   OrderServicingUnavailable,
@@ -282,6 +283,7 @@ export async function settleVerifiedPayment(
         if (
           !(
             error instanceof OrderServicingUnavailable ||
+            error instanceof BaggageCustodyConflict ||
             error instanceof InventoryUnavailableError
           )
         )

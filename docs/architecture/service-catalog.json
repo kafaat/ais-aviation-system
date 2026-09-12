@@ -234,6 +234,7 @@
       "accountableOwner": null,
       "consumers": [
         "server/routers/aviation-integrations.ts",
+        "server/services/baggage-custody.service.ts",
         "server/services/operational-events.service.ts"
       ],
       "dependencies": [
@@ -272,6 +273,36 @@
           "unitsTable"
         ],
         "writes": ["sessionsTable", "tagsTable", "unitsTable"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/baggage-custody.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/baggage-custody.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/routers/baggage.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/payment-settlement.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "aviationEvidence",
+          "baggageCustodyEvents",
+          "baggageItems",
+          "bookingSegments",
+          "bookings",
+          "flights"
+        ],
+        "writes": ["baggageCustodyEvents", "baggageItems", "baggageTracking"]
       },
       "replacement": null
     },
@@ -1997,6 +2028,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/baggage-custody.service.ts",
         "server/services/booking-invoice.service.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/idempotency-v2.service.ts",
@@ -2277,6 +2309,7 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/services/baggage-custody.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/order-servicing.service.ts",
@@ -3254,6 +3287,7 @@
       "consumers": [
         "server/_core/context.ts",
         "server/routers/tenants.ts",
+        "server/services/baggage-custody.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-invoice.service.ts",
         "server/services/bookings.service.ts",

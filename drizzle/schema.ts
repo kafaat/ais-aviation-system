@@ -5718,3 +5718,27 @@ export const orderServiceRefunds = mysqlTable(
     booking: index("order_refund_booking_idx").on(t.bookingId),
   })
 );
+
+export const baggageCustodyEvents = mysqlTable(
+  "baggage_custody_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    baggageId: int("baggageId").notNull(),
+    flightId: int("flightId").notNull(),
+    stage: mysqlEnum("stage", [
+      "acceptance",
+      "loading",
+      "transfer",
+      "arrival",
+    ]).notNull(),
+    evidenceId: int("evidenceId").notNull().unique(),
+    previousEvidenceId: int("previousEvidenceId"),
+    airportId: int("airportId").notNull(),
+    deviceId: varchar("deviceId", { length: 100 }).notNull(),
+    sourceId: varchar("sourceId", { length: 64 }).notNull(),
+    observedAt: timestamp("observedAt").notNull(),
+  },
+  t => ({
+    journey: index("baggage_custody_journey_idx").on(t.baggageId, t.observedAt),
+  })
+);

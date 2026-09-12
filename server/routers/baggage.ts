@@ -1,3 +1,4 @@
+import { getBaggageCustody } from "../services/baggage-custody.service";
 import { responseContracts } from "../contracts/baggage";
 import { z } from "zod";
 import {
@@ -32,7 +33,46 @@ const baggageStatusEnum = z.enum([
  * Baggage Router
  * Handles baggage registration, tracking, and management
  */
+const custodyStage = z.enum(["acceptance", "loading", "transfer", "arrival"]);
 export const baggageRouter = router({
+  custody: protectedProcedure
+    .input(z.object({ tagNumber: z.string().min(1).max(20) }))
+    .output(
+      z.object({
+        tagNumber: z.string(),
+        complete: z.boolean(),
+        verifiedPoints: z.number().int(),
+        requiredPoints: z.number().int(),
+        required: z.array(
+          z.object({
+            flightId: z.number().int(),
+            stage: custodyStage,
+            observed: z.boolean(),
+          })
+        ),
+        events: z.array(
+          z.object({
+            id: z.number().int(),
+            baggageId: z.number().int(),
+            flightId: z.number().int(),
+            stage: custodyStage,
+            evidenceId: z.number().int(),
+            previousEvidenceId: z.number().int().nullable(),
+            airportId: z.number().int(),
+            deviceId: z.string(),
+            sourceId: z.string(),
+            observedAt: z.date(),
+          })
+        ),
+      })
+    )
+    .query(({ input, ctx }) =>
+      getBaggageCustody(input.tagNumber, {
+        id: ctx.user.id,
+        role: ctx.user.role,
+        tenantId: ctx.tenantId,
+      })
+    ),
   /**
    * Track baggage by tag number (public - no auth required for passengers to track)
    */

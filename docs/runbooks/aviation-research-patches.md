@@ -62,3 +62,11 @@ Positive differences use a persisted Stripe checkout request and stable provider
 Owned quotes can be cancelled; active provider checkout must first be confirmed expired. New paid catalog services create entitlements. Ticket reissue/EMD and physical service fulfillment remain separate provider acceptance states (`awaiting_ticket_reissue` / `entitlement_created`). This series does not invent an airline ticketing acceptance receipt. Existing NDC unpaid exchange also consumes its linked canonical fare snapshot.
 
 Validation: TypeScript and 114 payment/servicing/refund tests passed, covering all-leg exchange, checkout replay, late collection review, no premature refund ledger entry, proportional original-payer allocation, preserved change fees and the existing modification UI's command retry.
+
+## 08 — Baggage custody across journey legs
+
+Signed `baggage_custody` events require capability `baggage` plus explicit `deviceIds` and `airportIds` in the source registry. Each payload binds tag, stage, airport, device and previousEvidenceId. Acceptance/loading/arrival and onward transfer must follow the actual booking segments and predecessor timestamp. Replaying a scan is harmless; unrelated flights, airports, devices and missing predecessors are rejected. Source evidence, custody chain and the existing tracking projection commit together.
+
+`baggage.custody` is owner/scoped-admin only. The tracker shows verified versus required journey points separately from ordinary status history. Missing scans stay incomplete; an accepted bag blocks itinerary exchange until its physical rerouting is reconciled. The local workflow follows handover evidence concepts; it does not assert Resolution 753 certification or activate a bag-drop device without partner acceptance.
+
+Validation: TypeScript and 14 custody/source/paid-servicing tests passed, including a six-point connecting journey, replay, failed projection rollback and access control. Hardware scanning and interline agreements remain external acceptance gates.

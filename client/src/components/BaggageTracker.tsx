@@ -1,3 +1,4 @@
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -48,6 +49,11 @@ export function BaggageTracker({
     }
   );
 
+  const { isAuthenticated } = useAuth();
+  const custody = trpc.baggage.custody.useQuery(
+    { tagNumber: searchTag },
+    { enabled: isAuthenticated && searchTag.length > 0 }
+  );
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (tagNumber.trim()) {

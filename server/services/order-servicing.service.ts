@@ -1,3 +1,4 @@
+import { assertBaggageNotInCustody } from "./baggage-custody.service";
 import { calculateModificationFee } from "./modification-fee";
 import { allocateProportional } from "./seat-economics.service";
 import { z } from "zod";
@@ -180,6 +181,7 @@ export async function quotePaidOrderService(
         let fareDifference = 0;
         const expiry = new Date(Date.now() + 10 * 60000);
         if (input.offerIds) {
+          await assertBaggageNotInCustody(tx, booking.id);
           const [active] = await tx
             .select()
             .from(bookingAncillaries)
@@ -418,6 +420,7 @@ export async function applyPaidOrderModification(
     throw unavailable("Servicing quote expired or booking changed");
   await assertTenantOperational(tx, booking.tenantId);
   if (plan.segments.length) {
+    await assertBaggageNotInCustody(tx, booking.id);
     const cabin = plan.segments[0].cabinClass;
     for (const id of [
       ...new Set([
