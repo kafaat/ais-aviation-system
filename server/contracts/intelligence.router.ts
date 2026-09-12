@@ -18,7 +18,7 @@ export const responseContracts = {
     operations: z.object({
       summary: z.string(),
       summaryAr: z.string(),
-      otp: outputNumber,
+      otp: outputNumber.nullable(),
       alerts: z.array(
         z.object({
           type: z.enum([
@@ -373,7 +373,11 @@ export const responseContracts = {
       flightId: outputNumber,
       flightNumber: z.string(),
       scheduledDeparture: z.date(),
-      predictedDelayMinutes: outputNumber,
+      predictedDelayMinutes: outputNumber.nullable(),
+      basis: z.enum(["observed", "partner_estimate", "unavailable"]),
+      evidenceId: outputNumber.nullable(),
+      sourceId: z.string().nullable(),
+      fresh: z.boolean(),
       confidence: outputNumber,
       factors: z.array(
         z.object({

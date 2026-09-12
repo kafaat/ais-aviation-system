@@ -32,3 +32,13 @@ Validation: TypeScript and 55 targeted offer, booking, payment-boundary and pric
 Unknown agent actions (including unapproved outbound notifications) are denied; only explicitly read-only actions are automatic. `aiPricing.approveOptimization` records a human approval of the exact recommendation, tenant, previous price and factors. `applyOptimization` consumes that approval, refuses expiry, tampering, a changed current price and changes above 30%, and commits the new price, recommendation state and execution receipt together. Execution retries return the original receipt. Approval expires after 30 minutes and recommendations older than one day require review. Decision overrides annotate history; they do not reverse financial or inventory effects.
 
 Validation: TypeScript and 14 governance tests passed, including tenant isolation, stale approval, payload changes and rollback if event persistence fails. Any additional mutating agent action needs its own bounded executor before it can be enabled.
+
+## 05 — Flight-instance operational evidence
+
+`aviationIntegrations.ingestOperations` accepts only signed, timestamped source events tied to an internal flight instance ID and matching tenant. Deployment config `AVIATION_SOURCE_REGISTRY` is a JSON array of `{sourceId, tenantId, capabilities, secretEnv, validUntil}`; the named environment secret must contain at least 32 characters. Use capability `operations`. Sign `HMAC-SHA256(secret, calculateRequestHash(envelope))` as lowercase hex. Transport timestamp tolerance is five minutes; a retry may refresh issuedAt, but reusing a source event ID with changed business content is rejected. No sample source or secret is enabled by default.
+
+Normalized kinds: departure_estimate, departure_actual, arrival_actual, tobt, tsat. Payload is `{time: ISO-8601 UTC}`. Source evidence and its outbox event commit together. Arrival/departure actual timestamps cannot be in the future; a stale estimate becomes unknown after 15 minutes. A newer estimate never overwrites an actual departure. Source adapters must map AIDX/A-CDM fields and flight identity into this explicit envelope; this is not a claim of protocol certification.
+
+The operations agent now reads source timestamps instead of invented hourly delays. Departure OTP uses unique observed flights with a 15-minute threshold. Missing observations, utilization and turnaround evidence remain unknown; completing a flight no longer means it was on time. Briefing text preserves the unknown state.
+
+Validation: TypeScript and four signed-ingestion tests passed (including replay, changed payload, foreign tenant, unavailable capability, atomic rollback and stale-data behavior).

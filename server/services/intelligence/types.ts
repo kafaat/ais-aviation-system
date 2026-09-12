@@ -183,7 +183,11 @@ export interface DelayPrediction {
   flightId: number;
   flightNumber: string;
   scheduledDeparture: Date;
-  predictedDelayMinutes: number;
+  predictedDelayMinutes: number | null;
+  basis: "observed" | "partner_estimate" | "unavailable";
+  evidenceId: number | null;
+  sourceId: string | null;
+  fresh: boolean;
   confidence: number;
   factors: DelayFactor[];
   recommendation: string;
@@ -204,13 +208,15 @@ export interface DisruptionForecast {
 }
 
 export interface OperationalHealth {
-  otp: number; // On-Time Performance percentage
-  completionRate: number;
-  averageDelay: number;
-  cancellationRate: number;
-  turnaroundEfficiency: number;
-  crewUtilization: number;
-  aircraftUtilization: number;
+  otp: number | null; // On-Time Performance percentage
+  completionRate: number | null;
+  averageDelay: number | null;
+  cancellationRate: number | null;
+  turnaroundEfficiency: number | null;
+  crewUtilization: number | null;
+  aircraftUtilization: number | null;
+  observedFlights: number;
+  coverage: number | null;
   alerts: OperationalAlert[];
 }
 
@@ -247,7 +253,7 @@ export interface IntelligenceBriefing {
   operations: {
     summary: string;
     summaryAr: string;
-    otp: number;
+    otp: number | null;
     alerts: OperationalAlert[];
   };
   fraud: {

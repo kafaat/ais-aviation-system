@@ -5643,3 +5643,31 @@ export const bookingCheckoutRequests = mysqlTable("booking_checkout_requests", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+/** Immutable signed source evidence; business projections remain in their own authorities. */
+export const aviationEvidence = mysqlTable(
+  "aviation_evidence",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    sourceId: varchar("sourceId", { length: 64 }).notNull(),
+    sourceEventId: varchar("sourceEventId", { length: 128 }).notNull(),
+    tenantId: int("tenantId"),
+    flightId: int("flightId"),
+    kind: varchar("kind", { length: 50 }).notNull(),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    digest: varchar("digest", { length: 64 }).notNull(),
+    observedAt: timestamp("observedAt").notNull(),
+    receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  },
+  t => ({
+    sourceEvent: uniqueIndex("aviation_source_event_unique").on(
+      t.sourceId,
+      t.sourceEventId
+    ),
+    flightKind: index("aviation_flight_kind_idx").on(
+      t.flightId,
+      t.kind,
+      t.observedAt
+    ),
+  })
+);
