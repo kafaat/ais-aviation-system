@@ -38,6 +38,40 @@ describe("CI workflow hardening", () => {
     expect(text).toContain("token: ${{ secrets.DEPLOYMENT_PAT }}");
   });
 
+  // The release bot's commit is the tip of main and the one commit no workflow
+  // runs against, because a GITHUB_TOKEN push starts no new run. It is only safe
+  // while it carries nothing but the version bump, so the proof must run before
+  // the push and must not become a separate optional step.
+  it("proves the release commit carries no code before pushing it to main", () => {
+    const text = readFileSync(join(workflowDir, "release.yml"), "utf8");
+    const verify = text.indexOf("Verify the release commit changes no code");
+    const push = text.indexOf("name: Push version bump");
+    expect(verify).toBeGreaterThan(-1);
+    expect(push).toBeGreaterThan(verify);
+    expect(text).toContain(
+      "git diff --name-only HEAD~1 HEAD | grep -vxE 'CHANGELOG\\.md|package\\.json'"
+    );
+    expect(text).toContain("jq -S 'del(.version)'");
+    // The bump must no longer be committed and pushed in one unguarded step.
+    expect(text).not.toMatch(
+      /git commit -m "chore\(release\)[^\n]*\n\s*git push/
+    );
+  });
+
+  // A bare `eslint .` exits 0 on any number of warnings, so the backlog grew
+  // unnoticed. CI must run the capped script, and the cap must be a real bound.
+  it("caps ESLint warnings in CI instead of accepting any number", () => {
+    const workflow = readFileSync(join(workflowDir, "ci-cd.yml"), "utf8");
+    expect(workflow).toContain("run: pnpm lint:ci");
+    expect(workflow).not.toMatch(/run:\s*pnpm lint\s*$/m);
+    const scripts = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8")
+    ).scripts as Record<string, string>;
+    const cap = /--max-warnings\s+(\d+)/.exec(scripts["lint:ci"] ?? "");
+    expect(cap).not.toBeNull();
+    expect(Number(cap?.[1])).toBeLessThan(Number.MAX_SAFE_INTEGER);
+  });
+
   it("does not allow literal fail-open jobs or high-severity audit bypasses", () => {
     const violations: string[] = [];
     for (const name of workflowFiles) {

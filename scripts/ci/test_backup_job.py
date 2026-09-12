@@ -84,6 +84,58 @@ class BackupJobTest(unittest.TestCase):
             with self.subTest(env=env), self.assertRaises(ValueError):
                 backup_job.build_job(env)
 
+    def valid(self, **overrides):
+        return backup_job.build_job({"BACKUP_PVC": "backup-pvc",
+                                     "BACKUP_CREDENTIAL_SECRET": "backup-secret",
+                                     "BACKUP_RUN_ID": "123-1", **overrides})
+
+    def test_dump_never_runs_as_root_or_with_extra_privileges(self):
+        pod = self.valid()["spec"]["template"]["spec"]
+        self.assertTrue(pod["securityContext"]["runAsNonRoot"])
+        self.assertNotEqual(pod["securityContext"]["runAsUser"], 0)
+        # fsGroup must match, or the non-root dump cannot write to the PVC.
+        self.assertEqual(pod["securityContext"]["fsGroup"],
+                         pod["securityContext"]["runAsUser"])
+        container = pod["containers"][0]["securityContext"]
+        self.assertFalse(container["allowPrivilegeEscalation"])
+        self.assertTrue(container["readOnlyRootFilesystem"])
+        self.assertEqual(container["capabilities"]["drop"], ["ALL"])
+
+    def test_read_only_root_still_offers_scratch_space(self):
+        pod = self.valid()["spec"]["template"]["spec"]
+        mounts = {m["mountPath"] for m in pod["containers"][0]["volumeMounts"]}
+        self.assertEqual(mounts, {"/backup", "/tmp"})
+        self.assertIn("emptyDir", next(v for v in pod["volumes"] if v["name"] == "tmp"))
+
+    def test_container_declares_resources(self):
+        resources = self.valid()["spec"]["template"]["spec"]["containers"][0]["resources"]
+        self.assertTrue(resources["requests"] and resources["limits"])
+
+    def test_deadline_is_operator_sizable_within_bounds(self):
+        self.assertEqual(self.valid()["spec"]["activeDeadlineSeconds"],
+                         backup_job.DEFAULT_DEADLINE_SECONDS)
+        self.assertEqual(
+            self.valid(BACKUP_DEADLINE_SECONDS="7200")["spec"]["activeDeadlineSeconds"], 7200)
+        # An unset workflow variable arrives as an empty string, which must mean
+        # the default rather than a failure.
+        self.assertEqual(
+            self.valid(BACKUP_DEADLINE_SECONDS="")["spec"]["activeDeadlineSeconds"],
+            backup_job.DEFAULT_DEADLINE_SECONDS)
+        # An unbounded or unparsable window would reintroduce a silent kill with
+        # no retry, so anything outside the reviewed range is refused outright.
+        for value in ("0", "60", "86400", "abc", "-600", "3600.5"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.valid(BACKUP_DEADLINE_SECONDS=value)
+
+    def test_image_reference_is_overridable_and_validated(self):
+        digest = "mysql@sha256:" + "a" * 64
+        self.assertEqual(
+            self.valid(BACKUP_IMAGE=digest)["spec"]["template"]["spec"]["containers"][0]["image"],
+            digest)
+        for value in ("mysql:8.0; rm -rf /", "MySQL:8.0", "mysql:8.0 --privileged", "-mysql:8.0"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.valid(BACKUP_IMAGE=value)
+
 
 if __name__ == "__main__":
     unittest.main()
