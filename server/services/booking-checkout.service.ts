@@ -411,10 +411,10 @@ export async function expireBookingCheckout(bookingId: number, userId: number) {
       .for("update");
     if (!claim?.sessionId)
       throw unavailable("Recover the unresolved checkout before expiring it");
-    return claim;
+    return { ...claim, sessionId: claim.sessionId };
   });
   if (claim.status === "expired") return { status: "expired" as const };
-  let session = await stripe.checkout.sessions.retrieve(claim.sessionId!);
+  let session = await stripe.checkout.sessions.retrieve(claim.sessionId);
   // Verify before mutating the provider session, even if a stored ID is corrupt.
   verifySession(claim, session);
   if (session.status === "open")

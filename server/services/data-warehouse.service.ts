@@ -735,7 +735,7 @@ export function generateETLManifest(
       fileSize: e.fileSize,
       dateRangeStart: e.dateRangeStart.toISOString(),
       dateRangeEnd: e.dateRangeEnd.toISOString(),
-      checksum: e.checksum!,
+      checksum: e.checksum ?? "",
     })),
     totalRecords,
     totalSize,
@@ -861,7 +861,10 @@ export async function createExportJob(
       })
       .where(eq(warehouseExports.id, exportRecord.id));
   }
-  return (await getExportJobById(exportRecord.id))!;
+  const job = await getExportJobById(exportRecord.id);
+  if (!job)
+    throw new Error(`Export job ${exportRecord.id} vanished after creation`);
+  return job;
 }
 
 /**

@@ -90,7 +90,7 @@ export const adminRouter = router({
         input.flightId,
         input.cabinClass,
         input.seats,
-        isAdmin(ctx.user.role) ? undefined : ctx.tenantId!
+        isAdmin(ctx.user.role) ? undefined : (ctx.tenantId ?? undefined)
       );
       if (!updated)
         throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });

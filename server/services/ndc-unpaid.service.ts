@@ -143,17 +143,37 @@ async function history(
   });
 }
 
+// The maps below are filled from the same segment list they are read back with,
+// but nothing enforced that. Report the itinerary problem instead of reading
+// undefined and failing further downstream.
+function requireFlight(
+  all: Map<number, typeof flights.$inferSelect>,
+  flightId: number
+) {
+  const flight = all.get(flightId);
+  if (!flight)
+    throw invoiceBlocked("Replacement itinerary references an unknown flight");
+  return flight;
+}
+
+function requireHold(held: Map<number, number>, flightId: number) {
+  const lockId = held.get(flightId);
+  if (lockId === undefined)
+    throw invoiceBlocked("Replacement itinerary lost an inventory hold");
+  return lockId;
+}
+
 async function replaceItinerary(
   tx: SettlementTx,
   context: Awaited<ReturnType<typeof lockOrder>>,
-  changes: ChangeOrderInput,
+  changes: ChangeOrderInput & { replacementOfferId: string },
   input: Command
 ) {
   const { booking, order } = context;
   const [offer] = await tx
     .select()
     .from(ndcOffers)
-    .where(eq(ndcOffers.offerId, changes.replacementOfferId!))
+    .where(eq(ndcOffers.offerId, changes.replacementOfferId))
     .for("update");
   const segments = storedJson<NdcSegment[]>(offer?.segments ?? null, []);
   if (
@@ -244,8 +264,9 @@ async function replaceItinerary(
     allFlights.set(id, flight);
   }
   for (const segment of segments) {
-    const flight = allFlights.get(segment.flightId)!;
+    const flight = allFlights.get(segment.flightId);
     if (
+      !flight ||
       !["scheduled", "delayed"].includes(flight.status) ||
       flight.departureTime <= new Date() ||
       flight.airlineId !== order.airlineId
@@ -264,7 +285,8 @@ async function replaceItinerary(
       );
   }
   for (const leg of old) {
-    if (allFlights.get(leg.flightId)!.departureTime <= new Date())
+    const legFlight = allFlights.get(leg.flightId);
+    if (!legFlight || legFlight.departureTime <= new Date())
       throw invoiceBlocked(
         "A historical departed itinerary requires reconciliation"
       );
@@ -328,9 +350,9 @@ async function replaceItinerary(
       bookingId: booking.id,
       segmentOrder: i + 1,
       flightId: s.flightId,
-      inventoryLockId: held.get(s.flightId)!,
+      inventoryLockId: requireHold(held, s.flightId),
       segmentAmount: allocations[i],
-      departureDate: allFlights.get(s.flightId)!.departureTime,
+      departureDate: requireFlight(allFlights, s.flightId).departureTime,
       status: "pending" as const,
     }))
   );
@@ -338,7 +360,7 @@ async function replaceItinerary(
     .update(bookings)
     .set({
       flightId: segments[0].flightId,
-      inventoryLockId: held.get(segments[0].flightId)!,
+      inventoryLockId: requireHold(held, segments[0].flightId),
       cabinClass: offer.cabinClass as "economy" | "business",
     })
     .where(eq(bookings.id, booking.id));
@@ -403,8 +425,14 @@ export async function changeUnpaidOrder(
     request: input,
     run: async tx => {
       const context = await lockOrder(tx, input);
-      if (changes.replacementOfferId)
-        await replaceItinerary(tx, context, changes, input);
+      const replacementOfferId = changes.replacementOfferId;
+      if (replacementOfferId)
+        await replaceItinerary(
+          tx,
+          context,
+          { ...changes, replacementOfferId },
+          input
+        );
       const updatedIndices = new Set<number>();
       for (const patch of changes.passengerUpdates ?? []) {
         const index = passengerIndex(patch, context.canonical);

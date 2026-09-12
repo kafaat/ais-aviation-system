@@ -217,23 +217,21 @@ describe("paid order servicing", () => {
   });
   it("allocates a fare reduction to both original split payers", async () => {
     fixture.rows("flights")[1].destinationId = 3;
-    fixture
-      .rows("payment_receipts")
-      .splice(
-        0,
-        1,
-        ...[3000, 7000].map((amount, i) => ({
-          paymentIntentId: `pi_split_${i}`,
-          bookingId: 7,
-          userId: i + 1,
-          targetId: i + 1,
-          kind: "split_payment",
-          amount,
-          refundedAmount: 0,
-          currency: "SAR",
-          settlementStatus: "applied",
-        }))
-      );
+    fixture.rows("payment_receipts").splice(
+      0,
+      1,
+      ...[3000, 7000].map((amount, i) => ({
+        paymentIntentId: `pi_split_${i}`,
+        bookingId: 7,
+        userId: i + 1,
+        targetId: i + 1,
+        kind: "split_payment",
+        amount,
+        refundedAmount: 0,
+        currency: "SAR",
+        settlementStatus: "applied",
+      }))
+    );
     const a = await offer(12);
     const quote = await quotePaidOrderService(
       { bookingId: 7, offerIds: [a.id], idempotencyKey: "split-refund-1" },

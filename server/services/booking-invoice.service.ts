@@ -91,6 +91,9 @@ export async function setInvoiceTotal(
     .where(eq(bookingSegments.bookingId, booking.id))
     .orderBy(asc(bookingSegments.segmentOrder))
     .for("update");
+  const segmentAmounts = legs.flatMap(l =>
+    l.segmentAmount == null ? [] : [l.segmentAmount]
+  );
   if (
     legs.length &&
     (legs.some(
@@ -100,14 +103,11 @@ export async function setInvoiceTotal(
         l.segmentAmount == null ||
         l.segmentAmount < 0
     ) ||
-      legs.reduce((sum, l) => sum + l.segmentAmount!, 0) !==
-        booking.totalAmount)
+      segmentAmounts.length !== legs.length ||
+      segmentAmounts.reduce((sum, a) => sum + a, 0) !== booking.totalAmount)
   )
     throw invoiceBlocked("Segment invoice allocation requires reconciliation");
-  const allocation = allocateProportional(
-    totalAmount,
-    legs.map(l => l.segmentAmount!)
-  );
+  const allocation = allocateProportional(totalAmount, segmentAmounts);
   for (const [i, leg] of legs.entries())
     await tx
       .update(bookingSegments)

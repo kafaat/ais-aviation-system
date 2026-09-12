@@ -207,14 +207,21 @@ async function quoteFor(tx: SettlementTx, booking: Booking) {
     active.map(s => ({ splitId: s.id, amount: s.amount })),
     fee.refundAmount
   );
+  const bySplitId = new Map(active.map(s => [s.id, s]));
   const items = allocated.map(a => {
-    const s = active.find(s => s.id === a.splitId)!;
+    const s = bySplitId.get(a.splitId);
+    if (!s)
+      throw unavailable("Refund allocation refers to an inactive payer share");
+    if (!s.stripePaymentIntentId)
+      throw unavailable(
+        `Payer share ${s.id} has no settled payment to refund against`
+      );
     return {
       splitId: s.id,
       payerName: s.payerName,
       paidAmount: s.amount,
       refundAmount: a.refundAmount,
-      paymentIntentId: s.stripePaymentIntentId!,
+      paymentIntentId: s.stripePaymentIntentId,
     };
   });
   const quoteHash = calculateRequestHash({
@@ -527,7 +534,11 @@ export async function recordVerifiedSplitRefund(
   if (!hint) return false;
   const booking = await lockBooking(tx, hint.bookingId);
   await lockPlan(tx, booking.id);
-  const item = (await lockItems(tx, booking.id)).find(i => i.id === hint.id)!;
+  const item = (await lockItems(tx, booking.id)).find(i => i.id === hint.id);
+  if (!item)
+    throw new Error(
+      `Refund item ${hint.id} vanished from booking ${booking.id} while settling`
+    );
   if (!matches(item, refund)) {
     await requireReview(tx, booking, item, "provider_refund_conflict");
     return true;
@@ -563,9 +574,14 @@ export async function recordVerifiedSplitRefund(
     // Reservation admitted exactly one untouched receipt per payer. This verified
     // individual refund is that receipt's confirmed cumulative refund; aggregate
     // charge events are deferred for these planned references (see settlement).
+    const chargeId = reference(refund.charge);
+    if (!chargeId)
+      throw new Error(
+        `Provider reported refund ${refund.id} as succeeded without a charge`
+      );
     await settleVerifiedRefund(tx, {
       paymentIntentId,
-      chargeId: reference(refund.charge)!,
+      chargeId,
       amount: item.collectedAmount,
       amountRefunded: item.refundAmount,
       currency: refund.currency,
@@ -633,6 +649,16 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
     return { ...item, requestedAt };
   });
   if (!item) return;
+  const lockCurrent = async (tx: SettlementTx) => {
+    const current = (await lockItems(tx, bookingId)).find(
+      i => i.id === item.id
+    );
+    if (!current)
+      throw new Error(
+        `Refund item ${item.id} vanished from booking ${bookingId} while reconciling`
+      );
+    return current;
+  };
   try {
     let refund: Stripe.Refund | undefined;
     if (item.refundId) {
@@ -660,9 +686,7 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
       if (conflict) {
         await db.transaction(async tx => {
           const booking = await lockBooking(tx, bookingId);
-          const current = (await lockItems(tx, bookingId)).find(
-            i => i.id === item.id
-          )!;
+          const current = await lockCurrent(tx);
           await requireReview(tx, booking, current, "provider_refund_conflict");
         });
         return;
@@ -671,9 +695,7 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
         if (Date.now() - item.requestedAt.getTime() >= 23 * 3600_000) {
           await db.transaction(async tx => {
             const booking = await lockBooking(tx, bookingId);
-            const current = (await lockItems(tx, bookingId)).find(
-              i => i.id === item.id
-            )!;
+            const current = await lockCurrent(tx);
             if (!["succeeded", "pending", "failed"].includes(current.status))
               await requireReview(
                 tx,
@@ -690,12 +712,15 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
         });
       }
     }
+    const verified = refund;
+    if (!verified)
+      throw new Error(
+        `Reconciliation reached settlement without a provider refund for item ${item.id}`
+      );
     await db.transaction(async tx => {
       const booking = await lockBooking(tx, bookingId);
-      const current = (await lockItems(tx, bookingId)).find(
-        i => i.id === item.id
-      )!;
-      if (!matches(current, refund!)) {
+      const current = await lockCurrent(tx);
+      if (!matches(current, verified)) {
         await requireReview(tx, booking, current, "provider_refund_conflict");
         return;
       }
@@ -710,8 +735,8 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
           .where(eq(bookingRefundItems.id, item.id));
       await recordVerifiedSplitRefund(
         tx,
-        refund!,
-        `split-refund-reconcile:${refund!.id}`
+        verified,
+        `split-refund-reconcile:${verified.id}`
       );
     });
   } catch {
@@ -719,9 +744,7 @@ async function processItem(bookingId: number, splitId: number, actor?: Actor) {
     // provider response followed by a local transaction failure.
     await db.transaction(async tx => {
       await lockBooking(tx, bookingId);
-      const current = (await lockItems(tx, bookingId)).find(
-        i => i.id === item.id
-      )!;
+      const current = await lockCurrent(tx);
       if (["queued", "requesting", "pending"].includes(current.status))
         await tx
           .update(bookingRefundItems)
@@ -790,8 +813,9 @@ export async function listSplitRefundCancellations(
     .orderBy(desc(bookingRefundPlans.bookingId))
     .limit(21);
   const items = plans.slice(0, 20);
+  const last = items.at(-1);
   return {
     items,
-    nextCursor: plans.length > 20 ? items.at(-1)!.bookingId : null,
+    nextCursor: plans.length > 20 && last ? last.bookingId : null,
   };
 }
