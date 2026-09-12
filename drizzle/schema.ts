@@ -5781,3 +5781,45 @@ export const aircraftRotations = mysqlTable(
     tailIdx: index("aircraft_rotation_tail_idx").on(t.airlineId, t.tailNumber),
   })
 );
+
+export const premiumPolicies = mysqlTable(
+  "premium_policies",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    flightId: int("flightId").notNull(),
+    tenantId: int("tenantId"),
+    evidenceId: int("evidenceId").notNull(),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    approvedBy: int("approvedBy").notNull(),
+    status: mysqlEnum("status", ["enabled", "paused"])
+      .default("enabled")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    evidenceIdx: uniqueIndex("premium_policy_evidence_idx").on(t.evidenceId),
+    flightIdx: index("premium_policy_flight_idx").on(t.flightId, t.status),
+  })
+);
+export const premiumAssignments = mysqlTable(
+  "premium_assignments",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    policyId: varchar("policyId", { length: 36 }).notNull(),
+    userId: int("userId").notNull(),
+    variant: mysqlEnum("variant", ["control", "treatment"]).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    visitorIdx: uniqueIndex("premium_assignment_visitor_idx").on(
+      t.policyId,
+      t.userId
+    ),
+  })
+);
+export const premiumConversions = mysqlTable("premium_conversions", {
+  bookingId: int("bookingId").primaryKey(),
+  assignmentId: varchar("assignmentId", { length: 36 }).notNull(),
+  offerId: varchar("offerId", { length: 36 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});

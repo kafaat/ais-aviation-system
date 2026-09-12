@@ -1,3 +1,7 @@
+import {
+  premiumAdjustment,
+  recordPremiumConversion,
+} from "./premium-experiment.service";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -10,6 +14,14 @@ import type { SettlementTx } from "./booking-settlement.service";
 
 const passengerType = z.enum(["adult", "child", "infant"]);
 const payloadSchema = z.object({
+  experiment: z
+    .object({
+      policyId: z.string().uuid(),
+      assignmentId: z.string().uuid(),
+      variant: z.enum(["control", "treatment"]),
+      protectedSeats: z.number().int().nonnegative(),
+    })
+    .optional(),
   version: z.literal(1),
   currency: z.literal("SAR"),
   amountUnit: z.literal("minor"),
@@ -137,10 +149,47 @@ export async function createRetailOffer(
     consumedBookingId: null,
     createdAt: now,
   };
-  const db = transaction ?? (await getDb());
-  if (!db) throw new Error("Offer storage unavailable");
-  await db.insert(retailOffers).values(offer);
-  return offer;
+  const db = await getDb();
+  if (!db && !transaction) throw new Error("Offer storage unavailable");
+  const persist = async (tx: SettlementTx) => {
+    if (
+      input.channel === "direct" &&
+      input.cabinClass === "business" &&
+      input.userId
+    ) {
+      const adjustment = await premiumAdjustment(
+        tx,
+        flight.id,
+        input.userId,
+        types.length,
+        offer.totalAmount
+      );
+      if (adjustment) {
+        offer.payload = {
+          ...payload,
+          experiment: adjustment.experiment,
+          policy: {
+            ...policy,
+            name: `premium:${adjustment.experiment.policyId}:${adjustment.experiment.variant}`,
+            fareMultiplier: offer.totalAmount
+              ? adjustment.totalAmount / offer.totalAmount
+              : 1,
+          },
+          baseAmount: adjustment.totalAmount,
+          taxesAndFees: 0,
+          totalAmount: adjustment.totalAmount,
+        };
+        offer.totalAmount = adjustment.totalAmount;
+        offer.expiresAt = new Date(
+          Math.min(offer.expiresAt.getTime(), adjustment.expiresAt.getTime())
+        );
+        offer.digest = offerDigest(offer.payload);
+      }
+    }
+    await tx.insert(retailOffers).values(offer);
+    return offer;
+  };
+  return transaction ? persist(transaction) : db!.transaction(persist);
 }
 export function validateRetailOffer(
   offer: RetailOffer,
@@ -205,6 +254,7 @@ export async function consumeRetailOffer(
   offer: RetailOffer,
   bookingId: number
 ) {
+  await recordPremiumConversion(tx, offer, bookingId);
   await tx
     .update(retailOffers)
     .set({ consumedBookingId: bookingId })

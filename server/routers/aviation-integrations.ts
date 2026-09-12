@@ -1,4 +1,9 @@
 import {
+  acceptPremiumPolicy,
+  pausePremiumPolicy,
+  premiumResults,
+} from "../services/premium-experiment.service";
+import {
   ingestFlightCost,
   getFlightEconomics,
 } from "../services/flight-economics-evidence.service";
@@ -24,6 +29,53 @@ export const evidenceReceipt = z.object({
   duplicate: z.boolean(),
 });
 export const aviationIntegrationsRouter = router({
+  acceptPremiumPolicy: adminProcedure
+    .input(signedEvidenceInput)
+    .output(z.object({ id: z.string().uuid(), evidenceId: z.number() }))
+    .mutation(({ input, ctx }) =>
+      acceptPremiumPolicy(
+        input.envelope,
+        input.signature,
+        ctx.user.id,
+        ctx.tenantId
+      )
+    ),
+  pausePremiumPolicy: adminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .output(z.object({ receiptId: z.string() }))
+    .mutation(({ input, ctx }) =>
+      pausePremiumPolicy(input.id, ctx.user.id, ctx.tenantId)
+    ),
+  premiumResults: adminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .output(
+      z.object({
+        id: z.string(),
+        currency: z.literal("SAR"),
+        asOf: z.date(),
+        metric: z.literal("lifecycle_net_collections_per_randomized_user"),
+        arms: z.array(
+          z.object({
+            variant: z.enum(["control", "treatment"]),
+            randomizedUsers: z.number(),
+            paidUsers: z.number(),
+            netCollectedMinor: z.number(),
+            netCollectedPerUserMinor: z.number().nullable(),
+          })
+        ),
+        unclassifiedEntries: z.number(),
+        effect: z
+          .object({
+            difference: z.number(),
+            lower95: z.number(),
+            upper95: z.number(),
+            method: z.literal("normal_approximation_per_randomized_user"),
+          })
+          .nullable(),
+        status: z.enum(["analysis_window_open", "observing"]),
+      })
+    )
+    .query(({ input, ctx }) => premiumResults(input.id, ctx.tenantId)),
   ingestFlightCost: publicProcedure
     .input(signedEvidenceInput)
     .output(evidenceReceipt)
