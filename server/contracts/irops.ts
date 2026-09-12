@@ -201,6 +201,8 @@ export const responseContracts = {
   triggerAutoProtection: z.object({
     actionsCreated: outputNumber,
     passengersProtected: outputNumber,
+    passengersAffected: outputNumber,
+    passengersPlanned: outputNumber,
     actions: z.array(
       z.object({
         id: outputNumber,

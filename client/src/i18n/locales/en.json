@@ -2880,7 +2880,7 @@
     "activeEvents": "{{count}} Active Event",
     "activeEventsPlural": "{{count}} Active Events",
     "refresh": "Refresh",
-    "autoProtect": "Auto-Protect",
+    "autoProtect": "Plan passenger recovery",
     "viewPassengers": "View Passengers",
     "escalate": "Escalate",
     "resolve": "Resolve",
@@ -2937,10 +2937,10 @@
     "analyzingConnections": "Analyzing connection risks...",
     "loadingMetrics": "Loading recovery metrics...",
     "unableToLoadMetrics": "Unable to load recovery metrics.",
-    "protectionTriggered": "Auto-protection triggered: {{actions}} actions for {{passengers}} passengers",
+    "protectionTriggered": "{{actions}} actions created; {{passengers}} passengers have a plan awaiting confirmed execution.",
     "escalatedTo": "Disruption escalated to {{level}}",
     "eventResolved": "Event resolved successfully",
-    "notificationsSent": "Notifications sent: {{sent}} succeeded, {{failed}} failed"
+    "notificationsSent": "In-app notifications saved for {{count}} users"
   },
   "bspReporting": {
     "title": "BSP Reporting",

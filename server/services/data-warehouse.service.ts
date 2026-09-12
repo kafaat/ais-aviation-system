@@ -448,15 +448,44 @@ export async function exportFlightsData(
 export async function exportRevenueData(
   options: ExportOptions
 ): Promise<ExportResult> {
-  if (options.incremental) throw new TRPCError({ code: "BAD_REQUEST", message: "Financial exports require a complete posting period; incremental invoice timestamps are not settlement cursors" });
+  if (options.incremental)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Financial exports require a complete posting period; incremental invoice timestamps are not settlement cursors",
+    });
   const rows = await getFinancialDays(options.dateRange);
-  const headers = ["date", "currency", "amountUnit", "billedAmount", "collectedAmount", "refundedAmount", "netCollectedAmount", "earnedRevenue", "bookings", "unreconciledBookings", "unclassifiedEntries"];
+  const headers = [
+    "date",
+    "currency",
+    "amountUnit",
+    "billedAmount",
+    "collectedAmount",
+    "refundedAmount",
+    "netCollectedAmount",
+    "earnedRevenue",
+    "bookings",
+    "unreconciledBookings",
+    "unclassifiedEntries",
+  ];
   const data = formatExportData(rows, options.format, headers, row => [
-    row.date, row.currency, row.amountUnit, String(row.billedAmount), String(row.collectedAmount),
-    String(row.refundedAmount), String(row.netCollectedAmount), "", String(row.bookings),
-    String(row.unreconciledBookings), String(row.unclassifiedEntries),
+    row.date,
+    row.currency,
+    row.amountUnit,
+    String(row.billedAmount),
+    String(row.collectedAmount),
+    String(row.refundedAmount),
+    String(row.netCollectedAmount),
+    "",
+    String(row.bookings),
+    String(row.unreconciledBookings),
+    String(row.unclassifiedEntries),
   ]);
-  return { data, recordCount: rows.length, fileSize: Buffer.byteLength(data, "utf-8") };
+  return {
+    data,
+    recordCount: rows.length,
+    fileSize: Buffer.byteLength(data, "utf-8"),
+  };
 }
 
 // ============================================================================

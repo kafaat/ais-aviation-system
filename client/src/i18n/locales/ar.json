@@ -2880,7 +2880,7 @@
     "activeEvents": "{{count}} حدث نشط",
     "activeEventsPlural": "{{count}} أحداث نشطة",
     "refresh": "تحديث",
-    "autoProtect": "حماية تلقائية",
+    "autoProtect": "تخطيط استعادة الركاب",
     "viewPassengers": "عرض المسافرين",
     "escalate": "تصعيد",
     "resolve": "حل",
@@ -2937,10 +2937,10 @@
     "analyzingConnections": "جاري تحليل مخاطر الرحلات المتصلة...",
     "loadingMetrics": "جاري تحميل مقاييس الاسترداد...",
     "unableToLoadMetrics": "تعذر تحميل مقاييس الاسترداد.",
-    "protectionTriggered": "تم تفعيل الحماية التلقائية: {{actions}} إجراء لـ {{passengers}} مسافر",
+    "protectionTriggered": "أُنشئت {{actions}} إجراءات؛ خطة {{passengers}} مسافراً تنتظر تأكيد التنفيذ.",
     "escalatedTo": "تم تصعيد الاضطراب إلى {{level}}",
     "eventResolved": "تم حل الحدث بنجاح",
-    "notificationsSent": "تم إرسال الإشعارات: {{sent}} نجحت، {{failed}} فشلت"
+    "notificationsSent": "حُفظت إشعارات داخل التطبيق لـ {{count}} مستخدمين"
   },
   "bspReporting": {
     "title": "تقارير BSP",

@@ -12,3 +12,11 @@ Owner: `financial-reporting.service`; consumers: Analytics KPI/daily collections
 Paid/refunded legacy bookings without a booking charge, and unclassified adjustment entries, appear as reconciliation gaps. Reconcile them with provider and accounting evidence; no automatic historical ledger entries are fabricated.
 
 Validation: financial read tests cover split payers, partial refunds, posting dates, an unknown earned amount, invalid amounts, export parity and storage failures. Final validation results are recorded with the patch bundle.
+
+## 02 — Durable disruption recovery
+
+Migration `0021_durable_irops` must precede this code. Disruption identity/status remain owned by `flight_disruptions`; IROPS adds durable enrichment and request-keyed actions, with outbox events in the same transaction. Repeating protection planning under the event lock reuses actions. The dashboard and metrics read the database and count each disruption once. Passenger recovery counts unique confirmed re-accommodations, not hotel tasks or proposed actions. Closing an event refuses unconfirmed work; it never marks work completed.
+
+Mass notification stores an idempotent in-app notice and its receipt atomically. This confirms an inbox record, not email delivery. Re-accommodation completion is internal to the booking authority; no API accepts an arbitrary `completed` flag. Partner hotel/voucher/compensation execution still requires the appropriate provider authority and acceptance evidence. Existing legacy disruption rows remain readable without invented completion evidence. The new action store contains booking/passenger IDs rather than copied names or email addresses.
+
+Local validation at this stage: TypeScript check passed; 14 financial/IROPS tests passed. Database restart/concurrency acceptance follows in the final acceptance script.

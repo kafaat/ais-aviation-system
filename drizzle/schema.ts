@@ -3610,6 +3610,23 @@ export const flightDisruptions = mysqlTable(
     reason: varchar("reason", { length: 500 }).notNull(),
     severity: mysqlEnum("severity", ["minor", "moderate", "severe"]).notNull(),
 
+    // IROPS enrichment shares the canonical disruption identity and status.
+    iropsType: mysqlEnum("iropsType", [
+      "delay",
+      "cancellation",
+      "diversion",
+      "equipment_change",
+    ]),
+    iropsSeverity: mysqlEnum("iropsSeverity", [
+      "low",
+      "medium",
+      "high",
+      "critical",
+    ]),
+    escalationLevel: int("escalationLevel").default(1).notNull(),
+    estimatedRecoveryTime: timestamp("estimatedRecoveryTime"),
+    protectionStartedAt: timestamp("protectionStartedAt"),
+
     // Delay info
     originalDepartureTime: timestamp("originalDepartureTime"),
     newDepartureTime: timestamp("newDepartureTime"),
@@ -3634,6 +3651,40 @@ export const flightDisruptions = mysqlTable(
     createdAtIdx: index("flight_disruptions_created_at_idx").on(
       table.createdAt
     ),
+  })
+);
+
+export const iropsActions = mysqlTable(
+  "irops_actions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    eventId: int("eventId").notNull(),
+    requestKey: varchar("requestKey", { length: 191 }).notNull(),
+    actionType: mysqlEnum("actionType", [
+      "rebook",
+      "hotel",
+      "compensation",
+      "notification",
+      "meal_voucher",
+    ]).notNull(),
+    targetPassengerId: int("targetPassengerId"),
+    status: mysqlEnum("status", [
+      "pending",
+      "in_progress",
+      "completed",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    details: json("details").$type<Record<string, unknown>>().notNull(),
+    evidenceType: varchar("evidenceType", { length: 40 }),
+    evidenceId: varchar("evidenceId", { length: 191 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+  },
+  table => ({
+    requestIdx: uniqueIndex("irops_actions_request_idx").on(table.requestKey),
+    eventIdx: index("irops_actions_event_idx").on(table.eventId, table.status),
   })
 );
 

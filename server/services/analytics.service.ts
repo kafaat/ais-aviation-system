@@ -3,7 +3,11 @@
  * Provides business intelligence and KPIs for admin dashboard
  */
 
-import { getFinancialDays, getFinancialSummary, type FinancialAmounts } from "./financial-reporting.service";
+import {
+  getFinancialDays,
+  getFinancialSummary,
+  type FinancialAmounts,
+} from "./financial-reporting.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { bookings, flights, airports } from "../../drizzle/schema";
@@ -120,7 +124,9 @@ export async function getRevenueOverTime(
 ): Promise<RevenueDataPoint[]> {
   const startDate = new Date(Date.now() - days * 86400000);
   return (await getFinancialDays({ startDate })).map(row => ({
-    date: row.date, revenue: row.netCollectedAmount, bookings: row.bookings,
+    date: row.date,
+    revenue: row.netCollectedAmount,
+    bookings: row.bookings,
   }));
 }
 
