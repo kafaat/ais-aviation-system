@@ -324,7 +324,7 @@ async function replaceItinerary(
       cabinClass: offer.cabinClass as "economy" | "business",
     })
     .where(eq(bookings.id, booking.id));
-  const payload = storedJson<Record<string, any>>(order.orderPayload, {});
+  const payload = storedJson<Record<string, unknown>>(order.orderPayload, {});
   payload.offerId = offer.offerId;
   payload.segments = segments;
   payload.pricing = {
@@ -442,7 +442,10 @@ export async function changeUnpaidOrder(
             .strict()
             .parse(changes.contactInfoUpdate)
         );
-      const payload = storedJson<Record<string, any>>(current.orderPayload, {});
+      const payload = storedJson<Record<string, unknown>>(
+        current.orderPayload,
+        {}
+      );
       payload.passengers = context.ndcPassengers;
       payload.contactInfo = contact;
       await tx

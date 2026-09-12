@@ -465,7 +465,7 @@ export async function getCorporateUsers(corporateAccountId: number): Promise<
     )
     .orderBy(desc(corporateUsers.createdAt));
 
-  return results as any;
+  return results;
 }
 
 /**
@@ -513,7 +513,7 @@ export async function getUserCorporateAccount(
     )
     .limit(1);
 
-  return result.length > 0 ? (result[0] as any) : null;
+  return result.length > 0 ? result[0] : null;
 }
 
 /**
@@ -969,7 +969,7 @@ export async function getCorporateBookings(
     .where(whereClause)
     .orderBy(desc(corporateBookings.createdAt));
 
-  return results as any;
+  return results;
 }
 
 /**

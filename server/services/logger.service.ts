@@ -1,5 +1,6 @@
 import pino, { Logger, LoggerOptions, TransportTargetOptions } from "pino";
 import { AsyncLocalStorage } from "async_hooks";
+import type { Request, Response, NextFunction } from "express";
 
 // ============================================================================
 // Types and Interfaces
@@ -616,7 +617,18 @@ export function logDebug(message: string, context?: LogContext): void {
 /**
  * Express middleware for request logging and context
  */
-export function loggerMiddleware(req: any, res: any, next: any): void {
+type LoggedRequest = Request & {
+  id?: string;
+  requestId?: string;
+  correlationId?: string;
+  log?: StructuredLogger;
+};
+
+export function loggerMiddleware(
+  req: LoggedRequest,
+  res: Response,
+  next: NextFunction
+): void {
   const requestId =
     (req.headers["x-request-id"] as string) || req.id || generateRequestId();
 

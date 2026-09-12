@@ -959,12 +959,12 @@ class QueueService {
   /**
    * Get queue stats
    */
-  async getStats(): Promise<Record<string, any>> {
+  async getStats(): Promise<Record<string, string | Record<string, number>>> {
     if (!this.initialized) {
       return { status: "disabled" };
     }
 
-    const stats: Record<string, any> = {};
+    const stats: Record<string, Record<string, number>> = {};
 
     for (const [name, queue] of this.queues) {
       const counts = await queue.getJobCounts();

@@ -197,15 +197,16 @@ export function sanitizeInput(
   next: NextFunction
 ): void {
   // Basic XSS prevention - remove script tags and event handlers
-  const sanitize = (obj: any): any => {
+  const sanitize = (obj: unknown): unknown => {
     if (typeof obj === "string") {
       return obj
         .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
         .replace(/on\w+\s*=/gi, "");
     }
     if (typeof obj === "object" && obj !== null) {
-      for (const key in obj) {
-        obj[key] = sanitize(obj[key]);
+      const record = obj as Record<string, unknown>;
+      for (const key in record) {
+        record[key] = sanitize(record[key]);
       }
     }
     return obj;
@@ -215,10 +216,10 @@ export function sanitizeInput(
     req.body = sanitize(req.body);
   }
   if (req.query) {
-    req.query = sanitize(req.query);
+    req.query = sanitize(req.query) as typeof req.query;
   }
   if (req.params) {
-    req.params = sanitize(req.params);
+    req.params = sanitize(req.params) as typeof req.params;
   }
 
   next();

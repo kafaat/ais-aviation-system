@@ -91,7 +91,7 @@ export async function recordStatusChange(data: {
   changedByRole?: string;
   actorType?: ActorType;
   paymentIntentId?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
     // Validate transition if there's a previous status
@@ -198,7 +198,7 @@ export async function transitionBookingStatus(
     changedByRole?: string;
     actorType?: ActorType;
     paymentIntentId?: string;
-    metadata?: any;
+    metadata?: Record<string, unknown>;
   } = {}
 ): Promise<{ success: boolean; error?: string }> {
   // Validate transition
