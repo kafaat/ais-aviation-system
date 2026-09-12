@@ -595,12 +595,15 @@ class QueueService {
             );
             mismatches++;
           }
-        } catch (stripeError: any) {
+        } catch (stripeError) {
           logger.error(
             {
               bookingId: booking.id,
               paymentIntentId: booking.stripePaymentIntentId,
-              error: stripeError.message,
+              error:
+                stripeError instanceof Error
+                  ? stripeError.message
+                  : "Unknown error",
             },
             "Reconciliation: Failed to fetch from Stripe"
           );

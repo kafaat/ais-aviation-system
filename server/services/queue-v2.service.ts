@@ -335,8 +335,11 @@ export function startEmailWorker(): Worker {
         }
 
         console.info(`[Worker] Email job completed: ${job.id}`);
-      } catch (err: any) {
-        console.error(`[Worker] Email job failed: ${job.id}`, err.message);
+      } catch (err) {
+        console.error(
+          `[Worker] Email job failed: ${job.id}`,
+          err instanceof Error ? err.message : err
+        );
         throw err; // Re-throw to trigger retry
       }
     },
@@ -455,10 +458,10 @@ export function startWebhookRetryWorker(): Worker {
         console.info(
           `[Worker] Event ${eventId} processed successfully on retry`
         );
-      } catch (err: any) {
+      } catch (err) {
         console.error(
           `[Worker] Webhook retry failed for ${eventId}:`,
-          err.message
+          err instanceof Error ? err.message : err
         );
         throw err;
       }

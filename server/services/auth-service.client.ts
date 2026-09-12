@@ -60,15 +60,20 @@ class AuthServiceClient {
         try {
           const { data } = await request();
           return data;
-        } catch (error: any) {
-          if (error.response?.data) {
+        } catch (error) {
+          // The service answers failures with a structured body; anything
+          // without one is a network/timeout error the breaker should count.
+          if (axios.isAxiosError(error) && error.response?.data) {
             return error.response.data as AuthServiceResponse;
           }
-          throw error; // network/timeout -> let the breaker count it
+          throw error;
         }
       });
-    } catch (error: any) {
-      log.error({ op, error: error?.message }, "Auth service call failed");
+    } catch (error) {
+      log.error(
+        { op, error: error instanceof Error ? error.message : error },
+        "Auth service call failed"
+      );
       return { success: false, message: "Auth service unavailable" };
     }
   }

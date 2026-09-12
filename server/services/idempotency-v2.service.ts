@@ -358,9 +358,10 @@ export async function withIdempotency<T>(
       `[Idempotency] Operation completed for ${opts.scope}:${opts.key}`
     );
     return result;
-  } catch (err: any) {
+  } catch (err) {
     // 5. Store error
-    const errorMessage = err.message || "Unknown error";
+    const errorMessage =
+      err instanceof Error && err.message ? err.message : "Unknown error";
     await db
       .update(idempotencyRequests)
       .set({

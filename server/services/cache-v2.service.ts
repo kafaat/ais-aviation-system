@@ -382,8 +382,11 @@ export const cacheServiceV2 = {
       const latency = Date.now() - start;
 
       return { status: "ok", latency };
-    } catch (err: any) {
-      return { status: "error", error: err.message };
+    } catch (err) {
+      return {
+        status: "error",
+        error: err instanceof Error ? err.message : "Unknown error",
+      };
     }
   },
 

@@ -588,8 +588,11 @@ class CacheService {
       const latency = Date.now() - start;
 
       return { status: "ok", latency };
-    } catch (error: any) {
-      return { status: "error", error: error.message };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 

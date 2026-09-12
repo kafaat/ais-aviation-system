@@ -90,6 +90,7 @@ export default function CorporateBookings() {
     Object.keys(filters).length > 0 ? filters : undefined,
     { enabled: !!account }
   );
+  type CorporateBooking = NonNullable<typeof bookings>[number];
 
   // Mutations
   const approveMutation = trpc.corporate.approveBooking.useMutation({
@@ -126,13 +127,13 @@ export default function CorporateBookings() {
     });
   };
 
-  const openRejectDialog = (booking: any) => {
+  const openRejectDialog = (booking: CorporateBooking) => {
     setSelectedBooking(booking);
     setRejectionReason("");
     setRejectDialogOpen(true);
   };
 
-  const openDetailsDialog = (booking: any) => {
+  const openDetailsDialog = (booking: CorporateBooking) => {
     setSelectedBooking(booking);
     setDetailsDialogOpen(true);
   };
@@ -317,7 +318,7 @@ export default function CorporateBookings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bookings.map((booking: any) => (
+                {bookings.map(booking => (
                   <TableRow key={booking.id}>
                     <TableCell className="font-mono">
                       {booking.booking.bookingReference}

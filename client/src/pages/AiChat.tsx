@@ -133,13 +133,13 @@ export default function AiChat() {
       if (result.suggestions) {
         setSuggestions(result.suggestions);
       }
-    } catch (err: any) {
+    } catch (err) {
       if (!abortControllerRef.current?.signal.aborted) {
         const errorMsg: ChatMessageDisplay = {
           id: Date.now() + 1,
           role: "assistant",
           content:
-            err.message ||
+            (err instanceof Error && err.message) ||
             "عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.\nSorry, an error occurred. Please try again.",
           createdAt: new Date().toISOString(),
         };

@@ -736,7 +736,7 @@ export default function MyBookings() {
                                 </p>
                                 <div className="space-y-2 max-h-48 overflow-y-auto">
                                   {booking.passengers.map(
-                                    (passenger: any, index: number) => (
+                                    (passenger, index: number) => (
                                       <div
                                         key={passenger.id}
                                         className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700"
