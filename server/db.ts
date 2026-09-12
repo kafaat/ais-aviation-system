@@ -609,6 +609,7 @@ export async function getFlightById(id: number) {
   const result = await db
     .select({
       id: flights.id,
+      tenantId: flights.tenantId,
       flightNumber: flights.flightNumber,
       departureTime: flights.departureTime,
       arrivalTime: flights.arrivalTime,

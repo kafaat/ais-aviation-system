@@ -106,7 +106,10 @@ describe("atomic booking commands", () => {
     expect(fixture.rows("bookings")).toHaveLength(1);
     expect(fixture.rows("passengers")).toHaveLength(1);
     expect(fixture.rows("inventory_locks")).toHaveLength(1);
-    expect(fixture.rows("outbox")).toHaveLength(1);
+    expect(fixture.rows("outbox")).toHaveLength(2);
+    expect(fixture.rows("retail_offers")[0].consumedBookingId).toBe(
+      first.bookingId
+    );
     expect(fixture.rows("idempotency_requests")[0].expiresAt).toBeNull();
   });
   it("detects nested payload changes while ignoring object key ordering", async () => {

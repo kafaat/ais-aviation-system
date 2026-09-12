@@ -116,6 +116,20 @@ export default function BookingPage() {
     id: flightId,
   });
   const createBooking = trpc.bookings.create.useMutation();
+  const createOffer = trpc.priceQuote.createOffer.useMutation();
+  const [selectedOffer, setSelectedOffer] = useState<{
+    offerId: string;
+    totalAmount: number;
+    expiresAt: Date;
+    fingerprint: string;
+  } | null>(null);
+  const offerFingerprint = JSON.stringify({
+    flightId,
+    cabinClass,
+    types: passengers.map(p => p.type),
+  });
+  const activeOffer =
+    selectedOffer?.fingerprint === offerFingerprint ? selectedOffer : null;
   const { data: priceLockStatus } = trpc.priceLock.checkLock.useQuery(
     { flightId, cabinClass },
     { enabled: isAuthenticated && flightId > 0 }
@@ -131,6 +145,7 @@ export default function BookingPage() {
       cabinClass,
       passengers,
       selectedAncillaries,
+      offerId: activeOffer?.offerId,
     });
     if (command.current?.fingerprint !== fingerprint) {
       command.current = {
@@ -143,6 +158,7 @@ export default function BookingPage() {
       sessionId: command.current.key,
       idempotencyKey: command.current.key,
       priceLockId: command.current.priceLockId,
+      offerId: command.current.priceLockId ? undefined : activeOffer?.offerId,
     };
   };
   const createCheckout = trpc.payments.createCheckoutSession.useMutation();
@@ -477,7 +493,9 @@ export default function BookingPage() {
     activePriceLock?.lockedPrice ??
     (cabinClass === "economy" ? flight.economyPrice : flight.businessPrice);
   const baseAmount =
-    (price * passengers.length + (activePriceLock?.lockFee ?? 0)) / 100;
+    (activePriceLock
+      ? price * passengers.length + activePriceLock.lockFee
+      : (activeOffer?.totalAmount ?? price * passengers.length)) / 100;
   const totalAmount = baseAmount + ancillariesTotalCost / 100;
 
   const handleAncillariesChange = (
@@ -1152,11 +1170,55 @@ export default function BookingPage() {
               </div>
 
               <div className="space-y-3">
+                {!activePriceLock && (
+                  <>
+                    <Button
+                      className="w-full"
+                      variant="outline"
+                      disabled={createOffer.isPending}
+                      onClick={async () => {
+                        try {
+                          const fingerprint = offerFingerprint;
+                          const offer = await createOffer.mutateAsync({
+                            flightId,
+                            cabinClass,
+                            passengerTypes: passengers.map(p => p.type),
+                          });
+                          setSelectedOffer({ ...offer, fingerprint });
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : t("common.error")
+                          );
+                        }
+                      }}
+                    >
+                      {i18n.language === "ar"
+                        ? "تحديث عرض السعر"
+                        : "Refresh fare offer"}
+                    </Button>
+                    <p role="status" className="text-xs text-muted-foreground">
+                      {activeOffer
+                        ? (i18n.language === "ar"
+                            ? "السعر صالح حتى "
+                            : "Fare valid until ") +
+                          new Date(activeOffer.expiresAt).toLocaleTimeString()
+                        : i18n.language === "ar"
+                          ? "حدّث العرض لتأكيد سعر جميع المسافرين قبل الحجز."
+                          : "Refresh the offer to confirm the fare for all passengers before booking."}
+                    </p>
+                  </>
+                )}
                 <Button
                   onClick={handleSubmit}
                   className="w-full shadow-lg"
                   size="lg"
-                  disabled={createBooking.isPending || createCheckout.isPending}
+                  disabled={
+                    createBooking.isPending ||
+                    createCheckout.isPending ||
+                    (!activePriceLock && !activeOffer)
+                  }
                 >
                   <CreditCard className="h-5 w-5 mr-2" aria-hidden="true" />
                   {createBooking.isPending || createCheckout.isPending
@@ -1169,7 +1231,11 @@ export default function BookingPage() {
                   variant="outline"
                   className="w-full"
                   size="lg"
-                  disabled={createBooking.isPending || createCheckout.isPending}
+                  disabled={
+                    createBooking.isPending ||
+                    createCheckout.isPending ||
+                    (!activePriceLock && !activeOffer)
+                  }
                 >
                   <Split className="h-5 w-5 mr-2" aria-hidden="true" />
                   {t("splitPayment.splitWithOthers")}

@@ -19,6 +19,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { flights, ancillaryServices } from "../../drizzle/schema";
+import { calculateFlightPrice } from "./flights.service";
 import { TRPCError } from "@trpc/server";
 
 export type LoyaltyTier = "bronze" | "silver" | "gold" | "platinum";
@@ -134,10 +135,7 @@ export async function getPriceQuote(
   }
 
   const [flight] = await db
-    .select({
-      economyPrice: flights.economyPrice,
-      businessPrice: flights.businessPrice,
-    })
+    .select()
     .from(flights)
     .where(eq(flights.id, input.flightId))
     .limit(1);
@@ -146,10 +144,8 @@ export async function getPriceQuote(
     throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
   }
 
-  const baseFare =
-    input.cabinClass === "business"
-      ? flight.businessPrice
-      : flight.economyPrice;
+  const baseFare = (await calculateFlightPrice(flight, input.cabinClass, 1))
+    .price;
 
   let ancillaries: QuoteAncillary[] = [];
   const ids = input.ancillaryServiceIds ?? [];

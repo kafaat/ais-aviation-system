@@ -20,3 +20,9 @@ Migration `0021_durable_irops` must precede this code. Disruption identity/statu
 Mass notification stores an idempotent in-app notice and its receipt atomically. This confirms an inbox record, not email delivery. Re-accommodation completion is internal to the booking authority; no API accepts an arbitrary `completed` flag. Partner hotel/voucher/compensation execution still requires the appropriate provider authority and acceptance evidence. Existing legacy disruption rows remain readable without invented completion evidence. The new action store contains booking/passenger IDs rather than copied names or email addresses.
 
 Local validation at this stage: TypeScript check passed; 14 financial/IROPS tests passed. Database restart/concurrency acceptance follows in the final acceptance script.
+
+## 03 — Persisted fare offers
+
+Direct bookings and NDC AirShopping now use `calculateFlightPrice` and persist a five-minute fare snapshot. Direct offers bind the passenger-type mix and owner; NDC retains its existing passenger-count fare policy with explicit fare-class/tax policy metadata. Booking creation locks and consumes the snapshot with the booking/outbox transaction, so retries cannot purchase it twice. The booking screen refreshes and displays the accepted fare; ancillaries are still priced by the invoice authority and purchased price locks remain separately enforced. Public loyalty/miles price composition is a what-if view, not a redemption authorization. Legacy NDC offers expire under their original policy; new offers carry the canonical snapshot identity.
+
+Validation: TypeScript and 55 targeted offer, booking, payment-boundary and price-composition tests passed. Actual airline NDC certification is an external acceptance gate.

@@ -220,6 +220,30 @@ export const flights = mysqlTable(
 export type Flight = typeof flights.$inferSelect;
 export type InsertFlight = typeof flights.$inferInsert;
 
+/** Immutable airfare offers shared by direct booking and the NDC adapter.
+ * Ancillaries and payment/loyalty tenders keep their existing invoice authorities. */
+export const retailOffers = mysqlTable(
+  "retail_offers",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    flightId: int("flightId").notNull(),
+    tenantId: int("tenantId"),
+    userId: int("userId"),
+    channel: mysqlEnum("channel", ["direct", "ndc"]).notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    digest: varchar("digest", { length: 64 }).notNull(),
+    totalAmount: int("totalAmount").notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    consumedBookingId: int("consumedBookingId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    expiresIdx: index("retail_offers_expires_idx").on(table.expiresAt),
+    bookingIdx: index("retail_offers_booking_idx").on(table.consumedBookingId),
+  })
+);
+
 /**
  * Bookings table
  */

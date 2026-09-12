@@ -12,7 +12,11 @@ import {
   ancillaryServices,
   priceLocks,
 } from "../../drizzle/schema";
-import { calculateFlightPrice } from "./flights.service";
+import {
+  createRetailOffer,
+  lockRetailOffer,
+  consumeRetailOffer,
+} from "./retail-offer.service";
 import { createInventoryLock } from "./inventory-lock.service";
 import { trackBookingStarted, trackBookingCancelled } from "./metrics.service";
 import {
@@ -58,6 +62,7 @@ export interface CreateBookingInput {
   sessionId: string;
   lockId?: number;
   priceLockId?: number;
+  offerId?: string;
   idempotencyKey?: string;
   ancillaries?: SelectedAncillary[];
 }
@@ -133,21 +138,27 @@ export async function createBooking(
         code: "BAD_REQUEST",
         message: "Passengers are required",
       });
-    const pricingResult = await calculateFlightPrice(
-      flight,
-      input.cabinClass,
-      input.passengers.length,
-      input.passengers,
-      input.userId,
-      input.sessionId
-    );
-    const baseAmount = pricingResult.price;
-
-    if (pricingResult.pricing) {
-      console.info(
-        `[Booking] Dynamic pricing applied: ${pricingResult.pricing.adjustmentPercentage}% adjustment (Occupancy: ${pricingResult.pricing.occupancyRate}%, Days until departure: ${pricingResult.pricing.daysUntilDeparture})`
-      );
-    }
+    if (input.offerId && input.priceLockId)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Choose an offer or a purchased price lock",
+      });
+    const offerId = input.priceLockId
+      ? undefined
+      : (input.offerId ??
+        (
+          await createRetailOffer(
+            {
+              flightId: flight.id,
+              cabinClass: input.cabinClass,
+              passengerTypes: input.passengers.map(p => p.type),
+              userId: input.userId,
+              sessionId: input.sessionId,
+              channel: "direct",
+            },
+            transaction
+          )
+        ).id);
 
     const bookingReference = db.generateBookingReference();
     const pnr = db.generateBookingReference();
@@ -175,6 +186,16 @@ export async function createBooking(
           )
             throw new Error("Flight unavailable");
           await assertTenantOperational(tx, currentFlight.tenantId);
+          const selectedOffer = offerId
+            ? await lockRetailOffer(tx, offerId, {
+                flightId: currentFlight.id,
+                tenantId: currentFlight.tenantId,
+                userId: input.userId,
+                channel: "direct",
+                cabinClass: input.cabinClass,
+                passengerTypes: input.passengers.map(p => p.type),
+              })
+            : undefined;
           let lockId = input.lockId;
           if (lockId) {
             const [hold] = await tx
@@ -252,7 +273,7 @@ export async function createBooking(
               totalPrice: service.price * item.quantity,
             });
           }
-          let fareAmount = baseAmount;
+          let fareAmount = selectedOffer?.totalAmount ?? 0;
           if (input.priceLockId) {
             const [priceLock] = await tx
               .select()
@@ -295,6 +316,8 @@ export async function createBooking(
             numberOfPassengers: input.passengers.length,
           });
           const bookingId = created.insertId;
+          if (selectedOffer)
+            await consumeRetailOffer(tx, selectedOffer, bookingId);
           await tx.insert(passengers).values(
             input.passengers.map(p => ({
               tenantId: currentFlight.tenantId,
