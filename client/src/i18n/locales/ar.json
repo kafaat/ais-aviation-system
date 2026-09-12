@@ -1953,7 +1953,7 @@
       "subtitle": "نظرة شاملة على أداء النظام",
       "totalBookings": "إجمالي الحجوزات",
       "passenger": "راكب",
-      "totalRevenue": "إجمالي الإيرادات",
+      "totalRevenue": "صافي التحصيل",
       "average": "متوسط",
       "occupancyRate": "معدل الإشغال",
       "excellentPerformance": "أداء ممتاز",
@@ -1963,9 +1963,9 @@
       "high": "مرتفع",
       "totalPassengers": "إجمالي الركاب",
       "passengerPerBooking": "راكب/حجز",
-      "dailyRevenue": "الإيرادات اليومية",
+      "dailyRevenue": "صافي التحصيل اليومي",
       "last30Days": "آخر 30 يوم",
-      "revenueLabel": "الإيرادات (ر.س)",
+      "revenueLabel": "صافي التحصيل (ر.س)",
       "bookingTrends": "اتجاهات الحجوزات",
       "bookings": "الحجوزات",
       "passengers": "الركاب",
@@ -2005,7 +2005,9 @@
       "revenueByCat": "الإيرادات حسب الفئة",
       "topAncillaries": "أكثر الخدمات الإضافية طلباً",
       "sales": "المبيعات",
-      "noData": "لا توجد بيانات"
+      "noData": "لا توجد بيانات",
+      "unavailable": "تعذرت قراءة المؤشرات المالية.",
+      "financialBasis": "الفوترة: {{billed}} · التحصيل: {{collected}} · الاسترداد: {{refunded}} ر.س · سجلات تحتاج مطابقة: {{gaps}}. الإيراد المكتسب غير مقاس."
     },
     "aiPricing": {
       "title": "التسعير الديناميكي بالذكاء الاصطناعي",

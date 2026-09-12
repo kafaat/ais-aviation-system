@@ -38,7 +38,7 @@ const COLORS = [
 
 export default function AnalyticsDashboard() {
   const { t } = useTranslation();
-  const { data: kpis, isLoading: kpisLoading } =
+  const { data: kpis, isLoading: kpisLoading, error: kpisError } =
     trpc.analytics.getKPIs.useQuery();
   const { data: revenueData, isLoading: revenueLoading } =
     trpc.analytics.getRevenueOverTime.useQuery({ days: 30 });
@@ -78,6 +78,10 @@ export default function AnalyticsDashboard() {
         </div>
       </div>
 
+      {kpisError && <p role="alert">{t("admin.analytics.unavailable")}</p>}
+      {kpis && <p className="mb-4 text-sm text-muted-foreground">
+        {t("admin.analytics.financialBasis", { billed: (kpis.billedAmount / 100).toLocaleString(), collected: (kpis.collectedAmount / 100).toLocaleString(), refunded: (kpis.refundedAmount / 100).toLocaleString(), gaps: kpis.unreconciledBookings + kpis.unclassifiedEntries })}
+      </p>}
       {/* KPI Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
         <Card>
@@ -117,7 +121,7 @@ export default function AnalyticsDashboard() {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {((kpis?.totalRevenue || 0) / 100).toLocaleString()}{" "}
+                  {kpis ? (kpis.totalRevenue / 100).toLocaleString() : "—"}{" "}
                   {t("common.sar")}
                 </div>
                 <p className="text-xs text-muted-foreground">

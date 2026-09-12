@@ -1953,7 +1953,7 @@
       "subtitle": "Comprehensive overview of system performance",
       "totalBookings": "Total Bookings",
       "passenger": "passenger(s)",
-      "totalRevenue": "Total Revenue",
+      "totalRevenue": "Net collections",
       "average": "Average",
       "occupancyRate": "Occupancy Rate",
       "excellentPerformance": "Excellent performance",
@@ -1963,9 +1963,9 @@
       "high": "High",
       "totalPassengers": "Total Passengers",
       "passengerPerBooking": "passenger/booking",
-      "dailyRevenue": "Daily Revenue",
+      "dailyRevenue": "Daily net collections",
       "last30Days": "Last 30 Days",
-      "revenueLabel": "Revenue (SAR)",
+      "revenueLabel": "Net collections (SAR)",
       "bookingTrends": "Booking Trends",
       "bookings": "Bookings",
       "passengers": "Passengers",
@@ -2005,7 +2005,9 @@
       "revenueByCat": "Revenue by Category",
       "topAncillaries": "Top Ancillary Services",
       "sales": "Sales",
-      "noData": "No data available"
+      "noData": "No data available",
+      "unavailable": "Financial reporting is unavailable.",
+      "financialBasis": "Billed: {{billed}} · Collected: {{collected}} · Refunded: {{refunded}} SAR · Reconciliation gaps: {{gaps}}. Earned revenue is not measured."
     },
     "aiPricing": {
       "title": "AI Dynamic Pricing",
