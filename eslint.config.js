@@ -112,9 +112,16 @@ export default [
     },
   },
 
-  // Test files configuration
+  // Test files configuration. scripts/acceptance is the acceptance suite: it
+  // refuses to run without AIS_DISPOSABLE_DATABASE outside production, and no
+  // server or client module imports it.
   {
-    files: ["**/*.test.ts", "**/*.spec.ts", "**/__tests__/**"],
+    files: [
+      "**/*.test.ts",
+      "**/*.spec.ts",
+      "**/__tests__/**",
+      "scripts/acceptance/**",
+    ],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "no-console": "off",
@@ -123,6 +130,12 @@ export default [
       // the rule would mean making the double return a bare value, so it would
       // no longer resemble what it stands in for. The rule stays on for source.
       "require-await": "off",
+      // A wrong assertion here fails the test that exists to catch it, which is
+      // the outcome the rule protects against everywhere else. Keeping it on
+      // would leave ~110 warnings nobody acts on, which is what let the backlog
+      // grow unnoticed before. It stays on for every non-test path, where the
+      // cap is now zero.
+      "@typescript-eslint/no-non-null-assertion": "off",
     },
   },
 
