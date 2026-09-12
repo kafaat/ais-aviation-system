@@ -43,7 +43,7 @@ export const agentGovernanceRouter = router({
     }),
 
   /**
-   * Override / roll back an agent decision (white-box, human-in-the-loop).
+   * Annotate an agent decision (does not reverse a business transaction) (white-box, human-in-the-loop).
    */
   overrideDecision: adminProcedure
     .meta({

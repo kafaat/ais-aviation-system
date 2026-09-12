@@ -1,3 +1,4 @@
+import { approvePriceChange } from "../services/pricing-approval.service";
 import { responseContracts } from "../contracts/ai-pricing.router";
 /**
  * AI Pricing Router
@@ -403,7 +404,16 @@ export const aiPricingRouter = router({
       }
     }),
 
-  /** Apply an optimization recommendation */
+  approveOptimization: adminProcedure
+    .input(z.object({ logId: z.number().int().positive() }))
+    .output(
+      z.object({ receiptId: z.string().uuid(), expiresAt: z.date().nullable() })
+    )
+    .mutation(({ input, ctx }) =>
+      approvePriceChange(input.logId, ctx.user.id, ctx.tenantId)
+    ),
+
+  /** Execute the exact, unexpired human-approved recommendation. */
   applyOptimization: adminProcedure
     .input(
       z.object({
@@ -415,7 +425,8 @@ export const aiPricingRouter = router({
       try {
         await RevenueOptimizationService.applyOptimization(
           input.logId,
-          ctx.user.id
+          ctx.user.id,
+          ctx.tenantId
         );
         return { success: true };
       } catch (error) {

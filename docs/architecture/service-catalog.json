@@ -1874,6 +1874,7 @@
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
         "server/services/payment-settlement.service.ts",
+        "server/services/pricing-approval.service.ts",
         "server/services/retail-offer.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
@@ -2229,6 +2230,27 @@
       "replacement": null
     },
     {
+      "file": "server/services/pricing-approval.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/pricing-approval.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/ai-pricing.router.ts",
+        "server/services/pricing/revenue-optimization.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/outbox.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["flights", "revenueOptimizationLogs"],
+        "writes": ["flights", "revenueOptimizationLogs"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/pricing/ab-testing.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/pricing/ab-testing.service.ts",
@@ -2349,6 +2371,7 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/cache.service.ts",
+        "server/services/pricing-approval.service.ts",
         "server/services/pricing/demand-forecasting.service.ts"
       ],
       "tableExpressions": {
@@ -2358,7 +2381,7 @@
           "pricingHistory",
           "revenueOptimizationLogs"
         ],
-        "writes": ["flights", "priceElasticityData", "revenueOptimizationLogs"]
+        "writes": ["priceElasticityData", "revenueOptimizationLogs"]
       },
       "replacement": null
     },
@@ -3028,6 +3051,7 @@
         "server/services/bookings.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/pricing-approval.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/travel-agent.service.ts"

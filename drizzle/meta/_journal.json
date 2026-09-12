@@ -162,6 +162,13 @@
       "when": 1789236576645,
       "tag": "0022_retail_offer_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1789237171339,
+      "tag": "0023_bound_price_approvals",
+      "breakpoints": true
     }
   ]
 }

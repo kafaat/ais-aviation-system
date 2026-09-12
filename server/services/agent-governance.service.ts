@@ -135,12 +135,12 @@ export async function getAiCostBreakdown(
 // 2. Agent action governance (approval gates)
 // ---------------------------------------------------------------------------
 
-export type AgentActionClass = "auto-safe" | "requires-approval";
+export type AgentActionClass = "auto-safe" | "requires-approval" | "denied";
 
 /**
  * Actions that mutate money, inventory, or a customer's itinerary must NOT be
- * executed autonomously — they require human approval. Everything else
- * (notify/suggest/analyze) is auto-safe. This is the first governance gate for
+ * executed autonomously — they require human approval. Only explicitly
+ * read-only actions are auto-safe; unknown actions are denied. This is the first governance gate for
  * "always-on" agents on a mission-critical system.
  */
 const REQUIRES_APPROVAL = new Set<string>([
@@ -155,11 +155,14 @@ const REQUIRES_APPROVAL = new Set<string>([
 ]);
 
 export function classifyAgentAction(actionType: string): AgentActionClass {
-  return REQUIRES_APPROVAL.has(actionType) ? "requires-approval" : "auto-safe";
+  if (REQUIRES_APPROVAL.has(actionType)) return "requires-approval";
+  return new Set(["suggest", "analyze", "summarize"]).has(actionType)
+    ? "auto-safe"
+    : "denied";
 }
 
 export function requiresApproval(actionType: string): boolean {
-  return classifyAgentAction(actionType) === "requires-approval";
+  return classifyAgentAction(actionType) !== "auto-safe";
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +170,7 @@ export function requiresApproval(actionType: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * Override (roll back / correct) an agent decision. Records who did it, why,
+ * Annotate an agent decision as superseded. This does not reverse money or inventory. Records who did it, why,
  * and optionally which decision now supersedes it — the human-in-the-loop
  * correction that prevents the agent from repeating a bad decision.
  */

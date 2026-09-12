@@ -4313,6 +4313,9 @@ export const revenueOptimizationLogs = mysqlTable(
     autoApplied: boolean("autoApplied").default(false).notNull(),
     approvedBy: int("approvedBy"),
     approvedAt: timestamp("approvedAt"),
+    approvalDigest: varchar("approvalDigest", { length: 64 }),
+    approvalExpiresAt: timestamp("approvalExpiresAt"),
+    executionEventId: varchar("executionEventId", { length: 36 }),
 
     status: mysqlEnum("status", [
       "suggested",

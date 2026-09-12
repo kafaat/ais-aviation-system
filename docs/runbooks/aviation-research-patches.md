@@ -26,3 +26,9 @@ Local validation at this stage: TypeScript check passed; 14 financial/IROPS test
 Direct bookings and NDC AirShopping now use `calculateFlightPrice` and persist a five-minute fare snapshot. Direct offers bind the passenger-type mix and owner; NDC retains its existing passenger-count fare policy with explicit fare-class/tax policy metadata. Booking creation locks and consumes the snapshot with the booking/outbox transaction, so retries cannot purchase it twice. The booking screen refreshes and displays the accepted fare; ancillaries are still priced by the invoice authority and purchased price locks remain separately enforced. Public loyalty/miles price composition is a what-if view, not a redemption authorization. Legacy NDC offers expire under their original policy; new offers carry the canonical snapshot identity.
 
 Validation: TypeScript and 55 targeted offer, booking, payment-boundary and price-composition tests passed. Actual airline NDC certification is an external acceptance gate.
+
+## 04 — Bound approvals and execution
+
+Unknown agent actions (including unapproved outbound notifications) are denied; only explicitly read-only actions are automatic. `aiPricing.approveOptimization` records a human approval of the exact recommendation, tenant, previous price and factors. `applyOptimization` consumes that approval, refuses expiry, tampering, a changed current price and changes above 30%, and commits the new price, recommendation state and execution receipt together. Execution retries return the original receipt. Approval expires after 30 minutes and recommendations older than one day require review. Decision overrides annotate history; they do not reverse financial or inventory effects.
+
+Validation: TypeScript and 14 governance tests passed, including tenant isolation, stale approval, payload changes and rollback if event persistence fails. Any additional mutating agent action needs its own bounded executor before it can be enabled.
