@@ -1,5 +1,38 @@
 # Changelog
 
+## What's Changed in v1.23.0
+
+### Features
+
+- feat(retail): bind bookings and NDC offers to persisted fare snapshots (8834541)
+- feat(operations): ingest signed flight events and report observed performance (406a270)
+- feat(orders): settle paid itinerary exchanges and original-payer refunds (3226822)
+- feat(baggage): persist verified custody chains across journey legs (1f7743f)
+- feat(recovery): apply operator crew rules and approved inventory recovery (3ba1cad)
+- feat(economics): consume closed cost snapshots and maintenance-backed rotations (532a503)
+- feat(retail): govern premium discounts and measure persistent experiment cohorts (977c359)
+- feat(travel): source emissions and traveler rules and enforce document clearance (b1ce178)
+
+### Bug Fixes
+
+- fix(finance): separate invoices from posted collections and refunds (9903f65)
+- fix(irops): persist recovery plans and require execution evidence (169c471)
+- fix(agents): bind human price approvals to atomic execution receipts (ec13a84)
+- fix(forecasting): evaluate temporal baselines and preserve unknown accuracy (b9b5e6f)
+
+### Maintenance
+
+- ci(security): add a gitleaks config for two synthetic fixture credentials (fe40fba)
+
+### Other Changes
+
+- Merge main into the aviation research patch series (516b7d4)
+- Merge pull request #146 from kafaat/aviation-research-patches (97bcd99)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.12...v1.23.0
+
+---
+
 ## What's Changed in v1.22.12
 
 ### Bug Fixes
