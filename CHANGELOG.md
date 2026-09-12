@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.22.10
+
+### Bug Fixes
+
+- fix(backup): harden the production backup Job and let operators size it (87847a1)
+
+### Maintenance
+
+- ci(release): prove the release commit carries no code before pushing (70e993d)
+- ci(lint): cap ESLint warnings so the backlog cannot keep growing (92927eb)
+
+### Other Changes
+
+- Merge pull request #143 from kafaat/claude/project-exploration-JWCKA (35b2d19)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.9...v1.22.10
+
+---
+
 ## What's Changed in v1.22.9
 
 ### Bug Fixes
