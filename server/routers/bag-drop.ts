@@ -39,7 +39,7 @@ export const bagDropRouter = router({
   scanPass: publicProcedure
     .input(z.object({ boardingPassToken: z.string().min(32).max(8192) }))
     .output(responseContracts["scanPass"])
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       const verified = verifyBoardingPass(input.boardingPassToken);
       if (!verified.valid) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: verified.reason });
@@ -105,7 +105,7 @@ export const bagDropRouter = router({
     .output(responseContracts["checkAllowance"])
     .query(async ({ input }) => {
       const capability = bagSession(input.sessionToken);
-      return bagDropService.checkBagAllowance(
+      return await bagDropService.checkBagAllowance(
         capability.bookingId,
         capability.passengerId
       );
@@ -121,7 +121,7 @@ export const bagDropRouter = router({
     .output(responseContracts["calculateFee"])
     .query(async ({ input }) => {
       const capability = bagSession(input.sessionToken);
-      return bagDropService.calculateExcessFee(
+      return await bagDropService.calculateExcessFee(
         capability.bookingId,
         input.totalWeight
       );
@@ -135,7 +135,7 @@ export const bagDropRouter = router({
   processPayment: publicProcedure
     .input(z.object({ sessionToken: capabilityInput }))
     .output(responseContracts["processPayment"])
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       bagSession(input.sessionToken);
       throw new TRPCError({
         code: "PRECONDITION_FAILED",
@@ -182,7 +182,9 @@ export const bagDropRouter = router({
   getUnitStatus: adminProcedure
     .input(z.object({ unitId: z.number().int().positive() }))
     .output(responseContracts["getUnitStatus"])
-    .query(async ({ input }) => bagDropService.getBagDropStatus(input.unitId)),
+    .query(
+      async ({ input }) => await bagDropService.getBagDropStatus(input.unitId)
+    ),
 
   getAnalytics: adminProcedure
     .input(
@@ -193,10 +195,11 @@ export const bagDropRouter = router({
       })
     )
     .output(responseContracts["getAnalytics"])
-    .query(async ({ input }) =>
-      bagDropService.getBagDropAnalytics(input.airportId, {
-        start: new Date(input.startDate),
-        end: new Date(input.endDate),
-      })
+    .query(
+      async ({ input }) =>
+        await bagDropService.getBagDropAnalytics(input.airportId, {
+          start: new Date(input.startDate),
+          end: new Date(input.endDate),
+        })
     ),
 });

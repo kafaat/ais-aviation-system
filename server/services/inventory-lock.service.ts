@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { inventoryLocks, flights } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
-import { eq, and, lt, gt, sql } from "drizzle-orm";
+import { eq, and, lt, gt } from "drizzle-orm";
 
 /**
  * Inventory Lock Service

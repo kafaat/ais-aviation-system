@@ -118,6 +118,11 @@ export default [
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "no-console": "off",
+      // A test double for an async API is legitimately `async` with nothing to
+      // await: `vi.fn(async () => row)` models the real signature. Satisfying
+      // the rule would mean making the double return a bare value, so it would
+      // no longer resemble what it stands in for. The rule stays on for source.
+      "require-await": "off",
     },
   },
 

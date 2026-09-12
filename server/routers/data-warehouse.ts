@@ -245,7 +245,7 @@ export const dataWarehouseRouter = router({
       })
     )
     .output(responseContracts["updateSchedule"])
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const { id, ...updates } = input;
       const schedule = await dwService.updateSchedule(id, updates);
 
@@ -275,7 +275,7 @@ export const dataWarehouseRouter = router({
   deleteSchedule: adminProcedure
     .input(z.object({ id: z.number() }))
     .output(responseContracts["deleteSchedule"])
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const deleted = await dwService.deleteSchedule(input.id);
       return {
         success: deleted,

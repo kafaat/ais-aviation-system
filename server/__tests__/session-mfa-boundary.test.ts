@@ -67,7 +67,7 @@ beforeEach(() => {
   state.db = {
     query,
     transaction: async (fn: any) => fn(state.db),
-    select: (projection: any) => {
+    select: (_projection: any) => {
       let table: any;
       const rows = () =>
         table === users

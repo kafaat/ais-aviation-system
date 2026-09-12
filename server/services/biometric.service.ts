@@ -674,6 +674,9 @@ export function configureGate(input: {
  * Log a biometric event for audit purposes.
  * All biometric operations must be logged for compliance and security.
  */
+// Stays async with nothing to await: the requireDemoCapability throw must
+// reach callers as a rejection, not as a synchronous throw.
+// eslint-disable-next-line require-await
 export async function logBiometricEvent(
   passengerId: number,
   eventType: BiometricEventType,

@@ -115,7 +115,7 @@ function settledWhere(period: RefundReportPeriod = {}) {
 }
 
 export async function getRefundStats(): Promise<RefundStats> {
-  return reporting(db =>
+  return await reporting(db =>
     db.transaction(
       async tx => {
         const [settled] = await tx
@@ -236,7 +236,7 @@ export async function getRefundHistory(params: {
       code: "BAD_REQUEST",
       message: "Invalid refund history page",
     });
-  return reporting(db => settledRows(db, {}, limit, offset));
+  return await reporting(db => settledRows(db, {}, limit, offset));
 }
 export async function getRefundExportRows(period: RefundReportPeriod) {
   bounds(period);
@@ -255,7 +255,7 @@ export async function getRefundTrends(): Promise<
   const startDate = new Date(endDate);
   startDate.setUTCDate(startDate.getUTCDate() - 29);
   startDate.setUTCHours(0, 0, 0, 0);
-  return reporting(async db => {
+  return await reporting(async db => {
     const rows = await db
       .select({
         day: sql<string>`FLOOR(UNIX_TIMESTAMP(${financialLedger.transactionDate}) / 86400)`,

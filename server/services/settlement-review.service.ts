@@ -9,7 +9,7 @@ const log = createServiceLogger("settlement-review");
 export async function listSettlementReviews(limit: number) {
   const db = getDb();
   if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
-  return db
+  return await db
     .select()
     .from(paymentReceipts)
     .where(eq(paymentReceipts.settlementStatus, "review_required"))

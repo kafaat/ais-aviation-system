@@ -55,7 +55,7 @@ export async function confirmFundedBooking(
 ) {
   // A rejected later leg must undo earlier leg reservations before the outer
   // payment transaction records the collected funds for operator review.
-  return tx.transaction(inner =>
+  return await tx.transaction(inner =>
     applyFundedBooking(inner, booking, paymentIntentId)
   );
 }

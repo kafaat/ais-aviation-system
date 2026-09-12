@@ -202,7 +202,7 @@ export async function verifyForensicWorkflows(
   );
   await check(
     "idempotency claim and business write share rollback and serialize concurrent retries",
-    async () => {
+    () => {
       const command = {
         scope: "ci.command",
         key: "stable",
@@ -247,7 +247,7 @@ export async function verifyForensicWorkflows(
         withTransactionalIdempotency({
           ...command,
           request: { nested: { x: 2 } },
-          run: async () => ({ identity: "invalid" }),
+          run: () => Promise.resolve({ identity: "invalid" }),
         })
       );
     }
@@ -301,7 +301,7 @@ export async function verifyForensicWorkflows(
       await started;
       try {
         assert.equal(
-          await runScheduledTask("ci-job", "tick-1", async () => {
+          await runScheduledTask("ci-job", "tick-1", () => {
             throw new Error("Duplicate execution");
           }),
           false
@@ -311,7 +311,7 @@ export async function verifyForensicWorkflows(
       }
       assert.equal(await first, true);
       await assert.rejects(
-        runScheduledTask("ci-job", "tick-2", async () => {
+        runScheduledTask("ci-job", "tick-2", () => {
           throw new Error("Provider unavailable");
         })
       );

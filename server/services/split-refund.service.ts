@@ -57,7 +57,7 @@ async function lockPlan(tx: SettlementTx, bookingId: number) {
   return plan;
 }
 async function lockItems(tx: SettlementTx, bookingId: number) {
-  return tx
+  return await tx
     .select()
     .from(bookingRefundItems)
     .where(eq(bookingRefundItems.bookingId, bookingId))
@@ -299,7 +299,7 @@ export async function getSplitRefundCancellation(
   actor: Actor
 ) {
   if (!actor) throw new TRPCError({ code: "UNAUTHORIZED" });
-  return dbOrThrow().transaction(async tx =>
+  return await dbOrThrow().transaction(async tx =>
     view(tx, await lockBooking(tx, bookingId, actor))
   );
 }
@@ -322,7 +322,7 @@ export async function reserveSplitRefundCancellation(
     (input.notes?.length ?? 0) > 500
   )
     throw new TRPCError({ code: "BAD_REQUEST" });
-  return dbOrThrow().transaction(async tx => {
+  return await dbOrThrow().transaction(async tx => {
     const booking = await lockBooking(tx, input.bookingId, actor);
     const previous = await lockPlan(tx, booking.id);
     if (previous) {

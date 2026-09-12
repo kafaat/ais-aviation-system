@@ -132,7 +132,7 @@ export async function addAncillaryToBooking(
   },
   actor: InvoiceActor
 ) {
-  return withTransactionalIdempotency({
+  return await withTransactionalIdempotency({
     scope: "booking.ancillary.add",
     key: data.idempotencyKey,
     userId: actor.userId,
@@ -209,7 +209,7 @@ export async function removeAncillaryFromBooking(
 ) {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
-  return db.transaction(async tx => {
+  return await db.transaction(async tx => {
     const [identity] = await tx
       .select()
       .from(bookingAncillaries)

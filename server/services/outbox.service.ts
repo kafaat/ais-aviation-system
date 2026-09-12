@@ -299,9 +299,8 @@ export const configuredPublisher: OutboxPublisher = async event => {
 };
 
 /** Retained only to make legacy callers fail visibly instead of discarding events. */
-export const loggingPublisher: OutboxPublisher = async () => {
-  throw new Error("Logging is not event delivery");
-};
+export const loggingPublisher: OutboxPublisher = () =>
+  Promise.reject(new Error("Logging is not event delivery"));
 
 /** Convenience entry point for the cron/worker tick. */
 export async function runOutboxRelay(): Promise<{
