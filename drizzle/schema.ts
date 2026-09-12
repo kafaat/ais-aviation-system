@@ -4011,6 +4011,9 @@ export const demandPredictions = mysqlTable(
     actualDemand: decimal("actualDemand", { precision: 10, scale: 2 }),
     actualPrice: int("actualPrice"),
 
+    trainingCutoffAt: timestamp("trainingCutoffAt"),
+    diagnostics: json("diagnostics").$type<Record<string, unknown>>(),
+
     // Feature importances (JSON: { feature: weight })
     featureImportances: text("featureImportances"),
 

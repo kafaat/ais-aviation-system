@@ -549,7 +549,6 @@
         "server/services/pricing/ab-testing.service.ts",
         "server/services/pricing/ai-pricing.service.ts",
         "server/services/pricing/customer-segmentation.service.ts",
-        "server/services/pricing/demand-forecasting.service.ts",
         "server/services/pricing/dynamic-pricing.service.ts",
         "server/services/pricing/revenue-optimization.service.ts",
         "server/services/rate-limit.service.ts"
@@ -2373,10 +2372,15 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/cache.service.ts"
+        "server/services/pricing/temporal-forecast.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "flights"],
+        "reads": [
+          "aiPricingModels",
+          "bookings",
+          "demandPredictions",
+          "flights"
+        ],
         "writes": ["aiPricingModels", "demandPredictions"]
       },
       "replacement": null
@@ -2426,6 +2430,19 @@
           "revenueOptimizationLogs"
         ],
         "writes": ["priceElasticityData", "revenueOptimizationLogs"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/pricing/temporal-forecast.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/pricing/temporal-forecast.ts",
+      "accountableOwner": null,
+      "consumers": ["server/services/pricing/demand-forecasting.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
       },
       "replacement": null
     },

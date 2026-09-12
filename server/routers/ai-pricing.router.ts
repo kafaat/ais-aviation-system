@@ -166,6 +166,11 @@ export const aiPricingRouter = router({
             predictedDemand: f.predictedDemand,
             confidenceLower: f.confidenceLower,
             confidenceUpper: f.confidenceUpper,
+            modelVersion: f.modelVersion,
+            target: f.target,
+            trainingCutoff: f.trainingCutoff,
+            sampleCount: f.sampleCount,
+            evaluation: f.evaluation,
             recommendedPrice: f.recommendedPrice,
             recommendedMultiplier: f.recommendedMultiplier,
             featureImportances: f.featureImportances,
@@ -204,6 +209,11 @@ export const aiPricingRouter = router({
             predictedDemand: f.predictedDemand,
             confidenceLower: f.confidenceLower,
             confidenceUpper: f.confidenceUpper,
+            modelVersion: f.modelVersion,
+            target: f.target,
+            trainingCutoff: f.trainingCutoff,
+            sampleCount: f.sampleCount,
+            evaluation: f.evaluation,
             recommendedPrice: f.recommendedPrice,
           })),
         };
@@ -218,6 +228,14 @@ export const aiPricingRouter = router({
       }
     }),
 
+  reconcileForecastOutcomes: adminProcedure
+    .input(z.object({ modelId: z.number().int().positive() }))
+    .output(
+      z.object({ observed: z.number().int(), examined: z.number().int() })
+    )
+    .mutation(({ input }) =>
+      DemandForecastingService.reconcileForecastOutcomes(input.modelId)
+    ),
   /** Get model accuracy metrics */
   forecastAccuracy: adminProcedure
     .input(

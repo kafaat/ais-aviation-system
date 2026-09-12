@@ -43,6 +43,8 @@ export interface AIPricingResult {
     abTestVariant: string | null;
     optimizationGoal: string | null;
     confidence: number;
+    mode?: "shadow";
+    suggestedMultiplier?: number;
   };
 }
 
@@ -153,7 +155,9 @@ export async function calculateAIPricingMultiplier(
 
   // Normalize to be a multiplier around 1.0
   // The weights above sum to 1.0, so if all components are 1.0, result is 1.0
-  const aiMultiplier = Math.min(2.0, Math.max(0.75, combinedMultiplier));
+  const suggestedMultiplier = Math.min(2.0, Math.max(0.75, combinedMultiplier));
+  // Model suggestions are shadow output. Applied base prices come from the bound human approval executor.
+  const aiMultiplier = 1;
 
   // Confidence based on data availability
   const confidence = calculateConfidence(
@@ -172,6 +176,8 @@ export async function calculateAIPricingMultiplier(
       abTestMultiplier,
     },
     metadata: {
+      mode: "shadow",
+      suggestedMultiplier,
       demandForecast,
       customerSegment: segmentName,
       abTestVariant,

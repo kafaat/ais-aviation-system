@@ -1,6 +1,25 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber, structuredValue } from "./primitives";
+const forecastEvidence = {
+  modelVersion: z.string(),
+  target: z.literal("booked_departing_passengers"),
+  trainingCutoff: z.date(),
+  sampleCount: outputNumber,
+  evaluation: z.object({
+    mae: outputNumber.nullable(),
+    rmse: outputNumber.nullable(),
+    mape: outputNumber.nullable(),
+    r2: outputNumber.nullable(),
+    wape: outputNumber.nullable(),
+    sampleCount: outputNumber,
+    baselineMae: outputNumber.nullable(),
+    empiricalCoverage: outputNumber,
+    nominalCoverage: outputNumber,
+    selectionSamples: outputNumber,
+    calibrationSamples: outputNumber,
+  }),
+};
 export const responseContracts = {
   getDashboard: z.object({
     success: z.boolean(),
@@ -62,6 +81,7 @@ export const responseContracts = {
     success: z.boolean(),
     data: z.array(
       z.object({
+        ...forecastEvidence,
         date: z.string(),
         predictedDemand: outputNumber,
         confidenceLower: outputNumber,
@@ -77,6 +97,7 @@ export const responseContracts = {
     data: z.array(
       z.object({
         flightId: outputNumber,
+        ...forecastEvidence,
         date: z.string(),
         predictedDemand: outputNumber,
         confidenceLower: outputNumber,
@@ -88,10 +109,11 @@ export const responseContracts = {
   forecastAccuracy: z.object({
     success: z.boolean(),
     data: z.object({
-      mae: outputNumber,
-      rmse: outputNumber,
-      mape: outputNumber,
-      r2: outputNumber,
+      mae: outputNumber.nullable(),
+      rmse: outputNumber.nullable(),
+      mape: outputNumber.nullable(),
+      r2: outputNumber.nullable(),
+      wape: outputNumber.nullable(),
       sampleCount: outputNumber,
     }),
   }),
@@ -283,7 +305,7 @@ export const responseContracts = {
         endDate: z.union([z.null(), z.date()]),
         trafficPercentage: outputNumber,
         minimumSampleSize: outputNumber,
-        confidenceLevel: outputNumber,
+        confidenceLevel: outputNumber.nullable(),
       })
     ),
   }),
@@ -329,7 +351,7 @@ export const responseContracts = {
       isSignificant: z.boolean(),
       pValue: outputNumber,
       relativeLift: outputNumber,
-      confidenceLevel: outputNumber,
+      confidenceLevel: outputNumber.nullable(),
       recommendedAction: z.string(),
     }),
   }),

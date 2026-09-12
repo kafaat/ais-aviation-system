@@ -42,3 +42,13 @@ Normalized kinds: departure_estimate, departure_actual, arrival_actual, tobt, ts
 The operations agent now reads source timestamps instead of invented hourly delays. Departure OTP uses unique observed flights with a 15-minute threshold. Missing observations, utilization and turnaround evidence remain unknown; completing a flight no longer means it was on time. Briefing text preserves the unknown state.
 
 Validation: TypeScript and four signed-ingestion tests passed (including replay, changed payload, foreign tenant, unavailable capability, atomic rollback and stale-data behavior).
+
+## 06 — Temporal forecast evaluation
+
+Demand now means booked departing passengers per flight instance, cabin, airline and tenant. It includes itinerary-segment membership and excludes unconfirmed bookings and future departures from training. The model compares weekday and trailing means using rolling origins, selects on an earlier window, and reports error/coverage on a separate final 14-observation window. At least 42 historical flights are required; sparse or unavailable data raises an explicit error. Fixed holiday boosts and the unmeasured 95% confidence claim are removed. Published diagnostics include the training cutoff, target, sample sizes, baseline error, nominal coverage and measured validation coverage.
+
+`forecastDemand` now returns one target-departure observation instead of repeating a route total for each day. `reconcileForecastOutcomes` records completed-flight outcomes for this model version; `forecastAccuracy` scores one earliest pre-departure prediction per flight/cabin/target. Missing accuracy and undefined percentage denominators are null. Prediction persistence is required, not best effort.
+
+AI multipliers are shadow suggestions; the effective AI multiplier is one. Human-approved base-price changes use the patch-04 executor. The historical outcome is booked demand, not unconstrained latent demand; sell-out censoring and production challenger acceptance still require operator data.
+
+Validation: TypeScript and 25 forecast tests passed, including future-data exclusion, chronological comparison, zero actuals and sparse-data rejection.
