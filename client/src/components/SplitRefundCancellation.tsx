@@ -40,7 +40,8 @@ export function SplitRefundCancellation({
       onRefresh();
     },
   });
-  const summary = data.plan ?? data.quote;
+  const quote = data.quote;
+  const summary = data.plan ?? quote;
   if (!summary)
     return (
       <p role="alert">{data.reason ?? t("cancelBooking.notCancellable")}</p>
@@ -136,7 +137,7 @@ export function SplitRefundCancellation({
           </tbody>
         </table>
       </div>
-      {data.quote && (
+      {quote && (
         <>
           <Label htmlFor="split-refund-reason">
             {t("cancelBooking.reasonLabel")}
@@ -172,7 +173,7 @@ export function SplitRefundCancellation({
             onClick={() =>
               cancel.mutate({
                 bookingId,
-                quoteHash: data.quote!.quoteHash,
+                quoteHash: quote.quoteHash,
                 reason,
                 notes,
               })

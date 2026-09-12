@@ -138,10 +138,13 @@ export default function RefundsDashboard() {
         {!queue.isLoading && queue.data?.items.length === 0 && (
           <p>{t("admin.refunds.noRefunds")}</p>
         )}
-        {queue.data?.nextCursor && (
+        {queue.data?.nextCursor != null && (
           <Button
             variant="outline"
-            onClick={() => setCursor(queue.data!.nextCursor!)}
+            onClick={() => {
+              const next = queue.data?.nextCursor;
+              if (next != null) setCursor(next);
+            }}
           >
             {t("cancelBooking.split.more")}
           </Button>

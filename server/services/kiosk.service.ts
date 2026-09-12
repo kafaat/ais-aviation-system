@@ -473,7 +473,8 @@ export async function performCheckIn(
     }
 
     // Assign seat if provided
-    if (options.seatNumber) {
+    const requestedSeat = options.seatNumber;
+    if (requestedSeat) {
       await db.transaction(async tx => {
         // Check seat is not already taken
         const [seatTaken] = await tx
@@ -483,7 +484,7 @@ export async function performCheckIn(
           .where(
             and(
               eq(bookings.flightId, booking.flightId),
-              eq(passengers.seatNumber, options.seatNumber!),
+              eq(passengers.seatNumber, requestedSeat),
               sql`${bookings.status} IN ('confirmed', 'completed')`
             )
           )
@@ -498,7 +499,7 @@ export async function performCheckIn(
 
         await tx
           .update(passengers)
-          .set({ seatNumber: options.seatNumber! })
+          .set({ seatNumber: requestedSeat })
           .where(eq(passengers.id, passengerId));
       });
     }

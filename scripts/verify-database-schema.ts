@@ -78,12 +78,17 @@ try {
           unique: true,
           columns: [column.name],
         });
-      if (column.isUnique)
+      if (column.isUnique) {
+        if (!column.uniqueName)
+          throw new Error(
+            `Column ${column.name} is unique but has no constraint name to verify`
+          );
         expected.push({
-          name: column.uniqueName!,
+          name: column.uniqueName,
           unique: true,
           columns: [column.name],
         });
+      }
     }
     for (const key of config.primaryKeys)
       expected.push({
