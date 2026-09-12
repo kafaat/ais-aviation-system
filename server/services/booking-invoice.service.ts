@@ -123,8 +123,12 @@ export async function setInvoiceTotal(
     .where(eq(ndcOrders.bookingId, booking.id))
     .for("update");
   for (const order of orders) {
-    const payload = storedJson<Record<string, any>>(order.orderPayload, {});
-    payload.pricing = { ...payload.pricing, totalAmount };
+    const payload = storedJson<Record<string, unknown>>(order.orderPayload, {});
+    const pricing =
+      typeof payload.pricing === "object" && payload.pricing !== null
+        ? (payload.pricing as Record<string, unknown>)
+        : {};
+    payload.pricing = { ...pricing, totalAmount };
     await tx
       .update(ndcOrders)
       .set({

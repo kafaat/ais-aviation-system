@@ -58,7 +58,7 @@ export default function TravelAgentManagement() {
   const [statusFilter, setStatusFilter] = useState<
     "all" | "active" | "inactive"
   >("all");
-  const [selectedAgent, setSelectedAgent] = useState<any>(null);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
   const [commissionDialogOpen, setCommissionDialogOpen] = useState(false);
@@ -91,6 +91,7 @@ export default function TravelAgentManagement() {
   } = trpc.travelAgent.list.useQuery(
     statusFilter === "all" ? undefined : { isActive: statusFilter === "active" }
   );
+  type Agent = NonNullable<typeof agentsData>["agents"][number];
 
   const { data: pendingCommissions, refetch: refetchCommissions } =
     trpc.travelAgent.getPendingCommissions.useQuery();
@@ -191,14 +192,14 @@ export default function TravelAgentManagement() {
     registerMutation.mutate(registerForm);
   };
 
-  const handleToggleStatus = (agent: any) => {
+  const handleToggleStatus = (agent: Agent) => {
     updateStatusMutation.mutate({
       id: agent.id,
       isActive: !agent.isActive,
     });
   };
 
-  const handleRegenerateCredentials = (agent: any) => {
+  const handleRegenerateCredentials = (agent: Agent) => {
     if (
       confirm(
         t("travelAgent.admin.confirmRegenerate") ||
@@ -230,13 +231,13 @@ export default function TravelAgentManagement() {
     toast.success(t("common.copied") || "Copied to clipboard");
   };
 
-  const openCommissionDialog = (agent: any) => {
+  const openCommissionDialog = (agent: Agent) => {
     setSelectedAgent(agent);
     setNewCommissionRate(parseFloat(agent.commissionRate));
     setCommissionDialogOpen(true);
   };
 
-  const openStatsDialog = (agent: any) => {
+  const openStatsDialog = (agent: Agent) => {
     setSelectedAgent(agent);
     setStatsDialogOpen(true);
   };
@@ -257,13 +258,13 @@ export default function TravelAgentManagement() {
 
   const agents = agentsData?.agents || [];
   const totalAgents = agentsData?.total || 0;
-  const activeAgents = agents.filter((a: any) => a.isActive).length;
+  const activeAgents = agents.filter(a => a.isActive).length;
   const totalRevenue = agents.reduce(
-    (sum: number, a: any) => sum + a.totalRevenue,
+    (sum: number, a: Agent) => sum + a.totalRevenue,
     0
   );
   const totalCommission = agents.reduce(
-    (sum: number, a: any) => sum + a.totalCommission,
+    (sum: number, a: Agent) => sum + a.totalCommission,
     0
   );
 
@@ -309,7 +310,7 @@ export default function TravelAgentManagement() {
             <Plane className="h-4 w-4 text-muted-foreground" />
           </div>
           <p className="text-3xl font-bold">
-            {agents.reduce((sum: number, a: any) => sum + a.totalBookings, 0)}
+            {agents.reduce((sum: number, a: Agent) => sum + a.totalBookings, 0)}
           </p>
           <p className="text-xs text-muted-foreground mt-2">
             {t("travelAgent.admin.allAgents") || "All agents"}
@@ -433,7 +434,7 @@ export default function TravelAgentManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {agents.map((agent: any) => (
+                    {agents.map(agent => (
                       <TableRow key={agent.id}>
                         <TableCell>
                           <div className="font-medium">{agent.agencyName}</div>
@@ -586,7 +587,7 @@ export default function TravelAgentManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendingCommissions.map((commission: any) => (
+                  {pendingCommissions.map(commission => (
                     <TableRow key={commission.id}>
                       <TableCell className="font-medium">
                         {commission.agencyName}

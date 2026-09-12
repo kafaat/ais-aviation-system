@@ -355,7 +355,7 @@ export default function AnalyticsDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {flightOccupancy?.map((flight: any) => (
+                    {flightOccupancy?.map(flight => (
                       <tr key={flight.flightId} className="border-b">
                         <td className="p-2">{flight.flightNumber}</td>
                         <td className="p-2">

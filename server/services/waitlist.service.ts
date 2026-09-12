@@ -129,7 +129,7 @@ export async function addToWaitlist(
     notifyBySms,
   });
 
-  const insertId = (result as any).insertId;
+  const insertId = result.insertId;
 
   return {
     id: insertId,

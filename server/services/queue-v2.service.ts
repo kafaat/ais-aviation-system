@@ -304,11 +304,16 @@ export function startEmailWorker(): Worker {
       try {
         // Import email service dynamically to avoid circular dependencies
         const { sendBookingConfirmation } = await import("./email.service");
+        type BookingConfirmationData = Parameters<
+          typeof sendBookingConfirmation
+        >[0];
 
         switch (type) {
           case "booking-confirmation":
             if (bookingId && data) {
-              await sendBookingConfirmation(data as any);
+              await sendBookingConfirmation(
+                data as unknown as BookingConfirmationData
+              );
             }
             break;
 
@@ -335,8 +340,11 @@ export function startEmailWorker(): Worker {
         }
 
         console.info(`[Worker] Email job completed: ${job.id}`);
-      } catch (err: any) {
-        console.error(`[Worker] Email job failed: ${job.id}`, err.message);
+      } catch (err) {
+        console.error(
+          `[Worker] Email job failed: ${job.id}`,
+          err instanceof Error ? err.message : err
+        );
         throw err; // Re-throw to trigger retry
       }
     },
@@ -455,10 +463,10 @@ export function startWebhookRetryWorker(): Worker {
         console.info(
           `[Worker] Event ${eventId} processed successfully on retry`
         );
-      } catch (err: any) {
+      } catch (err) {
         console.error(
           `[Worker] Webhook retry failed for ${eventId}:`,
-          err.message
+          err instanceof Error ? err.message : err
         );
         throw err;
       }

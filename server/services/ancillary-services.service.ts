@@ -23,7 +23,10 @@ import {
 /**
  * Get all available ancillary services
  */
-export async function getAvailableAncillaries(category?: string) {
+/** The category values the schema actually accepts. */
+type AncillaryCategory = (typeof ancillaryServices.$inferSelect)["category"];
+
+export async function getAvailableAncillaries(category?: AncillaryCategory) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -33,7 +36,7 @@ export async function getAvailableAncillaries(category?: string) {
 
   const conditions = [eq(ancillaryServices.available, true)];
   if (category) {
-    conditions.push(eq(ancillaryServices.category, category as any));
+    conditions.push(eq(ancillaryServices.category, category));
   }
 
   return await db
@@ -74,7 +77,7 @@ export async function createAncillaryService(data: InsertAncillaryService) {
     });
 
   const [result] = await db.insert(ancillaryServices).values(data);
-  return Number((result as any).insertId);
+  return Number(result.insertId);
 }
 
 /**
@@ -132,7 +135,7 @@ export async function addAncillaryToBooking(
   },
   actor: InvoiceActor
 ) {
-  return withTransactionalIdempotency({
+  return await withTransactionalIdempotency({
     scope: "booking.ancillary.add",
     key: data.idempotencyKey,
     userId: actor.userId,
@@ -209,7 +212,7 @@ export async function removeAncillaryFromBooking(
 ) {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
-  return db.transaction(async tx => {
+  return await db.transaction(async tx => {
     const [identity] = await tx
       .select()
       .from(bookingAncillaries)
@@ -251,7 +254,7 @@ export async function removeAncillaryFromBooking(
  * Get ancillaries by category with filters
  */
 export async function getAncillariesByCategory(params: {
-  category: string;
+  category: AncillaryCategory;
   cabinClass?: string;
   airlineId?: number;
 }) {
@@ -267,7 +270,7 @@ export async function getAncillariesByCategory(params: {
     .from(ancillaryServices)
     .where(
       and(
-        eq(ancillaryServices.category, params.category as any),
+        eq(ancillaryServices.category, params.category),
         eq(ancillaryServices.available, true)
       )
     );

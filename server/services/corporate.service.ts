@@ -108,7 +108,7 @@ export async function createCorporateAccount(
     status: "pending",
   });
 
-  const insertId = (result as any).insertId || (result as any)[0]?.insertId;
+  const insertId = result[0].insertId;
 
   if (!insertId) {
     throw new TRPCError({
@@ -409,7 +409,7 @@ export async function addUserToCorporate(
     isActive: true,
   });
 
-  const insertId = (result as any).insertId || (result as any)[0]?.insertId;
+  const insertId = result[0].insertId;
 
   const created = await db
     .select()
@@ -465,7 +465,7 @@ export async function getCorporateUsers(corporateAccountId: number): Promise<
     )
     .orderBy(desc(corporateUsers.createdAt));
 
-  return results as any;
+  return results;
 }
 
 /**
@@ -513,7 +513,7 @@ export async function getUserCorporateAccount(
     )
     .limit(1);
 
-  return result.length > 0 ? (result[0] as any) : null;
+  return result.length > 0 ? result[0] : null;
 }
 
 /**
@@ -662,7 +662,7 @@ export async function createCorporateBooking(
     approvalStatus: "pending",
   });
 
-  const insertId = (result as any).insertId || (result as any)[0]?.insertId;
+  const insertId = result[0].insertId;
 
   const created = await db
     .select()
@@ -969,7 +969,7 @@ export async function getCorporateBookings(
     .where(whereClause)
     .orderBy(desc(corporateBookings.createdAt));
 
-  return results as any;
+  return results;
 }
 
 /**

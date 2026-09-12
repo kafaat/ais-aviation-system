@@ -63,7 +63,8 @@ export default function CorporateBookings() {
 
   // Dialog state
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedBooking, setSelectedBooking] =
+    useState<CorporateBooking | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 
@@ -71,7 +72,11 @@ export default function CorporateBookings() {
   const { data: account, isLoading: accountLoading } =
     trpc.corporate.getMyAccount.useQuery();
 
-  const filters: any = {};
+  const filters: {
+    approvalStatus?: ApprovalStatus;
+    costCenter?: string;
+    projectCode?: string;
+  } = {};
   if (statusFilter !== "all") {
     filters.approvalStatus = statusFilter;
   }
@@ -90,6 +95,7 @@ export default function CorporateBookings() {
     Object.keys(filters).length > 0 ? filters : undefined,
     { enabled: !!account }
   );
+  type CorporateBooking = NonNullable<typeof bookings>[number];
 
   // Mutations
   const approveMutation = trpc.corporate.approveBooking.useMutation({
@@ -126,13 +132,13 @@ export default function CorporateBookings() {
     });
   };
 
-  const openRejectDialog = (booking: any) => {
+  const openRejectDialog = (booking: CorporateBooking) => {
     setSelectedBooking(booking);
     setRejectionReason("");
     setRejectDialogOpen(true);
   };
 
-  const openDetailsDialog = (booking: any) => {
+  const openDetailsDialog = (booking: CorporateBooking) => {
     setSelectedBooking(booking);
     setDetailsDialogOpen(true);
   };
@@ -317,7 +323,7 @@ export default function CorporateBookings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bookings.map((booking: any) => (
+                {bookings.map(booking => (
                   <TableRow key={booking.id}>
                     <TableCell className="font-mono">
                       {booking.booking.bookingReference}

@@ -314,12 +314,14 @@ export async function withIdempotency<T>(
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-    } catch (insertErr: any) {
+    } catch (insertErr) {
       // Duplicate key error (MySQL error 1062 / ER_DUP_ENTRY)
+      const dbError = insertErr as { code?: string; errno?: number };
       if (
-        insertErr.code === "ER_DUP_ENTRY" ||
-        insertErr.errno === 1062 ||
-        (insertErr.message && insertErr.message.includes("Duplicate entry"))
+        dbError.code === "ER_DUP_ENTRY" ||
+        dbError.errno === 1062 ||
+        (insertErr instanceof Error &&
+          insertErr.message.includes("Duplicate entry"))
       ) {
         throw new AppError(
           ErrorCode.IDEMPOTENCY_IN_PROGRESS,
@@ -358,9 +360,10 @@ export async function withIdempotency<T>(
       `[Idempotency] Operation completed for ${opts.scope}:${opts.key}`
     );
     return result;
-  } catch (err: any) {
+  } catch (err) {
     // 5. Store error
-    const errorMessage = err.message || "Unknown error";
+    const errorMessage =
+      err instanceof Error && err.message ? err.message : "Unknown error";
     await db
       .update(idempotencyRequests)
       .set({
@@ -406,7 +409,7 @@ export async function cleanupExpiredIdempotencyRecords(): Promise<number> {
       .delete(idempotencyRequests)
       .where(lt(idempotencyRequests.expiresAt, now));
 
-    const deletedCount = (result as any).rowsAffected || 0;
+    const deletedCount = result[0].affectedRows;
     console.info(`[Idempotency] Cleaned up ${deletedCount} expired records`);
     return deletedCount;
   } catch (err) {

@@ -43,7 +43,7 @@ async function lockBooking(tx: SettlementTx, bookingId: number) {
   return booking;
 }
 async function lockSplits(tx: SettlementTx, bookingId: number) {
-  return tx
+  return await tx
     .select()
     .from(paymentSplits)
     .where(eq(paymentSplits.bookingId, bookingId))

@@ -32,10 +32,14 @@ echo "Backup persisted with checksum: $BACKUP_NAME"
 # than the image default so the dump is never written by root, and fsGroup gives
 # the same identity write access to the mounted PVC.
 MYSQL_UID = 999
-DEFAULT_IMAGE = "mysql:8.0"
-# Deliberately permissive on the reference form and strict on nothing else: a
-# digest-pinned reference is what production should use, but an unverified digest
-# hard-coded here would break every backup, so the choice stays with the operator.
+# Pinned by digest so a backup always runs the image that was reviewed, following
+# the same tag-plus-immutable-ref convention this repository uses for Actions. The
+# digest is the multi-platform OCI index for mysql:8.0 resolved from Docker Hub on
+# 2026-09-12, covering linux/amd64 and linux/arm64/v8. Refresh it deliberately —
+# a pinned image stops receiving upstream patches — with:
+#   docker buildx imagetools inspect mysql:8.0
+DEFAULT_IMAGE = ("mysql:8.0@sha256:"
+                 "7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b")
 IMAGE = re.compile(r"[a-z0-9][a-z0-9._\-/]*(?::[\w.\-]+)?(?:@sha256:[a-f0-9]{64})?")
 # 540s silently killed any dump that ran longer, with backoffLimit 0 leaving no
 # retry. The window is now the operator's to size against a measured dump.

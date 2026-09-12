@@ -491,7 +491,7 @@ export async function getPayerPaymentDetails(
  * Process payment for a split using Stripe checkout
  */
 export async function processPayerPayment(paymentToken: string) {
-  return createSplitCheckout(paymentToken);
+  return await createSplitCheckout(paymentToken);
 }
 
 /**
@@ -499,11 +499,13 @@ export async function processPayerPayment(paymentToken: string) {
  * Uses a transaction to atomically mark the split as paid, check if all splits
  * are paid, and update the booking status if so.
  */
-export async function markSplitPaid(
+export function markSplitPaid(
   _splitId: number,
   _paymentIntentId: string
 ): Promise<never> {
-  throw new Error("Use the provider-verified canonical settlement processor");
+  return Promise.reject(
+    new Error("Use the provider-verified canonical settlement processor")
+  );
 }
 
 /**
@@ -611,5 +613,5 @@ export async function sendAllPaymentRequests(
  * Resend payment request email
  */
 export async function resendPaymentRequest(splitId: number): Promise<boolean> {
-  return sendPaymentRequest(splitId);
+  return await sendPaymentRequest(splitId);
 }

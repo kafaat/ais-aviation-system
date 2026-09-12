@@ -260,7 +260,7 @@ if (
   import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
   if (process.argv.includes("--print-sql"))
-    console.log(forensicSql().trimEnd());
+    console.info(forensicSql().trimEnd());
   else {
     const output = process.argv.find(a => a.startsWith("--output="))?.slice(9);
     if (!process.argv.includes("--run") || !output)

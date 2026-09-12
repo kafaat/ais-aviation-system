@@ -343,7 +343,7 @@ export async function exportUserData(
   };
 
   const result = await db.insert(dataExportRequests).values(exportRequest);
-  const requestId = (result as any).insertId || result[0]?.insertId;
+  const requestId = result[0].insertId;
 
   // Log the request
   await createAuditLog({
@@ -705,7 +705,7 @@ export async function requestAccountDeletion(
   const result = await db
     .insert(accountDeletionRequests)
     .values(deletionRequest);
-  const requestId = (result as any).insertId || result[0]?.insertId;
+  const requestId = result[0].insertId;
 
   // Log the request
   await createAuditLog({

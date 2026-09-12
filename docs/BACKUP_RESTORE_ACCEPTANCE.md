@@ -69,10 +69,14 @@ sets `activeDeadlineSeconds` (default 3600, accepted range 300–43200); with
 `backoffLimit: 0` there is no retry, so measure a real dump and leave margin
 rather than discovering the limit during an incident. The deployment step derives
 its own `kubectl wait` timeout from whatever this produces. `PRODUCTION_BACKUP_IMAGE`
-overrides the `mysql:8.0` default and should carry a `@sha256:` digest in
-production, since the default tag is mutable; obtain one with
-`docker buildx imagetools inspect mysql:8.0`. Both variables fall back to the
-default when unset or empty.
+overrides the image; both variables fall back to the default when unset or empty.
+
+The default image is pinned by digest to the multi-platform `mysql:8.0` index
+resolved on 2026-09-12 (`linux/amd64` and `linux/arm64/v8`), so a backup always
+runs the client that was reviewed rather than whatever the tag points at that
+day. A pinned image stops receiving upstream patches, so refresh it deliberately
+with `docker buildx imagetools inspect mysql:8.0` and update `DEFAULT_IMAGE` in
+`scripts/k8s-backup-job.py`; a test enforces that the default stays digest-pinned.
 
 This is a logical database backup, with GTID restoration deliberately disabled.
 `--single-transaction` provides an InnoDB snapshot; concurrent schema changes must

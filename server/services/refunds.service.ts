@@ -3,13 +3,12 @@ import Stripe from "stripe";
 import { getDb } from "../db";
 import {
   bookings,
-  payments,
   users,
   flights,
   paymentSplits,
   paymentReceipts,
 } from "../../drizzle/schema";
-import { and, eq, sql, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
 import { trackRefundIssued } from "./metrics.service";
@@ -237,7 +236,6 @@ export async function createRefund(
       booking.stripePaymentIntentId
     );
     const cumulativeRefundedAmount = sumRefundAmounts(refundsAfterOperation);
-    const isFullRefund = cumulativeRefundedAmount >= booking.totalAmount;
 
     if (refund.status === "succeeded") {
       const chargeId =

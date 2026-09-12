@@ -15,7 +15,7 @@ import { withTransactionalIdempotency } from "./idempotency-v2.service";
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, eq, gte, lte, desc, sql } from "drizzle-orm";
+import { and, eq, gte, lte, desc, sql, type SQL } from "drizzle-orm";
 import { randomBytes, createHash } from "crypto";
 import { getDb } from "../db";
 import {
@@ -185,7 +185,7 @@ export async function registerAgent(
     apiSecret: apiSecretHash,
   });
 
-  const agentId = (result as any).insertId || result[0]?.insertId;
+  const agentId = result[0].insertId;
 
   // Fetch the created agent
   const [agent] = await db
@@ -830,7 +830,7 @@ export async function listAgents(
   const limit = Math.min(options.limit ?? 20, 100);
   const offset = (page - 1) * limit;
 
-  const conditions: any[] = [];
+  const conditions: SQL[] = [];
   if (options.isActive !== undefined) {
     conditions.push(eq(travelAgents.isActive, options.isActive));
   }
@@ -924,7 +924,7 @@ export async function updateCommissionStatus(
       message: "Database not available",
     });
 
-  const updateData: any = {
+  const updateData: Partial<typeof agentBookings.$inferInsert> = {
     commissionStatus: status,
     updatedAt: new Date(),
   };

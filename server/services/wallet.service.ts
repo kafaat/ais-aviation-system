@@ -219,17 +219,19 @@ export async function payFromWallet(userId: number, bookingId: number) {
 /**
  * Refund to wallet
  */
-export async function refundToWallet(
+export function refundToWallet(
   _userId: number,
   _amount: number,
   _description: string,
   _bookingId?: number
 ): Promise<never> {
-  throw new TRPCError({
-    code: "PRECONDITION_FAILED",
-    message:
-      "Unlinked wallet credits are disabled; reconcile a verified original payment first",
-  });
+  return Promise.reject(
+    new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Unlinked wallet credits are disabled; reconcile a verified original payment first",
+    })
+  );
 }
 
 /**

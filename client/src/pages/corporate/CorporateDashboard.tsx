@@ -347,7 +347,7 @@ export default function CorporateDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bookings.slice(0, 5).map((booking: any) => (
+                {bookings.slice(0, 5).map(booking => (
                   <TableRow key={booking.id}>
                     <TableCell className="font-mono">
                       {booking.booking.bookingReference}
@@ -442,7 +442,7 @@ export default function CorporateDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((member: any) => (
+              {users.map(member => (
                 <TableRow key={member.id}>
                   <TableCell>{member.user.name || "-"}</TableCell>
                   <TableCell>{member.user.email}</TableCell>

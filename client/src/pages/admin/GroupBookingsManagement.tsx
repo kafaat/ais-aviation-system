@@ -62,7 +62,9 @@ export default function GroupBookingsManagement() {
   // Dialog state
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedBooking, setSelectedBooking] = useState<GroupBooking | null>(
+    null
+  );
   const [discountPercent, setDiscountPercent] = useState(5);
   const [rejectionReason, setRejectionReason] = useState("");
 
@@ -77,6 +79,7 @@ export default function GroupBookingsManagement() {
   } = trpc.groupBookings.list.useQuery(
     statusFilter === "all" ? undefined : { status: statusFilter }
   );
+  type GroupBooking = NonNullable<typeof bookings>[number];
 
   // Mutations
   const approveMutation = trpc.groupBookings.approve.useMutation({
@@ -123,7 +126,7 @@ export default function GroupBookingsManagement() {
     });
   };
 
-  const openApproveDialog = (booking: any) => {
+  const openApproveDialog = (booking: GroupBooking) => {
     setSelectedBooking(booking);
     // Calculate suggested discount based on group size
     if (booking.groupSize >= 50) {
@@ -136,7 +139,7 @@ export default function GroupBookingsManagement() {
     setApproveDialogOpen(true);
   };
 
-  const openRejectDialog = (booking: any) => {
+  const openRejectDialog = (booking: GroupBooking) => {
     setSelectedBooking(booking);
     setRejectionReason("");
     setRejectDialogOpen(true);
@@ -320,7 +323,7 @@ export default function GroupBookingsManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bookings.map((booking: any) => (
+                {bookings.map(booking => (
                   <TableRow key={booking.id}>
                     <TableCell className="font-medium">#{booking.id}</TableCell>
                     <TableCell>

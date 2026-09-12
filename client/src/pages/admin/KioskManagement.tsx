@@ -300,8 +300,7 @@ export default function KioskManagement() {
 
   // ---------- Queries ----------
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const kioskTrpc = (trpc as any).kiosk as {
+  const kioskTrpc = trpc.kiosk as {
     getDevices: {
       useQuery: (
         input?: {

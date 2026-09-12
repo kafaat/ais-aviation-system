@@ -360,7 +360,7 @@ describe("Account Lock Service", () => {
 
   describe("cleanupOldLoginAttempts", () => {
     it("should delete old login attempts", async () => {
-      mockDb.where.mockResolvedValue({ rowsAffected: 5 });
+      mockDb.where.mockResolvedValue([{ affectedRows: 5 }]);
 
       const count = await cleanupOldLoginAttempts(30);
       expect(mockDb.delete).toHaveBeenCalled();
@@ -368,7 +368,7 @@ describe("Account Lock Service", () => {
     });
 
     it("should return 0 when no rows affected", async () => {
-      mockDb.where.mockResolvedValue({});
+      mockDb.where.mockResolvedValue([{ affectedRows: 0 }]);
 
       const count = await cleanupOldLoginAttempts();
       expect(count).toBe(0);

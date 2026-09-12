@@ -81,7 +81,7 @@ export const reconciliationWorker = redisConnection
         },
       }
     )
-  : (null as any); // Fallback when Redis is not available
+  : null; // No worker when Redis is not configured
 
 // ============================================================================
 // Event Handlers

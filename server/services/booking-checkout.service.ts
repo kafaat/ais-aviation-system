@@ -221,7 +221,7 @@ export async function reserveBookingCheckout(
 ): Promise<Claim> {
   const db = getDb();
   if (!db) throw unavailable("Database unavailable");
-  return db.transaction(async tx => {
+  return await db.transaction(async tx => {
     const booking = await ownedPending(tx, owner.bookingId, owner.userId);
     const [existing] = await tx
       .select()

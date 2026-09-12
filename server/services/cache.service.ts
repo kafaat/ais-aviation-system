@@ -84,7 +84,10 @@ class CacheService {
   /**
    * Generate cache key from query parameters
    */
-  private generateCacheKey(prefix: string, params: any): string {
+  private generateCacheKey(
+    prefix: string,
+    params: Record<string, unknown>
+  ): string {
     const paramsString = JSON.stringify(params, Object.keys(params).sort());
     const hash = crypto.createHash("md5").update(paramsString).digest("hex");
     return `${CACHE_PREFIX}:${prefix}:${hash}`;
@@ -176,7 +179,11 @@ class CacheService {
   /**
    * Set value in cache
    */
-  async set(key: string, value: any, ttlSeconds: number = 300): Promise<void> {
+  async set(
+    key: string,
+    value: unknown,
+    ttlSeconds: number = 300
+  ): Promise<void> {
     if (!this.isConnected()) {
       return;
     }
@@ -264,7 +271,7 @@ class CacheService {
       passengers?: number;
       cabinClass?: string;
     },
-    results: any,
+    results: unknown,
     ttlSeconds: number = 120 // 2 minutes default
   ): Promise<void> {
     if (!this.isConnected()) {
@@ -298,7 +305,7 @@ class CacheService {
     date: string;
     passengers?: number;
     cabinClass?: string;
-  }): Promise<any | null> {
+  }): Promise<unknown | null> {
     if (!this.isConnected()) {
       return null;
     }
@@ -375,7 +382,7 @@ class CacheService {
    */
   async cacheFlightDetails(
     flightId: number,
-    details: any,
+    details: unknown,
     ttlSeconds: number = 300 // 5 minutes
   ): Promise<void> {
     if (!this.isConnected()) {
@@ -393,7 +400,7 @@ class CacheService {
   /**
    * Get cached flight details
    */
-  async getCachedFlightDetails(flightId: number): Promise<any | null> {
+  async getCachedFlightDetails(flightId: number): Promise<unknown | null> {
     if (!this.isConnected()) {
       return null;
     }
@@ -431,7 +438,7 @@ class CacheService {
   async cachePricing(
     flightId: number,
     cabinClass: string,
-    pricing: any,
+    pricing: unknown,
     ttlSeconds: number = 60 // 1 minute (prices change frequently)
   ): Promise<void> {
     if (!this.isConnected()) {
@@ -456,7 +463,7 @@ class CacheService {
   async getCachedPricing(
     flightId: number,
     cabinClass: string
-  ): Promise<any | null> {
+  ): Promise<unknown | null> {
     if (!this.isConnected()) {
       return null;
     }
@@ -497,7 +504,7 @@ class CacheService {
    */
   async cacheUserSession(
     userId: number,
-    sessionData: any,
+    sessionData: unknown,
     ttlSeconds: number = 900 // 15 minutes
   ): Promise<void> {
     const key = `${CACHE_PREFIX}:session:${userId}`;
@@ -507,7 +514,7 @@ class CacheService {
   /**
    * Get cached user session
    */
-  async getCachedUserSession(userId: number): Promise<any | null> {
+  async getCachedUserSession(userId: number): Promise<unknown | null> {
     const key = `${CACHE_PREFIX}:session:${userId}`;
     return await this.get(key);
   }
@@ -588,8 +595,11 @@ class CacheService {
       const latency = Date.now() - start;
 
       return { status: "ok", latency };
-    } catch (error: any) {
-      return { status: "error", error: error.message };
+    } catch (error) {
+      return {
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
     }
   }
 

@@ -65,7 +65,9 @@ export default function MyWaitlist() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<any>(null);
+  const [selectedEntry, setSelectedEntry] = useState<WaitlistEntry | null>(
+    null
+  );
 
   const {
     data: waitlistEntries,
@@ -74,6 +76,7 @@ export default function MyWaitlist() {
   } = trpc.waitlist.myWaitlist.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+  type WaitlistEntry = NonNullable<typeof waitlistEntries>[number];
 
   const cancelEntry = trpc.waitlist.cancel.useMutation({
     onSuccess: () => {
@@ -110,7 +113,7 @@ export default function MyWaitlist() {
     },
   });
 
-  const getStatusBadgeStyle = (status: WaitlistStatus) => {
+  const getStatusBadgeStyle = (status: string) => {
     const styles: Record<WaitlistStatus, string> = {
       waiting:
         "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800",
@@ -123,10 +126,10 @@ export default function MyWaitlist() {
       cancelled:
         "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800",
     };
-    return styles[status] || styles.waiting;
+    return styles[status as WaitlistStatus] || styles.waiting;
   };
 
-  const getStatusIcon = (status: WaitlistStatus) => {
+  const getStatusIcon = (status: string) => {
     const icons: Record<WaitlistStatus, React.ReactNode> = {
       waiting: <Clock className="h-4 w-4" />,
       offered: <AlertCircle className="h-4 w-4" />,
@@ -134,7 +137,7 @@ export default function MyWaitlist() {
       expired: <Timer className="h-4 w-4" />,
       cancelled: <XCircle className="h-4 w-4" />,
     };
-    return icons[status] || icons.waiting;
+    return icons[status as WaitlistStatus] || icons.waiting;
   };
 
   // Loading Skeleton
@@ -258,12 +261,13 @@ export default function MyWaitlist() {
           </Empty>
         ) : (
           <div className="space-y-4">
-            {waitlistEntries.map((entry: any) => {
+            {waitlistEntries.map(entry => {
               const isOffered = entry.status === "offered";
+              const offerExpiresAt = entry.offerExpiresAt
+                ? new Date(entry.offerExpiresAt)
+                : null;
               const offerExpiring =
-                isOffered &&
-                entry.offerExpiresAt &&
-                new Date(entry.offerExpiresAt) > new Date();
+                isOffered && !!offerExpiresAt && offerExpiresAt > new Date();
 
               return (
                 <Card
@@ -286,7 +290,7 @@ export default function MyWaitlist() {
                   />
 
                   {/* Urgent offer notification */}
-                  {isOffered && offerExpiring && (
+                  {offerExpiring && offerExpiresAt && (
                     <div className="bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 px-6 py-3">
                       <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
                         <AlertCircle className="h-5 w-5" />
@@ -296,10 +300,10 @@ export default function MyWaitlist() {
                         <span className="text-sm">
                           -{" "}
                           {t("waitlist.offerExpires", {
-                            time: formatDistanceToNow(
-                              new Date(entry.offerExpiresAt),
-                              { locale: dateLocale, addSuffix: true }
-                            ),
+                            time: formatDistanceToNow(offerExpiresAt, {
+                              locale: dateLocale,
+                              addSuffix: true,
+                            }),
                           })}
                         </span>
                       </div>

@@ -12,7 +12,14 @@
  * @date 2026-01-26
  */
 
-import { Queue, Worker, Job, QueueEvents } from "bullmq";
+import {
+  Queue,
+  Worker,
+  Job,
+  QueueEvents,
+  type ConnectionOptions,
+  type JobsOptions,
+} from "bullmq";
 import { TRPCError } from "@trpc/server";
 import { logger } from "../_core/logger";
 import { getDb } from "../db";
@@ -67,7 +74,6 @@ class QueueService {
   private queues: Map<QueueName, Queue> = new Map();
   private workers: Map<QueueName, Worker> = new Map();
   private queueEvents: Map<QueueName, QueueEvents> = new Map();
-  private connection: any;
   private initialized: boolean = false;
 
   /**
@@ -85,7 +91,7 @@ class QueueService {
     }
 
     try {
-      this.connection = {
+      const connection: ConnectionOptions = {
         host: process.env.REDIS_HOST || "localhost",
         port: parseInt(process.env.REDIS_PORT || "6379"),
         password: process.env.REDIS_PASSWORD,
@@ -93,29 +99,37 @@ class QueueService {
       };
 
       // Initialize queues
-      this.initializeQueue(QueueName.EMAIL);
-      this.initializeQueue(QueueName.WEBHOOK_RETRY);
-      this.initializeQueue(QueueName.RECONCILIATION);
-      this.initializeQueue(QueueName.CLEANUP);
-      this.initializeQueue(QueueName.NOTIFICATIONS);
+      this.initializeQueue(QueueName.EMAIL, connection);
+      this.initializeQueue(QueueName.WEBHOOK_RETRY, connection);
+      this.initializeQueue(QueueName.RECONCILIATION, connection);
+      this.initializeQueue(QueueName.CLEANUP, connection);
+      this.initializeQueue(QueueName.NOTIFICATIONS, connection);
 
       // Initialize workers
-      this.initializeWorker(QueueName.EMAIL, this.processEmailJob.bind(this));
+      this.initializeWorker(
+        QueueName.EMAIL,
+        this.processEmailJob.bind(this),
+        connection
+      );
       this.initializeWorker(
         QueueName.WEBHOOK_RETRY,
-        this.processWebhookRetryJob.bind(this)
+        this.processWebhookRetryJob.bind(this),
+        connection
       );
       this.initializeWorker(
         QueueName.RECONCILIATION,
-        this.processReconciliationJob.bind(this)
+        this.processReconciliationJob.bind(this),
+        connection
       );
       this.initializeWorker(
         QueueName.CLEANUP,
-        this.processCleanupJob.bind(this)
+        this.processCleanupJob.bind(this),
+        connection
       );
       this.initializeWorker(
         QueueName.NOTIFICATIONS,
-        this.processNotificationJob.bind(this)
+        this.processNotificationJob.bind(this),
+        connection
       );
 
       // Schedule recurring jobs
@@ -139,9 +153,12 @@ class QueueService {
   /**
    * Initialize a queue
    */
-  private initializeQueue(queueName: QueueName): void {
+  private initializeQueue(
+    queueName: QueueName,
+    connection: ConnectionOptions
+  ): void {
     const queue = new Queue(queueName, {
-      connection: this.connection,
+      connection,
       defaultJobOptions: {
         attempts: 3,
         backoff: {
@@ -162,7 +179,7 @@ class QueueService {
 
     // Setup queue events
     const queueEvents = new QueueEvents(queueName, {
-      connection: this.connection,
+      connection,
     });
 
     queueEvents.on("completed", ({ jobId }) => {
@@ -181,10 +198,11 @@ class QueueService {
    */
   private initializeWorker(
     queueName: QueueName,
-    processor: (job: Job) => Promise<any>
+    processor: (job: Job) => Promise<unknown>,
+    connection: ConnectionOptions
   ): void {
     const worker = new Worker(queueName, processor, {
-      connection: this.connection,
+      connection,
       concurrency: 5,
     });
 
@@ -211,8 +229,8 @@ class QueueService {
   async addJob(
     queueName: QueueName,
     jobName: string,
-    data: any,
-    options?: any
+    data: unknown,
+    options?: JobsOptions
   ): Promise<Job | null> {
     const queue = this.getQueue(queueName);
     if (!queue) {
@@ -595,12 +613,15 @@ class QueueService {
             );
             mismatches++;
           }
-        } catch (stripeError: any) {
+        } catch (stripeError) {
           logger.error(
             {
               bookingId: booking.id,
               paymentIntentId: booking.stripePaymentIntentId,
-              error: stripeError.message,
+              error:
+                stripeError instanceof Error
+                  ? stripeError.message
+                  : "Unknown error",
             },
             "Reconciliation: Failed to fetch from Stripe"
           );
@@ -708,7 +729,7 @@ class QueueService {
             .delete(idempotencyRequests)
             .where(lt(idempotencyRequests.expiresAt, expiredDate));
 
-          deletedCount = (result as any)[0]?.affectedRows || 0;
+          deletedCount = result[0]?.affectedRows ?? 0;
           break;
         }
 
@@ -720,7 +741,7 @@ class QueueService {
             .delete(refreshTokens)
             .where(lt(refreshTokens.expiresAt, now));
 
-          deletedCount = (result as any)[0]?.affectedRows || 0;
+          deletedCount = result[0]?.affectedRows ?? 0;
           break;
         }
 
@@ -743,7 +764,7 @@ class QueueService {
               )
             );
 
-          deletedCount = (result as any)[0]?.affectedRows || 0;
+          deletedCount = result[0]?.affectedRows ?? 0;
           break;
         }
 
@@ -761,7 +782,7 @@ class QueueService {
               )
             );
 
-          deletedCount = (result as any)[0]?.affectedRows || 0;
+          deletedCount = result[0]?.affectedRows ?? 0;
           break;
         }
 
@@ -856,7 +877,11 @@ class QueueService {
     cabinClass: string;
     numberOfPassengers: number;
     totalAmount: string;
-    attachments?: any[];
+    attachments?: Array<{
+      filename: string;
+      content: Buffer | string;
+      contentType?: string;
+    }>;
   }): Promise<void> {
     await this.addJob(QueueName.EMAIL, EmailJobType.BOOKING_CONFIRMATION, {
       type: EmailJobType.BOOKING_CONFIRMATION,
@@ -901,7 +926,7 @@ class QueueService {
   async scheduleWebhookRetry(data: {
     eventId: string;
     eventType: string;
-    payload: any;
+    payload: unknown;
   }): Promise<void> {
     await this.addJob(QueueName.WEBHOOK_RETRY, "retry-webhook", data, {
       delay: 5000, // Retry after 5 seconds
@@ -934,12 +959,12 @@ class QueueService {
   /**
    * Get queue stats
    */
-  async getStats(): Promise<Record<string, any>> {
+  async getStats(): Promise<Record<string, string | Record<string, number>>> {
     if (!this.initialized) {
       return { status: "disabled" };
     }
 
-    const stats: Record<string, any> = {};
+    const stats: Record<string, Record<string, number>> = {};
 
     for (const [name, queue] of this.queues) {
       const counts = await queue.getJobCounts();

@@ -179,7 +179,7 @@ export async function calculateFlightPrice(
   passengers?: Array<{ type: "adult" | "child" | "infant" }>,
   userId?: number,
   sessionId?: string
-): Promise<{ price: number; pricing?: any }> {
+) {
   const basePrice =
     cabinClass === "economy" ? flight.economyPrice : flight.businessPrice;
 

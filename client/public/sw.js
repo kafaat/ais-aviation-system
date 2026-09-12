@@ -168,48 +168,6 @@ async function cacheFirstStrategy(request) {
 }
 
 /**
- * Network-first strategy: try network, fall back to cache.
- * Best for API calls and dynamic content where freshness is critical.
- */
-async function networkFirstStrategy(request) {
-  if (isApiRequest(new URL(request.url))) return networkOnlyStrategy(request);
-  try {
-    const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
-      // Cache successful responses for offline fallback
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, networkResponse.clone());
-    }
-    return networkResponse;
-  } catch (_error) {
-    // Network failed - try serving from cache
-    const cachedResponse = await caches.match(request);
-    if (cachedResponse) {
-      return cachedResponse;
-    }
-
-    // For API requests, return a structured JSON error
-    if (isApiRequest(new URL(request.url))) {
-      return new Response(
-        JSON.stringify({
-          error: "OFFLINE",
-          message: "You are currently offline. This data is not available.",
-        }),
-        {
-          status: 503,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    return new Response("Content not available offline", {
-      status: 503,
-      statusText: "Service Unavailable",
-    });
-  }
-}
-
-/**
  * Navigation strategy: network-first with offline HTML fallback.
  * For page navigations, always try network first. If offline,
  * serve the dedicated offline page.

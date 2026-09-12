@@ -151,8 +151,9 @@ export const kioskRouter = router({
         .optional()
     )
     .output(responseContracts["getDevices"])
-    .query(async ({ input }) =>
-      kioskService.getKioskDevices(input ?? undefined)
+    .query(
+      async ({ input }) =>
+        await kioskService.getKioskDevices(input ?? undefined)
     ),
 
   registerDevice: adminProcedure
@@ -168,18 +169,19 @@ export const kioskRouter = router({
       })
     )
     .output(responseContracts["registerDevice"])
-    .mutation(async ({ input }) =>
-      kioskService.registerKiosk(
-        input.airportId,
-        input.terminal,
-        input.location,
-        {
-          hardwareType: input.hardwareType,
-          hasPrinter: input.hasPrinter,
-          hasScanner: input.hasScanner,
-          hasPayment: input.hasPayment,
-        }
-      )
+    .mutation(
+      async ({ input }) =>
+        await kioskService.registerKiosk(
+          input.airportId,
+          input.terminal,
+          input.location,
+          {
+            hardwareType: input.hardwareType,
+            hasPrinter: input.hasPrinter,
+            hasScanner: input.hasScanner,
+            hasPayment: input.hasPayment,
+          }
+        )
     ),
 
   getAnalytics: adminProcedure
@@ -191,15 +193,18 @@ export const kioskRouter = router({
       })
     )
     .output(responseContracts["getAnalytics"])
-    .query(async ({ input }) =>
-      kioskService.getKioskAnalytics(input.airportId, {
-        from: input.from,
-        to: input.to,
-      })
+    .query(
+      async ({ input }) =>
+        await kioskService.getKioskAnalytics(input.airportId, {
+          from: input.from,
+          to: input.to,
+        })
     ),
 
   getDeviceStatus: adminProcedure
     .input(z.object({ kioskId: z.number().positive() }))
     .output(responseContracts["getDeviceStatus"])
-    .query(async ({ input }) => kioskService.getKioskStatus(input.kioskId)),
+    .query(
+      async ({ input }) => await kioskService.getKioskStatus(input.kioskId)
+    ),
 });

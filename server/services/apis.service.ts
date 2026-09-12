@@ -1285,6 +1285,9 @@ function formatEdifactTime(date: Date): string {
  * Submit APIS data to destination country authorities.
  * Generates the appropriate message and records the submission.
  */
+// Stays async with nothing to await: the synchronous validation throw below
+// must reach callers as a rejection, not as a synchronous throw.
+// eslint-disable-next-line require-await
 export async function submitToAuthorities(
   flightId: number,
   destination: string

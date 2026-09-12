@@ -148,7 +148,7 @@ export async function createGroupBookingRequest(
     status: "pending",
   });
 
-  const insertId = (result as any).insertId || (result as any)[0]?.insertId;
+  const insertId = result[0].insertId;
 
   if (!insertId) {
     throw new TRPCError({
@@ -490,6 +490,7 @@ export async function getGroupBookingsWithFlightDetails(
       organizerPhone: groupBookings.organizerPhone,
       groupSize: groupBookings.groupSize,
       flightId: groupBookings.flightId,
+      cabinClass: groupBookings.cabinClass,
       status: groupBookings.status,
       discountPercent: groupBookings.discountPercent,
       totalPrice: groupBookings.totalPrice,
@@ -511,5 +512,5 @@ export async function getGroupBookingsWithFlightDetails(
     .where(whereClause)
     .orderBy(desc(groupBookings.createdAt));
 
-  return results as any;
+  return results;
 }

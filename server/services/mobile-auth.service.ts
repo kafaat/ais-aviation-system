@@ -51,7 +51,7 @@ function generateToken(
   };
 
   const options: SignOptions = {
-    expiresIn: expiresIn as any,
+    expiresIn: expiresIn as SignOptions["expiresIn"],
     issuer: "ais-aviation",
     audience: "ais-mobile",
   };
@@ -307,7 +307,7 @@ export async function cleanupExpiredTokens(): Promise<void> {
     .delete(refreshTokens)
     .where(lt(refreshTokens.expiresAt, new Date()));
 
-  const affectedRows = (result as any)[0]?.affectedRows || 0;
+  const affectedRows = result[0].affectedRows;
   logger.info(
     {
       deletedCount: affectedRows,

@@ -64,7 +64,7 @@ export default function CorporateManagement() {
   // Dialog state
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<any>(null);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [creditLimit, setCreditLimit] = useState(0);
   const [discountPercent, setDiscountPercent] = useState(0);
 
@@ -76,6 +76,7 @@ export default function CorporateManagement() {
   } = trpc.corporate.listAccounts.useQuery(
     statusFilter === "all" ? undefined : { status: statusFilter }
   );
+  type Account = NonNullable<typeof accounts>[number];
 
   const { data: accountStats } = trpc.corporate.getAccountStats.useQuery(
     { id: selectedAccount?.id || 0 },
@@ -114,12 +115,12 @@ export default function CorporateManagement() {
     },
   });
 
-  const openDetailsDialog = (account: any) => {
+  const openDetailsDialog = (account: Account) => {
     setSelectedAccount(account);
     setDetailsDialogOpen(true);
   };
 
-  const openSettingsDialog = (account: any) => {
+  const openSettingsDialog = (account: Account) => {
     setSelectedAccount(account);
     setCreditLimit(account.creditLimit / 100);
     setDiscountPercent(Number(account.discountPercent) || 0);
@@ -319,7 +320,7 @@ export default function CorporateManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {accounts.map((account: any) => (
+                {accounts.map(account => (
                   <TableRow key={account.id}>
                     <TableCell className="font-medium">#{account.id}</TableCell>
                     <TableCell>

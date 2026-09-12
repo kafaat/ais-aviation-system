@@ -154,7 +154,7 @@ export const paymentsRouter = router({
           code: "PRECONDITION_FAILED",
           message: "Provider settlement integration is not available",
         });
-      return createBookingCheckout({
+      return await createBookingCheckout({
         bookingId: input.bookingId,
         userId: ctx.user.id,
         email: ctx.user.email,

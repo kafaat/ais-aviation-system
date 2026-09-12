@@ -324,7 +324,7 @@ async function replaceItinerary(
       cabinClass: offer.cabinClass as "economy" | "business",
     })
     .where(eq(bookings.id, booking.id));
-  const payload = storedJson<Record<string, any>>(order.orderPayload, {});
+  const payload = storedJson<Record<string, unknown>>(order.orderPayload, {});
   payload.offerId = offer.offerId;
   payload.segments = segments;
   payload.pricing = {
@@ -378,7 +378,7 @@ export async function changeUnpaidOrder(
       code: "BAD_REQUEST",
       message: "No changes requested",
     });
-  return withTransactionalIdempotency({
+  return await withTransactionalIdempotency({
     scope: "ndc.order.change",
     key: input.idempotencyKey,
     userId: input.userId,
@@ -442,7 +442,10 @@ export async function changeUnpaidOrder(
             .strict()
             .parse(changes.contactInfoUpdate)
         );
-      const payload = storedJson<Record<string, any>>(current.orderPayload, {});
+      const payload = storedJson<Record<string, unknown>>(
+        current.orderPayload,
+        {}
+      );
       payload.passengers = context.ndcPassengers;
       payload.contactInfo = contact;
       await tx
@@ -474,7 +477,7 @@ export async function serviceUnpaidOrder(
       code: "BAD_REQUEST",
       message: "Request 1 to 20 ancillary items",
     });
-  return withTransactionalIdempotency({
+  return await withTransactionalIdempotency({
     scope: "ndc.order.services",
     key: input.idempotencyKey,
     userId: input.userId,
