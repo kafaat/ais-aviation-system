@@ -185,7 +185,7 @@ export async function registerAgent(
     apiSecret: apiSecretHash,
   });
 
-  const agentId = (result as any).insertId || result[0]?.insertId;
+  const agentId = result[0].insertId;
 
   // Fetch the created agent
   const [agent] = await db

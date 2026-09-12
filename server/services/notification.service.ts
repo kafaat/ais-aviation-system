@@ -70,7 +70,7 @@ export async function createNotification(
       isRead: false,
     });
 
-    const insertId = (result as any)?.insertId;
+    const insertId = result.insertId;
 
     if (insertId == null) {
       throw new TRPCError({
@@ -262,7 +262,7 @@ export async function markAllAsRead(
         and(eq(notifications.userId, userId), eq(notifications.isRead, false))
       );
 
-    const affectedRows = (result as any).affectedRows || 0;
+    const affectedRows = result[0].affectedRows;
 
     console.info(
       `[Notification] Marked ${affectedRows} notifications as read for user ${userId}`
@@ -382,7 +382,7 @@ export async function deleteAllNotifications(
       .delete(notifications)
       .where(eq(notifications.userId, userId));
 
-    const affectedRows = (result as any).affectedRows || 0;
+    const affectedRows = result[0].affectedRows;
 
     console.info(
       `[Notification] Deleted ${affectedRows} notifications for user ${userId}`
@@ -642,7 +642,7 @@ export async function cleanupOldNotifications(
         )
       );
 
-    const affectedRows = (result as any).affectedRows || 0;
+    const affectedRows = result[0].affectedRows;
 
     console.info(
       `[Notification] Cleaned up ${affectedRows} old notifications older than ${daysOld} days`

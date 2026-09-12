@@ -407,7 +407,7 @@ export async function cleanupExpiredIdempotencyRecords(): Promise<number> {
       .delete(idempotencyRequests)
       .where(lt(idempotencyRequests.expiresAt, now));
 
-    const deletedCount = (result as any).rowsAffected || 0;
+    const deletedCount = result[0].affectedRows;
     console.info(`[Idempotency] Cleaned up ${deletedCount} expired records`);
     return deletedCount;
   } catch (err) {

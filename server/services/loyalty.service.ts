@@ -65,7 +65,7 @@ export async function getOrCreateLoyaltyAccount(userId: number) {
     const [newAccount] = await database
       .select()
       .from(loyaltyAccounts)
-      .where(eq(loyaltyAccounts.id, (result as any).insertId))
+      .where(eq(loyaltyAccounts.id, result.insertId))
       .limit(1);
 
     if (!newAccount) {

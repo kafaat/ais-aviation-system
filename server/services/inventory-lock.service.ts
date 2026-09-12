@@ -178,7 +178,7 @@ export async function releaseExpiredLocks(): Promise<number> {
         )
       );
 
-    const affectedRows = (result as any).affectedRows || 0;
+    const affectedRows = result.affectedRows;
 
     if (affectedRows > 0) {
       console.info(`[Inventory] Released ${affectedRows} expired locks`);

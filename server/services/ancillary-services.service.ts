@@ -74,7 +74,7 @@ export async function createAncillaryService(data: InsertAncillaryService) {
     });
 
   const [result] = await db.insert(ancillaryServices).values(data);
-  return Number((result as any).insertId);
+  return Number(result.insertId);
 }
 
 /**

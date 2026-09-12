@@ -148,7 +148,7 @@ export async function createGroupBookingRequest(
     status: "pending",
   });
 
-  const insertId = (result as any).insertId || (result as any)[0]?.insertId;
+  const insertId = result[0].insertId;
 
   if (!insertId) {
     throw new TRPCError({

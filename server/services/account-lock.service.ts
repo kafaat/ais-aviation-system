@@ -472,7 +472,7 @@ export async function cleanupOldLoginAttempts(
     .delete(loginAttempts)
     .where(lt(loginAttempts.attemptedAt, cutoffDate));
 
-  const deletedCount = (result as any).rowsAffected || 0;
+  const deletedCount = result[0].affectedRows;
 
   logger.info(
     {
