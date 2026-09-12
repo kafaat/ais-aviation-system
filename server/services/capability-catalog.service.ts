@@ -10,11 +10,20 @@ export const capabilityCatalog = [
   },
   {
     id: "ndcPaidServicing",
-    implementation: "blocked",
-    owner: "ndc.service",
-    consumer: "ndc.changeOrder and ndc.addServices",
+    implementation: "implemented",
+    owner: "order-servicing.service and payment-settlement.service",
+    consumer:
+      "ndc.quotePaidService, ndc.confirmNoChargeService and payments.createModificationCheckout",
     requirement:
-      "Paid/ticketed exchange, verified fare difference settlement, travel-document servicing and contracted EMD issuance",
+      "Local paid SAR itinerary exchange and catalog entitlements before check-in; same tenant/airline and cabin across up to six segments, no unresolved ancillary fulfillment. Original Stripe payer refund receipts required for a lower fare.",
+  },
+  {
+    id: "ndcExternalFulfillment",
+    implementation: "blocked",
+    owner: "contracted ticket/EMD provider",
+    consumer: "order servicing fulfillment",
+    requirement:
+      "Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts",
   },
   {
     id: "kioskHardware",

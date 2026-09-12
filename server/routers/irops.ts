@@ -1,3 +1,9 @@
+import {
+  proposeRecovery,
+  approveRecovery,
+  executeRecovery,
+  recoveryInput,
+} from "../services/irops-recovery.service";
 import { responseContracts } from "../contracts/irops";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
@@ -22,6 +28,37 @@ import { TRPCError } from "@trpc/server";
  * and recovery operations.
  */
 export const iropsRouter = router({
+  proposeRecovery: adminProcedure
+    .input(recoveryInput)
+    .output(
+      z.object({
+        id: z.string().uuid(),
+        digest: z.string(),
+        expiresAt: z.date(),
+        choices: z.array(
+          z.object({ bookingId: z.number(), key: z.string().nullable() })
+        ),
+        optimal: z.boolean(),
+        gap: z.number().nullable(),
+        unassignedPassengers: z.number(),
+        passengerDelayMinutes: z.number(),
+        nodes: z.number(),
+        objective: z.string(),
+      })
+    )
+    .mutation(({ input, ctx }) => proposeRecovery(input, ctx.tenantId)),
+  approveRecovery: adminProcedure
+    .input(z.object({ id: z.string().uuid(), digest: z.string().length(64) }))
+    .output(z.object({ id: z.string(), digest: z.string() }))
+    .mutation(({ input, ctx }) =>
+      approveRecovery(input.id, input.digest, ctx.user.id, ctx.tenantId)
+    ),
+  executeRecovery: adminProcedure
+    .input(z.object({ id: z.string().uuid(), digest: z.string().length(64) }))
+    .output(z.object({ receiptId: z.string() }))
+    .mutation(({ input, ctx }) =>
+      executeRecovery(input.id, input.digest, ctx.user.id, ctx.tenantId)
+    ),
   /**
    * Get IROPS dashboard summary
    * Returns active disruptions count, passengers affected, recovery rate, etc.

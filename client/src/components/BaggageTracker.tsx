@@ -1,3 +1,4 @@
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -48,6 +49,11 @@ export function BaggageTracker({
     }
   );
 
+  const { isAuthenticated } = useAuth();
+  const custody = trpc.baggage.custody.useQuery(
+    { tagNumber: searchTag },
+    { enabled: isAuthenticated && searchTag.length > 0 }
+  );
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (tagNumber.trim()) {
@@ -104,6 +110,33 @@ export function BaggageTracker({
 
   return (
     <div className="space-y-4">
+      {custody.data && (
+        <Card className="p-4 space-y-2">
+          <p className="font-medium">
+            {i18n.language === "ar"
+              ? "إثباتات تسليم الأمتعة"
+              : "Verified baggage handovers"}
+            : {custody.data.verifiedPoints}/{custody.data.requiredPoints}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {custody.data.complete
+              ? i18n.language === "ar"
+                ? "اكتملت نقاط التتبع المطلوبة"
+                : "Required custody points are complete"
+              : i18n.language === "ar"
+                ? "سلسلة التتبع غير مكتملة"
+                : "Custody history is incomplete"}
+          </p>
+          <ul className="text-xs space-y-1">
+            {custody.data.events.map(event => (
+              <li key={event.id}>
+                {event.stage} · {event.sourceId} ·{" "}
+                {event.observedAt.toLocaleString()}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {/* Search Form */}
       {showSearch && (
         <Card className="p-4">

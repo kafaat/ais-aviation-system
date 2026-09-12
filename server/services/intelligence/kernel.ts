@@ -205,11 +205,11 @@ export class IntelligenceKernel {
     // Operations summary
     const opsData = operations?.data as
       | {
-          otp?: number;
+          otp?: number | null;
           alerts?: OperationalAlert[];
         }
       | undefined;
-    const otp = opsData?.otp ?? 0;
+    const otp = opsData?.otp ?? null;
     const opsAlerts = opsData?.alerts ?? [];
 
     const briefing: IntelligenceBriefing = {
@@ -237,8 +237,14 @@ export class IntelligenceKernel {
         },
       },
       operations: {
-        summary: `OTP: ${otp}%. ${opsAlerts.length} active alerts.`,
-        summaryAr: `الأداء في الوقت المحدد: ${otp}%. ${opsAlerts.length} تنبيهات نشطة.`,
+        summary:
+          otp === null
+            ? "Departure OTP unavailable: source observations are missing."
+            : `OTP: ${otp}%. ${opsAlerts.length} active alerts.`,
+        summaryAr:
+          otp === null
+            ? "الأداء في الوقت المحدد غير متاح: بيانات الرصد مفقودة."
+            : `الأداء في الوقت المحدد: ${otp}%. ${opsAlerts.length} تنبيهات نشطة.`,
         otp,
         alerts: opsAlerts,
       },
@@ -433,7 +439,7 @@ export class IntelligenceKernel {
     // Operations contribution (40%)
     if (operations?.status === "completed") {
       const data = operations.data as
-        | { otp?: number; cancellationRate?: number }
+        | { otp?: number | null; cancellationRate?: number | null }
         | undefined;
       const otp = data?.otp ?? 0;
       const cancelRate = data?.cancellationRate ?? 0;

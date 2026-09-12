@@ -220,6 +220,30 @@ export const flights = mysqlTable(
 export type Flight = typeof flights.$inferSelect;
 export type InsertFlight = typeof flights.$inferInsert;
 
+/** Immutable airfare offers shared by direct booking and the NDC adapter.
+ * Ancillaries and payment/loyalty tenders keep their existing invoice authorities. */
+export const retailOffers = mysqlTable(
+  "retail_offers",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    flightId: int("flightId").notNull(),
+    tenantId: int("tenantId"),
+    userId: int("userId"),
+    channel: mysqlEnum("channel", ["direct", "ndc"]).notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    digest: varchar("digest", { length: 64 }).notNull(),
+    totalAmount: int("totalAmount").notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    consumedBookingId: int("consumedBookingId"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    expiresIdx: index("retail_offers_expires_idx").on(table.expiresAt),
+    bookingIdx: index("retail_offers_booking_idx").on(table.consumedBookingId),
+  })
+);
+
 /**
  * Bookings table
  */
@@ -339,6 +363,7 @@ export const passengers = mysqlTable(
     lastName: varchar("lastName", { length: 100 }).notNull(),
     dateOfBirth: timestamp("dateOfBirth"),
     passportNumber: varchar("passportNumber", { length: 20 }),
+    passportExpiry: timestamp("passportExpiry"),
     nationality: varchar("nationality", { length: 3 }), // ISO country code
     seatNumber: varchar("seatNumber", { length: 5 }), // e.g., "12A"
     ticketNumber: varchar("ticketNumber", { length: 13 }), // IATA 13-digit ticket number
@@ -615,6 +640,13 @@ export const bookingModifications = mysqlTable(
       "paid",
       "refunded",
     ]).default("pending"),
+
+    servicingPayload: json("servicingPayload").$type<Record<string, unknown>>(),
+    executionEventId: varchar("executionEventId", { length: 36 }),
+    checkoutRequestId: varchar("checkoutRequestId", { length: 36 }),
+    checkoutData: json("checkoutData").$type<Record<string, unknown>>(),
+    checkoutSessionId: varchar("checkoutSessionId", { length: 255 }),
+    checkoutUrl: text("checkoutUrl"),
 
     // Metadata
     reason: text("reason"),
@@ -3610,6 +3642,23 @@ export const flightDisruptions = mysqlTable(
     reason: varchar("reason", { length: 500 }).notNull(),
     severity: mysqlEnum("severity", ["minor", "moderate", "severe"]).notNull(),
 
+    // IROPS enrichment shares the canonical disruption identity and status.
+    iropsType: mysqlEnum("iropsType", [
+      "delay",
+      "cancellation",
+      "diversion",
+      "equipment_change",
+    ]),
+    iropsSeverity: mysqlEnum("iropsSeverity", [
+      "low",
+      "medium",
+      "high",
+      "critical",
+    ]),
+    escalationLevel: int("escalationLevel").default(1).notNull(),
+    estimatedRecoveryTime: timestamp("estimatedRecoveryTime"),
+    protectionStartedAt: timestamp("protectionStartedAt"),
+
     // Delay info
     originalDepartureTime: timestamp("originalDepartureTime"),
     newDepartureTime: timestamp("newDepartureTime"),
@@ -3634,6 +3683,40 @@ export const flightDisruptions = mysqlTable(
     createdAtIdx: index("flight_disruptions_created_at_idx").on(
       table.createdAt
     ),
+  })
+);
+
+export const iropsActions = mysqlTable(
+  "irops_actions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    eventId: int("eventId").notNull(),
+    requestKey: varchar("requestKey", { length: 191 }).notNull(),
+    actionType: mysqlEnum("actionType", [
+      "rebook",
+      "hotel",
+      "compensation",
+      "notification",
+      "meal_voucher",
+    ]).notNull(),
+    targetPassengerId: int("targetPassengerId"),
+    status: mysqlEnum("status", [
+      "pending",
+      "in_progress",
+      "completed",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    details: json("details").$type<Record<string, unknown>>().notNull(),
+    evidenceType: varchar("evidenceType", { length: 40 }),
+    evidenceId: varchar("evidenceId", { length: 191 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+  },
+  table => ({
+    requestIdx: uniqueIndex("irops_actions_request_idx").on(table.requestKey),
+    eventIdx: index("irops_actions_event_idx").on(table.eventId, table.status),
   })
 );
 
@@ -3747,6 +3830,9 @@ export const crewAssignments = mysqlTable(
     status: mysqlEnum("status", ["assigned", "confirmed", "onboard", "removed"])
       .default("assigned")
       .notNull(),
+    dutyStartTime: timestamp("dutyStartTime"),
+    dutyEndTime: timestamp("dutyEndTime"),
+    ruleEvidenceId: int("ruleEvidenceId"),
     notes: text("notes"),
     assignedBy: int("assignedBy"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -3935,6 +4021,9 @@ export const demandPredictions = mysqlTable(
     // Actual values (filled post-departure for model evaluation)
     actualDemand: decimal("actualDemand", { precision: 10, scale: 2 }),
     actualPrice: int("actualPrice"),
+
+    trainingCutoffAt: timestamp("trainingCutoffAt"),
+    diagnostics: json("diagnostics").$type<Record<string, unknown>>(),
 
     // Feature importances (JSON: { feature: weight })
     featureImportances: text("featureImportances"),
@@ -4238,6 +4327,9 @@ export const revenueOptimizationLogs = mysqlTable(
     autoApplied: boolean("autoApplied").default(false).notNull(),
     approvedBy: int("approvedBy"),
     approvedAt: timestamp("approvedAt"),
+    approvalDigest: varchar("approvalDigest", { length: 64 }),
+    approvalExpiresAt: timestamp("approvalExpiresAt"),
+    executionEventId: varchar("executionEventId", { length: 36 }),
 
     status: mysqlEnum("status", [
       "suggested",
@@ -5564,4 +5656,171 @@ export const bookingCheckoutRequests = mysqlTable("booking_checkout_requests", {
   checkoutUrl: text("checkoutUrl"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Immutable signed source evidence; business projections remain in their own authorities. */
+export const aviationEvidence = mysqlTable(
+  "aviation_evidence",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    sourceId: varchar("sourceId", { length: 64 }).notNull(),
+    sourceEventId: varchar("sourceEventId", { length: 128 }).notNull(),
+    tenantId: int("tenantId"),
+    flightId: int("flightId"),
+    kind: varchar("kind", { length: 50 }).notNull(),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    digest: varchar("digest", { length: 64 }).notNull(),
+    observedAt: timestamp("observedAt").notNull(),
+    receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+  },
+  t => ({
+    sourceEvent: uniqueIndex("aviation_source_event_unique").on(
+      t.sourceId,
+      t.sourceEventId
+    ),
+    flightKind: index("aviation_flight_kind_idx").on(
+      t.flightId,
+      t.kind,
+      t.observedAt
+    ),
+  })
+);
+
+/** Refund transport intents for order exchanges; financial_ledger remains the money authority. */
+export const orderServiceRefunds = mysqlTable(
+  "order_service_refunds",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    modificationId: int("modificationId").notNull(),
+    paymentIntentId: varchar("paymentIntentId", { length: 255 }).notNull(),
+    amount: int("amount").notNull(),
+    baseRefundedAmount: int("baseRefundedAmount").notNull(),
+    status: mysqlEnum("status", [
+      "queued",
+      "requesting",
+      "pending",
+      "succeeded",
+      "failed",
+      "review_required",
+    ])
+      .default("queued")
+      .notNull(),
+    refundId: varchar("refundId", { length: 255 }),
+    requestedAt: timestamp("requestedAt"),
+    nextAttemptAt: timestamp("nextAttemptAt").defaultNow().notNull(),
+    errorCode: varchar("errorCode", { length: 100 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+  },
+  t => ({
+    modificationPayment: uniqueIndex("order_refund_mod_payment_unique").on(
+      t.modificationId,
+      t.paymentIntentId
+    ),
+    pending: index("order_refund_pending_idx").on(t.status, t.nextAttemptAt),
+    booking: index("order_refund_booking_idx").on(t.bookingId),
+  })
+);
+
+export const baggageCustodyEvents = mysqlTable(
+  "baggage_custody_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    baggageId: int("baggageId").notNull(),
+    flightId: int("flightId").notNull(),
+    stage: mysqlEnum("stage", [
+      "acceptance",
+      "loading",
+      "transfer",
+      "arrival",
+    ]).notNull(),
+    evidenceId: int("evidenceId").notNull().unique(),
+    previousEvidenceId: int("previousEvidenceId"),
+    airportId: int("airportId").notNull(),
+    deviceId: varchar("deviceId", { length: 100 }).notNull(),
+    sourceId: varchar("sourceId", { length: 64 }).notNull(),
+    observedAt: timestamp("observedAt").notNull(),
+  },
+  t => ({
+    journey: index("baggage_custody_journey_idx").on(t.baggageId, t.observedAt),
+  })
+);
+
+export const iropsRecoveryPlans = mysqlTable(
+  "irops_recovery_plans",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    eventId: int("eventId").notNull(),
+    tenantId: int("tenantId"),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    digest: varchar("digest", { length: 64 }).notNull(),
+    status: mysqlEnum("status", ["proposed", "approved", "executed"])
+      .default("proposed")
+      .notNull(),
+    approvedBy: int("approvedBy"),
+    expiresAt: timestamp("expiresAt").notNull(),
+    executionEventId: varchar("executionEventId", { length: 36 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({ eventIdx: index("irops_recovery_event_idx").on(t.eventId, t.status) })
+);
+
+export const aircraftRotations = mysqlTable(
+  "aircraft_rotations",
+  {
+    flightId: int("flightId").primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    tenantId: int("tenantId"),
+    tailNumber: varchar("tailNumber", { length: 20 }).notNull(),
+    maintenanceEvidenceId: int("maintenanceEvidenceId").notNull(),
+    scheduleDigest: varchar("scheduleDigest", { length: 64 }).notNull(),
+    assignedBy: int("assignedBy").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    tailIdx: index("aircraft_rotation_tail_idx").on(t.airlineId, t.tailNumber),
+  })
+);
+
+export const premiumPolicies = mysqlTable(
+  "premium_policies",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    flightId: int("flightId").notNull(),
+    tenantId: int("tenantId"),
+    evidenceId: int("evidenceId").notNull(),
+    payload: json("payload").$type<Record<string, unknown>>().notNull(),
+    approvedBy: int("approvedBy").notNull(),
+    status: mysqlEnum("status", ["enabled", "paused"])
+      .default("enabled")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    evidenceIdx: uniqueIndex("premium_policy_evidence_idx").on(t.evidenceId),
+    flightIdx: index("premium_policy_flight_idx").on(t.flightId, t.status),
+  })
+);
+export const premiumAssignments = mysqlTable(
+  "premium_assignments",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    policyId: varchar("policyId", { length: 36 }).notNull(),
+    userId: int("userId").notNull(),
+    variant: mysqlEnum("variant", ["control", "treatment"]).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    visitorIdx: uniqueIndex("premium_assignment_visitor_idx").on(
+      t.policyId,
+      t.userId
+    ),
+  })
+);
+export const premiumConversions = mysqlTable("premium_conversions", {
+  bookingId: int("bookingId").primaryKey(),
+  assignmentId: varchar("assignmentId", { length: 36 }).notNull(),
+  offerId: varchar("offerId", { length: 36 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

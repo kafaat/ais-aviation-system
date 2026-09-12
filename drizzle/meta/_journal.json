@@ -148,6 +148,83 @@
       "when": 1789122556129,
       "tag": "0020_split_refund_cancellation",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1789236018825,
+      "tag": "0021_durable_irops",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1789236576645,
+      "tag": "0022_retail_offer_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1789237171339,
+      "tag": "0023_bound_price_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1789237523348,
+      "tag": "0024_aviation_source_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1789237862307,
+      "tag": "0025_temporal_forecast_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1789238815253,
+      "tag": "0026_paid_order_servicing",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1789239291527,
+      "tag": "0027_baggage_custody_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1789240442921,
+      "tag": "0028_crew_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "5",
+      "when": 1789240715244,
+      "tag": "0029_aircraft_rotation",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1789241026253,
+      "tag": "0030_premium_experiments",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1789241494714,
+      "tag": "0031_passenger_document_expiry",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,9 @@
 import {
+  createRetailOffer,
+  lockRetailOffer,
+  consumeRetailOffer,
+} from "./retail-offer.service";
+import {
   cancelBookingResources,
   type SettlementTx,
 } from "./booking-settlement.service";
@@ -1043,6 +1048,25 @@ export async function createOrder(
         });
       }
       const first = requireHold(held, segments[0].flightId);
+      const retailOfferId = safeParseJson<{ retailOfferId?: string }>(
+        offer.offerPayload,
+        {}
+      ).retailOfferId;
+      const canonicalOffer = retailOfferId
+        ? await lockRetailOffer(db, retailOfferId, {
+            flightId: segments[0].flightId,
+            tenantId: first.tenantId,
+            userId,
+            channel: "ndc",
+            cabinClass,
+            passengerTypes: params.passengers.map(p => p.type),
+          })
+        : undefined;
+      if (canonicalOffer && canonicalOffer.totalAmount !== offer.totalPrice)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "NDC offer price differs from its authoritative snapshot",
+        });
 
       const [bookingResult] = await db.insert(bookings).values({
         userId,
@@ -1068,6 +1092,9 @@ export async function createOrder(
         });
       }
 
+      if (canonicalOffer)
+        await consumeRetailOffer(db, canonicalOffer, bookingId);
+
       // Create passenger records in the bookings system
       const passengerRecords = params.passengers.map(p => ({
         bookingId,
@@ -1078,6 +1105,9 @@ export async function createOrder(
         lastName: p.lastName,
         dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth) : undefined,
         passportNumber: p.passportNumber,
+        passportExpiry: p.passportExpiry
+          ? new Date(p.passportExpiry)
+          : undefined,
         nationality: p.nationality,
       }));
 
@@ -1865,20 +1895,29 @@ export async function generateOfferFromFlight(params: {
     returnDate,
   } = params;
 
-  // Calculate pricing
-  const basePricePerPax =
-    cabinClass === "economy" || cabinClass === "premium_economy"
-      ? flight.economyPrice
-      : flight.businessPrice;
-
-  // Apply fare class multiplier if available
-  const multiplier = fareClass
-    ? parseFloat(String(fareClass.basePriceMultiplier))
-    : 1.0;
-  const adjustedBasePerPax = Math.round(basePricePerPax * multiplier);
-  const totalBasePrice = adjustedBasePerPax * passengerCount;
-  const taxesAndFees = Math.round(totalBasePrice * TAX_RATE);
-  const totalPrice = totalBasePrice + taxesAndFees;
+  if (cabinClass !== "economy" && cabinClass !== "business")
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "This airline supports economy and business inventory",
+    });
+  const retailOffer = await createRetailOffer({
+    flightId: flight.id,
+    cabinClass,
+    passengerTypes: Array.from(
+      { length: passengerCount },
+      () => "adult" as const
+    ),
+    channel: "ndc",
+    expiresAt,
+    ndcPolicy: {
+      fareMultiplier: fareClass ? Number(fareClass.basePriceMultiplier) : 1,
+      taxRate: TAX_RATE,
+      fareClassId: fareClass?.id,
+    },
+  });
+  const totalBasePrice = Number(retailOffer.payload.baseAmount);
+  const taxesAndFees = Number(retailOffer.payload.taxesAndFees);
+  const totalPrice = retailOffer.totalAmount;
 
   // Build segment
   const segmentKey = generateNdcId("SEG");
@@ -1908,10 +1947,11 @@ export async function generateOfferFromFlight(params: {
 
   // Build the full offer payload (NDC-structured JSON)
   const offerId = generateNdcId("OFF");
-  const pricePerPassenger =
-    adjustedBasePerPax + Math.round(adjustedBasePerPax * TAX_RATE);
+  const pricePerPassenger = totalPrice / passengerCount;
   const offerPayload = JSON.stringify({
     ndcVersion: NDC_VERSION,
+    retailOfferId: retailOffer.id,
+    pricingPolicy: retailOffer.payload.policy,
     offerId,
     responseId,
     owner: ownerCode,
@@ -1957,7 +1997,7 @@ export async function generateOfferFromFlight(params: {
     offerPayload,
     segments: JSON.stringify([segment]),
     bundledServices: JSON.stringify(bundledServices),
-    expiresAt,
+    expiresAt: retailOffer.expiresAt,
     status: "active",
     ownerCode,
     channel,
@@ -2006,7 +2046,7 @@ export async function generateOfferFromFlight(params: {
     segments: [segment],
     bundledServices,
     fareClass: fareClassInfo,
-    expiresAt: expiresAt.toISOString(),
+    expiresAt: retailOffer.expiresAt.toISOString(),
     status: "active",
     channel,
     ndcVersion: NDC_VERSION,

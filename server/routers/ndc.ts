@@ -1,3 +1,9 @@
+import { cancelOrderServiceQuote } from "../services/order-service-checkout.service";
+import {
+  paidServiceInput,
+  quotePaidOrderService,
+  confirmNoChargeService,
+} from "../services/order-servicing.service";
 import { responseContracts } from "../contracts/ndc";
 import { z } from "zod";
 import {
@@ -89,6 +95,39 @@ const serviceItemSchema = z.object({
  * and ancillary service management through a standards-compliant interface.
  */
 export const ndcRouter = router({
+  cancelPaidService: protectedProcedure
+    .input(z.object({ modificationId: z.number().int().positive() }))
+    .output(z.object({ cancelled: z.boolean() }))
+    .mutation(({ input, ctx }) =>
+      cancelOrderServiceQuote(input.modificationId, ctx.user.id)
+    ),
+  quotePaidService: protectedProcedure
+    .input(paidServiceInput)
+    .output(
+      z.object({
+        bookingId: z.number().int(),
+        modificationId: z.number().int(),
+        totalCost: z.number().int(),
+        newAmount: z.number().int(),
+        modificationFee: z.number().int(),
+        priceDifference: z.number().int(),
+        originalAmount: z.number().int(),
+        expiresAt: z.date(),
+        requiresPayment: z.boolean(),
+        refundDue: z.number().int(),
+      })
+    )
+    .mutation(({ input, ctx }) =>
+      quotePaidOrderService(input, ctx.user.id, ctx.tenantId)
+    ),
+  confirmNoChargeService: protectedProcedure
+    .input(z.object({ modificationId: z.number().int().positive() }))
+    .output(
+      z.object({ receiptId: z.string().uuid(), refundDue: z.number().int() })
+    )
+    .mutation(({ input, ctx }) =>
+      confirmNoChargeService(input.modificationId, ctx.user.id)
+    ),
   // ==========================================================================
   // Shopping & Offers
   // ==========================================================================

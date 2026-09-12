@@ -1,3 +1,4 @@
+import { createOrderServiceCheckout } from "../services/order-service-checkout.service";
 import {
   createBookingCheckout,
   expireBookingCheckout,
@@ -246,6 +247,20 @@ export const paymentsRouter = router({
         });
       }
 
+      if (modification.servicingPayload) {
+        if (input.provider !== "stripe")
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Paid order servicing requires the verified Stripe settlement adapter",
+          });
+        return createOrderServiceCheckout(
+          input.modificationId,
+          ctx.user.id,
+          process.env.VITE_APP_URL ||
+            `${ctx.req.protocol}://${ctx.req.get("host")}`
+        );
+      }
       const authoritativeAmount = modification.totalCost;
       await assertNoCollectionReview(database, bookingData.id);
       const appBaseUrl =

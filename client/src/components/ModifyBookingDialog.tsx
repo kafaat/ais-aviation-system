@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import {
@@ -10,19 +10,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Calendar,
-  ArrowUpCircle,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-} from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { PaymentMethodSelector } from "./PaymentMethodSelector";
-
-interface ModifyBookingDialogProps {
+interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   booking: {
@@ -37,281 +27,265 @@ interface ModifyBookingDialogProps {
     destinationId?: number;
   };
 }
-
-export function ModifyBookingDialog({
-  open,
-  onOpenChange,
-  booking,
-}: ModifyBookingDialogProps) {
-  const { t } = useTranslation();
-  const [selectedTab, setSelectedTab] = useState<"date" | "upgrade">("date");
-  const [selectedFlightId, _setSelectedFlightId] = useState<number | null>(
-    null
-  );
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState("stripe");
-
+type Quote = {
+  modificationId: number;
+  originalAmount: number;
+  newAmount: number;
+  priceDifference: number;
+  modificationFee: number;
+  totalCost: number;
+  requiresPayment: boolean;
+};
+export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
+  const { t, i18n } = useTranslation();
+  const ar = i18n.language === "ar";
   const utils = trpc.useUtils();
-
-  // Search for alternative flights on the same route
-  // Only enabled when both origin and destination IDs are available
-  const hasRouteIds = Boolean(booking.originId && booking.destinationId);
-  const { data: _alternativeFlights, isLoading: isSearching } =
-    trpc.flights.search.useQuery(
-      {
-        originId: booking.originId || 0,
-        destinationId: booking.destinationId || 0,
-        departureDate: new Date(),
-      },
-      { enabled: selectedTab === "date" && open && hasRouteIds }
-    );
-
-  const createModificationCheckout =
-    trpc.payments.createModificationCheckout.useMutation({
-      onSuccess: data => {
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          toast.success(t("modifyBooking.paymentInitiated"));
-        }
-      },
-      onError: error => {
-        toast.error(error.message || t("modifyBooking.paymentError"));
-        setIsProcessing(false);
-      },
-    });
-
-  const requestChangeDateMutation =
-    trpc.modifications.requestChangeDate.useMutation({
-      onSuccess: async data => {
-        if (data.requiresPayment && data.totalCost > 0) {
-          toast.success(t("modifyBooking.dateChangePaymentRedirect"));
-          createModificationCheckout.mutate({
-            bookingId: booking.id,
-            modificationId: data.modificationId,
-            provider: selectedProvider as Parameters<
-              typeof createModificationCheckout.mutate
-            >[0]["provider"],
-          });
-        } else if (data.totalCost < 0) {
-          toast.success(
-            t("modifyBooking.dateChangeRefund", {
-              amount: Math.abs(data.totalCost / 100),
-            })
-          );
-          await utils.bookings.myBookings.invalidate();
-          onOpenChange(false);
-          setIsProcessing(false);
-        } else {
-          toast.success(t("modifyBooking.dateChangeSuccess"));
-          await utils.bookings.myBookings.invalidate();
-          onOpenChange(false);
-          setIsProcessing(false);
-        }
-      },
-      onError: error => {
-        toast.error(error.message || t("modifyBooking.dateChangeError"));
-        setIsProcessing(false);
-      },
-    });
-
-  const requestUpgradeMutation = trpc.modifications.requestUpgrade.useMutation({
-    onSuccess: data => {
-      toast.success(t("modifyBooking.upgradePaymentRedirect"));
-      createModificationCheckout.mutate({
-        bookingId: booking.id,
-        modificationId: data.modificationId,
-        provider: selectedProvider as Parameters<
-          typeof createModificationCheckout.mutate
-        >[0]["provider"],
-      });
+  const [mode, setMode] = useState<"date" | "upgrade">("date");
+  const [date, setDate] = useState(
+    new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+  );
+  const [flightId, setFlightId] = useState<number | null>(null);
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [busy, setBusy] = useState(false);
+  const command = useRef<{ fingerprint: string; key: string } | null>(null);
+  const search = trpc.flights.search.useQuery(
+    {
+      originId: booking.originId ?? 0,
+      destinationId: booking.destinationId ?? 0,
+      departureDate: new Date(`${date}T00:00:00Z`),
     },
-    onError: error => {
-      toast.error(error.message || t("modifyBooking.upgradeError"));
-      setIsProcessing(false);
-    },
-  });
-
-  const _handleChangeDate = () => {
-    if (!selectedFlightId) {
-      toast.error(t("modifyBooking.selectFlightError"));
-      return;
+    {
+      enabled:
+        open &&
+        mode === "date" &&
+        Boolean(booking.originId && booking.destinationId) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(date),
     }
-
-    setIsProcessing(true);
-    requestChangeDateMutation.mutate({
-      bookingId: booking.id,
-      newFlightId: selectedFlightId,
-      reason: "Customer requested date change",
-    });
+  );
+  const change = trpc.modifications.requestChangeDate.useMutation();
+  const upgrade = trpc.modifications.requestUpgrade.useMutation();
+  const checkout = trpc.payments.createModificationCheckout.useMutation();
+  const confirm = trpc.ndc.confirmNoChargeService.useMutation();
+  const cancel = trpc.ndc.cancelPaidService.useMutation();
+  const request = async () => {
+    setBusy(true);
+    try {
+      const fingerprint = JSON.stringify({
+        bookingId: booking.id,
+        mode,
+        flightId,
+      });
+      if (command.current?.fingerprint !== fingerprint)
+        command.current = { fingerprint, key: crypto.randomUUID() };
+      const input = {
+        bookingId: booking.id,
+        idempotencyKey: command.current.key,
+      };
+      const result =
+        mode === "upgrade"
+          ? await upgrade.mutateAsync(input)
+          : await change.mutateAsync({ ...input, newFlightId: flightId ?? 0 });
+      setQuote(result);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("common.error"));
+    } finally {
+      setBusy(false);
+    }
   };
-
-  const handleUpgrade = () => {
-    setIsProcessing(true);
-    requestUpgradeMutation.mutate({
-      bookingId: booking.id,
-      reason: "Customer requested cabin upgrade",
-    });
+  const accept = async () => {
+    if (!quote) return;
+    setBusy(true);
+    try {
+      if (quote.totalCost > 0) {
+        const result = await checkout.mutateAsync({
+          bookingId: booking.id,
+          modificationId: quote.modificationId,
+          provider: "stripe",
+        });
+        if (!result.url) throw new Error("Payment URL unavailable");
+        window.location.assign(result.url);
+      } else {
+        const result = await confirm.mutateAsync({
+          modificationId: quote.modificationId,
+        });
+        toast.success(
+          result.refundDue > 0
+            ? ar
+              ? "تم التغيير؛ الاسترداد قيد المعالجة."
+              : "Exchange applied; refund is processing."
+            : ar
+              ? "تم تطبيق التغيير."
+              : "Change applied."
+        );
+        await utils.bookings.myBookings.invalidate();
+        setQuote(null);
+        command.current = null;
+        onOpenChange(false);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("common.error"));
+    } finally {
+      setBusy(false);
+    }
   };
-
+  const close = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (quote)
+        await cancel.mutateAsync({ modificationId: quote.modificationId });
+      setQuote(null);
+      command.current = null;
+      onOpenChange(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("common.error"));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next) void close();
+      }}
+    >
+      <DialogContent
+        className="max-w-xl max-h-[90vh] overflow-y-auto"
+        dir={ar ? "rtl" : "ltr"}
+      >
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {t("modifyBooking.title")}
-            <Badge variant="outline">{booking.bookingReference}</Badge>
+          <DialogTitle>
+            {t("modifyBooking.title")} · {booking.bookingReference}
           </DialogTitle>
           <DialogDescription>
-            {t("modifyBooking.flightInfo", {
-              flightNumber: booking.flightNumber,
-              origin: booking.originName,
-              destination: booking.destinationName,
-            })}
+            {booking.originName} → {booking.destinationName}
           </DialogDescription>
         </DialogHeader>
-
-        <Tabs
-          value={selectedTab}
-          onValueChange={v => setSelectedTab(v as "date" | "upgrade")}
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="date" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              {t("modifyBooking.changeDateTab")}
-            </TabsTrigger>
-            <TabsTrigger
-              value="upgrade"
-              className="flex items-center gap-2"
-              disabled={booking.cabinClass === "business"}
-            >
-              <ArrowUpCircle className="h-4 w-4" />
-              {t("modifyBooking.upgradeTab")}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="date" className="space-y-4">
-            <div className="rounded-lg border p-4 bg-muted/50">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium mb-1">
-                    {t("modifyBooking.dateChangePolicy")}
-                  </p>
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>{t("modifyBooking.policyMoreThan7Days")}</li>
-                    <li>{t("modifyBooking.policy3to7Days")}</li>
-                    <li>{t("modifyBooking.policy1to3Days")}</li>
-                    <li>{t("modifyBooking.policyLessThan24Hours")}</li>
-                  </ul>
-                </div>
-              </div>
+        {!quote ? (
+          <div className="space-y-4">
+            <div className="flex gap-2">
+              <Button
+                variant={mode === "date" ? "default" : "outline"}
+                onClick={() => setMode("date")}
+              >
+                {t("modifyBooking.changeDateTab")}
+              </Button>
+              <Button
+                disabled={booking.cabinClass === "business"}
+                variant={mode === "upgrade" ? "default" : "outline"}
+                onClick={() => setMode("upgrade")}
+              >
+                {t("modifyBooking.upgradeTab")}
+              </Button>
             </div>
-
-            {isSearching ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  {t("modifyBooking.contactCustomerService")}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t("modifyBooking.alternativeFlightsComingSoon")}
-                </p>
-              </div>
+            {mode === "date" && (
+              <>
+                <label className="block text-sm">
+                  {ar ? "تاريخ الرحلة الجديدة" : "New departure date"}
+                  <Input
+                    type="date"
+                    value={date}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={e => {
+                      setDate(e.target.value);
+                      setFlightId(null);
+                    }}
+                  />
+                </label>
+                {search.error && <p role="alert">{search.error.message}</p>}
+                {search.isLoading ? (
+                  <p>{t("common.loading")}</p>
+                ) : (
+                  <div className="space-y-2">
+                    {search.data?.map(f => (
+                      <Button
+                        key={f.id}
+                        className="w-full justify-between"
+                        variant={flightId === f.id ? "default" : "outline"}
+                        onClick={() => setFlightId(f.id)}
+                      >
+                        <span>{f.flightNumber}</span>
+                        <span>
+                          {new Date(f.departureTime).toLocaleString(
+                            ar ? "ar-SA" : "en-GB"
+                          )}
+                        </span>
+                      </Button>
+                    ))}
+                    {!search.data?.length && (
+                      <p>
+                        {ar
+                          ? "لا توجد رحلات متاحة لهذا التاريخ."
+                          : "No flights available for this date."}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
-          </TabsContent>
-
-          <TabsContent value="upgrade" className="space-y-4">
-            <div className="rounded-lg border p-4 bg-muted/50">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium mb-1">
-                    {t("modifyBooking.upgradeTitle")}
-                  </p>
-                  <p className="text-muted-foreground">
-                    {t("modifyBooking.upgradeDescription")}
-                  </p>
-                </div>
+            <p className="text-sm text-muted-foreground">
+              {ar
+                ? "يعرض السعر التالي إجمالي التغيير ورسومه قبل التأكيد. إعادة إصدار وثائق السفر تتبع حالة التنفيذ."
+                : "Review the complete price and change fee before confirming. Travel-document reissue follows fulfillment status."}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3" role="status">
+            {[
+              [ar ? "الإجمالي الحالي" : "Current total", quote.originalAmount],
+              [
+                ar
+                  ? "الإجمالي الجديد شاملاً الرسوم"
+                  : "New total including fees",
+                quote.newAmount,
+              ],
+              [ar ? "رسوم التغيير" : "Change fee", quote.modificationFee],
+              [
+                quote.totalCost < 0
+                  ? ar
+                    ? "الاسترداد المستحق"
+                    : "Refund due"
+                  : ar
+                    ? "المبلغ المطلوب"
+                    : "Amount due",
+                Math.abs(quote.totalCost),
+              ],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="flex justify-between">
+                <span>{label}</span>
+                <strong>{(Number(value) / 100).toFixed(2)} SAR</strong>
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-sm text-muted-foreground">
-                  {t("modifyBooking.currentPrice")}
-                </span>
-                <span className="font-medium">
-                  {(booking.totalAmount / 100).toFixed(2)} {t("common.sar")}
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="text-sm text-muted-foreground">
-                  {t("modifyBooking.upgradePrice")}
-                </span>
-                <span className="font-medium">
-                  {((booking.totalAmount * 2) / 100).toFixed(2)}{" "}
-                  {t("common.sar")}
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm font-medium">
-                  {t("modifyBooking.priceDifference")}
-                </span>
-                <span className="font-bold text-lg text-primary">
-                  {(booking.totalAmount / 100).toFixed(2)} {t("common.sar")}
-                </span>
-              </div>
-            </div>
-
-            <div className="rounded-lg border p-4 bg-green-50 dark:bg-green-950/20">
-              <div className="flex items-start gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-green-900 dark:text-green-100 mb-1">
-                    {t("modifyBooking.businessBenefits")}
-                  </p>
-                  <ul className="space-y-1 text-green-700 dark:text-green-200">
-                    <li>{t("modifyBooking.benefitFullyReclining")}</li>
-                    <li>{t("modifyBooking.benefitGourmetMeals")}</li>
-                    <li>{t("modifyBooking.benefitPriorityBoarding")}</li>
-                    <li>{t("modifyBooking.benefitExtraBag")}</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <PaymentMethodSelector
-              onProviderSelect={setSelectedProvider}
-              selectedProvider={selectedProvider}
-              amount={booking.totalAmount}
-            />
-          </TabsContent>
-        </Tabs>
-
+            ))}
+            <p className="text-sm text-muted-foreground">
+              {ar
+                ? "لا يعد الاسترداد مكتملاً إلا بعد تأكيد جهة الدفع."
+                : "Refund completion requires confirmation from the payment provider."}
+            </p>
+          </div>
+        )}
         <DialogFooter>
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isProcessing}
+            disabled={busy}
+            onClick={() => void close()}
           >
             {t("common.cancel")}
           </Button>
-          {selectedTab === "upgrade" && booking.cabinClass !== "business" && (
-            <Button onClick={handleUpgrade} disabled={isProcessing}>
-              {isProcessing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {t("modifyBooking.processing")}
-                </>
-              ) : (
-                t("modifyBooking.confirmUpgrade")
-              )}
-            </Button>
-          )}
+          <Button
+            disabled={busy || (!quote && mode === "date" && !flightId)}
+            onClick={() => void (quote ? accept() : request())}
+          >
+            {busy
+              ? t("common.loading")
+              : quote
+                ? ar
+                  ? "تأكيد العرض"
+                  : "Confirm offer"
+                : ar
+                  ? "عرض سعر التغيير"
+                  : "Quote change"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

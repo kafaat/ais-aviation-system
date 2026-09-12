@@ -1,3 +1,4 @@
+import { getFinancialDays } from "./financial-reporting.service";
 import { createHash } from "node:crypto";
 /**
  * Data Warehouse Export Service
@@ -447,99 +448,42 @@ export async function exportFlightsData(
 export async function exportRevenueData(
   options: ExportOptions
 ): Promise<ExportResult> {
-  const db = await getDb();
-  if (!db) {
+  if (options.incremental)
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      code: "BAD_REQUEST",
+      message:
+        "Financial exports require a complete posting period; incremental invoice timestamps are not settlement cursors",
     });
-  }
-
-  const { dateRange, format } = options;
-
-  // Revenue by route and class
-  const results = await db
-    .select({
-      date: sql<string>`DATE(${bookings.createdAt})`,
-      originCode: sql<string>`origin_airport.code`,
-      originCity: sql<string>`origin_airport.city`,
-      destinationCode: sql<string>`dest_airport.code`,
-      destinationCity: sql<string>`dest_airport.city`,
-      airlineCode: airlines.code,
-      cabinClass: bookings.cabinClass,
-      totalBookings: sql<number>`COUNT(*)`,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
-      confirmedRevenue: sql<number>`SUM(CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END)`,
-      cancelledRevenue: sql<number>`SUM(CASE WHEN ${bookings.status} = 'cancelled' THEN ${bookings.totalAmount} ELSE 0 END)`,
-      refundedRevenue: sql<number>`SUM(CASE WHEN ${bookings.paymentStatus} = 'refunded' THEN ${bookings.totalAmount} ELSE 0 END)`,
-      totalPassengers: sql<number>`SUM(${bookings.numberOfPassengers})`,
-      avgTicketPrice: sql<number>`AVG(${bookings.totalAmount})`,
-    })
-    .from(bookings)
-    .leftJoin(flights, eq(bookings.flightId, flights.id))
-    .leftJoin(airlines, eq(flights.airlineId, airlines.id))
-    .leftJoin(
-      sql`${airports} AS origin_airport`,
-      sql`origin_airport.id = ${flights.originId}`
-    )
-    .leftJoin(
-      sql`${airports} AS dest_airport`,
-      sql`dest_airport.id = ${flights.destinationId}`
-    )
-    .where(
-      and(
-        gte(bookings.createdAt, dateRange.startDate),
-        lte(bookings.createdAt, dateRange.endDate)
-      )
-    )
-    .groupBy(
-      sql`DATE(${bookings.createdAt})`,
-      sql`origin_airport.code`,
-      sql`origin_airport.city`,
-      sql`dest_airport.code`,
-      sql`dest_airport.city`,
-      airlines.code,
-      bookings.cabinClass
-    )
-    .orderBy(sql`DATE(${bookings.createdAt})`);
-
+  const rows = await getFinancialDays(options.dateRange);
   const headers = [
     "date",
-    "originCode",
-    "originCity",
-    "destinationCode",
-    "destinationCity",
-    "airlineCode",
-    "cabinClass",
-    "totalBookings",
-    "totalRevenue",
-    "confirmedRevenue",
-    "cancelledRevenue",
-    "refundedRevenue",
-    "totalPassengers",
-    "avgTicketPrice",
+    "currency",
+    "amountUnit",
+    "billedAmount",
+    "collectedAmount",
+    "refundedAmount",
+    "netCollectedAmount",
+    "earnedRevenue",
+    "bookings",
+    "unreconciledBookings",
+    "unclassifiedEntries",
   ];
-
-  const data = formatExportData(results, format, headers, row => [
-    row.date || "",
-    row.originCode || "",
-    row.originCity || "",
-    row.destinationCode || "",
-    row.destinationCity || "",
-    row.airlineCode || "",
-    row.cabinClass || "",
-    String(row.totalBookings || 0),
-    String(row.totalRevenue || 0),
-    String(row.confirmedRevenue || 0),
-    String(row.cancelledRevenue || 0),
-    String(row.refundedRevenue || 0),
-    String(row.totalPassengers || 0),
-    String(Math.round(Number(row.avgTicketPrice) || 0)),
+  const data = formatExportData(rows, options.format, headers, row => [
+    row.date,
+    row.currency,
+    row.amountUnit,
+    String(row.billedAmount),
+    String(row.collectedAmount),
+    String(row.refundedAmount),
+    String(row.netCollectedAmount),
+    "",
+    String(row.bookings),
+    String(row.unreconciledBookings),
+    String(row.unclassifiedEntries),
   ]);
-
   return {
     data,
-    recordCount: results.length,
+    recordCount: rows.length,
     fileSize: Buffer.byteLength(data, "utf-8"),
   };
 }

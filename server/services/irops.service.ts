@@ -1,13 +1,18 @@
+import { createHash } from "node:crypto";
+import { recordEvent } from "./outbox.service";
+import type { SettlementTx } from "./booking-settlement.service";
 import { getDb } from "../db";
 import {
   flightDisruptions,
+  iropsActions,
+  notifications,
   flights,
   bookings,
+  bookingSegments,
   passengers,
   airports,
 } from "../../drizzle/schema";
 import { eq, and, sql, ne, inArray, gte, lte, desc } from "drizzle-orm";
-import { createNotification } from "./notification.service";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -79,6 +84,8 @@ export interface IROPSAction {
   details: Record<string, unknown>;
   createdAt: Date;
   completedAt: Date | null;
+  evidenceType: string | null;
+  evidenceId: string | null;
 }
 
 /**
@@ -109,132 +116,108 @@ export interface RecoveryMetrics {
 }
 
 // ============================================================================
-// In-memory IROPS event/action stores
-// These act as lightweight schema-less tables that overlay on top of the
-// existing flightDisruptions table for the IROPS-specific fields.
-// In a production system these would be their own database tables.
-// ============================================================================
-
-let iropsEventIdSeq = 1;
-let iropsActionIdSeq = 1;
-
-const iropsEventsStore: Map<number, IROPSEvent> = new Map();
-const iropsActionsStore: Map<number, IROPSAction> = new Map();
-
-// ============================================================================
-// IROPS Service Functions
-// ============================================================================
+// Durable state uses flight_disruptions + irops_actions. No process-local authority.
+async function iropsDb() {
+  const db = await getDb();
+  if (!db)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "IROPS storage unavailable",
+    });
+  return db;
+}
+function affectedBooking(flightId: number) {
+  return sql`(${bookings.flightId} = ${flightId} OR EXISTS (SELECT 1 FROM booking_segments s WHERE s.bookingId = ${bookings.id} AND s.flightId = ${flightId}))`;
+}
+async function readEvent(eventId: number): Promise<IROPSEvent | null> {
+  const db = await iropsDb();
+  const [row] = await db
+    .select({ disruption: flightDisruptions, flight: flights })
+    .from(flightDisruptions)
+    .innerJoin(flights, eq(flights.id, flightDisruptions.flightId))
+    .where(eq(flightDisruptions.id, eventId))
+    .limit(1);
+  if (!row) return null;
+  const { disruption: d, flight: f } = row;
+  const impact = await computeFlightImpact(db, d.flightId);
+  const codes = await db
+    .select({ id: airports.id, code: airports.code })
+    .from(airports)
+    .where(inArray(airports.id, [f.originId, f.destinationId]));
+  return {
+    id: d.id,
+    flightId: d.flightId,
+    eventType: d.iropsType ?? mapDisruptionType(d.type),
+    severity: d.iropsSeverity ?? mapSeverity(d.severity),
+    delayMinutes: d.delayMinutes,
+    reason: d.reason,
+    affectedPassengers: impact.totalPassengers,
+    connectionsAtRisk: impact.connectionsAtRisk,
+    estimatedRecoveryTime: d.estimatedRecoveryTime,
+    status:
+      d.status === "active"
+        ? d.protectionStartedAt
+          ? "recovering"
+          : "active"
+        : "resolved",
+    escalationLevel: d.escalationLevel,
+    createdBy: d.createdBy,
+    createdAt: d.createdAt,
+    resolvedAt: d.resolvedAt,
+    updatedAt: d.updatedAt,
+    flightNumber: f.flightNumber,
+    departureTime: f.departureTime,
+    origin: codes.find(c => c.id === f.originId)?.code,
+    destination: codes.find(c => c.id === f.destinationId)?.code,
+  };
+}
+export function countProtectedPassengers(
+  actions: Array<
+    Pick<
+      typeof iropsActions.$inferSelect,
+      | "eventId"
+      | "targetPassengerId"
+      | "actionType"
+      | "status"
+      | "evidenceType"
+      | "evidenceId"
+    >
+  >
+): number {
+  return new Set(
+    actions
+      .filter(
+        a =>
+          a.actionType === "rebook" &&
+          a.status === "completed" &&
+          a.targetPassengerId !== null &&
+          a.evidenceType === "booking_reaccommodation" &&
+          a.evidenceId
+      )
+      .map(a => `${a.eventId}:${a.targetPassengerId}`)
+  ).size;
+}
 
 /**
  * Get all current/active disruptions with IROPS enrichment
  */
 export async function getActiveIROPSDisruptions(): Promise<IROPSEvent[]> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get active disruptions from the DB
-  const dbDisruptions = await db
-    .select({
-      id: flightDisruptions.id,
-      flightId: flightDisruptions.flightId,
-      type: flightDisruptions.type,
-      reason: flightDisruptions.reason,
-      severity: flightDisruptions.severity,
-      delayMinutes: flightDisruptions.delayMinutes,
-      status: flightDisruptions.status,
-      createdBy: flightDisruptions.createdBy,
-      createdAt: flightDisruptions.createdAt,
-      resolvedAt: flightDisruptions.resolvedAt,
-      updatedAt: flightDisruptions.updatedAt,
-      flightNumber: flights.flightNumber,
-      departureTime: flights.departureTime,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-    })
+  const db = await iropsDb();
+  const rows = await db
+    .select({ id: flightDisruptions.id })
     .from(flightDisruptions)
-    .innerJoin(flights, eq(flightDisruptions.flightId, flights.id))
     .where(eq(flightDisruptions.status, "active"))
-    .orderBy(desc(flightDisruptions.createdAt));
-
-  // Also include in-memory active IROPS events
-  const memoryEvents = Array.from(iropsEventsStore.values()).filter(
-    e => e.status === "active" || e.status === "recovering"
-  );
-
-  // Map DB disruptions to IROPS events (enriching with passenger counts)
-  const dbEvents: IROPSEvent[] = await Promise.all(
-    dbDisruptions.map(async d => {
-      const existing = Array.from(iropsEventsStore.values()).find(
-        e => e.flightId === d.flightId && e.reason === d.reason
-      );
-      if (existing) return existing;
-
-      const impact = await computeFlightImpact(db, d.flightId);
-
-      // Get airport codes
-      const [origin] = await db
-        .select({ code: airports.code })
-        .from(airports)
-        .where(eq(airports.id, d.originId))
-        .limit(1);
-
-      const [destination] = await db
-        .select({ code: airports.code })
-        .from(airports)
-        .where(eq(airports.id, d.destinationId))
-        .limit(1);
-
-      return {
-        id: d.id,
-        flightId: d.flightId,
-        eventType: mapDisruptionType(d.type),
-        severity: mapSeverity(d.severity),
-        delayMinutes: d.delayMinutes,
-        reason: d.reason,
-        affectedPassengers: impact.totalPassengers,
-        connectionsAtRisk: impact.connectionsAtRisk,
-        estimatedRecoveryTime: null,
-        status: "active" as IROPSEventStatus,
-        escalationLevel: d.severity === "severe" ? 2 : 1,
-        createdBy: d.createdBy,
-        createdAt: d.createdAt,
-        resolvedAt: d.resolvedAt,
-        updatedAt: d.updatedAt,
-        flightNumber: d.flightNumber,
-        origin: origin?.code,
-        destination: destination?.code,
-        departureTime: d.departureTime,
-      };
-    })
-  );
-
-  // Merge, avoiding duplicates by id
-  const seen = new Set<number>();
-  const merged: IROPSEvent[] = [];
-
-  for (const ev of dbEvents) {
-    if (!seen.has(ev.id)) {
-      seen.add(ev.id);
-      merged.push(ev);
-    }
-  }
-  for (const ev of memoryEvents) {
-    if (!seen.has(ev.id)) {
-      seen.add(ev.id);
-      merged.push(ev);
-    }
-  }
-
-  return merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    .orderBy(desc(flightDisruptions.createdAt))
+    .limit(5001);
+  if (rows.length > 5000)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "IROPS active-event limit exceeded",
+    });
+  const events = await Promise.all(rows.map(row => readEvent(row.id)));
+  return events.filter((event): event is IROPSEvent => event !== null);
 }
 
-/**
- * Create a new IROPS disruption event
- */
 export async function createDisruptionEvent(
   flightId: number,
   type: IROPSEventType,
@@ -246,114 +229,53 @@ export async function createDisruptionEvent(
     createdBy?: number;
   }
 ): Promise<IROPSEvent> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Verify flight exists
-  const [flight] = await db
-    .select({
-      id: flights.id,
-      flightNumber: flights.flightNumber,
-      departureTime: flights.departureTime,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (!flight)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-
-  // Also create a record in the existing flightDisruptions table for compatibility
-  const mappedType = type === "equipment_change" ? "diversion" : type;
-  const mappedSeverity =
-    details.severity === "low"
-      ? "minor"
-      : details.severity === "critical"
-        ? "severe"
-        : details.severity === "high"
-          ? "severe"
-          : "moderate";
-
-  // Wrap insert + flight status update in a transaction for atomicity
-  const result = await db.transaction(async tx => {
-    const [insertResult] = await tx.insert(flightDisruptions).values({
+  const db = await iropsDb();
+  const id = await db.transaction(async tx => {
+    const [flight] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .for("update");
+    if (!flight)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    const [result] = await tx.insert(flightDisruptions).values({
       flightId,
-      type: mappedType,
+      type: type === "equipment_change" ? "diversion" : type,
+      iropsType: type,
       reason: details.reason,
-      severity: mappedSeverity,
+      severity:
+        details.severity === "low"
+          ? "minor"
+          : details.severity === "medium"
+            ? "moderate"
+            : "severe",
+      iropsSeverity: details.severity,
+      escalationLevel: severityToEscalationLevel(details.severity),
       originalDepartureTime: flight.departureTime,
-      delayMinutes: details.delayMinutes || null,
-      status: "active",
-      createdBy: details.createdBy || null,
+      delayMinutes: details.delayMinutes ?? null,
+      estimatedRecoveryTime: details.estimatedRecoveryTime ?? null,
+      createdBy: details.createdBy ?? null,
     });
-
-    // Update flight status for cancellations
-    if (type === "cancellation") {
+    if (!result.insertId) throw new Error("Missing disruption identity");
+    if (type === "cancellation" || type === "delay")
       await tx
         .update(flights)
-        .set({ status: "cancelled" })
+        .set({ status: type === "cancellation" ? "cancelled" : "delayed" })
         .where(eq(flights.id, flightId));
-    } else if (type === "delay") {
-      await tx
-        .update(flights)
-        .set({ status: "delayed" })
-        .where(eq(flights.id, flightId));
-    }
-
-    return insertResult;
+    await recordEvent(tx, {
+      aggregateType: "disruption",
+      aggregateId: result.insertId,
+      tenantId: flight.tenantId,
+      eventType: "irops.created",
+      payload: { flightId, type },
+    });
+    return result.insertId;
   });
-
-  // Compute impact
-  const impact = await computeFlightImpact(db, flightId);
-
-  // Get airport codes
-  const [origin] = await db
-    .select({ code: airports.code })
-    .from(airports)
-    .where(eq(airports.id, flight.originId))
-    .limit(1);
-
-  const [destination] = await db
-    .select({ code: airports.code })
-    .from(airports)
-    .where(eq(airports.id, flight.destinationId))
-    .limit(1);
-
-  const event: IROPSEvent = {
-    id: result.insertId || iropsEventIdSeq++,
-    flightId,
-    eventType: type,
-    severity: details.severity,
-    delayMinutes: details.delayMinutes ?? null,
-    reason: details.reason,
-    affectedPassengers: impact.totalPassengers,
-    connectionsAtRisk: impact.connectionsAtRisk,
-    estimatedRecoveryTime: details.estimatedRecoveryTime ?? null,
-    status: "active",
-    escalationLevel: details.severity === "critical" ? 3 : 1,
-    createdBy: details.createdBy ?? null,
-    createdAt: new Date(),
-    resolvedAt: null,
-    updatedAt: new Date(),
-    flightNumber: flight.flightNumber,
-    origin: origin?.code,
-    destination: destination?.code,
-    departureTime: flight.departureTime,
-  };
-
-  iropsEventsStore.set(event.id, event);
+  const event = await readEvent(id);
+  if (!event) throw new Error("Created disruption cannot be read");
   return event;
 }
 
-/**
- * Calculate total impact for a disrupted flight
- */
 export async function getDisruptionImpact(flightId: number): Promise<{
   totalPassengers: number;
   connectionsAtRisk: number;
@@ -380,9 +302,7 @@ export async function getDisruptionImpact(flightId: number): Promise<{
       numberOfPassengers: bookings.numberOfPassengers,
     })
     .from(bookings)
-    .where(
-      and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
-    );
+    .where(and(affectedBooking(flightId), ne(bookings.status, "cancelled")));
 
   let businessClassPassengers = 0;
   let economyClassPassengers = 0;
@@ -449,9 +369,7 @@ export async function getAffectedPassengers(flightId: number): Promise<
       userId: bookings.userId,
     })
     .from(bookings)
-    .where(
-      and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
-    );
+    .where(and(affectedBooking(flightId), ne(bookings.status, "cancelled")));
 
   if (affectedBookings.length === 0) return [];
 
@@ -481,35 +399,30 @@ export async function getAffectedPassengers(flightId: number): Promise<
     .where(eq(flights.id, flightId))
     .limit(1);
 
-  // Check for connecting flights: bookings by the same users on flights
-  // departing from this flight's destination within 24h of arrival
   const userIds = affectedBookings.map(b => b.userId);
-
-  const connectionMap: Map<number, string> = new Map();
+  const connectionMap = new Map<number, string>();
   if (flight) {
-    const twentyFourHoursLater = new Date(flight.arrivalTime);
-    twentyFourHoursLater.setHours(twentyFourHoursLater.getHours() + 24);
-
-    const connectingBookings = await db
+    const connections = await db
       .select({
-        userId: bookings.userId,
+        bookingId: bookingSegments.bookingId,
         flightNumber: flights.flightNumber,
       })
-      .from(bookings)
-      .innerJoin(flights, eq(bookings.flightId, flights.id))
+      .from(bookingSegments)
+      .innerJoin(flights, eq(flights.id, bookingSegments.flightId))
       .where(
         and(
-          inArray(bookings.userId, userIds),
+          inArray(bookingSegments.bookingId, bookingIds),
+          ne(bookingSegments.status, "cancelled"),
           eq(flights.originId, flight.destinationId),
-          ne(bookings.status, "cancelled"),
           gte(flights.departureTime, flight.arrivalTime),
-          lte(flights.departureTime, twentyFourHoursLater)
+          lte(
+            flights.departureTime,
+            new Date(flight.arrivalTime.getTime() + 86400000)
+          ),
+          sql`${bookingSegments.segmentOrder} > (SELECT bs.segmentOrder FROM booking_segments bs WHERE bs.bookingId = ${bookingSegments.bookingId} AND bs.flightId = ${flightId} ORDER BY bs.segmentOrder LIMIT 1)`
         )
       );
-
-    for (const cb of connectingBookings) {
-      connectionMap.set(cb.userId, cb.flightNumber);
-    }
+    for (const c of connections) connectionMap.set(c.bookingId, c.flightNumber);
   }
 
   // Get user emails for contact
@@ -529,7 +442,7 @@ export async function getAffectedPassengers(flightId: number): Promise<
   return affectedPassengers.map(p => {
     const booking = affectedBookings.find(b => b.bookingId === p.bookingId);
     const userId = booking?.userId ?? 0;
-    const connectionFlight = connectionMap.get(userId) ?? null;
+    const connectionFlight = connectionMap.get(p.bookingId) ?? null;
 
     return {
       passengerId: p.id,
@@ -554,357 +467,268 @@ export async function getAffectedPassengers(flightId: number): Promise<
  */
 export async function autoTriggerProtection(flightId: number): Promise<{
   actionsCreated: number;
+  passengersAffected: number;
+  passengersPlanned: number;
   passengersProtected: number;
   actions: IROPSAction[];
 }> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
+  const db = await iropsDb();
   const affectedPax = await getAffectedPassengers(flightId);
-  const actions: IROPSAction[] = [];
-
-  // Find the IROPS event for this flight
-  const event = Array.from(iropsEventsStore.values()).find(
-    e => e.flightId === flightId && e.status !== "resolved"
-  );
-
-  const eventId = event?.id ?? 0;
-
-  for (const pax of affectedPax) {
-    // Create a rebooking action
-    const rebookAction: IROPSAction = {
-      id: iropsActionIdSeq++,
-      eventId,
-      actionType: "rebook",
-      targetPassengerId: pax.passengerId,
-      status: "pending",
-      details: {
-        passengerName: `${pax.firstName} ${pax.lastName}`,
-        bookingReference: pax.bookingReference,
-        cabinClass: pax.cabinClass,
-        hasConnection: pax.hasConnection,
-        connectionFlightNumber: pax.connectionFlightNumber,
-      },
-      createdAt: new Date(),
-      completedAt: null,
-    };
-    iropsActionsStore.set(rebookAction.id, rebookAction);
-    actions.push(rebookAction);
-
-    // Create a notification action
-    const notifyAction: IROPSAction = {
-      id: iropsActionIdSeq++,
-      eventId,
-      actionType: "notification",
-      targetPassengerId: pax.passengerId,
-      status: "pending",
-      details: {
-        passengerName: `${pax.firstName} ${pax.lastName}`,
-        contactEmail: pax.contactEmail,
-        message: `Flight disruption - your booking ${pax.bookingReference} is being handled by our IROPS team.`,
-      },
-      createdAt: new Date(),
-      completedAt: null,
-    };
-    iropsActionsStore.set(notifyAction.id, notifyAction);
-    actions.push(notifyAction);
-
-    // Create a meal voucher action
-    const mealAction: IROPSAction = {
-      id: iropsActionIdSeq++,
-      eventId,
-      actionType: "meal_voucher",
-      targetPassengerId: pax.passengerId,
-      status: "pending",
-      details: {
-        passengerName: `${pax.firstName} ${pax.lastName}`,
-        voucherAmountSAR: pax.cabinClass === "business" ? 200 : 100,
-      },
-      createdAt: new Date(),
-      completedAt: null,
-    };
-    iropsActionsStore.set(mealAction.id, mealAction);
-    actions.push(mealAction);
-
-    // If connecting passenger, also create hotel accommodation action
-    if (pax.hasConnection) {
-      const hotelAction: IROPSAction = {
-        id: iropsActionIdSeq++,
-        eventId,
-        actionType: "hotel",
-        targetPassengerId: pax.passengerId,
-        status: "pending",
-        details: {
-          passengerName: `${pax.firstName} ${pax.lastName}`,
-          connectionFlight: pax.connectionFlightNumber,
-          priority: "high",
-        },
-        createdAt: new Date(),
-        completedAt: null,
-      };
-      iropsActionsStore.set(hotelAction.id, hotelAction);
-      actions.push(hotelAction);
+  return db.transaction(async tx => {
+    const [event] = await tx
+      .select()
+      .from(flightDisruptions)
+      .where(
+        and(
+          eq(flightDisruptions.flightId, flightId),
+          eq(flightDisruptions.status, "active")
+        )
+      )
+      .orderBy(desc(flightDisruptions.id))
+      .limit(1)
+      .for("update");
+    if (!event)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "No active disruption for this flight",
+      });
+    const existing = await tx
+      .select()
+      .from(iropsActions)
+      .where(eq(iropsActions.eventId, event.id));
+    const keys = new Set(existing.map(a => a.requestKey));
+    let actionsCreated = 0;
+    for (const pax of affectedPax) {
+      const types: IROPSActionType[] = [
+        "rebook",
+        "notification",
+        "meal_voucher",
+        ...(pax.hasConnection ? ["hotel" as const] : []),
+      ];
+      for (const actionType of types) {
+        const requestKey = `protection:${event.id}:${pax.passengerId}:${actionType}`;
+        if (keys.has(requestKey)) continue;
+        await tx.insert(iropsActions).values({
+          eventId: event.id,
+          requestKey,
+          actionType,
+          targetPassengerId: pax.passengerId,
+          details: {
+            bookingId: pax.bookingId,
+            cabinClass: pax.cabinClass,
+            hasConnection: pax.hasConnection,
+          },
+        });
+        actionsCreated++;
+      }
     }
-  }
-
-  // Update event status to recovering
-  if (event) {
-    event.status = "recovering";
-    event.updatedAt = new Date();
-    iropsEventsStore.set(event.id, event);
-  }
-
-  return {
-    actionsCreated: actions.length,
-    passengersProtected: affectedPax.length,
-    actions,
-  };
+    await tx
+      .update(flightDisruptions)
+      .set({ protectionStartedAt: event.protectionStartedAt ?? new Date() })
+      .where(eq(flightDisruptions.id, event.id));
+    if (actionsCreated)
+      await recordEvent(tx, {
+        aggregateType: "disruption",
+        aggregateId: event.id,
+        eventType: "irops.protection_planned",
+        payload: { flightId, actionsCreated },
+      });
+    const actions = await tx
+      .select()
+      .from(iropsActions)
+      .where(eq(iropsActions.eventId, event.id));
+    return {
+      actionsCreated,
+      passengersAffected: affectedPax.length,
+      passengersPlanned: new Set(
+        actions
+          .filter(a => a.actionType === "rebook")
+          .map(a => a.targetPassengerId)
+      ).size,
+      passengersProtected: countProtectedPassengers(actions),
+      actions,
+    };
+  });
 }
 
-/**
- * Get IROPS dashboard summary
- */
 export async function getIROPSDashboard(): Promise<IROPSDashboardData> {
+  const db = await iropsDb();
   const activeEvents = await getActiveIROPSDisruptions();
-
-  const allEvents = Array.from(iropsEventsStore.values());
-  const allActions = Array.from(iropsActionsStore.values());
-
-  const totalPassengersAffected = activeEvents.reduce(
-    (sum, e) => sum + e.affectedPassengers,
-    0
-  );
-
-  const connectionsAtRisk = activeEvents.reduce(
-    (sum, e) => sum + e.connectionsAtRisk,
-    0
-  );
-
-  const totalEvents = allEvents.length;
-  const resolvedEvents = allEvents.filter(e => e.status === "resolved").length;
-  const recoveryRate =
-    totalEvents > 0 ? Math.round((resolvedEvents / totalEvents) * 100) : 100;
-
-  const criticalEvents = activeEvents.filter(
-    e => e.severity === "critical"
-  ).length;
-
+  const [counts] = await db
+    .select({
+      total: sql<number>`COUNT(*)`,
+      resolved: sql<number>`COALESCE(SUM(${flightDisruptions.status} = 'resolved'), 0)`,
+    })
+    .from(flightDisruptions);
+  const recentActions = await db
+    .select()
+    .from(iropsActions)
+    .orderBy(desc(iropsActions.createdAt), desc(iropsActions.id))
+    .limit(20);
   const severityBreakdown: Record<IROPSSeverity, number> = {
     low: 0,
     medium: 0,
     high: 0,
     critical: 0,
   };
-  for (const e of activeEvents) {
-    severityBreakdown[e.severity]++;
-  }
-
-  // Get recent actions sorted by creation time
-  const recentActions = allActions
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 20);
-
+  for (const event of activeEvents) severityBreakdown[event.severity]++;
   return {
     activeDisruptions: activeEvents.length,
-    totalPassengersAffected,
-    connectionsAtRisk,
-    recoveryRate,
-    criticalEvents,
+    totalPassengersAffected: activeEvents.reduce(
+      (n, e) => n + e.affectedPassengers,
+      0
+    ),
+    connectionsAtRisk: activeEvents.reduce(
+      (n, e) => n + e.connectionsAtRisk,
+      0
+    ),
+    recoveryRate: Number(counts.total)
+      ? (Number(counts.resolved) / Number(counts.total)) * 100
+      : 0,
+    criticalEvents: severityBreakdown.critical,
     recentEvents: activeEvents.slice(0, 10),
     recentActions,
     severityBreakdown,
   };
 }
 
-/**
- * Get recovery performance metrics for a date range
- */
 export async function getRecoveryMetrics(dateRange: {
   start: Date;
   end: Date;
 }): Promise<RecoveryMetrics> {
-  const db = await getDb();
-  if (!db)
+  const db = await iropsDb();
+  if (
+    !Number.isFinite(dateRange.start.getTime()) ||
+    !Number.isFinite(dateRange.end.getTime()) ||
+    dateRange.start > dateRange.end
+  )
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      code: "BAD_REQUEST",
+      message: "Invalid recovery period",
     });
-
-  // Get all disruptions in the date range from the DB
-  const disruptions = await db
-    .select({
-      id: flightDisruptions.id,
-      status: flightDisruptions.status,
-      createdAt: flightDisruptions.createdAt,
-      resolvedAt: flightDisruptions.resolvedAt,
-    })
+  const events = await db
+    .select()
     .from(flightDisruptions)
     .where(
       and(
         gte(flightDisruptions.createdAt, dateRange.start),
         lte(flightDisruptions.createdAt, dateRange.end)
       )
-    );
-
-  // Also include in-memory events in the range
-  const memoryEvents = Array.from(iropsEventsStore.values()).filter(
-    e => e.createdAt >= dateRange.start && e.createdAt <= dateRange.end
-  );
-
-  const totalEvents = disruptions.length + memoryEvents.length;
-  const resolvedDB = disruptions.filter(d => d.status === "resolved");
-  const resolvedMem = memoryEvents.filter(e => e.status === "resolved");
-  const resolvedEvents = resolvedDB.length + resolvedMem.length;
-
-  // Average resolution time
-  let totalResolutionMs = 0;
-  let resolutionCount = 0;
-
-  for (const d of resolvedDB) {
-    if (d.resolvedAt) {
-      totalResolutionMs += d.resolvedAt.getTime() - d.createdAt.getTime();
-      resolutionCount++;
-    }
-  }
-  for (const e of resolvedMem) {
-    if (e.resolvedAt) {
-      totalResolutionMs += e.resolvedAt.getTime() - e.createdAt.getTime();
-      resolutionCount++;
-    }
-  }
-
-  const avgResolutionMinutes =
-    resolutionCount > 0
-      ? Math.round(totalResolutionMs / resolutionCount / 60000)
-      : 0;
-
-  // Count actions by type in the range
-  const rangeActions = Array.from(iropsActionsStore.values()).filter(
-    a => a.createdAt >= dateRange.start && a.createdAt <= dateRange.end
-  );
-
-  const rebookingSuccess = rangeActions.filter(
-    a => a.actionType === "rebook" && a.status === "completed"
-  ).length;
-
-  const compensationIssued = rangeActions.filter(
-    a => a.actionType === "compensation" && a.status === "completed"
-  ).length;
-
-  const passengersRecovered = rangeActions.filter(
-    a =>
-      (a.actionType === "rebook" || a.actionType === "hotel") &&
-      a.status === "completed"
-  ).length;
-
-  const recoveryRatePercent =
-    totalEvents > 0 ? Math.round((resolvedEvents / totalEvents) * 100) : 100;
-
+    )
+    .limit(50001);
+  if (events.length > 50000)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Narrow the recovery period",
+    });
+  const rows = events.length
+    ? await db
+        .select()
+        .from(iropsActions)
+        .where(
+          inArray(
+            iropsActions.eventId,
+            events.map(e => e.id)
+          )
+        )
+    : [];
+  const resolved = events.filter(e => e.status === "resolved" && e.resolvedAt);
   return {
-    totalEvents,
-    resolvedEvents,
-    avgResolutionMinutes,
-    rebookingSuccess,
-    compensationIssued,
-    passengersRecovered,
-    recoveryRatePercent,
+    totalEvents: events.length,
+    resolvedEvents: resolved.length,
+    avgResolutionMinutes: resolved.length
+      ? resolved.reduce(
+          (n, e) =>
+            n +
+            ((e.resolvedAt?.getTime() ?? e.createdAt.getTime()) -
+              e.createdAt.getTime()) /
+              60000,
+          0
+        ) / resolved.length
+      : 0,
+    rebookingSuccess: countProtectedPassengers(rows),
+    passengersRecovered: countProtectedPassengers(rows),
+    compensationIssued: rows.filter(
+      a =>
+        a.actionType === "compensation" &&
+        a.status === "completed" &&
+        a.evidenceId
+    ).length,
+    recoveryRatePercent: events.length
+      ? (resolved.length / events.length) * 100
+      : 0,
   };
 }
 
-/**
- * Send mass notification to all affected passengers on a flight
- */
 export async function sendMassNotification(
   flightId: number,
   message: string
-): Promise<{
-  notificationsSent: number;
-  failedCount: number;
-}> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get all affected bookings and their user IDs
-  const affectedBookings = await db
-    .select({
-      userId: bookings.userId,
-      bookingReference: bookings.bookingReference,
-    })
+): Promise<{ notificationsSent: number; failedCount: number }> {
+  const db = await iropsDb();
+  const affected = await db
+    .select({ userId: bookings.userId })
     .from(bookings)
-    .where(
-      and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
-    );
-
-  // Get the flight number for the notification
-  const [flight] = await db
-    .select({ flightNumber: flights.flightNumber })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  const flightNumber = flight?.flightNumber ?? `Flight #${flightId}`;
-  const uniqueUserIds = [...new Set(affectedBookings.map(b => b.userId))];
-
-  let notificationsSent = 0;
-  let failedCount = 0;
-
-  for (const userId of uniqueUserIds) {
-    try {
-      await createNotification(
+    .where(and(affectedBooking(flightId), ne(bookings.status, "cancelled")));
+  const digest = createHash("sha256").update(message).digest("hex");
+  return db.transaction(async tx => {
+    const [event] = await tx
+      .select()
+      .from(flightDisruptions)
+      .where(
+        and(
+          eq(flightDisruptions.flightId, flightId),
+          eq(flightDisruptions.status, "active")
+        )
+      )
+      .orderBy(desc(flightDisruptions.id))
+      .limit(1)
+      .for("update");
+    if (!event)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "No active disruption",
+      });
+    for (const userId of new Set(affected.map(b => b.userId))) {
+      const requestKey = `notify:${event.id}:${userId}:${digest}`;
+      const [old] = await tx
+        .select({ id: iropsActions.id })
+        .from(iropsActions)
+        .where(eq(iropsActions.requestKey, requestKey))
+        .limit(1);
+      if (old) continue;
+      const [notice] = await tx.insert(notifications).values({
         userId,
-        "flight",
-        `IROPS Alert: ${flightNumber}`,
+        type: "flight",
+        title: "Flight disruption",
         message,
-        { flightId, flightNumber }
-      );
-      notificationsSent++;
-    } catch (err) {
-      console.error(
-        `Failed to send IROPS notification to user ${userId}:`,
-        err
-      );
-      failedCount++;
+        data: JSON.stringify({ flightId, eventId: event.id }),
+      });
+      if (!notice.insertId) throw new Error("Missing notification receipt");
+      await tx.insert(iropsActions).values({
+        eventId: event.id,
+        requestKey,
+        actionType: "notification",
+        status: "completed",
+        details: { userId },
+        evidenceType: "in_app_notification",
+        evidenceId: String(notice.insertId),
+        completedAt: new Date(),
+      });
+      await recordEvent(tx, {
+        aggregateType: "notification",
+        aggregateId: notice.insertId,
+        eventType: "irops.notification_created",
+        payload: { userId, flightId },
+      });
     }
-  }
-
-  // Log actions in the IROPS store
-  const event = Array.from(iropsEventsStore.values()).find(
-    e => e.flightId === flightId && e.status !== "resolved"
-  );
-
-  if (event) {
-    const action: IROPSAction = {
-      id: iropsActionIdSeq++,
-      eventId: event.id,
-      actionType: "notification",
-      targetPassengerId: null,
-      status: "completed",
-      details: {
-        message,
-        recipientCount: notificationsSent,
-        failedCount,
-        flightNumber,
-      },
-      createdAt: new Date(),
-      completedAt: new Date(),
+    // This is creation in the user's inbox, not an email delivery receipt.
+    return {
+      notificationsSent: new Set(affected.map(b => b.userId)).size,
+      failedCount: 0,
     };
-    iropsActionsStore.set(action.id, action);
-  }
-
-  return { notificationsSent, failedCount };
+  });
 }
 
-/**
- * Get passengers whose connections are at risk due to the disrupted flight
- */
 export async function getConnectionsAtRisk(flightId: number): Promise<
   Array<{
     passengerId: number;
@@ -963,9 +787,7 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
       bookingReference: bookings.bookingReference,
     })
     .from(bookings)
-    .where(
-      and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
-    );
+    .where(and(affectedBooking(flightId), ne(bookings.status, "cancelled")));
 
   if (affectedBookings.length === 0) return [];
 
@@ -1092,260 +914,146 @@ export async function escalateDisruption(
   disruptionId: number,
   level: IROPSSeverity
 ): Promise<IROPSEvent> {
-  const event = iropsEventsStore.get(disruptionId);
-
-  if (!event) {
-    // Try to find in the DB disruptions
-    const db = await getDb();
-    if (!db)
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Database not available",
-      });
-
-    const [dbDisruption] = await db
+  const db = await iropsDb();
+  await db.transaction(async tx => {
+    const [event] = await tx
       .select()
       .from(flightDisruptions)
       .where(eq(flightDisruptions.id, disruptionId))
-      .limit(1);
-
-    if (!dbDisruption)
+      .for("update");
+    if (!event)
       throw new TRPCError({
         code: "NOT_FOUND",
         message: "IROPS event not found",
       });
-
-    // Create an in-memory event from DB disruption
-    const impact = await computeFlightImpact(db, dbDisruption.flightId);
-
-    const newEvent: IROPSEvent = {
-      id: dbDisruption.id,
-      flightId: dbDisruption.flightId,
-      eventType: mapDisruptionType(dbDisruption.type),
-      severity: level,
-      delayMinutes: dbDisruption.delayMinutes,
-      reason: dbDisruption.reason,
-      affectedPassengers: impact.totalPassengers,
-      connectionsAtRisk: impact.connectionsAtRisk,
-      estimatedRecoveryTime: null,
-      status: dbDisruption.status === "resolved" ? "resolved" : "active",
-      escalationLevel: severityToEscalationLevel(level),
-      createdBy: dbDisruption.createdBy,
-      createdAt: dbDisruption.createdAt,
-      resolvedAt: dbDisruption.resolvedAt,
-      updatedAt: new Date(),
-    };
-
-    iropsEventsStore.set(newEvent.id, newEvent);
-
-    // Update severity in DB
-    const mappedSeverity =
-      level === "low"
-        ? "minor"
-        : level === "critical"
-          ? "severe"
-          : level === "high"
-            ? "severe"
-            : "moderate";
-
-    await db
+    if (event.status !== "active")
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Disruption is closed",
+      });
+    await tx
       .update(flightDisruptions)
-      .set({ severity: mappedSeverity })
+      .set({
+        severity:
+          level === "low"
+            ? "minor"
+            : level === "medium"
+              ? "moderate"
+              : "severe",
+        iropsSeverity: level,
+        escalationLevel: severityToEscalationLevel(level),
+      })
       .where(eq(flightDisruptions.id, disruptionId));
-
-    return newEvent;
-  }
-
-  // Update the in-memory event
-  event.severity = level;
-  event.escalationLevel = severityToEscalationLevel(level);
-  event.updatedAt = new Date();
-  iropsEventsStore.set(event.id, event);
-
-  // Also update DB
-  const db = await getDb();
-  if (db) {
-    const mappedSeverity =
-      level === "low"
-        ? "minor"
-        : level === "critical"
-          ? "severe"
-          : level === "high"
-            ? "severe"
-            : "moderate";
-
-    await db
-      .update(flightDisruptions)
-      .set({ severity: mappedSeverity })
-      .where(eq(flightDisruptions.id, disruptionId));
-  }
-
+    await recordEvent(tx, {
+      aggregateType: "disruption",
+      aggregateId: disruptionId,
+      eventType: "irops.escalated",
+      payload: { level },
+    });
+  });
+  const event = await readEvent(disruptionId);
+  if (!event) throw new Error("Disruption unavailable");
   return event;
 }
 
-/**
- * Resolve an IROPS event
- */
 export async function resolveIROPSEvent(eventId: number): Promise<IROPSEvent> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+  const db = await iropsDb();
+  await db.transaction(async tx => {
+    const [event] = await tx
+      .select()
+      .from(flightDisruptions)
+      .where(eq(flightDisruptions.id, eventId))
+      .for("update");
+    if (!event)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "IROPS event not found",
+      });
+    if (event.status === "resolved") return;
+    const [pending] = await tx
+      .select({ id: iropsActions.id })
+      .from(iropsActions)
+      .where(
+        and(
+          eq(iropsActions.eventId, eventId),
+          ne(iropsActions.status, "completed")
+        )
+      )
+      .limit(1);
+    if (pending)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Unconfirmed recovery actions remain",
+      });
+    await tx
+      .update(flightDisruptions)
+      .set({ status: "resolved", resolvedAt: new Date() })
+      .where(eq(flightDisruptions.id, eventId));
+    await recordEvent(tx, {
+      aggregateType: "disruption",
+      aggregateId: eventId,
+      eventType: "irops.resolved",
+      payload: {},
     });
-
-  const event = iropsEventsStore.get(eventId);
-  const now = new Date();
-
-  if (event) {
-    event.status = "resolved";
-    event.resolvedAt = now;
-    event.updatedAt = now;
-    iropsEventsStore.set(event.id, event);
-  }
-
-  // Also resolve in the DB
-  await db
-    .update(flightDisruptions)
-    .set({ status: "resolved", resolvedAt: now })
-    .where(eq(flightDisruptions.id, eventId));
-
-  // Mark all pending actions for this event as completed
-  for (const [id, action] of iropsActionsStore) {
-    if (
-      action.eventId === eventId &&
-      (action.status === "pending" || action.status === "in_progress")
-    ) {
-      action.status = "completed";
-      action.completedAt = now;
-      iropsActionsStore.set(id, action);
-    }
-  }
-
-  if (event) return event;
-
-  // Return a synthetic event from DB data
-  const [dbDisruption] = await db
-    .select()
-    .from(flightDisruptions)
-    .where(eq(flightDisruptions.id, eventId))
-    .limit(1);
-
-  if (!dbDisruption)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "IROPS event not found",
-    });
-
-  return {
-    id: dbDisruption.id,
-    flightId: dbDisruption.flightId,
-    eventType: mapDisruptionType(dbDisruption.type),
-    severity: mapSeverity(dbDisruption.severity),
-    delayMinutes: dbDisruption.delayMinutes,
-    reason: dbDisruption.reason,
-    affectedPassengers: 0,
-    connectionsAtRisk: 0,
-    estimatedRecoveryTime: null,
-    status: "resolved",
-    escalationLevel: 0,
-    createdBy: dbDisruption.createdBy,
-    createdAt: dbDisruption.createdAt,
-    resolvedAt: now,
-    updatedAt: now,
-  };
+  });
+  const event = await readEvent(eventId);
+  if (!event) throw new Error("Disruption unavailable");
+  return event;
 }
 
-/**
- * Get a single IROPS event detail by ID
- */
 export async function getIROPSEventDetail(eventId: number): Promise<{
   event: IROPSEvent;
   actions: IROPSAction[];
   impact: Awaited<ReturnType<typeof getDisruptionImpact>>;
 } | null> {
-  const db = await getDb();
-  if (!db)
+  const db = await iropsDb();
+  const event = await readEvent(eventId);
+  if (!event) return null;
+  const actions = await db
+    .select()
+    .from(iropsActions)
+    .where(eq(iropsActions.eventId, eventId))
+    .orderBy(desc(iropsActions.createdAt));
+  return { event, actions, impact: await getDisruptionImpact(event.flightId) };
+}
+
+/** Called by the inventory/booking authority in its own successful transaction.
+ * There is deliberately no public 'mark completed' endpoint. */
+export async function recordReaccommodation(
+  tx: SettlementTx,
+  actionId: number,
+  bookingId: number
+) {
+  const [action] = await tx
+    .select()
+    .from(iropsActions)
+    .where(eq(iropsActions.id, actionId))
+    .for("update");
+  if (
+    !action ||
+    action.actionType !== "rebook" ||
+    action.details.bookingId !== bookingId
+  )
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      code: "PRECONDITION_FAILED",
+      message: "Recovery action does not own this booking",
     });
-
-  let event = iropsEventsStore.get(eventId);
-
-  if (!event) {
-    // Try loading from DB
-    const [dbDisruption] = await db
-      .select({
-        id: flightDisruptions.id,
-        flightId: flightDisruptions.flightId,
-        type: flightDisruptions.type,
-        reason: flightDisruptions.reason,
-        severity: flightDisruptions.severity,
-        delayMinutes: flightDisruptions.delayMinutes,
-        status: flightDisruptions.status,
-        createdBy: flightDisruptions.createdBy,
-        createdAt: flightDisruptions.createdAt,
-        resolvedAt: flightDisruptions.resolvedAt,
-        updatedAt: flightDisruptions.updatedAt,
-        flightNumber: flights.flightNumber,
-        departureTime: flights.departureTime,
-        originId: flights.originId,
-        destinationId: flights.destinationId,
-      })
-      .from(flightDisruptions)
-      .innerJoin(flights, eq(flightDisruptions.flightId, flights.id))
-      .where(eq(flightDisruptions.id, eventId))
-      .limit(1);
-
-    if (!dbDisruption) return null;
-
-    const impact = await computeFlightImpact(db, dbDisruption.flightId);
-
-    const [origin] = await db
-      .select({ code: airports.code })
-      .from(airports)
-      .where(eq(airports.id, dbDisruption.originId))
-      .limit(1);
-
-    const [destination] = await db
-      .select({ code: airports.code })
-      .from(airports)
-      .where(eq(airports.id, dbDisruption.destinationId))
-      .limit(1);
-
-    event = {
-      id: dbDisruption.id,
-      flightId: dbDisruption.flightId,
-      eventType: mapDisruptionType(dbDisruption.type),
-      severity: mapSeverity(dbDisruption.severity),
-      delayMinutes: dbDisruption.delayMinutes,
-      reason: dbDisruption.reason,
-      affectedPassengers: impact.totalPassengers,
-      connectionsAtRisk: impact.connectionsAtRisk,
-      estimatedRecoveryTime: null,
-      status: dbDisruption.status === "resolved" ? "resolved" : "active",
-      escalationLevel: severityToEscalationLevel(
-        mapSeverity(dbDisruption.severity)
-      ),
-      createdBy: dbDisruption.createdBy,
-      createdAt: dbDisruption.createdAt,
-      resolvedAt: dbDisruption.resolvedAt,
-      updatedAt: dbDisruption.updatedAt,
-      flightNumber: dbDisruption.flightNumber,
-      origin: origin?.code,
-      destination: destination?.code,
-      departureTime: dbDisruption.departureTime,
-    };
-  }
-
-  const actions = Array.from(iropsActionsStore.values())
-    .filter(a => a.eventId === eventId)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
-  const impact = await getDisruptionImpact(event.flightId);
-
-  return { event, actions, impact };
+  if (action.status === "completed") return;
+  await tx
+    .update(iropsActions)
+    .set({
+      status: "completed",
+      evidenceType: "booking_reaccommodation",
+      evidenceId: String(bookingId),
+      completedAt: new Date(),
+    })
+    .where(eq(iropsActions.id, actionId));
+  await recordEvent(tx, {
+    aggregateType: "irops_action",
+    aggregateId: actionId,
+    eventType: "irops.reaccommodation_confirmed",
+    payload: { bookingId },
+  });
 }
 
 // ============================================================================
@@ -1356,68 +1064,16 @@ export async function getIROPSEventDetail(eventId: number): Promise<{
  * Compute passenger and connection counts for a flight
  */
 async function computeFlightImpact(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  _db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   flightId: number
 ): Promise<{
   totalPassengers: number;
   connectionsAtRisk: number;
 }> {
-  // Count passengers on active bookings
-  const affectedBookings = await db
-    .select({
-      numberOfPassengers: bookings.numberOfPassengers,
-      userId: bookings.userId,
-    })
-    .from(bookings)
-    .where(
-      and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
-    );
-
-  const totalPassengers = affectedBookings.reduce(
-    (sum, b) => sum + b.numberOfPassengers,
-    0
-  );
-
-  // Estimate connections at risk: check if any users have another
-  // booking from the same destination within 24h
-  const userIds = affectedBookings.map(b => b.userId);
-  if (userIds.length === 0) {
-    return { totalPassengers: 0, connectionsAtRisk: 0 };
-  }
-
-  const [flight] = await db
-    .select({
-      arrivalTime: flights.arrivalTime,
-      destinationId: flights.destinationId,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (!flight) {
-    return { totalPassengers, connectionsAtRisk: 0 };
-  }
-
-  const twentyFourHoursLater = new Date(flight.arrivalTime);
-  twentyFourHoursLater.setHours(twentyFourHoursLater.getHours() + 24);
-
-  const connectingBookings = await db
-    .select({ userId: bookings.userId })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(
-      and(
-        inArray(bookings.userId, userIds),
-        eq(flights.originId, flight.destinationId),
-        ne(bookings.status, "cancelled"),
-        gte(flights.departureTime, flight.arrivalTime),
-        lte(flights.departureTime, twentyFourHoursLater)
-      )
-    );
-
+  const affected = await getAffectedPassengers(flightId);
   return {
-    totalPassengers,
-    connectionsAtRisk: connectingBookings.length,
+    totalPassengers: affected.length,
+    connectionsAtRisk: affected.filter(p => p.hasConnection).length,
   };
 }
 

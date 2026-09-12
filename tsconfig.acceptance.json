@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "scripts/verify-transaction-boundaries.ts",
+    "scripts/acceptance/aviation-research.ts",
     "scripts/migration-preservation-check.ts",
     "scripts/db/replay-acceptance.ts",
     "scripts/acceptance/stripe-checkout.ts"

@@ -1,9 +1,15 @@
+import { BaggageCustodyConflict } from "./baggage-custody.service";
+import {
+  applyPaidOrderModification,
+  OrderServicingUnavailable,
+} from "./order-servicing.service";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   bookings,
   bookingRefundItems,
   flights,
   bookingModifications,
+  orderServiceRefunds,
   paymentSplits,
   paymentReceipts,
   financialLedger,
@@ -248,6 +254,44 @@ export async function settleVerifiedPayment(
       )
       .limit(1)
       .for("update");
+    if (change?.servicingPayload && change.userId === booking.userId) {
+      assertCollectedAmount(amount, change.totalCost, currency);
+      await recordReceipt(
+        tx,
+        payment,
+        kind,
+        change.id,
+        booking.userId,
+        booking.id
+      );
+      try {
+        if (
+          !change.checkoutRequestId ||
+          meta.checkoutRequestId !== change.checkoutRequestId
+        )
+          throw new OrderServicingUnavailable(
+            "Collected payment lacks the saved servicing checkout identity"
+          );
+        await tx.transaction(inner =>
+          applyPaidOrderModification(inner, booking, change)
+        );
+        await tx
+          .update(bookingModifications)
+          .set({ stripePaymentIntentId: paymentIntentId })
+          .where(eq(bookingModifications.id, change.id));
+      } catch (error) {
+        if (
+          !(
+            error instanceof OrderServicingUnavailable ||
+            error instanceof BaggageCustodyConflict ||
+            error instanceof InventoryUnavailableError
+          )
+        )
+          throw error;
+        await requireCollectionReview(tx, payment, booking, error.message);
+      }
+      return;
+    }
     if (
       !change ||
       change.userId !== booking.userId ||
@@ -562,6 +606,24 @@ export async function settleVerifiedRefund(
     )
       return;
   }
+  const servicePlans = ownerBooking
+    ? await tx
+        .select()
+        .from(orderServiceRefunds)
+        .where(eq(orderServiceRefunds.paymentIntentId, input.paymentIntentId))
+        .for("update")
+    : [];
+  if (
+    servicePlans.some(p => p.status !== "succeeded") &&
+    (!input.refundId ||
+      !servicePlans.some(
+        p =>
+          p.status === "succeeded" &&
+          p.refundId === input.refundId &&
+          p.baseRefundedAmount + p.amount === input.amountRefunded
+      ))
+  )
+    return;
   const [receipt] = await tx
     .select()
     .from(paymentReceipts)

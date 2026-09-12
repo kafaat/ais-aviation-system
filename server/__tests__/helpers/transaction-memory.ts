@@ -61,9 +61,25 @@ export function transactionMemory(seed: Record<string, any[]>) {
       let table: any;
       let predicate: any;
       let limit = Infinity;
+      let ordering: Array<{ column: string; descending: boolean }> = [];
       const result = () => {
         const found = rows(table)
           .filter(row => filter(predicate, row))
+          .sort((a, b) => {
+            for (const order of ordering) {
+              const av =
+                a[order.column] instanceof Date
+                  ? a[order.column].getTime()
+                  : a[order.column];
+              const bv =
+                b[order.column] instanceof Date
+                  ? b[order.column].getTime()
+                  : b[order.column];
+              if (av === bv) continue;
+              return (av < bv ? -1 : 1) * (order.descending ? -1 : 1);
+            }
+            return 0;
+          })
           .slice(0, limit);
         if (!projection) return structuredClone(found);
         const entries = Object.entries(projection);
@@ -113,7 +129,17 @@ export function transactionMemory(seed: Record<string, any[]>) {
           lockedTables.push(getTableName(table));
           return chain;
         },
-        orderBy: () => chain,
+        orderBy: (...columns: any[]) => {
+          ordering = columns.map(c => {
+            if (!(c instanceof SQL))
+              return { column: c.name, descending: false };
+            const query = dialect.sqlToQuery(c).sql;
+            const column = query.match(/`[^`]+`\.`([^`]+)`/)?.[1];
+            if (!column) throw new Error(`Unsupported order: ${query}`);
+            return { column, descending: /desc/i.test(query) };
+          });
+          return chain;
+        },
         then: (resolve: any, reject: any) =>
           Promise.resolve().then(result).then(resolve, reject),
       };

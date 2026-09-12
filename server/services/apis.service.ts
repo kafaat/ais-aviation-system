@@ -191,39 +191,45 @@ export async function collectPassengerInfo(
   passengerId: number,
   data: CollectPassengerInfoInput
 ) {
-  const db = await requireDb();
+  const database = await requireDb();
+  return database.transaction(async db => {
+    // Verify passenger exists and get booking info
+    const [passenger] = await db
+      .select({
+        id: passengers.id,
+        bookingId: passengers.bookingId,
+        firstName: passengers.firstName,
+        lastName: passengers.lastName,
+      })
+      .from(passengers)
+      .where(eq(passengers.id, passengerId))
+      .limit(1);
 
-  // Verify passenger exists and get booking info
-  const [passenger] = await db
-    .select({
-      id: passengers.id,
-      bookingId: passengers.bookingId,
-      firstName: passengers.firstName,
-      lastName: passengers.lastName,
-    })
-    .from(passengers)
-    .where(eq(passengers.id, passengerId))
-    .limit(1);
+    if (!passenger) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Passenger not found",
+      });
+    }
 
-  if (!passenger) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found",
-    });
-  }
+    await db
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, passenger.bookingId))
+      .for("update");
 
-  // Check for existing APIS data
-  const [existing] = await db
-    .select({ id: sql<number>`id` })
-    .from(sql`apis_data`)
-    .where(sql`passenger_id = ${passengerId}`)
-    .limit(1);
+    // Check for existing APIS data
+    const [existing] = await db
+      .select({ id: sql<number>`id` })
+      .from(sql`apis_data`)
+      .where(sql`passenger_id = ${passengerId}`)
+      .limit(1);
 
-  const now = new Date();
+    const now = new Date();
 
-  if (existing) {
-    // Update existing record
-    await db.execute(sql`
+    if (existing) {
+      // Update existing record
+      await db.execute(sql`
       UPDATE apis_data SET
         document_type = ${data.documentType},
         document_number = ${data.documentNumber},
@@ -246,17 +252,17 @@ export async function collectPassengerInfo(
       WHERE id = ${existing.id}
     `);
 
-    return {
-      id: existing.id,
-      passengerId,
-      bookingId: passenger.bookingId,
-      status: "complete" as APISDataStatus,
-      message: "APIS data updated successfully",
-    };
-  }
+      return {
+        id: existing.id,
+        passengerId,
+        bookingId: passenger.bookingId,
+        status: "complete" as APISDataStatus,
+        message: "APIS data updated successfully",
+      };
+    }
 
-  // Insert new record
-  const [result] = await db.execute(sql`
+    // Insert new record
+    const [result] = await db.execute(sql`
     INSERT INTO apis_data (
       passenger_id, booking_id, document_type, document_number,
       issuing_country, nationality, date_of_birth, gender,
@@ -274,13 +280,14 @@ export async function collectPassengerInfo(
     )
   `);
 
-  return {
-    id: Number((result as { insertId: number }).insertId),
-    passengerId,
-    bookingId: passenger.bookingId,
-    status: "complete" as APISDataStatus,
-    message: "APIS data collected successfully",
-  };
+    return {
+      id: Number((result as { insertId: number }).insertId),
+      passengerId,
+      bookingId: passenger.bookingId,
+      status: "complete" as APISDataStatus,
+      message: "APIS data collected successfully",
+    };
+  });
 }
 
 // ============================================================================
@@ -356,7 +363,7 @@ export async function validateAPISData(passengerId: number) {
     errors.push("Gender must be M (Male), F (Female), or U (Undisclosed)");
   }
 
-  // Validate document expiry (must be in the future, at least 6 months)
+  // Basic expiry validation; country-specific admission is a separate sourced decision.
   const expiryDate = apisData["expiry_date"]
     ? new Date(apisData["expiry_date"] as string)
     : null;
@@ -365,13 +372,9 @@ export async function validateAPISData(passengerId: number) {
     if (expiryDate <= now) {
       errors.push("Travel document has expired");
     } else {
-      const sixMonthsFromNow = new Date();
-      sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
-      if (expiryDate < sixMonthsFromNow) {
-        warnings.push(
-          "Travel document expires within 6 months. Some countries may deny entry."
-        );
-      }
+      warnings.push(
+        "Format validation does not determine admission; current itinerary-specific operator document clearance is required."
+      );
     }
   }
 
@@ -462,28 +465,9 @@ export async function checkTravelDocValidity(
   } else if (expiryDate <= now) {
     issues.push("Document has expired");
   } else {
-    // Check destination-specific validity requirements
-    const _destRequirements =
-      DEFAULT_REQUIREMENTS[destination] ?? DEFAULT_REQUIREMENTS.DEFAULT;
-    const requiredMonths = destination === "US" || destination === "CA" ? 6 : 3;
-    const minExpiryDate = new Date();
-    minExpiryDate.setMonth(minExpiryDate.getMonth() + requiredMonths);
-
-    if (expiryDate < minExpiryDate) {
-      issues.push(
-        `Document must be valid for at least ${requiredMonths} months beyond travel date for ${destination}`
-      );
-    }
-
-    // Check if destination requires visa for this nationality
-    if (
-      nationality !== destination &&
-      ["US", "GB", "CA", "AU"].includes(destination)
-    ) {
-      recommendations.push(
-        `Verify visa requirements for ${nationality} nationals traveling to ${destination}`
-      );
-    }
+    issues.push(
+      `Current itinerary-specific document review is required for ${destination}`
+    );
   }
 
   // Nationality check

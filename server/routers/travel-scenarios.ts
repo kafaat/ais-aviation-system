@@ -1,3 +1,4 @@
+import { travelProfileSchema } from "../services/travel-evidence-policy";
 import { responseContracts } from "../contracts/travel-scenarios";
 import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../_core/trpc";
@@ -79,11 +80,12 @@ export const travelScenariosRouter = router({
   getTravelRequirements: publicProcedure
     .input(
       z.object({
-        flightId: z.number().describe("Flight ID"),
+        flightId: z.number().int().positive().describe("Flight ID"),
+        profile: travelProfileSchema.optional(),
       })
     )
     .output(responseContracts["getTravelRequirements"])
     .query(async ({ input }) => {
-      return await getTravelRequirements(input.flightId);
+      return await getTravelRequirements(input.flightId, input.profile);
     }),
 });

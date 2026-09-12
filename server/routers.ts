@@ -1,3 +1,4 @@
+import { aviationIntegrationsRouter } from "./routers/aviation-integrations";
 import { operationsRouter } from "./routers/operations";
 import { tenantsRouter } from "./routers/tenants";
 import { systemRouter } from "./_core/systemRouter";
@@ -106,6 +107,7 @@ import { webhooksRouter } from "./routers/webhooks";
  * Combines all domain routers into a single API
  */
 export const appRouter = router({
+  aviationIntegrations: aviationIntegrationsRouter,
   operations: operationsRouter,
   tenants: tenantsRouter,
   // System router (AI, notifications, etc.)

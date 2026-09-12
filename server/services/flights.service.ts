@@ -173,7 +173,10 @@ function calculatePassengerTypePrice(
  * Calculate flight price with dynamic pricing and passenger type discounts
  */
 export async function calculateFlightPrice(
-  flight: NonNullable<Awaited<ReturnType<typeof db.getFlightById>>>,
+  flight: Pick<
+    NonNullable<Awaited<ReturnType<typeof db.getFlightById>>>,
+    "id" | "economyPrice" | "businessPrice"
+  >,
   cabinClass: "economy" | "business",
   passengerCount: number,
   passengers?: Array<{ type: "adult" | "child" | "infant" }>,

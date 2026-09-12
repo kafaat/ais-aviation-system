@@ -17,7 +17,8 @@ export const modificationsRouter = router({
       z.object({
         bookingId: z.number(),
         newFlightId: z.number(),
-        reason: z.string().optional(),
+        reason: z.string().max(1000).optional(),
+        idempotencyKey: z.string().min(8).max(100).optional(),
       })
     )
     .output(responseContracts["requestChangeDate"])
@@ -27,6 +28,7 @@ export const modificationsRouter = router({
         userId: ctx.user.id,
         newFlightId: input.newFlightId,
         reason: input.reason,
+        idempotencyKey: input.idempotencyKey,
       });
     }),
 
@@ -37,7 +39,8 @@ export const modificationsRouter = router({
     .input(
       z.object({
         bookingId: z.number(),
-        reason: z.string().optional(),
+        reason: z.string().max(1000).optional(),
+        idempotencyKey: z.string().min(8).max(100).optional(),
       })
     )
     .output(responseContracts["requestUpgrade"])
@@ -47,6 +50,7 @@ export const modificationsRouter = router({
         userId: ctx.user.id,
         newCabinClass: "business",
         reason: input.reason,
+        idempotencyKey: input.idempotencyKey,
       });
     }),
 

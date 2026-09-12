@@ -116,12 +116,41 @@
       "replacement": null
     },
     {
+      "file": "server/services/aircraft-rotation.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/aircraft-rotation.service.ts",
+      "accountableOwner": null,
+      "consumers": ["server/routers/aviation-integrations.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "aircraftRotations",
+          "airlines",
+          "aviationEvidence",
+          "flights"
+        ],
+        "writes": ["aircraftRotations"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/analytics.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/analytics.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/analytics.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/financial-reporting.service.ts"
+      ],
       "tableExpressions": {
         "reads": [
           "airports",
@@ -224,6 +253,33 @@
       "replacement": null
     },
     {
+      "file": "server/services/aviation-evidence.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/aviation-evidence.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/services/aircraft-rotation.service.ts",
+        "server/services/baggage-custody.service.ts",
+        "server/services/crew-rule.service.ts",
+        "server/services/flight-economics-evidence.service.ts",
+        "server/services/operational-events.service.ts",
+        "server/services/premium-experiment.service.ts",
+        "server/services/travel-clearance.service.ts",
+        "server/services/travel-evidence.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/outbox.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["aviationEvidence", "signature"],
+        "writes": ["aviationEvidence"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/bag-drop.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/bag-drop.service.ts",
@@ -248,6 +304,37 @@
           "unitsTable"
         ],
         "writes": ["sessionsTable", "tagsTable", "unitsTable"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/baggage-custody.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/baggage-custody.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/routers/baggage.ts",
+        "server/services/irops-recovery.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/payment-settlement.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "aviationEvidence",
+          "baggageCustodyEvents",
+          "baggageItems",
+          "bookingSegments",
+          "bookings",
+          "flights"
+        ],
+        "writes": ["baggageCustodyEvents", "baggageItems", "baggageTracking"]
       },
       "replacement": null
     },
@@ -344,7 +431,9 @@
       "accountableOwner": null,
       "consumers": [
         "server/services/ancillary-services.service.ts",
-        "server/services/ndc-unpaid.service.ts"
+        "server/services/irops-recovery.service.ts",
+        "server/services/ndc-unpaid.service.ts",
+        "server/services/order-servicing.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -377,9 +466,15 @@
       "technicalOwner": "server/services/booking-modification.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/modifications.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/retail-offer.service.ts"
+      ],
       "tableExpressions": {
-        "reads": ["bookingModifications", "bookings", "flights"],
+        "reads": ["bookingModifications", "bookings", "passengers"],
         "writes": ["bookingModifications"]
       },
       "replacement": null
@@ -393,7 +488,10 @@
         "server/routers/payments.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/bookings.service.ts",
+        "server/services/irops-recovery.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/split-checkout.service.ts",
@@ -459,11 +557,11 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/booking-settlement.service.ts",
-        "server/services/flights.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/inventory-lock.service.ts",
         "server/services/metrics.service.ts",
         "server/services/outbox.service.ts",
+        "server/services/retail-offer.service.ts",
         "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
@@ -525,7 +623,6 @@
         "server/services/pricing/ab-testing.service.ts",
         "server/services/pricing/ai-pricing.service.ts",
         "server/services/pricing/customer-segmentation.service.ts",
-        "server/services/pricing/demand-forecasting.service.ts",
         "server/services/pricing/dynamic-pricing.service.ts",
         "server/services/pricing/revenue-optimization.service.ts",
         "server/services/rate-limit.service.ts"
@@ -655,9 +752,57 @@
       "technicalOwner": "server/services/crew-assignment.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/crew.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/crew-rule.service.ts",
+        "server/services/required-value.ts"
+      ],
       "tableExpressions": {
         "reads": ["crewAssignments", "crewMembers", "flights"],
+        "writes": ["crewAssignments"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/crew-duty-policy.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/crew-duty-policy.ts",
+      "accountableOwner": null,
+      "consumers": ["server/services/crew-rule.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/crew-rule.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/crew-rule.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/services/crew-assignment.service.ts",
+        "server/services/dcs.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/crew-duty-policy.ts",
+        "server/services/outbox.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "airlines",
+          "aviationEvidence",
+          "crewAssignments",
+          "crewMembers",
+          "flights"
+        ],
         "writes": ["crewAssignments"]
       },
       "replacement": null
@@ -675,6 +820,7 @@
         "server/services/bag-drop.service.ts",
         "server/services/data-warehouse.service.ts",
         "server/services/inventory-lock.service.ts",
+        "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
         "server/services/price-alerts.service.ts",
         "server/services/scheduled-task.service.ts",
@@ -716,6 +862,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/financial-reporting.service.ts",
         "server/services/rbac.service.ts"
       ],
       "tableExpressions": {
@@ -758,6 +905,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/crew-rule.service.ts",
         "server/services/demo-capability.ts"
       ],
       "tableExpressions": {
@@ -1003,6 +1151,44 @@
       "replacement": null
     },
     {
+      "file": "server/services/financial-reporting.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/financial-reporting.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/services/analytics.service.ts",
+        "server/services/data-warehouse.service.ts",
+        "server/services/premium-experiment.service.ts"
+      ],
+      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "tableExpressions": {
+        "reads": ["bookings", "financialLedger"],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/flight-economics-evidence.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/flight-economics-evidence.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/services/intelligence/economics.agent.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/required-value.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["aviationEvidence", "flights"],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/flight-status.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/flight-status.service.ts",
@@ -1049,8 +1235,9 @@
       "consumers": [
         "server/routers/flights.ts",
         "server/services/ai-chat-booking.service.ts",
-        "server/services/bookings.service.ts",
-        "server/services/multi-city.service.ts"
+        "server/services/multi-city.service.ts",
+        "server/services/price-quote.service.ts",
+        "server/services/retail-offer.service.ts"
       ],
       "dependencies": [
         "server/db.ts",
@@ -1184,17 +1371,24 @@
       "technicalOwner": "server/services/idempotency-v2.service.ts",
       "accountableOwner": null,
       "consumers": [
+        "server/services/aircraft-rotation.service.ts",
         "server/services/ancillary-services.service.ts",
+        "server/services/aviation-evidence.service.ts",
         "server/services/booking-checkout.service.ts",
+        "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",
         "server/services/event-inbox.service.ts",
+        "server/services/irops-recovery.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-refund.service.ts",
-        "server/services/travel-agent.service.ts"
+        "server/services/travel-agent.service.ts",
+        "server/services/travel-clearance.service.ts",
+        "server/services/travel-evidence.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -1237,7 +1431,9 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/_core/logger.ts",
-        "server/db.ts"
+        "server/db.ts",
+        "server/services/flight-economics-evidence.service.ts",
+        "server/services/required-value.ts"
       ],
       "tableExpressions": {
         "reads": ["airports", "bookingSegments", "bookings", "flights"],
@@ -1337,11 +1533,11 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
-        "server/_core/logger.ts",
-        "server/db.ts"
+        "server/db.ts",
+        "server/services/operational-events.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "flights"],
+        "reads": ["flights"],
         "writes": []
       },
       "replacement": null
@@ -1380,7 +1576,9 @@
       "consumers": [
         "server/services/booking-settlement.service.ts",
         "server/services/inventory-lock.service.ts",
-        "server/services/inventory/inventory.service.ts"
+        "server/services/inventory/inventory.service.ts",
+        "server/services/irops-recovery.service.ts",
+        "server/services/premium-experiment.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
       "tableExpressions": {
@@ -1400,7 +1598,9 @@
         "server/services/inventory/inventory.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
-        "server/services/ndc.service.ts"
+        "server/services/ndc.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/order-servicing.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -1448,25 +1648,81 @@
       "replacement": null
     },
     {
-      "file": "server/services/irops.service.ts",
+      "file": "server/services/irops-recovery.service.ts",
       "lifecycle": "active",
-      "technicalOwner": "server/services/irops.service.ts",
+      "technicalOwner": "server/services/irops-recovery.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/irops.ts"],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/notification.service.ts"
+        "server/services/baggage-custody.service.ts",
+        "server/services/booking-invoice.service.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/inventory-capacity.service.ts",
+        "server/services/irops.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/recovery-solver.ts",
+        "server/services/required-value.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingAncillaries",
+          "bookingModifications",
+          "bookingSegments",
+          "bookings",
+          "flightDisruptions",
+          "flights",
+          "iropsActions",
+          "iropsRecoveryPlans",
+          "ndcOrders"
+        ],
+        "writes": [
+          "bookingSegments",
+          "bookings",
+          "iropsActions",
+          "iropsRecoveryPlans",
+          "ndcOrders",
+          "notifications",
+          "passengers",
+          "seatInventory"
+        ]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/irops.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/irops.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/irops.ts",
+        "server/services/irops-recovery.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
         "reads": [
           "airports",
+          "bookingSegments",
           "bookings",
           "flightDisruptions",
           "flights",
+          "iropsActions",
           "passengers"
         ],
-        "writes": ["flightDisruptions", "flights"]
+        "writes": [
+          "flightDisruptions",
+          "flights",
+          "iropsActions",
+          "message",
+          "notifications"
+        ]
       },
       "replacement": null
     },
@@ -1476,7 +1732,11 @@
       "technicalOwner": "server/services/kiosk.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/kiosk.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/travel-clearance.service.ts"
+      ],
       "tableExpressions": {
         "reads": [
           "airlines",
@@ -1660,6 +1920,19 @@
       "replacement": "server/services/mobile-auth-v2.service.ts"
     },
     {
+      "file": "server/services/modification-fee.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/modification-fee.ts",
+      "accountableOwner": null,
+      "consumers": ["server/services/order-servicing.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/multi-city.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/multi-city.service.ts",
@@ -1731,6 +2004,7 @@
         "server/services/inventory-lock.service.ts",
         "server/services/ndc.service.ts",
         "server/services/outbox.service.ts",
+        "server/services/retail-offer.service.ts",
         "server/services/seat-economics.service.ts"
       ],
       "tableExpressions": {
@@ -1774,6 +2048,7 @@
         "server/services/ndc-order-state.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/outbox.service.ts",
+        "server/services/retail-offer.service.ts",
         "server/services/seat-economics.service.ts",
         "server/services/tenant.service.ts"
       ],
@@ -1808,7 +2083,6 @@
         "server/services/corporate.service.ts",
         "server/services/flight-status.service.ts",
         "server/services/gate.service.ts",
-        "server/services/irops.service.ts",
         "server/services/price-alerts.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/queue.service.ts",
@@ -1828,22 +2102,161 @@
       "replacement": null
     },
     {
+      "file": "server/services/operational-events.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/operational-events.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/services/intelligence/operations.agent.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["aviationEvidence", "flights"],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/order-refunds.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/order-refunds.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/services/cron.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/refunds.service.ts",
+        "server/services/split-refund.service.ts",
+        "server/webhooks/stripe.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/outbox.service.ts",
+        "server/services/payment-settlement.service.ts",
+        "server/services/split-refund.service.ts",
+        "server/stripe.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingRefundPlans",
+          "bookings",
+          "orderServiceRefunds",
+          "paymentReceipts"
+        ],
+        "writes": ["orderServiceRefunds"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/order-service-checkout.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/order-service-checkout.service.ts",
+      "accountableOwner": null,
+      "consumers": ["server/routers/ndc.ts", "server/routers/payments.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/services/inventory-lock.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/outbox.service.ts",
+        "server/stripe.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingModifications",
+          "bookings",
+          "flights",
+          "inventoryLocks"
+        ],
+        "writes": ["bookingModifications", "inventoryLocks"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/order-servicing.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/order-servicing.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/ndc.ts",
+        "server/services/booking-modification.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/payment-settlement.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/baggage-custody.service.ts",
+        "server/services/booking-invoice.service.ts",
+        "server/services/booking-settlement.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/inventory-lock.service.ts",
+        "server/services/modification-fee.ts",
+        "server/services/order-refunds.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/retail-offer.service.ts",
+        "server/services/seat-economics.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingAncillaries",
+          "bookingModifications",
+          "bookingSegments",
+          "bookings",
+          "flights",
+          "inventoryLocks",
+          "ndcOrders",
+          "passengers",
+          "retailOffers"
+        ],
+        "writes": [
+          "bookingModifications",
+          "bookingSegments",
+          "bookings",
+          "inventoryLocks",
+          "ndcOrders",
+          "passengers",
+          "seatInventory"
+        ]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/outbox.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/outbox.service.ts",
       "accountableOwner": null,
       "consumers": [
         "server/services/agent-governance.service.ts",
+        "server/services/aircraft-rotation.service.ts",
+        "server/services/aviation-evidence.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-invoice.service.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/bookings.service.ts",
+        "server/services/crew-rule.service.ts",
         "server/services/cron.service.ts",
         "server/services/eticket.service.ts",
+        "server/services/irops-recovery.service.ts",
+        "server/services/irops.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/order-refunds.service.ts",
+        "server/services/order-service-checkout.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/payment-settlement.service.ts",
+        "server/services/premium-experiment.service.ts",
+        "server/services/pricing-approval.service.ts",
+        "server/services/retail-offer.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/split-refund.service.ts",
@@ -2058,14 +2471,17 @@
       "technicalOwner": "server/services/payment-settlement.service.ts",
       "accountableOwner": null,
       "consumers": [
+        "server/services/order-refunds.service.ts",
         "server/services/refunds.service.ts",
         "server/services/split-refund.service.ts",
         "server/webhooks/stripe.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/services/baggage-custody.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-settlement.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
@@ -2074,6 +2490,7 @@
           "bookingRefundItems",
           "bookings",
           "flights",
+          "orderServiceRefunds",
           "paymentReceipts",
           "paymentSplits",
           "walletTransactions",
@@ -2126,6 +2543,55 @@
       "tableExpressions": {
         "reads": ["bookings", "flights"],
         "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/premium-experiment-policy.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/premium-experiment-policy.ts",
+      "accountableOwner": null,
+      "consumers": ["server/services/premium-experiment.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/premium-experiment.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/premium-experiment.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/services/retail-offer.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/financial-reporting.service.ts",
+        "server/services/inventory-capacity.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/premium-experiment-policy.ts",
+        "server/services/required-value.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookings",
+          "financialLedger",
+          "flights",
+          "premiumAssignments",
+          "premiumConversions",
+          "premiumPolicies"
+        ],
+        "writes": [
+          "premiumAssignments",
+          "premiumConversions",
+          "premiumPolicies"
+        ]
       },
       "replacement": null
     },
@@ -2186,10 +2652,35 @@
       "technicalOwner": "server/services/price-quote.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/price-quote.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flights.service.ts"
+      ],
       "tableExpressions": {
         "reads": ["ancillaryServices", "flights"],
         "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/pricing-approval.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/pricing-approval.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/ai-pricing.router.ts",
+        "server/services/pricing/revenue-optimization.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/outbox.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["flights", "revenueOptimizationLogs"],
+        "writes": ["flights", "revenueOptimizationLogs"]
       },
       "replacement": null
     },
@@ -2272,10 +2763,15 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/cache.service.ts"
+        "server/services/pricing/temporal-forecast.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "flights"],
+        "reads": [
+          "aiPricingModels",
+          "bookings",
+          "demandPredictions",
+          "flights"
+        ],
         "writes": ["aiPricingModels", "demandPredictions"]
       },
       "replacement": null
@@ -2314,6 +2810,7 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/cache.service.ts",
+        "server/services/pricing-approval.service.ts",
         "server/services/pricing/demand-forecasting.service.ts"
       ],
       "tableExpressions": {
@@ -2323,7 +2820,20 @@
           "pricingHistory",
           "revenueOptimizationLogs"
         ],
-        "writes": ["flights", "priceElasticityData", "revenueOptimizationLogs"]
+        "writes": ["priceElasticityData", "revenueOptimizationLogs"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/pricing/temporal-forecast.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/pricing/temporal-forecast.ts",
+      "accountableOwner": null,
+      "consumers": ["server/services/pricing/demand-forecasting.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
       },
       "replacement": null
     },
@@ -2461,6 +2971,19 @@
       "replacement": null
     },
     {
+      "file": "server/services/recovery-solver.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/recovery-solver.ts",
+      "accountableOwner": null,
+      "consumers": ["server/services/irops-recovery.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/redis-cache.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/redis-cache.service.ts",
@@ -2523,6 +3046,7 @@
         "server/services/email.service.ts",
         "server/services/metrics.service.ts",
         "server/services/notification.service.ts",
+        "server/services/order-refunds.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/stripe.ts"
       ],
@@ -2552,6 +3076,55 @@
       "tableExpressions": {
         "reads": ["airlines", "bookings", "flights", "users"],
         "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/required-value.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/required-value.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/services/crew-assignment.service.ts",
+        "server/services/flight-economics-evidence.service.ts",
+        "server/services/intelligence/economics.agent.ts",
+        "server/services/irops-recovery.service.ts",
+        "server/services/premium-experiment.service.ts",
+        "server/services/retail-offer.service.ts",
+        "server/services/travel-clearance.service.ts",
+        "server/services/travel-evidence.service.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/retail-offer.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/retail-offer.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/price-quote.ts",
+        "server/services/booking-modification.service.ts",
+        "server/services/bookings.service.ts",
+        "server/services/ndc-unpaid.service.ts",
+        "server/services/ndc.service.ts",
+        "server/services/order-servicing.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flights.service.ts",
+        "server/services/outbox.service.ts",
+        "server/services/premium-experiment.service.ts",
+        "server/services/required-value.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["retailOffers"],
+        "writes": ["retailOffers"]
       },
       "replacement": null
     },
@@ -2645,6 +3218,7 @@
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/order-servicing.service.ts",
         "server/services/seat-economics-tenant.service.ts"
       ],
       "dependencies": [
@@ -2670,8 +3244,15 @@
       "lifecycle": "active",
       "technicalOwner": "server/services/seat-map.service.ts",
       "accountableOwner": null,
-      "consumers": ["server/routers/seat-map.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "consumers": [
+        "server/routers/seat-map.ts",
+        "server/services/travel-scenarios.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/travel-clearance.service.ts"
+      ],
       "tableExpressions": {
         "reads": [
           "airlines",
@@ -2877,6 +3458,7 @@
       "consumers": [
         "server/routers/refunds.ts",
         "server/services/cron.service.ts",
+        "server/services/order-refunds.service.ts",
         "server/webhooks/stripe.ts"
       ],
       "dependencies": [
@@ -2885,6 +3467,7 @@
         "server/services/booking-settlement.service.ts",
         "server/services/cancellation-fees.service.ts",
         "server/services/idempotency-v2.service.ts",
+        "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/stripe.ts"
@@ -2966,11 +3549,18 @@
       "consumers": [
         "server/_core/context.ts",
         "server/routers/tenants.ts",
+        "server/services/aircraft-rotation.service.ts",
+        "server/services/baggage-custody.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-invoice.service.ts",
         "server/services/bookings.service.ts",
+        "server/services/crew-rule.service.ts",
+        "server/services/irops-recovery.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc.service.ts",
+        "server/services/operational-events.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/pricing-approval.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/travel-agent.service.ts"
@@ -3019,12 +3609,88 @@
       "replacement": null
     },
     {
+      "file": "server/services/travel-clearance.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/travel-clearance.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/services/kiosk.service.ts",
+        "server/services/seat-map.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/operations-schema.ts",
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/required-value.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "airports",
+          "apisData",
+          "aviationEvidence",
+          "bookingSegments",
+          "bookings",
+          "flights",
+          "passengers"
+        ],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/travel-evidence-policy.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/travel-evidence-policy.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/travel-scenarios.ts",
+        "server/services/travel-evidence.service.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/travel-evidence.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/travel-evidence.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/aviation-integrations.ts",
+        "server/services/travel-scenarios.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/aviation-evidence.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/required-value.ts",
+        "server/services/travel-evidence-policy.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["airports", "aviationEvidence", "flights"],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/travel-scenarios.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/travel-scenarios.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/travel-scenarios.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/seat-map.service.ts",
+        "server/services/travel-evidence.service.ts"
+      ],
       "tableExpressions": {
         "reads": [
           "airports",
@@ -3033,7 +3699,7 @@
           "passengers",
           "userPreferences"
         ],
-        "writes": ["bookings", "userPreferences"]
+        "writes": ["userPreferences"]
       },
       "replacement": null
     },

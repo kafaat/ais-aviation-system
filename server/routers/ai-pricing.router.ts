@@ -1,3 +1,4 @@
+import { approvePriceChange } from "../services/pricing-approval.service";
 import { responseContracts } from "../contracts/ai-pricing.router";
 /**
  * AI Pricing Router
@@ -165,6 +166,11 @@ export const aiPricingRouter = router({
             predictedDemand: f.predictedDemand,
             confidenceLower: f.confidenceLower,
             confidenceUpper: f.confidenceUpper,
+            modelVersion: f.modelVersion,
+            target: f.target,
+            trainingCutoff: f.trainingCutoff,
+            sampleCount: f.sampleCount,
+            evaluation: f.evaluation,
             recommendedPrice: f.recommendedPrice,
             recommendedMultiplier: f.recommendedMultiplier,
             featureImportances: f.featureImportances,
@@ -203,6 +209,11 @@ export const aiPricingRouter = router({
             predictedDemand: f.predictedDemand,
             confidenceLower: f.confidenceLower,
             confidenceUpper: f.confidenceUpper,
+            modelVersion: f.modelVersion,
+            target: f.target,
+            trainingCutoff: f.trainingCutoff,
+            sampleCount: f.sampleCount,
+            evaluation: f.evaluation,
             recommendedPrice: f.recommendedPrice,
           })),
         };
@@ -217,6 +228,14 @@ export const aiPricingRouter = router({
       }
     }),
 
+  reconcileForecastOutcomes: adminProcedure
+    .input(z.object({ modelId: z.number().int().positive() }))
+    .output(
+      z.object({ observed: z.number().int(), examined: z.number().int() })
+    )
+    .mutation(({ input }) =>
+      DemandForecastingService.reconcileForecastOutcomes(input.modelId)
+    ),
   /** Get model accuracy metrics */
   forecastAccuracy: adminProcedure
     .input(
@@ -403,7 +422,16 @@ export const aiPricingRouter = router({
       }
     }),
 
-  /** Apply an optimization recommendation */
+  approveOptimization: adminProcedure
+    .input(z.object({ logId: z.number().int().positive() }))
+    .output(
+      z.object({ receiptId: z.string().uuid(), expiresAt: z.date().nullable() })
+    )
+    .mutation(({ input, ctx }) =>
+      approvePriceChange(input.logId, ctx.user.id, ctx.tenantId)
+    ),
+
+  /** Execute the exact, unexpired human-approved recommendation. */
   applyOptimization: adminProcedure
     .input(
       z.object({
@@ -415,7 +443,8 @@ export const aiPricingRouter = router({
       try {
         await RevenueOptimizationService.applyOptimization(
           input.logId,
-          ctx.user.id
+          ctx.user.id,
+          ctx.tenantId
         );
         return { success: true };
       } catch (error) {

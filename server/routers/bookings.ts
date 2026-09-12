@@ -67,6 +67,7 @@ export const bookingsRouter = router({
           .optional()
           .describe("Inventory lock ID"),
         priceLockId: z.number().int().positive().optional(),
+        offerId: z.string().uuid().optional(),
         idempotencyKey: z.string().min(1).max(255).optional(),
         ancillaries: z
           .array(
@@ -100,6 +101,7 @@ export const bookingsRouter = router({
         sessionId: input.sessionId,
         lockId: input.lockId,
         priceLockId: input.priceLockId,
+        offerId: input.offerId,
         idempotencyKey: input.idempotencyKey,
         ancillaries: input.ancillaries,
       });

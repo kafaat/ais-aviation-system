@@ -1,3 +1,4 @@
+import { executeApprovedPriceChange } from "../pricing-approval.service";
 /**
  * Revenue Optimization Service
  *
@@ -354,40 +355,10 @@ export async function getRevenueMetrics(
  */
 export async function applyOptimization(
   logId: number,
-  approvedBy: number
+  executedBy: number,
+  tenantId: number | null = null
 ): Promise<boolean> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const log = await db.query.revenueOptimizationLogs?.findFirst({
-    where: eq(revenueOptimizationLogs.id, logId),
-  });
-
-  if (!log || log.status !== "suggested") {
-    throw new Error("Optimization not found or not in suggested status");
-  }
-
-  // Update flight price
-  const updateData =
-    log.cabinClass === "economy"
-      ? { economyPrice: log.optimizedPrice }
-      : { businessPrice: log.optimizedPrice };
-
-  await db.update(flights).set(updateData).where(eq(flights.id, log.flightId));
-
-  // Mark as applied
-  await db
-    .update(revenueOptimizationLogs)
-    .set({
-      status: "applied",
-      approvedBy,
-      approvedAt: new Date(),
-    })
-    .where(eq(revenueOptimizationLogs.id, logId));
-
-  // Invalidate caches
-  await cacheService.del(`optimize:${log.flightId}:${log.cabinClass}:*`);
-
+  await executeApprovedPriceChange(logId, executedBy, tenantId);
   return true;
 }
 

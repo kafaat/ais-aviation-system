@@ -1,3 +1,8 @@
+import { requireValue } from "../required-value";
+import {
+  readFlightCosts,
+  costTotal,
+} from "../flight-economics-evidence.service";
 /**
  * Economics Agent
  *
@@ -14,7 +19,6 @@
  *
  * @module services/intelligence/economics.agent
  */
-
 import { getDb } from "../../db";
 import {
   flights,
@@ -29,33 +33,12 @@ import type {
   AgentRecommendation,
   IntelligenceContext,
   RouteEconomics,
-  CostBreakdown,
   ProfitabilityAnalysis,
 } from "./types";
-
 const log = createServiceLogger("intelligence:economics");
-
 // ============================================================================
 // Constants
 // ============================================================================
-
-/** Average distance for Saudi domestic routes (km) */
-const AVG_DOMESTIC_DISTANCE_KM = 850;
-
-/** Average distance for international routes (km) */
-const _AVG_INTERNATIONAL_DISTANCE_KM = 3200;
-
-/** Standard cost breakdown percentages for airline operations */
-const COST_STRUCTURE = {
-  fuel: 0.3,
-  crew: 0.18,
-  maintenance: 0.12,
-  airport: 0.15,
-  navigation: 0.06,
-  insurance: 0.04,
-  overhead: 0.15,
-} as const;
-
 /** Aggregate capacities independently from booking multiplicity and retain unknown allocations. */
 export function summarizeRouteActivity(
   flightRows: Array<{
@@ -105,7 +88,9 @@ export function summarizeRouteActivity(
       const leg = itinerary.find(s => s.flightId === flight.id);
       if (itinerary.length ? !leg : booking.flightId !== flight.id) continue;
       route.bookedSeats += booking.numberOfPassengers;
-      const amount = leg ? leg.segmentAmount : booking.totalAmount;
+      const amount = itinerary.length
+        ? requireValue(leg).segmentAmount
+        : booking.totalAmount;
       route.revenue =
         route.revenue == null || amount == null ? null : route.revenue + amount;
     }
@@ -113,15 +98,12 @@ export function summarizeRouteActivity(
   }
   return [...routes.values()];
 }
-
 // ============================================================================
 // Economics Agent
 // ============================================================================
-
 export class EconomicsAgent {
   private readonly agentId = "economics-agent-v1";
   private readonly agentName = "Economics Agent";
-
   /**
    * Run full profitability analysis
    */
@@ -131,23 +113,19 @@ export class EconomicsAgent {
     const startTime = Date.now();
     const reasoning: string[] = [];
     const recommendations: AgentRecommendation[] = [];
-
     try {
       const db = await getDb();
       if (!db) {
         return this.errorResult("Database not available", startTime);
       }
-
       // Determine date range
       const now = new Date();
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const startDate = context.scope.dateRange?.start || thirtyDaysAgo;
       const endDate = context.scope.dateRange?.end || now;
-
       reasoning.push(
         `Analyzing period: ${startDate.toISOString().split("T")[0]} to ${endDate.toISOString().split("T")[0]}`
       );
-
       // Read each flight once; never SUM capacity across a one-to-many booking join.
       const flown = await db
         .select()
@@ -208,44 +186,116 @@ export class EconomicsAgent {
         .from(airports);
       const airportMap = new Map(airportList.map(a => [a.id, a.code]));
       const activity = summarizeRouteActivity(flown, paid, segments);
-      const routes: RouteEconomics[] = activity.map(route => ({
-        routeId: `${route.originId}-${route.destinationId}`,
-        origin: airportMap.get(route.originId) ?? `APT-${route.originId}`,
-        destination:
-          airportMap.get(route.destinationId) ?? `APT-${route.destinationId}`,
-        measured: {
-          flights: route.flightCount,
-          availableSeats: route.totalSeats,
-          bookedSeats: route.bookedSeats,
-          revenue: route.revenue == null ? null : route.revenue / 100,
-        },
-        metrics: {
-          loadFactor: route.totalSeats
-            ? Math.round((route.bookedSeats / route.totalSeats) * 1000) / 10
-            : 0,
-          rask: null,
-          cask: null,
-          yield: null,
-          breakEvenLoadFactor: null,
-          profitMargin: null,
-          contributionMargin: null,
-        },
-        trend: "unknown",
-        forecast: { nextMonth: null, nextQuarter: null, confidence: 0 },
-      }));
+      const facts = await readFlightCosts(flown.map(f => f.id));
+      const allCosts = flown.length > 0 && flown.every(f => facts.has(f.id));
+      const allRevenue =
+        allCosts &&
+        flown.every(
+          f =>
+            requireValue(facts.get(f.id)).payload.recognizedRevenueMinor !==
+            null
+        );
+      const totalCost = allCosts
+        ? flown.reduce(
+            (sum, f) => sum + costTotal(requireValue(facts.get(f.id)).payload),
+            0
+          ) / 100
+        : null;
+      const totalRevenue = allRevenue
+        ? flown.reduce(
+            (sum, f) =>
+              sum +
+              requireValue(
+                requireValue(facts.get(f.id)).payload.recognizedRevenueMinor
+              ),
+            0
+          ) / 100
+        : null;
+      const routes: RouteEconomics[] = activity.map(route => {
+        const fs = flown.filter(
+          f =>
+            f.originId === route.originId &&
+            f.destinationId === route.destinationId
+        );
+        const complete = fs.every(f => facts.has(f.id));
+        const cost = complete
+          ? fs.reduce(
+              (sum, f) =>
+                sum + costTotal(requireValue(facts.get(f.id)).payload),
+              0
+            ) / 100
+          : null;
+        const revenue =
+          complete &&
+          fs.every(
+            f =>
+              requireValue(facts.get(f.id)).payload.recognizedRevenueMinor !==
+              null
+          )
+            ? fs.reduce(
+                (sum, f) =>
+                  sum +
+                  requireValue(
+                    requireValue(facts.get(f.id)).payload.recognizedRevenueMinor
+                  ),
+                0
+              ) / 100
+            : null;
+        const ask = complete
+          ? fs.reduce(
+              (sum, f) =>
+                sum +
+                (f.economySeats + f.businessSeats) *
+                  requireValue(facts.get(f.id)).payload.routeDistanceKm,
+              0
+            )
+          : null;
+        return {
+          routeId: `${route.originId}-${route.destinationId}`,
+          origin: airportMap.get(route.originId) ?? `APT-${route.originId}`,
+          destination:
+            airportMap.get(route.destinationId) ?? `APT-${route.destinationId}`,
+          measured: {
+            flights: route.flightCount,
+            availableSeats: route.totalSeats,
+            bookedSeats: route.bookedSeats,
+            revenue: route.revenue == null ? null : route.revenue / 100,
+          },
+          metrics: {
+            loadFactor: route.totalSeats
+              ? Math.round((route.bookedSeats / route.totalSeats) * 1000) / 10
+              : 0,
+            rask: ask && revenue !== null ? revenue / ask : null,
+            cask: ask && cost !== null ? cost / ask : null,
+            yield: null,
+            breakEvenLoadFactor: null,
+            profitMargin:
+              revenue && cost !== null
+                ? ((revenue - cost) / revenue) * 100
+                : null,
+            contributionMargin: null,
+          },
+          trend: "unknown",
+          forecast: { nextMonth: null, nextQuarter: null, confidence: 0 },
+        };
+      });
       reasoning.push(
         `Measured ${flown.length} completed flights and ${paid.length} paid bookings; capacity counted once per flight and passengers per segment.`
       );
       reasoning.push(
-        "Distance, operating costs and a validated forecasting model are absent. Profitability, RASK/CASK and forecasts are unavailable; no route closure or automatic price action is inferred."
+        `Closed cost evidence covers ${facts.size}/${flown.length} flights. Only complete source snapshots populate cost and recognized-revenue metrics. Forecasts remain unavailable.`
       );
       const result: ProfitabilityAnalysis = {
-        totalRevenue: activity.some(r => r.revenue == null)
-          ? null
-          : activity.reduce((sum, r) => sum + (r.revenue ?? 0), 0) / 100,
-        totalCost: null,
-        operatingProfit: null,
-        netMargin: null,
+        totalRevenue,
+        totalCost,
+        operatingProfit:
+          totalCost !== null && totalRevenue !== null
+            ? totalRevenue - totalCost
+            : null,
+        netMargin:
+          totalRevenue && totalCost !== null
+            ? ((totalRevenue - totalCost) / totalRevenue) * 100
+            : null,
         roi: null,
         routes,
         unprofitableRoutes: [],
@@ -253,15 +303,14 @@ export class EconomicsAgent {
         recommendations,
         dataQuality: {
           missing: [
-            "route_distance",
-            "operating_cost_ledger",
+            ...(!allCosts ? ["closed_flight_cost_and_distance"] : []),
+            ...(!allRevenue ? ["recognized_revenue"] : []),
             "validated_forecast",
             ...(activity.some(r => r.revenue == null)
               ? ["historical_segment_revenue_allocation"]
               : []),
           ],
-          revenueAllocation:
-            "Stored itinerary quote allocation; historical missing allocations remain unknown",
+          revenueAllocation: `Measured booking revenue uses stored invoice allocations. Profitability uses closed source accounting snapshots: ${[...facts.values()].map(f => f.evidenceId).join(",") || "none"}.`,
         },
       };
       const confidence = 0; // No evidence supporting a profitability prediction.
@@ -275,7 +324,6 @@ export class EconomicsAgent {
         },
         "Economics analysis completed"
       );
-
       return {
         agentId: this.agentId,
         agentName: this.agentName,
@@ -300,27 +348,6 @@ export class EconomicsAgent {
       );
     }
   }
-
-  /**
-   * Get cost breakdown for a specific route
-   */
-  estimateRouteCost(totalRevenue: number, loadFactor: number): CostBreakdown {
-    const estimatedTotal = totalRevenue * 0.78; // ~22% average airline margin
-
-    return {
-      fuel: estimatedTotal * COST_STRUCTURE.fuel,
-      crew: estimatedTotal * COST_STRUCTURE.crew,
-      maintenance: estimatedTotal * COST_STRUCTURE.maintenance,
-      airport: estimatedTotal * COST_STRUCTURE.airport,
-      navigation: estimatedTotal * COST_STRUCTURE.navigation,
-      insurance: estimatedTotal * COST_STRUCTURE.insurance,
-      overhead: estimatedTotal * COST_STRUCTURE.overhead,
-      total: estimatedTotal,
-      perSeat: loadFactor > 0 ? estimatedTotal / (loadFactor * 180) : 0, // Assume A320 with 180 seats
-      perKm: estimatedTotal / AVG_DOMESTIC_DISTANCE_KM,
-    };
-  }
-
   private errorResult(
     message: string,
     startTime: number
@@ -334,11 +361,11 @@ export class EconomicsAgent {
       confidence: 0,
       confidenceLevel: "low",
       data: {
-        totalRevenue: 0,
-        totalCost: 0,
-        operatingProfit: 0,
-        netMargin: 0,
-        roi: 0,
+        totalRevenue: null,
+        totalCost: null,
+        operatingProfit: null,
+        netMargin: null,
+        roi: null,
         routes: [],
         unprofitableRoutes: [],
         topPerformers: [],
@@ -350,5 +377,4 @@ export class EconomicsAgent {
     };
   }
 }
-
 export const economicsAgent = new EconomicsAgent();

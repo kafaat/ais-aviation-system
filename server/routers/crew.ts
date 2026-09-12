@@ -70,6 +70,7 @@ export const crewRouter = router({
       return await crewService.assignCrewToFlight({
         ...input,
         assignedBy: ctx.user.id,
+        tenantId: ctx.tenantId,
       });
     }),
 

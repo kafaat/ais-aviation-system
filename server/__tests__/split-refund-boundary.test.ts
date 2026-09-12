@@ -543,7 +543,12 @@ describe("durable payer refund execution", () => {
     await reserve();
     state.create.mockRejectedValueOnce(new Error("outage"));
     await processPendingSplitRefunds();
-    expect(items().map(i => i.status)).toEqual(["requesting", "succeeded"]);
+    // The worker orders UUIDs; insertion order does not determine which share fails first.
+    expect(
+      items()
+        .map(i => i.status)
+        .sort()
+    ).toEqual(["requesting", "succeeded"]);
     vi.setSystemTime(new Date("2026-09-11T12:02:00Z"));
     await processPendingSplitRefunds();
     expect(plan().status).toBe("completed");

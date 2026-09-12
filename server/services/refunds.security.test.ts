@@ -96,6 +96,7 @@ beforeEach(() => {
     .mockResolvedValueOnce([booking])
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])
+    .mockResolvedValueOnce([]) // No pending order-service refund liability.
     .mockResolvedValueOnce([booking])
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([]);

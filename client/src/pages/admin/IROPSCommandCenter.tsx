@@ -449,7 +449,7 @@ function EventsTab({
       toast.success(
         t("irops.protectionTriggered", {
           actions: data.actionsCreated,
-          passengers: data.passengersProtected,
+          passengers: data.passengersPlanned,
         })
       );
       refetch();

@@ -1953,7 +1953,7 @@
       "subtitle": "Comprehensive overview of system performance",
       "totalBookings": "Total Bookings",
       "passenger": "passenger(s)",
-      "totalRevenue": "Total Revenue",
+      "totalRevenue": "Net collections",
       "average": "Average",
       "occupancyRate": "Occupancy Rate",
       "excellentPerformance": "Excellent performance",
@@ -1963,9 +1963,9 @@
       "high": "High",
       "totalPassengers": "Total Passengers",
       "passengerPerBooking": "passenger/booking",
-      "dailyRevenue": "Daily Revenue",
+      "dailyRevenue": "Daily net collections",
       "last30Days": "Last 30 Days",
-      "revenueLabel": "Revenue (SAR)",
+      "revenueLabel": "Net collections (SAR)",
       "bookingTrends": "Booking Trends",
       "bookings": "Bookings",
       "passengers": "Passengers",
@@ -2005,7 +2005,9 @@
       "revenueByCat": "Revenue by Category",
       "topAncillaries": "Top Ancillary Services",
       "sales": "Sales",
-      "noData": "No data available"
+      "noData": "No data available",
+      "unavailable": "Financial reporting is unavailable.",
+      "financialBasis": "Billed: {{billed}} · Collected: {{collected}} · Refunded: {{refunded}} SAR · Reconciliation gaps: {{gaps}}. Earned revenue is not measured."
     },
     "aiPricing": {
       "title": "AI Dynamic Pricing",
@@ -2878,7 +2880,7 @@
     "activeEvents": "{{count}} Active Event",
     "activeEventsPlural": "{{count}} Active Events",
     "refresh": "Refresh",
-    "autoProtect": "Auto-Protect",
+    "autoProtect": "Plan passenger recovery",
     "viewPassengers": "View Passengers",
     "escalate": "Escalate",
     "resolve": "Resolve",
@@ -2935,10 +2937,10 @@
     "analyzingConnections": "Analyzing connection risks...",
     "loadingMetrics": "Loading recovery metrics...",
     "unableToLoadMetrics": "Unable to load recovery metrics.",
-    "protectionTriggered": "Auto-protection triggered: {{actions}} actions for {{passengers}} passengers",
+    "protectionTriggered": "{{actions}} actions created; {{passengers}} passengers have a plan awaiting confirmed execution.",
     "escalatedTo": "Disruption escalated to {{level}}",
     "eventResolved": "Event resolved successfully",
-    "notificationsSent": "Notifications sent: {{sent}} succeeded, {{failed}} failed"
+    "notificationsSent": "In-app notifications saved for {{count}} users"
   },
   "bspReporting": {
     "title": "BSP Reporting",

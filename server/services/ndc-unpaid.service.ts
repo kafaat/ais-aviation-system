@@ -1,3 +1,4 @@
+import { lockRetailOffer, consumeRetailOffer } from "./retail-offer.service";
 import { z } from "zod";
 import { and, asc, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -318,6 +319,23 @@ async function replaceItinerary(
       tx
     );
     held.set(s.flightId, result.lockId);
+  }
+  const canonicalId = storedJson<{ retailOfferId?: string }>(
+    offer.offerPayload,
+    {}
+  ).retailOfferId;
+  if (canonicalId) {
+    const retail = await lockRetailOffer(tx, canonicalId, {
+      flightId: segments[0].flightId,
+      tenantId: booking.tenantId,
+      userId: booking.userId,
+      channel: "ndc",
+      cabinClass: offer.cabinClass,
+      passengerTypes: context.canonical.map(p => p.type),
+    });
+    if (retail.totalAmount !== offer.totalPrice)
+      throw invoiceBlocked("NDC fare snapshot changed");
+    await consumeRetailOffer(tx, retail, booking.id);
   }
   await setInvoiceTotal(tx, booking, offer.totalPrice);
   await tx

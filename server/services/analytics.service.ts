@@ -3,12 +3,17 @@
  * Provides business intelligence and KPIs for admin dashboard
  */
 
+import {
+  getFinancialDays,
+  getFinancialSummary,
+  type FinancialAmounts,
+} from "./financial-reporting.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { bookings, flights, airports } from "../../drizzle/schema";
 import { sql, and, gte, lte, eq, desc } from "drizzle-orm";
 
-export interface KPIMetrics {
+export interface KPIMetrics extends FinancialAmounts {
   totalBookings: number;
   totalRevenue: number;
   averageOccupancyRate: number;
@@ -59,11 +64,12 @@ export async function getKPIMetrics(
         )
       : undefined;
 
-  // Total bookings and revenue
+  const financial = await getFinancialSummary({ startDate, endDate });
+
+  // Booking counts are independent of settlement posting dates.
   const [bookingStats] = await db
     .select({
       totalBookings: sql<number>`COUNT(*)`,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
       totalPassengers: sql<number>`SUM(${bookings.numberOfPassengers})`,
     })
     .from(bookings)
@@ -102,7 +108,8 @@ export async function getKPIMetrics(
 
   return {
     totalBookings: bookingStats.totalBookings || 0,
-    totalRevenue: bookingStats.totalRevenue || 0,
+    ...financial,
+    totalRevenue: financial.netCollectedAmount, // Deprecated alias: net collections, not earned revenue.
     averageOccupancyRate: Math.round(averageOccupancyRate * 10) / 10,
     cancellationRate: Math.round(cancellationRate * 10) / 10,
     totalPassengers: bookingStats.totalPassengers || 0,
@@ -115,37 +122,11 @@ export async function getKPIMetrics(
 export async function getRevenueOverTime(
   days: number = 30
 ): Promise<RevenueDataPoint[]> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-
-  const revenueData = await db
-    .select({
-      date: sql<string>`DATE(${bookings.createdAt})`,
-      revenue: sql<number>`SUM(${bookings.totalAmount})`,
-      bookings: sql<number>`COUNT(*)`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        gte(bookings.createdAt, startDate),
-        sql`${bookings.status} = 'confirmed'`
-      )
-    )
-    .groupBy(sql`DATE(${bookings.createdAt})`)
-    .orderBy(sql`DATE(${bookings.createdAt})`);
-
-  return revenueData.map(row => ({
+  const startDate = new Date(Date.now() - days * 86400000);
+  return (await getFinancialDays({ startDate })).map(row => ({
     date: row.date,
-    revenue: row.revenue || 0,
-    bookings: row.bookings || 0,
+    revenue: row.netCollectedAmount,
+    bookings: row.bookings,
   }));
 }
 

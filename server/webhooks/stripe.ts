@@ -1,3 +1,4 @@
+import { recordVerifiedOrderRefund } from "../services/order-refunds.service";
 /**
  * Stripe Webhook Handler - Production-Grade
  *
@@ -315,6 +316,14 @@ export async function processStripeEvent(
     case "refund.created":
     case "refund.updated":
     case "refund.failed":
+      if (
+        await recordVerifiedOrderRefund(
+          tx,
+          event.data.object as Stripe.Refund,
+          event.id
+        )
+      )
+        return;
       await recordVerifiedSplitRefund(
         tx,
         event.data.object as Stripe.Refund,

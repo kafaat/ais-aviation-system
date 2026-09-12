@@ -118,10 +118,17 @@ describe("classifyAgentAction / requiresApproval", () => {
     }
   });
 
-  it("treats notify/suggest/analyze as auto-safe", () => {
-    for (const a of ["notify", "suggest", "analyze", "summarize", "unknown"]) {
+  it("treats only explicit read operations as auto-safe", () => {
+    for (const a of ["suggest", "analyze", "summarize"]) {
       expect(classifyAgentAction(a)).toBe("auto-safe");
       expect(requiresApproval(a)).toBe(false);
     }
   });
+});
+
+it("denies unknown and outbound notification actions", () => {
+  for (const action of ["unknown", "notify", "transfer_funds"]) {
+    expect(classifyAgentAction(action)).toBe("denied");
+    expect(requiresApproval(action)).toBe(true);
+  }
 });
