@@ -227,8 +227,7 @@ interface WBHistoryRecord {
 // Access the weightBalance router via type assertion.
 // The router is defined but must be registered in server/routers.ts
 // for full type inference. Until then, we use this typed accessor.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const wbTrpc = (trpc as any).weightBalance as {
+const wbTrpc = trpc.weightBalance as {
   calculate: {
     useMutation: (opts: {
       onSuccess: () => void;

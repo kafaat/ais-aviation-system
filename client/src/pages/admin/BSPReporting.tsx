@@ -73,7 +73,6 @@ interface SettlementCycleRow {
   netAmount: number;
   commissionAmount: number;
   status: string;
-  transactionCount: number;
 }
 
 interface BSPTransactionRow {
@@ -117,8 +116,7 @@ interface ComplianceCheck {
   details: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const bspTrpc = (trpc as any).bspReporting;
+const bspTrpc = trpc.bspReporting;
 
 // ============================================================================
 // Helper Functions
@@ -170,7 +168,7 @@ export default function BSPReporting() {
     onSuccess: () => {
       toast.success(t("bspReporting.reportGeneratedSuccess"));
     },
-    onError: (error: Error) => {
+    onError: error => {
       toast.error(
         t("bspReporting.reportGenerateFailed", { error: error.message })
       );
@@ -192,7 +190,7 @@ export default function BSPReporting() {
         );
       }
     },
-    onError: (error: Error) => {
+    onError: error => {
       toast.error(
         t("bspReporting.reconciliationFailed", { error: error.message })
       );
@@ -217,7 +215,7 @@ export default function BSPReporting() {
       URL.revokeObjectURL(url);
       toast.success(t("bspReporting.hotExported", { count: data.recordCount }));
     },
-    onError: (error: Error) => {
+    onError: error => {
       toast.error(t("bspReporting.hotExportFailed", { error: error.message }));
     },
   });
@@ -235,7 +233,7 @@ export default function BSPReporting() {
         );
       }
     },
-    onError: (error: Error) => {
+    onError: error => {
       toast.error(
         t("bspReporting.complianceValidationFailed", {
           error: error.message,

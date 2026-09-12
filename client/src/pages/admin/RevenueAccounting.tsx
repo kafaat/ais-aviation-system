@@ -186,67 +186,58 @@ export function RevenueAccounting() {
   // in server/routers.ts. Type assertions ensure the component code stays
   // type-safe regardless of router registration state.
 
-  const { data: dashboard, isLoading: dashboardLoading } = (
-    trpc as any
-  ).revenueAccounting.getDashboard.useQuery(dateFilter) as {
-    data: DashboardData | undefined;
-    isLoading: boolean;
-  };
+  const { data: dashboard, isLoading: dashboardLoading } =
+    trpc.revenueAccounting.getDashboard.useQuery(dateFilter) as {
+      data: DashboardData | undefined;
+      isLoading: boolean;
+    };
 
-  const { data: routeData, isLoading: routeLoading } = (
-    trpc as any
-  ).revenueAccounting.getRevenueByRoute.useQuery(dateFilter, {
-    enabled: activeTab === "route",
-  }) as { data: RouteRevenueRow[] | undefined; isLoading: boolean };
+  const { data: routeData, isLoading: routeLoading } =
+    trpc.revenueAccounting.getRevenueByRoute.useQuery(dateFilter, {
+      enabled: activeTab === "route",
+    }) as { data: RouteRevenueRow[] | undefined; isLoading: boolean };
 
-  const { data: classData, isLoading: classLoading } = (
-    trpc as any
-  ).revenueAccounting.getRevenueByClass.useQuery(dateFilter, {
-    enabled: activeTab === "class",
-  }) as { data: ClassRevenueRow[] | undefined; isLoading: boolean };
+  const { data: classData, isLoading: classLoading } =
+    trpc.revenueAccounting.getRevenueByClass.useQuery(dateFilter, {
+      enabled: activeTab === "class",
+    }) as { data: ClassRevenueRow[] | undefined; isLoading: boolean };
 
-  const { data: channelData, isLoading: channelLoading } = (
-    trpc as any
-  ).revenueAccounting.getRevenueByChannel.useQuery(dateFilter, {
-    enabled: activeTab === "channel",
-  }) as { data: ChannelRevenueRow[] | undefined; isLoading: boolean };
+  const { data: channelData, isLoading: channelLoading } =
+    trpc.revenueAccounting.getRevenueByChannel.useQuery(dateFilter, {
+      enabled: activeTab === "channel",
+    }) as { data: ChannelRevenueRow[] | undefined; isLoading: boolean };
 
-  const { data: ancillaryData, isLoading: ancillaryLoading } = (
-    trpc as any
-  ).revenueAccounting.getAncillaryRevenue.useQuery(dateFilter, {
-    enabled: activeTab === "ancillary",
-  }) as {
-    data: { total: number; breakdown: AncillaryBreakdownRow[] } | undefined;
-    isLoading: boolean;
-  };
+  const { data: ancillaryData, isLoading: ancillaryLoading } =
+    trpc.revenueAccounting.getAncillaryRevenue.useQuery(dateFilter, {
+      enabled: activeTab === "ancillary",
+    }) as {
+      data: { total: number; breakdown: AncillaryBreakdownRow[] } | undefined;
+      isLoading: boolean;
+    };
 
-  const { data: yieldData, isLoading: yieldLoading } = (
-    trpc as any
-  ).revenueAccounting.getYieldAnalysis.useQuery(
-    dateFilter ? { ...dateFilter, limit: 20 } : { limit: 20 },
-    { enabled: activeTab === "yield" }
-  ) as { data: YieldRow[] | undefined; isLoading: boolean };
+  const { data: yieldData, isLoading: yieldLoading } =
+    trpc.revenueAccounting.getYieldAnalysis.useQuery(
+      dateFilter ? { ...dateFilter, limit: 20 } : { limit: 20 },
+      { enabled: activeTab === "yield" }
+    ) as { data: YieldRow[] | undefined; isLoading: boolean };
 
-  const { data: reports, isLoading: reportsLoading } = (
-    trpc as any
-  ).revenueAccounting.getReports.useQuery(undefined, {
-    enabled: activeTab === "reports",
-  }) as { data: ReportRow[] | undefined; isLoading: boolean };
+  const { data: reports, isLoading: reportsLoading } =
+    trpc.revenueAccounting.getReports.useQuery(undefined, {
+      enabled: activeTab === "reports",
+    }) as { data: ReportRow[] | undefined; isLoading: boolean };
 
-  const { data: deferredData, isLoading: deferredLoading } = (
-    trpc as any
-  ).revenueAccounting.getDeferredRevenue.useQuery() as {
-    data: { total: number; items: DeferredItem[] } | undefined;
-    isLoading: boolean;
-  };
+  const { data: deferredData, isLoading: deferredLoading } =
+    trpc.revenueAccounting.getDeferredRevenue.useQuery() as {
+      data: { total: number; items: DeferredItem[] } | undefined;
+      isLoading: boolean;
+    };
 
-  const generateReportMutation = (
-    trpc as any
-  ).revenueAccounting.generateReport.useMutation() as {
-    mutate: (input: { month: number; year: number }) => void;
-    data: ReportRow | undefined;
-    isPending: boolean;
-  };
+  const generateReportMutation =
+    trpc.revenueAccounting.generateReport.useMutation() as {
+      mutate: (input: { month: number; year: number }) => void;
+      data: ReportRow | undefined;
+      isPending: boolean;
+    };
 
   // ============ Render ============
 

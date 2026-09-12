@@ -468,8 +468,7 @@ function GateStatusTab() {
   const [gateIdFilter, setGateIdFilter] = useState("");
 
   // Try to use the real API, fall back to mock data
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const biometricTrpc = (trpc as any).biometric as {
+  const biometricTrpc = trpc.biometric as {
     getGateStatus: {
       useQuery: (
         input: { gateId: number },
@@ -659,8 +658,7 @@ function EventsLogTab() {
   const [limit] = useState(50);
 
   // Try the real API
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const biometricTrpc = (trpc as any).biometric as {
+  const biometricTrpc = trpc.biometric as {
     getEvents: {
       useQuery: (
         input?: {
@@ -874,8 +872,7 @@ function ConfigurationTab() {
     firmwareVersion: "",
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const biometricTrpc = (trpc as any).biometric as {
+  const biometricTrpc = trpc.biometric as {
     configureGate: {
       useMutation: (opts: {
         onSuccess: () => void;

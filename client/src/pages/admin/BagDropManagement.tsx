@@ -394,8 +394,7 @@ export default function BagDropManagement() {
   // tRPC queries with mock fallbacks
   // ---------------------------------------------------------------------------
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bdTrpc = (trpc as any).bagDrop as {
+  const bdTrpc = trpc.bagDrop as {
     getUnits: {
       useQuery: (
         input?: { airportId?: number },
