@@ -1,5 +1,30 @@
 # Changelog
 
+## What's Changed in v1.22.12
+
+### Bug Fixes
+
+- fix(scripts): name-check unique constraints in the schema verifier (748d778)
+
+### Code Refactoring
+
+- refactor(refunds): replace non-null assertions in itinerary and refund paths (a368620)
+- refactor: clear the remaining non-null assertions in application code (9fa9b2d)
+
+### Maintenance
+
+- ci(lint): take the warning cap to zero (88d76c1)
+
+### Other Changes
+
+- Merge branch 'claude/backup-digest-and-lint-debt' into claude/non-null-assertions (35cff2d)
+- Merge remote-tracking branch 'origin/main' into claude/non-null-assertions (ba609ed)
+- Merge pull request #145 from kafaat/claude/non-null-assertions (c0ccad5)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.11...v1.22.12
+
+---
+
 ## What's Changed in v1.22.11
 
 ### Bug Fixes
