@@ -1,0 +1,35 @@
+{
+  "commit": "3a140729b7ff68ab8bf917c8031b09a2af5383d2",
+  "baseline": {
+    "pnpm check": 0,
+    "pnpm lint:ci": 0,
+    "tsc acceptance": 0,
+    "tsc all scripts including audit runner": 0,
+    "service catalog --check": 0
+  },
+  "migrations": {
+    "applied": 32,
+    "pending": 0,
+    "actualTables": 141,
+    "targetTables": 141,
+    "verified": true
+  },
+  "functionalAudit": {
+    "reproducedCases": 13,
+    "realMySQL": true,
+    "externalHTTPStubbed": true,
+    "refundProviderStubbed": true
+  },
+  "securityPolicyAudit": "3 regression scenarios reproduced using Gitleaks 8.24.3",
+  "originalPatches": {
+    "count": 12,
+    "allMerged": true,
+    "allMatchingOriginalTrees": true
+  },
+  "limits": [
+    "Not a production environment audit",
+    "No external aviation or Stripe provider acceptance",
+    "Full unit suite not rerun in this audit",
+    "Static import graph and literal API consumer inventory are not execution coverage"
+  ]
+}

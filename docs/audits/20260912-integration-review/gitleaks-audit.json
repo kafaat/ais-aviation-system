@@ -1,0 +1,7 @@
+{
+  "result": "REGRESSION_REPRODUCED",
+  "scanner": "8.24.3",
+  "configCommit": "3a140729b7ff68ab8bf917c8031b09a2af5383d2",
+  "failure": "Detection or fixture exemption failed: same_line_idempotency, same_line_logger, unrecognised_idempotency",
+  "providerCalls": 0
+}

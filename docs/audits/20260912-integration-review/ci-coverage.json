@@ -1,0 +1,12 @@
+{
+  "excludedTrackedScripts": [
+    "scripts/ci/production-db-preflight.ts",
+    "scripts/db/generate.ts",
+    "scripts/generate-openapi.ts",
+    "scripts/generate-service-catalog.ts",
+    "scripts/reconcile-legacy-payments.ts",
+    "scripts/run-check-in-reminders.ts",
+    "scripts/run-reconciliation.ts",
+    "scripts/verify-database-schema.ts"
+  ]
+}

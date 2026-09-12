@@ -1,0 +1,128 @@
+{
+  "reviewedCommit": "3a140729b7ff68ab8bf917c8031b09a2af5383d2",
+  "generatedAt": "2026-09-12T21:59:32.992Z",
+  "meaning": "PASS = observed defect reproduced; not a healthy-product test result",
+  "environment": "Empty disposable MySQL 8 with real transactions; outbound HTTP and refund provider stubbed",
+  "result": "REPRODUCED",
+  "observations": [
+    {
+      "id": "R01",
+      "finding": "Legacy check-in bypasses international clearance and accepts zero passengers",
+      "observations": {
+        "canonicalError": "International check-in requires current operator document clearance for this passenger and itinerary",
+        "legacySuccess": true,
+        "checkedIn": true,
+        "assignedSeats": 0
+      }
+    },
+    {
+      "id": "R02",
+      "finding": "Legacy check-in writes duplicate non-existent seats without inventory claims",
+      "observations": {
+        "seatNumbers": ["99Z", "99Z"],
+        "inventoryClaims": 0
+      }
+    },
+    {
+      "id": "R03",
+      "finding": "Signed boarding pass can be issued before check-in and after cancellation",
+      "observations": {
+        "uncheckedInPassValid": true,
+        "cancelledPaidPassValid": true,
+        "seatNumber": null
+      }
+    },
+    {
+      "id": "R04",
+      "finding": "Second itinerary leg is rejected by seat selection",
+      "observations": {
+        "validSegmentFlightId": 996003,
+        "error": "Booking not found for flight"
+      }
+    },
+    {
+      "id": "R05",
+      "finding": "Tracking by flight ID returns a different dated flight",
+      "observations": {
+        "requestedId": 996004,
+        "returnedId": 996005,
+        "sharedFlightNumber": "ZY904"
+      }
+    },
+    {
+      "id": "R06",
+      "finding": "Admin availability override permits 11 paid reservations on capacity 10",
+      "observations": {
+        "physicalCapacity": 10,
+        "fundedReservedPassengers": 11,
+        "remaining": 0
+      }
+    },
+    {
+      "id": "R07",
+      "finding": "Flight cancellation omits secondary-leg bookings and creates no IROPS event",
+      "observations": {
+        "affectedBookings": 0,
+        "actualConfirmedItineraries": 1,
+        "disruptionRecords": 0
+      }
+    },
+    {
+      "id": "R08",
+      "finding": "Failed status-history write leaves flight status committed",
+      "observations": {
+        "rejected": true,
+        "committedStatus": "delayed",
+        "historyRows": 0
+      }
+    },
+    {
+      "id": "R09",
+      "finding": "Flight refund command cannot retry after its first provider failure",
+      "observations": {
+        "firstError": "synthetic provider outage",
+        "retryError": "Invalid status transition from 'cancelled' to 'cancelled'",
+        "providerCallsAfterTwoAttempts": 1
+      }
+    },
+    {
+      "id": "R10",
+      "finding": "Declining a waitlist offer does not restore its reserved capacity",
+      "observations": {
+        "capacityBeforeOffer": 10,
+        "availableAfterDecline": 9,
+        "activeBookings": 0,
+        "entryStatus": "cancelled"
+      }
+    },
+    {
+      "id": "R11",
+      "finding": "Group approval consumes inventory already protected by an active checkout hold",
+      "observations": {
+        "physicalCapacity": 10,
+        "confirmedGroupSeats": 10,
+        "stillActiveCheckoutHold": 1,
+        "available": 0
+      }
+    },
+    {
+      "id": "R12",
+      "finding": "Disruption rescheduling can set departure after arrival",
+      "observations": {
+        "status": "delayed",
+        "departureAfterArrivalMinutes": 60
+      }
+    },
+    {
+      "id": "R13",
+      "finding": "A full settled refund and local event consumption retain earned loyalty miles",
+      "observations": {
+        "bookingPaymentStatus": "refunded",
+        "earnedMilesBefore": 100,
+        "milesAfterFullRefundAndInbox": 100
+      }
+    }
+  ],
+  "outboundNetworkCalls": 0,
+  "stubbedHttpCalls": 2
+}

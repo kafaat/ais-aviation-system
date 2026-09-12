@@ -1,0 +1,21 @@
+{
+  "method": "Independent static AST inventory of tracked non-test TypeScript. Literal tRPC consumers and recordEvent calls only; aliases/dynamic dispatch may be omitted. DB writer arguments require manual validation. Import reachability does not certify execution.",
+  "summary": {
+    "commit": "3a140729b7ff68ab8bf917c8031b09a2af5383d2",
+    "sourceModules": 624,
+    "services": 175,
+    "lifecycle": {
+      "active": 162,
+      "retired": 11,
+      "type-only": 2
+    },
+    "accountableOwnersAssigned": 0,
+    "mountedDomains": 88,
+    "literalProcedureDefinitions": 755,
+    "literalFrontendCalls": 432,
+    "domainsWithLiteralFrontendCalls": 61,
+    "literalRecordEventCallSites": 50,
+    "migrations": 32,
+    "tables": 141
+  }
+}
