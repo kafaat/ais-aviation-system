@@ -91,7 +91,7 @@ export default function MyBookings() {
   const [modifyDialogOpen, setModifyDialogOpen] = useState(false);
   const [manageAncillariesOpen, setManageAncillariesOpen] = useState(false);
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">(
@@ -107,6 +107,7 @@ export default function MyBookings() {
     undefined,
     { enabled: isAuthenticated }
   );
+  type Booking = NonNullable<typeof bookings>[number];
 
   // Get flight IDs for WebSocket subscription
   const flightIds = useMemo<number[]>(
@@ -910,11 +911,11 @@ export default function MyBookings() {
           booking={{
             id: selectedBooking.id,
             bookingReference: selectedBooking.bookingReference,
-            flightNumber: selectedBooking.flightNumber,
+            flightNumber: selectedBooking.flight.flightNumber,
             cabinClass: selectedBooking.cabinClass,
             totalAmount: selectedBooking.totalAmount,
-            originName: selectedBooking.originName,
-            destinationName: selectedBooking.destinationName,
+            originName: selectedBooking.flight.origin,
+            destinationName: selectedBooking.flight.destination,
           }}
         />
       )}

@@ -64,7 +64,7 @@ export default function CorporateManagement() {
   // Dialog state
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<any>(null);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [creditLimit, setCreditLimit] = useState(0);
   const [discountPercent, setDiscountPercent] = useState(0);
 

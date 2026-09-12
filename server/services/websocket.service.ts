@@ -1,6 +1,9 @@
-// Note: ws module is optional - WebSocket functionality will be disabled if not installed
-let WebSocketServer: any;
-let _WebSocket: any;
+// Note: ws module is optional at runtime - WebSocket functionality is disabled
+// if it is missing. Its types are still used; only the import is guarded.
+import type { WebSocket, WebSocketServer as WsServer } from "ws";
+
+let WebSocketServer: typeof import("ws").WebSocketServer | undefined;
+let _WebSocket: typeof import("ws").WebSocket | undefined;
 
 try {
   const ws = require("ws");
@@ -45,7 +48,7 @@ export interface FlightStatusPayload {
 }
 
 interface ClientSubscription {
-  ws: any; // WebSocket type when ws module is available
+  ws: WebSocket;
   flightIds: Set<number>;
 }
 
@@ -53,8 +56,8 @@ interface ClientSubscription {
  * WebSocket Service for real-time flight status updates
  */
 class WebSocketService {
-  private wss: any = null; // WebSocketServer when ws module is available
-  private clients: Map<any, ClientSubscription> = new Map(); // Map of WebSocket to ClientSubscription
+  private wss: WsServer | null = null;
+  private clients: Map<WebSocket, ClientSubscription> = new Map();
   private flightStatuses: Map<number, FlightStatusPayload> = new Map();
   private simulationInterval: ReturnType<typeof setInterval> | null = null;
   private isInitialized = false;
@@ -80,7 +83,7 @@ class WebSocketService {
       path: "/ws/flight-status",
     });
 
-    this.wss.on("connection", (ws: any) => {
+    this.wss.on("connection", (ws: WebSocket) => {
       console.info("[WebSocket] Client connected");
 
       // Initialize client subscription
@@ -127,7 +130,7 @@ class WebSocketService {
    * Handle incoming client messages
    */
   private async handleClientMessage(
-    ws: any,
+    ws: WebSocket,
     message: { type: string; flightIds?: number[] }
   ): Promise<void> {
     const client = this.clients.get(ws);
@@ -225,7 +228,7 @@ class WebSocketService {
   /**
    * Send message to a specific client
    */
-  private sendToClient(ws: any, message: FlightStatusMessage): void {
+  private sendToClient(ws: WebSocket, message: FlightStatusMessage): void {
     if (ws.readyState === 1) {
       // WebSocket.OPEN = 1
       ws.send(JSON.stringify(message));

@@ -63,7 +63,8 @@ export default function CorporateBookings() {
 
   // Dialog state
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedBooking, setSelectedBooking] =
+    useState<CorporateBooking | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
 

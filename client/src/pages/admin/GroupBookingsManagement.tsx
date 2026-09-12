@@ -62,7 +62,9 @@ export default function GroupBookingsManagement() {
   // Dialog state
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedBooking, setSelectedBooking] = useState<GroupBooking | null>(
+    null
+  );
   const [discountPercent, setDiscountPercent] = useState(5);
   const [rejectionReason, setRejectionReason] = useState("");
 

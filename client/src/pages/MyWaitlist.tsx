@@ -65,7 +65,9 @@ export default function MyWaitlist() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [declineDialogOpen, setDeclineDialogOpen] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<any>(null);
+  const [selectedEntry, setSelectedEntry] = useState<WaitlistEntry | null>(
+    null
+  );
 
   const {
     data: waitlistEntries,
@@ -74,6 +76,7 @@ export default function MyWaitlist() {
   } = trpc.waitlist.myWaitlist.useQuery(undefined, {
     enabled: isAuthenticated,
   });
+  type WaitlistEntry = NonNullable<typeof waitlistEntries>[number];
 
   const cancelEntry = trpc.waitlist.cancel.useMutation({
     onSuccess: () => {
