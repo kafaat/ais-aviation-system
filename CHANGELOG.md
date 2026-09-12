@@ -1,5 +1,31 @@
 # Changelog
 
+## What's Changed in v1.22.11
+
+### Bug Fixes
+
+- fix(backup): pin the default backup image by digest (3467a1b)
+- fix(admin): restore tRPC type checking on six admin pages (8807d74)
+- fix(client): type error handlers and list callbacks instead of any (c08ca06)
+- fix(services): correct six always-zero row counts hidden by as-any casts (a4c1bdd)
+- fix(client): type selected-row state, exposing a broken modify dialog (b8176cf)
+- fix(services): type middleware, blobs and query builders; restore a dropped column (afaedb6)
+- fix(acceptance): restore async on a forensic check that awaits (99d074b)
+
+### Code Refactoring
+
+- refactor: clear every require-await and unused-symbol warning (b0b6f2c)
+- refactor(services): give the cache and queue services real types (58be522)
+- refactor: eliminate the last of the explicit any warnings (60c623c)
+
+### Other Changes
+
+- Merge pull request #144 from kafaat/claude/backup-digest-and-lint-debt (7218e93)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.22.10...v1.22.11
+
+---
+
 ## What's Changed in v1.22.10
 
 ### Bug Fixes
