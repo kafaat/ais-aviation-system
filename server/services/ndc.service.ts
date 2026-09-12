@@ -541,6 +541,27 @@ async function emitNdcOrderEvent(
  * @param params - Search parameters including route, date, passengers, and cabin class
  * @returns Array of structured NDC offers
  */
+/**
+ * The hold map is filled from the same segment list it is read back with, but
+ * nothing enforced that. Surface a held-inventory failure rather than reading
+ * undefined off a missing entry.
+ */
+function requireHold(
+  held: Map<
+    number,
+    { lockId: number; tenantId: number | null; departureTime: Date }
+  >,
+  flightId: number
+) {
+  const hold = held.get(flightId);
+  if (!hold)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: `Inventory hold missing for flight ${flightId}`,
+    });
+  return hold;
+}
+
 export async function searchOffers(
   params: SearchOffersInput
 ): Promise<NdcOfferResponse[]> {
@@ -1021,7 +1042,7 @@ export async function createOrder(
           departureTime: flight.departureTime,
         });
       }
-      const first = held.get(segments[0].flightId)!;
+      const first = requireHold(held, segments[0].flightId);
 
       const [bookingResult] = await db.insert(bookings).values({
         userId,
@@ -1073,8 +1094,8 @@ export async function createOrder(
             segmentOrder: i + 1,
             segmentAmount: segmentAmounts[i],
             status: "pending" as const,
-            inventoryLockId: held.get(segment.flightId)!.lockId,
-            departureDate: held.get(segment.flightId)!.departureTime,
+            inventoryLockId: requireHold(held, segment.flightId).lockId,
+            departureDate: requireHold(held, segment.flightId).departureTime,
           }))
         );
 
