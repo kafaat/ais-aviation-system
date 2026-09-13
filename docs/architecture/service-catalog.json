@@ -1386,7 +1386,12 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/routers/family-pool.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/loyalty-balance.service.ts",
+        "server/services/outbox.service.ts"
+      ],
       "tableExpressions": {
         "reads": [
           "familyGroupMembers",
@@ -1394,7 +1399,7 @@
           "loyaltyAccounts",
           "users"
         ],
-        "writes": ["familyGroupMembers", "familyGroups", "loyaltyAccounts"]
+        "writes": ["familyGroupMembers", "familyGroups"]
       },
       "replacement": null
     },
@@ -2321,6 +2326,26 @@
       "replacement": null
     },
     {
+      "file": "server/services/loyalty-balance.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/loyalty-balance.service.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/family-pool.service.ts",
+        "server/services/loyalty.service.ts"
+      ],
+      "dependencies": ["drizzle/schema.ts"],
+      "tableExpressions": {
+        "reads": ["loyaltyAccounts", "loyaltyCreditLots", "milesTransactions"],
+        "writes": ["loyaltyAccounts", "loyaltyCreditLots", "milesTransactions"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/loyalty.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/loyalty.service.ts",
@@ -2334,7 +2359,11 @@
         "server/routers/loyalty.ts",
         "server/services/event-inbox.service.ts"
       ],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/loyalty-balance.service.ts"
+      ],
       "tableExpressions": {
         "reads": [
           "bookingLoyaltyAccruals",
@@ -2344,11 +2373,7 @@
           "paymentReceipts",
           "walletTransactions"
         ],
-        "writes": [
-          "bookingLoyaltyAccruals",
-          "loyaltyAccounts",
-          "milesTransactions"
-        ]
+        "writes": ["bookingLoyaltyAccruals", "loyaltyAccounts"]
       },
       "replacement": null
     },
@@ -2914,6 +2939,7 @@
         "server/services/cron.service.ts",
         "server/services/departure-control.service.ts",
         "server/services/disruption.service.ts",
+        "server/services/family-pool.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/flight-state.service.ts",
         "server/services/group-booking.service.ts",

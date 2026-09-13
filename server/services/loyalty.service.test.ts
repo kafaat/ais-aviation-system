@@ -118,7 +118,23 @@ describe("Loyalty Service", () => {
     amount: number
   ) {
     const fixture = transactionMemory({
-      loyalty_accounts: [account],
+      loyalty_accounts: [{ ...account, creditLotsInitializedAt: new Date() }],
+      loyalty_credit_lots:
+        account.currentMilesBalance > 0
+          ? [
+              {
+                transactionId: 900,
+                loyaltyAccountId: account.id,
+                bookingId: null,
+                creditedMiles: account.currentMilesBalance,
+                remainingMiles: account.currentMilesBalance,
+                spentMiles: 0,
+                expiredMiles: 0,
+                reversedMiles: 0,
+                expiresAt: new Date(Date.now() + 86400000),
+              },
+            ]
+          : [],
       bookings: [
         {
           id: bookingId,
@@ -274,12 +290,7 @@ describe("Loyalty Service", () => {
 
     const milesToRedeem = 1000;
 
-    mockDb._setResults(
-      [accountWithMiles], // tx: select account inside transaction
-      [], // tx: no previous earning for this booking
-      [], // tx: update account
-      [{ insertId: 4 }] // tx: insert redemption transaction
-    );
+    funded(accountWithMiles, testBookingId, 10000);
 
     const { redeemMiles } = await import("./loyalty.service");
     const result = await redeemMiles(testUserId, milesToRedeem);
@@ -295,9 +306,7 @@ describe("Loyalty Service", () => {
       currentMilesBalance: 10000,
     };
 
-    mockDb._setResults(
-      [accountWithMiles] // tx: select account inside transaction (will throw insufficient)
-    );
+    funded(accountWithMiles, testBookingId, 10000);
 
     const { redeemMiles } = await import("./loyalty.service");
     await expect(redeemMiles(testUserId, 999999999)).rejects.toThrow(

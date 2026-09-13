@@ -1,3 +1,10 @@
+import {
+  lockMilesState,
+  expireMilesLots,
+  spendMiles,
+  requireMiles,
+} from "./loyalty-balance.service";
+import { recordEvent } from "./outbox.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -276,15 +283,8 @@ export async function getMyFamilyGroup(userId: number) {
       )
     );
 
-  // Calculate total pooled miles
-  const totalPooledMiles = members.reduce(
-    (sum, m) => sum + (m.currentMiles || 0),
-    0
-  );
-
   return {
     ...group,
-    pooledMiles: totalPooledMiles,
     members,
     myRole: membership.role,
   };
@@ -302,75 +302,65 @@ export async function contributeMilesToPool(
       message: "Database not available",
     });
 
-  if (miles <= 0)
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Miles must be positive",
-    });
-
-  // Verify membership
-  const [membership] = await db
-    .select()
-    .from(familyGroupMembers)
-    .where(
-      and(
-        eq(familyGroupMembers.groupId, groupId),
-        eq(familyGroupMembers.userId, userId),
-        eq(familyGroupMembers.status, "active")
+  requireMiles(miles);
+  return await db.transaction(async tx => {
+    const [group] = await tx
+      .select()
+      .from(familyGroups)
+      .where(eq(familyGroups.id, groupId))
+      .for("update");
+    if (!group || group.status !== "active")
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Active family group not found",
+      });
+    const [membership] = await tx
+      .select()
+      .from(familyGroupMembers)
+      .where(
+        and(
+          eq(familyGroupMembers.groupId, groupId),
+          eq(familyGroupMembers.userId, userId),
+          eq(familyGroupMembers.status, "active")
+        )
       )
+      .for("update");
+    if (!membership)
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "You are not a member of this group",
+      });
+    const state = await lockMilesState(tx, userId);
+    await expireMilesLots(tx, state);
+    await spendMiles(tx, state, miles, {
+      type: "adjustment",
+      reason: `family-pool:${groupId}`,
+    });
+    if (
+      !Number.isSafeInteger(group.pooledMiles + miles) ||
+      group.pooledMiles + miles > 2147483647
     )
-    .limit(1);
-
-  if (!membership)
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You are not a member of this group",
+      throw new Error("Family pool balance exceeds storage bounds");
+    await tx
+      .update(familyGroupMembers)
+      .set({
+        milesContributed: sql`${familyGroupMembers.milesContributed} + ${miles}`,
+      })
+      .where(eq(familyGroupMembers.id, membership.id));
+    await tx
+      .update(familyGroups)
+      .set({ pooledMiles: group.pooledMiles + miles })
+      .where(eq(familyGroups.id, groupId));
+    const [user] = await tx.select().from(users).where(eq(users.id, userId));
+    await recordEvent(tx, {
+      aggregateType: "family",
+      aggregateId: groupId,
+      tenantId: user?.tenantId ?? null,
+      eventType: "family.miles_contributed",
+      payload: { groupId, userId, miles },
     });
-
-  // Check user has enough miles
-  const [account] = await db
-    .select()
-    .from(loyaltyAccounts)
-    .where(eq(loyaltyAccounts.userId, userId))
-    .limit(1);
-
-  if (!account || account.currentMilesBalance < miles) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Insufficient miles balance",
-    });
-  }
-
-  // Deduct from user's account
-  await db
-    .update(loyaltyAccounts)
-    .set({
-      currentMilesBalance: sql`${loyaltyAccounts.currentMilesBalance} - ${miles}`,
-    })
-    .where(eq(loyaltyAccounts.userId, userId));
-
-  // Update member contribution
-  await db
-    .update(familyGroupMembers)
-    .set({
-      milesContributed: sql`${familyGroupMembers.milesContributed} + ${miles}`,
-    })
-    .where(
-      and(
-        eq(familyGroupMembers.groupId, groupId),
-        eq(familyGroupMembers.userId, userId)
-      )
-    );
-
-  // Update group pooled miles
-  await db
-    .update(familyGroups)
-    .set({
-      pooledMiles: sql`${familyGroups.pooledMiles} + ${miles}`,
-    })
-    .where(eq(familyGroups.id, groupId));
-
-  return { success: true, milesContributed: miles };
+    return { success: true, milesContributed: miles };
+  });
 }
 
 export async function deleteFamilyGroup(ownerId: number, groupId: number) {
@@ -381,29 +371,33 @@ export async function deleteFamilyGroup(ownerId: number, groupId: number) {
       message: "Database not available",
     });
 
-  const [group] = await db
-    .select()
-    .from(familyGroups)
-    .where(and(eq(familyGroups.id, groupId), eq(familyGroups.ownerId, ownerId)))
-    .limit(1);
-
-  if (!group)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Family group not found or you are not the owner",
-    });
-
-  // Remove all members
-  await db
-    .update(familyGroupMembers)
-    .set({ status: "removed" })
-    .where(eq(familyGroupMembers.groupId, groupId));
-
-  // Deactivate group
-  await db
-    .update(familyGroups)
-    .set({ status: "inactive" })
-    .where(eq(familyGroups.id, groupId));
-
-  return { success: true };
+  return await db.transaction(async tx => {
+    const [group] = await tx
+      .select()
+      .from(familyGroups)
+      .where(
+        and(eq(familyGroups.id, groupId), eq(familyGroups.ownerId, ownerId))
+      )
+      .for("update");
+    if (!group)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Family group not found or you are not the owner",
+      });
+    if (group.pooledMiles !== 0)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Reconcile the family's contributed balance before deactivating the group",
+      });
+    await tx
+      .update(familyGroupMembers)
+      .set({ status: "removed" })
+      .where(eq(familyGroupMembers.groupId, groupId));
+    await tx
+      .update(familyGroups)
+      .set({ status: "inactive" })
+      .where(eq(familyGroups.id, groupId));
+    return { success: true };
+  });
 }

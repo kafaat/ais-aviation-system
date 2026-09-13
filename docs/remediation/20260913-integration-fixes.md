@@ -182,3 +182,29 @@ The original twelve research patches were already present at the audit base;
 these nine remediation patches close their integration defects and add missing
 software connections. They do not establish representative forecast accuracy,
 physical airport acceptance, external fulfillment contracts or operational sign-off.
+
+## Patch 10 — Conserved loyalty credit and family transfers
+
+- Migration 0037 adds credit lots and an initialization marker without rewriting
+  historical balances. Each earned or bonus credit is partitioned into available,
+  spent, expired and reversed miles. Spending consumes the earliest expiring lot.
+- Expiration consumes only unused credit once. Refunding expired credit has no
+  second balance debit; refunding already spent credit recovers other available
+  credit before creating debt. New credits repay that debt before becoming spendable.
+- Bonus grants, redemption, booking reconciliation, expiration and family transfers
+  lock the same account. A family contribution writes the personal ledger, credit
+  lots, member contribution, pooled balance and outbox event in one transaction.
+  The family screen reads the stored contributed pool; groups with a nonzero pool
+  cannot be deleted and silently discard that balance.
+- Legacy adoption replays the original ledger and checks every recorded balance.
+  An unexplained balance, repeated historical expiration or an unrecorded family
+  deduction remains unchanged and requires reconciliation. The expiration job
+  reports failure with the affected user identity while still processing other
+  accounts; it no longer reports success after a storage or reconciliation error.
+
+Validation: 14 loyalty unit tests, 22 disposable MySQL remediation scenarios and
+six boarding-pass cryptographic tests passed. R19 covers spending, expiration,
+refund replay and debt repayment; R20 covers concurrent family transfers/bonuses,
+rollback and funded-group deletion; R21 covers valid and invalid legacy adoption.
+The migrated schema has 38 migrations and 147 tables. See the [legacy reconciliation procedure](../operations/loyalty-reconciliation.md).
+Full-suite results below are separate from this focused validation.

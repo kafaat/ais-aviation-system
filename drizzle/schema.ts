@@ -681,6 +681,7 @@ export const loyaltyAccounts = mysqlTable(
     totalMilesEarned: int("totalMilesEarned").notNull().default(0),
     currentMilesBalance: int("currentMilesBalance").notNull().default(0),
     milesRedeemed: int("milesRedeemed").notNull().default(0),
+    creditLotsInitializedAt: timestamp("creditLotsInitializedAt"),
 
     // Tier system
     tier: mysqlEnum("tier", ["bronze", "silver", "gold", "platinum"])
@@ -749,6 +750,23 @@ export const milesTransactions = mysqlTable(
 
 export type MilesTransaction = typeof milesTransactions.$inferSelect;
 export type InsertMilesTransaction = typeof milesTransactions.$inferInsert;
+
+/** One lot per earned/bonus credit; all mutations hold the loyalty account lock. */
+export const loyaltyCreditLots = mysqlTable(
+  "loyalty_credit_lots",
+  {
+    transactionId: int("transactionId").primaryKey(),
+    loyaltyAccountId: int("loyaltyAccountId").notNull(),
+    bookingId: int("bookingId"),
+    creditedMiles: int("creditedMiles").notNull(),
+    remainingMiles: int("remainingMiles").notNull(),
+    spentMiles: int("spentMiles").notNull().default(0),
+    expiredMiles: int("expiredMiles").notNull().default(0),
+    reversedMiles: int("reversedMiles").notNull().default(0),
+    expiresAt: timestamp("expiresAt"),
+  },
+  t => ({ account: index("loyalty_lots_account_idx").on(t.loyaltyAccountId) })
+);
 
 /**
  * Inventory Locks table

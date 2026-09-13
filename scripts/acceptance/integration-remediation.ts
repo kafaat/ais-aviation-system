@@ -1573,6 +1573,272 @@ try {
       };
     }
   );
+  await record(
+    "R19",
+    "Only unused miles expire, replay is inert, and refunds recover spent credit once",
+    async () => {
+      const {
+        awardMilesForBooking,
+        redeemMiles,
+        processExpiredMiles,
+        awardBonusMiles,
+      } = await import("../../server/services/loyalty.service");
+      const { settleVerifiedRefund } =
+        await import("../../server/services/payment-settlement.service");
+      const ownerId = id + 40;
+      await db
+        .insert(s.users)
+        .values({ id: ownerId, tenantId: id, openId: "audit-miles-expiry" });
+      await booking(40, 17);
+      await db
+        .update(s.bookings)
+        .set({ userId: ownerId })
+        .where(eq(s.bookings.id, id + 40));
+      await db.insert(s.paymentReceipts).values({
+        paymentIntentId: "pi_audit_expired_miles",
+        kind: "booking",
+        bookingId: id + 40,
+        userId: ownerId,
+        targetId: id + 40,
+        amount: 10000,
+        currency: "SAR",
+      });
+      assert.equal(
+        (await awardMilesForBooking(ownerId, id + 40, id + 17, 10000))
+          .newBalance,
+        100
+      );
+      await redeemMiles(ownerId, 40);
+      // Advance this synthetic credit's expiry; no application clock or other account is changed.
+      await db
+        .update(s.loyaltyCreditLots)
+        .set({ expiresAt: hour(-1) })
+        .where(eq(s.loyaltyCreditLots.bookingId, id + 40));
+      assert.equal((await processExpiredMiles()).totalExpiredMiles, 60);
+      assert.equal((await processExpiredMiles()).totalExpiredMiles, 0);
+      await db.transaction(tx =>
+        settleVerifiedRefund(tx, {
+          paymentIntentId: "pi_audit_expired_miles",
+          chargeId: "ch_audit_expired_miles",
+          amount: 10000,
+          amountRefunded: 10000,
+          currency: "SAR",
+          eventId: "audit_expired_miles_refund",
+        })
+      );
+      const refund = await awardMilesForBooking(
+        ownerId,
+        id + 40,
+        id + 17,
+        10000
+      );
+      assert.equal(refund.milesReversed, 100);
+      assert.equal(refund.newBalance, -40);
+      assert.equal(
+        (await awardMilesForBooking(ownerId, id + 40, id + 17, 10000))
+          .milesReversed,
+        0
+      );
+      assert.equal(
+        (await awardBonusMiles(ownerId, 70, "Synthetic debt repayment"))
+          .newBalance,
+        30
+      );
+      assert.equal((await processExpiredMiles()).totalExpiredMiles, 0);
+      const ledger = await db
+        .select()
+        .from(s.milesTransactions)
+        .where(eq(s.milesTransactions.userId, ownerId));
+      assert.equal(
+        ledger.reduce((n, t) => n + t.amount, 0),
+        30
+      );
+      assert.equal(ledger.filter(t => t.type === "expire").length, 1);
+      return {
+        credited: 100,
+        spent: 40,
+        expired: 60,
+        grossReversed: 100,
+        refundDebit: 40,
+        newCredit: 70,
+        available: 30,
+        duplicateExpiryDebits: 0,
+      };
+    }
+  );
+  await record(
+    "R20",
+    "Family transfer, miles ledger and pool commit together under concurrent spending",
+    async () => {
+      const { awardBonusMiles, redeemMiles } =
+        await import("../../server/services/loyalty.service");
+      const {
+        createFamilyGroup,
+        contributeMilesToPool,
+        getMyFamilyGroup,
+        deleteFamilyGroup,
+      } = await import("../../server/services/family-pool.service");
+      const ownerId = id + 41;
+      await db
+        .insert(s.users)
+        .values({ id: ownerId, tenantId: id, openId: "audit-family-miles" });
+      await awardBonusMiles(ownerId, 100, "Synthetic initial credit");
+      const group = await createFamilyGroup(ownerId, "Synthetic family");
+      const transfers = await Promise.allSettled([
+        contributeMilesToPool(ownerId, group.id, 80),
+        contributeMilesToPool(ownerId, group.id, 80),
+      ]);
+      assert.equal(transfers.filter(r => r.status === "fulfilled").length, 1);
+      assert.equal(transfers.filter(r => r.status === "rejected").length, 1);
+      const account = async () =>
+        (
+          await db
+            .select()
+            .from(s.loyaltyAccounts)
+            .where(eq(s.loyaltyAccounts.userId, ownerId))
+        )[0];
+      assert.equal((await account()).currentMilesBalance, 20);
+      assert.equal((await getMyFamilyGroup(ownerId))?.pooledMiles, 80);
+      await assert.rejects(deleteFamilyGroup(ownerId, group.id), /Reconcile/);
+      await db.execute(
+        sql.raw(
+          "CREATE TRIGGER remediation_fail_pool_event BEFORE INSERT ON outbox FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'synthetic pool event failure'"
+        )
+      );
+      try {
+        await assert.rejects(contributeMilesToPool(ownerId, group.id, 5));
+      } finally {
+        await db.execute(sql.raw("DROP TRIGGER remediation_fail_pool_event"));
+      }
+      assert.equal((await account()).currentMilesBalance, 20);
+      const afterRollback = await getMyFamilyGroup(ownerId);
+      assert.equal(afterRollback?.pooledMiles, 80);
+      assert.equal(afterRollback?.members[0].milesContributed, 80);
+      const concurrent = await Promise.allSettled([
+        awardBonusMiles(ownerId, 30, "Concurrent bonus A"),
+        awardBonusMiles(ownerId, 50, "Concurrent bonus B"),
+        redeemMiles(ownerId, 20),
+      ]);
+      assert(
+        concurrent.every(r => r.status === "fulfilled"),
+        JSON.stringify(concurrent)
+      );
+      const final = await account();
+      assert.equal(final.currentMilesBalance, 80);
+      assert.equal(final.totalMilesEarned, 180);
+      assert.equal(final.milesRedeemed, 20);
+      const ledger = await db
+        .select()
+        .from(s.milesTransactions)
+        .where(eq(s.milesTransactions.userId, ownerId));
+      assert.equal(
+        ledger.reduce((n, t) => n + t.amount, 0),
+        80
+      );
+      assert.equal(
+        ledger.filter(t => t.reason === `family-pool:${group.id}`).length,
+        1
+      );
+      return {
+        concurrentTransfers: 2,
+        acceptedTransfers: 1,
+        pooledMiles: 80,
+        finalPersonalMiles: 80,
+        rollbackPreservedLedgerAndBothBalances: true,
+        fundedGroupDeletionRejected: true,
+      };
+    }
+  );
+  await record(
+    "R21",
+    "Legacy credit adoption requires a complete ledger and scheduler failures remain visible",
+    async () => {
+      const { processExpiredMiles } =
+        await import("../../server/services/loyalty.service");
+      for (const offset of [42, 43]) {
+        await db.insert(s.users).values({
+          id: id + offset,
+          tenantId: id,
+          openId: `audit-legacy-miles-${offset}`,
+        });
+        const [account] = await db.insert(s.loyaltyAccounts).values({
+          userId: id + offset,
+          currentMilesBalance: 60,
+          totalMilesEarned: 100,
+          milesRedeemed: 40,
+        });
+        await db.insert(s.milesTransactions).values({
+          userId: id + offset,
+          loyaltyAccountId: account.insertId,
+          type: "bonus",
+          amount: 100,
+          balanceAfter: 100,
+          expiresAt: hour(24),
+          description: "Historical credit",
+        });
+        if (offset === 43)
+          await db.insert(s.milesTransactions).values({
+            userId: id + offset,
+            loyaltyAccountId: account.insertId,
+            type: "redeem",
+            amount: -40,
+            balanceAfter: 60,
+            description: "Historical redemption",
+          });
+      }
+      const { runScheduledTask } =
+        await import("../../server/services/scheduled-task.service");
+      await assert.rejects(
+        runScheduledTask("auditLoyaltyExpiry", "synthetic-tick", async () => {
+          await processExpiredMiles();
+        }),
+        /expiration incomplete/
+      );
+      const [task] = await db
+        .select()
+        .from(s.scheduledTasks)
+        .where(eq(s.scheduledTasks.name, "auditLoyaltyExpiry"));
+      assert.equal(task.lastSuccessAt, null);
+      assert.equal(task.lastTick, null);
+      assert(
+        task.lastError?.includes(String(id + 42)),
+        "Scheduler must retain the affected account identity"
+      );
+      const [unproven] = await db
+        .select()
+        .from(s.loyaltyAccounts)
+        .where(eq(s.loyaltyAccounts.userId, id + 42));
+      assert.equal(unproven.currentMilesBalance, 60);
+      assert.equal(unproven.creditLotsInitializedAt, null);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(s.loyaltyCreditLots)
+            .where(eq(s.loyaltyCreditLots.loyaltyAccountId, unproven.id))
+        ).length,
+        0
+      );
+      const [proven] = await db
+        .select()
+        .from(s.loyaltyAccounts)
+        .where(eq(s.loyaltyAccounts.userId, id + 43));
+      assert(proven.creditLotsInitializedAt);
+      const [lot] = await db
+        .select()
+        .from(s.loyaltyCreditLots)
+        .where(eq(s.loyaltyCreditLots.loyaltyAccountId, proven.id));
+      assert.equal(lot.remainingMiles, 60);
+      assert.equal(lot.spentMiles, 40);
+      return {
+        unexplainedBalancePreserved: true,
+        unprovenAdoptionRejected: true,
+        provenHistoricalBalanceAdopted: 60,
+        schedulerReportedFailure: true,
+        otherAccountsStillProcessed: true,
+      };
+    }
+  );
   await writeFile(
     reportPath,
     JSON.stringify(
