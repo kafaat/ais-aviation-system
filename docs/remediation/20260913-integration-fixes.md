@@ -248,3 +248,35 @@ These follow-ups are patches 10 and 11 of the integration remediation, separate
 from the twelve original research patches already present. External provider,
 device, dispatch and organizational acceptance remains unprovided; no ownership
 assignment or production financial correction was invented.
+
+## Patch 12 — Read-only loyalty and family reconciliation evidence
+
+After PR #148, the forensic auditor still lacked checks for the credit lots and
+family transfers introduced by patch 10. The standalone aggregate query in the
+runbook could miss an invalid intermediate balance even when the final sum matched.
+
+- Extend the existing findings registry from 18 to 32 checks and regenerate its
+  operator SQL. Report pending adoption, missing owners, ledger transitions and
+  balances, lot conservation and identity, missing or partial initialization,
+  unsupported family contributions and inactive funded groups.
+- Preserve read-only repeatable-read execution, full counts, bounded identifiers,
+  redacted errors and explicit review/blocked outcomes. Accept legitimate debt,
+  zero-delta reversals after expiry, and contributions from removed memberships.
+- Extend the existing transaction acceptance runner with clean and corrupt MySQL
+  fixtures covering every new finding. Verify an intermediate ledger error while
+  the aggregate still matches; compare stored rows before and after both audits.
+- Replace the standalone runbook query with the canonical audit command and the
+  meaning of each returned ID. Close the verified post-merge CI item and record
+  the exact inputs still needed for external acceptance in the provider runbook.
+
+Local validation: all **45 transaction acceptance checks** passed on disposable
+MySQL 8.0.46 and Redis 7.0.15, with zero skips and no provider calls. All 38
+migrations applied and schema verification passed. The focused forensic and
+loyalty-balance unit suite passed **10 tests**. Zero-warning ESLint and all three
+TypeScript configurations passed. GitHub's existing production gate also runs
+the extended acceptance runner against its MySQL 8.0 and Redis 7.4 services.
+
+This is the twelfth **audit remediation** patch, separate from the twelve earlier
+research patches. It prepares evidence collection; it does not reconcile a
+production account, populate organizational ownership, execute Stripe with a real
+test key or establish provider, device, forecast or disaster-recovery acceptance.
