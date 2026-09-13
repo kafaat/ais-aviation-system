@@ -11,7 +11,12 @@ import {
  * and replacement logic for the DCS module.
  */
 import { getDb } from "../db";
-import { crewMembers, crewAssignments, flights } from "../../drizzle/schema";
+import {
+  crewMembers,
+  crewAssignments,
+  flights,
+  airlines,
+} from "../../drizzle/schema";
 import { eq, and, sql, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 // ============================================================================
@@ -159,28 +164,45 @@ export async function removeCrewFromFlight(
       code: "INTERNAL_SERVER_ERROR",
       message: "Database not available",
     });
-  const [assignment] = await db
+  const [hint] = await db
     .select()
-    .from(crewAssignments)
-    .where(
-      and(
-        eq(crewAssignments.flightId, flightId),
-        eq(crewAssignments.crewMemberId, crewMemberId),
-        ne(crewAssignments.status, "removed")
+    .from(flights)
+    .where(eq(flights.id, flightId));
+  if (!hint) throw new Error("Flight not found");
+  return db.transaction(async tx => {
+    await tx
+      .select()
+      .from(airlines)
+      .where(eq(airlines.id, hint.airlineId))
+      .for("update");
+    await tx
+      .select()
+      .from(crewMembers)
+      .where(eq(crewMembers.id, crewMemberId))
+      .for("update");
+    await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .for("update");
+    const [assignment] = await tx
+      .select()
+      .from(crewAssignments)
+      .where(
+        and(
+          eq(crewAssignments.flightId, flightId),
+          eq(crewAssignments.crewMemberId, crewMemberId),
+          ne(crewAssignments.status, "removed")
+        )
       )
-    )
-    .limit(1);
-  if (!assignment) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Active crew assignment not found for this flight",
-    });
-  }
-  await db
-    .update(crewAssignments)
-    .set({ status: "removed" })
-    .where(eq(crewAssignments.id, assignment.id));
-  return { success: true, assignmentId: assignment.id };
+      .for("update");
+    if (!assignment) throw new Error("Active crew assignment not found");
+    await tx
+      .update(crewAssignments)
+      .set({ status: "removed" })
+      .where(eq(crewAssignments.id, assignment.id));
+    return { success: true, assignmentId: assignment.id };
+  });
 }
 // ============================================================================
 // Get Flight Crew (with full details)

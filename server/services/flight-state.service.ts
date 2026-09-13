@@ -2,6 +2,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   bookings,
+  airlines,
   flights,
   flightStatusHistory,
   flightDisruptions,
@@ -34,6 +35,16 @@ export async function transitionFlight(
     disruptionId?: number;
   }
 ) {
+  const [hint] = await tx
+    .select()
+    .from(flights)
+    .where(eq(flights.id, update.flightId));
+  if (!hint) throw new Error("Flight not found");
+  await tx
+    .select()
+    .from(airlines)
+    .where(eq(airlines.id, hint.airlineId))
+    .for("update");
   const [flight] = await tx
     .select()
     .from(flights)
