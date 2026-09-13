@@ -2,6 +2,8 @@ import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { getDb } from "../db";
 import {
   groupBookings,
+  users,
+  inventoryLocks,
   flights,
   airlines,
   airports,
@@ -26,6 +28,7 @@ describe.skipIf(!dbAvailable)("Group Booking Service", () => {
   // Test data IDs
   let testFlightId: number;
   let testGroupBookingId: number;
+  const testUserId = 999804;
   const testAirlineId = 999801;
   const testOriginId = 999802;
   const testDestinationId = 999803;
@@ -36,6 +39,12 @@ describe.skipIf(!dbAvailable)("Group Booking Service", () => {
       throw new Error("Database not available for tests");
     }
 
+    await db.insert(users).values({
+      id: testUserId,
+      openId: "group-test-organizer",
+      email: "test@example.com",
+      role: "user",
+    });
     // Create test airline (use INSERT IGNORE to avoid conflicts with parallel tests)
     await db.execute(
       sql`INSERT IGNORE INTO airlines (id, code, name, active) VALUES (${testAirlineId}, 'GB9', 'Test Group Airline', 1)`
@@ -79,7 +88,11 @@ describe.skipIf(!dbAvailable)("Group Booking Service", () => {
       await db
         .delete(groupBookings)
         .where(eq(groupBookings.flightId, testFlightId));
+      await db
+        .delete(inventoryLocks)
+        .where(eq(inventoryLocks.flightId, testFlightId));
       await db.delete(flights).where(eq(flights.id, testFlightId));
+      await db.delete(users).where(eq(users.id, testUserId));
       await db.delete(airports).where(eq(airports.id, testOriginId));
       await db.delete(airports).where(eq(airports.id, testDestinationId));
       await db.delete(airlines).where(eq(airlines.id, testAirlineId));
@@ -121,6 +134,7 @@ describe.skipIf(!dbAvailable)("Group Booking Service", () => {
         groupSize: 15,
         flightId: testFlightId,
         notes: "Test group booking",
+        organizerUserId: testUserId,
       });
 
       expect(result).toBeDefined();
@@ -247,12 +261,12 @@ describe.skipIf(!dbAvailable)("Group Booking Service", () => {
     it("should reject approving non-pending booking", async () => {
       await expect(
         approveGroupBooking(testGroupBookingId, 10, 1)
-      ).rejects.toThrow("Cannot approve a confirmed group booking");
+      ).rejects.toThrow("Group request is not pending");
     });
 
     it("should reject approving non-existent booking", async () => {
       await expect(approveGroupBooking(999999999, 10, 1)).rejects.toThrow(
-        "Group booking request not found"
+        "Group request is not pending"
       );
     });
   });
@@ -282,16 +296,21 @@ describe.skipIf(!dbAvailable)("Group Booking Service", () => {
       expect(result.rejectionReason).toBe(reason);
     });
 
-    it("should reject rejecting non-pending booking", async () => {
-      await expect(
-        rejectGroupBooking(rejectTestBookingId, "Another reason")
-      ).rejects.toThrow("Cannot reject a cancelled group booking");
+    it("replays rejection without changing its original decision", async () => {
+      const again = await rejectGroupBooking(
+        rejectTestBookingId,
+        "Another reason"
+      );
+      expect(again.status).toBe("cancelled");
+      expect(again.rejectionReason).toBe(
+        "Not enough seats available for requested date"
+      );
     });
 
     it("should reject rejecting non-existent booking", async () => {
       await expect(
         rejectGroupBooking(999999999, "Some reason")
-      ).rejects.toThrow("Group booking request not found");
+      ).rejects.toThrow("Group request not found");
     });
   });
 

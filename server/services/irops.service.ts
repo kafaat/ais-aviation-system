@@ -1,3 +1,7 @@
+import {
+  transitionFlight,
+  flightBookingCondition,
+} from "./flight-state.service";
 import { createHash } from "node:crypto";
 import { recordEvent } from "./outbox.service";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -126,9 +130,7 @@ async function iropsDb() {
     });
   return db;
 }
-function affectedBooking(flightId: number) {
-  return sql`(${bookings.flightId} = ${flightId} OR EXISTS (SELECT 1 FROM booking_segments s WHERE s.bookingId = ${bookings.id} AND s.flightId = ${flightId}))`;
-}
+const affectedBooking = flightBookingCondition;
 async function readEvent(eventId: number): Promise<IROPSEvent | null> {
   const db = await iropsDb();
   const [row] = await db
@@ -258,10 +260,14 @@ export async function createDisruptionEvent(
     });
     if (!result.insertId) throw new Error("Missing disruption identity");
     if (type === "cancellation" || type === "delay")
-      await tx
-        .update(flights)
-        .set({ status: type === "cancellation" ? "cancelled" : "delayed" })
-        .where(eq(flights.id, flightId));
+      await transitionFlight(tx, {
+        flightId,
+        status: type === "cancellation" ? "cancelled" : "delayed",
+        reason: details.reason,
+        delayMinutes: details.delayMinutes,
+        adminUserId: details.createdBy,
+        disruptionId: result.insertId,
+      });
     await recordEvent(tx, {
       aggregateType: "disruption",
       aggregateId: result.insertId,

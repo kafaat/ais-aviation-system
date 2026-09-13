@@ -1,7 +1,17 @@
 import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
+import type Stripe from "stripe";
 const provider = vi.hoisted(() => ({ refund: vi.fn() }));
 vi.mock("../stripe", () => ({
-  stripe: { refunds: { create: provider.refund } },
+  stripe: {
+    refunds: {
+      create: provider.refund,
+      list: () => ({
+        async *[Symbol.asyncIterator]() {
+          /* No prior provider refunds in this fixture. */
+        },
+      }),
+    },
+  },
 }));
 vi.mock("../_core/notification", () => ({ notifyOwner: vi.fn() }));
 vi.mock("./email.service", async importOriginal => ({
@@ -23,12 +33,17 @@ import {
   bookingStatusHistory,
   flightStatusHistory,
   outbox,
+  flightCancellationJobs,
+  orderServiceRefunds,
 } from "../../drizzle/schema";
 import { eq, and, or } from "drizzle-orm";
+import { settleVerifiedPayment } from "./payment-settlement.service";
 import {
-  settleVerifiedPayment,
-  settleVerifiedRefund,
-} from "./payment-settlement.service";
+  processFlightCancellations,
+  getFlightCancellationStatus,
+} from "./flight-cancellation.service";
+import { recordVerifiedOrderRefund } from "./order-refunds.service";
+import { retryCancellationPlanning } from "./operations-dashboard.service";
 import { isDatabaseAvailable } from "../__tests__/test-db-helper";
 
 const dbAvailable = await isDatabaseAvailable();
@@ -120,6 +135,12 @@ describe.skipIf(!dbAvailable)("Flight Status Service", () => {
           )
         );
       await db
+        .delete(orderServiceRefunds)
+        .where(eq(orderServiceRefunds.bookingId, testBookingId));
+      await db
+        .delete(flightCancellationJobs)
+        .where(eq(flightCancellationJobs.bookingId, testBookingId));
+      await db
         .delete(financialLedger)
         .where(eq(financialLedger.bookingId, testBookingId));
       await db.delete(payments).where(eq(payments.bookingId, testBookingId));
@@ -186,13 +207,22 @@ describe.skipIf(!dbAvailable)("Flight Status Service", () => {
       .update(bookings)
       .set({ stripePaymentIntentId: null })
       .where(eq(bookings.id, testBookingId));
+    const [collection] = await db
+      .select()
+      .from(paymentReceipts)
+      .where(eq(paymentReceipts.paymentIntentId, paymentIntentId));
+    await db
+      .delete(paymentReceipts)
+      .where(eq(paymentReceipts.paymentIntentId, paymentIntentId));
     try {
-      await expect(
-        cancelFlightAndRefund({
-          flightId: testFlightId,
-          reason: "Missing original payment",
-        })
-      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+      await cancelFlightAndRefund({
+        flightId: testFlightId,
+        reason: "Missing original payment",
+      });
+      await processFlightCancellations();
+      expect(
+        (await getFlightCancellationStatus(testFlightId)).reviewRequiredBookings
+      ).toBe(1);
       expect(provider.refund).not.toHaveBeenCalled();
       const [booking] = await db
         .select()
@@ -201,6 +231,7 @@ describe.skipIf(!dbAvailable)("Flight Status Service", () => {
       expect(booking.paymentStatus).toBe("paid");
       expect(booking.seatsReserved).toBe(true);
     } finally {
+      await db.insert(paymentReceipts).values(collection);
       await db
         .update(bookings)
         .set({ stripePaymentIntentId: paymentIntentId })
@@ -208,7 +239,7 @@ describe.skipIf(!dbAvailable)("Flight Status Service", () => {
     }
   });
 
-  it("requests a provider refund and waits for verified settlement before releasing seats", async () => {
+  it("cancels locally but counts refunds only after verified payer settlement", async () => {
     // Reset flight to scheduled directly in DB (cancelled → scheduled is not a valid transition)
     const db = await getDb();
     if (!db) throw new Error("Database not available");
@@ -217,55 +248,83 @@ describe.skipIf(!dbAvailable)("Flight Status Service", () => {
       .set({ status: "scheduled" })
       .where(eq(flights.id, testFlightId));
 
-    provider.refund.mockResolvedValue({
-      id: "re_flight_status",
-      status: "succeeded",
-    });
-
+    const [job] = await db
+      .select()
+      .from(flightCancellationJobs)
+      .where(eq(flightCancellationJobs.bookingId, testBookingId));
+    await retryCancellationPlanning(
+      job.id,
+      testUserId,
+      null,
+      "Original collection reconciled"
+    );
+    let verified: Stripe.Refund | undefined;
+    provider.refund.mockImplementation(
+      async (params: Stripe.RefundCreateParams) => {
+        verified = {
+          id: "re_flight_status",
+          object: "refund",
+          payment_intent: paymentIntentId,
+          charge: `ch_flight_status_${testBookingId}`,
+          amount: 50000,
+          currency: "sar",
+          status: "pending",
+          metadata: params.metadata ?? {},
+        } as Stripe.Refund;
+        return verified;
+      }
+    );
     const result = await cancelFlightAndRefund({
       flightId: testFlightId,
       reason: "Airline operational issues",
     });
 
     expect(result.success).toBe(true);
-    expect(result.refundedBookings).toBe(1);
+    expect(result.refundedBookings).toBe(0);
+    await processFlightCancellations();
+    expect(provider.refund).toHaveBeenCalledOnce();
     expect(provider.refund).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         payment_intent: paymentIntentId,
-        reason: "requested_by_customer",
-        metadata: {
-          bookingId: String(testBookingId),
-          flightId: String(testFlightId),
-        },
-      },
-      {
-        idempotencyKey: `flight-cancel:${testFlightId}:booking:${testBookingId}`,
-      }
+        amount: 50000,
+      }),
+      expect.objectContaining({
+        idempotencyKey: expect.stringMatching(/^order-refund:/),
+      })
     );
-
-    // Provider HTTP acceptance is not the local financial settlement authority.
+    // Local cancellation releases seats; money stays paid until individual success evidence.
     const [pending] = await db
       .select()
       .from(bookings)
       .where(eq(bookings.id, testBookingId));
     expect(pending.paymentStatus).toBe("paid");
-    expect(pending.seatsReserved).toBe(true);
+    expect(pending.seatsReserved).toBe(false);
     const [reservedFlight] = await db
       .select()
       .from(flights)
       .where(eq(flights.id, testFlightId));
-    expect(reservedFlight.economyAvailable).toBe(99);
+    expect(reservedFlight.economyAvailable).toBe(100);
 
-    const verifiedRefund = {
-      paymentIntentId,
-      chargeId: `ch_flight_status_${testBookingId}`,
-      amount: 50000,
-      amountRefunded: 50000,
-      currency: "sar",
-      eventId: `evt_flight_refund_${testBookingId}`,
-    };
-    await db.transaction(tx => settleVerifiedRefund(tx, verifiedRefund));
-    await db.transaction(tx => settleVerifiedRefund(tx, verifiedRefund));
+    if (!verified) throw new Error("Missing provider request");
+    const completed = { ...verified, status: "succeeded" as const };
+    await db.transaction(tx =>
+      recordVerifiedOrderRefund(
+        tx,
+        completed,
+        `evt_flight_refund_${testBookingId}`
+      )
+    );
+    await db.transaction(tx =>
+      recordVerifiedOrderRefund(
+        tx,
+        completed,
+        `evt_flight_refund_${testBookingId}`
+      )
+    );
+    await processFlightCancellations();
+    expect(
+      (await getFlightCancellationStatus(testFlightId)).refundedBookings
+    ).toBe(1);
     const [booking] = await db
       .select()
       .from(bookings)

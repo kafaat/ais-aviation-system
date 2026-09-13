@@ -168,16 +168,33 @@ export function transactionMemory(seed: Record<string, any[]>) {
                     r.idempotencyKey === value.idempotencyKey
                   : getTableName(table) === "event_inbox"
                     ? r.eventId === value.eventId
-                    : getTableName(table) === "scheduled_tasks"
-                      ? r.name === value.name
-                      : getTableName(table) === "warehouse_exports" &&
-                        value.requestKey != null &&
-                        r.requestKey === value.requestKey
+                    : getTableName(table) === "event_deliveries"
+                      ? r.eventId === value.eventId &&
+                        r.consumer === value.consumer
+                      : getTableName(table) === "loyalty_accounts"
+                        ? r.userId === value.userId
+                        : getTableName(table) === "booking_loyalty_accruals"
+                          ? r.bookingId === value.bookingId
+                          : getTableName(table) === "scheduled_tasks"
+                            ? r.name === value.name
+                            : getTableName(table) === "warehouse_exports" &&
+                              value.requestKey != null &&
+                              r.requestKey === value.requestKey
               )
             )
               continue;
             list.push({
               id: insertId + index,
+              processedAt: null,
+              attempts: 0,
+              ...(getTableName(table) === "loyalty_accounts"
+                ? {
+                    totalMilesEarned: 0,
+                    currentMilesBalance: 0,
+                    milesRedeemed: 0,
+                    tierPoints: 0,
+                  }
+                : {}),
               refundedAmount: 0,
               settlementStatus: "applied",
               seatsReserved: false,
@@ -215,7 +232,9 @@ export function transactionMemory(seed: Record<string, any[]>) {
             for (const [key, value] of Object.entries(values)) {
               if (value instanceof SQL) {
                 const query = dialect.sqlToQuery(value);
-                const amount = Number(query.params[0]);
+                const amount = Number(
+                  query.params[0] ?? query.sql.match(/[+-]\s*(\d+)$/)?.[1]
+                );
                 row[key] += query.sql.includes(" + ") ? amount : -amount;
               } else row[key] = structuredClone(value);
             }

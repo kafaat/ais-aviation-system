@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "repositoryFallback": "@kafaat",
+  "fallbackDomain": "platform",
+  "note": "A repository reviewer is not a domain approver or an on-call rotation. The organization must supply and accept these assignments.",
+  "domains": [
+    {
+      "id": "payments",
+      "match": "payment|refund|settlement|wallet|stripe|ledger|loyalty",
+      "accountableOwner": null,
+      "onCall": null,
+      "acceptanceEvidence": null
+    },
+    {
+      "id": "departure",
+      "match": "departure|boarding|seat-map|ticket|baggage|bag-drop|travel-clearance|kiosk|dcs",
+      "accountableOwner": null,
+      "onCall": null,
+      "acceptanceEvidence": null
+    },
+    {
+      "id": "airline-operations",
+      "match": "crew|aircraft|flight-state|flight-status|disruption|irops|recovery|aviation|operational-events",
+      "accountableOwner": null,
+      "onCall": null,
+      "acceptanceEvidence": null
+    },
+    {
+      "id": "commercial",
+      "match": "booking|inventory|waitlist|group|ndc|order|pricing|premium|economics|ancillar",
+      "accountableOwner": null,
+      "onCall": null,
+      "acceptanceEvidence": null
+    },
+    {
+      "id": "platform",
+      "match": ".*",
+      "accountableOwner": null,
+      "onCall": null,
+      "acceptanceEvidence": null
+    }
+  ]
+}

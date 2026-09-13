@@ -155,7 +155,7 @@ export const responseContracts = {
       cabinClass: z.enum(["economy", "business"]),
       boardingTime: z.string(),
       sequence: z.string(),
-      gate: z.null(),
+      gate: z.string().nullable(),
       barcodeData: z.string(),
       printedAt: z.string(),
     }),

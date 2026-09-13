@@ -40,6 +40,24 @@ export async function documentContext(
     .from(bookings)
     .where(eq(bookings.id, bookingId))
     .limit(1);
+  if (!b) throw new Error("Booking unavailable");
+  const legs = await tx
+    .select()
+    .from(bookingSegments)
+    .where(eq(bookingSegments.bookingId, bookingId))
+    .orderBy(asc(bookingSegments.segmentOrder));
+  const ids = legs.length
+    ? legs
+        .filter(l => l.status === "confirmed" || l.status === "pending")
+        .map(l => l.flightId)
+    : [b.flightId];
+  const fs = await tx
+    .select()
+    .from(flights)
+    .where(inArray(flights.id, ids))
+    .orderBy(flights.id)
+    .for("update");
+  if (fs.length !== ids.length) throw new Error("Itinerary is incomplete");
   const [p] = await tx
     .select()
     .from(passengers)
@@ -48,20 +66,7 @@ export async function documentContext(
     )
     .limit(1)
     .for("update");
-  if (!b || !p) throw new Error("Passenger booking unavailable");
-  const legs = await tx
-    .select()
-    .from(bookingSegments)
-    .where(eq(bookingSegments.bookingId, bookingId))
-    .orderBy(asc(bookingSegments.segmentOrder));
-  const ids = legs.length ? legs.map(l => l.flightId) : [b.flightId];
-  const fs = await tx
-    .select()
-    .from(flights)
-    .where(inArray(flights.id, ids))
-    .orderBy(flights.id)
-    .for("update");
-  if (fs.length !== ids.length) throw new Error("Itinerary is incomplete");
+  if (!p) throw new Error("Passenger booking unavailable");
   const ordered = ids.map(id => requireValue(fs.find(f => f.id === id)));
   const airportRows = await tx
     .select()

@@ -33,8 +33,12 @@ export const responseContracts = {
     affectedBookings: outputNumber,
   }),
   cancelFlightAndRefund: z.object({
+    requestedBookings: outputNumber,
+    pendingBookings: outputNumber,
+    reviewRequiredBookings: outputNumber,
     success: z.boolean(),
     refundedBookings: outputNumber,
+    completedBookings: outputNumber,
   }),
   getMetrics: z.object({
     period: z.object({

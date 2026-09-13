@@ -1,3 +1,8 @@
+import {
+  observeApiResponse,
+  startOperationalObservations,
+  stopOperationalObservations,
+} from "../services/operational-observations.service";
 import { operationalIntegrations } from "../routes/operational-integrations";
 import {
   recordMetric,
@@ -99,10 +104,13 @@ async function startServer() {
 
   // APM request timing middleware
   startSLAMonitoring();
+  startOperationalObservations();
   app.use((req, res, next) => {
     const start = performance.now();
     res.once("finish", () => {
-      // Observed HTTP responses for this process only; not fleet uptime.
+      if (req.path.startsWith("/api/"))
+        observeApiResponse(performance.now() - start, res.statusCode);
+      // Local diagnostics; durable fleet observations are exposed through operations.
       recordMetric("api", "uptime", res.statusCode < 500 ? 100 : 0);
       recordMetric("api", "response_time", performance.now() - start);
       recordMetric("api", "error_rate", res.statusCode >= 500 ? 100 : 0);
@@ -322,6 +330,11 @@ async function startServer() {
     server.close(async () => {
       log.info({ event: "http_server_closed" }, "HTTP server closed.");
 
+      try {
+        await stopOperationalObservations();
+      } catch (err) {
+        log.error({ err }, "Final observation flush failed");
+      }
       // Stop APM metrics collection
       stopSystemMetricsCollection();
       log.info({ event: "apm_stopped" }, "APM metrics collection stopped.");

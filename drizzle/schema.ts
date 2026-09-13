@@ -681,6 +681,7 @@ export const loyaltyAccounts = mysqlTable(
     totalMilesEarned: int("totalMilesEarned").notNull().default(0),
     currentMilesBalance: int("currentMilesBalance").notNull().default(0),
     milesRedeemed: int("milesRedeemed").notNull().default(0),
+    creditLotsInitializedAt: timestamp("creditLotsInitializedAt"),
 
     // Tier system
     tier: mysqlEnum("tier", ["bronze", "silver", "gold", "platinum"])
@@ -749,6 +750,23 @@ export const milesTransactions = mysqlTable(
 
 export type MilesTransaction = typeof milesTransactions.$inferSelect;
 export type InsertMilesTransaction = typeof milesTransactions.$inferInsert;
+
+/** One lot per earned/bonus credit; all mutations hold the loyalty account lock. */
+export const loyaltyCreditLots = mysqlTable(
+  "loyalty_credit_lots",
+  {
+    transactionId: int("transactionId").primaryKey(),
+    loyaltyAccountId: int("loyaltyAccountId").notNull(),
+    bookingId: int("bookingId"),
+    creditedMiles: int("creditedMiles").notNull(),
+    remainingMiles: int("remainingMiles").notNull(),
+    spentMiles: int("spentMiles").notNull().default(0),
+    expiredMiles: int("expiredMiles").notNull().default(0),
+    reversedMiles: int("reversedMiles").notNull().default(0),
+    expiresAt: timestamp("expiresAt"),
+  },
+  t => ({ account: index("loyalty_lots_account_idx").on(t.loyaltyAccountId) })
+);
 
 /**
  * Inventory Locks table
@@ -1797,6 +1815,7 @@ export const waitlist = mysqlTable(
 
     // Resulting booking
     bookingId: int("bookingId"),
+    inventoryLockId: int("inventoryLockId"),
 
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -2212,6 +2231,10 @@ export const groupBookings = mysqlTable(
     organizerName: varchar("organizerName", { length: 255 }).notNull(),
     organizerEmail: varchar("organizerEmail", { length: 320 }).notNull(),
     organizerPhone: varchar("organizerPhone", { length: 20 }).notNull(),
+    organizerUserId: int("organizerUserId"),
+    inventoryLockId: int("inventoryLockId"),
+    bookingId: int("bookingId"),
+    allocationExpiresAt: timestamp("allocationExpiresAt"),
 
     // Group details
     groupSize: int("groupSize").notNull(), // Minimum 10 passengers
@@ -5385,6 +5408,8 @@ export const seatInventory = mysqlTable(
     // Check-in
     checkedInAt: timestamp("checkedInAt"),
     boardingPassIssued: boolean("boardingPassIssued").default(false).notNull(),
+    // Rotated on every check-in/seat change; null revokes all earlier tokens.
+    checkInNonce: varchar("checkInNonce", { length: 36 }),
     boardingGroup: varchar("boardingGroup", { length: 5 }), // e.g., "A", "B", "1", "2"
     boardingSequence: int("boardingSequence"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -5692,7 +5717,8 @@ export const orderServiceRefunds = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     bookingId: int("bookingId").notNull(),
-    modificationId: int("modificationId").notNull(),
+    modificationId: int("modificationId"),
+    cancellationFlightId: int("cancellationFlightId"),
     paymentIntentId: varchar("paymentIntentId", { length: 255 }).notNull(),
     amount: int("amount").notNull(),
     baseRefundedAmount: int("baseRefundedAmount").notNull(),
@@ -5823,4 +5849,103 @@ export const premiumConversions = mysqlTable("premium_conversions", {
   assignmentId: varchar("assignmentId", { length: 36 }).notNull(),
   offerId: varchar("offerId", { length: 36 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+/** Durable flight cancellation targets; money completion comes from payer receipts. */
+export const flightCancellationJobs = mysqlTable(
+  "flight_cancellation_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    bookingId: int("bookingId").notNull(),
+    reason: varchar("reason", { length: 500 }).notNull(),
+    actorId: int("actorId"),
+    status: mysqlEnum("status", [
+      "queued",
+      "planned",
+      "completed",
+      "review_required",
+    ])
+      .default("queued")
+      .notNull(),
+    errorCode: varchar("errorCode", { length: 100 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    target: uniqueIndex("flight_cancel_booking_unique").on(
+      t.flightId,
+      t.bookingId
+    ),
+    pending: index("flight_cancel_status_idx").on(t.status),
+  })
+);
+
+/** Frozen earning policy and the net miles already applied for one invoice. */
+export const bookingLoyaltyAccruals = mysqlTable("booking_loyalty_accruals", {
+  bookingId: int("bookingId").primaryKey(),
+  userId: int("userId").notNull(),
+  multiplier: decimal("multiplier", { precision: 5, scale: 2 }).notNull(),
+  awardedMiles: int("awardedMiles").default(0).notNull(),
+  awardedTierPoints: int("awardedTierPoints").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Each effect has its own receipt; external effects use stable idempotency keys. */
+export const eventDeliveries = mysqlTable(
+  "event_deliveries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    eventId: varchar("eventId", { length: 36 }).notNull(),
+    consumer: varchar("consumer", { length: 100 }).notNull(),
+    status: mysqlEnum("status", [
+      "pending",
+      "processing",
+      "processed",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    leaseToken: varchar("leaseToken", { length: 36 }),
+    leaseUntil: timestamp("leaseUntil"),
+    processedAt: timestamp("processedAt"),
+    lastError: varchar("lastError", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    receipt: uniqueIndex("event_consumer_unique").on(t.eventId, t.consumer),
+    pending: index("event_delivery_status_idx").on(t.status, t.updatedAt),
+  })
+);
+
+/** Durable sampled observations; absence of samples is unknown, not uptime. */
+export const operationalSamples = mysqlTable(
+  "operational_samples",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    instanceId: varchar("instanceId", { length: 64 }).notNull(),
+    component: mysqlEnum("component", ["api", "worker"]).notNull(),
+    status: mysqlEnum("status", ["healthy", "degraded", "stopped"]).notNull(),
+    startedAt: timestamp("startedAt").notNull(),
+    endedAt: timestamp("endedAt").notNull(),
+    requests: int("requests").notNull().default(0),
+    errors: int("errors").notNull().default(0),
+    totalDurationMs: decimal("totalDurationMs", { precision: 20, scale: 3 })
+      .notNull()
+      .default("0"),
+  },
+  t => ({
+    window: index("operational_sample_window_idx").on(t.component, t.endedAt),
+  })
+);
+export const operationsAlerts = mysqlTable("operations_alerts", {
+  key: varchar("key", { length: 100 }).primaryKey(),
+  status: mysqlEnum("status", ["active", "resolved"]).notNull(),
+  message: varchar("message", { length: 500 }).notNull(),
+  acknowledgedBy: int("acknowledgedBy"),
+  acknowledgedAt: timestamp("acknowledgedAt"),
+  firstObservedAt: timestamp("firstObservedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

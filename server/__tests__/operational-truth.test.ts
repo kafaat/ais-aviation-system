@@ -55,19 +55,35 @@ describe("operational truth", () => {
       eventId: "stable-event-id",
       eventType: "booking.modified",
       aggregateId: "7",
+      aggregateType: "booking",
+      tenantId: null,
+      payload: {},
     } as any;
     await expect(configuredPublisher(event)).rejects.toThrow(
-      "Inbox database unavailable"
+      "Outbox consumer delivery incomplete"
     );
     vi.stubEnv("OUTBOX_PUBLISH_URL", "https://receiver.example.test/events");
     vi.stubEnv("OUTBOX_PUBLISH_TOKEN", "synthetic-key");
+    const fixture = transactionMemory({
+      event_inbox: [],
+      event_deliveries: [],
+    });
+    boundary.db = fixture.db;
     const fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response("", { status: 503 }))
       .mockResolvedValueOnce(new Response("", { status: 202 }));
     vi.stubGlobal("fetch", fetch);
-    await expect(configuredPublisher(event)).rejects.toThrow("HTTP 503");
+    await expect(configuredPublisher(event)).rejects.toMatchObject({
+      errors: [
+        expect.objectContaining({
+          message: "Outbox receiver rejected delivery: HTTP 503",
+        }),
+      ],
+    });
+    expect(fixture.rows("event_deliveries")[0].status).toBe("failed");
     await expect(configuredPublisher(event)).resolves.toBeUndefined();
+    expect(fixture.rows("event_deliveries")[0].status).toBe("processed");
     expect(fetch.mock.calls.at(-1)?.[1].headers["Idempotency-Key"]).toBe(
       event.eventId
     );

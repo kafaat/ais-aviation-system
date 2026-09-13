@@ -59,6 +59,8 @@ export const responseContracts = {
     })
   ),
   acceptOffer: z.object({
+    waitlistId: outputNumber,
+    expiresAt: z.date(),
     success: z.boolean(),
     message: z.string(),
     flightId: outputNumber,

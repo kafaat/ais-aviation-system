@@ -50,25 +50,28 @@ afterEach(async () => {
 describe("cron.service scheduler", () => {
   it("schedules the outbox relay every minute and lock cleanup every 5 minutes", () => {
     startCronJobs();
-    expect(scheduled.map(t => t.expr).sort()).toEqual(
-      [
-        "* * * * *",
-        "* * * * *",
-        "* * * * *",
-        "*/5 * * * *",
-        "* * * * *",
-        "0 * * * *",
-        "0 0 * * *",
-        "*/15 * * * *",
-        "* * * * *",
-      ].sort()
+    expect(scheduled.map(t => t.expr)).toEqual(
+      PERIODIC_JOB_CATALOG.map(j => j.cron)
+    );
+    expect(
+      PERIODIC_JOB_CATALOG.find(j => j.name === "relayOutboxEvents")?.cron
+    ).toBe("* * * * *");
+    expect(
+      PERIODIC_JOB_CATALOG.find(j => j.name === "cleanupExpiredLocks")?.cron
+    ).toBe("*/5 * * * *");
+    expect(PERIODIC_JOB_CATALOG.map(j => j.name)).toEqual(
+      expect.arrayContaining([
+        "flightCancellationRefunds",
+        "channelAllocationExpiry",
+        "operationalAlerts",
+      ])
     );
   });
 
   it("is idempotent — a second start does not double-schedule", () => {
     startCronJobs();
     startCronJobs();
-    expect(scheduled).toHaveLength(9);
+    expect(scheduled).toHaveLength(PERIODIC_JOB_CATALOG.length);
   });
 
   it("stop() halts every scheduled task and allows a clean restart", async () => {
@@ -78,7 +81,7 @@ describe("cron.service scheduler", () => {
     for (const t of tasks) expect(t.stop).toHaveBeenCalledTimes(1);
 
     startCronJobs();
-    expect(scheduled).toHaveLength(18); // every task can restart
+    expect(scheduled).toHaveLength(PERIODIC_JOB_CATALOG.length * 2); // every task can restart
   });
 
   it("runs durable order refund work from its scheduled tick", async () => {

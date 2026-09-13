@@ -33,14 +33,9 @@ import {
 import { eq, and } from "drizzle-orm";
 import { recordVerifiedSplitRefund } from "../services/split-refund.service";
 import { sendBookingConfirmation } from "../services/email.service";
-import { awardMilesForBooking } from "../services/loyalty.service";
 import { generateETicketForPassenger } from "../services/eticket.service";
 import { createServiceLogger } from "../_core/logger";
-import {
-  notifyBookingConfirmed,
-  notifyPaymentReceived,
-  createNotification,
-} from "../services/notification.service";
+import { createNotification } from "../services/notification.service";
 
 // Create service-specific logger
 const log = createServiceLogger("webhook:stripe");
@@ -499,15 +494,21 @@ async function handleChargeRefunded(
 }
 
 /**
- * Send confirmation email and award miles (post-transaction)
+ * Send confirmation email. Loyalty and in-app notifications have independent receipts.
  */
-export async function sendConfirmationAndAwardMiles(bookingId: number) {
+export async function sendBookingConfirmationEmail(
+  bookingId: number,
+  expectedTenantId: number | null
+) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
   try {
     const [booking] = await db
       .select({
+        tenantId: bookings.tenantId,
+        bookingStatus: bookings.status,
+        paymentStatus: bookings.paymentStatus,
         bookingReference: bookings.bookingReference,
         pnr: bookings.pnr,
         totalAmount: bookings.totalAmount,
@@ -530,6 +531,14 @@ export async function sendConfirmationAndAwardMiles(bookingId: number) {
       .where(eq(bookings.id, bookingId))
       .limit(1);
 
+    if (!booking || booking.tenantId !== expectedTenantId)
+      throw new Error("Booking email tenant mismatch");
+    if (
+      booking &&
+      (booking.bookingStatus !== "confirmed" ||
+        booking.paymentStatus !== "paid")
+    )
+      return;
     if (!booking || !booking.userEmail)
       throw new Error("Booking confirmation recipient is unavailable");
 
@@ -581,14 +590,9 @@ export async function sendConfirmationAndAwardMiles(bookingId: number) {
         }
         const failures = results.filter(r => r.status === "rejected");
         if (failures.length > 0) {
-          log.warn(
-            {
-              event: "eticket_partial_failure",
-              bookingId,
-              failed: failures.length,
-              succeeded: eticketAttachments.length,
-            },
-            `Failed to generate ${failures.length}/${results.length} e-tickets`
+          throw new AggregateError(
+            failures.map(f => f.reason),
+            "Ticket documents incomplete"
           );
         }
         log.info(
@@ -605,6 +609,7 @@ export async function sendConfirmationAndAwardMiles(bookingId: number) {
         { event: "eticket_generation_failed", bookingId, error: eticketError },
         "Failed to generate e-tickets"
       );
+      throw eticketError;
     }
 
     // Send email
@@ -632,44 +637,6 @@ export async function sendConfirmationAndAwardMiles(bookingId: number) {
     log.info(
       { event: "confirmation_sent", bookingId, email: booking.userEmail },
       `Sent booking confirmation to ${booking.userEmail}`
-    );
-
-    // Send in-app notifications
-    try {
-      await notifyBookingConfirmed(
-        booking.userId,
-        booking.bookingReference,
-        booking.flightNumber,
-        bookingId
-      );
-      await notifyPaymentReceived(
-        booking.userId,
-        booking.totalAmount,
-        booking.bookingReference
-      );
-    } catch (notifError) {
-      log.error(
-        { event: "notification_failed", bookingId, error: notifError },
-        "Failed to send in-app notifications"
-      );
-    }
-
-    // Award loyalty miles
-    const result = await awardMilesForBooking(
-      booking.userId,
-      bookingId,
-      booking.flightId,
-      booking.totalAmount
-    );
-
-    log.info(
-      {
-        event: "miles_awarded",
-        bookingId,
-        userId: booking.userId,
-        milesEarned: result.milesEarned,
-      },
-      `Awarded ${result.milesEarned} miles to user ${booking.userId}`
     );
   } catch (error) {
     log.error(

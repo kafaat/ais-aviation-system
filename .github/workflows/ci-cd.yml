@@ -65,14 +65,15 @@ jobs:
           fi
           echo "All files are properly formatted."
 
-      # Warnings are capped at the count measured when the cap was introduced, so
-      # the backlog can shrink but not grow. Lower the number in package.json when
-      # you clear warnings; never raise it to make a new one pass.
+      # Every production warning fails this gate.
       - name: Run ESLint
         run: pnpm lint:ci
 
       - name: Run TypeScript check
         run: pnpm run check
+
+      - name: Type-check every operational and acceptance script
+        run: pnpm run check:scripts
 
   # =============================================================================
   # STAGE 2: Testing
@@ -252,10 +253,44 @@ jobs:
         with:
           sarif_file: "trivy-results.sarif"
 
+      # Native CLI avoids the deprecated Node runtime in gitleaks-action v2.
+      - name: Install verified Gitleaks CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination="$RUNNER_TEMP/ais-gitleaks"
+          mkdir -p "$destination"
+          curl --fail --location --retry 3 \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz \
+            --output "$destination/gitleaks.tar.gz"
+          echo "9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c  $destination/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf "$destination/gitleaks.tar.gz" -C "$destination" gitleaks
+          echo "$destination" >> "$GITHUB_PATH"
+
+      - name: Verify secret detection policy
+        run: python3 scripts/ci/probe-gitleaks-policy.py --gitleaks gitleaks
+
       - name: Check for secrets with Gitleaks
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SCAN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          range=HEAD
+          if [[ -n "$SCAN_BASE" && "$SCAN_BASE" != 0000000000000000000000000000000000000000 ]]; then
+            [[ "$SCAN_BASE" =~ ^[a-f0-9]{40}$ ]]
+            git cat-file -e "$SCAN_BASE^{commit}"
+            range="$SCAN_BASE..HEAD"
+          fi
+          gitleaks detect --redact --config .gitleaks.toml --exit-code=2 \
+            --log-opts="$range" --report-format=sarif --report-path=results.sarif
+
+      - name: Upload Gitleaks results
+        if: always() && hashFiles('results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
+        with:
+          sarif_file: results.sarif
+          category: gitleaks
 
   # =============================================================================
   # STAGE 4: E2E Tests
@@ -543,6 +578,9 @@ jobs:
 
       - name: Build application
         run: pnpm run build
+
+      - name: Verify production asset budgets
+        run: pnpm run size
         env:
           NODE_ENV: production
 

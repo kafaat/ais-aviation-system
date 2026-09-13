@@ -141,7 +141,7 @@ export const capabilityCatalog = [
     owner: "sla-monitoring.service",
     consumer: "slaMonitoring",
     requirement:
-      "Process-local observations only; fleet and contractual SLA require durable telemetry",
+      "Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA",
   },
 ] as const;
 

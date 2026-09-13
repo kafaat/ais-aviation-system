@@ -225,6 +225,48 @@
       "when": 1789241494714,
       "tag": "0031_passenger_document_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1789258517165,
+      "tag": "0032_departure_check_in_nonce",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1789259203618,
+      "tag": "0033_channel_inventory_allocations",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "5",
+      "when": 1789260140943,
+      "tag": "0034_flight_cancellation_refunds",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "5",
+      "when": 1789260537949,
+      "tag": "0035_event_consumer_and_loyalty_receipts",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1789261843214,
+      "tag": "0036_durable_operations_observations",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "5",
+      "when": 1789266991415,
+      "tag": "0037_loyalty_credit_lot_conservation",
+      "breakpoints": true
     }
   ]
 }

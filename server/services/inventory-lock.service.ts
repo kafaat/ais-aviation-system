@@ -1,9 +1,15 @@
 import { countActiveHolds } from "./inventory-capacity.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { inventoryLocks, flights } from "../../drizzle/schema";
+import {
+  inventoryLocks,
+  flights,
+  bookings,
+  seatInventory,
+  passengers,
+} from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
-import { eq, and, lt, gt } from "drizzle-orm";
+import { eq, and, lt, gt, sql } from "drizzle-orm";
 
 /**
  * Inventory Lock Service
@@ -21,7 +27,8 @@ export async function createInventoryLock(
   cabinClass: "economy" | "business",
   sessionId: string,
   userId?: number,
-  transaction?: SettlementTx
+  transaction?: SettlementTx,
+  durationMinutes = LOCK_DURATION_MINUTES
 ): Promise<{ lockId: number; expiresAt: Date }> {
   try {
     const database = transaction || (await getDb());
@@ -33,11 +40,19 @@ export async function createInventoryLock(
         message: "Seat count must be positive",
       });
     const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + LOCK_DURATION_MINUTES);
+    if (
+      !Number.isSafeInteger(durationMinutes) ||
+      durationMinutes < 1 ||
+      durationMinutes > 1440
+    )
+      throw new Error("Invalid hold duration");
+    expiresAt.setMinutes(expiresAt.getMinutes() + durationMinutes);
 
     const create = async (tx: SettlementTx) => {
       const [flight] = await tx
         .select({
+          status: flights.status,
+          departureTime: flights.departureTime,
           economyAvailable: flights.economyAvailable,
           businessAvailable: flights.businessAvailable,
         })
@@ -53,6 +68,14 @@ export async function createInventoryLock(
         });
       }
 
+      if (
+        !["scheduled", "delayed"].includes(flight.status) ||
+        flight.departureTime <= new Date()
+      )
+        throw new Error("Flight is unavailable for an inventory hold");
+      expiresAt.setTime(
+        Math.min(expiresAt.getTime(), flight.departureTime.getTime())
+      );
       const currentAvailable =
         cabinClass === "economy"
           ? flight.economyAvailable
@@ -159,36 +182,81 @@ export async function convertLockToBooking(lockId: number): Promise<void> {
  * Release all expired locks
  */
 export async function releaseExpiredLocks(): Promise<number> {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    const now = new Date();
-
-    const [result] = await database
-      .update(inventoryLocks)
-      .set({
-        status: "expired",
-        releasedAt: now,
-      })
-      .where(
-        and(
-          eq(inventoryLocks.status, "active"),
-          lt(inventoryLocks.expiresAt, now)
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  const now = new Date();
+  const candidates = await db
+    .select()
+    .from(inventoryLocks)
+    .where(
+      and(
+        eq(inventoryLocks.status, "active"),
+        lt(inventoryLocks.expiresAt, now)
+      )
+    )
+    .limit(500);
+  let released = 0;
+  for (const candidate of candidates) {
+    released += await db.transaction(async tx => {
+      const linked = await tx
+        .select()
+        .from(bookings)
+        .where(
+          sql`(${bookings.inventoryLockId} = ${candidate.id} OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.inventoryLockId = ${candidate.id}))`
         )
-      );
-
-    const affectedRows = result.affectedRows;
-
-    if (affectedRows > 0) {
-      console.info(`[Inventory] Released ${affectedRows} expired locks`);
-    }
-
-    return affectedRows;
-  } catch (error) {
-    console.error("Error releasing expired locks:", error);
-    return 0;
+        .orderBy(bookings.id)
+        .for("update");
+      await tx
+        .select()
+        .from(flights)
+        .where(eq(flights.id, candidate.flightId))
+        .for("update");
+      const [hold] = await tx
+        .select()
+        .from(inventoryLocks)
+        .where(eq(inventoryLocks.id, candidate.id))
+        .for("update");
+      if (!hold || hold.status !== "active" || hold.expiresAt > now) return 0;
+      for (const booking of linked.filter(
+        b =>
+          b.status === "pending" &&
+          b.paymentStatus === "pending" &&
+          !b.seatsReserved
+      )) {
+        await tx
+          .update(seatInventory)
+          .set({
+            status: "available",
+            bookingId: null,
+            passengerId: null,
+            assignedAt: null,
+            checkedInAt: null,
+            checkInNonce: null,
+            boardingPassIssued: false,
+            boardingGroup: null,
+            boardingSequence: null,
+          })
+          .where(
+            and(
+              eq(seatInventory.bookingId, booking.id),
+              eq(seatInventory.flightId, hold.flightId),
+              eq(seatInventory.status, "occupied")
+            )
+          );
+        if (booking.flightId === hold.flightId)
+          await tx
+            .update(passengers)
+            .set({ seatNumber: null })
+            .where(eq(passengers.bookingId, booking.id));
+      }
+      await tx
+        .update(inventoryLocks)
+        .set({ status: "expired", releasedAt: now })
+        .where(eq(inventoryLocks.id, hold.id));
+      return 1;
+    });
   }
+  return released;
 }
 
 /**
