@@ -2953,6 +2953,7 @@
         "server/services/order-refunds.service.ts",
         "server/services/order-service-checkout.service.ts",
         "server/services/order-servicing.service.ts",
+        "server/services/payment-dispute.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/premium-experiment.service.ts",
         "server/services/pricing-approval.service.ts",
@@ -3000,6 +3001,26 @@
           "specialServices"
         ],
         "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/payment-dispute.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/payment-dispute.service.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/webhooks/stripe.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/outbox.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["bookings", "financialLedger", "paymentReceipts", "payments"],
+        "writes": ["financialLedger", "paymentHistory"]
       },
       "replacement": null
     },
