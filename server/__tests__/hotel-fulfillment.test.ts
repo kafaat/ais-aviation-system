@@ -86,13 +86,35 @@ describe("durable hotel fulfillment", () => {
     expect(provider.book).toHaveBeenCalledTimes(1);
     expect(fixture.rows("outbox")).toHaveLength(1);
   });
-  it("does not use credentials for a different provider account", async () => {
+  it("refuses a different provider account and records the block with a backoff", async () => {
     const provider = hotelFixtureProvider();
     provider.account = "different-account";
     await expect(fulfillHotelRequest(fixture.db, 1, provider)).rejects.toThrow(
       "account"
     );
     expect(provider.book).not.toHaveBeenCalled();
+    // Throwing inside the claim transaction rolled back without a lease or a
+    // backoff, so the scheduled worker re-selected this row and failed again
+    // every minute, holding the whole task permanently in error.
+    expect(row().providerNextAttemptAt).toBeInstanceOf(Date);
+    expect(row().providerNextAttemptAt.getTime()).toBeGreaterThan(Date.now());
+    expect(row().providerLastError).toBe(
+      "Hotel provider account or approval mismatch"
+    );
+    expect(row().status).toBe("pending_provider");
+    expect(row().providerLease).toBeFalsy();
+  });
+  it("blocks an unreadable stored request without a hot retry loop", async () => {
+    const provider = hotelFixtureProvider();
+    fixture.rows("emergency_hotel_bookings")[0].providerRequest = {
+      quote: "not a quote",
+    };
+    await expect(fulfillHotelRequest(fixture.db, 1, provider)).rejects.toThrow(
+      "unreadable"
+    );
+    expect(provider.book).not.toHaveBeenCalled();
+    expect(row().providerNextAttemptAt).toBeInstanceOf(Date);
+    expect(row().providerLastError).toBe("Stored hotel request is unreadable");
   });
   it("expires an unsent quote without a provider write", async () => {
     const expired = structuredClone(request);

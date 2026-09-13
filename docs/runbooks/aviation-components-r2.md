@@ -253,3 +253,25 @@ fix alone makes its new acceptance case fail, which is how it was verified.
 
 No workflow in this repository triggers on a pull request whose base is not
 `main`, so this branch's evidence is local only.
+
+## Review follow-up — the five remaining non-blocking findings
+
+Applied on top of the merge of PR #152. These are the review findings that were
+not merge-blocking; the sixth, the blanket OpenAPI error statuses, is left as
+recorded because narrowing it correctly needs the real status set of each
+procedure and would otherwise break the contract lab.
+
+| Finding                                                                                                                                                                                   | Fix                                                                                                                                  | Regression case                                                                                                                             |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| A provider account or approval mismatch threw inside the claim transaction, so it rolled back with no lease and no backoff and the scheduled task failed on that row every minute forever | The claim reports a blocked row; the backoff and the redacted reason are committed outside the transaction, then the error is raised | `refuses a different provider account and records the block with a backoff`, `blocks an unreadable stored request without a hot retry loop` |
+| An unreadable stored `providerRequest` had the same shape                                                                                                                                 | Parsed with `safeParse` and reported the same way                                                                                    | Same                                                                                                                                        |
+| The worker page had no ordering, so rows that can never resolve could hold all 25 slots and starve new bookings                                                                           | Ordered by `providerNextAttemptAt` ascending; MySQL sorts NULL first, so a never-attempted booking always leads                      | Empirically confirmed NULL-first ordering on MySQL 8.0.46; combined with the backoff above, blocked rows now rotate                         |
+| `assignTransportation` blocked only `cancelled` and `no_show`, so transport could be attached to a stay that was never booked or is being undone                                          | Also refuses `rejected`, `outcome_unknown`, `cancellation_pending` and `cancellation_unknown`                                        | `R2 hotels: unreconciled stays refuse transport and stay visible in the tiles`                                                              |
+| `sandbox_confirmed` was in none of the active, pending or cancelled buckets, so those rows vanished from all three tiles while still counting toward the total                            | Counted as outstanding, since a sandbox confirmation is not a real reservation                                                       | Same case                                                                                                                                   |
+| The gate router hardcoded `platformAdmin: true`, leaving the tenant check in `lockFlight` dead on every production path                                                                   | Derived from `isAdmin(ctx.user.role)`; unchanged for the platform roles that reach these procedures today                            | Existing gate acceptance and boundary suites                                                                                                |
+| The `prerelease` dispatch input no longer reached the release object on the custom-version path, which never receives the `-rc` suffix                                                    | Passed explicitly to the publisher, with the tag suffix kept as the fallback for push-triggered releases                             | `carries the operator's prerelease choice into release publication`                                                                         |
+
+Local validation: **56 acceptance checks passed with zero skips and zero
+provider calls**, up from 55. Zero-warning ESLint, Prettier, Gitleaks, and all
+three TypeScript configurations pass. As with PR #152, no workflow triggers on a
+pull request whose base is not `main`, so this branch's evidence is local only.

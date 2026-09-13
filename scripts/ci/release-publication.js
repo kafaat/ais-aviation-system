@@ -213,7 +213,10 @@ async function main() {
     commit,
     token: process.env.GITHUB_TOKEN || "",
     notes: process.env.RELEASE_NOTES || "",
-    prerelease: tag.includes("-"),
+    // The operator's explicit choice wins. The tag suffix only covers the
+    // auto-increment path, which appends -rc; a custom version does not, so
+    // reading the tag alone published a checked prerelease as a full release.
+    prerelease: process.env.RELEASE_PRERELEASE === "true" || tag.includes("-"),
     verify: () => verifyRemoteTag(git, tag, commit),
   });
   console.info(JSON.stringify({ tag, commit, ...result }));

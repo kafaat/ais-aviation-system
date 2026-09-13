@@ -58,6 +58,24 @@ describe("CI workflow hardening", () => {
     );
   });
 
+  // The dispatch input used to reach the release object directly. Once the
+  // publisher inferred it from the tag, a custom version, which never gets the
+  // -rc suffix, published a checked prerelease as a full release.
+  it("carries the operator's prerelease choice into release publication", () => {
+    const workflow = readFileSync(join(workflowDir, "release.yml"), "utf8");
+    const publish = workflow.indexOf("release-publication.js publish");
+    expect(publish).toBeGreaterThan(-1);
+    const step = workflow.slice(publish, publish + 600);
+    expect(step).toContain("RELEASE_PRERELEASE: ${{ inputs.prerelease }}");
+    const publisher = readFileSync(
+      join(process.cwd(), "scripts", "ci", "release-publication.js"),
+      "utf8"
+    );
+    expect(publisher).toContain('process.env.RELEASE_PRERELEASE === "true"');
+    // The tag suffix stays as the fallback for push-triggered releases.
+    expect(publisher).toContain('tag.includes("-")');
+  });
+
   // A bare `eslint .` exits 0 on any number of warnings, so the backlog grew
   // unnoticed. CI must run the capped script, and the cap must be a real bound.
   it("caps ESLint warnings in CI instead of accepting any number", () => {

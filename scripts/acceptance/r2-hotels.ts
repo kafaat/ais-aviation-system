@@ -187,6 +187,62 @@ export async function verifyR2Hotels(
       assert.equal(again.id, second.id);
     }
   );
+  await check(
+    "R2 hotels: unreconciled stays refuse transport and stay visible in the tiles",
+    async () => {
+      const { assignTransportation, getHotelCosts } =
+        await import("../../server/services/emergency-hotel.service");
+      const subject = await db.transaction(tx =>
+        createHotelRequest(
+          tx,
+          { ...intent, idempotencyKey: "r2 hotel transport row" },
+          seed
+        )
+      );
+      for (const status of [
+        "rejected",
+        "outcome_unknown",
+        "cancellation_pending",
+        "cancellation_unknown",
+      ] as const) {
+        await db
+          .update(emergencyHotelBookings)
+          .set({ status })
+          .where(eq(emergencyHotelBookings.id, subject.id));
+        await assert.rejects(
+          assignTransportation(subject.id, "shuttle"),
+          /cancelled, rejected or unreconciled/,
+          `transport must be refused for ${status}`
+        );
+      }
+      // A sandbox confirmation is not a real reservation, so it belongs in the
+      // outstanding bucket rather than in none of the three.
+      await db
+        .update(emergencyHotelBookings)
+        .set({ status: "sandbox_confirmed" })
+        .where(eq(emergencyHotelBookings.id, subject.id));
+      const { summary } = await getHotelCosts({
+        from: new Date(Date.now() - 86400000),
+        to: new Date(Date.now() + 86400000),
+      });
+      assert(
+        Number(summary.activeBookings) +
+          Number(summary.pendingBookings) +
+          Number(summary.cancelledBookings) <=
+          Number(summary.totalBookings)
+      );
+      assert(Number(summary.pendingBookings) >= 1);
+      // A confirmed stay still accepts transport.
+      await db
+        .update(emergencyHotelBookings)
+        .set({ status: "confirmed" })
+        .where(eq(emergencyHotelBookings.id, subject.id));
+      assert.equal(
+        (await assignTransportation(subject.id, "shuttle")).success,
+        true
+      );
+    }
+  );
   const request: HotelRequest = {
     quoteId: "11111111-1111-4111-8111-111111111111",
     mappingEvidence: "synthetic acceptance fixture",
