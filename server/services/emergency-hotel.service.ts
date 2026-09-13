@@ -41,7 +41,7 @@ export {
   requestHotelRoom as bookHotelRoom,
   requestHotelCancellation as cancelHotelBooking,
 } from "./hotel-fulfillment.service";
-import { nightsBetween } from "./hotel-fulfillment.service";
+import { estimateNights } from "./hotel-fulfillment.service";
 
 // ---------------------------------------------------------------------------
 // Service Functions
@@ -75,7 +75,9 @@ export async function findNearbyHotels(
     .orderBy(emergencyHotels.distanceKm);
 
   // Enrich each hotel with an estimated total cost for the stay
-  const nights = nightsBetween(checkIn, checkOut);
+  // Browsing estimate only. A same-day or over-long range must still list
+  // hotels; the strict check belongs to createHotelRequest, not to search.
+  const nights = estimateNights(checkIn, checkOut);
 
   return hotels.map(hotel => ({
     ...hotel,

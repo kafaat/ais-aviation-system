@@ -197,6 +197,12 @@ export async function allocateGate(
   }
 ) {
   const flight = await lockFlight(tx, input.flightId, input.actor);
+  // The plain read below is safe only because lockFlight ran first: a locking
+  // read acquires no snapshot, so this transaction's first consistent read is
+  // the one here and it sees the latest committed rows. Do not reorder them.
+  // FOR UPDATE here would gap-lock an empty flightId range and deadlock two
+  // concurrent allocations for different flights, which the acceptance case
+  // "concurrent competing flights allocate exactly once" catches.
   const hints = await tx
     .select()
     .from(gateAssignments)
@@ -295,10 +301,15 @@ export async function invalidateGateAssignments(
   reason: string,
   status: "cancelled" | "departed" = "cancelled"
 ) {
+  // Must be a locking read. Holding the flight lock is not enough: under
+  // REPEATABLE READ the caller's first plain SELECT already pinned this
+  // transaction's snapshot, so a non-locking read here can miss a reservation
+  // committed while we waited for the lock and silently skip the invalidation.
   const hints = await tx
     .select()
     .from(gateAssignments)
-    .where(and(eq(gateAssignments.flightId, flight.id), active()));
+    .where(and(eq(gateAssignments.flightId, flight.id), active()))
+    .for("update");
   if (!hints.length) return;
   const gates = await lockGates(
     tx,

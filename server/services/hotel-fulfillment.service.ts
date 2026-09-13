@@ -27,11 +27,19 @@ const dbRequired = () => {
   if (!db) throw new Error("Database unavailable");
   return db;
 };
+/** Strict: the result becomes a provider commitment, so refuse a nonsense stay. */
 export function nightsBetween(checkIn: Date, checkOut: Date): number {
   const diff = checkOut.getTime() - checkIn.getTime();
   if (!Number.isFinite(diff) || diff <= 0 || diff > 30 * 86400000)
     throw new Error("Hotel stay must be positive and at most 30 days");
   return Math.ceil(diff / 86400000);
+}
+/** Lenient: a browsing estimate must never turn a hotel search into an error.
+ * Same-day and reversed dates count as one night, as they did before R2-04. */
+export function estimateNights(checkIn: Date, checkOut: Date): number {
+  const diff = Math.abs(checkOut.getTime() - checkIn.getTime());
+  if (!Number.isFinite(diff)) return 1;
+  return Math.min(30, Math.max(1, Math.ceil(diff / 86400000)));
 }
 export const hotelIntent = z.object({
   hotelId: z.number().int().positive(),
@@ -87,21 +95,38 @@ export async function createHotelRequest(
     .for("share");
   if (!hotel?.isActive) throw new Error("Hotel is not active");
   const requestHash = digest(intent);
-  const requestKey = digest([booking.id, idempotencyKey ?? requestHash]);
-  const [existing] = await tx
-    .select()
-    .from(emergencyHotelBookings)
-    .where(eq(emergencyHotelBookings.requestKey, requestKey));
-  if (existing) {
-    if (existing.requestHash !== requestHash)
+  const base = idempotencyKey ?? requestHash;
+  // A cancelled or rejected request is finished. Returning it for an identical
+  // repeat would report a dead row as a live booking, so a repeat opens the next
+  // attempt slot instead. Slot 0 keeps the original derivation, and every slot
+  // stays individually idempotent: a duplicate call lands on the same slot and
+  // reuses the live row rather than sending a second request.
+  const requestKeyFor = (attempt: number) =>
+    digest(attempt === 0 ? [booking.id, base] : [booking.id, base, attempt]);
+  let requestKey: string | null = null;
+  let reusable: typeof emergencyHotelBookings.$inferSelect | undefined;
+  for (let attempt = 0; attempt < 32 && requestKey === null; attempt++) {
+    const candidate = requestKeyFor(attempt);
+    const [row] = await tx
+      .select()
+      .from(emergencyHotelBookings)
+      .where(eq(emergencyHotelBookings.requestKey, candidate));
+    if (row && row.requestHash !== requestHash)
       throw new Error("Hotel idempotency key reused with a different request");
+    if (!row || !["cancelled", "rejected"].includes(row.status)) {
+      requestKey = candidate;
+      reusable = row;
+    }
+  }
+  if (requestKey === null)
+    throw new Error("Too many superseded hotel requests for this stay");
+  if (reusable)
     return {
-      ...existing,
+      ...reusable,
       hotelName: hotel.name,
       hotelAddress: hotel.address,
       hotelPhone: hotel.phone,
     };
-  }
   const nightlyRate = Math.round(
     hotel.standardRate * (intent.roomType === "suite" ? 1.8 : 1)
   );
@@ -296,6 +321,16 @@ export function requestHotelCancellation(
       };
     if (row.providerLeaseUntil && row.providerLeaseUntil.getTime() > Date.now())
       throw new Error("Hotel provider operation is in progress");
+    // A row created before R2-04 carries no provider state whatsoever, so
+    // cancelling it is purely local bookkeeping — what cancelHotelBooking did
+    // before this change. Without this branch every pre-migration reservation
+    // would be permanently uncancellable through both the API and the admin
+    // screen. `checked_out` stays refused, as it was before.
+    const localOnly =
+      row.providerRequest === null &&
+      row.providerReceipt === null &&
+      row.providerLease === null &&
+      row.requestKey === null;
     if (
       ![
         "cancellation_pending",
@@ -304,7 +339,8 @@ export function requestHotelCancellation(
         "pending_provider",
         "confirmed",
         "sandbox_confirmed",
-      ].includes(row.status)
+      ].includes(row.status) &&
+      !(localOnly && ["reserved", "checked_in", "no_show"].includes(row.status))
     )
       throw new Error(
         "Reconcile hotel outcome before cancellation; legacy reservations require operator verification"

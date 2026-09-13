@@ -39,7 +39,12 @@ def main():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
-    context = native(args.toxiproxy_binary, port) if args.toxiproxy_binary else DockerContainer(IMAGE).with_network_mode("host").with_command(f"-host 127.0.0.1 -port {port}")
+    # Testcontainers 4.15.0 exposes no with_network_mode; extra run kwargs are
+    # the supported way to reach host networking. Check it rather than trust it:
+    # an AttributeError here aborts the whole lab instead of failing one case.
+    if not hasattr(DockerContainer, "with_kwargs"):
+        raise RuntimeError("Testcontainers does not expose with_kwargs; host networking is unavailable")
+    context = native(args.toxiproxy_binary, port) if args.toxiproxy_binary else DockerContainer(IMAGE).with_kwargs(network_mode="host").with_command(f"-host 127.0.0.1 -port {port}")
     # Host networking keeps this test's proxy and synthetic receiver on loopback.
     # CI is Linux; a missing Docker daemon fails rather than skipping the lab.
     with context:

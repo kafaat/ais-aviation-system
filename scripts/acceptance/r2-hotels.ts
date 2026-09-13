@@ -11,6 +11,7 @@ import type { SettlementTx } from "../../server/services/booking-settlement.serv
 import {
   createHotelRequest,
   fulfillHotelRequest,
+  requestHotelCancellation,
 } from "../../server/services/hotel-fulfillment.service";
 import type { HotelProvider } from "../../server/integrations/hotelbeds";
 import type {
@@ -134,6 +135,56 @@ export async function verifyR2Hotels(
         ).length,
         before.length
       );
+    }
+  );
+  await check(
+    "R2 hotels: legacy stays cancellable and a repeat after cancellation opens a new request",
+    async () => {
+      // A row predating provider fulfillment carries no provider state, so
+      // cancelling it is local bookkeeping, exactly as before this change.
+      const legacy = await db.transaction(tx =>
+        createHotelRequest(
+          tx,
+          { ...intent, idempotencyKey: "r2 hotel legacy row" },
+          seed
+        )
+      );
+      await db
+        .update(emergencyHotelBookings)
+        .set({
+          status: "reserved",
+          requestKey: null,
+          requestReference: null,
+          providerRequest: null,
+          providerReceipt: null,
+          providerLease: null,
+        })
+        .where(eq(emergencyHotelBookings.id, legacy.id));
+      assert.equal(
+        (await requestHotelCancellation(legacy.id, seed, 0)).status,
+        "cancelled"
+      );
+
+      // A repeat of an identical, already cancelled stay must not report the
+      // dead row as a live booking.
+      const repeat = { ...intent, idempotencyKey: "r2-hotel-repeat" };
+      const first = await db.transaction(tx =>
+        createHotelRequest(tx, repeat, seed)
+      );
+      assert.equal(
+        (await requestHotelCancellation(first.id, seed, 0)).status,
+        "cancelled"
+      );
+      const second = await db.transaction(tx =>
+        createHotelRequest(tx, repeat, seed)
+      );
+      assert.notEqual(second.id, first.id);
+      assert.equal(second.status, "requested");
+      // The new attempt slot is still idempotent on its own.
+      const again = await db.transaction(tx =>
+        createHotelRequest(tx, repeat, seed)
+      );
+      assert.equal(again.id, second.id);
     }
   );
   const request: HotelRequest = {

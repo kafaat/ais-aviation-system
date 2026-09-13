@@ -222,3 +222,34 @@ boundaries remain covered by the preceding acceptance suite. A missing runtime
 fails the dedicated CI job; it does not convert these cases into passing skips.
 Sources: [Toxiproxy](https://github.com/Shopify/toxiproxy),
 [Testcontainers Python](https://github.com/testcontainers/testcontainers-python).
+
+## Review fixes — six blocking defects found in R2-01…R2-07
+
+Applied on top of `0edab63` after the code review of PR #151. Each fix carries a
+regression case that fails without it. No behaviour outside the six defects was
+changed, and the remaining review findings are left to the patch authors.
+
+| Defect                                                                                                                                                                                                  | Fix                                                                                                                                                | Regression case                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| R2-07 CI job aborted before its first case: `with_network_mode` does not exist in the pinned Testcontainers 4.15.0                                                                                      | `with_kwargs(network_mode="host")`, plus an explicit assertion so a missing API fails loudly rather than skipping the lab                          | The `TCP Faults and Worker Recovery` job now reaches its cases at all                     |
+| `invalidateGateAssignments` read the flight's reservations without a lock, so a reservation committed after the caller pinned its snapshot was invisible and silently not invalidated                   | Locking read                                                                                                                                       | `R2 gates: a reservation committed after the canonical snapshot is still invalidated`     |
+| Same read, non-empty stale snapshot: the cancel hit current rows while the gate re-sync hit stale ones, stranding a gate on `occupied` with no reservation and naming the wrong gate in `gate.released` | Same fix                                                                                                                                           | Same case                                                                                 |
+| Every pre-migration hotel reservation became permanently uncancellable through both the API and the admin screen                                                                                        | `reserved`, `checked_in` and `no_show` are cancellable again when the row carries no provider state at all; `checked_out` stays refused, as before | `R2 hotels: legacy stays cancellable and a repeat after cancellation opens a new request` |
+| A same-day or over-30-night hotel _search_ returned HTTP 500 because the strict stay validator was reused for a browsing estimate                                                                       | Separate lenient `estimateNights` for search; `nightsBetween` stays strict where the value becomes a provider commitment                           | `estimates a browsing stay without turning a hotel search into an error`                  |
+| Repeating an identical stay after its cancellation returned the cancelled row, and the UI reported it as a recorded booking                                                                             | Terminal rows no longer satisfy the idempotency lookup; the repeat opens the next attempt slot, and each slot stays individually idempotent        | Same hotel acceptance case                                                                |
+
+One change was attempted and reverted: a locking read in `allocateGate`. It is
+unnecessary, because `lockFlight` runs first and acquires no snapshot, and it is
+harmful, because `FOR UPDATE` over an empty `flightId` range gap-locks and
+deadlocks two concurrent allocations for different flights. The existing
+acceptance case `concurrent competing flights allocate exactly once` caught it.
+The comment there now records why that read must stay plain and must stay second.
+
+Local validation: **55 acceptance checks passed with zero skips and zero provider
+calls** on disposable MySQL 8.0.46 and Redis, up from 53. The full unit suite,
+all three TypeScript configurations, zero-warning ESLint, Prettier, Gitleaks, the
+service catalog check and the event contract check all pass. Removing the gate
+fix alone makes its new acceptance case fail, which is how it was verified.
+
+No workflow in this repository triggers on a pull request whose base is not
+`main`, so this branch's evidence is local only.
