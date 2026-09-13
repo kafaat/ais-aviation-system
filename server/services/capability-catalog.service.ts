@@ -1,6 +1,14 @@
 /** Technical ownership and evidence requirements, not a claim of operational certification. */
 export const capabilityCatalog = [
   {
+    id: "hotelFulfillment",
+    implementation: "implemented",
+    owner: "hotel-fulfillment.service",
+    consumer: "emergencyHotel and hotelFulfillment scheduled task",
+    requirement:
+      "Default disabled; Hotelbeds single adult/room, net SAR, explicit quote and hotel mapping approval; sandbox confirmation is not a real stay. Live credentials, certification, local fees/transport and property acceptance remain operator responsibilities.",
+  },
+  {
     id: "ndcUnpaidServicing",
     implementation: "implemented",
     owner: "ndc-unpaid.service and booking-invoice.service",

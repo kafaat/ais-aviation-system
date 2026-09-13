@@ -11,7 +11,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass |
 | R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass         |
 | R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass |
-| R2-04 | Provider-confirmed emergency hotel fulfillment      | Pending                                     |
+| R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass |
 | R2-05 | Versioned event contracts                           | Pending                                     |
 | R2-06 | Provider/API contract laboratory                    | Pending                                     |
 | R2-07 | Transport fault acceptance                          | Pending                                     |
@@ -78,3 +78,54 @@ completed 50 checks with zero skips, including five R2 cases for competing
 flights, adjacent intervals, rollback, canonical schedule invalidation, and
 exactly one durable passenger notification. Main and scripts type checks passed;
 acceptance configuration also passed. Provider calls: zero.
+
+## R2-04 — hotel requests and supplier receipts
+
+Migration 0039 extends the existing hotel booking authority with request identity,
+approved quote, provider receipt and fenced delivery lease. Existing `reserved`
+rows stay visibly unverified; their local EH numbers are never adopted as supplier
+confirmations. New requests bind the booking, passenger, tenant and current flight
+membership, validate date direction, and serialize idempotent commands. They start
+as `requested`, without a confirmation number. Passenger payments are unaffected.
+
+The Hotel Management panel records an accommodation request, retrieves a Hotelbeds
+CheckRate quote, displays the exact room/board/dates, procurement amount, terms and
+cancellation policies, and requires explicit operator approval. The operator must
+supply a rate key from their authorized supplier search and a verified hotel/room
+mapping reference. Availability search and supplier content mapping are prerequisites,
+not an inferred mapping from local hotel names. The bounded adapter supports one
+adult, one room, RO/BB board, net-model SAR rates; it rejects commissionable,
+mandatory-selling-price, resident, package, card-required and foreign-currency rates.
+The quoted net procurement cost does not erase local incidentals described in the
+supplier terms. Transport remains a separately requested service.
+
+The `hotelFulfillment` worker persists `outcome_unknown` **before** its first booking
+POST. Retries query the same client reference and then verify booking detail; even
+an empty lookup never authorizes another POST. A pre-send crash can therefore
+require an operator/provider reconciliation. Cancellation uses a fee simulation,
+a separately approved maximum fee, and persists `cancellation_unknown` before
+DELETE. Simulation is never a cancellation acknowledgement. A lost write response
+is reconciled by reading; writes are not automatically repeated. Increasing a
+cancellation ceiling requires another explicit admin command and is refused while
+a provider operation holds the lease. Provider account changes fail closed.
+
+Configure `HOTELBEDS_MODE=disabled|sandbox|live`, `HOTELBEDS_API_KEY` and
+`HOTELBEDS_SECRET`. Live mode additionally requires `HOTELBEDS_ACCEPTANCE_REFERENCE`.
+Keep the same supplier account while requests are unresolved. Default is disabled.
+Sandbox receipts produce `sandbox_confirmed`, explicitly not a property reservation,
+and are excluded from actual SAR expense totals. Live totals derive from persisted
+supplier receipts, including actual cancellation fees. The former synthetic hotel,
+booking and cost fallbacks are removed from the admin page.
+
+Source contracts: [Hotelbeds workflow](https://developer.hotelbeds.com/documentation/hotels/booking-api/workflow/),
+[pricing models](https://developer.hotelbeds.com/documentation/hotels/knowledge-base/pricing-models/),
+and the [OpenAPI file linked by Hotelbeds' own reference page](https://bitbucket.org/ApiPortalHotelbeds/apitude-openapi/raw/master/OpenAPI-Hotel-BookingAPI-3.0.yaml).
+The linked API 1.0 schema calls CheckRate's hotel field `hotels`; the adapter also
+accepts the singular `hotel` envelope and rejects an ambiguous double envelope.
+Schemas and responses still need verification against the contracted account.
+
+Evidence: 23 unit/HTTP-boundary cases and a real MySQL/Redis acceptance run with
+53 checks, zero skips, including three hotel cases. Fake supplier replies exercise
+ambiguous outcomes and concurrent claims; **no live supplier calls were made**.
+Property voucher certification, account-specific pricing, legacy manual receipts,
+local fees and actual transport acceptance remain deployment/operator work.

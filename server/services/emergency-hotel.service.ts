@@ -37,20 +37,11 @@ export type InsertEmergencyHotelBooking =
 // Helpers
 // ---------------------------------------------------------------------------
 
-function generateConfirmationNumber(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let result = "EH-";
-  for (let i = 0; i < 8; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
-function nightsBetween(checkIn: Date, checkOut: Date): number {
-  const msPerDay = 1000 * 60 * 60 * 24;
-  const diff = Math.abs(checkOut.getTime() - checkIn.getTime());
-  return Math.max(1, Math.ceil(diff / msPerDay));
-}
+export {
+  requestHotelRoom as bookHotelRoom,
+  requestHotelCancellation as cancelHotelBooking,
+} from "./hotel-fulfillment.service";
+import { nightsBetween } from "./hotel-fulfillment.service";
 
 // ---------------------------------------------------------------------------
 // Service Functions
@@ -95,133 +86,6 @@ export async function findNearbyHotels(
 }
 
 /**
- * Book an emergency hotel room for a disrupted passenger.
- */
-export async function bookHotelRoom(input: {
-  hotelId: number;
-  bookingId: number;
-  flightId: number;
-  passengerId: number;
-  roomType: "standard" | "suite";
-  checkIn: Date;
-  checkOut: Date;
-  mealIncluded?: boolean;
-  transportIncluded?: boolean;
-  notes?: string;
-}) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  return await db.transaction(async tx => {
-    // Look up the hotel to get the rate (inside transaction to prevent deactivation race)
-    const [hotel] = await tx
-      .select()
-      .from(emergencyHotels)
-      .where(eq(emergencyHotels.id, input.hotelId))
-      .limit(1)
-      .for("share");
-
-    if (!hotel)
-      throw new TRPCError({ code: "NOT_FOUND", message: "Hotel not found" });
-    if (!hotel.isActive)
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Hotel is not currently active",
-      });
-
-    const nights = nightsBetween(input.checkIn, input.checkOut);
-    const nightlyRate =
-      input.roomType === "suite"
-        ? Math.round(hotel.standardRate * 1.8)
-        : hotel.standardRate;
-    const totalCost = nightlyRate * nights;
-    const confirmationNumber = generateConfirmationNumber();
-
-    const [result] = await tx.insert(emergencyHotelBookings).values({
-      hotelId: input.hotelId,
-      bookingId: input.bookingId,
-      flightId: input.flightId,
-      passengerId: input.passengerId,
-      roomType: input.roomType,
-      checkIn: input.checkIn,
-      checkOut: input.checkOut,
-      nightlyRate,
-      totalCost,
-      mealIncluded: input.mealIncluded ?? true,
-      transportIncluded: input.transportIncluded ?? hotel.hasTransport,
-      status: "reserved",
-      confirmationNumber,
-      notes: input.notes ?? null,
-    });
-
-    const [booking] = await tx
-      .select()
-      .from(emergencyHotelBookings)
-      .where(eq(emergencyHotelBookings.id, result.insertId))
-      .limit(1);
-
-    return {
-      ...booking,
-      hotelName: hotel.name,
-      hotelAddress: hotel.address,
-      hotelPhone: hotel.phone,
-    };
-  });
-}
-
-/**
- * Cancel an emergency hotel booking.
- */
-export async function cancelHotelBooking(hotelBookingId: number) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  return await db.transaction(async tx => {
-    const [existing] = await tx
-      .select()
-      .from(emergencyHotelBookings)
-      .where(eq(emergencyHotelBookings.id, hotelBookingId))
-      .limit(1)
-      .for("update");
-
-    if (!existing)
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Hotel booking not found",
-      });
-
-    if (existing.status === "cancelled") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Hotel booking is already cancelled",
-      });
-    }
-
-    if (existing.status === "checked_out") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Cannot cancel a completed hotel booking",
-      });
-    }
-
-    await tx
-      .update(emergencyHotelBookings)
-      .set({ status: "cancelled", updatedAt: new Date() })
-      .where(eq(emergencyHotelBookings.id, hotelBookingId));
-
-    return { success: true, confirmationNumber: existing.confirmationNumber };
-  });
-}
-
-/**
  * Get all hotel bookings for a disrupted flight.
  */
 export async function getHotelBookingsByFlight(flightId: number) {
@@ -247,7 +111,9 @@ export async function getHotelBookingsByFlight(flightId: number) {
       mealIncluded: emergencyHotelBookings.mealIncluded,
       transportIncluded: emergencyHotelBookings.transportIncluded,
       status: emergencyHotelBookings.status,
+      providerLastError: emergencyHotelBookings.providerLastError,
       confirmationNumber: emergencyHotelBookings.confirmationNumber,
+      requestReference: emergencyHotelBookings.requestReference,
       notes: emergencyHotelBookings.notes,
       createdAt: emergencyHotelBookings.createdAt,
       hotelName: emergencyHotels.name,
@@ -291,6 +157,7 @@ export async function getHotelBookingsByPassenger(passengerId: number) {
       transportIncluded: emergencyHotelBookings.transportIncluded,
       status: emergencyHotelBookings.status,
       confirmationNumber: emergencyHotelBookings.confirmationNumber,
+      requestReference: emergencyHotelBookings.requestReference,
       notes: emergencyHotelBookings.notes,
       createdAt: emergencyHotelBookings.createdAt,
       hotelName: emergencyHotels.name,
@@ -392,39 +259,29 @@ export async function getHotelCosts(dateRange: { from: Date; to: Date }) {
       message: "Database not available",
     });
 
-  const costData = await db
+  const liveReceipt = sql`${emergencyHotelBookings.providerReceipt} IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(${emergencyHotelBookings.providerRequest}, '$.quote.mode')) = 'live'`;
+  const range = and(
+    gte(emergencyHotelBookings.createdAt, dateRange.from),
+    lte(emergencyHotelBookings.createdAt, dateRange.to)
+  );
+  const active = sql`${liveReceipt} AND ${emergencyHotelBookings.status} IN ('confirmed','checked_in')`;
+  const [totals] = await db
     .select({
-      totalCost: sql<number>`COALESCE(SUM(${emergencyHotelBookings.totalCost}), 0)`,
+      totalCost: sql<number>`COALESCE(SUM(CASE WHEN ${liveReceipt} THEN ${emergencyHotelBookings.totalCost} ELSE 0 END),0)`,
+      activeTotalCost: sql<number>`COALESCE(SUM(CASE WHEN ${active} THEN ${emergencyHotelBookings.totalCost} ELSE 0 END),0)`,
+      cancellationCost: sql<number>`COALESCE(SUM(CASE WHEN ${liveReceipt} AND ${emergencyHotelBookings.status} = 'cancelled' THEN ${emergencyHotelBookings.totalCost} ELSE 0 END),0)`,
       totalBookings: sql<number>`COUNT(*)`,
-      cancelledBookings: sql<number>`SUM(CASE WHEN ${emergencyHotelBookings.status} = 'cancelled' THEN 1 ELSE 0 END)`,
-      activeBookings: sql<number>`SUM(CASE WHEN ${emergencyHotelBookings.status} != 'cancelled' THEN 1 ELSE 0 END)`,
+      activeBookings: sql<number>`COALESCE(SUM(CASE WHEN ${active} THEN 1 ELSE 0 END),0)`,
+      cancelledBookings: sql<number>`COALESCE(SUM(CASE WHEN ${emergencyHotelBookings.status} = 'cancelled' THEN 1 ELSE 0 END),0)`,
+      pendingBookings: sql<number>`COALESCE(SUM(CASE WHEN ${emergencyHotelBookings.status} IN ('reserved','requested','pending_provider','outcome_unknown','cancellation_pending','cancellation_unknown','rejected') THEN 1 ELSE 0 END),0)`,
     })
     .from(emergencyHotelBookings)
-    .where(
-      and(
-        gte(emergencyHotelBookings.createdAt, dateRange.from),
-        lte(emergencyHotelBookings.createdAt, dateRange.to)
-      )
-    );
-
-  const activeCostData = await db
-    .select({
-      activeTotalCost: sql<number>`COALESCE(SUM(${emergencyHotelBookings.totalCost}), 0)`,
-    })
-    .from(emergencyHotelBookings)
-    .where(
-      and(
-        gte(emergencyHotelBookings.createdAt, dateRange.from),
-        lte(emergencyHotelBookings.createdAt, dateRange.to),
-        sql`${emergencyHotelBookings.status} != 'cancelled'`
-      )
-    );
-
+    .where(range);
   const byHotel = await db
     .select({
       hotelId: emergencyHotelBookings.hotelId,
       hotelName: emergencyHotels.name,
-      totalCost: sql<number>`COALESCE(SUM(${emergencyHotelBookings.totalCost}), 0)`,
+      totalCost: sql<number>`COALESCE(SUM(${emergencyHotelBookings.totalCost}),0)`,
       bookingCount: sql<number>`COUNT(*)`,
     })
     .from(emergencyHotelBookings)
@@ -432,22 +289,17 @@ export async function getHotelCosts(dateRange: { from: Date; to: Date }) {
       emergencyHotels,
       eq(emergencyHotelBookings.hotelId, emergencyHotels.id)
     )
-    .where(
-      and(
-        gte(emergencyHotelBookings.createdAt, dateRange.from),
-        lte(emergencyHotelBookings.createdAt, dateRange.to),
-        sql`${emergencyHotelBookings.status} != 'cancelled'`
-      )
-    )
+    .where(and(range, liveReceipt))
     .groupBy(emergencyHotelBookings.hotelId, emergencyHotels.name);
-
   return {
     summary: {
-      totalCost: costData[0]?.totalCost ?? 0,
-      activeTotalCost: activeCostData[0]?.activeTotalCost ?? 0,
-      totalBookings: costData[0]?.totalBookings ?? 0,
-      cancelledBookings: costData[0]?.cancelledBookings ?? 0,
-      activeBookings: costData[0]?.activeBookings ?? 0,
+      totalCost: Number(totals?.totalCost ?? 0),
+      activeTotalCost: Number(totals?.activeTotalCost ?? 0),
+      cancellationCost: Number(totals?.cancellationCost ?? 0),
+      totalBookings: Number(totals?.totalBookings ?? 0),
+      activeBookings: Number(totals?.activeBookings ?? 0),
+      cancelledBookings: Number(totals?.cancelledBookings ?? 0),
+      pendingBookings: Number(totals?.pendingBookings ?? 0),
     },
     byHotel,
     dateRange,
@@ -488,7 +340,7 @@ export async function assignTransportation(
       });
     }
 
-    const transportNote = `Transport: ${type} arranged`;
+    const transportNote = `Transport requested: ${type}; provider confirmation required`;
     const existingNotes = existing.notes ? `${existing.notes}\n` : "";
 
     await tx
