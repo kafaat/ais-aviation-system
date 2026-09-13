@@ -168,7 +168,7 @@ Provider calls in these tests are synthetic adapters, not live acceptance.
 | Missing feasibility, operations visibility, worker liveness | 7, 8                                                               | R15, R16; executable worker probe test                                                                                          |
 | External adapters/acceptance and organizational ownership   | Acceptance interfaces, explicit blocked/unknown state and runbooks | Real provider, device and organizational acceptance remains required; see [prerequisites](../operations/provider-acceptance.md) |
 
-Local validation on 2026-09-13: **1,920 passing tests, three pre-existing skips**;
+Validation through patch 9 on 2026-09-13: **1,920 passing tests, three pre-existing skips**;
 the coverage gate passed without lowering thresholds (24% lines, 19.27% branches,
 20.4% functions). The separate MySQL/Redis remediation runner passed **19
 scenarios** and six cryptographic tests. Production API/worker/client builds
@@ -208,3 +208,43 @@ refund replay and debt repayment; R20 covers concurrent family transfers/bonuses
 rollback and funded-group deletion; R21 covers valid and invalid legacy adoption.
 The migrated schema has 38 migrations and 147 tables. See the [legacy reconciliation procedure](../operations/loyalty-reconciliation.md).
 Full-suite results below are separate from this focused validation.
+
+## Patch 11 — Executable Stripe sandbox evidence
+
+- Extend the existing manual workflow with Node 24, prerequisite evidence and the
+  Redis service used by the integration. Preserve a redacted artifact even when
+  preflight fails; a missing prerequisite cannot turn into a passing or skipped
+  provider acceptance result.
+- Add directly verified test captures for two frozen split shares, idempotent
+  capture replay, partial original-payer refunds, recovery of an intentionally
+  withheld acknowledgement from provider history, and cancellation refunds of
+  the remainder through the normal worker.
+- Keep provider credentials and customer details out of evidence. Distinguish
+  direct retrieval from webhook delivery and name scopes that were not exercised.
+- Replace the three old credential-gated router tests with always-running offline
+  tests. Keep live provider assertions in the existing explicit acceptance runner.
+
+Validation: 18 offline tests passed. The complete runner passed seven contracts
+against real MySQL with a simulated Stripe transport (one session, two captures,
+four refunds); this is adapter/control-flow verification, not provider evidence.
+Native Node 24 preflight produced `BLOCKED` with exit 1 when prerequisites were
+absent. Real Stripe execution still requires the configured test key and manual
+workflow run; see the [acceptance procedure](../operations/provider-acceptance.md).
+
+## Follow-up validation
+
+On 2026-09-13 the full MySQL/Redis suite passed **1,944 tests with zero skips** in
+144 test files. Coverage passed unchanged gates: 24.27% lines, 23.93% statements,
+19.47% branches and 20.59% functions. The separate remediation runner passed **22
+scenarios** and six cryptographic tests, including durable scheduler failure
+reporting for unproven historical loyalty accounts. All 16 migration replay
+scenarios and 44 existing transaction acceptance checks passed; schema verification
+reports **38 migrations and 147 tables**. Production builds, all asset budgets,
+zero-warning lint and all three TypeScript configurations passed. Eight Gitleaks
+policy controls and 15 backup/worker probe tests passed. The generated catalog
+contains **185 services: 172 active, 11 retired and two type-only**.
+
+These follow-ups are patches 10 and 11 of the integration remediation, separate
+from the twelve original research patches already present. External provider,
+device, dispatch and organizational acceptance remains unprovided; no ownership
+assignment or production financial correction was invented.
