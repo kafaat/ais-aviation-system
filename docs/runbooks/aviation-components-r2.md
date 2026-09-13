@@ -9,7 +9,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | Patch | Scope                                               | Evidence / status                           |
 | ----- | --------------------------------------------------- | ------------------------------------------- |
 | R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass |
-| R2-02 | Resume publication of an existing release tag       | Pending                                     |
+| R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass         |
 | R2-03 | Atomic gate allocation and conflict prevention      | Pending                                     |
 | R2-04 | Provider-confirmed emergency hotel fulfillment      | Pending                                     |
 | R2-05 | Versioned event contracts                           | Pending                                     |
@@ -32,3 +32,21 @@ retains `null`. Booking disputes retain the booking's tenant. The focused
 `payment-dispute-boundary` suite passes 11 cases, including public and tenant
 wallets and the missing-account rollback. These are transaction-double tests;
 they do not claim live provider acceptance.
+
+## R2-02 — immutable release publication
+
+The release workflow reuses an already pushed version commit/tag only after
+checking its exact parent, version, and absence of code changes. Publication
+reads the release by tag before creating it. A retry after an HTTP 500 uses the
+same commit; an existing release is preserved. Release mutations are serialized.
+
+For an older tag whose GitHub release is missing, dispatch **Release Automation**
+with `resume_tag=vX.Y.Z` and `resume_commit=<full tag commit SHA>`. This path only
+publishes that existing, verified tag; it does not bump a version or dispatch a
+deployment. Leave these two inputs empty for the normal release flow. Never
+move a tag to make recovery pass. The original inert-release-commit guard stays
+in the normal flow, and recovery verifies the same boundary independently.
+
+Tests create real temporary Git histories and simulate release API failures,
+existing releases, altered packages/code, unrelated sources, and remote tag
+drift. No release was published by the local test.

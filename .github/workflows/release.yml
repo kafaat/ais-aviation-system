@@ -28,6 +28,18 @@ on:
         description: "Custom version (leave empty to auto-increment)"
         required: false
         type: string
+      resume_tag:
+        description: "Publish an existing tag without another version bump (optional)"
+        required: false
+        type: string
+      resume_commit:
+        description: "Exact 40-character commit for resume_tag"
+        required: false
+        type: string
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
 
 env:
   NODE_VERSION: "22.x"
@@ -50,10 +62,17 @@ jobs:
 
       - name: Check commits for release triggers
         id: check
+        env:
+          RESUME_TAG: ${{ inputs.resume_tag }}
+          INPUT_RELEASE_TYPE: ${{ inputs.release_type }}
         run: |
+          if [ -n "$RESUME_TAG" ]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "release_type=${{ github.event.inputs.release_type }}" >> $GITHUB_OUTPUT
+            echo "release_type=$INPUT_RELEASE_TYPE" >> $GITHUB_OUTPUT
             exit 0
           fi
 
@@ -103,12 +122,18 @@ jobs:
 
       - name: Calculate new version
         id: version
+        env:
+          CUSTOM_VERSION: ${{ inputs.custom_version }}
         run: |
           CURRENT_VERSION=$(jq -r '.version' package.json)
           echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
-          if [ -n "${{ github.event.inputs.custom_version }}" ]; then
-            NEW_VERSION="${{ github.event.inputs.custom_version }}"
+          if [ -n "$CUSTOM_VERSION" ]; then
+            if ! [[ "$CUSTOM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+              echo "::error::Invalid custom version"
+              exit 1
+            fi
+            NEW_VERSION="$CUSTOM_VERSION"
             echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -219,13 +244,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Update version in package.json
+      - name: Reuse an already pushed release commit or tag
+        id: release-target
+        env:
+          RELEASE_TAG: v${{ needs.version.outputs.new_version }}
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
         run: |
-          npm version ${{ needs.version.outputs.new_version }} --no-git-tag-version
+          git fetch origin main --tags
+          node scripts/ci/release-publication.js prepare
+
+      - name: Update version in package.json
+        if: steps.release-target.outputs.reuse_commit != 'true'
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
+        run: |
+          npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts
 
       - name: Update CHANGELOG.md
+        if: steps.release-target.outputs.reuse_commit != 'true'
+        env:
+          RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
         run: |
-          NEW_CHANGELOG="# Changelog\n\n${{ needs.changelog.outputs.changelog }}\n\n"
+          NEW_CHANGELOG="# Changelog\n\n${RELEASE_NOTES}\n\n"
           if [ -f CHANGELOG.md ]; then
             EXISTING=$(tail -n +3 CHANGELOG.md)
             echo -e "$NEW_CHANGELOG\n---\n\n$EXISTING" > CHANGELOG.md
@@ -234,11 +274,13 @@ jobs:
           fi
 
       - name: Format CHANGELOG.md with Prettier
+        if: steps.release-target.outputs.reuse_commit != 'true'
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm exec prettier --write CHANGELOG.md
 
       - name: Commit version bump
+        if: steps.release-target.outputs.reuse_commit != 'true'
         run: |
           git add package.json CHANGELOG.md
           git commit -m "chore(release): v${{ needs.version.outputs.new_version }}"
@@ -266,25 +308,23 @@ jobs:
           echo "Release commit is limited to the version bump and changelog."
 
       - name: Push version bump
-        run: git push
+        if: steps.release-target.outputs.reuse_commit != 'true'
+        run: git push origin HEAD:main
 
       - name: Create and push tag
+        if: steps.release-target.outputs.tag_exists != 'true'
         run: |
           git tag -a "v${{ needs.version.outputs.new_version }}" \
             -m "Release v${{ needs.version.outputs.new_version }}"
           git push origin "v${{ needs.version.outputs.new_version }}"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          tag_name: v${{ needs.version.outputs.new_version }}
-          name: v${{ needs.version.outputs.new_version }}
-          body: ${{ needs.changelog.outputs.changelog }}
-          draft: false
-          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
-          generate_release_notes: false
+        run: node scripts/ci/release-publication.js publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: v${{ needs.version.outputs.new_version }}
+          RELEASE_SOURCE_SHA: ${{ github.sha }}
+          RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
 
       - name: Notify release
         if: vars.SLACK_WEBHOOK_URL != ''
@@ -306,6 +346,26 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+  resume-publication:
+    name: Resume Existing Release Publication
+    if: github.event_name == 'workflow_dispatch' && inputs.resume_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Publish the verified existing tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.resume_tag }}
+          RELEASE_EXPECTED_SHA: ${{ inputs.resume_commit }}
+        run: node scripts/ci/release-publication.js resume
 
   # =============================================================================
   # Trigger Deployment (Optional)
