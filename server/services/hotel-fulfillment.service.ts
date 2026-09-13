@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db";
 import {
@@ -415,14 +415,23 @@ export async function fulfillHotelRequest(
       (row.providerLeaseUntil && row.providerLeaseUntil.getTime() > Date.now())
     )
       return null;
-    const request = hotelRequest.parse(row.providerRequest);
+    // Report a blocked row instead of throwing here. A throw inside this
+    // transaction rolls back with no lease and no backoff written, so the
+    // scheduled worker re-selects the same row and fails again every minute
+    // for as long as the mismatch lasts, holding the task permanently in error.
+    const parsed = hotelRequest.safeParse(row.providerRequest);
+    if (!parsed.success)
+      return { blocked: "Stored hotel request is unreadable" as const };
+    const request = parsed.data;
     if (
       request.quote.mode !== provider.mode ||
       request.quote.account !== provider.account ||
       !request.approvedAt ||
       !row.requestReference
     )
-      throw new Error("Hotel provider account or approval mismatch");
+      return {
+        blocked: "Hotel provider account or approval mismatch" as const,
+      };
     const action =
       row.status === "pending_provider"
         ? "book"
@@ -453,6 +462,24 @@ export async function fulfillHotelRequest(
     return { row, request, action, reference: row.requestReference };
   });
   if (!claim) return;
+  if ("blocked" in claim) {
+    // Committed outside the claim transaction, so the failure is recorded and
+    // backed off exactly like any other. Skipped if a worker has since leased
+    // the row; that worker owns the outcome.
+    await db
+      .update(emergencyHotelBookings)
+      .set({
+        providerNextAttemptAt: new Date(Date.now() + 5 * 60000),
+        providerLastError: claim.blocked,
+      })
+      .where(
+        and(
+          eq(emergencyHotelBookings.id, id),
+          isNull(emergencyHotelBookings.providerLease)
+        )
+      );
+    throw new Error(claim.blocked);
+  }
   const { row, request, action, reference } = claim;
   try {
     let receipt: HotelReceipt | null;
@@ -610,6 +637,10 @@ export async function processHotelFulfillment() {
         )
       )
     )
+    // Oldest next-attempt first, and MySQL sorts NULL first ascending, so a
+    // never-attempted booking always leads. Without this a page of rows that
+    // can never resolve would hold every slot and silently starve new work.
+    .orderBy(asc(emergencyHotelBookings.providerNextAttemptAt))
     .limit(25);
   const failed: number[] = [];
   for (const row of rows) {

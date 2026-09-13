@@ -325,6 +325,10 @@ jobs:
           RELEASE_TAG: v${{ needs.version.outputs.new_version }}
           RELEASE_SOURCE_SHA: ${{ github.sha }}
           RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
+          # Empty on a push, where the tag suffix decides. On a dispatch the
+          # operator's choice must reach the release, including a custom
+          # version, which never receives the -rc suffix.
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
 
       - name: Notify release
         if: vars.SLACK_WEBHOOK_URL != ''

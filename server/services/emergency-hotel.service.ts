@@ -275,7 +275,10 @@ export async function getHotelCosts(dateRange: { from: Date; to: Date }) {
       totalBookings: sql<number>`COUNT(*)`,
       activeBookings: sql<number>`COALESCE(SUM(CASE WHEN ${active} THEN 1 ELSE 0 END),0)`,
       cancelledBookings: sql<number>`COALESCE(SUM(CASE WHEN ${emergencyHotelBookings.status} = 'cancelled' THEN 1 ELSE 0 END),0)`,
-      pendingBookings: sql<number>`COALESCE(SUM(CASE WHEN ${emergencyHotelBookings.status} IN ('reserved','requested','pending_provider','outcome_unknown','cancellation_pending','cancellation_unknown','rejected') THEN 1 ELSE 0 END),0)`,
+      // sandbox_confirmed is not a real reservation, so it stays outstanding
+      // rather than active; leaving it out of every bucket hid those rows
+      // from all three tiles while they still counted toward the total.
+      pendingBookings: sql<number>`COALESCE(SUM(CASE WHEN ${emergencyHotelBookings.status} IN ('reserved','requested','pending_provider','outcome_unknown','cancellation_pending','cancellation_unknown','rejected','sandbox_confirmed') THEN 1 ELSE 0 END),0)`,
     })
     .from(emergencyHotelBookings)
     .where(range);
@@ -335,10 +338,22 @@ export async function assignTransportation(
         message: "Hotel booking not found",
       });
 
-    if (existing.status === "cancelled" || existing.status === "no_show") {
+    // R2-04 added states in which no stay exists yet, or one is being undone.
+    // Attaching transport to those would report success for a trip nobody has.
+    if (
+      [
+        "cancelled",
+        "no_show",
+        "rejected",
+        "outcome_unknown",
+        "cancellation_pending",
+        "cancellation_unknown",
+      ].includes(existing.status)
+    ) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "Cannot assign transport to cancelled or no-show booking",
+        message:
+          "Cannot assign transport to a cancelled, rejected or unreconciled booking",
       });
     }
 

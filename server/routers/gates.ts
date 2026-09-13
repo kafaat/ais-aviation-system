@@ -2,6 +2,7 @@ import { responseContracts } from "../contracts/gates";
 import { z } from "zod";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as gateService from "../services/gate.service";
+import { isAdmin } from "../services/rbac.service";
 
 /**
  * Gates Router
@@ -125,7 +126,9 @@ export const gatesRouter = router({
         actor: {
           userId: ctx.user.id,
           tenantId: ctx.tenantId ?? null,
-          platformAdmin: true,
+          // Only platform roles cross tenants. Hardcoding true made the tenant
+          // check in lockFlight dead code the moment a scoped role is added.
+          platformAdmin: isAdmin(ctx.user.role),
         },
       });
     }),
@@ -162,7 +165,9 @@ export const gatesRouter = router({
         actor: {
           userId: ctx.user.id,
           tenantId: ctx.tenantId ?? null,
-          platformAdmin: true,
+          // Only platform roles cross tenants. Hardcoding true made the tenant
+          // check in lockFlight dead code the moment a scoped role is added.
+          platformAdmin: isAdmin(ctx.user.role),
         },
       });
 
@@ -193,7 +198,9 @@ export const gatesRouter = router({
       return await gateService.releaseGate(input.flightId, {
         userId: ctx.user.id,
         tenantId: ctx.tenantId ?? null,
-        platformAdmin: true,
+        // Only platform roles cross tenants. Hardcoding true made the tenant
+        // check in lockFlight dead code the moment a scoped role is added.
+        platformAdmin: isAdmin(ctx.user.role),
       });
     }),
 
