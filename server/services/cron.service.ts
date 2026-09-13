@@ -29,6 +29,16 @@ export async function cleanupExpiredLocks() {
 
 export const PERIODIC_JOB_CATALOG = [
   {
+    name: "flightCancellationRefunds",
+    cron: "* * * * *",
+    periodMs: 60000,
+    run: async () => {
+      const { processFlightCancellations } =
+        await import("./flight-cancellation.service");
+      await processFlightCancellations();
+    },
+  },
+  {
     name: "channelAllocationExpiry",
     cron: "* * * * *",
     periodMs: 60000,

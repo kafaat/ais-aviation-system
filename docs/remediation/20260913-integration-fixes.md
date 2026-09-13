@@ -65,3 +65,27 @@ expiration passed on disposable MySQL. The runner now covers ten scenarios.
 
 Validation: R05, R07/R08 (including an injected history-write failure), and R12
 passed on MySQL; thirteen regression scenarios and six crypto tests pass.
+
+## Patch 5 — Resumable refunds and independent event effects
+
+- Flight cancellation captures durable booking jobs; each original Stripe payer
+  receives a saved refund request. Provider acknowledgement, local cancellation,
+  and completed refunds remain separate states. Unpaid cancellations are excluded
+  from refund counts. Unknown outcomes reconcile provider history with stable keys.
+- Split funding can be cancelled only when every remaining payer balance has its
+  own cancellation request. Missing original collection evidence requires review.
+- Each event consumer has its own durable receipt. Local effects and receipts
+  commit together; external effects use fenced leases and stable provider keys.
+  Email failure no longer prevents loyalty, notifications or external-bus delivery.
+  Unregistered envelopes are archived without claiming domain handling.
+- Booking miles and tier points converge on net posted funding. Partial/full
+  refunds, repeated delivery and late confirmation cannot inflate awards. A refund
+  after redemption can leave a negative balance; refunds are not redemptions.
+- Migrations 0034/0035 preserve existing receipts and add cancellation jobs,
+  booking accrual balances and consumer delivery receipts.
+
+Validation: fifteen MySQL scenarios and six crypto tests pass. R09 covers two
+original payers, timeout after provider success, restart/reconciliation and no
+extra provider create or ledger write. R13 covers independent effects, partial and
+full refunds, duplicate/reordered delivery and archive-only event semantics.
+Provider calls in these tests are synthetic adapters, not live acceptance.

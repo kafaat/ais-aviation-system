@@ -239,6 +239,20 @@
       "when": 1789259203618,
       "tag": "0033_channel_inventory_allocations",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "5",
+      "when": 1789260140943,
+      "tag": "0034_flight_cancellation_refunds",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "5",
+      "when": 1789260537949,
+      "tag": "0035_event_consumer_and_loyalty_receipts",
+      "breakpoints": true
     }
   ]
 }

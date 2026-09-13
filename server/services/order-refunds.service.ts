@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { createServiceLogger } from "../_core/logger";
+const log = createServiceLogger("order-refunds");
 import { and, asc, eq, inArray, lte } from "drizzle-orm";
 import type Stripe from "stripe";
 import { getDb } from "../db";
@@ -43,8 +45,9 @@ export async function assertNoOrderRefundPending(
 export async function planOrderRefund(
   tx: SettlementTx,
   booking: Booking,
-  modificationId: number,
-  amount: number
+  modificationId: number | null,
+  amount: number,
+  cancellationFlightId?: number
 ) {
   await assertNoOrderRefundPending(tx, booking.id);
   const [cancellation] = await tx
@@ -100,11 +103,12 @@ export async function planOrderRefund(
       id: randomUUID(),
       bookingId: booking.id,
       modificationId,
+      cancellationFlightId: cancellationFlightId ?? null,
       paymentIntentId: receipt.paymentIntentId,
       amount: part.refundAmount,
       baseRefundedAmount: receipt.refundedAmount,
       status: "queued",
-      nextAttemptAt: new Date(),
+      nextAttemptAt: new Date(Math.floor(Date.now() / 1000) * 1000),
     });
   }
   await recordEvent(tx, {
@@ -270,7 +274,9 @@ async function processOrderRefund(id: string) {
             amount: item.amount,
             metadata: {
               orderServiceRefundId: item.id,
-              modificationId: String(item.modificationId),
+              ...(item.modificationId !== null
+                ? { modificationId: String(item.modificationId) }
+                : { cancellationFlightId: String(item.cancellationFlightId) }),
             },
           },
           { idempotencyKey: `order-refund:${item.id}` }
@@ -285,6 +291,10 @@ async function processOrderRefund(id: string) {
       )
     );
   } catch (error) {
+    log.error(
+      { err: error, refundRequestId: id },
+      "Refund transport or reconciliation failed"
+    );
     const code = error instanceof Error ? error.message : "provider_error";
     if (
       [

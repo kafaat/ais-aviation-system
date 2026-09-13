@@ -1,8 +1,10 @@
 /** Correct-behaviour regression gates against an EMPTY disposable MySQL database.
  * Provider HTTP is stubbed; no claim of external aviation/provider acceptance. */
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import type Stripe from "stripe";
 import { writeFile } from "node:fs/promises";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
 import type { TrpcContext } from "../../server/_core/context";
 
@@ -762,6 +764,335 @@ try {
         explicitInvalidArrivalRejected: true,
         operationalApprovalsInvalidated: true,
       };
+    }
+  );
+  await record(
+    "R09",
+    "Cancellation resumes each original payer after an unknown provider outcome",
+    async () => {
+      const { requestFlightCancellation, processFlightCancellations } =
+        await import("../../server/services/flight-cancellation.service");
+      const { stripe } = await import("../../server/stripe");
+      await booking(13, 13, 1, true);
+      await booking(14, 13, 1, false);
+      await db
+        .update(s.flights)
+        .set({ economyAvailable: 9 })
+        .where(eq(s.flights.id, id + 13));
+      for (const [part, amount] of [
+        [1, 4000],
+        [2, 6000],
+      ]) {
+        const intent = `pi_audit_cancel_${part}`;
+        await db.insert(s.paymentSplits).values({
+          id: id + part,
+          bookingId: id + 13,
+          payerEmail: `payer${part}@example.invalid`,
+          payerName: `Payer ${part}`,
+          amount,
+          percentage: String(amount / 100),
+          status: "paid",
+          stripePaymentIntentId: intent,
+          paymentToken: `audit-cancel-payer-${part}`,
+        });
+        await db.insert(s.paymentReceipts).values({
+          paymentIntentId: intent,
+          kind: "split_payment",
+          bookingId: id + 13,
+          userId: id,
+          targetId: id + part,
+          amount,
+          currency: "SAR",
+        });
+      }
+      const original = {
+        create: stripe.refunds.create,
+        list: stripe.refunds.list,
+        retrieve: stripe.refunds.retrieve,
+      };
+      const provider = new Map<string, Stripe.Refund>();
+      const keys: string[] = [];
+      stripe.refunds.list = ((params: Stripe.RefundListParams) => ({
+        async *[Symbol.asyncIterator]() {
+          for (const r of provider.values())
+            if (r.payment_intent === params.payment_intent) yield r;
+        },
+      })) as unknown as typeof stripe.refunds.list;
+      stripe.refunds.create = (async (
+        params: Stripe.RefundCreateParams,
+        options: Stripe.RequestOptions
+      ) => {
+        keys.push(options.idempotencyKey ?? "");
+        const intent = String(params.payment_intent);
+        const refund = {
+          id: `re_audit_${provider.size + 1}`,
+          object: "refund",
+          amount: params.amount,
+          currency: "sar",
+          payment_intent: intent,
+          charge: `ch_${intent}`,
+          status: "succeeded",
+          metadata: params.metadata ?? {},
+        } as Stripe.Refund;
+        provider.set(intent, refund);
+        if (intent.endsWith("_2"))
+          throw new Error("Synthetic timeout AFTER provider committed");
+        return refund;
+      }) as typeof stripe.refunds.create;
+      stripe.refunds.retrieve = (async (refundId: string) => {
+        const r = [...provider.values()].find(r => r.id === refundId);
+        assert(r);
+        return r;
+      }) as typeof stripe.refunds.retrieve;
+      try {
+        const requested = await requestFlightCancellation({
+          flightId: id + 13,
+          reason: "Synthetic cancellation",
+          actorId: id,
+        });
+        assert.equal(requested.requestedBookings, 2);
+        assert.equal(requested.refundedBookings, 0);
+        await processFlightCancellations();
+        let items = await db
+          .select()
+          .from(s.orderServiceRefunds)
+          .where(eq(s.orderServiceRefunds.cancellationFlightId, id + 13));
+        assert.equal(items.length, 2);
+        assert.equal(
+          items.filter(r => r.status === "succeeded").length,
+          1,
+          JSON.stringify(items)
+        );
+        let receipts = await db
+          .select()
+          .from(s.paymentReceipts)
+          .where(eq(s.paymentReceipts.bookingId, id + 13));
+        assert.equal(
+          receipts.reduce((n, r) => n + r.refundedAmount, 0),
+          4000
+        );
+        await db
+          .update(s.orderServiceRefunds)
+          .set({ nextAttemptAt: hour(-1) })
+          .where(eq(s.orderServiceRefunds.cancellationFlightId, id + 13));
+        await processFlightCancellations();
+        const resumed = await requestFlightCancellation({
+          flightId: id + 13,
+          reason: "Same cancellation retry",
+          actorId: id,
+        });
+        assert.equal(resumed.completedBookings, 2);
+        assert.equal(
+          resumed.refundedBookings,
+          1,
+          "Unpaid cancellation is not a refund"
+        );
+        assert.equal(resumed.pendingBookings, 0);
+        assert.equal(resumed.reviewRequiredBookings, 0);
+        await processFlightCancellations();
+        items = await db
+          .select()
+          .from(s.orderServiceRefunds)
+          .where(eq(s.orderServiceRefunds.cancellationFlightId, id + 13));
+        assert(items.every(r => r.status === "succeeded"));
+        receipts = await db
+          .select()
+          .from(s.paymentReceipts)
+          .where(eq(s.paymentReceipts.bookingId, id + 13));
+        assert.equal(
+          receipts.reduce((n, r) => n + r.refundedAmount, 0),
+          10000
+        );
+        assert.equal(
+          keys.length,
+          2,
+          "List reconciliation must recover the unknown outcome without another create"
+        );
+        assert.equal(new Set(keys).size, 2);
+        assert(keys.every(k => k.startsWith("order-refund:")));
+        const ledger = await db
+          .select()
+          .from(s.financialLedger)
+          .where(eq(s.financialLedger.bookingId, id + 13));
+        assert.equal(ledger.length, 2);
+        const [cancelled] = await db
+          .select()
+          .from(s.bookings)
+          .where(eq(s.bookings.id, id + 13));
+        assert.equal(cancelled.status, "cancelled");
+        assert.equal(cancelled.paymentStatus, "refunded");
+        return {
+          originalPayers: 2,
+          providerCreates: keys.length,
+          refundedMinorUnits: 10000,
+          duplicateLedgerWrites: 0,
+          unpaidNotCountedAsRefund: true,
+        };
+      } finally {
+        Object.assign(stripe.refunds, original);
+      }
+    }
+  );
+  await record(
+    "R13",
+    "Independent event receipts and net loyalty survive email failure, duplicates and reordered refunds",
+    async () => {
+      const { consumeLocalEvent, deliverExternalEffect } =
+        await import("../../server/services/event-inbox.service");
+      const { configuredPublisher } =
+        await import("../../server/services/outbox.service");
+      const { settleVerifiedRefund } =
+        await import("../../server/services/payment-settlement.service");
+      const { awardMilesForBooking } =
+        await import("../../server/services/loyalty.service");
+      await db.insert(s.paymentReceipts).values({
+        paymentIntentId: "pi_audit_loyalty",
+        kind: "booking",
+        bookingId: id + 9,
+        userId: id,
+        targetId: id + 9,
+        amount: 10000,
+        currency: "SAR",
+      });
+      const [baseEvent] = await db.select().from(s.outbox).limit(1);
+      assert(baseEvent);
+      const event: s.OutboxEvent = {
+        ...baseEvent,
+        eventId: randomUUID(),
+        eventType: "booking.confirmed",
+        aggregateId: String(id + 9),
+        aggregateType: "booking",
+        tenantId: id,
+        payload: { bookingId: id + 9 },
+      };
+      process.env.OUTBOX_PUBLISH_URL = "https://audit.invalid/events";
+      process.env.OUTBOX_PUBLISH_TOKEN = "synthetic-event-transport";
+      try {
+        await assert.rejects(configuredPublisher(event), /delivery incomplete/);
+        const [account] = await db
+          .select()
+          .from(s.loyaltyAccounts)
+          .where(eq(s.loyaltyAccounts.userId, id));
+        assert.equal(
+          account.currentMilesBalance,
+          100,
+          "Missing email must not block miles"
+        );
+        const delivery = await db
+          .select()
+          .from(s.eventDeliveries)
+          .where(eq(s.eventDeliveries.eventId, event.eventId));
+        assert.equal(
+          delivery.find(d => d.consumer === "booking-email")?.status,
+          "failed"
+        );
+        assert.equal(
+          delivery.find(d => d.consumer === "external-bus")?.status,
+          "processed"
+        );
+        assert.equal(
+          delivery.find(d => d.consumer === "notifications")?.status,
+          "processed"
+        );
+        let retries = 0;
+        await deliverExternalEffect(event, "booking-email", () => {
+          retries++;
+          return Promise.resolve();
+        });
+        await configuredPublisher(event);
+        await configuredPublisher(event);
+        assert.equal(retries, 1);
+        const messages = await db
+          .select()
+          .from(s.notifications)
+          .where(
+            and(
+              eq(s.notifications.userId, id),
+              sql`${s.notifications.data} LIKE ${`%${event.eventId}%`}`
+            )
+          );
+        assert.equal(messages.length, 1);
+        const award = await awardMilesForBooking(id, id + 9, 999999999, id + 9);
+        assert.equal(
+          award.milesEarned,
+          0,
+          "Caller-supplied price cannot inflate ledger accrual"
+        );
+        await db.transaction(tx =>
+          settleVerifiedRefund(tx, {
+            paymentIntentId: "pi_audit_loyalty",
+            chargeId: "ch_audit_loyalty",
+            amount: 10000,
+            amountRefunded: 4000,
+            currency: "SAR",
+            eventId: "audit_partial_refund",
+          })
+        );
+        const partial = {
+          ...event,
+          eventId: randomUUID(),
+          eventType: "payment.refunded",
+          aggregateType: "payment",
+          aggregateId: "pi_audit_loyalty",
+        };
+        await consumeLocalEvent(partial);
+        const [afterPartial] = await db
+          .select()
+          .from(s.loyaltyAccounts)
+          .where(eq(s.loyaltyAccounts.userId, id));
+        assert.equal(afterPartial.currentMilesBalance, 60);
+        assert.equal(afterPartial.tierPoints, 60);
+        await db.transaction(tx =>
+          settleVerifiedRefund(tx, {
+            paymentIntentId: "pi_audit_loyalty",
+            chargeId: "ch_audit_loyalty",
+            amount: 10000,
+            amountRefunded: 10000,
+            currency: "SAR",
+            eventId: "audit_full_refund",
+          })
+        );
+        await consumeLocalEvent({ ...partial, eventId: randomUUID() });
+        await consumeLocalEvent({ ...event, eventId: randomUUID() }); // late confirmation
+        await consumeLocalEvent(partial); // old partial after full refund
+        const [after] = await db
+          .select()
+          .from(s.loyaltyAccounts)
+          .where(eq(s.loyaltyAccounts.userId, id));
+        assert.equal(after.currentMilesBalance, 0);
+        assert.equal(after.tierPoints, 0);
+        assert.equal(after.milesRedeemed, 0, "Refund is not redemption");
+        const unknown = {
+          ...event,
+          eventId: randomUUID(),
+          eventType: "audit.unregistered",
+        };
+        assert.equal((await consumeLocalEvent(unknown)).archivedOnly, true);
+        const [archive] = await db
+          .select()
+          .from(s.eventInbox)
+          .where(eq(s.eventInbox.eventId, unknown.eventId));
+        assert.equal(
+          archive.processedAt,
+          null,
+          "Storage is not domain handling"
+        );
+        await assert.rejects(
+          consumeLocalEvent({ ...event, tenantId: id + 1 }),
+          /conflicts/
+        );
+        return {
+          emailFailureIsolated: true,
+          externalBusDelivered: true,
+          duplicateNotifications: 0,
+          partialRefundBalance: 60,
+          fullRefundBalance: 0,
+          archiveIsNotHandling: true,
+        };
+      } finally {
+        delete process.env.OUTBOX_PUBLISH_URL;
+        delete process.env.OUTBOX_PUBLISH_TOKEN;
+      }
     }
   );
   await writeFile(

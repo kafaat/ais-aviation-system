@@ -5699,7 +5699,8 @@ export const orderServiceRefunds = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     bookingId: int("bookingId").notNull(),
-    modificationId: int("modificationId").notNull(),
+    modificationId: int("modificationId"),
+    cancellationFlightId: int("cancellationFlightId"),
     paymentIntentId: varchar("paymentIntentId", { length: 255 }).notNull(),
     amount: int("amount").notNull(),
     baseRefundedAmount: int("baseRefundedAmount").notNull(),
@@ -5831,3 +5832,72 @@ export const premiumConversions = mysqlTable("premium_conversions", {
   offerId: varchar("offerId", { length: 36 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+/** Durable flight cancellation targets; money completion comes from payer receipts. */
+export const flightCancellationJobs = mysqlTable(
+  "flight_cancellation_jobs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    bookingId: int("bookingId").notNull(),
+    reason: varchar("reason", { length: 500 }).notNull(),
+    actorId: int("actorId"),
+    status: mysqlEnum("status", [
+      "queued",
+      "planned",
+      "completed",
+      "review_required",
+    ])
+      .default("queued")
+      .notNull(),
+    errorCode: varchar("errorCode", { length: 100 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    target: uniqueIndex("flight_cancel_booking_unique").on(
+      t.flightId,
+      t.bookingId
+    ),
+    pending: index("flight_cancel_status_idx").on(t.status),
+  })
+);
+
+/** Frozen earning policy and the net miles already applied for one invoice. */
+export const bookingLoyaltyAccruals = mysqlTable("booking_loyalty_accruals", {
+  bookingId: int("bookingId").primaryKey(),
+  userId: int("userId").notNull(),
+  multiplier: decimal("multiplier", { precision: 5, scale: 2 }).notNull(),
+  awardedMiles: int("awardedMiles").default(0).notNull(),
+  awardedTierPoints: int("awardedTierPoints").default(0).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+/** Each effect has its own receipt; external effects use stable idempotency keys. */
+export const eventDeliveries = mysqlTable(
+  "event_deliveries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    eventId: varchar("eventId", { length: 36 }).notNull(),
+    consumer: varchar("consumer", { length: 100 }).notNull(),
+    status: mysqlEnum("status", [
+      "pending",
+      "processing",
+      "processed",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    leaseToken: varchar("leaseToken", { length: 36 }),
+    leaseUntil: timestamp("leaseUntil"),
+    processedAt: timestamp("processedAt"),
+    lastError: varchar("lastError", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    receipt: uniqueIndex("event_consumer_unique").on(t.eventId, t.consumer),
+    pending: index("event_delivery_status_idx").on(t.status, t.updatedAt),
+  })
+);

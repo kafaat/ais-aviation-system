@@ -260,7 +260,10 @@ export const adminRouter = router({
         .where(eq(flights.id, input.flightId))
         .limit(1);
 
-      const result = await flightStatusService.cancelFlightAndRefund(input);
+      const result = await flightStatusService.cancelFlightAndRefund({
+        ...input,
+        actorId: ctx.user.id,
+      });
 
       // Audit log: Flight cancelled with refunds
       if (existingFlight) {
