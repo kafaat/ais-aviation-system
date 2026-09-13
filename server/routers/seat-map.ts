@@ -394,6 +394,7 @@ export const seatMapRouter = router({
       z.object({
         bookingId: z.number().positive(),
         passengerId: z.number().positive(),
+        flightId: z.number().int().positive().optional(),
       })
     )
     .output(responseContracts["getPassengerSeat"])
@@ -403,7 +404,8 @@ export const seatMapRouter = router({
 
       return await seatMapService.getPassengerSeat(
         input.bookingId,
-        input.passengerId
+        input.passengerId,
+        input.flightId
       );
     }),
 

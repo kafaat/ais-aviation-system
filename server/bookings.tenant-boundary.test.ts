@@ -24,11 +24,7 @@ describe("booking tenant boundary", () => {
     );
   });
 
-  it("binds check-in passenger updates to both booking and tenant", () => {
-    expect(routerSource).toContain("eq(passengers.bookingId, input.bookingId)");
-    expect(routerSource).toContain("eq(passengers.tenantId, ctx.tenantId)");
-    expect(routerSource).toContain("Passenger does not belong to this booking");
-  });
+  // Check-in ownership is exercised through the real router in integration-remediation R01.
 
   it("binds cancellation inventory restoration to the tenant", () => {
     expect(serviceSource).toContain("eq(bookings.tenantId, tenantId)");

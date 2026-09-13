@@ -1,3 +1,4 @@
+import { z } from "zod";
 import ts from "typescript";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, relative } from "node:path";
@@ -82,6 +83,40 @@ for (const entry of ["server/_core/index.ts", "server/worker.ts"]) reach(entry);
 const lifecycle = JSON.parse(
   readFileSync("docs/architecture/service-lifecycle.json", "utf8")
 );
+const ownership = z
+  .object({
+    schemaVersion: z.literal(1),
+    repositoryFallback: z.string(),
+    fallbackDomain: z.string(),
+    domains: z.array(
+      z.object({
+        id: z.string(),
+        match: z.string(),
+        accountableOwner: z.string().min(1).nullable(),
+        onCall: z.string().min(1).nullable(),
+        acceptanceEvidence: z.string().min(1).nullable(),
+      })
+    ),
+  })
+  .parse(
+    JSON.parse(readFileSync("docs/architecture/service-ownership.json", "utf8"))
+  );
+function ownershipFor(file: string) {
+  const domain =
+    ownership.domains.find(d => new RegExp(d.match).test(file)) ??
+    ownership.domains.find(d => d.id === ownership.fallbackDomain);
+  if (!domain) throw new Error(`No ownership domain for ${file}`);
+  return {
+    domain: domain.id,
+    accountableOwner: domain.accountableOwner,
+    onCall: domain.onCall,
+    ownershipAcceptance: domain.acceptanceEvidence,
+    ownershipStatus:
+      domain.accountableOwner && domain.onCall && domain.acceptanceEvidence
+        ? "assigned"
+        : "unassigned",
+  };
+}
 const services = [...graph.keys()]
   .filter(key => key.startsWith("server/services/"))
   .sort()
@@ -95,7 +130,7 @@ const services = [...graph.keys()]
           ? "active"
           : "unwired",
     technicalOwner: file,
-    accountableOwner: null,
+    ...ownershipFor(file),
     consumers: [...(imports.get(file) ?? [])].sort(),
     dependencies: [...(graph.get(file) ?? [])].sort(),
     tableExpressions: operations.get(file),
@@ -115,7 +150,7 @@ for (const service of services.filter(
 const output =
   JSON.stringify(
     {
-      schemaVersion: 1,
+      schemaVersion: 2,
       method:
         "Static TypeScript import graph from API and worker; table expressions require domain review; deployment reachability is not certification",
       services,

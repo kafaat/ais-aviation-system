@@ -261,40 +261,60 @@ export async function relayOutbox(
 
 /** Delivery is at least once; downstream receivers deduplicate the stable eventId. */
 export const configuredPublisher: OutboxPublisher = async event => {
-  if (event.eventType === "booking.confirmed") {
-    const { sendConfirmationAndAwardMiles } =
-      await import("../webhooks/stripe");
-    await sendConfirmationAndAwardMiles(Number(event.aggregateId));
-    return;
+  const { consumeLocalEvent, deliverExternalEffect } =
+    await import("./event-inbox.service");
+  const effects: Promise<unknown>[] = [consumeLocalEvent(event)];
+  if (event.eventType === "booking.confirmed")
+    effects.push(
+      deliverExternalEffect(event, "booking-email", async () => {
+        const { sendBookingConfirmationEmail } =
+          await import("../webhooks/stripe");
+        await sendBookingConfirmationEmail(
+          Number(event.aggregateId),
+          event.tenantId
+        );
+      })
+    );
+  if (event.eventType === "flight.status_changed") {
+    const { deliverFlightStatusEmails } =
+      await import("./flight-event-delivery.service");
+    effects.push(deliverFlightStatusEmails(event));
   }
   const endpoint = process.env.OUTBOX_PUBLISH_URL;
   const token = process.env.OUTBOX_PUBLISH_TOKEN;
-  if (!endpoint) {
-    const { consumeLocalEvent } = await import("./event-inbox.service");
-    await consumeLocalEvent(event);
-    return;
-  }
-  if (!token)
-    throw new Error("Configured outbox receiver requires authentication");
-  if (
-    process.env.NODE_ENV === "production" &&
-    new URL(endpoint).protocol !== "https:"
-  )
-    throw new Error("Outbox receiver requires HTTPS");
-  const response = await fetch(endpoint, {
-    method: "POST",
-    redirect: "error",
-    signal: AbortSignal.timeout(15000),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      "Idempotency-Key": event.eventId,
-    },
-    body: JSON.stringify(event),
-  });
-  if (!response.ok)
-    throw new Error(
-      `Outbox receiver rejected delivery: HTTP ${response.status}`
+  if (endpoint)
+    effects.push(
+      deliverExternalEffect(event, "external-bus", async () => {
+        if (!token)
+          throw new Error("Configured outbox receiver requires authentication");
+        if (
+          process.env.NODE_ENV === "production" &&
+          new URL(endpoint).protocol !== "https:"
+        )
+          throw new Error("Outbox receiver requires HTTPS");
+        const response = await fetch(endpoint, {
+          method: "POST",
+          redirect: "error",
+          signal: AbortSignal.timeout(15000),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            "Idempotency-Key": event.eventId,
+          },
+          body: JSON.stringify(event),
+        });
+        if (!response.ok)
+          throw new Error(
+            `Outbox receiver rejected delivery: HTTP ${response.status}`
+          );
+      })
+    );
+  const results = await Promise.allSettled(effects);
+  const failed = results.filter(r => r.status === "rejected");
+  if (failed.length)
+    throw new AggregateError(
+      failed.map(f => f.reason),
+      "Outbox consumer delivery incomplete"
     );
 };
 

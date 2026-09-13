@@ -12,7 +12,13 @@ let fixture: ReturnType<typeof transactionMemory>;
 beforeEach(() => {
   fixture = transactionMemory({
     flights: [
-      { id: 1, economyAvailable: 1, businessAvailable: 1, status: "scheduled" },
+      {
+        id: 1,
+        economyAvailable: 1,
+        businessAvailable: 1,
+        status: "scheduled",
+        departureTime: new Date(Date.now() + 86400000),
+      },
     ],
     inventory_locks: [
       {

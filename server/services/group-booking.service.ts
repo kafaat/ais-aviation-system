@@ -1,9 +1,15 @@
+import {
+  createInventoryLock,
+  releaseInventoryLock,
+} from "./inventory-lock.service";
+import { recordEvent } from "./outbox.service";
 import { TRPCError } from "@trpc/server";
-import { eq, desc, and, gte, sql, SQL } from "drizzle-orm";
+import { eq, desc, and, sql, SQL, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   groupBookings,
   flights,
+  users,
   type GroupBooking,
 } from "../../drizzle/schema";
 
@@ -22,20 +28,8 @@ export const DISCOUNT_TIERS = {
   LARGE: { min: 50, max: Infinity, discount: 15 }, // 15% discount
 } as const;
 
-function getAffectedRows(result: unknown): number {
-  if (Array.isArray(result)) {
-    const first = result[0];
-    if (first && typeof first === "object" && "affectedRows" in first) {
-      return Number((first as { affectedRows?: number }).affectedRows ?? 0);
-    }
-  }
-  if (result && typeof result === "object" && "rowsAffected" in result) {
-    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);
-  }
-  return 0;
-}
-
 export interface CreateGroupBookingInput {
+  organizerUserId?: number;
   organizerName: string;
   organizerEmail: string;
   organizerPhone: string;
@@ -98,7 +92,11 @@ export async function createGroupBookingRequest(
   }
 
   // Validate group size
-  if (data.groupSize < MIN_GROUP_SIZE) {
+  if (
+    !Number.isSafeInteger(data.groupSize) ||
+    data.groupSize < MIN_GROUP_SIZE ||
+    data.groupSize > 600
+  ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: `Group size must be at least ${MIN_GROUP_SIZE} passengers`,
@@ -138,6 +136,7 @@ export async function createGroupBookingRequest(
 
   // Create the group booking request
   const result = await db.insert(groupBookings).values({
+    organizerUserId: data.organizerUserId,
     organizerName: data.organizerName,
     organizerEmail: data.organizerEmail,
     organizerPhone: data.organizerPhone,
@@ -235,121 +234,96 @@ export async function getGroupBookingById(
 export async function approveGroupBooking(
   id: number,
   discountPercent: number,
-  adminUserId: number
+  adminUserId: number,
+  organizerUserId?: number
 ): Promise<GroupBooking> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  return db.transaction(async tx => {
-    const [booking] = await tx
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  if (
+    !Number.isFinite(discountPercent) ||
+    discountPercent < 0 ||
+    discountPercent > 100
+  )
+    throw new Error("Invalid group discount");
+  return await db.transaction(async tx => {
+    const [group] = await tx
       .select()
       .from(groupBookings)
       .where(eq(groupBookings.id, id))
-      .limit(1);
-
-    if (!booking) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Group booking request not found",
-      });
-    }
-
-    if (booking.status !== "pending") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Cannot approve a ${booking.status} group booking`,
-      });
-    }
-
-    const [flightData] = await tx
+      .for("update");
+    if (!group || group.status !== "pending")
+      throw new Error("Group request is not pending");
+    const ownerId = group.organizerUserId ?? organizerUserId;
+    const [owner] = ownerId
+      ? await tx.select().from(users).where(eq(users.id, ownerId))
+      : [];
+    if (
+      !owner ||
+      (!group.organizerUserId &&
+        owner.email?.toLowerCase() !== group.organizerEmail.toLowerCase())
+    )
+      throw new Error(
+        "Assign the organizer's identified customer account before allocating seats"
+      );
+    const [flight] = await tx
       .select()
       .from(flights)
-      .where(eq(flights.id, booking.flightId))
-      .limit(1);
-
-    if (!flightData) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-    }
-
-    const cabinClass = booking.cabinClass ?? "economy";
-    const pricePerSeat =
-      cabinClass === "economy"
-        ? flightData.economyPrice
-        : flightData.businessPrice;
-    const basePrice = pricePerSeat * booking.groupSize;
-    const discountAmount = Math.round(basePrice * (discountPercent / 100));
-    const totalPrice = basePrice - discountAmount;
-
-    const seatUpdate =
-      cabinClass === "economy"
-        ? await tx
-            .update(flights)
-            .set({
-              economyAvailable: sql`${flights.economyAvailable} - ${booking.groupSize}`,
-            })
-            .where(
-              and(
-                eq(flights.id, booking.flightId),
-                gte(flights.economyAvailable, booking.groupSize)
-              )
-            )
-        : await tx
-            .update(flights)
-            .set({
-              businessAvailable: sql`${flights.businessAvailable} - ${booking.groupSize}`,
-            })
-            .where(
-              and(
-                eq(flights.id, booking.flightId),
-                gte(flights.businessAvailable, booking.groupSize)
-              )
-            );
-
-    if (getAffectedRows(seatUpdate) !== 1) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Not enough ${cabinClass} seats available`,
-      });
-    }
-
-    const bookingUpdate = await tx
+      .where(eq(flights.id, group.flightId))
+      .for("update");
+    if (
+      !flight ||
+      (flight.tenantId !== null && owner.tenantId !== flight.tenantId)
+    )
+      throw new Error("Group customer and flight tenant do not match");
+    const hold = await createInventoryLock(
+      group.flightId,
+      group.groupSize,
+      group.cabinClass,
+      `group:${id}`,
+      owner.id,
+      tx,
+      1440
+    );
+    const basePrice =
+      (group.cabinClass === "economy"
+        ? flight.economyPrice
+        : flight.businessPrice) * group.groupSize;
+    const totalPrice =
+      basePrice - Math.round((basePrice * discountPercent) / 100);
+    if (!Number.isSafeInteger(totalPrice) || totalPrice <= 0)
+      throw new Error("A positive approved group invoice is required");
+    await tx
       .update(groupBookings)
       .set({
         status: "confirmed",
+        organizerUserId: owner.id,
+        inventoryLockId: hold.lockId,
+        allocationExpiresAt: hold.expiresAt,
         discountPercent: String(discountPercent),
         totalPrice,
         approvedBy: adminUserId,
         approvedAt: new Date(),
-        updatedAt: new Date(),
       })
-      .where(
-        and(eq(groupBookings.id, id), eq(groupBookings.status, "pending"))
-      );
-
-    if (getAffectedRows(bookingUpdate) !== 1) {
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: "Group booking was already processed",
-      });
-    }
-
+      .where(eq(groupBookings.id, id));
+    await recordEvent(tx, {
+      aggregateType: "group",
+      aggregateId: id,
+      tenantId: flight.tenantId,
+      eventType: "group.allocated",
+      payload: {
+        groupBookingId: id,
+        organizerUserId: owner.id,
+        inventoryLockId: hold.lockId,
+        expiresAt: hold.expiresAt.toISOString(),
+        totalPrice,
+        actorId: adminUserId,
+      },
+    });
     const [updated] = await tx
       .select()
       .from(groupBookings)
-      .where(eq(groupBookings.id, id))
-      .limit(1);
-
-    if (!updated) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Group booking not found after update",
-      });
-    }
+      .where(eq(groupBookings.id, id));
+    if (!updated) throw new Error("Group allocation disappeared");
     return updated;
   });
 }
@@ -364,49 +338,57 @@ export async function rejectGroupBooking(
   id: number,
   reason: string
 ): Promise<GroupBooking> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  return await db.transaction(async tx => {
+    const [group] = await tx
+      .select()
+      .from(groupBookings)
+      .where(eq(groupBookings.id, id))
+      .for("update");
+    if (!group) throw new Error("Group request not found");
+    if (group.bookingId)
+      throw new Error("Cancel the linked booking through its refund workflow");
+    if (group.status === "cancelled") return group;
+    await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, group.flightId))
+      .for("update");
+    if (group.inventoryLockId)
+      await releaseInventoryLock(group.inventoryLockId, tx);
+    else if (group.status === "confirmed")
+      throw new Error("Legacy group requires inventory reconciliation");
+    await tx
+      .update(groupBookings)
+      .set({ status: "cancelled", rejectionReason: reason })
+      .where(eq(groupBookings.id, id));
+    await recordEvent(tx, {
+      aggregateType: "group",
+      aggregateId: id,
+      eventType: "group.allocation_released",
+      payload: { groupBookingId: id, reason },
     });
-  }
+    return { ...group, status: "cancelled", rejectionReason: reason };
+  });
+}
 
-  // Get the group booking
-  const booking = await getGroupBookingById(id);
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Group booking request not found",
-    });
-  }
-
-  if (booking.status !== "pending") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Cannot reject a ${booking.status} group booking`,
-    });
-  }
-
-  // Update the group booking
-  await db
-    .update(groupBookings)
-    .set({
-      status: "cancelled",
-      rejectionReason: reason,
-      updatedAt: new Date(),
-    })
-    .where(eq(groupBookings.id, id));
-
-  // Return updated booking
-  const updated = await getGroupBookingById(id);
-  if (!updated) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Group booking not found after update",
-    });
-  }
-  return updated;
+export async function expireGroupAllocations() {
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  const rows = await db
+    .select()
+    .from(groupBookings)
+    .where(
+      and(
+        eq(groupBookings.status, "confirmed"),
+        isNull(groupBookings.bookingId),
+        sql`${groupBookings.allocationExpiresAt} <= ${new Date()}`
+      )
+    );
+  for (const row of rows)
+    await rejectGroupBooking(row.id, "Allocation expired before booking");
+  return rows.length;
 }
 
 /**
@@ -485,6 +467,10 @@ export async function getGroupBookingsWithFlightDetails(
   const results = await db
     .select({
       id: groupBookings.id,
+      inventoryLockId: groupBookings.inventoryLockId,
+      organizerUserId: groupBookings.organizerUserId,
+      bookingId: groupBookings.bookingId,
+      allocationExpiresAt: groupBookings.allocationExpiresAt,
       organizerName: groupBookings.organizerName,
       organizerEmail: groupBookings.organizerEmail,
       organizerPhone: groupBookings.organizerPhone,

@@ -168,6 +168,9 @@ export default function GroupBookingRequest() {
               <Link href="/">
                 <Button variant="outline">{t("common.back")}</Button>
               </Link>
+              <Link href="/my-groups">
+                <Button>{t("groupBooking.myAllocations")}</Button>
+              </Link>
               <Link href="/search">
                 <Button>{t("groupBooking.searchMoreFlights")}</Button>
               </Link>

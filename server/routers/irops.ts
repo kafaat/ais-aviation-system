@@ -1,5 +1,6 @@
 import {
   proposeRecovery,
+  listRecoveryPlans,
   approveRecovery,
   executeRecovery,
   recoveryInput,
@@ -28,6 +29,25 @@ import { TRPCError } from "@trpc/server";
  * and recovery operations.
  */
 export const iropsRouter = router({
+  recoveryPlans: adminProcedure
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          eventId: z.number(),
+          digest: z.string(),
+          status: z.string(),
+          expiresAt: z.date(),
+          approvedBy: z.number().nullable(),
+          choices: z.array(
+            z.object({ bookingId: z.number(), key: z.string().nullable() })
+          ),
+          unassignedPassengers: z.number(),
+          passengerDelayMinutes: z.number(),
+        })
+      )
+    )
+    .query(({ ctx }) => listRecoveryPlans(ctx.tenantId)),
   proposeRecovery: adminProcedure
     .input(recoveryInput)
     .output(

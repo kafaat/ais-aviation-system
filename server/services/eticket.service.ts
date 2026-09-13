@@ -1,14 +1,17 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { TRPCError } from "@trpc/server";
-import { recordEvent } from "./outbox.service";
+import { randomInt } from "node:crypto";
 
 /**
  * E-Ticket PDF Generation Service
- * Generates IATA-compliant e-tickets and boarding passes
+ * Generates local itinerary documents and signed AIS boarding documents.
+ * External carrier ticket/dispatch acceptance is a separate authority.
  */
 
 export interface TicketData {
+  flightId?: number;
+  additionalLegs?: TicketData[];
   // Passenger info
   passengerName: string;
   passengerType: "adult" | "child" | "infant";
@@ -44,13 +47,14 @@ export interface TicketData {
 }
 
 export interface BoardingPassData extends TicketData {
+  signedToken: string;
   gate?: string;
   boardingTime?: Date;
   sequence?: string;
 }
 
 /**
- * Generate IATA-standard ticket number (13 digits)
+ * Generate a local document reference (13 digits; not external IATA issuance)
  * Format: AAA-XXXXXXXXX-C
  * AAA = Airline code (3 digits)
  * XXXXXXXXX = Serial number (9 digits)
@@ -58,7 +62,7 @@ export interface BoardingPassData extends TicketData {
  */
 export function generateTicketNumber(airlineCode: string = "001"): string {
   // Generate 9-digit serial number
-  const serial = Math.floor(100000000 + Math.random() * 900000000);
+  const serial = randomInt(100000000, 1000000000);
 
   // Calculate check digit (simple mod 7 for demo)
   const checkDigit = (parseInt(airlineCode) + serial) % 7;
@@ -229,7 +233,7 @@ export async function generateETicketPDF(
         .fontSize(8)
         .fillColor("#9ca3af")
         .text(
-          "This is an electronic ticket. Please present this document or a printed copy at check-in.",
+          "AIS itinerary receipt. Carrier ticket acceptance and boarding authorization are separate.",
           50,
           doc.y,
           { align: "center", width: 495 }
@@ -240,6 +244,35 @@ export async function generateETicketPDF(
           width: 495,
         });
 
+      for (const leg of ticketData.additionalLegs ?? []) {
+        doc
+          .addPage()
+          .fillColor("#1e40af")
+          .fontSize(20)
+          .text("ITINERARY CONTINUED", 50, 50);
+        doc
+          .moveDown()
+          .fillColor("#000")
+          .fontSize(12)
+          .text(`Passenger: ${leg.passengerName}`)
+          .text(`Reference: ${leg.bookingReference}`)
+          .text(`Flight: ${leg.airline} ${leg.flightNumber}`)
+          .moveDown()
+          .text(
+            `${leg.originCode} (${leg.origin}) to ${leg.destinationCode} (${leg.destination})`
+          )
+          .text(`Departure (UTC): ${leg.departureTime.toISOString()}`)
+          .text(`Arrival (UTC): ${leg.arrivalTime.toISOString()}`)
+          .text(
+            `Class: ${leg.cabinClass}; Seat: ${leg.seatNumber ?? "Not assigned"}`
+          )
+          .text(`Baggage: ${leg.baggageAllowance}`)
+          .moveDown()
+          .fontSize(9)
+          .text(
+            "Included in the itinerary total on the first page. Not a boarding authorization."
+          );
+      }
       doc.end();
     } catch (error) {
       console.error("Error generating e-ticket PDF:", error);
@@ -260,7 +293,9 @@ export async function generateBoardingPassPDF(
   passData: BoardingPassData
 ): Promise<Buffer> {
   // Generate barcode data first (async operation)
-  const barcodeData = `M1${passData.passengerName.substring(0, 20).padEnd(20)}E${passData.bookingReference}${passData.originCode}${passData.destinationCode}${passData.flightNumber.padEnd(5)}${passData.sequence || "001"}`;
+  if (!passData.signedToken)
+    throw new Error("Signed boarding authorization required");
+  const barcodeData = passData.signedToken;
   let barcodeDataURL: string;
   try {
     barcodeDataURL = await QRCode.toDataURL(barcodeData);
@@ -325,7 +360,7 @@ export async function generateBoardingPassPDF(
         .text(`Class: ${passData.cabinClass.toUpperCase()}`, 20, 195);
 
       // Barcode
-      doc.image(barcodeDataURL, 350, 50, { width: 200, height: 150 });
+      doc.image(barcodeDataURL, 350, 50, { width: 150, height: 150 });
 
       // Booking reference
       doc
@@ -354,138 +389,7 @@ export async function generateETicketForPassenger(
   bookingId: number,
   passengerId: number
 ): Promise<string> {
-  const { getDb } = await import("../db");
-  const { bookings, flights, airports, passengers, airlines } =
-    await import("../../drizzle/schema");
-  const { eq } = await import("drizzle-orm");
-
-  const database = await getDb();
-  if (!database)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get booking details
-  const [booking] = await database
-    .select({
-      bookingReference: bookings.bookingReference,
-      pnr: bookings.pnr,
-      cabinClass: bookings.cabinClass,
-      totalAmount: bookings.totalAmount,
-      flightNumber: flights.flightNumber,
-      airlineId: flights.airlineId,
-      departureTime: flights.departureTime,
-      arrivalTime: flights.arrivalTime,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-    })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-  }
-
-  // Get passenger details
-  const [passenger] = await database
-    .select()
-    .from(passengers)
-    .where(eq(passengers.id, passengerId))
-    .limit(1);
-
-  if (!passenger || passenger.bookingId !== bookingId) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Passenger not found" });
-  }
-
-  // Get airport details
-  const [origin] = await database
-    .select()
-    .from(airports)
-    .where(eq(airports.id, booking.originId))
-    .limit(1);
-
-  const [destination] = await database
-    .select()
-    .from(airports)
-    .where(eq(airports.id, booking.destinationId))
-    .limit(1);
-
-  if (!origin || !destination) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Airport not found" });
-  }
-
-  // Get airline details
-  const [airline] = await database
-    .select()
-    .from(airlines)
-    .where(eq(airlines.id, booking.airlineId))
-    .limit(1);
-
-  const airlineName = airline?.name || "Unknown Airline";
-
-  // Generate ticket number if not exists, using a transaction to avoid
-  // race conditions where concurrent requests both see null and write
-  // different ticket numbers
-  let ticketNumber = passenger.ticketNumber;
-  if (!ticketNumber) {
-    ticketNumber = generateTicketNumber();
-    await database.transaction(async tx => {
-      // Re-read inside transaction to check if another request already set it
-      const [current] = await tx
-        .select({ ticketNumber: passengers.ticketNumber })
-        .from(passengers)
-        .where(eq(passengers.id, passenger.id))
-        .limit(1);
-      if (current?.ticketNumber) {
-        ticketNumber = current.ticketNumber;
-      } else {
-        await tx
-          .update(passengers)
-          .set({ ticketNumber })
-          .where(eq(passengers.id, passenger.id));
-        // Emit the ticket-issued domain event in the same transaction.
-        await recordEvent(tx, {
-          aggregateType: "booking",
-          aggregateId: bookingId,
-          eventType: "ETicketIssued",
-          payload: {
-            bookingId,
-            bookingReference: booking.bookingReference,
-            passengerId: passenger.id,
-            ticketNumber,
-          },
-        });
-      }
-    });
-  }
-
-  // Generate PDF
-  const pdfBuffer = await generateETicketPDF({
-    passengerName: `${passenger.firstName} ${passenger.lastName}`,
-    passengerType: passenger.type,
-    ticketNumber,
-    bookingReference: booking.bookingReference,
-    pnr: booking.pnr,
-    flightNumber: booking.flightNumber,
-    airline: airlineName,
-    origin: origin.city,
-    originCode: origin.code,
-    destination: destination.city,
-    destinationCode: destination.code,
-    departureTime: booking.departureTime,
-    arrivalTime: booking.arrivalTime,
-    cabinClass: booking.cabinClass,
-    seatNumber: passenger.seatNumber || undefined,
-    baggageAllowance:
-      booking.cabinClass === "business" ? "2 × 32kg" : "1 × 23kg",
-    totalAmount: booking.totalAmount,
-    currency: "SAR",
-    issueDate: new Date(),
-  });
-
-  // Return PDF as base64
-  return pdfBuffer.toString("base64");
+  const { readTicketDocument } = await import("./ticket-documents.service");
+  const { data } = await readTicketDocument(bookingId, passengerId);
+  return (await generateETicketPDF(data)).toString("base64");
 }

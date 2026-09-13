@@ -1,0 +1,1 @@
+ALTER TABLE `seat_inventory` ADD `checkInNonce` varchar(36);

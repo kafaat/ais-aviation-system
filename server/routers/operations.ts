@@ -1,9 +1,51 @@
+import { operationsDashboard } from "../contracts/operations";
+import {
+  readOperationsDashboard,
+  retryEventDelivery,
+  retryCancellationPlanning,
+} from "../services/operations-dashboard.service";
+import { acknowledgeOperationalAlert } from "../services/operational-observations.service";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { scheduledTasks } from "../../drizzle/schema";
 import { getDb } from "../db";
-import { listCapabilities } from "../services/capability-catalog.service";
 export const operationsRouter = router({
+  dashboard: adminProcedure
+    .output(operationsDashboard)
+    .query(({ ctx }) => readOperationsDashboard(ctx.tenantId)),
+  replayEvent: adminProcedure
+    .input(
+      z.object({
+        eventId: z.string().uuid(),
+        reason: z.string().min(5).max(500),
+      })
+    )
+    .output(z.object({ receiptId: z.string() }))
+    .mutation(({ ctx, input }) =>
+      retryEventDelivery(input.eventId, ctx.user.id, ctx.tenantId, input.reason)
+    ),
+  retryCancellation: adminProcedure
+    .input(
+      z.object({
+        jobId: z.number().int().positive(),
+        reason: z.string().min(5).max(500),
+      })
+    )
+    .output(z.object({ receiptId: z.string() }))
+    .mutation(({ ctx, input }) =>
+      retryCancellationPlanning(
+        input.jobId,
+        ctx.user.id,
+        ctx.tenantId,
+        input.reason
+      )
+    ),
+  acknowledgeAlert: adminProcedure
+    .input(z.object({ key: z.string().max(100) }))
+    .output(z.object({ acknowledged: z.boolean() }))
+    .mutation(({ ctx, input }) =>
+      acknowledgeOperationalAlert(input.key, ctx.user.id)
+    ),
   capabilities: adminProcedure
     .output(
       z.array(
@@ -14,11 +56,17 @@ export const operationsRouter = router({
           consumer: z.string(),
           requirement: z.string(),
           available: z.boolean(),
+          deploymentReady: z.boolean().nullable(),
           evidence: z.string(),
         })
       )
     )
-    .query(() => listCapabilities()),
+    .query(async ({ ctx }) =>
+      (await readOperationsDashboard(ctx.tenantId)).capabilities.map(c => ({
+        ...c,
+        available: c.deploymentReady === true,
+      }))
+    ),
   scheduledTasks: adminProcedure
     .output(
       z.array(

@@ -10,6 +10,7 @@ import {
 import { crewRuleSchema, validateDuty, type Duty } from "./crew-duty-policy";
 import {
   verifyAviationSource,
+  requireCurrentAviationSource,
   persistAviationEvidence,
   type EvidenceEnvelope,
 } from "./aviation-evidence.service";
@@ -96,7 +97,16 @@ export async function getCrewRules(
     throw new Error(
       "Exactly one effective operator-approved crew profile is required"
     );
-  return matches[0];
+  const selected = matches[0];
+  const evidence = rows.find(r => r.id === selected.evidenceId);
+  if (!evidence) throw new Error("Crew profile receipt missing");
+  requireCurrentAviationSource(
+    evidence.sourceId,
+    "crew_rules",
+    evidence.tenantId,
+    airlineId
+  );
+  return selected;
 }
 export async function evaluateCrewDuty(
   tx: SettlementTx,
@@ -217,7 +227,17 @@ export async function assignCrewWithRules(input: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Crew storage unavailable");
+  const [hint] = await db
+    .select()
+    .from(crewMembers)
+    .where(eq(crewMembers.id, input.crewMemberId));
+  if (!hint) throw new Error("Crew member not found");
   return db.transaction(async tx => {
+    await tx
+      .select()
+      .from(airlines)
+      .where(eq(airlines.id, hint.airlineId))
+      .for("update");
     const [crew] = await tx
       .select()
       .from(crewMembers)

@@ -439,7 +439,11 @@
     "selectSeats": "Select Your Seats",
     "seatAssignments": "Seat Assignments",
     "autoAssign": "Auto-assign",
-    "addToCalendar": "Add to Calendar"
+    "addToCalendar": "Add to Calendar",
+    "inventoryUnavailable": "Seat inventory is unavailable. Contact the airline or try again later.",
+    "passUnavailable": "A valid boarding pass could not be loaded.",
+    "onlineVerification": "This signed AIS pass requires online verification of current eligibility.",
+    "windowClosed": "Check-in requires a paid active reservation and is open from 48 hours until 1 hour before departure."
   },
   "analytics": {
     "title": "Analytics Dashboard",
@@ -1160,7 +1164,7 @@
     "step3": "Receive confirmation email with payment instructions",
     "status": {
       "pending": "Pending Review",
-      "confirmed": "Confirmed",
+      "confirmed": "Approved allocation",
       "cancelled": "Cancelled"
     },
     "admin": {
@@ -1202,7 +1206,11 @@
       "rejectionReason": "Rejection Reason",
       "rejectionReasonPlaceholder": "Enter the reason for rejection",
       "confirmReject": "Reject Booking"
-    }
+    },
+    "myAllocations": "My group allocations",
+    "allocationNote": "Approval holds seats until the deadline. Enter every passenger and complete payment to confirm the booking.",
+    "completeAllocation": "Enter passengers and pay",
+    "organizerAccount": "Organizer account matching the request email"
   },
   "baggage": {
     "title": "Baggage Tracking",

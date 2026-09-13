@@ -1,16 +1,35 @@
-import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-
+import { describe, expect, it, vi } from "vitest";
+import { transactionMemory } from "../__tests__/helpers/transaction-memory";
+const state = vi.hoisted(() => ({ db: null as unknown }));
+vi.mock("../db", () => ({ getDb: () => state.db }));
+import { offerSeat } from "./waitlist.service";
 describe("waitlist inventory atomicity", () => {
-  const source = readFileSync(
-    new URL("./waitlist.service.ts", import.meta.url),
-    "utf8"
-  );
-  it("guards seat reservation and the waiting-to-offered transition", () => {
-    expect(source).toContain("gte(flights.economyAvailable, entry.seats)");
-    expect(source).toContain("gte(flights.businessAvailable, entry.seats)");
-    expect(source).toContain('eq(waitlist.status, "waiting")');
-    expect(source).toContain("getAffectedRows(seatUpdate) !== 1");
-    expect(source).toContain("getAffectedRows(offerUpdate) !== 1");
+  it("rolls the hold and offered state back when the event cannot commit", async () => {
+    const f = transactionMemory({
+      waitlist: [
+        {
+          id: 1,
+          flightId: 1,
+          userId: 8,
+          cabinClass: "economy",
+          seats: 1,
+          status: "waiting",
+        },
+      ],
+      flights: [
+        {
+          id: 1,
+          status: "scheduled",
+          economyAvailable: 1,
+          departureTime: new Date(Date.now() + 86400000),
+        },
+      ],
+    });
+    state.db = f.db;
+    f.failInsert("outbox");
+    await expect(offerSeat(1)).rejects.toThrow("Injected");
+    expect(f.rows("waitlist")[0].status).toBe("waiting");
+    expect(f.rows("inventory_locks")).toHaveLength(0);
+    expect(f.rows("flights")[0].economyAvailable).toBe(1);
   });
 });

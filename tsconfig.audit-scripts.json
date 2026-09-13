@@ -1,8 +1,3 @@
 {
-  "extends": "./tsconfig.json",
-  "include": ["scripts/**/*.ts"],
-  "exclude": ["node_modules"],
-  "compilerOptions": {
-    "incremental": false
-  }
+  "extends": "./tsconfig.scripts.json"
 }

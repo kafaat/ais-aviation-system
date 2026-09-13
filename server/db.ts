@@ -874,25 +874,22 @@ export async function updateFlightAvailability(
   flightId: number,
   cabinClass: string,
   seats: number,
-  tenantId?: number
+  tenantId?: number,
+  actorId?: number,
+  reason = "Manual availability adjustment"
 ) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-
-  const [result] = await db
-    .update(flights)
-    .set(
-      cabinClass === "economy"
-        ? { economyAvailable: seats, updatedAt: new Date() }
-        : { businessAvailable: seats, updatedAt: new Date() }
-    )
-    .where(
-      and(
-        eq(flights.id, flightId),
-        tenantId == null ? undefined : eq(flights.tenantId, tenantId)
-      )
-    );
-  return result.affectedRows > 0;
+  if (cabinClass !== "economy" && cabinClass !== "business")
+    throw new Error("Unknown cabin class");
+  const { adjustFlightAvailability } =
+    await import("./services/inventory-adjustment.service");
+  return await adjustFlightAvailability({
+    flightId,
+    cabinClass,
+    seats,
+    tenantId,
+    actorId,
+    reason,
+  });
 }
 
 // Helper function to generate unique booking reference

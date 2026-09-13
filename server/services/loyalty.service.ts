@@ -1,6 +1,22 @@
+import {
+  lockMilesState,
+  expireMilesLots,
+  creditMiles,
+  spendMiles,
+  reverseBookingMilesCredit,
+  requireMiles,
+} from "./loyalty-balance.service";
+import type { SettlementTx } from "./booking-settlement.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { loyaltyAccounts, milesTransactions } from "../../drizzle/schema";
+import {
+  loyaltyAccounts,
+  milesTransactions,
+  bookings,
+  paymentReceipts,
+  walletTransactions,
+  bookingLoyaltyAccruals,
+} from "../../drizzle/schema";
 import { and, eq, desc, sql } from "drizzle-orm";
 
 /**
@@ -53,19 +69,24 @@ export async function getOrCreateLoyaltyAccount(userId: number) {
     }
 
     // Create new account
-    const [result] = await database.insert(loyaltyAccounts).values({
-      userId,
-      totalMilesEarned: 0,
-      currentMilesBalance: 0,
-      milesRedeemed: 0,
-      tier: "bronze",
-      tierPoints: 0,
-    });
+    await database
+      .insert(loyaltyAccounts)
+      .values({
+        userId,
+        totalMilesEarned: 0,
+        currentMilesBalance: 0,
+        milesRedeemed: 0,
+        tier: "bronze",
+        tierPoints: 0,
+      })
+      .onDuplicateKeyUpdate({
+        set: { userId: sql`${loyaltyAccounts.userId}` },
+      });
 
     const [newAccount] = await database
       .select()
       .from(loyaltyAccounts)
-      .where(eq(loyaltyAccounts.id, result.insertId))
+      .where(eq(loyaltyAccounts.userId, userId))
       .limit(1);
 
     if (!newAccount) {
@@ -99,113 +120,163 @@ function calculateTier(
 /**
  * Award miles for a booking
  */
+/** Recompute from posted funding. Duplicate/out-of-order events converge on net value. */
+export async function syncBookingMiles(
+  tx: SettlementTx,
+  bookingId: number,
+  expectedUserId?: number
+) {
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
+    .for("update");
+  if (
+    !booking ||
+    (expectedUserId !== undefined && booking.userId !== expectedUserId)
+  )
+    throw new Error("Loyalty booking ownership mismatch");
+  const userId = booking.userId;
+  await tx
+    .insert(loyaltyAccounts)
+    .values({ userId, tier: "bronze" })
+    .onDuplicateKeyUpdate({ set: { userId: sql`${loyaltyAccounts.userId}` } });
+  const state = await lockMilesState(tx, userId);
+  await expireMilesLots(tx, state);
+  const account = state.account;
+  let [accrual] = await tx
+    .select()
+    .from(bookingLoyaltyAccruals)
+    .where(eq(bookingLoyaltyAccruals.bookingId, bookingId))
+    .for("update");
+  if (!accrual) {
+    const prior = await tx
+      .select()
+      .from(milesTransactions)
+      .where(
+        and(
+          eq(milesTransactions.bookingId, bookingId),
+          eq(milesTransactions.userId, userId),
+          sql`${milesTransactions.type} IN ('earn','adjustment')`
+        )
+      );
+    const earned = prior
+      .filter(t => t.type === "earn")
+      .reduce((n, t) => n + t.amount, 0);
+    const previous = prior.reduce((n, t) => n + t.amount, 0);
+    if (previous < 0 || prior.filter(t => t.type === "earn").length > 1)
+      throw new Error("Legacy loyalty accrual requires reconciliation");
+    const base = Math.floor(booking.totalAmount / 100);
+    const multiplier =
+      earned && base ? earned / base : TIER_MULTIPLIERS[account.tier];
+    const values = {
+      bookingId,
+      userId,
+      multiplier: multiplier.toFixed(2),
+      awardedMiles: previous,
+      awardedTierPoints: earned ? base : 0,
+    };
+    await tx.insert(bookingLoyaltyAccruals).values(values);
+    accrual = { ...values, updatedAt: new Date() };
+  }
+  const receipts = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(
+      and(
+        eq(paymentReceipts.bookingId, bookingId),
+        eq(paymentReceipts.settlementStatus, "applied")
+      )
+    )
+    .for("update");
+  const wallet = await tx
+    .select()
+    .from(walletTransactions)
+    .where(
+      and(
+        eq(walletTransactions.bookingId, bookingId),
+        eq(walletTransactions.status, "completed")
+      )
+    );
+  const net =
+    receipts.reduce(
+      (n, r) => n + (r.currency === "SAR" ? r.amount - r.refundedAmount : 0),
+      0
+    ) +
+    wallet.reduce(
+      (n, r) =>
+        n +
+        (r.type === "payment"
+          ? Math.abs(r.amount)
+          : r.type === "refund"
+            ? -Math.abs(r.amount)
+            : 0),
+      0
+    );
+  const eligible =
+    ["confirmed", "completed"].includes(booking.status) &&
+    booking.paymentStatus === "paid";
+  const baseMiles = eligible
+    ? Math.floor(
+        (Math.max(0, Math.min(booking.totalAmount, net)) / 100) * MILES_PER_SAR
+      )
+    : 0;
+  const target = Math.floor(baseMiles * Number(accrual.multiplier));
+  const delta = target - accrual.awardedMiles;
+  const tierDelta = baseMiles - accrual.awardedTierPoints;
+  if (delta > 0) {
+    const expiry = new Date();
+    expiry.setFullYear(expiry.getFullYear() + 2);
+    await creditMiles(tx, state, {
+      amount: delta,
+      type: "earn",
+      bookingId,
+      flightId: booking.flightId,
+      reason: `booking-net:${bookingId}`,
+      expiresAt: expiry,
+    });
+  } else if (delta < 0)
+    await reverseBookingMilesCredit(tx, state, bookingId, -delta);
+  const newBalance = state.account.currentMilesBalance;
+  const tierPoints = Math.max(0, account.tierPoints + tierDelta);
+  const newTier = calculateTier(tierPoints);
+  if (delta || tierDelta) {
+    // A refund after redemption creates a negative balance, not free miles.
+    // Redemption already requires a sufficient positive balance.
+    await tx
+      .update(loyaltyAccounts)
+      .set({
+        currentMilesBalance: newBalance,
+        totalMilesEarned: Math.max(0, account.totalMilesEarned + delta),
+        tierPoints,
+        tier: newTier,
+        lastActivityAt: new Date(),
+      })
+      .where(eq(loyaltyAccounts.id, account.id));
+    await tx
+      .update(bookingLoyaltyAccruals)
+      .set({ awardedMiles: target, awardedTierPoints: baseMiles })
+      .where(eq(bookingLoyaltyAccruals.bookingId, bookingId));
+  }
+  return {
+    milesEarned: Math.max(0, delta),
+    milesReversed: Math.max(0, -delta),
+    baseMiles,
+    bonusMiles: target - baseMiles,
+    newBalance,
+    newTier,
+    tierUpgraded: tierPoints > account.tierPoints && newTier !== account.tier,
+  };
+}
 export async function awardMilesForBooking(
   userId: number,
   bookingId: number,
-  flightId: number,
-  amountPaid: number // in cents
+  _flightId: number,
+  _amountPaid: number
 ) {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    // Get or create loyalty account (outside transaction for account creation)
-    await getOrCreateLoyaltyAccount(userId);
-
-    // Use a transaction to prevent race conditions on balance updates
-    return await database.transaction(async tx => {
-      // Re-read account inside transaction for consistency
-      const [account] = await tx
-        .select()
-        .from(loyaltyAccounts)
-        .where(eq(loyaltyAccounts.userId, userId))
-        .limit(1)
-        .for("update");
-
-      if (!account) throw new Error("Loyalty account not found");
-
-      const [previous] = await tx
-        .select()
-        .from(milesTransactions)
-        .where(
-          and(
-            eq(milesTransactions.bookingId, bookingId),
-            eq(milesTransactions.userId, userId),
-            eq(milesTransactions.type, "earn")
-          )
-        )
-        .limit(1);
-      if (previous)
-        return {
-          milesEarned: previous.amount,
-          baseMiles: 0,
-          bonusMiles: 0,
-          newBalance: account.currentMilesBalance,
-          newTier: account.tier,
-          tierUpgraded: false,
-        };
-
-      // Calculate base miles (1 mile per SAR)
-      const amountInSAR = amountPaid / 100;
-      const baseMiles = Math.floor(amountInSAR * MILES_PER_SAR);
-
-      // Apply tier multiplier
-      const multiplier = TIER_MULTIPLIERS[account.tier];
-      const totalMiles = Math.floor(baseMiles * multiplier);
-
-      // Calculate tier points (same as base miles)
-      const tierPoints = baseMiles;
-
-      // Update account
-      const newTotalEarned = account.totalMilesEarned + totalMiles;
-      const newBalance = account.currentMilesBalance + totalMiles;
-      const newTierPoints = account.tierPoints + tierPoints;
-      const newTier = calculateTier(newTierPoints);
-
-      await tx
-        .update(loyaltyAccounts)
-        .set({
-          totalMilesEarned: newTotalEarned,
-          currentMilesBalance: newBalance,
-          tierPoints: newTierPoints,
-          tier: newTier,
-          lastActivityAt: new Date(),
-        })
-        .where(eq(loyaltyAccounts.id, account.id));
-
-      // Record transaction
-      const expiryDate = new Date();
-      expiryDate.setFullYear(expiryDate.getFullYear() + 2); // Miles expire in 2 years
-
-      await tx.insert(milesTransactions).values({
-        userId,
-        loyaltyAccountId: account.id,
-        type: "earn",
-        amount: totalMiles,
-        balanceAfter: newBalance,
-        bookingId,
-        flightId,
-        description: `Earned ${totalMiles} miles from booking`,
-        reason: `Base: ${baseMiles} miles × ${multiplier}x (${account.tier} tier)`,
-        expiresAt: expiryDate,
-      });
-
-      return {
-        milesEarned: totalMiles,
-        baseMiles,
-        bonusMiles: totalMiles - baseMiles,
-        newBalance,
-        newTier,
-        tierUpgraded: newTier !== account.tier,
-      };
-    });
-  } catch (error) {
-    console.error("Error awarding miles:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to award miles",
-    });
-  }
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  return await db.transaction(tx => syncBookingMiles(tx, bookingId, userId));
 }
 
 /**
@@ -216,61 +287,21 @@ export async function redeemMiles(
   milesToRedeem: number,
   bookingId?: number
 ): Promise<{ discountAmount: number; newBalance: number }> {
+  requireMiles(milesToRedeem);
   try {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
 
     // Use a transaction to prevent race conditions on balance updates
     return await database.transaction(async tx => {
-      // Read account inside transaction for consistency
-      const [account] = await tx
-        .select()
-        .from(loyaltyAccounts)
-        .where(eq(loyaltyAccounts.userId, userId))
-        .limit(1);
-
-      if (!account) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Loyalty account not found",
-        });
-      }
-
-      // Check if user has enough miles
-      if (account.currentMilesBalance < milesToRedeem) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Insufficient miles balance",
-        });
-      }
-
-      // Calculate discount (1 mile = 0.01 SAR = 1 cent)
-      const discountAmount = milesToRedeem; // in cents
-
-      // Update account
-      const newBalance = account.currentMilesBalance - milesToRedeem;
-      const newRedeemed = account.milesRedeemed + milesToRedeem;
-
-      await tx
-        .update(loyaltyAccounts)
-        .set({
-          currentMilesBalance: newBalance,
-          milesRedeemed: newRedeemed,
-          lastActivityAt: new Date(),
-        })
-        .where(eq(loyaltyAccounts.id, account.id));
-
-      // Record transaction
-      await tx.insert(milesTransactions).values({
-        userId,
-        loyaltyAccountId: account.id,
+      const state = await lockMilesState(tx, userId);
+      await expireMilesLots(tx, state);
+      const newBalance = await spendMiles(tx, state, milesToRedeem, {
         type: "redeem",
-        amount: -milesToRedeem,
-        balanceAfter: newBalance,
         bookingId,
-        description: `Redeemed ${milesToRedeem} miles for ${(discountAmount / 100).toFixed(2)} SAR discount`,
+        reason: "Miles redeemed for discount",
       });
-
+      const discountAmount = milesToRedeem;
       return {
         discountAmount,
         newBalance,
@@ -359,96 +390,38 @@ export async function processExpiredMiles(): Promise<{
   processedAccounts: number;
   totalExpiredMiles: number;
 }> {
-  const database = await getDb();
-  if (!database) {
-    console.error("Database not available for miles expiration");
-    return { processedAccounts: 0, totalExpiredMiles: 0 };
-  }
-
-  let processedAccounts = 0;
-  let totalExpiredMiles = 0;
-
-  try {
-    const now = new Date();
-
-    // Get all accounts with balances > 0
-    const accounts = await database.select().from(loyaltyAccounts);
-
-    for (const account of accounts) {
-      // Process each account in its own transaction to prevent race conditions
-      await database.transaction(async tx => {
-        // Re-read account inside transaction to get fresh balance
-        const [freshAccount] = await tx
-          .select()
-          .from(loyaltyAccounts)
-          .where(eq(loyaltyAccounts.userId, account.userId))
-          .limit(1);
-
-        if (!freshAccount || freshAccount.currentMilesBalance <= 0) return;
-
-        // Get expired earn transactions
-        const expiredTransactions = await tx
-          .select()
-          .from(milesTransactions)
-          .where(eq(milesTransactions.userId, account.userId));
-
-        const toExpire = expiredTransactions.filter(
-          t =>
-            t.type === "earn" &&
-            t.expiresAt &&
-            new Date(t.expiresAt) <= now &&
-            t.amount > 0
-        );
-
-        if (toExpire.length === 0) return;
-
-        const milesToExpire = toExpire.reduce((sum, t) => sum + t.amount, 0);
-        if (milesToExpire <= 0) return;
-
-        // Use fresh balance for calculation
-        const actualExpireAmount = Math.min(
-          milesToExpire,
-          freshAccount.currentMilesBalance
-        );
-        if (actualExpireAmount <= 0) return;
-
-        // Create expiration transaction record
-        await tx.insert(milesTransactions).values({
-          userId: account.userId,
-          loyaltyAccountId: freshAccount.id,
-          type: "expire",
-          amount: -actualExpireAmount,
-          balanceAfter: freshAccount.currentMilesBalance - actualExpireAmount,
-          description: `انتهاء صلاحية ${actualExpireAmount} ميل - Miles expiration (${toExpire.length} transactions)`,
-        });
-
-        // Use SQL-level arithmetic to safely update balance
-        await tx
-          .update(loyaltyAccounts)
-          .set({
-            currentMilesBalance: sql`GREATEST(${loyaltyAccounts.currentMilesBalance} - ${actualExpireAmount}, 0)`,
-            lastActivityAt: now,
-          })
-          .where(eq(loyaltyAccounts.userId, account.userId));
-
-        processedAccounts++;
-        totalExpiredMiles += actualExpireAmount;
-
-        console.info(
-          `[Loyalty] Expired ${actualExpireAmount} miles for user ${account.userId}`
-        );
+  const database = getDb();
+  if (!database) throw new Error("Database unavailable for miles expiration");
+  const accounts = await database
+    .select({ userId: loyaltyAccounts.userId })
+    .from(loyaltyAccounts);
+  let processedAccounts = 0,
+    totalExpiredMiles = 0;
+  const failures: unknown[] = [];
+  const failedUsers: number[] = [];
+  for (const account of accounts) {
+    try {
+      const expired = await database.transaction(async tx => {
+        const state = await lockMilesState(tx, account.userId);
+        return await expireMilesLots(tx, state);
       });
+      if (expired) processedAccounts++;
+      totalExpiredMiles += expired;
+    } catch (error) {
+      failedUsers.push(account.userId);
+      failures.push(
+        new Error(`Miles expiration failed for user ${account.userId}`, {
+          cause: error,
+        })
+      );
     }
-
-    console.info(
-      `[Loyalty] Miles expiration completed: ${processedAccounts} accounts, ${totalExpiredMiles} miles expired`
-    );
-
-    return { processedAccounts, totalExpiredMiles };
-  } catch (error) {
-    console.error("Error processing expired miles:", error);
-    return { processedAccounts, totalExpiredMiles };
   }
+  if (failures.length)
+    throw new AggregateError(
+      failures,
+      `Loyalty expiration incomplete for ${failures.length} accounts; user IDs: ${failedUsers.slice(0, 20).join(", ")}${failedUsers.length > 20 ? " (first 20)" : ""}`
+    );
+  return { processedAccounts, totalExpiredMiles };
 }
 
 /**
@@ -457,80 +430,14 @@ export async function processExpiredMiles(): Promise<{
 export async function reverseMilesForBooking(
   userId: number,
   bookingId: number,
-  reason: string = "Booking cancelled"
+  _reason = "Booking cancelled"
 ): Promise<{ milesReversed: number }> {
-  const database = await getDb();
-  if (!database) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  try {
-    // Use a transaction to prevent race conditions on balance updates
-    return await database.transaction(async tx => {
-      // Find original earn transaction for this booking
-      const [originalTransaction] = await tx
-        .select()
-        .from(milesTransactions)
-        .where(eq(milesTransactions.bookingId, bookingId));
-
-      if (!originalTransaction || originalTransaction.type !== "earn") {
-        return { milesReversed: 0 };
-      }
-
-      const milesToReverse = originalTransaction.amount;
-
-      // Get current account
-      const [account] = await tx
-        .select()
-        .from(loyaltyAccounts)
-        .where(eq(loyaltyAccounts.userId, userId));
-
-      if (!account) {
-        return { milesReversed: 0 };
-      }
-
-      const newBalance = Math.max(
-        0,
-        account.currentMilesBalance - milesToReverse
-      );
-
-      // Create adjustment transaction
-      await tx.insert(milesTransactions).values({
-        userId,
-        loyaltyAccountId: account.id,
-        bookingId,
-        type: "adjustment",
-        amount: -milesToReverse,
-        balanceAfter: newBalance,
-        description: `استرداد ${milesToReverse} ميل - ${reason}`,
-      });
-
-      // Update account
-      await tx
-        .update(loyaltyAccounts)
-        .set({
-          currentMilesBalance: newBalance,
-          milesRedeemed: account.milesRedeemed + milesToReverse,
-          lastActivityAt: new Date(),
-        })
-        .where(eq(loyaltyAccounts.userId, userId));
-
-      console.info(
-        `[Loyalty] Reversed ${milesToReverse} miles for user ${userId}, booking ${bookingId}`
-      );
-
-      return { milesReversed: milesToReverse };
-    });
-  } catch (error) {
-    console.error("Error reversing miles:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to reverse miles",
-    });
-  }
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  const result = await db.transaction(tx =>
+    syncBookingMiles(tx, bookingId, userId)
+  );
+  return { milesReversed: result.milesReversed };
 }
 
 /**
@@ -541,6 +448,7 @@ export async function awardBonusMiles(
   miles: number,
   reason: string
 ): Promise<{ newBalance: number }> {
+  requireMiles(miles);
   const database = await getDb();
   if (!database) {
     throw new TRPCError({
@@ -555,25 +463,14 @@ export async function awardBonusMiles(
 
     // Use a transaction to prevent race conditions on balance updates
     return await database.transaction(async tx => {
-      const [account] = await tx
-        .select()
-        .from(loyaltyAccounts)
-        .where(eq(loyaltyAccounts.userId, userId))
-        .limit(1);
-
-      if (!account) throw new Error("Loyalty account not found");
-
-      const newBalance = account.currentMilesBalance + miles;
-
-      // Create bonus transaction
-      await tx.insert(milesTransactions).values({
-        userId,
-        loyaltyAccountId: account.id,
-        type: "bonus",
+      const state = await lockMilesState(tx, userId);
+      await expireMilesLots(tx, state);
+      const account = state.account;
+      const newBalance = await creditMiles(tx, state, {
         amount: miles,
-        balanceAfter: newBalance,
-        description: `مكافأة: ${reason}`,
-        expiresAt: new Date(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000), // 2 years
+        type: "bonus",
+        reason,
+        expiresAt: new Date(Date.now() + 2 * 365 * 86400000),
       });
 
       // Update account

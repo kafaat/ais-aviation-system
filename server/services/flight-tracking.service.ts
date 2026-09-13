@@ -81,6 +81,11 @@ export interface FlightTrackingData {
 export async function getFlightTrackingByNumber(
   flightNumber: string
 ): Promise<FlightTrackingData | null> {
+  return await loadFlightTracking({ flightNumber });
+}
+async function loadFlightTracking(
+  identity: { flightNumber: string } | { flightId: number }
+): Promise<FlightTrackingData | null> {
   const database = await getDb();
   if (!database) {
     throw new TRPCError({
@@ -102,7 +107,11 @@ export async function getFlightTrackingByNumber(
       destinationId: flights.destinationId,
     })
     .from(flights)
-    .where(eq(flights.flightNumber, flightNumber))
+    .where(
+      "flightId" in identity
+        ? eq(flights.id, identity.flightId)
+        : eq(flights.flightNumber, identity.flightNumber)
+    )
     .orderBy(desc(flights.departureTime))
     .limit(1);
 
@@ -194,27 +203,7 @@ export async function getFlightTrackingByNumber(
 export async function getFlightTrackingById(
   flightId: number
 ): Promise<FlightTrackingData | null> {
-  const database = await getDb();
-  if (!database) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  const flightResult = await database
-    .select({
-      flightNumber: flights.flightNumber,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (flightResult.length === 0) {
-    return null;
-  }
-
-  return getFlightTrackingByNumber(flightResult[0].flightNumber);
+  return await loadFlightTracking({ flightId });
 }
 
 /**

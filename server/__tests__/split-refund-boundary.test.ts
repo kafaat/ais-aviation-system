@@ -174,8 +174,12 @@ afterEach(() => {
 describe("split cancellation invoice authority", () => {
   it("rejects all check-in paths after policy cancellation and detects partially checked-in groups", async () => {
     await reserve();
-    await expect(performCheckIn(7, 1, {})).rejects.toThrow("Cannot check in");
-    await expect(seatMapCheckIn(4, 7, 1)).rejects.toThrow("Cannot check in");
+    await expect(performCheckIn(7, 1, {})).rejects.toThrow(
+      "Booking not found for flight"
+    );
+    await expect(seatMapCheckIn(4, 7, 1)).rejects.toThrow(
+      "Booking not found for flight"
+    );
     expect(booking().checkedIn).toBe(false);
   });
   it("blocks refunding a group when only one passenger is checked in", async () => {

@@ -94,7 +94,7 @@ export default function MyWaitlist() {
     onSuccess: data => {
       toast.success(t("waitlist.offerAccepted"));
       // Redirect to booking page
-      window.location.href = `/booking/${data.flightId}?class=${data.cabinClass}&passengers=${data.passengers}&fromWaitlist=true`;
+      window.location.href = `/booking/${data.flightId}?class=${data.cabinClass}&waitlistId=${data.waitlistId}&passengers=${data.passengers}&fromWaitlist=true`;
     },
     onError: error => {
       toast.error(error.message);

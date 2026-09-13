@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { transactionMemory } from "../helpers/transaction-memory";
+import { getDb } from "../../db";
 
 // Create mock database with chainable methods
 const createMockDb = () => {
@@ -39,6 +41,9 @@ const createMockDb = () => {
     })),
     insert: vi.fn().mockReturnThis(),
     values: vi.fn().mockImplementation(() => ({
+      onDuplicateKeyUpdate() {
+        return this;
+      },
       then: (resolve: (v: unknown) => void) => {
         const result = results[callIndex++] ?? [{ insertId: 1 }];
         resolve(result);
@@ -62,42 +67,7 @@ const mockDb = createMockDb();
 
 // Mock modules before any imports
 vi.mock("../../db", () => ({
-  getDb: vi.fn().mockResolvedValue(mockDb),
-}));
-
-vi.mock("../../../drizzle/schema", () => ({
-  waitlist: {
-    id: "id",
-    flightId: "flightId",
-    userId: "userId",
-    cabinClass: "cabinClass",
-    seats: "seats",
-    priority: "priority",
-    status: "status",
-    offeredAt: "offeredAt",
-    offerExpiresAt: "offerExpiresAt",
-    confirmedAt: "confirmedAt",
-    notifyByEmail: "notifyByEmail",
-    notifyBySms: "notifyBySms",
-    createdAt: "createdAt",
-    updatedAt: "updatedAt",
-  },
-  flights: {
-    id: "id",
-    economyAvailable: "economyAvailable",
-    businessAvailable: "businessAvailable",
-  },
-  users: { id: "id", name: "name", email: "email" },
-  airports: { id: "id", code: "code", city: "city" },
-  airlines: { id: "id", name: "name", logo: "logo" },
-}));
-
-vi.mock("drizzle-orm", () => ({
-  eq: vi.fn((a, b) => ({ type: "eq", a, b })),
-  and: vi.fn((...args) => ({ type: "and", args })),
-  desc: vi.fn(a => ({ type: "desc", a })),
-  asc: vi.fn(a => ({ type: "asc", a })),
-  sql: vi.fn((...args) => ({ type: "sql", args })),
+  getDb: vi.fn(() => mockDb),
 }));
 
 // Mock TRPCError
@@ -111,10 +81,61 @@ vi.mock("@trpc/server", () => ({
   },
 }));
 
+function allocation(
+  status = "waiting",
+  options: { expiresAt?: Date; missing?: boolean } = {}
+) {
+  const expiry = options.expiresAt ?? new Date(Date.now() + 3600000);
+  const fixture = transactionMemory({
+    flights: [
+      {
+        id: 10,
+        economyAvailable: status === "waiting" ? 2 : 0,
+        businessAvailable: 0,
+        status: "scheduled",
+        departureTime: new Date(Date.now() + 86400000),
+      },
+    ],
+    waitlist: options.missing
+      ? []
+      : [
+          {
+            id: 1,
+            userId: 1,
+            flightId: 10,
+            cabinClass: "economy",
+            seats: 2,
+            status,
+            priority: 1,
+            inventoryLockId: status === "waiting" ? null : 1,
+            offerExpiresAt: expiry,
+          },
+        ],
+    inventory_locks:
+      status === "waiting"
+        ? []
+        : [
+            {
+              id: 1,
+              userId: 1,
+              flightId: 10,
+              cabinClass: "economy",
+              numberOfSeats: 2,
+              status: "active",
+              expiresAt: expiry,
+            },
+          ],
+  });
+  vi.mocked(getDb).mockReturnValue(fixture.db);
+  return fixture;
+}
 describe("Waitlist Service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockDb._reset();
+    vi.mocked(getDb).mockReturnValue(
+      mockDb as unknown as ReturnType<typeof getDb>
+    );
   });
 
   describe("addToWaitlist", () => {
@@ -230,18 +251,7 @@ describe("Waitlist Service", () => {
 
   describe("offerSeat", () => {
     it("should mark waitlist entry as offered", async () => {
-      mockDb._setResults(
-        [
-          {
-            id: 1,
-            userId: 1,
-            flightId: 1,
-            cabinClass: "economy",
-            status: "waiting",
-          },
-        ],
-        [{ affectedRows: 1 }]
-      );
+      allocation();
 
       vi.resetModules();
       const { offerSeat } = await import("../../services/waitlist.service");
@@ -253,7 +263,7 @@ describe("Waitlist Service", () => {
     });
 
     it("should throw error if entry not found", async () => {
-      mockDb._setResults([]);
+      allocation("waiting", { missing: true });
 
       vi.resetModules();
       const { offerSeat } = await import("../../services/waitlist.service");
@@ -261,43 +271,19 @@ describe("Waitlist Service", () => {
       await expect(offerSeat(999)).rejects.toThrow("Waitlist entry not found");
     });
 
-    it("should throw error if entry not in waiting status", async () => {
-      mockDb._setResults([
-        {
-          id: 1,
-          userId: 1,
-          flightId: 1,
-          cabinClass: "economy",
-          status: "offered",
-        },
-      ]);
+    it("should throw error if entry not waiting", async () => {
+      allocation("offered");
 
       vi.resetModules();
       const { offerSeat } = await import("../../services/waitlist.service");
 
-      await expect(offerSeat(1)).rejects.toThrow("not in waiting status");
+      await expect(offerSeat(1)).rejects.toThrow("not waiting");
     });
   });
 
   describe("acceptOffer", () => {
     it("should accept offer and return booking info", async () => {
-      const futureDate = new Date();
-      futureDate.setHours(futureDate.getHours() + 24);
-
-      mockDb._setResults(
-        [
-          {
-            id: 1,
-            userId: 1,
-            flightId: 10,
-            cabinClass: "economy",
-            seats: 2,
-            status: "offered",
-            offerExpiresAt: futureDate,
-          },
-        ],
-        [{ affectedRows: 1 }]
-      );
+      allocation("offered");
 
       vi.resetModules();
       const { acceptOffer } = await import("../../services/waitlist.service");
@@ -310,65 +296,28 @@ describe("Waitlist Service", () => {
       expect(result.passengers).toBe(2);
     });
 
-    it("should throw error if offer has expired", async () => {
-      const pastDate = new Date();
-      pastDate.setHours(pastDate.getHours() - 1);
-
-      mockDb._setResults(
-        [
-          {
-            id: 1,
-            userId: 1,
-            flightId: 10,
-            cabinClass: "economy",
-            seats: 2,
-            status: "offered",
-            offerExpiresAt: pastDate,
-          },
-        ],
-        [{ affectedRows: 1 }]
-      );
+    it("should throw error if Offer expired", async () => {
+      allocation("offered", { expiresAt: new Date(Date.now() - 3600000) });
 
       vi.resetModules();
       const { acceptOffer } = await import("../../services/waitlist.service");
 
-      await expect(acceptOffer(1, 1)).rejects.toThrow("offer has expired");
+      await expect(acceptOffer(1, 1)).rejects.toThrow("Offer expired");
     });
 
     it("should throw error if no active offer", async () => {
-      mockDb._setResults([
-        {
-          id: 1,
-          userId: 1,
-          flightId: 10,
-          cabinClass: "economy",
-          status: "waiting",
-        },
-      ]);
+      allocation("waiting");
 
       vi.resetModules();
       const { acceptOffer } = await import("../../services/waitlist.service");
 
-      await expect(acceptOffer(1, 1)).rejects.toThrow("No active offer");
+      await expect(acceptOffer(1, 1)).rejects.toThrow("Legacy offer");
     });
   });
 
   describe("declineOffer", () => {
     it("should decline offer and mark as cancelled", async () => {
-      mockDb._setResults(
-        [
-          {
-            id: 1,
-            userId: 1,
-            flightId: 10,
-            cabinClass: "economy",
-            status: "offered",
-          },
-        ],
-        [{ affectedRows: 1 }],
-        [{ id: 10, economyAvailable: 1, businessAvailable: 0 }],
-        []
-      );
+      allocation("offered");
 
       vi.resetModules();
       const { declineOffer } = await import("../../services/waitlist.service");
@@ -376,24 +325,13 @@ describe("Waitlist Service", () => {
       const result = await declineOffer(1, 1);
 
       expect(result.success).toBe(true);
-      expect(result.message).toContain("Offer declined");
+      expect(result.message).toContain("Offer released");
     });
   });
 
   describe("cancelWaitlistEntry", () => {
     it("should cancel waitlist entry", async () => {
-      mockDb._setResults(
-        [
-          {
-            id: 1,
-            userId: 1,
-            flightId: 10,
-            cabinClass: "economy",
-            status: "waiting",
-          },
-        ],
-        [{ affectedRows: 1 }]
-      );
+      allocation("waiting");
 
       vi.resetModules();
       const { cancelWaitlistEntry } =
@@ -402,27 +340,19 @@ describe("Waitlist Service", () => {
       const result = await cancelWaitlistEntry(1, 1);
 
       expect(result.success).toBe(true);
-      expect(result.message).toContain("Successfully removed from waitlist");
+      expect(result.message).toContain("Offer released");
     });
 
-    it("should throw error if entry already cancelled", async () => {
-      mockDb._setResults([
-        {
-          id: 1,
-          userId: 1,
-          flightId: 10,
-          cabinClass: "economy",
-          status: "cancelled",
-        },
-      ]);
+    it("should replay withdrawal of an already cancelled entry", async () => {
+      allocation("cancelled");
 
       vi.resetModules();
       const { cancelWaitlistEntry } =
         await import("../../services/waitlist.service");
 
-      await expect(cancelWaitlistEntry(1, 1)).rejects.toThrow(
-        "Cannot cancel this waitlist entry"
-      );
+      await expect(cancelWaitlistEntry(1, 1)).resolves.toMatchObject({
+        success: true,
+      });
     });
   });
 

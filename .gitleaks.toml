@@ -1,29 +1,13 @@
-# Gitleaks configuration.
-#
-# The default rule set is kept in full. This file only narrows one known false
-# positive; no rule is disabled, redefined, or skipped by path.
+# Keep every default detector. Exempt only the complete, known synthetic value:
+# a fixture must never hide a different credential on the same line.
+# scripts/ci/probe-gitleaks-policy.py exercises the real scanner in CI.
 [extend]
 useDefault = true
 
-# Test and acceptance fixtures pass a literal idempotency key, for example
-# `idempotencyKey: "cancel-test-1"`. The field name ends in "Key", so the
-# generic-api-key rule scores the value as a credential once its entropy is
-# high enough - "split-refund-1" scored 3.66 and failed a scan. All 23 such
-# literals in this repository are synthetic strings used only by tests.
-#
-# This matches the assignment shape rather than a path. Allowlisting by path
-# would skip the whole file: a scan with that form confirmed it also hid a real
-# high-entropy credential planted beside the fixture, so it is not used here.
-#
-# The second entry is the sanitiser fixture in unified-logger.test.ts, which
-# feeds a deliberately fake key to assert that logging masks it. It predates
-# this change and sits outside the pull-request scan range, so it is not
-# failing today, but it would fail the next scan that includes that file. It is
-# matched as an exact literal rather than by prefix.
 [allowlist]
-description = "Synthetic credentials in fixtures"
-regexTarget = "line"
+description = "Exact synthetic fixture values"
+regexTarget = "secret"
 regexes = [
-  '''idempotencyKey:\s*"[A-Za-z0-9:_.\-]{1,64}"''',
-  '''apiKey:\s*"sk_test_123456789"''',
+  '''^split-refund-1$''',
+  '''^sk_test_123456789$''',
 ]

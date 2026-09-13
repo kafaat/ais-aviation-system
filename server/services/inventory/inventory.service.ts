@@ -23,7 +23,7 @@ import {
   overbookingConfig as overbookingConfigTable,
   deniedBoardingRecords,
 } from "../../../drizzle/schema";
-import { eq, and, gte, sql, lt, desc, asc, inArray } from "drizzle-orm";
+import { eq, and, gte, sql, lt, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -97,8 +97,6 @@ export interface SeatAllocationResult {
 // ============================================================================
 // Constants
 // ============================================================================
-
-const WAITLIST_OFFER_HOURS = 24;
 
 const DEFAULT_OVERBOOKING: OverbookingConfig = {
   economyRate: 0.05,
@@ -503,61 +501,8 @@ export async function processWaitlist(
   flightId: number,
   cabinClass: "economy" | "business"
 ): Promise<number> {
-  const database = await getDb();
-  if (!database) {
-    throw new Error("Database connection not available");
-  }
-
-  const inventory = await getInventoryStatus(flightId, cabinClass);
-  if (inventory.availableSeats <= 0) {
-    return 0;
-  }
-
-  // Get waitlist entries in priority order
-  const entries = await database
-    .select()
-    .from(waitlist)
-    .where(
-      and(
-        eq(waitlist.flightId, flightId),
-        eq(waitlist.cabinClass, cabinClass),
-        eq(waitlist.status, "waiting")
-      )
-    )
-    .orderBy(asc(waitlist.priority))
-    .limit(10);
-
-  let seatsOffered = 0;
-  const offerExpiresAt = new Date(
-    Date.now() + WAITLIST_OFFER_HOURS * 60 * 60 * 1000
-  );
-
-  for (const entry of entries) {
-    if (seatsOffered + entry.seats > inventory.availableSeats) {
-      break;
-    }
-
-    const [result] = await database
-      .update(waitlist)
-      .set({
-        status: "offered",
-        offeredAt: new Date(),
-        offerExpiresAt: offerExpiresAt,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(waitlist.id, entry.id), eq(waitlist.status, "waiting")));
-
-    // A passenger may have cancelled after the candidate list was read.
-    if (result.affectedRows !== 1) continue;
-
-    seatsOffered += entry.seats;
-
-    console.info(
-      `[Inventory] Waitlist offer sent: id=${entry.id}, user=${entry.userId}, seats=${entry.seats}`
-    );
-  }
-
-  return seatsOffered;
+  const { processWaitlist: canonical } = await import("../waitlist.service");
+  return (await canonical(flightId, cabinClass)).offeredCount;
 }
 
 /**
@@ -568,61 +513,9 @@ export async function removeFromWaitlist(
   waitlistId: number,
   userId: number
 ): Promise<void> {
-  const database = await getDb();
-  if (!database) {
-    throw new Error("Database connection not available");
-  }
-
-  const [entry] = await database
-    .select()
-    .from(waitlist)
-    .where(eq(waitlist.id, waitlistId))
-    .limit(1);
-
-  if (!entry) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Waitlist entry not found",
-    });
-  }
-  if (entry.userId !== userId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-  }
-  if (entry.status === "cancelled") return;
-  if (entry.status !== "waiting" && entry.status !== "offered") {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: "Waitlist entry is closed",
-    });
-  }
-
-  const [result] = await database
-    .update(waitlist)
-    .set({
-      status: "cancelled",
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(waitlist.id, waitlistId),
-        eq(waitlist.userId, userId),
-        inArray(waitlist.status, ["waiting", "offered"])
-      )
-    );
-
-  if (result.affectedRows !== 1) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: "Waitlist entry changed",
-    });
-  }
-
-  console.info(`[Inventory] Waitlist entry cancelled: id=${waitlistId}`);
+  const { cancelWaitlistEntry } = await import("../waitlist.service");
+  await cancelWaitlistEntry(waitlistId, userId);
 }
-
-// ============================================================================
-// Overbooking Management
-// ============================================================================
 
 /**
  * Get overbooking configuration for a flight (checks per-route config first)

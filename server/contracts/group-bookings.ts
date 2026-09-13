@@ -5,6 +5,10 @@ export const responseContracts = {
   list: z.array(
     z.object({
       id: outputNumber,
+      organizerUserId: outputNumber.nullable(),
+      inventoryLockId: outputNumber.nullable(),
+      bookingId: outputNumber.nullable(),
+      allocationExpiresAt: z.date().nullable(),
       status: z.enum(["cancelled", "pending", "confirmed"]),
       createdAt: z.date(),
       updatedAt: z.date(),

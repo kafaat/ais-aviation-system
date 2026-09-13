@@ -45,6 +45,7 @@ export const disruptionsRouter = router({
         reason: z.string().min(5).max(500),
         severity: z.enum(["minor", "moderate", "severe"]),
         newDepartureTime: z.date().optional(),
+        newArrivalTime: z.date().optional(),
         delayMinutes: z.number().min(0).optional(),
       })
     )

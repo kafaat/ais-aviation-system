@@ -9,6 +9,7 @@ import {
 import { getDb } from "../db";
 import {
   verifyAviationSource,
+  requireCurrentAviationSource,
   persistAviationEvidence,
   type EvidenceEnvelope,
 } from "./aviation-evidence.service";
@@ -79,6 +80,12 @@ export async function readMaintenance(
       "Exactly one authoritative tail maintenance source is required"
     );
   const row = [...latest.values()][0];
+  requireCurrentAviationSource(
+    row.sourceId,
+    "maintenance",
+    tenantId,
+    airlineId
+  );
   return {
     evidenceId: row.id,
     sourceId: row.sourceId,

@@ -282,9 +282,16 @@ describe("seat replacement", () => {
   async function seed(status: "occupied" | "available") {
     const { bookings, passengers, seatInventory } =
       await import("../../drizzle/schema");
-    await fixture.db
-      .insert(bookings)
-      .values({ id: 5, userId: 1, flightId: 11, cabinClass: "economy" });
+    await fixture.db.insert(bookings).values({
+      id: 5,
+      userId: 1,
+      flightId: 11,
+      cabinClass: "economy",
+      status: "confirmed",
+      paymentStatus: "paid",
+      seatsReserved: true,
+      tenantId: 3,
+    });
     await fixture.db
       .insert(passengers)
       .values({ id: 5, bookingId: 5, seatNumber: "1A" });
@@ -298,7 +305,14 @@ describe("seat replacement", () => {
         bookingId: 5,
         status: "occupied",
       },
-      { id: 2, flightId: 11, seatNumber: "1B", cabinClass: "economy", status },
+      {
+        id: 2,
+        flightId: 11,
+        seatNumber: "1B",
+        cabinClass: "economy",
+        seatPrice: 0,
+        status,
+      },
     ]);
   }
   it("preserves the current seat when the requested seat is occupied", async () => {

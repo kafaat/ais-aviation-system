@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import {
   bookings,
   bookingRefundPlans,
+  orderServiceRefunds,
   paymentSplits,
   flights,
   inventoryLocks,
@@ -258,6 +259,7 @@ export async function releaseBookingSeats(
     assignedAt: null,
     checkedInAt: null,
     boardingPassIssued: false,
+    checkInNonce: null,
     boardingGroup: null,
     boardingSequence: null,
   };
@@ -328,7 +330,46 @@ export async function cancelBookingResources(
         .from(bookingRefundPlans)
         .where(eq(bookingRefundPlans.bookingId, booking.id))
         .limit(1);
-      if (!plan)
+      // Flight cancellation uses durable order refunds for every original payer.
+      // Do not let an unrelated/partial exchange refund authorize cancellation.
+      const orderPlans = plan
+        ? []
+        : await tx
+            .select()
+            .from(orderServiceRefunds)
+            .where(
+              and(
+                eq(orderServiceRefunds.bookingId, booking.id),
+                isNotNull(orderServiceRefunds.cancellationFlightId)
+              )
+            )
+            .for("update");
+      const receipts = plan
+        ? []
+        : await tx
+            .select()
+            .from(paymentReceipts)
+            .where(
+              and(
+                eq(paymentReceipts.bookingId, booking.id),
+                eq(paymentReceipts.settlementStatus, "applied")
+              )
+            )
+            .for("update");
+      const covered =
+        receipts.length > 0 &&
+        receipts.every(
+          r =>
+            r.amount === r.refundedAmount ||
+            orderPlans.some(
+              p =>
+                p.paymentIntentId === r.paymentIntentId &&
+                p.baseRefundedAmount === r.refundedAmount &&
+                p.amount === r.amount - r.refundedAmount &&
+                ["queued", "requesting", "pending"].includes(p.status)
+            )
+        );
+      if (!plan && !covered)
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message:

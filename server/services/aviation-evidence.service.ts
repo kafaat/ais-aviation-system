@@ -30,6 +30,38 @@ const sourceSchema = z.object({
   airportIds: z.array(z.number().int().positive()).optional(),
 });
 export type AviationSource = z.infer<typeof sourceSchema>;
+export function getAviationSources() {
+  return z
+    .array(sourceSchema)
+    .parse(JSON.parse(process.env.AVIATION_SOURCE_REGISTRY ?? "[]"));
+}
+export function requireCurrentAviationSource(
+  sourceId: string,
+  capability: string,
+  tenantId: number | null,
+  airlineId: number
+) {
+  const matches = getAviationSources().filter(s => s.sourceId === sourceId);
+  const source = matches.length === 1 ? matches[0] : undefined;
+  if (
+    !source ||
+    source.tenantId !== tenantId ||
+    !source.capabilities.includes(capability) ||
+    !source.airlineIds?.includes(airlineId) ||
+    Date.parse(source.validUntil) <= Date.now() ||
+    (process.env[source.secretEnv]?.length ?? 0) < 32
+  )
+    throw new Error(
+      "Operational evidence source expired or no longer authorized"
+    );
+  return {
+    sourceId,
+    validUntil: source.validUntil,
+    tenantId,
+    airlineId,
+    capability,
+  };
+}
 /** No credentials or source registration are accepted from the ingestion request. */
 export function verifyAviationSource(
   envelope: EvidenceEnvelope,
@@ -47,9 +79,7 @@ export function verifyAviationSource(
       code: "BAD_REQUEST",
       message: "Invalid event size or timestamp",
     });
-  const registry = z
-    .array(sourceSchema)
-    .parse(JSON.parse(process.env.AVIATION_SOURCE_REGISTRY ?? "[]"));
+  const registry = getAviationSources();
   const matches = registry.filter(s => s.sourceId === envelope.sourceId);
   const source = matches.length === 1 ? matches[0] : undefined;
   const key = source ? process.env[source.secretEnv] : undefined;

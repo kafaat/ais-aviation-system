@@ -15,13 +15,17 @@ const payload = (): BoardingPassPayload => ({
   bookingReference: "ABC123",
   passengerId: 9,
   passengerName: "Sara Ali",
+  flightId: 5,
   flightNumber: "SV123",
+  checkInNonce: "8c78e2e3-99ef-4c26-9838-a61bc155168e",
+  documentDigest: "a".repeat(64),
+  itineraryDigest: "b".repeat(64),
   originId: 10,
   destinationId: 20,
   departureTime: "2026-06-01T09:00:00.000Z",
   seatNumber: "12A",
   cabinClass: "economy",
-  sequence: null,
+  sequence: 1,
 });
 
 describe("boarding-pass sign/verify", () => {

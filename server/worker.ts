@@ -1,3 +1,8 @@
+import { randomUUID } from "node:crypto";
+import {
+  observationInstanceId,
+  recordOperationalSample,
+} from "./services/operational-observations.service";
 /**
  * Background Job Worker Entry Point
  *
@@ -105,6 +110,7 @@ async function initialize(): Promise<void> {
   const check = async (initial = false) => {
     if (checking || isShuttingDown) return;
     checking = true;
+    const startedAt = new Date();
     let timeout: NodeJS.Timeout | undefined;
     try {
       await Promise.race([
@@ -121,6 +127,14 @@ async function initialize(): Promise<void> {
         Object.values(getWorkersStatus()).some(w => !w.running || w.paused)
       )
         throw new Error("A mandatory queue worker stopped");
+      await recordOperationalSample({
+        id: randomUUID(),
+        instanceId: observationInstanceId,
+        component: "worker",
+        status: "healthy",
+        startedAt,
+        endedAt: new Date(),
+      });
       if (!isShuttingDown) {
         writeFileSync("/tmp/ais-worker-ready.next", String(Date.now()));
         renameSync("/tmp/ais-worker-ready.next", "/tmp/ais-worker-ready");
@@ -128,6 +142,18 @@ async function initialize(): Promise<void> {
     } catch (error) {
       rmSync("/tmp/ais-worker-ready", { force: true });
       log.error({ error }, "Worker readiness lost");
+      try {
+        await recordOperationalSample({
+          id: randomUUID(),
+          instanceId: observationInstanceId,
+          component: "worker",
+          status: "degraded",
+          startedAt,
+          endedAt: new Date(),
+        });
+      } catch {
+        /* Database outage is visible as a stale observation. */
+      }
       if (initial) throw error;
     } finally {
       clearTimeout(timeout);
@@ -182,6 +208,14 @@ async function shutdown(signal: string): Promise<void> {
     log.info({}, "Closing queues and Redis connection...");
     await closeQueues();
 
+    await recordOperationalSample({
+      id: randomUUID(),
+      instanceId: observationInstanceId,
+      component: "worker",
+      status: "stopped",
+      startedAt: new Date(),
+      endedAt: new Date(),
+    });
     // 5. Close database connection pool
     log.info({}, "Closing database connection pool...");
     await closePool();

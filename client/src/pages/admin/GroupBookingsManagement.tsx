@@ -60,6 +60,7 @@ export default function GroupBookingsManagement() {
   );
 
   // Dialog state
+  const [organizerUserId, setOrganizerUserId] = useState("");
   const [approveDialogOpen, setApproveDialogOpen] = useState(false);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<GroupBooking | null>(
@@ -110,6 +111,7 @@ export default function GroupBookingsManagement() {
   const handleApprove = () => {
     if (!selectedBooking) return;
     approveMutation.mutate({
+      organizerUserId: Number(organizerUserId) || undefined,
       id: selectedBooking.id,
       discountPercent,
     });
@@ -127,6 +129,9 @@ export default function GroupBookingsManagement() {
   };
 
   const openApproveDialog = (booking: GroupBooking) => {
+    setOrganizerUserId(
+      booking.organizerUserId ? String(booking.organizerUserId) : ""
+    );
     setSelectedBooking(booking);
     // Calculate suggested discount based on group size
     if (booking.groupSize >= 50) {
@@ -365,7 +370,21 @@ export default function GroupBookingsManagement() {
                         {booking.groupSize}
                       </Badge>
                     </TableCell>
-                    <TableCell>{getStatusBadge(booking.status)}</TableCell>
+                    <TableCell>
+                      {getStatusBadge(booking.status)}
+                      {booking.bookingId && (
+                        <p>
+                          {t("checkIn.bookingRef")}: #{booking.bookingId}
+                        </p>
+                      )}
+                      {booking.allocationExpiresAt && !booking.bookingId && (
+                        <p className="text-xs">
+                          {new Date(
+                            booking.allocationExpiresAt
+                          ).toLocaleString()}
+                        </p>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {booking.discountPercent ? (
                         <span className="text-green-600 font-semibold flex items-center gap-1">
@@ -453,6 +472,20 @@ export default function GroupBookingsManagement() {
                     `#${selectedBooking.flightId}`}
                 </p>
               </div>
+              {!selectedBooking.organizerUserId && (
+                <div>
+                  <Label htmlFor="organizer-user">
+                    {t("groupBooking.organizerAccount")}
+                  </Label>
+                  <Input
+                    id="organizer-user"
+                    type="number"
+                    min={1}
+                    value={organizerUserId}
+                    onChange={e => setOrganizerUserId(e.target.value)}
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="discount">
                   {t("groupBooking.admin.discountPercent")}

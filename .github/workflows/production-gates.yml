@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.x"
+          node-version: "24.x"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -67,8 +67,8 @@ jobs:
         run: pnpm exec tsc -p tsconfig.acceptance.json --noEmit
       - name: Verify service producers, consumers and retired modules
         run: node --import tsx scripts/generate-service-catalog.ts --check
-      - name: Verify backup failure boundaries
-        run: python3 -m unittest discover -s scripts/ci -p 'test_backup_job.py' -v
+      - name: Verify backup failure boundaries and worker liveness
+        run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
       - name: Prove transaction boundaries against live MySQL and Redis
         timeout-minutes: 3
         env:
@@ -78,6 +78,22 @@ jobs:
           REDIS_URL: redis://127.0.0.1:6379/1
           JWT_SECRET: acceptance-only-signing-key-not-for-production
         run: pnpm test:acceptance "$RUNNER_TEMP/live-acceptance.json"
+      - name: Prove integration remediation on a separate empty database
+        timeout-minutes: 5
+        env:
+          NODE_ENV: test
+          AIS_DISPOSABLE_DATABASE: "true"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_integration_remediation_test
+          REDIS_URL: redis://127.0.0.1:6379/2
+          QUEUE_REDIS_URL: redis://127.0.0.1:6379/2
+          JWT_SECRET: acceptance-only-signing-key-not-for-production
+          STRIPE_SECRET_KEY: sk_test_mock_key
+          MYSQL_PWD: test_password
+        run: |
+          mysql -h 127.0.0.1 -u root -e 'CREATE DATABASE ais_integration_remediation_test'
+          pnpm db:migrate
+          pnpm db:verify
+          node --import tsx scripts/acceptance/integration-remediation.ts "$RUNNER_TEMP/integration-remediation.json"
       - name: Restore the deployment backup on an isolated MySQL server
         env:
           NODE_ENV: test
@@ -92,6 +108,7 @@ jobs:
         with:
           name: live-transaction-acceptance
           path: |
+            ${{ runner.temp }}/integration-remediation.json
             ${{ runner.temp }}/live-acceptance.json
             ${{ runner.temp }}/backup-restore.json
           if-no-files-found: error
@@ -119,7 +136,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.x"
+          node-version: "24.x"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - name: Resolve previous release
         id: previous
@@ -171,7 +188,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.x"
+          node-version: "24.x"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

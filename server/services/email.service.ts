@@ -141,6 +141,7 @@ export interface BookingConfirmationData {
 }
 
 export interface FlightStatusChangeData {
+  idempotencyKey?: string;
   passengerName: string;
   passengerEmail: string;
   bookingReference: string;
@@ -617,6 +618,7 @@ export async function sendFlightStatusChange(
     const colors = statusColors[data.newStatus] || statusColors.scheduled;
 
     const template: EmailTemplate = {
+      idempotencyKey: data.idempotencyKey,
       to: data.passengerEmail,
       subject: `تحديث حالة الرحلة ${data.flightNumber}`,
       text: `

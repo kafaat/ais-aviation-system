@@ -82,6 +82,7 @@ export const adminRouter = router({
         flightId: z.number(),
         cabinClass: z.enum(["economy", "business"]),
         seats: z.number().int().min(0),
+        reason: z.string().trim().min(1).max(500).optional(),
       })
     )
     .output(responseContracts["updateFlightAvailability"])
@@ -90,7 +91,9 @@ export const adminRouter = router({
         input.flightId,
         input.cabinClass,
         input.seats,
-        isAdmin(ctx.user.role) ? undefined : (ctx.tenantId ?? undefined)
+        isAdmin(ctx.user.role) ? undefined : (ctx.tenantId ?? undefined),
+        ctx.user.id,
+        input.reason
       );
       if (!updated)
         throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
@@ -201,7 +204,10 @@ export const adminRouter = router({
         .where(eq(flights.id, input.flightId))
         .limit(1);
 
-      const result = await flightStatusService.updateFlightStatus(input);
+      const result = await flightStatusService.updateFlightStatus({
+        ...input,
+        adminUserId: ctx.user.id,
+      });
 
       // Audit log: Flight status updated
       if (existingFlight) {
@@ -254,7 +260,10 @@ export const adminRouter = router({
         .where(eq(flights.id, input.flightId))
         .limit(1);
 
-      const result = await flightStatusService.cancelFlightAndRefund(input);
+      const result = await flightStatusService.cancelFlightAndRefund({
+        ...input,
+        actorId: ctx.user.id,
+      });
 
       // Audit log: Flight cancelled with refunds
       if (existingFlight) {

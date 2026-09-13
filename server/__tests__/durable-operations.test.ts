@@ -60,8 +60,8 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 describe("durable integration effects", () => {
   it("deduplicates receipt and owned notification, rejects identity reuse", async () => {
-    expect(await consumeLocalEvent(event)).toEqual({ duplicate: false });
-    expect(await consumeLocalEvent(event)).toEqual({ duplicate: true });
+    expect(await consumeLocalEvent(event)).toMatchObject({ duplicate: false });
+    expect(await consumeLocalEvent(event)).toMatchObject({ duplicate: true });
     expect(fixture.rows("event_inbox")).toHaveLength(1);
     expect(fixture.rows("notifications")).toHaveLength(1);
     expect(fixture.rows("notifications")[0].userId).toBe(8);
@@ -69,19 +69,33 @@ describe("durable integration effects", () => {
       consumeLocalEvent({ ...event, payload: { bookingId: 2 } })
     ).rejects.toThrow("conflicts");
   });
-  it("rolls the receipt back if its effect cannot commit", async () => {
+  it("records failure without claiming that the local effect committed", async () => {
     fixture.failInsert("notifications");
-    await expect(consumeLocalEvent(event)).rejects.toThrow("Injected");
-    expect(fixture.rows("event_inbox")).toHaveLength(0);
+    await expect(consumeLocalEvent(event)).rejects.toThrow(
+      "Local event consumers failed"
+    );
+    expect(fixture.rows("event_inbox")[0].processedAt).toBeNull();
+    expect(
+      fixture.rows("event_deliveries").every(r => r.status !== "processed")
+    ).toBe(true);
+    expect(fixture.rows("notifications")).toHaveLength(0);
   });
   it("does not consume a missing or foreign aggregate", async () => {
     await expect(consumeLocalEvent({ ...event, tenantId: 9 })).rejects.toThrow(
-      "tenant"
+      "Local event consumers failed"
     );
     await expect(
-      consumeLocalEvent({ ...event, aggregateId: "99" })
-    ).rejects.toThrow("unavailable");
-    expect(fixture.rows("event_inbox")).toHaveLength(0);
+      consumeLocalEvent({
+        ...event,
+        eventId: "7169330f-40d2-484f-b12a-507f1d22217a",
+        aggregateId: "99",
+      })
+    ).rejects.toThrow("Local event consumers failed");
+    expect(fixture.rows("event_inbox")[0].processedAt).toBeNull();
+    expect(
+      fixture.rows("event_deliveries").every(r => r.status !== "processed")
+    ).toBe(true);
+    expect(fixture.rows("notifications")).toHaveLength(0);
   });
   it("records completed ticks and retries failures without false success", async () => {
     const run = vi.fn().mockResolvedValue(undefined);

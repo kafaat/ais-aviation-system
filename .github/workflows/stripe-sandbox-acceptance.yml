@@ -18,24 +18,34 @@ jobs:
         options: >-
           --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_password"
           --health-interval=10s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7.4-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.x"
+          node-version: "24.x"
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-      - name: Require a Stripe test key
+      - name: Record prerequisites and require a Stripe test key
         env:
+          NODE_ENV: test
+          AIS_DISPOSABLE_DATABASE: "true"
+          DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_stripe_test
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
-        run: |
-          node -e 'if (!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")) { console.error("Configure STRIPE_TEST_SECRET_KEY with an sk_test_ key; provider acceptance cannot be skipped."); process.exit(1); }'
+        run: node scripts/acceptance/stripe-checkout.ts "$RUNNER_TEMP/stripe-acceptance.json" --preflight
       - run: pnpm install --frozen-lockfile
       - name: Apply committed migrations to an isolated database
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_stripe_test
         run: pnpm db:migrate
-      - name: Verify the real Stripe test checkout contract
+      - name: Verify Stripe sandbox checkout, captures and original-payer refunds
         env:
+          REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test
           AIS_DISPOSABLE_DATABASE: "true"
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_stripe_test
@@ -47,5 +57,5 @@ jobs:
         with:
           name: stripe-sandbox-evidence
           path: ${{ runner.temp }}/stripe-acceptance.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 14

@@ -1,10 +1,12 @@
+import { readRecoveryFeasibility } from "./recovery-feasibility.service";
 import { requireValue } from "./required-value";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
+  airlines,
   bookingSegments,
   bookingModifications,
   bookingAncillaries,
@@ -57,6 +59,18 @@ async function readInputs(
   input: z.infer<typeof recoveryInput>,
   tenantId: number | null
 ) {
+  const [scope] = await tx
+    .select({ airlineId: flights.airlineId })
+    .from(flightDisruptions)
+    .innerJoin(flights, eq(flights.id, flightDisruptions.flightId))
+    .where(eq(flightDisruptions.id, input.eventId));
+  if (!scope) throw new Error("Disruption not found");
+  // All operational assignment, policy and schedule writers take this lock first.
+  await tx
+    .select()
+    .from(airlines)
+    .where(eq(airlines.id, scope.airlineId))
+    .for("update");
   const [event] = await tx
     .select()
     .from(flightDisruptions)
@@ -154,6 +168,15 @@ async function readInputs(
     if (!f) throw new Error("Recovery flight unavailable");
     locked.push(f);
   }
+  const operationalEvidence = [];
+  for (const f of locked.filter(f => input.candidateFlightIds.includes(f.id))) {
+    if (f.airlineId !== scope.airlineId || f.tenantId !== original[0].tenantId)
+      throw new Error("Candidate outside operator scope");
+    operationalEvidence.push({
+      flightId: f.id,
+      evidence: await readRecoveryFeasibility(tx, f),
+    });
+  }
   const capacities: Record<string, number> = {};
   for (const f of locked.filter(f => input.candidateFlightIds.includes(f.id)))
     for (const cabin of ["economy", "business"] as const)
@@ -207,6 +230,7 @@ async function readInputs(
   // Availability can improve without invalidating approval; inventory is rechecked atomically at execution.
   const snapshot = calculateRequestHash({
     eventId: event.id,
+    operationalEvidence,
     status: event.status,
     records: records.map(r => ({ booking: r.booking, segments: r.segments })),
     flights: locked.map(
@@ -330,7 +354,7 @@ export async function executeRecovery(
       state = await readInputs(tx, saved.input, tenantId);
     if (state.snapshot !== saved.snapshot)
       throw new Error(
-        "Booking or schedule changed; propose a new recovery plan"
+        "Booking, schedule or operational evidence changed; propose a new recovery plan"
       );
     validateRecoverySolution(state.problem, saved.choices);
     for (const choice of saved.choices) {
@@ -479,5 +503,33 @@ export async function executeRecovery(
       .set({ status: "executed", executionEventId: receiptId })
       .where(eq(iropsRecoveryPlans.id, id));
     return { receiptId };
+  });
+}
+
+/** Persisted review queue so an operator can resume after navigation or restart. */
+export async function listRecoveryPlans(tenantId: number | null) {
+  const db = getDb();
+  if (!db) throw new Error("Recovery database unavailable");
+  const rows = await db
+    .select()
+    .from(iropsRecoveryPlans)
+    .where(
+      tenantId === null ? undefined : eq(iropsRecoveryPlans.tenantId, tenantId)
+    )
+    .orderBy(sql`${iropsRecoveryPlans.createdAt} DESC`)
+    .limit(30);
+  return rows.map(r => {
+    const p = savedPlan.parse(r.payload);
+    return {
+      id: r.id,
+      eventId: r.eventId,
+      digest: r.digest,
+      status: r.status,
+      expiresAt: r.expiresAt,
+      approvedBy: r.approvedBy,
+      choices: p.choices,
+      unassignedPassengers: p.unassignedPassengers,
+      passengerDelayMinutes: p.passengerDelayMinutes,
+    };
   });
 }

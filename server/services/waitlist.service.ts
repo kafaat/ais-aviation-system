@@ -1,32 +1,27 @@
+import { randomUUID } from "node:crypto";
+import {
+  createInventoryLock,
+  releaseInventoryLock,
+} from "./inventory-lock.service";
+import { countActiveHolds } from "./inventory-capacity.service";
+import { recordEvent } from "./outbox.service";
+import type { SettlementTx } from "./booking-settlement.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   waitlist,
+  inventoryLocks,
   flights,
   users,
   airports,
   airlines,
 } from "../../drizzle/schema";
-import { eq, and, desc, asc, gte, sql } from "drizzle-orm";
-import { createNotification } from "./notification.service";
+import { eq, and, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 
 /**
  * Waitlist Service
  * Handles waitlist operations for fully booked flights
  */
-
-function getAffectedRows(result: unknown): number {
-  if (Array.isArray(result)) {
-    const first = result[0];
-    if (first && typeof first === "object" && "affectedRows" in first) {
-      return Number((first as { affectedRows?: number }).affectedRows ?? 0);
-    }
-  }
-  if (result && typeof result === "object" && "rowsAffected" in result) {
-    return Number((result as { rowsAffected?: number }).rowsAffected ?? 0);
-  }
-  return 0;
-}
 
 /**
  * Get the next priority number for a waitlist entry
@@ -196,392 +191,217 @@ export async function getWaitlistPosition(
  * Process waitlist when seats become available
  * Called when a booking is cancelled or seats are added
  */
-export async function processWaitlist(flightId: number): Promise<{
+async function offerInTransaction(
+  tx: SettlementTx,
+  entry: typeof waitlist.$inferSelect
+) {
+  const hold = await createInventoryLock(
+    entry.flightId,
+    entry.seats,
+    entry.cabinClass,
+    `waitlist:${entry.id}:${randomUUID()}`,
+    entry.userId,
+    tx,
+    1440
+  );
+  await tx
+    .update(waitlist)
+    .set({
+      status: "offered",
+      offeredAt: new Date(),
+      offerExpiresAt: hold.expiresAt,
+      inventoryLockId: hold.lockId,
+    })
+    .where(eq(waitlist.id, entry.id));
+  await recordEvent(tx, {
+    aggregateType: "waitlist",
+    aggregateId: entry.id,
+    eventType: "waitlist.offered",
+    payload: {
+      waitlistId: entry.id,
+      flightId: entry.flightId,
+      userId: entry.userId,
+      expiresAt: hold.expiresAt.toISOString(),
+    },
+  });
+  return hold;
+}
+export async function processWaitlist(
+  flightId: number,
+  cabin?: "economy" | "business"
+): Promise<{
   offeredCount: number;
   notifications: Array<{ userId: number; email: boolean; sms: boolean }>;
 }> {
-  const database = await getDb();
-  if (!database) throw new Error("Database not available");
-
-  // Use a transaction to prevent race conditions on seat offers
-  return await database.transaction(async tx => {
-    // Get flight details inside transaction for consistency
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  return await db.transaction(async tx => {
     const [flight] = await tx
       .select()
       .from(flights)
       .where(eq(flights.id, flightId))
-      .limit(1);
-
-    if (!flight) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Flight not found",
-      });
-    }
-
+      .for("update");
+    if (!flight) throw new Error("Flight not found");
     const notifications: Array<{
       userId: number;
       email: boolean;
       sms: boolean;
     }> = [];
-    let offeredCount = 0;
-
-    // Process economy waitlist
-    if (flight.economyAvailable > 0) {
-      let remainingEconomy = flight.economyAvailable;
-
-      const economyWaitlist = await tx
-        .select()
-        .from(waitlist)
-        .where(
-          and(
-            eq(waitlist.flightId, flightId),
-            eq(waitlist.cabinClass, "economy"),
-            eq(waitlist.status, "waiting")
-          )
+    if (
+      !["scheduled", "delayed"].includes(flight.status) ||
+      flight.departureTime <= new Date()
+    )
+      return { offeredCount: 0, notifications };
+    const entries = await tx
+      .select()
+      .from(waitlist)
+      .where(
+        and(
+          eq(waitlist.flightId, flightId),
+          eq(waitlist.status, "waiting"),
+          cabin ? eq(waitlist.cabinClass, cabin) : undefined
         )
-        .orderBy(asc(waitlist.priority));
-
-      for (const entry of economyWaitlist) {
-        if (entry.seats <= remainingEconomy) {
-          // Update status directly within the transaction
-          const expiresAt = new Date();
-          expiresAt.setHours(expiresAt.getHours() + 24);
-
-          const seatUpdate = await tx
-            .update(flights)
-            .set({
-              economyAvailable: sql`${flights.economyAvailable} - ${entry.seats}`,
-            })
-            .where(
-              and(
-                eq(flights.id, flightId),
-                gte(flights.economyAvailable, entry.seats)
-              )
-            );
-          if (getAffectedRows(seatUpdate) !== 1) {
-            throw new Error(
-              "Inventory changed while processing economy waitlist"
-            );
-          }
-
-          const offerUpdate = await tx
-            .update(waitlist)
-            .set({
-              status: "offered",
-              offeredAt: new Date(),
-              offerExpiresAt: expiresAt,
-            })
-            .where(
-              and(eq(waitlist.id, entry.id), eq(waitlist.status, "waiting"))
-            );
-          if (getAffectedRows(offerUpdate) !== 1) {
-            throw new Error("Waitlist entry was concurrently processed");
-          }
-
-          remainingEconomy -= entry.seats;
-          offeredCount++;
-          notifications.push({
-            userId: entry.userId,
-            email: entry.notifyByEmail,
-            sms: entry.notifyBySms,
-          });
-        }
-      }
+      )
+      .orderBy(asc(waitlist.priority), asc(waitlist.id))
+      .for("update");
+    for (const entry of entries) {
+      const available =
+        (entry.cabinClass === "economy"
+          ? flight.economyAvailable
+          : flight.businessAvailable) -
+        (await countActiveHolds(tx, flightId, entry.cabinClass));
+      if (available < entry.seats) continue;
+      await offerInTransaction(tx, entry);
+      notifications.push({
+        userId: entry.userId,
+        email: entry.notifyByEmail,
+        sms: entry.notifyBySms,
+      });
     }
-
-    // Process business waitlist
-    if (flight.businessAvailable > 0) {
-      let remainingBusiness = flight.businessAvailable;
-
-      const businessWaitlist = await tx
-        .select()
-        .from(waitlist)
-        .where(
-          and(
-            eq(waitlist.flightId, flightId),
-            eq(waitlist.cabinClass, "business"),
-            eq(waitlist.status, "waiting")
-          )
-        )
-        .orderBy(asc(waitlist.priority));
-
-      for (const entry of businessWaitlist) {
-        if (entry.seats <= remainingBusiness) {
-          // Update status directly within the transaction
-          const expiresAt = new Date();
-          expiresAt.setHours(expiresAt.getHours() + 24);
-
-          const seatUpdate = await tx
-            .update(flights)
-            .set({
-              businessAvailable: sql`${flights.businessAvailable} - ${entry.seats}`,
-            })
-            .where(
-              and(
-                eq(flights.id, flightId),
-                gte(flights.businessAvailable, entry.seats)
-              )
-            );
-          if (getAffectedRows(seatUpdate) !== 1) {
-            throw new Error(
-              "Inventory changed while processing business waitlist"
-            );
-          }
-
-          const offerUpdate = await tx
-            .update(waitlist)
-            .set({
-              status: "offered",
-              offeredAt: new Date(),
-              offerExpiresAt: expiresAt,
-            })
-            .where(
-              and(eq(waitlist.id, entry.id), eq(waitlist.status, "waiting"))
-            );
-          if (getAffectedRows(offerUpdate) !== 1) {
-            throw new Error("Waitlist entry was concurrently processed");
-          }
-
-          remainingBusiness -= entry.seats;
-          offeredCount++;
-          notifications.push({
-            userId: entry.userId,
-            email: entry.notifyByEmail,
-            sms: entry.notifyBySms,
-          });
-        }
-      }
-    }
-
-    return { offeredCount, notifications };
+    return { offeredCount: notifications.length, notifications };
   });
 }
-
-/**
- * Offer seat to next person in waitlist queue
- */
-export async function offerSeat(waitlistId: number): Promise<{
-  success: boolean;
-  expiresAt: Date;
-}> {
-  const database = await getDb();
-  if (!database) throw new Error("Database not available");
-
-  const [entry] = await database
+async function lockedEntry(tx: SettlementTx, id: number, userId?: number) {
+  const [candidate] = await tx
     .select()
     .from(waitlist)
-    .where(eq(waitlist.id, waitlistId))
-    .limit(1);
-
-  if (!entry) {
+    .where(eq(waitlist.id, id));
+  if (!candidate || (userId !== undefined && candidate.userId !== userId))
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Waitlist entry not found",
     });
-  }
-
-  if (entry.status !== "waiting") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "This waitlist entry is not in waiting status",
-    });
-  }
-
-  // Set offer expiration to 24 hours from now
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 24);
-
-  await database
-    .update(waitlist)
-    .set({
-      status: "offered",
-      offeredAt: new Date(),
-      offerExpiresAt: expiresAt,
-    })
-    .where(eq(waitlist.id, waitlistId));
-
-  // Get flight info for notification
-  try {
-    const [flight] = await database
-      .select({ flightNumber: flights.flightNumber })
-      .from(flights)
-      .where(eq(flights.id, entry.flightId))
-      .limit(1);
-
-    const flightNumber = flight?.flightNumber || `#${entry.flightId}`;
-    await createNotification(
-      entry.userId,
-      "booking",
-      "Waitlist Seat Available",
-      `A seat is now available for flight ${flightNumber} (${entry.cabinClass} class). You have 24 hours to accept this offer before it expires.`,
-      {
-        flightId: entry.flightId,
-        flightNumber,
-        link: `/waitlist`,
-      }
-    );
-  } catch (notifError) {
-    console.error(
-      `[Waitlist] Failed to send offer notification for waitlist ${waitlistId}:`,
-      notifError
-    );
-  }
-
-  return { success: true, expiresAt };
+  await tx
+    .select({ id: flights.id })
+    .from(flights)
+    .where(eq(flights.id, candidate.flightId))
+    .for("update");
+  const [entry] = await tx
+    .select()
+    .from(waitlist)
+    .where(eq(waitlist.id, id))
+    .for("update");
+  if (!entry) throw new Error("Waitlist entry disappeared");
+  return entry;
 }
-
-/**
- * Accept waitlist offer and convert to booking
- */
-export async function acceptOffer(
-  waitlistId: number,
-  userId: number
-): Promise<{
-  success: boolean;
-  message: string;
-  flightId: number;
-  cabinClass: "economy" | "business";
-  passengers: number;
-}> {
-  const database = await getDb();
-  if (!database) throw new Error("Database not available");
-
-  const [entry] = await database
-    .select()
-    .from(waitlist)
-    .where(and(eq(waitlist.id, waitlistId), eq(waitlist.userId, userId)))
-    .limit(1);
-
-  if (!entry) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Waitlist entry not found",
-    });
-  }
-
-  if (entry.status !== "offered") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "No active offer for this waitlist entry",
-    });
-  }
-
-  // Check if offer has expired
-  if (entry.offerExpiresAt && new Date() > new Date(entry.offerExpiresAt)) {
-    await database
+export async function offerSeat(waitlistId: number) {
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  return await db.transaction(async tx => {
+    const entry = await lockedEntry(tx, waitlistId);
+    if (entry.status !== "waiting")
+      throw new Error("Waitlist entry is not waiting");
+    const hold = await offerInTransaction(tx, entry);
+    return { success: true, expiresAt: hold.expiresAt };
+  });
+}
+export async function acceptOffer(waitlistId: number, userId: number) {
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  return await db.transaction(async tx => {
+    const entry = await lockedEntry(tx, waitlistId, userId);
+    if (!entry.inventoryLockId)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Legacy offer requires inventory reconciliation and a new offer",
+      });
+    const [hold] = await tx
+      .select()
+      .from(inventoryLocks)
+      .where(eq(inventoryLocks.id, entry.inventoryLockId))
+      .for("update");
+    if (
+      !["offered", "confirmed"].includes(entry.status) ||
+      !hold ||
+      hold.status !== "active" ||
+      hold.expiresAt <= new Date() ||
+      entry.bookingId
+    )
+      throw new Error("Offer expired or already transferred to a booking");
+    await tx
       .update(waitlist)
-      .set({ status: "expired" })
-      .where(eq(waitlist.id, waitlistId));
-
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "This offer has expired",
-    });
-  }
-
-  // Mark as confirmed
-  await database
-    .update(waitlist)
-    .set({
-      status: "confirmed",
-      confirmedAt: new Date(),
-    })
-    .where(eq(waitlist.id, waitlistId));
-
-  return {
-    success: true,
-    message: "Offer accepted. Please proceed to complete your booking.",
-    flightId: entry.flightId,
-    cabinClass: entry.cabinClass as "economy" | "business",
-    passengers: entry.seats,
-  };
+      .set({
+        status: "confirmed",
+        confirmedAt: entry.confirmedAt ?? new Date(),
+      })
+      .where(eq(waitlist.id, entry.id));
+    return {
+      success: true,
+      message:
+        "Offer accepted; inventory is held until the displayed deadline. Payment confirms the booking.",
+      flightId: entry.flightId,
+      cabinClass: entry.cabinClass,
+      passengers: entry.seats,
+      waitlistId: entry.id,
+      expiresAt: hold.expiresAt,
+    };
+  });
 }
-
-/**
- * Decline waitlist offer
- */
-export async function declineOffer(
+async function endOffer(
   waitlistId: number,
-  userId: number
-): Promise<{ success: boolean; message: string }> {
-  const database = await getDb();
-  if (!database) throw new Error("Database not available");
-
-  const [entry] = await database
-    .select()
-    .from(waitlist)
-    .where(and(eq(waitlist.id, waitlistId), eq(waitlist.userId, userId)))
-    .limit(1);
-
-  if (!entry) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Waitlist entry not found",
+  userId: number | undefined,
+  status: "expired" | "cancelled"
+) {
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  return await db.transaction(async tx => {
+    const entry = await lockedEntry(tx, waitlistId, userId);
+    if (entry.bookingId) throw new Error("Manage the linked booking instead");
+    if (["cancelled", "expired"].includes(entry.status))
+      return { flightId: entry.flightId, changed: false };
+    if (
+      status === "expired" &&
+      (!entry.offerExpiresAt || entry.offerExpiresAt > new Date())
+    )
+      return { flightId: entry.flightId, changed: false };
+    if (entry.inventoryLockId)
+      await releaseInventoryLock(entry.inventoryLockId, tx);
+    // Historical offers did not consistently reserve capacity. Do not invent
+    // a compensating increment; the inventory reconciliation gate exposes them.
+    if (!entry.inventoryLockId && entry.status !== "waiting")
+      throw new Error("Legacy offer requires inventory reconciliation");
+    await tx.update(waitlist).set({ status }).where(eq(waitlist.id, entry.id));
+    await recordEvent(tx, {
+      aggregateType: "waitlist",
+      aggregateId: entry.id,
+      eventType: `waitlist.${status}`,
+      payload: {
+        waitlistId: entry.id,
+        flightId: entry.flightId,
+        userId: entry.userId,
+      },
     });
-  }
-
-  if (entry.status !== "offered") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "No active offer to decline",
-    });
-  }
-
-  // Mark as cancelled
-  await database
-    .update(waitlist)
-    .set({ status: "cancelled" })
-    .where(eq(waitlist.id, waitlistId));
-
-  // Process waitlist to offer to next person
-  await processWaitlist(entry.flightId);
-
-  return {
-    success: true,
-    message: "Offer declined. The seat will be offered to the next person.",
-  };
+    return { flightId: entry.flightId, changed: true };
+  });
 }
-
-/**
- * Cancel waitlist entry
- */
-export async function cancelWaitlistEntry(
-  waitlistId: number,
-  userId: number
-): Promise<{ success: boolean; message: string }> {
-  const database = await getDb();
-  if (!database) throw new Error("Database not available");
-
-  const [entry] = await database
-    .select()
-    .from(waitlist)
-    .where(and(eq(waitlist.id, waitlistId), eq(waitlist.userId, userId)))
-    .limit(1);
-
-  if (!entry) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Waitlist entry not found",
-    });
-  }
-
-  if (entry.status === "cancelled" || entry.status === "confirmed") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot cancel this waitlist entry",
-    });
-  }
-
-  await database
-    .update(waitlist)
-    .set({ status: "cancelled" })
-    .where(eq(waitlist.id, waitlistId));
-
-  return {
-    success: true,
-    message: "Successfully removed from waitlist",
-  };
+export async function declineOffer(waitlistId: number, userId: number) {
+  const result = await endOffer(waitlistId, userId, "cancelled");
+  await processWaitlist(result.flightId);
+  return { success: true, message: "Offer released" };
+}
+export async function cancelWaitlistEntry(waitlistId: number, userId: number) {
+  return await declineOffer(waitlistId, userId);
 }
 
 /**
@@ -712,59 +532,37 @@ export async function getUserWaitlist(userId: number): Promise<
 /**
  * Check and expire old offers (run via cron job)
  */
-export async function processExpiredOffers(): Promise<{
-  expiredCount: number;
-  reofferedCount: number;
-}> {
-  const database = await getDb();
-  if (!database) {
-    console.error("Database not available for offer expiration");
-    return { expiredCount: 0, reofferedCount: 0 };
-  }
-
-  try {
-    const now = new Date();
-
-    // Find expired offers
-    const expiredOffers = await database
-      .select()
-      .from(waitlist)
-      .where(
-        and(
-          eq(waitlist.status, "offered"),
-          sql`${waitlist.offerExpiresAt} < ${now}`
-        )
-      );
-
-    let expiredCount = 0;
-    const flightsToProcess = new Set<number>();
-
-    for (const offer of expiredOffers) {
-      await database
-        .update(waitlist)
-        .set({ status: "expired" })
-        .where(eq(waitlist.id, offer.id));
-
-      expiredCount++;
-      flightsToProcess.add(offer.flightId);
-    }
-
-    // Re-process waitlists for affected flights
-    let reofferedCount = 0;
-    for (const flightId of flightsToProcess) {
-      const result = await processWaitlist(flightId);
-      reofferedCount += result.offeredCount;
-    }
-
-    console.info(
-      `[Waitlist] Processed ${expiredCount} expired offers, re-offered to ${reofferedCount} users`
+export async function processExpiredOffers() {
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  const entries = await db
+    .select()
+    .from(waitlist)
+    .where(
+      and(
+        inArray(waitlist.status, ["offered", "confirmed"]),
+        isNull(waitlist.bookingId),
+        sql`${waitlist.offerExpiresAt} <= ${new Date()}`
+      )
     );
-
-    return { expiredCount, reofferedCount };
-  } catch (error) {
-    console.error("Error processing expired offers:", error);
-    return { expiredCount: 0, reofferedCount: 0 };
+  let expiredCount = 0,
+    reofferedCount = 0;
+  const failures: unknown[] = [];
+  for (const entry of entries) {
+    try {
+      const ended = await endOffer(entry.id, undefined, "expired");
+      if (ended.changed) expiredCount++;
+      reofferedCount += (await processWaitlist(entry.flightId)).offeredCount;
+    } catch (error) {
+      failures.push(error);
+    }
   }
+  if (failures.length)
+    throw new AggregateError(
+      failures,
+      "Waitlist expiration needs reconciliation"
+    );
+  return { expiredCount, reofferedCount };
 }
 
 /**
