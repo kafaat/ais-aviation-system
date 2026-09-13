@@ -1,5 +1,37 @@
 # Changelog
 
+## What's Changed in v1.24.0
+
+### Features
+
+- feat(operations): persist health evidence and expose controlled recovery workflows (a462bfd)
+
+### Bug Fixes
+
+- fix(ci): constrain secret exemptions and check all scripts (4cb9f1c)
+- fix(check-in): unify passenger departure state and signed passes (cf762ea)
+- fix(inventory): unify waitlist and group booking allocations (649d6b2)
+- fix(flights): make operational transitions atomic across itinerary legs (137bf8d)
+- fix(finance): resume payer refunds and isolate event consumer effects (97490eb)
+- fix(departure): bind documents and seat changes to the active itinerary (61d0cdb)
+- fix(recovery): require current crew tail and source evidence at execution (e894bdc)
+- fix(loyalty): conserve expiring credits and atomic family transfers (dc70d5c)
+
+### Documentation
+
+- docs(audit): record integration gaps and reproducible evidence (b4fdf54)
+
+### Other Changes
+
+- Merge pull request #147 from kafaat/codex/integration-audit-20260912 (c4638b1)
+- test(integration): enforce regression gates and document operational boundaries (13b85bf)
+- test(payments): extend sandbox acceptance to captures and payer refunds (563eb1a)
+- Merge pull request #148 from kafaat/codex/integration-remediation-20260913 (773e0cd)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.23.0...v1.24.0
+
+---
+
 ## What's Changed in v1.23.0
 
 ### Features
