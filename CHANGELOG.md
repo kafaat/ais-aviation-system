@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.24.1
+
+### Bug Fixes
+
+- fix(audit): cover loyalty and family reconciliation gaps (a7bec7f)
+
+### Other Changes
+
+- Merge pull request #149 from kafaat/codex/remaining-data-acceptance-20260913 (4ac7474)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.24.0...v1.24.1
+
+---
+
 ## What's Changed in v1.24.0
 
 ### Features
