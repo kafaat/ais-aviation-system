@@ -37,7 +37,9 @@ for (const [name, payload] of [
             }
           : {
               type: {
-                ...metadata.properties?.type,
+                ...(typeof metadata.properties?.type === "object"
+                  ? metadata.properties.type
+                  : {}),
                 not: {
                   enum: Object.keys(eventPayloadContracts).map(
                     type => `org.ais.${type}.v1`

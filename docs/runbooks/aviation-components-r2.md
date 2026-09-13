@@ -13,7 +13,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass            |
 | R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass            |
 | R2-05 | Versioned event contracts                           | Implemented; 65 focused checks and AsyncAPI validation |
-| R2-06 | Provider/API contract laboratory                    | Pending                                                |
+| R2-06 | Provider/API contract laboratory                    | Implemented; real REST passed; Microcks awaits CI      |
 | R2-07 | Transport fault acceptance                          | Pending                                                |
 | R2-08 | Trace context and data lineage                      | Pending                                                |
 | R2-09 | On-call delivery and acknowledgement                | Pending                                                |
@@ -163,3 +163,35 @@ AsyncAPI 3.0 JSON schema using jsonschema 4.26.0. No external broker is required
 Sources: [CloudEvents 1.0.2](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md),
 [structured JSON](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/formats/json-format.md),
 [AsyncAPI 3.0](https://www.asyncapi.com/docs/reference/specification/v3.0.0).
+
+## R2-06 — executable contract laboratory
+
+`python scripts/contracts/run.py all --report <directory>` runs Schemathesis
+4.27.0 against the real published REST middleware, database-backed mobile sessions
+and a fresh disposable MySQL database, then starts a digest-pinned Microcks 1.13.2
+container through Testcontainers 4.15.0. Install the isolated, pinned Python
+requirements in `scripts/contracts/requirements.txt`. The database must be empty,
+loopback, named `ais_*_test`, and explicitly marked disposable. No provider keys
+are needed. Missing Docker fails the requested Microcks phase; it never counts as
+a passing or skipped acceptance. Component Labs runs both phases on pull requests.
+
+The REST phase has 35 generated positive and 35 generated negative cases, plus
+eight state-machine examples of read/replay/read-all/unread-count and cross-user
+isolation. It exercises only four published notification paths. Authentication
+uses explicit valid, absent and invalid bearer fixtures; random cookie syntax is
+not the target. Negative generation covers declared query parameters; unknown
+query keys are separately verified as ignored, matching the existing Zod and
+OpenAPI query semantics. No unexported tRPC procedure is claimed covered.
+
+This found and fixed fractional pagination causing MySQL HTTP 500, the generated
+error schema rejecting real Zod issue metadata, and missing documented resource
+not-found responses. All four local REST groups pass against real MySQL/Redis.
+Microcks imports bounded synthetic provider examples and tests the real Hotelbeds
+adapter over HTTP: quote, booking, lookup, cancellation simulation/acknowledgement,
+foreign currency and wrong reference. Its fixture HTTP override exists only in
+the laboratory; production supplier hosts remain fixed. These are wire fixtures,
+not live supplier acceptance. Local Microcks execution awaits Docker/CI.
+
+Sources: [Schemathesis stateful testing](https://schemathesis.readthedocs.io/en/latest/guides/stateful-testing/),
+[Microcks import](https://microcks.io/documentation/guides/usage/importing-content/),
+[OpenAPI fixture conventions](https://microcks.io/documentation/references/artifacts/openapi-conventions/).
