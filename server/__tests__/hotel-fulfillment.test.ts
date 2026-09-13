@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { emergencyHotelBookings } from "../../drizzle/schema";
 import {
+  estimateNights,
   fulfillHotelRequest,
   nightsBetween,
 } from "../services/hotel-fulfillment.service";
@@ -160,6 +161,23 @@ describe("durable hotel fulfillment", () => {
     ).toThrow();
     expect(() => moneyCents("1.234")).toThrow();
     expect(() => moneyCents(Infinity)).toThrow();
+  });
+  it("estimates a browsing stay without turning a hotel search into an error", () => {
+    // findNearbyHotels only decorates results with a cost, and the router maps
+    // any throw to a 500. A same-day search is the normal irregular-operations
+    // case, so the estimate stays lenient while the committed stay stays strict.
+    const day = new Date("2035-01-01T00:00:00Z");
+    expect(estimateNights(day, day)).toBe(1);
+    expect(
+      estimateNights(
+        new Date("2035-01-02T00:00:00Z"),
+        new Date("2035-01-01T00:00:00Z")
+      )
+    ).toBe(1);
+    expect(estimateNights(day, new Date("2035-01-04T00:00:00Z"))).toBe(3);
+    expect(estimateNights(day, new Date("2035-06-01T00:00:00Z"))).toBe(30);
+    expect(estimateNights(new Date("invalid"), day)).toBe(1);
+    expect(() => nightsBetween(day, day)).toThrow();
   });
 });
 describe("Hotelbeds HTTP boundary", () => {

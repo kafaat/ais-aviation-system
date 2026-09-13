@@ -404,6 +404,11 @@ function BookingsTab() {
                       "pending_provider",
                       "confirmed",
                       "sandbox_confirmed",
+                      // Pre-R2-04 rows carry no provider state; the server
+                      // re-checks that and refuses if any is present.
+                      "reserved",
+                      "checked_in",
+                      "no_show",
                     ].includes(booking.status) && (
                       <Button
                         variant="destructive"

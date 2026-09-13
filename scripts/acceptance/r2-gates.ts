@@ -38,7 +38,7 @@ export async function verifyR2Gates(
   );
   await db.insert(airlines).values({ id, code: "R2", name: "R2 fixture" });
   await db.insert(flights).values(
-    [0, 1, 2, 3].map(i => ({
+    [0, 1, 2, 3, 4].map(i => ({
       id: id + i,
       flightNumber: `R2G${i}`,
       airlineId: id,
@@ -57,7 +57,7 @@ export async function verifyR2Gates(
     }))
   );
   await db.insert(airportGates).values(
-    [0, 1, 2].map(i => ({
+    [0, 1, 2, 3].map(i => ({
       id: id + i,
       airportId: i === 1 ? id + 1 : id,
       gateNumber: `R2-${i}`,
@@ -149,6 +149,47 @@ export async function verifyR2Gates(
         .select()
         .from(airportGates)
         .where(eq(airportGates.id, id));
+      assert.equal(gate?.status, "available");
+    }
+  );
+  await check(
+    "R2 gates: a reservation committed after the canonical snapshot is still invalidated",
+    async () => {
+      const flightId = id + 4;
+      const gateId = id + 3;
+      let pinned!: () => void;
+      const snapshotPinned = new Promise<void>(resolve => (pinned = resolve));
+      let allocated!: () => void;
+      const allocationCommitted = new Promise<void>(
+        resolve => (allocated = resolve)
+      );
+      // transitionFlight opens with a plain SELECT, which pins this
+      // transaction's REPEATABLE READ snapshot before it takes any lock. A
+      // reservation committed after that point is invisible to every later
+      // non-locking read, so invalidateGateAssignments must read FOR UPDATE.
+      const canonical = db.transaction(async tx => {
+        await tx.select().from(flights).where(eq(flights.id, flightId));
+        pinned();
+        await allocationCommitted;
+        await transitionFlight(tx, {
+          flightId,
+          status: "delayed",
+          newDepartureTime: new Date(at.getTime() + 45 * 60_000),
+        });
+      });
+      await snapshotPinned;
+      await db.transaction(tx => allocateGate(tx, { flightId, gateId, actor }));
+      allocated();
+      await canonical;
+      const [assignment] = await db
+        .select()
+        .from(gateAssignments)
+        .where(eq(gateAssignments.flightId, flightId));
+      assert.equal(assignment?.status, "cancelled");
+      const [gate] = await db
+        .select()
+        .from(airportGates)
+        .where(eq(airportGates.id, gateId));
       assert.equal(gate?.status, "available");
     }
   );
