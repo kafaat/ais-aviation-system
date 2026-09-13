@@ -61,3 +61,55 @@ jobs:
           name: aviation-contract-lab
           path: ${{ runner.temp }}/contract-lab
           if-no-files-found: error
+
+  transport-faults:
+    name: TCP Faults and Worker Recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test_password
+          MYSQL_DATABASE: ais_fault_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -ptest_password"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=3s --health-retries=10
+    env:
+      NODE_ENV: test
+      AIS_DISPOSABLE_DATABASE: "true"
+      DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_fault_test
+      REDIS_URL: redis://127.0.0.1:6379/1
+      JWT_SECRET: acceptance-only-signing-key-not-for-production
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.x"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pnpm install --frozen-lockfile
+      - run: python -m pip install -r scripts/contracts/requirements.txt
+      - run: pnpm db:migrate
+      - name: Prove real transaction boundaries before injecting transport faults
+        run: pnpm test:acceptance "$RUNNER_TEMP/fault-baseline.json"
+      - name: Inject TCP outage, delayed acknowledgement and worker death
+        run: python scripts/contracts/run_faults.py --report "$RUNNER_TEMP/transport-faults.json"
+      - name: Preserve fault evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: aviation-transport-faults
+          path: |
+            ${{ runner.temp }}/fault-baseline.json
+            ${{ runner.temp }}/transport-faults.json
+          if-no-files-found: error

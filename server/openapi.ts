@@ -194,6 +194,7 @@ export function buildOpenApiDocument(router: AnyRouter): OpenAPIObject {
     // The REST adapter returns Zod issue metadata, not only issue.message.
     // The generator's default strict error schema otherwise rejects real 400s.
     if (operation) {
+      operation.responses ??= {};
       // Original tRPC procedures and transport checks can return these errors.
       for (const [status, description] of Object.entries({
         404: "Resource not found or outside caller scope",

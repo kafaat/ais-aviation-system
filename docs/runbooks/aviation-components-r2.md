@@ -13,7 +13,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass            |
 | R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass            |
 | R2-05 | Versioned event contracts                           | Implemented; 65 focused checks and AsyncAPI validation |
-| R2-06 | Provider/API contract laboratory                    | Implemented; real REST passed; Microcks awaits CI      |
+| R2-06 | Provider/API contract laboratory                    | Implemented; real REST and Microcks CI passed          |
 | R2-07 | Transport fault acceptance                          | Pending                                                |
 | R2-08 | Trace context and data lineage                      | Pending                                                |
 | R2-09 | On-call delivery and acknowledgement                | Pending                                                |
@@ -190,8 +190,35 @@ Microcks imports bounded synthetic provider examples and tests the real Hotelbed
 adapter over HTTP: quote, booking, lookup, cancellation simulation/acknowledgement,
 foreign currency and wrong reference. Its fixture HTTP override exists only in
 the laboratory; production supplier hosts remain fixed. These are wire fixtures,
-not live supplier acceptance. Local Microcks execution awaits Docker/CI.
+not live supplier acceptance. Microcks and REST both passed in GitHub Actions run 34762907838 on PR #151.
+The local environment has no Docker; CI supplies the actual container evidence.
 
 Sources: [Schemathesis stateful testing](https://schemathesis.readthedocs.io/en/latest/guides/stateful-testing/),
 [Microcks import](https://microcks.io/documentation/guides/usage/importing-content/),
 [OpenAPI fixture conventions](https://microcks.io/documentation/references/artifacts/openapi-conventions/).
+
+## R2-07 — real transport faults and process recovery
+
+Run the existing 53-case MySQL/Redis transaction acceptance on a fresh disposable
+database, then `python scripts/contracts/run_faults.py --report <file>`. The
+Linux CI job starts digest-pinned Toxiproxy 2.12.0 via Testcontainers; a local
+`--toxiproxy-binary` option runs the same verified version without Docker.
+Control, receiver and proxy bind only to loopback. No supplier is involved.
+
+Four additional cases exercise the real outbox claim/acknowledgement code and
+durable notification consumer across TCP outage, 1-second downstream latency
+with a 200-ms sender deadline, SIGKILL after consumer acknowledgement but before
+publisher acknowledgement, and recovery in a fresh worker process. The test
+advances only its fixture's persisted lease clock to avoid waiting five minutes;
+production lease durations are unchanged. An obsolete lease cannot publish.
+Three successful transport deliveries produce exactly one notification and
+consumer receipt. SHA-256 snapshots of booking, flight capacity, payment and
+refund records, wallet balances/transactions and inventory locks stay identical.
+
+Local evidence: baseline 53 passed with zero skips, followed by all four real
+Toxiproxy/process cases. This is transport replay evidence, not a simulation of a
+new charge or a database commit-response loss. Those financial transaction
+boundaries remain covered by the preceding acceptance suite. A missing runtime
+fails the dedicated CI job; it does not convert these cases into passing skips.
+Sources: [Toxiproxy](https://github.com/Shopify/toxiproxy),
+[Testcontainers Python](https://github.com/testcontainers/testcontainers-python).
