@@ -86,6 +86,23 @@ and package version. This closes the outstanding post-merge CI check.
 | Airline and airport services                               | Execute the scoped contracts in the domain table above                                                                                                          | Provider/device connections and operator approval                                 |
 | Forecast and resilience acceptance                         | Evaluate on representative dated data and retain observed restore/failover measurements from the target environment                                             | Representative data, target deployment and operational reviewers                  |
 
+### Chargeback evidence path
+
+Before this change the webhook logged every `charge.dispute.*` event as unhandled,
+so a provider sandbox chargeback would have left no local record to correlate.
+`server/services/payment-dispute.service.ts` now records each signature-verified
+dispute event inside the webhook transaction: one `financial_ledger` adjustment per
+provider event id (signed amount only on `funds_withdrawn`/`funds_reinstated`,
+zero for lifecycle events), a `payment_history` entry (`disputed`, or `chargeback`
+on funds withdrawal and a lost outcome) for booking payments, and a
+`payment.disputed` outbox event. It never cancels a booking, releases inventory or
+changes payment status; the chargeback outcome remains an operator decision.
+Replays write nothing, a dispute for an unknown payment is retried like an early
+refund, and a foreign currency or an amount above the receipt is rejected. This is
+the local half of the chargeback row above; the provider half still requires a
+sandbox dispute (`4000 0000 0000 0259` and its outcome) delivered to a reachable
+test deployment.
+
 No workflow-dispatch run was returned by the repository API during this follow-up.
 The available connection exposes reads and reruns, but no workflow dispatch;
 the local environment supplies neither a Stripe test key nor a production database.

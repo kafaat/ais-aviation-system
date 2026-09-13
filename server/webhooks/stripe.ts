@@ -32,6 +32,10 @@ import {
 } from "../services/payment-settlement.service";
 import { eq, and } from "drizzle-orm";
 import { recordVerifiedSplitRefund } from "../services/split-refund.service";
+import {
+  disputeFromStripe,
+  recordVerifiedDispute,
+} from "../services/payment-dispute.service";
 import { sendBookingConfirmation } from "../services/email.service";
 import { generateETicketForPassenger } from "../services/eticket.service";
 import { createServiceLogger } from "../_core/logger";
@@ -323,6 +327,21 @@ export async function processStripeEvent(
         tx,
         event.data.object as Stripe.Refund,
         event.id
+      );
+      return;
+
+    case "charge.dispute.created":
+    case "charge.dispute.updated":
+    case "charge.dispute.funds_withdrawn":
+    case "charge.dispute.funds_reinstated":
+    case "charge.dispute.closed":
+      await recordVerifiedDispute(
+        tx,
+        disputeFromStripe(
+          event.type,
+          event.data.object as Stripe.Dispute,
+          event.id
+        )
       );
       return;
 
