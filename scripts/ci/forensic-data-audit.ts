@@ -118,6 +118,94 @@ export const forensicFindings = [
     owner: "ndc",
     sql: "SELECT n.id AS recordId FROM ndc_orders n LEFT JOIN bookings b ON b.id = n.bookingId WHERE b.id IS NULL OR n.totalAmount <> b.totalAmount OR (b.paymentStatus = 'refunded' AND n.status <> 'refunded') OR (b.status = 'cancelled' AND n.status NOT IN ('cancelled','refunded')) OR (b.status = 'confirmed' AND b.paymentStatus = 'paid' AND n.status = 'pending')",
   },
+  {
+    id: "loyalty_credit_adoption_pending",
+    severity: "review",
+    owner: "loyalty-balance",
+    sql: "SELECT id AS recordId FROM loyalty_accounts WHERE creditLotsInitializedAt IS NULL",
+  },
+  {
+    id: "loyalty_account_missing_owner",
+    severity: "error",
+    owner: "loyalty-balance",
+    sql: "SELECT a.id AS recordId FROM loyalty_accounts a LEFT JOIN users u ON u.id = a.userId WHERE u.id IS NULL",
+  },
+  {
+    id: "loyalty_ledger_owner_mismatch",
+    severity: "error",
+    owner: "loyalty-balance",
+    sql: "SELECT t.id AS recordId FROM miles_transactions t LEFT JOIN loyalty_accounts a ON a.id = t.loyaltyAccountId WHERE a.id IS NULL OR t.userId <> a.userId",
+  },
+  {
+    id: "loyalty_ledger_transition_mismatch",
+    severity: "error",
+    owner: "loyalty-balance",
+    // A matching final sum cannot conceal an incorrect intermediate balance.
+    sql: "SELECT id AS recordId FROM (SELECT id, balanceAfter, SUM(amount) OVER (PARTITION BY loyaltyAccountId ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS recordedBalance FROM miles_transactions) ledger WHERE balanceAfter <> recordedBalance",
+  },
+  {
+    id: "loyalty_ledger_balance_mismatch",
+    severity: "error",
+    owner: "loyalty-balance",
+    sql: "SELECT a.id AS recordId FROM loyalty_accounts a LEFT JOIN miles_transactions t ON t.loyaltyAccountId = a.id GROUP BY a.id, a.currentMilesBalance, a.totalMilesEarned, a.milesRedeemed HAVING a.currentMilesBalance <> COALESCE(SUM(t.amount), 0) OR (COUNT(t.id) = 0 AND (a.totalMilesEarned <> 0 OR a.milesRedeemed <> 0))",
+  },
+  {
+    id: "loyalty_credit_lot_conservation_mismatch",
+    severity: "error",
+    owner: "loyalty-balance",
+    sql: "SELECT transactionId AS recordId FROM loyalty_credit_lots WHERE creditedMiles <= 0 OR remainingMiles < 0 OR spentMiles < 0 OR expiredMiles < 0 OR reversedMiles < 0 OR creditedMiles <> remainingMiles + spentMiles + expiredMiles + reversedMiles",
+  },
+  {
+    id: "loyalty_credit_lot_identity_mismatch",
+    severity: "error",
+    owner: "loyalty-balance",
+    sql: "SELECT l.transactionId AS recordId FROM loyalty_credit_lots l LEFT JOIN miles_transactions t ON t.id = l.transactionId LEFT JOIN loyalty_accounts a ON a.id = l.loyaltyAccountId WHERE a.id IS NULL OR t.id IS NULL OR t.loyaltyAccountId <> l.loyaltyAccountId OR t.userId <> a.userId OR t.type NOT IN ('earn','bonus','adjustment') OR t.amount <> l.creditedMiles OR NOT (t.bookingId <=> l.bookingId) OR NOT (t.expiresAt <=> l.expiresAt)",
+  },
+  {
+    id: "loyalty_initialized_credit_missing_lot",
+    severity: "error",
+    owner: "loyalty-balance",
+    sql: "SELECT t.id AS recordId FROM miles_transactions t JOIN loyalty_accounts a ON a.id = t.loyaltyAccountId LEFT JOIN loyalty_credit_lots l ON l.transactionId = t.id WHERE a.creditLotsInitializedAt IS NOT NULL AND t.amount > 0 AND t.type IN ('earn','bonus','adjustment') AND l.transactionId IS NULL",
+  },
+  {
+    id: "loyalty_available_credit_mismatch",
+    severity: "error",
+    owner: "loyalty-balance",
+    // Refunding spent credit can legitimately leave debt with zero available lots.
+    sql: "SELECT a.id AS recordId FROM loyalty_accounts a LEFT JOIN loyalty_credit_lots l ON l.loyaltyAccountId = a.id WHERE a.creditLotsInitializedAt IS NOT NULL GROUP BY a.id, a.currentMilesBalance HAVING COALESCE(SUM(l.remainingMiles), 0) <> GREATEST(0, a.currentMilesBalance)",
+  },
+  {
+    id: "loyalty_uninitialized_account_has_lots",
+    severity: "error",
+    owner: "loyalty-balance",
+    sql: "SELECT a.id AS recordId FROM loyalty_accounts a WHERE a.creditLotsInitializedAt IS NULL AND EXISTS (SELECT 1 FROM loyalty_credit_lots l WHERE l.loyaltyAccountId = a.id)",
+  },
+  {
+    id: "family_pool_balance_mismatch",
+    severity: "error",
+    owner: "family-pool",
+    // Removed members retain their historical contributions to the persisted pool.
+    sql: "SELECT g.id AS recordId FROM family_groups g LEFT JOIN family_group_members m ON m.groupId = g.id GROUP BY g.id, g.pooledMiles HAVING g.pooledMiles < 0 OR g.pooledMiles <> COALESCE(SUM(m.milesContributed - m.milesRedeemed), 0) OR SUM(m.milesContributed < 0 OR m.milesRedeemed < 0) > 0",
+  },
+  {
+    id: "family_contribution_ledger_mismatch",
+    severity: "error",
+    owner: "family-pool",
+    // Aggregate repeated memberships for the same user without losing removed rows.
+    sql: "SELECT DISTINCT m.groupId AS recordId FROM (SELECT groupId, userId, SUM(milesContributed) AS contributed FROM family_group_members GROUP BY groupId, userId) m LEFT JOIN (SELECT reason, userId, -SUM(amount) AS contributed FROM miles_transactions WHERE type = 'adjustment' AND amount < 0 AND bookingId IS NULL GROUP BY reason, userId) t ON t.reason = CONCAT('family-pool:', m.groupId) AND t.userId = m.userId WHERE m.contributed <> COALESCE(t.contributed, 0)",
+  },
+  {
+    id: "family_transfer_missing_membership",
+    severity: "error",
+    owner: "family-pool",
+    sql: "SELECT t.id AS recordId FROM miles_transactions t LEFT JOIN family_groups g ON t.reason = CONCAT('family-pool:', g.id) WHERE t.reason LIKE 'family-pool:%' AND (g.id IS NULL OR t.type <> 'adjustment' OR t.amount >= 0 OR t.bookingId IS NOT NULL OR NOT EXISTS (SELECT 1 FROM family_group_members m WHERE m.groupId = g.id AND m.userId = t.userId))",
+  },
+  {
+    id: "inactive_family_retains_miles",
+    severity: "error",
+    owner: "family-pool",
+    sql: "SELECT id AS recordId FROM family_groups WHERE status = 'inactive' AND pooledMiles <> 0",
+  },
 ] as const;
 
 type Finding = {

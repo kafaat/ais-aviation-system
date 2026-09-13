@@ -28,10 +28,9 @@ person's acceptance or a provider contract.
 
 ## Running the existing Stripe sandbox acceptance
 
-Use the **Stripe Sandbox Acceptance** workflow on the branch containing the
-changes (`codex/integration-remediation-20260913` before merge). It is intentionally
-manual and already exists; this change extends that workflow instead of introducing
-a second provider path. Supply the GitHub Actions secret `STRIPE_TEST_SECRET_KEY`
+Use the **Stripe Sandbox Acceptance** workflow on `main` after PR #148. It is
+intentionally manual and already exists; the remediation extends that workflow
+instead of introducing a second provider path. Supply the GitHub Actions secret `STRIPE_TEST_SECRET_KEY`
 through the repository's secret configuration. The workflow maps it to
 `STRIPE_SECRET_KEY`; never put its value in a PR, command log or evidence file.
 
@@ -69,3 +68,26 @@ Stripe transport (one session, two captures, four refunds), and 18 offline bound
 and evidence tests passed. No real Stripe sandbox credential was available in
 this execution environment. No live-provider acceptance was executed, and the
 presence of a GitHub Actions secret has not been verified.
+
+## Remaining operational handoff after PR #148
+
+The post-merge [CI/CD Pipeline run 34746676270](https://github.com/kafaat/ais-aviation-system/actions/runs/34746676270)
+completed successfully at 2026-09-13 08:14 UTC on merge commit
+`773e0cde397ba68b334a79fd107827a2da3805b9`. The resulting v1.24.0 release
+commit `bdd446423e2ad1852d339804d53cabf9e33196cb` changes only the changelog
+and package version. This closes the outstanding post-merge CI check.
+
+| Remaining acceptance                                       | Concrete next action                                                                                                                                            | Required input                                                                    |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Stripe's seven automated sandbox contracts                 | Run the existing manual workflow on `main` and retain `stripe-sandbox-evidence`; accept only `PASS` with its source SHA and completed checks                    | Configured test key and an operator with workflow dispatch access                 |
+| Hosted Checkout, 3DS, signed webhook delivery, chargebacks | Execute these separately in the provider sandbox and correlate each request, provider acknowledgement and local settlement                                      | Sandbox merchant access and a reachable test deployment                           |
+| Historical balances and allocations                        | Run the existing forensic auditor on a restored copy, then reconcile each finding against original evidence; see [loyalty procedure](loyalty-reconciliation.md) | Restored database copy, restricted evidence store and accepted financial reviewer |
+| Domain ownership                                           | Fill all three assignment fields for each of the five domains and regenerate the existing catalog                                                               | Accepted owner, on-call contact and approval evidence                             |
+| Airline and airport services                               | Execute the scoped contracts in the domain table above                                                                                                          | Provider/device connections and operator approval                                 |
+| Forecast and resilience acceptance                         | Evaluate on representative dated data and retain observed restore/failover measurements from the target environment                                             | Representative data, target deployment and operational reviewers                  |
+
+No workflow-dispatch run was returned by the repository API during this follow-up.
+The available connection exposes reads and reruns, but no workflow dispatch;
+the local environment supplies neither a Stripe test key nor a production database.
+These are execution prerequisites, not passing acceptance results. A regression
+test, local fixture or updated document cannot supply the missing external evidence.
