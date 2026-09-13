@@ -13,6 +13,8 @@ export const responseContracts = {
       gateType: z.enum(["international", "domestic", "both"]),
       boardingStartTime: z.union([z.null(), z.date()]),
       boardingEndTime: z.union([z.null(), z.date()]),
+      occupiedFrom: z.date().nullable(),
+      occupiedUntil: z.date().nullable(),
       status: z.enum([
         "cancelled",
         "assigned",
@@ -35,6 +37,7 @@ export const responseContracts = {
       type: z.enum(["international", "domestic", "both"]),
       status: z.enum(["available", "occupied", "maintenance"]),
       capacity: z.union([z.null(), z.string()]),
+      compatibleAircraftTypes: z.array(z.string()).nullable(),
       createdAt: z.date(),
       updatedAt: z.date(),
     })
@@ -49,6 +52,7 @@ export const responseContracts = {
       type: z.enum(["international", "domestic", "both"]),
       status: z.enum(["available", "occupied", "maintenance"]),
       capacity: z.union([z.null(), z.string()]),
+      compatibleAircraftTypes: z.array(z.string()).nullable(),
       createdAt: z.date(),
       updatedAt: z.date(),
     })
@@ -102,6 +106,8 @@ export const responseContracts = {
             ]),
             boardingStartTime: z.union([z.null(), z.date()]),
             boardingEndTime: z.union([z.null(), z.date()]),
+            occupiedFrom: z.date().nullable(),
+            occupiedUntil: z.date().nullable(),
             assignmentStatus: z.enum([
               "cancelled",
               "assigned",
@@ -119,6 +125,7 @@ export const responseContracts = {
         type: z.enum(["international", "domestic", "both"]),
         status: z.enum(["available", "occupied", "maintenance"]),
         capacity: z.union([z.null(), z.string()]),
+        compatibleAircraftTypes: z.array(z.string()).nullable(),
         createdAt: z.date(),
         updatedAt: z.date(),
       })

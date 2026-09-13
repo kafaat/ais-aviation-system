@@ -10,7 +10,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | ----- | --------------------------------------------------- | ------------------------------------------- |
 | R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass |
 | R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass         |
-| R2-03 | Atomic gate allocation and conflict prevention      | Pending                                     |
+| R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass |
 | R2-04 | Provider-confirmed emergency hotel fulfillment      | Pending                                     |
 | R2-05 | Versioned event contracts                           | Pending                                     |
 | R2-06 | Provider/API contract laboratory                    | Pending                                     |
@@ -50,3 +50,31 @@ in the normal flow, and recovery verifies the same boundary independently.
 Tests create real temporary Git histories and simulate release API failures,
 existing releases, altered packages/code, unrelated sources, and remote tag
 drift. No release was published by the local test.
+
+## R2-03 — gate resource authority
+
+`gate-allocation.service.ts` is the allocation writer. Assignment, switch,
+release, status changes, and compatibility changes lock the flight (when
+applicable), gates in increasing ID order, then assignments. Writes and outbox
+receipts share a transaction. The flight-state authority invalidates a gate
+reservation when its schedule changes or the flight closes. Gate-change
+notifications now use the durable inbox and a consumer receipt.
+
+Migration 0038 only adds columns to `airport_gates` and `gate_assignments`.
+Legacy reservations with no occupancy window conservatively block conflicting
+allocations until explicitly released and reviewed. Legacy free-text capacity
+is not converted into an aircraft approval. Admin Gate Management provides the
+exact aircraft identifiers and operator approval reference; active reservations
+must be released before changing that policy. Approval references are excluded
+from public response contracts.
+
+Reservations are half-open intervals. The default planning interval is two
+hours before through two hours after departure; an assignment may supply an
+explicit interval covering departure and boarding, capped at 24 hours. This is
+a conservative software default, not a measured airport turnaround policy.
+
+Validation: 11 gate boundary cases; a fresh MySQL 8 / Redis acceptance run
+completed 50 checks with zero skips, including five R2 cases for competing
+flights, adjacent intervals, rollback, canonical schedule invalidation, and
+exactly one durable passenger notification. Main and scripts type checks passed;
+acceptance configuration also passed. Provider calls: zero.

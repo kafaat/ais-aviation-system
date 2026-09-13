@@ -1361,6 +1361,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/flight-state.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/loyalty.service.ts"
       ],
@@ -1369,6 +1370,8 @@
           "bookings",
           "eventDeliveries",
           "eventInbox",
+          "flights",
+          "gateAssignments",
           "groupBookings",
           "waitlist"
         ],
@@ -1564,12 +1567,14 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/services/disruption.service.ts",
+        "server/services/event-inbox.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/flight-status.service.ts",
         "server/services/irops.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/services/gate-allocation.service.ts",
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
@@ -1651,6 +1656,29 @@
       "replacement": null
     },
     {
+      "file": "server/services/gate-allocation.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/gate-allocation.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/flight-state.service.ts",
+        "server/services/gate.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/outbox.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["airportGates", "airports", "flights", "gateAssignments"],
+        "writes": ["airportGates", "gateAssignments"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/gate.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/gate.service.ts",
@@ -1663,6 +1691,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/gate-allocation.service.ts",
         "server/services/notification.service.ts"
       ],
       "tableExpressions": {
@@ -2942,6 +2971,7 @@
         "server/services/family-pool.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/flight-state.service.ts",
+        "server/services/gate-allocation.service.ts",
         "server/services/group-booking.service.ts",
         "server/services/inventory-adjustment.service.ts",
         "server/services/irops-recovery.service.ts",
@@ -3019,7 +3049,13 @@
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "financialLedger", "paymentReceipts", "payments"],
+        "reads": [
+          "bookings",
+          "financialLedger",
+          "paymentReceipts",
+          "payments",
+          "users"
+        ],
         "writes": ["financialLedger", "paymentHistory"]
       },
       "replacement": null

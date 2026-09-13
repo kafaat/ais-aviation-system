@@ -9,6 +9,15 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, or, gte, lte, asc, ne, sql, count } from "drizzle-orm";
 import { createNotification } from "./notification.service";
+import {
+  allocateGate,
+  availableGates,
+  changeGateStatus,
+  configureGateCompatibility,
+  releaseFlightGate,
+  removeGate,
+  type GateActor,
+} from "./gate-allocation.service";
 
 /**
  * Gate Service
@@ -26,6 +35,9 @@ export interface GetAvailableGatesInput {
 }
 
 export interface AssignGateInput {
+  actor: GateActor;
+  occupiedFrom?: Date;
+  occupiedUntil?: Date;
   flightId: number;
   gateId: number;
   boardingStartTime?: Date;
@@ -34,6 +46,7 @@ export interface AssignGateInput {
 }
 
 export interface UpdateGateAssignmentInput {
+  actor: GateActor;
   flightId: number;
   newGateId: number;
   changeReason?: string;
@@ -146,29 +159,28 @@ export async function getAirportGates(airportId: number) {
  * Update gate status
  */
 export async function updateGateStatus(input: UpdateGateStatusInput) {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
+  const db = getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.transaction(tx =>
+    changeGateStatus(tx, input.gateId, input.status)
+  );
+}
 
-    await database
-      .update(airportGates)
-      .set({
-        status: input.status,
-        updatedAt: new Date(),
-      })
-      .where(eq(airportGates.id, input.gateId));
-
-    console.info(
-      `[Gate] Updated gate ${input.gateId} status to ${input.status}`
-    );
-    return { success: true };
-  } catch (error) {
-    console.error("Error updating gate status:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to update gate status",
-    });
-  }
+export async function updateGateCompatibility(input: {
+  gateId: number;
+  aircraftTypes: string[];
+  evidence: string;
+}) {
+  const db = getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.transaction(tx =>
+    configureGateCompatibility(
+      tx,
+      input.gateId,
+      input.aircraftTypes,
+      input.evidence
+    )
+  );
 }
 
 // ============================================================================
@@ -180,344 +192,34 @@ export async function updateGateStatus(input: UpdateGateStatusInput) {
  * Considers gate type (domestic/international) and current assignments
  */
 export async function getAvailableGates(input: GetAvailableGatesInput) {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    // Get base conditions for gate type
-    const typeConditions = [];
-    if (input.flightType === "domestic") {
-      typeConditions.push(
-        or(eq(airportGates.type, "domestic"), eq(airportGates.type, "both"))
-      );
-    } else if (input.flightType === "international") {
-      typeConditions.push(
-        or(
-          eq(airportGates.type, "international"),
-          eq(airportGates.type, "both")
-        )
-      );
-    }
-
-    // Calculate time window for checking conflicts (2 hours before/after)
-    const windowStart = new Date(input.dateTime.getTime() - 2 * 60 * 60 * 1000);
-    const windowEnd = new Date(input.dateTime.getTime() + 2 * 60 * 60 * 1000);
-
-    // Get all gates at this airport that are available (not in maintenance)
-    const allGates = await database
-      .select()
-      .from(airportGates)
-      .where(
-        and(
-          eq(airportGates.airportId, input.airportId),
-          ne(airportGates.status, "maintenance"),
-          ...(typeConditions.length > 0 ? typeConditions : [])
-        )
-      )
-      .orderBy(asc(airportGates.terminal), asc(airportGates.gateNumber));
-
-    // Get current assignments within the time window
-    const activeAssignments = await database
-      .select({
-        gateId: gateAssignments.gateId,
-      })
-      .from(gateAssignments)
-      .innerJoin(flights, eq(gateAssignments.flightId, flights.id))
-      .where(
-        and(
-          or(
-            eq(gateAssignments.status, "assigned"),
-            eq(gateAssignments.status, "boarding")
-          ),
-          gte(flights.departureTime, windowStart),
-          lte(flights.departureTime, windowEnd)
-        )
-      );
-
-    const occupiedGateIds = new Set(activeAssignments.map(a => a.gateId));
-
-    // Filter out occupied gates
-    const availableGates = allGates.filter(
-      gate => !occupiedGateIds.has(gate.id)
-    );
-
-    return availableGates.map(gate => ({
-      ...gate,
-      amenities: gate.amenities ? JSON.parse(gate.amenities) : [],
-    }));
-  } catch (error) {
-    console.error("Error getting available gates:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to get available gates",
-    });
-  }
+  const db = getDb();
+  if (!db) throw new Error("Database not available");
+  return await availableGates(
+    db,
+    input.airportId,
+    input.dateTime,
+    input.flightType
+  );
 }
 
-/**
- * Assign a gate to a flight
- */
 export async function assignGate(input: AssignGateInput) {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    // Check if flight exists
-    const [flight] = await database
-      .select()
-      .from(flights)
-      .where(eq(flights.id, input.flightId))
-      .limit(1);
-
-    if (!flight) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Flight not found",
-      });
-    }
-
-    // Check if gate exists and is available
-    const [gate] = await database
-      .select()
-      .from(airportGates)
-      .where(eq(airportGates.id, input.gateId))
-      .limit(1);
-
-    if (!gate) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Gate not found",
-      });
-    }
-
-    if (gate.status === "maintenance") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Gate is currently under maintenance",
-      });
-    }
-
-    // Check for existing active assignment for this flight
-    const [existingAssignment] = await database
-      .select()
-      .from(gateAssignments)
-      .where(
-        and(
-          eq(gateAssignments.flightId, input.flightId),
-          or(
-            eq(gateAssignments.status, "assigned"),
-            eq(gateAssignments.status, "boarding")
-          )
-        )
-      )
-      .limit(1);
-
-    if (existingAssignment) {
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: "Flight already has an active gate assignment",
-      });
-    }
-
-    // Create the assignment
-    const [result] = await database.insert(gateAssignments).values({
-      flightId: input.flightId,
-      gateId: input.gateId,
-      boardingStartTime: input.boardingStartTime || null,
-      boardingEndTime: input.boardingEndTime || null,
-      assignedBy: input.assignedBy || null,
-      status: "assigned",
-    });
-
-    // Update gate status to occupied
-    await database
-      .update(airportGates)
-      .set({ status: "occupied", updatedAt: new Date() })
-      .where(eq(airportGates.id, input.gateId));
-
-    const insertId = Number(result.insertId);
-    console.info(
-      `[Gate] Assigned gate ${gate.gateNumber} to flight ${flight.flightNumber}`
-    );
-
-    return {
-      id: insertId,
-      flightId: input.flightId,
-      gateId: input.gateId,
-      gateNumber: gate.gateNumber,
-      terminal: gate.terminal,
-    };
-  } catch (error) {
-    if (error instanceof TRPCError) throw error;
-    console.error("Error assigning gate:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to assign gate",
-    });
-  }
+  const db = getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.transaction(tx => allocateGate(tx, input));
 }
 
-/**
- * Update gate assignment (change gate)
- */
 export async function updateGateAssignment(input: UpdateGateAssignmentInput) {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    // Get current assignment
-    const [currentAssignment] = await database
-      .select()
-      .from(gateAssignments)
-      .where(
-        and(
-          eq(gateAssignments.flightId, input.flightId),
-          or(
-            eq(gateAssignments.status, "assigned"),
-            eq(gateAssignments.status, "boarding")
-          )
-        )
-      )
-      .limit(1);
-
-    if (!currentAssignment) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "No active gate assignment found for this flight",
-      });
-    }
-
-    // Check if new gate exists and is available
-    const [newGate] = await database
-      .select()
-      .from(airportGates)
-      .where(eq(airportGates.id, input.newGateId))
-      .limit(1);
-
-    if (!newGate) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "New gate not found",
-      });
-    }
-
-    if (newGate.status === "maintenance") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "New gate is currently under maintenance",
-      });
-    }
-
-    // Mark old assignment as changed
-    await database
-      .update(gateAssignments)
-      .set({
-        status: "changed",
-        updatedAt: new Date(),
-      })
-      .where(eq(gateAssignments.id, currentAssignment.id));
-
-    // Release old gate
-    await database
-      .update(airportGates)
-      .set({ status: "available", updatedAt: new Date() })
-      .where(eq(airportGates.id, currentAssignment.gateId));
-
-    // Create new assignment
-    const [result] = await database.insert(gateAssignments).values({
-      flightId: input.flightId,
-      gateId: input.newGateId,
-      boardingStartTime: currentAssignment.boardingStartTime,
-      boardingEndTime: currentAssignment.boardingEndTime,
-      assignedBy: input.assignedBy || null,
-      status: "assigned",
-      previousGateId: currentAssignment.gateId,
-      changeReason: input.changeReason || null,
-    });
-
-    // Update new gate status to occupied
-    await database
-      .update(airportGates)
-      .set({ status: "occupied", updatedAt: new Date() })
-      .where(eq(airportGates.id, input.newGateId));
-
-    const insertId = Number(result.insertId);
-    console.info(
-      `[Gate] Changed gate for flight ${input.flightId} from gate ${currentAssignment.gateId} to gate ${input.newGateId}`
-    );
-
-    return {
-      id: insertId,
-      flightId: input.flightId,
-      newGateId: input.newGateId,
-      oldGateId: currentAssignment.gateId,
-      newGateNumber: newGate.gateNumber,
-      newTerminal: newGate.terminal,
-    };
-  } catch (error) {
-    if (error instanceof TRPCError) throw error;
-    console.error("Error updating gate assignment:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to update gate assignment",
-    });
-  }
+  const db = getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.transaction(tx =>
+    allocateGate(tx, { ...input, gateId: input.newGateId, replace: true })
+  );
 }
 
-/**
- * Release gate (when flight departs or is cancelled)
- */
-export async function releaseGate(flightId: number) {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    // Get current assignment
-    const [currentAssignment] = await database
-      .select()
-      .from(gateAssignments)
-      .where(
-        and(
-          eq(gateAssignments.flightId, flightId),
-          or(
-            eq(gateAssignments.status, "assigned"),
-            eq(gateAssignments.status, "boarding")
-          )
-        )
-      )
-      .limit(1);
-
-    if (!currentAssignment) {
-      return { success: true, message: "No active gate assignment to release" };
-    }
-
-    // Mark assignment as departed
-    await database
-      .update(gateAssignments)
-      .set({
-        status: "departed",
-        updatedAt: new Date(),
-      })
-      .where(eq(gateAssignments.id, currentAssignment.id));
-
-    // Release gate
-    await database
-      .update(airportGates)
-      .set({ status: "available", updatedAt: new Date() })
-      .where(eq(airportGates.id, currentAssignment.gateId));
-
-    console.info(
-      `[Gate] Released gate ${currentAssignment.gateId} from flight ${flightId}`
-    );
-
-    return { success: true };
-  } catch (error) {
-    console.error("Error releasing gate:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to release gate",
-    });
-  }
+export async function releaseGate(flightId: number, actor: GateActor) {
+  const db = getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.transaction(tx => releaseFlightGate(tx, flightId, actor));
 }
 
 /**
@@ -538,6 +240,8 @@ export async function getFlightGate(flightId: number) {
         gateType: airportGates.type,
         boardingStartTime: gateAssignments.boardingStartTime,
         boardingEndTime: gateAssignments.boardingEndTime,
+        occupiedFrom: gateAssignments.occupiedFrom,
+        occupiedUntil: gateAssignments.occupiedUntil,
         status: gateAssignments.status,
         assignedAt: gateAssignments.assignedAt,
         previousGateId: gateAssignments.previousGateId,
@@ -599,6 +303,8 @@ export async function getGateSchedule(input: GateScheduleInput) {
         flightStatus: flights.status,
         boardingStartTime: gateAssignments.boardingStartTime,
         boardingEndTime: gateAssignments.boardingEndTime,
+        occupiedFrom: gateAssignments.occupiedFrom,
+        occupiedUntil: gateAssignments.occupiedUntil,
         assignmentStatus: gateAssignments.status,
         assignedAt: gateAssignments.assignedAt,
       })
@@ -824,42 +530,7 @@ export async function getGateStats(airportId?: number) {
  * Delete a gate (admin only)
  */
 export async function deleteGate(gateId: number) {
-  try {
-    const database = await getDb();
-    if (!database) throw new Error("Database not available");
-
-    // Check if gate has active assignments
-    const [activeAssignment] = await database
-      .select()
-      .from(gateAssignments)
-      .where(
-        and(
-          eq(gateAssignments.gateId, gateId),
-          or(
-            eq(gateAssignments.status, "assigned"),
-            eq(gateAssignments.status, "boarding")
-          )
-        )
-      )
-      .limit(1);
-
-    if (activeAssignment) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Cannot delete gate with active assignments",
-      });
-    }
-
-    await database.delete(airportGates).where(eq(airportGates.id, gateId));
-
-    console.info(`[Gate] Deleted gate ${gateId}`);
-    return { success: true };
-  } catch (error) {
-    if (error instanceof TRPCError) throw error;
-    console.error("Error deleting gate:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to delete gate",
-    });
-  }
+  const db = getDb();
+  if (!db) throw new Error("Database not available");
+  return await db.transaction(tx => removeGate(tx, gateId));
 }

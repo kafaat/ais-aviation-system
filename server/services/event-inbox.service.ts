@@ -9,11 +9,14 @@ import {
   notifications,
   waitlist,
   groupBookings,
+  flights,
+  gateAssignments,
   type OutboxEvent,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
 import { calculateRequestHash } from "./idempotency-v2.service";
 import { syncBookingMiles } from "./loyalty.service";
+import { flightBookingCondition } from "./flight-state.service";
 export type InboxEvent = Pick<
   OutboxEvent,
   | "eventId"
@@ -233,6 +236,59 @@ async function notificationEffect(tx: SettlementTx, event: InboxEvent) {
         link: "/my-bookings",
       }),
     });
+  } else if (event.eventType === "gate.changed") {
+    if (event.aggregateType !== "flight")
+      throw new Error("Gate event aggregate mismatch");
+    const details = z
+      .object({
+        flightId: z.number().int().positive(),
+        assignmentId: z.number().int().positive(),
+        gateId: z.number().int().positive(),
+        gateNumber: z.string().min(1),
+      })
+      .parse(payload);
+    if (String(details.flightId) !== event.aggregateId)
+      throw new Error("Gate event flight mismatch");
+    const [flight] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, details.flightId));
+    const [assignment] = await tx
+      .select()
+      .from(gateAssignments)
+      .where(eq(gateAssignments.id, details.assignmentId));
+    if (
+      !flight ||
+      flight.tenantId !== event.tenantId ||
+      !assignment ||
+      assignment.flightId !== flight.id ||
+      assignment.gateId !== details.gateId
+    )
+      throw new Error("Gate event ownership mismatch");
+    if (!["assigned", "boarding"].includes(assignment.status)) return;
+    const rows = await tx
+      .select()
+      .from(bookings)
+      .where(
+        and(flightBookingCondition(flight.id), eq(bookings.status, "confirmed"))
+      );
+    for (const booking of rows) {
+      if (booking.tenantId !== event.tenantId)
+        throw new Error("Gate passenger tenant mismatch");
+      await tx.insert(notifications).values({
+        userId: booking.userId,
+        type: "flight",
+        title: "Gate Change Alert",
+        message: `Flight ${flight.flightNumber}: proceed to gate ${details.gateNumber}.`,
+        data: JSON.stringify({
+          flightId: flight.id,
+          bookingId: booking.id,
+          eventId: event.eventId,
+          newGate: details.gateNumber,
+          link: "/my-bookings",
+        }),
+      });
+    }
   } else if (event.eventType === "flight.status_changed") {
     const ids = z.array(z.number().int().positive()).parse(payload.bookingIds);
     if (!ids.length) return;
@@ -291,9 +347,12 @@ export async function consumeLocalEvent(event: InboxEvent) {
   const tasks: Promise<{ duplicate: boolean }>[] = [];
   if (
     Object.hasOwn(bookingMessages, event.eventType) ||
-    ["flight.status_changed", "waitlist.offered", "group.allocated"].includes(
-      event.eventType
-    )
+    [
+      "flight.status_changed",
+      "gate.changed",
+      "waitlist.offered",
+      "group.allocated",
+    ].includes(event.eventType)
   )
     tasks.push(
       localEffect(event, "notifications", tx => notificationEffect(tx, event))

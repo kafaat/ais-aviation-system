@@ -11,6 +11,7 @@ import {
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
 import { recordEvent } from "./outbox.service";
+import { invalidateGateAssignments } from "./gate-allocation.service";
 export type FlightStatus = typeof flights.$inferSelect.status;
 const transitions: Record<FlightStatus, FlightStatus[]> = {
   scheduled: ["delayed", "cancelled", "completed"],
@@ -102,6 +103,17 @@ export async function transitionFlight(
     );
   let disruptionId = update.disruptionId;
   if (changed) {
+    if (
+      scheduleChanged ||
+      update.status === "cancelled" ||
+      update.status === "completed"
+    )
+      await invalidateGateAssignments(
+        tx,
+        flight,
+        "Flight schedule/state changed; gate reassignment required",
+        update.status === "completed" ? "departed" : "cancelled"
+      );
     await tx
       .update(flights)
       .set({ status: update.status, departureTime, arrivalTime })
