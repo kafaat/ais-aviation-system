@@ -1,7 +1,10 @@
+import { transitionFlight } from "./flight-state.service";
+import { recordEvent } from "./outbox.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   flightDisruptions,
+  bookingSegments,
   flights,
   bookings,
   airports,
@@ -17,6 +20,7 @@ export async function createDisruption(input: {
   reason: string;
   severity: "minor" | "moderate" | "severe";
   newDepartureTime?: Date;
+  newArrivalTime?: Date;
   delayMinutes?: number;
   createdBy?: number;
 }) {
@@ -58,7 +62,8 @@ export async function createDisruption(input: {
       .select()
       .from(flights)
       .where(eq(flights.id, input.flightId))
-      .limit(1);
+      .limit(1)
+      .for("update");
 
     if (!flight) {
       throw new TRPCError({
@@ -79,21 +84,28 @@ export async function createDisruption(input: {
       createdBy: input.createdBy || null,
     });
 
-    // Update flight status
-    if (input.type === "cancellation") {
-      await tx
-        .update(flights)
-        .set({ status: "cancelled" })
-        .where(eq(flights.id, input.flightId));
-    } else if (input.type === "delay" && input.newDepartureTime) {
-      await tx
-        .update(flights)
-        .set({
-          status: "delayed",
-          departureTime: input.newDepartureTime,
-        })
-        .where(eq(flights.id, input.flightId));
-    }
+    await transitionFlight(tx, {
+      flightId: input.flightId,
+      status:
+        input.type === "cancellation"
+          ? "cancelled"
+          : input.type === "delay"
+            ? "delayed"
+            : flight.status,
+      reason: input.reason,
+      adminUserId: input.createdBy,
+      delayMinutes: input.delayMinutes,
+      newDepartureTime: input.newDepartureTime,
+      newArrivalTime: input.newArrivalTime,
+      disruptionId: result.insertId,
+    });
+    await recordEvent(tx, {
+      aggregateType: "disruption",
+      aggregateId: result.insertId,
+      tenantId: flight.tenantId,
+      eventType: "irops.created",
+      payload: { flightId: flight.id, type: input.type },
+    });
 
     const [insertedDisruption] = await tx
       .select()
@@ -132,7 +144,25 @@ export async function getUserDisruptions(userId: number) {
 
   if (userBookings.length === 0) return [];
 
-  const flightIds = userBookings.map(b => b.flightId);
+  const legs = await db
+    .select()
+    .from(bookingSegments)
+    .where(
+      inArray(
+        bookingSegments.bookingId,
+        userBookings.map(b => b.bookingId)
+      )
+    );
+  const memberships = userBookings.flatMap(b => {
+    const itinerary = legs.filter(l => l.bookingId === b.bookingId);
+    return itinerary.length
+      ? itinerary
+          .filter(l => l.status === "confirmed" || l.status === "pending")
+          .map(l => ({ ...b, flightId: l.flightId }))
+      : [b];
+  });
+  const flightIds = [...new Set(memberships.map(b => b.flightId))];
+  if (!flightIds.length) return [];
 
   // Get disruptions for those flights using SQL WHERE IN for better performance
   const userFlightDisruptions = await db
@@ -163,7 +193,7 @@ export async function getUserDisruptions(userId: number) {
 
   // Enrich with booking references
   return userFlightDisruptions.map(d => {
-    const booking = userBookings.find(b => b.flightId === d.flightId);
+    const booking = memberships.find(b => b.flightId === d.flightId);
     return {
       ...d,
       bookingReference: booking?.bookingReference,

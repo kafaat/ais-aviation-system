@@ -2,7 +2,7 @@
  * Provider HTTP is stubbed; no claim of external aviation/provider acceptance. */
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
 import type { TrpcContext } from "../../server/_core/context";
 
@@ -608,6 +608,160 @@ try {
       assert.equal(released.status, "available");
       assert.equal(released.bookingId, null);
       return { groupReleased: true, physicalSeatReleased: true };
+    }
+  );
+  const { updateFlightStatus } =
+    await import("../../server/services/flight-status.service");
+  const { createDisruption } =
+    await import("../../server/services/disruption.service");
+  await record(
+    "R05",
+    "Flight tracking preserves the requested dated flight identity",
+    async () => {
+      const { getFlightTrackingById } =
+        await import("../../server/services/flight-tracking.service");
+      const data = await getFlightTrackingById(id + 4);
+      assert(data);
+      assert.equal(data.flight.id, id + 4);
+      return { requestedAndReturnedId: id + 4 };
+    }
+  );
+  await record(
+    "R07_R08",
+    "Flight state, history, disruption and outbox commit atomically for all legs",
+    async () => {
+      await db.execute(
+        sql.raw(
+          "CREATE TRIGGER remediation_fail_history BEFORE INSERT ON flight_status_history FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'synthetic history failure'"
+        )
+      );
+      try {
+        await assert.rejects(
+          updateFlightStatus({
+            flightId: id + 8,
+            status: "delayed",
+            adminUserId: id,
+          })
+        );
+      } finally {
+        await db.execute(sql.raw("DROP TRIGGER remediation_fail_history"));
+      }
+      const [unchanged] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, id + 8));
+      assert.equal(unchanged.status, "scheduled");
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(s.flightStatusHistory)
+            .where(eq(s.flightStatusHistory.flightId, id + 8))
+        ).length,
+        0
+      );
+      const result = await updateFlightStatus({
+        flightId: id + 3,
+        status: "cancelled",
+        adminUserId: id,
+      });
+      assert.equal(result.affectedBookings, 1);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(s.flightDisruptions)
+            .where(eq(s.flightDisruptions.flightId, id + 3))
+        ).length,
+        1
+      );
+      await updateFlightStatus({
+        flightId: id + 3,
+        status: "cancelled",
+        adminUserId: id,
+      });
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(s.flightStatusHistory)
+            .where(eq(s.flightStatusHistory.flightId, id + 3))
+        ).length,
+        1
+      );
+      return {
+        atomicRollback: true,
+        secondLegAffected: true,
+        idempotentCancellation: true,
+      };
+    }
+  );
+  await record(
+    "R12",
+    "Schedule changes preserve duration and invalidate crew/tail approval",
+    async () => {
+      const [before] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, id + 12));
+      await db.insert(s.crewAssignments).values({
+        flightId: id + 12,
+        crewMemberId: id,
+        role: "captain",
+        status: "confirmed",
+      });
+      await db.insert(s.aircraftRotations).values({
+        flightId: id + 12,
+        airlineId: id,
+        tenantId: id,
+        tailNumber: "ZZ-A",
+        maintenanceEvidenceId: id,
+        scheduleDigest: "a".repeat(64),
+        assignedBy: id,
+      });
+      const departure = new Date(before.arrivalTime.getTime() + 3600000);
+      await createDisruption({
+        flightId: id + 12,
+        type: "delay",
+        severity: "moderate",
+        reason: "Schedule revision",
+        newDepartureTime: departure,
+        createdBy: id,
+      });
+      const [after] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, id + 12));
+      assert.equal(
+        after.arrivalTime.getTime() - after.departureTime.getTime(),
+        before.arrivalTime.getTime() - before.departureTime.getTime()
+      );
+      assert(after.arrivalTime > after.departureTime);
+      const [crew] = await db
+        .select()
+        .from(s.crewAssignments)
+        .where(eq(s.crewAssignments.flightId, id + 12));
+      assert.equal(crew.status, "removed");
+      const [tail] = await db
+        .select()
+        .from(s.aircraftRotations)
+        .where(eq(s.aircraftRotations.flightId, id + 12));
+      assert.equal(tail.scheduleDigest, "invalidated");
+      await assert.rejects(
+        createDisruption({
+          flightId: id + 12,
+          type: "delay",
+          severity: "moderate",
+          reason: "Invalid schedule",
+          newDepartureTime: departure,
+          newArrivalTime: before.arrivalTime,
+        })
+      );
+      return {
+        positiveDuration: true,
+        explicitInvalidArrivalRejected: true,
+        operationalApprovalsInvalidated: true,
+      };
     }
   );
   await writeFile(

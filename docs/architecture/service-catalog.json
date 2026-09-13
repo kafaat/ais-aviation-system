@@ -574,11 +574,20 @@
           "ancillaryServices",
           "bookings",
           "flights",
+          "groupBookings",
           "inventoryLocks",
           "priceLocks",
-          "seatInventory"
+          "seatInventory",
+          "waitlist"
         ],
-        "writes": ["bookingAncillaries", "bookings", "passengers", "priceLocks"]
+        "writes": [
+          "bookingAncillaries",
+          "bookings",
+          "groupBookings",
+          "passengers",
+          "priceLocks",
+          "waitlist"
+        ]
       },
       "replacement": null
     },
@@ -825,12 +834,14 @@
         "server/jobs/loyalty-cleanup.job.ts",
         "server/services/bag-drop.service.ts",
         "server/services/data-warehouse.service.ts",
+        "server/services/group-booking.service.ts",
         "server/services/inventory-lock.service.ts",
         "server/services/order-refunds.service.ts",
         "server/services/outbox.service.ts",
         "server/services/price-alerts.service.ts",
         "server/services/scheduled-task.service.ts",
-        "server/services/split-refund.service.ts"
+        "server/services/split-refund.service.ts",
+        "server/services/waitlist.service.ts"
       ],
       "tableExpressions": {
         "reads": [],
@@ -1009,10 +1020,21 @@
       "technicalOwner": "server/services/disruption.service.ts",
       "accountableOwner": null,
       "consumers": ["server/routers/disruptions.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/outbox.service.ts"
+      ],
       "tableExpressions": {
-        "reads": ["airports", "bookings", "flightDisruptions", "flights"],
-        "writes": ["flightDisruptions", "flights"]
+        "reads": [
+          "airports",
+          "bookingSegments",
+          "bookings",
+          "flightDisruptions",
+          "flights"
+        ],
+        "writes": ["flightDisruptions"]
       },
       "replacement": null
     },
@@ -1037,7 +1059,6 @@
       "consumers": [
         "server/jobs/check-in-reminder.job.ts",
         "server/queue/workers/email.worker.ts",
-        "server/services/flight-status.service.ts",
         "server/services/notification.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/queue.service.ts",
@@ -1224,6 +1245,32 @@
       "replacement": null
     },
     {
+      "file": "server/services/flight-state.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/flight-state.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/services/disruption.service.ts",
+        "server/services/flight-status.service.ts",
+        "server/services/irops.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/outbox.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["bookings", "flightDisruptions", "flights"],
+        "writes": [
+          "aircraftRotations",
+          "crewAssignments",
+          "flightDisruptions",
+          "flightStatusHistory",
+          "flights"
+        ]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/flight-status.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/flight-status.service.ts",
@@ -1231,21 +1278,13 @@
       "consumers": ["server/routers/admin.ts", "server/routers/flights.ts"],
       "dependencies": [
         "drizzle/schema.ts",
-        "server/_core/notification.ts",
         "server/db.ts",
-        "server/services/email.service.ts",
-        "server/services/notification.service.ts",
+        "server/services/flight-state.service.ts",
         "server/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": [
-          "airports",
-          "bookings",
-          "flightStatusHistory",
-          "flights",
-          "users"
-        ],
-        "writes": ["flightStatusHistory", "flights"]
+        "reads": ["bookings", "flightStatusHistory", "flights"],
+        "writes": []
       },
       "replacement": null
     },
@@ -1373,11 +1412,19 @@
       "lifecycle": "active",
       "technicalOwner": "server/services/group-booking.service.ts",
       "accountableOwner": null,
-      "consumers": ["server/routers/group-bookings.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "consumers": [
+        "server/routers/group-bookings.ts",
+        "server/services/cron.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/inventory-lock.service.ts",
+        "server/services/outbox.service.ts"
+      ],
       "tableExpressions": {
-        "reads": ["flights", "groupBookings"],
-        "writes": ["flights", "groupBookings"]
+        "reads": ["flights", "groupBookings", "users"],
+        "writes": ["groupBookings"]
       },
       "replacement": null
     },
@@ -1604,16 +1651,36 @@
       "replacement": null
     },
     {
+      "file": "server/services/inventory-adjustment.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/inventory-adjustment.service.ts",
+      "accountableOwner": null,
+      "consumers": ["server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/inventory-capacity.service.ts",
+        "server/services/outbox.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["bookings", "flights", "groupBookings", "waitlist"],
+        "writes": ["flights"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/inventory-capacity.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/inventory-capacity.service.ts",
       "accountableOwner": null,
       "consumers": [
         "server/services/booking-settlement.service.ts",
+        "server/services/inventory-adjustment.service.ts",
         "server/services/inventory-lock.service.ts",
         "server/services/inventory/inventory.service.ts",
         "server/services/irops-recovery.service.ts",
-        "server/services/premium-experiment.service.ts"
+        "server/services/premium-experiment.service.ts",
+        "server/services/waitlist.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
       "tableExpressions": {
@@ -1630,12 +1697,14 @@
       "consumers": [
         "server/services/bookings.service.ts",
         "server/services/cron.service.ts",
+        "server/services/group-booking.service.ts",
         "server/services/inventory/inventory.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
         "server/services/ndc.service.ts",
         "server/services/order-service-checkout.service.ts",
-        "server/services/order-servicing.service.ts"
+        "server/services/order-servicing.service.ts",
+        "server/services/waitlist.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -1643,8 +1712,8 @@
         "server/services/inventory-capacity.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["flights", "inventoryLocks"],
-        "writes": ["inventoryLocks"]
+        "reads": ["bookings", "flights", "inventoryLocks"],
+        "writes": ["inventoryLocks", "passengers", "seatInventory"]
       },
       "replacement": null
     },
@@ -1661,7 +1730,8 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/inventory-capacity.service.ts",
-        "server/services/inventory-lock.service.ts"
+        "server/services/inventory-lock.service.ts",
+        "server/services/waitlist.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -1739,6 +1809,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/flight-state.service.ts",
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
@@ -1753,7 +1824,6 @@
         ],
         "writes": [
           "flightDisruptions",
-          "flights",
           "iropsActions",
           "message",
           "notifications"
@@ -2111,13 +2181,11 @@
         "server/routers/bookings.ts",
         "server/routers/notifications.ts",
         "server/services/corporate.service.ts",
-        "server/services/flight-status.service.ts",
         "server/services/gate.service.ts",
         "server/services/price-alerts.service.ts",
         "server/services/queue-v2.service.ts",
         "server/services/queue.service.ts",
         "server/services/refunds.service.ts",
-        "server/services/waitlist.service.ts",
         "server/webhooks/stripe.ts"
       ],
       "dependencies": [
@@ -2275,7 +2343,11 @@
         "server/services/crew-rule.service.ts",
         "server/services/cron.service.ts",
         "server/services/departure-control.service.ts",
+        "server/services/disruption.service.ts",
         "server/services/eticket.service.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/group-booking.service.ts",
+        "server/services/inventory-adjustment.service.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/irops.service.ts",
         "server/services/multi-city.service.ts",
@@ -2293,7 +2365,8 @@
         "server/services/split-refund.service.ts",
         "server/services/stripe-webhook.service.ts",
         "server/services/tenant.service.ts",
-        "server/services/travel-agent.service.ts"
+        "server/services/travel-agent.service.ts",
+        "server/services/waitlist.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -3295,6 +3368,7 @@
           "bookings",
           "flights",
           "gateAssignments",
+          "inventoryLocks",
           "passengers",
           "seatInventory",
           "seatMaps"
@@ -3771,11 +3845,17 @@
       "lifecycle": "active",
       "technicalOwner": "server/services/waitlist.service.ts",
       "accountableOwner": null,
-      "consumers": ["server/routers/waitlist.ts"],
+      "consumers": [
+        "server/routers/waitlist.ts",
+        "server/services/cron.service.ts",
+        "server/services/inventory/inventory.service.ts"
+      ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/notification.service.ts"
+        "server/services/inventory-capacity.service.ts",
+        "server/services/inventory-lock.service.ts",
+        "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -3783,11 +3863,12 @@
           "airports",
           "destinationAirport",
           "flights",
+          "inventoryLocks",
           "originAirport",
           "users",
           "waitlist"
         ],
-        "writes": ["flights", "waitlist"]
+        "writes": ["waitlist"]
       },
       "replacement": null
     },

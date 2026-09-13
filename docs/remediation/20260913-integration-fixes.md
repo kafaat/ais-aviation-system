@@ -51,3 +51,17 @@ No external provider or airport calls were made.
 Validation: R06/R10/R11 plus repeated decline, expiration, hold reuse rejection,
 waitlist-to-paid-booking handoff, group invoice settlement and physical-seat
 expiration passed on disposable MySQL. The runner now covers ten scenarios.
+
+## Patch 4 — Flight identity and atomic operational transitions
+
+- Tracking by ID queries that flight directly even when its number is reused.
+- Status, schedule, history, disruption identity and the outbox commit together.
+  Repeated cancellation is idempotent; affected-booking membership includes all
+  active itinerary legs and excludes superseded primary-flight references.
+- Delay commands preserve planned duration unless a revised arrival is supplied.
+  Invalid schedules roll back. Changed schedules/cancellations remove crew
+  assignments and invalidate the saved tail schedule digest pending reassignment.
+- Passenger disruption reads include secondary itinerary segments.
+
+Validation: R05, R07/R08 (including an injected history-write failure), and R12
+passed on MySQL; thirteen regression scenarios and six crypto tests pass.
