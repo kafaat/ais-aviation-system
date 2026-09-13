@@ -1,10 +1,7 @@
-import {
-  transitionFlight,
-  flightBookingCondition,
-} from "./flight-state.service";
+import { transitionFlight } from "./flight-state.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { flights, bookings, flightStatusHistory } from "../../drizzle/schema";
+import { flights, flightStatusHistory } from "../../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 
 /**

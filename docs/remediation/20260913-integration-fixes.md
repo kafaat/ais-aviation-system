@@ -89,3 +89,96 @@ original payers, timeout after provider success, restart/reconciliation and no
 extra provider create or ledger write. R13 covers independent effects, partial and
 full refunds, duplicate/reordered delivery and archive-only event semantics.
 Provider calls in these tests are synthetic adapters, not live acceptance.
+
+## Patch 6 — Itinerary documents and seat eligibility
+
+- Ticket documents read the owned, paid itinerary under the same booking/flight
+  locks used by departure control. One local ticket reference is persisted per
+  passenger; secondary legs retain their own route, time and seat.
+- Boarding PDFs embed the state-verified signed boarding token for the selected
+  leg. The web projection is checked against the issued token before returning.
+  Calendar downloads include every active leg with stable, escaped event IDs.
+- Seat selection and seat changes require the selected leg's live hold or a
+  funded reservation. Expired checkout holds cannot retain a physical seat.
+- AIS receipt/reference numbers are described as local documents; they do not
+  claim external airline ticket issuance or airport boarding acceptance.
+
+## Patch 7 — Operational feasibility inside recovery
+
+- Recovery proposals, approvals and execution share a snapshot containing the
+  tail assignment, current maintenance release, rotation continuity, crew roster,
+  qualifications, duty/rest checks, medical validity and approved rules.
+- Stored source evidence is usable only while its separately registered
+  authorization is current and scoped to the operator and tenant. Uploading a
+  signed package cannot register its source or extend authorization.
+- Operator locks serialize schedule, crew, tail and recovery writers. Changed or
+  expired evidence rejects execution instead of silently carrying an old approval.
+- Persisted recovery plans have an operator read path and retain execution
+  receipts for duplicate requests.
+
+## Patch 8 — Durable operations and the operator screen
+
+- Migration 0036 adds observation batches and durable alerts. API response
+  observations persist every ten seconds with deduplicated batch IDs; workers
+  persist dependency checks and expose a Kubernetes liveness probe that rejects
+  missing or stale readiness evidence. These are observations, not contractual SLA.
+- `/admin/operations` exposes incomplete events with consumer receipts, pending
+  cancellations, current sources, scheduler successes, runtime capability
+  evidence, alerts, recovery review/approval/execution, signed evidence import,
+  tail assignment, flight economics and premium experiment results.
+- Reasoned event replay retains completed effects and records its actor. A
+  cancellation can re-enter planning only before provider requests exist; existing
+  financial requests require reconciliation. Both commands enforce tenant scope.
+- Capability availability uses observed deployment evidence; unknown readiness
+  stays nullable. Ownership is an explicit, separately accepted assignment.
+- The topology and recovery runbook now describe MySQL, separate Redis roles,
+  API/worker authorities and external acceptance requirements. No domain owner,
+  on-call rota or provider certification is invented.
+
+## Patch 9 — Regression gates and accounting concurrency
+
+- Older mocks now model transaction boundaries and complete domain state.
+  Source-text assertions for group/waitlist atomicity were replaced with rollback
+  checks; tenant and passenger rejection also run against the actual router/MySQL.
+- Redemption locks the loyalty account and requires a positive integer. Two
+  simultaneous redemptions cannot spend one balance; a subsequent refund retains
+  the negative net balance instead of making the spent miles free.
+- CI runs the remediation acceptance in a separate empty database and retains its
+  JSON evidence. The historical audit runner remains historical evidence; it is
+  not used as a passing regression gate because it asserts the former defects.
+- Asset budgets now measure the actual minified Vite outputs without bundling
+  them again through webpack. The React/UI vendor and charts patterns match the
+  configured chunks; the nonexistent separate UI chunk is covered by the existing
+  300 kB vendor budget. Existing total/entry/vendor/chart limits are unchanged,
+  and the application build job now enforces the size gate.
+
+## Closure map
+
+| Audit findings                                              | Implemented patches                                                | Executable evidence                                                                                                             |
+| ----------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| A01–A04: departure, UI, eligibility, itinerary legs         | 2, 4, 6                                                            | R01–R04, C01–C03, R07/R08; signed token/PDF/calendar checks                                                                     |
+| A05: capacity overrides                                     | 3                                                                  | R06                                                                                                                             |
+| A06: waitlist release and handoff                           | 3                                                                  | R10, C04; rollback tests                                                                                                        |
+| A07: group allocations                                      | 3, 9                                                               | R11, R17; rollback tests                                                                                                        |
+| A08: resumable payer refunds                                | 5                                                                  | R09; flight cancellation service tests                                                                                          |
+| A09–A11: flight identity, atomicity, schedule               | 4                                                                  | R05, R07/R08, R12                                                                                                               |
+| A12: net loyalty after refunds                              | 5, 9                                                               | R13, R18                                                                                                                        |
+| A13: independent event effects                              | 5, 8                                                               | R13, R16; delivery failure and replay tests                                                                                     |
+| A14: secret scanning                                        | 1                                                                  | Eight real Gitleaks positive/negative controls                                                                                  |
+| Missing feasibility, operations visibility, worker liveness | 7, 8                                                               | R15, R16; executable worker probe test                                                                                          |
+| External adapters/acceptance and organizational ownership   | Acceptance interfaces, explicit blocked/unknown state and runbooks | Real provider, device and organizational acceptance remains required; see [prerequisites](../operations/provider-acceptance.md) |
+
+Local validation on 2026-09-13: **1,920 passing tests, three pre-existing skips**;
+the coverage gate passed without lowering thresholds (24% lines, 19.27% branches,
+20.4% functions). The separate MySQL/Redis remediation runner passed **19
+scenarios** and six cryptographic tests. Production API/worker/client builds
+passed. The schema contains **37 committed migrations and 146 tables**.
+All **16 migration replay scenarios**, the existing **44 live transaction
+acceptance checks**, eight Gitleaks policy controls and 15 backup/worker probe
+tests also passed. ESLint passed with zero warnings; TypeScript passed for the
+application, acceptance runner and all scripts. No coverage or lint budget was relaxed.
+
+The original twelve research patches were already present at the audit base;
+these nine remediation patches close their integration defects and add missing
+software connections. They do not establish representative forecast accuracy,
+physical airport acceptance, external fulfillment contracts or operational sign-off.

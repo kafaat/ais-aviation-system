@@ -23,6 +23,26 @@ const caller = inventoryRouter.createCaller(ctx);
 
 beforeEach(() => {
   fixture = transactionMemory({
+    flights: [
+      {
+        id: 900,
+        economyAvailable: 0,
+        businessAvailable: 0,
+        status: "scheduled",
+        departureTime: new Date(Date.now() + 86400000),
+      },
+    ],
+    inventory_locks: [
+      {
+        id: 1,
+        flightId: 900,
+        userId: 101,
+        cabinClass: "economy",
+        numberOfSeats: 1,
+        status: "active",
+        expiresAt: new Date(Date.now() + 60000),
+      },
+    ],
     seat_holds: [
       {
         id: 1,
@@ -89,6 +109,30 @@ function beforeWrite(tableName: string, mutate: () => void) {
   };
 }
 
+// A competing writer can commit before our locking reread; it cannot write through a held MySQL lock.
+function beforeEntryLock(mutate: () => void) {
+  const select = fixture.db.select;
+  let done = false;
+  fixture.db.select = (...args: unknown[]) => {
+    const chain = select(...args),
+      from = chain.from;
+    chain.from = (table: Parameters<typeof getTableName>[0]) => {
+      from(table);
+      if (getTableName(table) === "waitlist") {
+        const lock = chain.for;
+        chain.for = (...values: unknown[]) => {
+          if (!done) {
+            done = true;
+            mutate();
+          }
+          return lock(...values);
+        };
+      }
+      return chain;
+    };
+    return chain;
+  };
+}
 describe("inventory owner mutations through the real router and service", () => {
   it("rejects releasing another user's hold without modifying inventory", async () => {
     await expect(caller.releaseHold({ holdId: 2 })).rejects.toMatchObject({
@@ -138,7 +182,7 @@ describe("inventory owner mutations through the real router and service", () => 
   it("rejects cancelling another user's waitlist entry", async () => {
     await expect(
       caller.removeFromWaitlist({ waitlistId: 2, reason: "cancelled" })
-    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(fixture.rows("waitlist")[1].status).toBe("waiting");
   });
 
@@ -146,6 +190,7 @@ describe("inventory owner mutations through the real router and service", () => 
     "allows the owner to withdraw a %s entry idempotently",
     async status => {
       fixture.rows("waitlist")[0].status = status;
+      if (status === "offered") fixture.rows("waitlist")[0].inventoryLockId = 1;
       await caller.removeFromWaitlist({ waitlistId: 1, reason: "cancelled" });
       await caller.removeFromWaitlist({ waitlistId: 1 });
       expect(fixture.rows("waitlist").map(row => row.status)).toEqual([
@@ -165,29 +210,33 @@ describe("inventory owner mutations through the real router and service", () => 
     }
   );
 
-  it.each(["confirmed", "expired"])(
-    "preserves an already %s waitlist entry",
-    async status => {
-      fixture.rows("waitlist")[0].status = status;
-      await expect(
-        caller.removeFromWaitlist({ waitlistId: 1 })
-      ).rejects.toMatchObject({ code: "CONFLICT" });
-      expect(fixture.rows("waitlist")[0].status).toBe(status);
-    }
-  );
-
-  it("does not overwrite waitlist confirmation between read and write", async () => {
-    beforeWrite("waitlist", () => {
-      fixture.rows("waitlist")[0].status = "confirmed";
-    });
-    await expect(
-      caller.removeFromWaitlist({ waitlistId: 1 })
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+  it("preserves an already transferred waitlist entry", async () => {
+    fixture.rows("waitlist")[0].status = "confirmed";
+    fixture.rows("waitlist")[0].bookingId = 99;
+    await expect(caller.removeFromWaitlist({ waitlistId: 1 })).rejects.toThrow(
+      "linked booking"
+    );
     expect(fixture.rows("waitlist")[0].status).toBe("confirmed");
+  });
+  it("keeps an expired entry expired on withdrawal retry", async () => {
+    fixture.rows("waitlist")[0].status = "expired";
+    await caller.removeFromWaitlist({ waitlistId: 1 });
+    expect(fixture.rows("waitlist")[0].status).toBe("expired");
+  });
+  it("rolls back withdrawal when the locking reread finds a booking transfer", async () => {
+    beforeEntryLock(() => {
+      fixture.rows("waitlist")[0].status = "confirmed";
+      fixture.rows("waitlist")[0].bookingId = 99;
+    });
+    await expect(caller.removeFromWaitlist({ waitlistId: 1 })).rejects.toThrow(
+      "linked booking"
+    );
+    expect(fixture.rows("waitlist")[0].status).toBe("waiting"); // This rollback double restores the entire transaction snapshot.
   });
 
   it("does not resurrect a cancelled entry when processing a stale candidate list", async () => {
-    beforeWrite("waitlist", () => {
+    fixture.rows("flights")[0].economyAvailable = 2;
+    beforeEntryLock(() => {
       fixture.rows("waitlist")[0].status = "cancelled";
     });
     await expect(processWaitlist(900, "economy")).resolves.toBe(1);

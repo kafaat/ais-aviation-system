@@ -263,7 +263,7 @@ export async function approveGroupBooking(
         owner.email?.toLowerCase() !== group.organizerEmail.toLowerCase())
     )
       throw new Error(
-        "Assign the organizer's verified customer account before allocating seats"
+        "Assign the organizer's identified customer account before allocating seats"
       );
     const [flight] = await tx
       .select()

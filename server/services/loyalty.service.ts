@@ -284,6 +284,11 @@ export async function redeemMiles(
   milesToRedeem: number,
   bookingId?: number
 ): Promise<{ discountAmount: number; newBalance: number }> {
+  if (!Number.isSafeInteger(milesToRedeem) || milesToRedeem <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "A positive whole number of miles is required",
+    });
   try {
     const database = await getDb();
     if (!database) throw new Error("Database not available");
@@ -295,7 +300,8 @@ export async function redeemMiles(
         .select()
         .from(loyaltyAccounts)
         .where(eq(loyaltyAccounts.userId, userId))
-        .limit(1);
+        .limit(1)
+        .for("update");
 
       if (!account) {
         throw new TRPCError({

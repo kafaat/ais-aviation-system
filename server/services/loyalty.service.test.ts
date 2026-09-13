@@ -6,6 +6,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { transactionMemory } from "../__tests__/helpers/transaction-memory";
+import { getDb } from "../db";
 
 // Create mock database with chainable methods
 const createMockDb = () => {
@@ -52,6 +54,9 @@ const createMockDb = () => {
     })),
     insert: vi.fn().mockReturnThis(),
     values: vi.fn().mockImplementation(() => ({
+      onDuplicateKeyUpdate() {
+        return this;
+      },
       then: (resolve: (v: unknown) => void) => {
         const result = results[callIndex++] ?? [{ insertId: 1 }];
         resolve(result);
@@ -74,42 +79,7 @@ const mockDb = createMockDb();
 
 // Mock modules before any imports
 vi.mock("../db", () => ({
-  getDb: vi.fn().mockResolvedValue(mockDb),
-}));
-
-vi.mock("../../drizzle/schema", () => ({
-  loyaltyAccounts: {
-    id: "id",
-    userId: "userId",
-    totalMilesEarned: "totalMilesEarned",
-    currentMilesBalance: "currentMilesBalance",
-    milesRedeemed: "milesRedeemed",
-    tier: "tier",
-    tierPoints: "tierPoints",
-    lastActivityAt: "lastActivityAt",
-    createdAt: "createdAt",
-    updatedAt: "updatedAt",
-  },
-  milesTransactions: {
-    id: "id",
-    userId: "userId",
-    loyaltyAccountId: "loyaltyAccountId",
-    type: "type",
-    amount: "amount",
-    balanceAfter: "balanceAfter",
-    bookingId: "bookingId",
-    flightId: "flightId",
-    description: "description",
-    reason: "reason",
-    expiresAt: "expiresAt",
-    createdAt: "createdAt",
-  },
-}));
-
-vi.mock("drizzle-orm", () => ({
-  and: vi.fn((...conditions) => ({ conditions })),
-  eq: vi.fn((a, b) => ({ type: "eq", a, b })),
-  desc: vi.fn(a => ({ type: "desc", a })),
+  getDb: vi.fn(() => mockDb),
 }));
 
 vi.mock("@trpc/server", () => ({
@@ -140,9 +110,46 @@ describe("Loyalty Service", () => {
     updatedAt: new Date(),
   };
 
+  function funded(
+    account:
+      | typeof baseBronzeAccount
+      | (Omit<typeof baseBronzeAccount, "tier"> & { tier: "silver" }),
+    bookingId: number,
+    amount: number
+  ) {
+    const fixture = transactionMemory({
+      loyalty_accounts: [account],
+      bookings: [
+        {
+          id: bookingId,
+          userId: testUserId,
+          flightId: testFlightId,
+          status: "confirmed",
+          paymentStatus: "paid",
+          totalAmount: amount,
+        },
+      ],
+      payment_receipts: [
+        {
+          paymentIntentId: "pi_loyalty_fixture",
+          bookingId,
+          userId: testUserId,
+          kind: "booking",
+          amount,
+          refundedAmount: 0,
+          currency: "SAR",
+          settlementStatus: "applied",
+        },
+      ],
+    });
+    vi.mocked(getDb).mockReturnValue(fixture.db);
+  }
   beforeEach(() => {
     vi.clearAllMocks();
     mockDb._reset();
+    vi.mocked(getDb).mockReturnValue(
+      mockDb as unknown as ReturnType<typeof getDb>
+    );
   });
 
   it("should create a new loyalty account for a user", async () => {
@@ -183,13 +190,7 @@ describe("Loyalty Service", () => {
     const bronzeAccount = { ...baseBronzeAccount };
     const amountPaid = 50000; // 500 SAR in cents
 
-    mockDb._setResults(
-      [bronzeAccount], // getOrCreateLoyaltyAccount: select existing
-      [bronzeAccount], // tx: re-read account inside transaction
-      [], // tx: no previous earning for this booking
-      [], // tx: update account
-      [{ insertId: 1 }] // tx: insert miles transaction
-    );
+    funded(bronzeAccount, testBookingId, amountPaid);
 
     const { awardMilesForBooking } = await import("./loyalty.service");
     const result = await awardMilesForBooking(
@@ -219,13 +220,7 @@ describe("Loyalty Service", () => {
 
     const amountPaid = 1000000; // 10,000 SAR in cents
 
-    mockDb._setResults(
-      [bronzeAccountWithPoints], // getOrCreateLoyaltyAccount: select
-      [bronzeAccountWithPoints], // tx: re-read account inside transaction
-      [], // tx: no previous earning for this booking
-      [], // tx: update account
-      [{ insertId: 2 }] // tx: insert miles transaction
-    );
+    funded(bronzeAccountWithPoints, testBookingId + 1, amountPaid);
 
     const { awardMilesForBooking } = await import("./loyalty.service");
     const result = await awardMilesForBooking(
@@ -251,13 +246,7 @@ describe("Loyalty Service", () => {
 
     const amountPaid = 40000; // 400 SAR in cents
 
-    mockDb._setResults(
-      [silverAccount], // getOrCreateLoyaltyAccount: select
-      [silverAccount], // tx: re-read account inside transaction
-      [], // tx: no previous earning for this booking
-      [], // tx: update account
-      [{ insertId: 3 }] // tx: insert miles transaction
-    );
+    funded(silverAccount, testBookingId + 2, amountPaid);
 
     const { awardMilesForBooking } = await import("./loyalty.service");
     const result = await awardMilesForBooking(

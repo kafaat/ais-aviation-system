@@ -1,8 +1,9 @@
 /** Correct-behaviour regression gates against an EMPTY disposable MySQL database.
  * Provider HTTP is stubbed; no claim of external aviation/provider acceptance. */
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHmac } from "node:crypto";
 import type Stripe from "stripe";
+import QRCode from "qrcode";
 import { writeFile } from "node:fs/promises";
 import { and, eq, sql } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
@@ -114,7 +115,7 @@ try {
     { id: id + 2, code: "ZZC", name: "C", city: "C", country: "AE" },
   ]);
   await db.insert(s.flights).values(
-    Array.from({ length: 14 }, (_, i) => ({
+    Array.from({ length: 18 }, (_, i) => ({
       id: id + i,
       tenantId: id,
       airlineId: id,
@@ -177,6 +178,18 @@ try {
     "R01",
     "Every check-in channel enforces passenger coverage and document clearance",
     async () => {
+      await assert.rejects(
+        bookingsRouter.createCaller({ ...ctx, tenantId: id + 1 }).checkIn({
+          bookingId: id + 2,
+          seatAssignments: [{ passengerId: id + 40, seatNumber: "1A" }],
+        })
+      );
+      await assert.rejects(
+        caller.checkIn({
+          bookingId: id + 2,
+          seatAssignments: [{ passengerId: id + 20, seatNumber: "1A" }],
+        })
+      );
       await assert.rejects(
         caller.checkIn({ bookingId: id, seatAssignments: [] })
       );
@@ -245,6 +258,15 @@ try {
           { userId: id }
         )
       );
+      const { eticketRouter } = await import("../../server/routers/eticket");
+      const documents = eticketRouter.createCaller(ctx);
+      await assert.rejects(
+        documents.generateBoardingPass({
+          bookingId: id + 2,
+          passengerId: id + 40,
+          flightId: id + 3,
+        })
+      );
       await selectSeat(id + 3, "1B", id + 2, id + 40);
       await caller.checkIn({
         bookingId: id + 2,
@@ -264,6 +286,50 @@ try {
       assert.equal((await verifyActiveBoardingPass(second.token)).valid, true);
       assert.equal(first.payload.seatNumber, "1A");
       assert.equal(second.payload.seatNumber, "1B");
+      const qrInputs: string[] = [];
+      const qr = QRCode.toDataURL;
+      QRCode.toDataURL = ((text: string) => {
+        qrInputs.push(text);
+        return qr(text);
+      }) as typeof QRCode.toDataURL;
+      try {
+        const pdf = await documents.generateBoardingPass({
+          bookingId: id + 2,
+          passengerId: id + 40,
+          flightId: id + 3,
+        });
+        assert.equal(
+          Buffer.from(pdf.pdf, "base64").subarray(0, 4).toString(),
+          "%PDF"
+        );
+        assert.equal(qrInputs.length, 1);
+        const printed = await verifyActiveBoardingPass(qrInputs[0]);
+        assert(printed.valid);
+        assert.equal(printed.data.flightId, id + 3);
+        assert.equal(printed.data.seatNumber, "1B");
+      } finally {
+        QRCode.toDataURL = qr;
+      }
+      const { readTicketDocument } =
+        await import("../../server/services/ticket-documents.service");
+      const ticket = await readTicketDocument(id + 2, id + 40, id);
+      assert.deepEqual(
+        ticket.legs.map(l => l.flightId),
+        [id + 2, id + 3]
+      );
+      assert.deepEqual(
+        ticket.legs.map(l => l.seatNumber),
+        ["1A", "1B"]
+      );
+      const calendar = await documents.generateCalendarEvent({
+        bookingId: id + 2,
+      });
+      assert.equal(
+        Buffer.from(calendar.ics, "base64")
+          .toString()
+          .match(/BEGIN:VEVENT/g)?.length,
+        2
+      );
       const [p] = await db
         .select()
         .from(s.passengers)
@@ -1012,7 +1078,7 @@ try {
             )
           );
         assert.equal(messages.length, 1);
-        const award = await awardMilesForBooking(id, id + 9, 999999999, id + 9);
+        const award = await awardMilesForBooking(id, id + 9, id + 9, 999999999);
         assert.equal(
           award.milesEarned,
           0,
@@ -1093,6 +1159,418 @@ try {
         delete process.env.OUTBOX_PUBLISH_URL;
         delete process.env.OUTBOX_PUBLISH_TOKEN;
       }
+    }
+  );
+  await record(
+    "R15",
+    "Recovery requires current tail, crew and source evidence at execution",
+    async () => {
+      const { proposeRecovery, approveRecovery, executeRecovery } =
+        await import("../../server/services/irops-recovery.service");
+      const { ingestCrewRules, assignCrewWithRules } =
+        await import("../../server/services/crew-rule.service");
+      const { ingestMaintenance, assignAircraftRotation } =
+        await import("../../server/services/aircraft-rotation.service");
+      const { autoTriggerProtection } =
+        await import("../../server/services/irops.service");
+      const { calculateRequestHash } =
+        await import("../../server/services/idempotency-v2.service");
+      await booking(30, 14);
+      await db
+        .update(s.flights)
+        .set({ economyAvailable: 9 })
+        .where(eq(s.flights.id, id + 14));
+      await createDisruption({
+        flightId: id + 14,
+        type: "delay",
+        severity: "moderate",
+        reason: "Synthetic recovery",
+        createdBy: id,
+      });
+      const [disruption] = await db
+        .select()
+        .from(s.flightDisruptions)
+        .where(eq(s.flightDisruptions.flightId, id + 14));
+      assert(disruption);
+      await autoTriggerProtection(id + 14);
+      const input = {
+        eventId: disruption.id,
+        bookingIds: [id + 30],
+        candidateFlightIds: [id + 15],
+      };
+      await assert.rejects(proposeRecovery(input, id), /aircraft assignment/);
+      const registry = [
+        {
+          sourceId: "audit-operator",
+          tenantId: id,
+          capabilities: ["crew_rules", "maintenance"],
+          secretEnv: "AIS_AUDIT_OPERATOR_SIGNING",
+          validUntil: hour(48).toISOString(),
+          airlineIds: [id],
+        },
+      ];
+      process.env.AVIATION_SOURCE_REGISTRY = JSON.stringify(registry);
+      process.env.AIS_AUDIT_OPERATOR_SIGNING =
+        "synthetic-operator-evidence-signing-key";
+      const evidence = (kind: string, payload: Record<string, unknown>) => {
+        const envelope = {
+          sourceId: "audit-operator",
+          eventId: randomUUID(),
+          issuedAt: new Date().toISOString(),
+          observedAt: new Date().toISOString(),
+          flightId: null,
+          kind,
+          payload,
+        };
+        const signature = createHmac(
+          "sha256",
+          process.env.AIS_AUDIT_OPERATOR_SIGNING!
+        )
+          .update(calculateRequestHash(envelope))
+          .digest("hex");
+        return { envelope, signature };
+      };
+      try {
+        const maintenance = evidence("maintenance", {
+          airlineId: id,
+          tailNumber: "ZZ-TEST",
+          aircraftType: "A320",
+          status: "released",
+          validUntil: hour(48).toISOString(),
+          reference: "synthetic-maintenance",
+          minimumTurnaroundMinutes: 45,
+        });
+        await ingestMaintenance(maintenance.envelope, maintenance.signature);
+        await assignAircraftRotation(id + 15, "ZZ-TEST", id, id);
+        await assert.rejects(proposeRecovery(input, id), /crew profile/);
+        const policy = evidence("crew_rules", {
+          airlineId: id,
+          version: "synthetic-v1",
+          reference: "https://example.invalid/audit-policy",
+          effectiveFrom: hour(-24).toISOString(),
+          effectiveTo: hour(72).toISOString(),
+          timeZone: "UTC",
+          aircraftTypes: ["A320"],
+          reportBeforeMinutes: 30,
+          releaseAfterMinutes: 15,
+          maxDuty24Minutes: 600,
+          maxDuty7DayMinutes: 2400,
+          minRestMinutes: 600,
+          minimumCrew: {
+            captain: 1,
+            first_officer: 1,
+            purser: 0,
+            cabin_crew: 4,
+          },
+          fdpBands: [
+            {
+              startHour: 0,
+              endHour: 24,
+              minSegments: 1,
+              maxSegments: 6,
+              maxMinutes: 600,
+            },
+          ],
+        });
+        await ingestCrewRules(policy.envelope, policy.signature, id, id);
+        await assert.rejects(
+          proposeRecovery(input, id),
+          /Missing required captain/
+        );
+        const roles = [
+          "captain",
+          "first_officer",
+          "cabin_crew",
+          "cabin_crew",
+          "cabin_crew",
+          "cabin_crew",
+        ] as const;
+        for (const [n, role] of roles.entries()) {
+          await db.insert(s.crewMembers).values({
+            id: id + n,
+            employeeId: `AUDIT-${n}`,
+            firstName: "Synthetic",
+            lastName: `Crew ${n}`,
+            role,
+            airlineId: id,
+            medicalExpiry: hour(100),
+            licenseExpiry: hour(100),
+            qualifiedAircraft: JSON.stringify(["A320"]),
+          });
+          await assignCrewWithRules({
+            flightId: id + 15,
+            crewMemberId: id + n,
+            role,
+            assignedBy: id,
+            tenantId: id,
+          });
+        }
+        const proposal = await proposeRecovery(input, id);
+        assert.equal(proposal.unassignedPassengers, 0);
+        await approveRecovery(proposal.id, proposal.digest, id, id);
+        process.env.AVIATION_SOURCE_REGISTRY = JSON.stringify([
+          { ...registry[0], validUntil: hour(-1).toISOString() },
+        ]);
+        await assert.rejects(
+          executeRecovery(proposal.id, proposal.digest, id, id),
+          /expired or no longer authorized/
+        );
+        process.env.AVIATION_SOURCE_REGISTRY = JSON.stringify(registry);
+        const [captain] = await db
+          .select()
+          .from(s.crewMembers)
+          .where(eq(s.crewMembers.id, id));
+        assert(captain);
+        await db
+          .update(s.crewMembers)
+          .set({ medicalExpiry: hour(-1) })
+          .where(eq(s.crewMembers.id, id));
+        await assert.rejects(
+          executeRecovery(proposal.id, proposal.digest, id, id),
+          /medical/
+        );
+        await db
+          .update(s.crewMembers)
+          .set({
+            medicalExpiry: captain.medicalExpiry,
+            updatedAt: captain.updatedAt,
+          })
+          .where(eq(s.crewMembers.id, id));
+        const result = await executeRecovery(
+          proposal.id,
+          proposal.digest,
+          id,
+          id
+        );
+        assert(result.receiptId);
+        assert.equal(
+          (await executeRecovery(proposal.id, proposal.digest, id, id))
+            .receiptId,
+          result.receiptId
+        );
+        const [moved] = await db
+          .select()
+          .from(s.bookings)
+          .where(eq(s.bookings.id, id + 30));
+        assert.equal(moved.flightId, id + 15);
+        return {
+          missingTailRejected: true,
+          missingCrewRejected: true,
+          revokedSourceRejected: true,
+          expiredMedicalRejected: true,
+          verifiedPlanExecutedOnce: true,
+        };
+      } finally {
+        delete process.env.AVIATION_SOURCE_REGISTRY;
+        delete process.env.AIS_AUDIT_OPERATOR_SIGNING;
+      }
+    }
+  );
+  await record(
+    "R16",
+    "Operations persist telemetry, detect stale workers and fence event replay",
+    async () => {
+      const {
+        recordOperationalSample,
+        readDurableHealth,
+        refreshOperationalAlerts,
+        acknowledgeOperationalAlert,
+      } =
+        await import("../../server/services/operational-observations.service");
+      const { retryEventDelivery, readOperationsDashboard } =
+        await import("../../server/services/operations-dashboard.service");
+      const sample = {
+        id: randomUUID(),
+        instanceId: "audit-api",
+        component: "api" as const,
+        status: "healthy" as const,
+        startedAt: new Date(Date.now() - 10000),
+        endedAt: new Date(),
+        requests: 20,
+        errors: 2,
+        totalDurationMs: "1000.000",
+      };
+      await recordOperationalSample(sample);
+      await recordOperationalSample(sample);
+      const health = await readDurableHealth();
+      assert.equal(health.requests, 20);
+      assert.equal(health.errorRate, 10);
+      assert.equal(health.meanResponseMs, 50);
+      await refreshOperationalAlerts();
+      const [alert] = await db
+        .select()
+        .from(s.operationsAlerts)
+        .where(eq(s.operationsAlerts.key, "worker-observation"));
+      assert.equal(alert.status, "active");
+      await acknowledgeOperationalAlert(alert.key, id);
+      await recordOperationalSample({
+        id: randomUUID(),
+        instanceId: "audit-worker",
+        component: "worker",
+        status: "healthy",
+        startedAt: new Date(),
+        endedAt: new Date(),
+      });
+      await refreshOperationalAlerts();
+      const [resolved] = await db
+        .select()
+        .from(s.operationsAlerts)
+        .where(eq(s.operationsAlerts.key, "worker-observation"));
+      assert.equal(resolved.status, "resolved");
+      assert.equal(
+        (await readDurableHealth(new Date(Date.now() + 40000))).instances.find(
+          i => i.instanceId === "audit-worker"
+        )?.status,
+        "unknown"
+      );
+      const eventId = randomUUID();
+      await db.insert(s.outbox).values({
+        eventId,
+        aggregateId: String(id),
+        aggregateType: "booking",
+        tenantId: id,
+        eventType: "audit.retry",
+        payload: {},
+        status: "failed",
+        attempts: 5,
+      });
+      await db.insert(s.eventDeliveries).values({
+        eventId,
+        consumer: "notifications",
+        status: "processed",
+        processedAt: new Date(),
+      });
+      await assert.rejects(
+        retryEventDelivery(eventId, id, id + 1, "Synthetic review"),
+        /not found/
+      );
+      await retryEventDelivery(eventId, id, id, "Synthetic review");
+      await assert.rejects(
+        retryEventDelivery(eventId, id, id, "Duplicate review"),
+        /Only failed/
+      );
+      const [receipt] = await db
+        .select()
+        .from(s.eventDeliveries)
+        .where(eq(s.eventDeliveries.eventId, eventId));
+      assert.equal(receipt.status, "processed");
+      const foreign = await readOperationsDashboard(id + 1);
+      assert.equal(foreign.events.length, 0);
+      assert.equal(foreign.refunds.length, 0);
+      return {
+        durableSamplesDeduplicated: true,
+        meanResponseMs: 50,
+        missingWorkerAlert: true,
+        recoveredAlertResolved: true,
+        staleWorkerUnknown: true,
+        replayPreservesEffects: true,
+        crossTenantReplayRejected: true,
+      };
+    }
+  );
+  await record(
+    "R17",
+    "Concurrent group approvals cannot allocate the same last seats",
+    async () => {
+      const requests = [];
+      for (const n of [1, 2])
+        requests.push(
+          await createGroupBookingRequest({
+            organizerUserId: id,
+            organizerName: `Race ${n}`,
+            organizerEmail: `race${n}@example.invalid`,
+            organizerPhone: "0000000000",
+            flightId: id + 16,
+            groupSize: 10,
+          })
+        );
+      const approvals = await Promise.allSettled(
+        requests.map(r => approveGroupBooking(r.id, 5, id))
+      );
+      assert.equal(approvals.filter(r => r.status === "fulfilled").length, 1);
+      assert.equal(approvals.filter(r => r.status === "rejected").length, 1);
+      assert.equal(await countActiveHolds(db, id + 16, "economy"), 10);
+      const [flight] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, id + 16));
+      assert.equal(
+        flight.economyAvailable,
+        10,
+        "An allocation is not a funded reservation"
+      );
+      return {
+        concurrentRequests: 2,
+        allocatedGroups: 1,
+        heldSeats: 10,
+        paidSeats: 0,
+      };
+    }
+  );
+  await record(
+    "R18",
+    "Concurrent redemptions and a later refund preserve the net miles balance",
+    async () => {
+      const { awardMilesForBooking, redeemMiles } =
+        await import("../../server/services/loyalty.service");
+      const { consumeLocalEvent } =
+        await import("../../server/services/event-inbox.service");
+      const { settleVerifiedRefund } =
+        await import("../../server/services/payment-settlement.service");
+      await booking(31, 17);
+      await db.insert(s.paymentReceipts).values({
+        paymentIntentId: "pi_audit_redeemed_refund",
+        kind: "booking",
+        bookingId: id + 31,
+        userId: id,
+        targetId: id + 31,
+        amount: 10000,
+        currency: "SAR",
+      });
+      assert.equal(
+        (await awardMilesForBooking(id, id + 31, id + 17, 10000)).newBalance,
+        100
+      );
+      await assert.rejects(redeemMiles(id, -1), /positive whole/);
+      const redemptions = await Promise.allSettled([
+        redeemMiles(id, 80),
+        redeemMiles(id, 80),
+      ]);
+      assert.equal(redemptions.filter(r => r.status === "fulfilled").length, 1);
+      assert.equal(redemptions.filter(r => r.status === "rejected").length, 1);
+      await db.transaction(tx =>
+        settleVerifiedRefund(tx, {
+          paymentIntentId: "pi_audit_redeemed_refund",
+          chargeId: "ch_audit_redeemed_refund",
+          amount: 10000,
+          amountRefunded: 10000,
+          currency: "SAR",
+          eventId: "audit_redeemed_refund",
+        })
+      );
+      const [baseEvent] = await db.select().from(s.outbox).limit(1);
+      await consumeLocalEvent({
+        ...baseEvent,
+        eventId: randomUUID(),
+        eventType: "payment.refunded",
+        aggregateType: "payment",
+        aggregateId: "pi_audit_redeemed_refund",
+        tenantId: id,
+        payload: { bookingId: id + 31 },
+      });
+      const [account] = await db
+        .select()
+        .from(s.loyaltyAccounts)
+        .where(eq(s.loyaltyAccounts.userId, id));
+      assert.equal(account.currentMilesBalance, -80);
+      assert.equal(account.milesRedeemed, 80);
+      await assert.rejects(redeemMiles(id, 1), /Insufficient miles/);
+      return {
+        concurrentRedemptions: 2,
+        successfulRedemptions: 1,
+        redeemedMiles: 80,
+        balanceAfterRefund: -80,
+      };
     }
   );
   await writeFile(

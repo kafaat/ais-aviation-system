@@ -206,37 +206,36 @@
       "name": "Main JS Bundle",
       "path": "dist/public/assets/index-*.js",
       "limit": "500 KB",
-      "gzip": true
+      "gzip": true,
+      "webpack": false
     },
     {
-      "name": "Vendor Chunk",
-      "path": "dist/public/assets/vendor-*.js",
+      "name": "React, UI and utilities vendor chunk",
+      "path": "dist/public/assets/vendor-????????.js",
       "limit": "300 KB",
-      "gzip": true
-    },
-    {
-      "name": "UI Components Chunk",
-      "path": "dist/public/assets/ui-*.js",
-      "limit": "150 KB",
-      "gzip": true
+      "gzip": true,
+      "webpack": false
     },
     {
       "name": "Charts Chunk",
-      "path": "dist/public/assets/charts-*.js",
+      "path": "dist/public/assets/vendor-charts-*.js",
       "limit": "200 KB",
-      "gzip": true
+      "gzip": true,
+      "webpack": false
     },
     {
       "name": "Total JS",
       "path": "dist/public/assets/*.js",
       "limit": "1.2 MB",
-      "gzip": true
+      "gzip": true,
+      "webpack": false
     },
     {
       "name": "Total CSS",
       "path": "dist/public/assets/*.css",
       "limit": "100 KB",
-      "gzip": true
+      "gzip": true,
+      "webpack": false
     }
   ]
 }
