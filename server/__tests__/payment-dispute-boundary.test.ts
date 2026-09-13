@@ -59,6 +59,7 @@ const disputeRows = () =>
 beforeEach(() => {
   fixture = transactionMemory({
     tenants: [{ id: 3, status: "active" }],
+    users: [{ id: 9, tenantId: 3 }],
     bookings: [
       {
         id: 7,
@@ -214,34 +215,61 @@ describe("provider dispute evidence", () => {
     expect(fixture.rows("payment_history")[0].amount).toBe(2500);
   });
 
-  it("records a wallet top-up dispute in the ledger without booking history", async () => {
-    await fixture.db
-      .insert((await import("../../drizzle/schema")).walletTransactions)
-      .values({
-        id: 10,
-        walletId: 1,
+  it.each([3, null])(
+    "keeps wallet dispute evidence in its persisted account scope (%s)",
+    async tenantId => {
+      const { users } = await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      await fixture.db.update(users).set({ tenantId }).where(eq(users.id, 9));
+      await fixture.db
+        .insert((await import("../../drizzle/schema")).walletTransactions)
+        .values({
+          id: 10,
+          walletId: 1,
+          userId: 9,
+          type: "top_up",
+          amount: 10000,
+          status: "pending",
+        });
+      await event(
+        "evt_topup",
+        "checkout.session.completed",
+        checkout({ type: "wallet_topup", topUpId: "10", userId: "9" }, 10000)
+      );
+      await event(
+        "evt_wd",
+        "charge.dispute.funds_withdrawn",
+        dispute({ amount: 10000 })
+      );
+      expect(disputeRows()).toHaveLength(1);
+      expect(disputeRows()[0]).toMatchObject({
+        bookingId: null,
         userId: 9,
-        type: "top_up",
-        amount: 10000,
-        status: "pending",
+        amount: "-100.00",
       });
-    await event(
-      "evt_topup",
-      "checkout.session.completed",
-      checkout({ type: "wallet_topup", topUpId: "10", userId: "9" }, 10000)
-    );
-    await event(
-      "evt_wd",
-      "charge.dispute.funds_withdrawn",
-      dispute({ amount: 10000 })
-    );
-    expect(disputeRows()).toHaveLength(1);
-    expect(disputeRows()[0]).toMatchObject({
+      expect(fixture.rows("payment_history")).toHaveLength(0);
+      expect(fixture.rows("wallets")[0].balance).toBe(160000);
+      expect(
+        fixture.rows("outbox").filter(o => o.eventType === "payment.disputed")
+      ).toMatchObject([{ tenantId, payload: { userId: 9, bookingId: null } }]);
+    }
+  );
+
+  it("rolls back a wallet dispute if its account is missing", async () => {
+    const { paymentReceipts } = await import("../../drizzle/schema");
+    await fixture.db.insert(paymentReceipts).values({
+      paymentIntentId: "pi_1",
+      kind: "wallet_topup",
+      targetId: 10,
+      userId: 99,
       bookingId: null,
-      userId: 9,
-      amount: "-100.00",
+      amount: 100000,
+      currency: "SAR",
     });
-    expect(fixture.rows("payment_history")).toHaveLength(0);
-    expect(fixture.rows("wallets")[0].balance).toBe(160000);
+    await expect(
+      event("evt_orphan", "charge.dispute.created", dispute())
+    ).rejects.toThrow("account missing");
+    expect(disputeRows()).toHaveLength(0);
+    expect(fixture.rows("outbox")).toHaveLength(0);
   });
 });
