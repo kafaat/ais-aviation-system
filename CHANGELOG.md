@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.25.0
+
+### Features
+
+- feat(payments): record Stripe dispute evidence from signed webhooks (6daf437)
+
+### Other Changes
+
+- Merge pull request #150 from kafaat/claude/project-exploration-JWCKA (c73f254)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.24.1...v1.25.0
+
+---
+
 ## What's Changed in v1.24.1
 
 ### Bug Fixes
