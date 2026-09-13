@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   checkInPassengers,
   lockDepartureContext,
+  assertSeatSelectionContext,
   refreshBookingCheckIn,
 } from "./departure-control.service";
 import { issueBoardingPass } from "./boarding-pass.service";
@@ -17,7 +18,6 @@ import { issueBoardingPass } from "./boarding-pass.service";
 import { getDb } from "../db";
 import {
   seatMaps,
-  inventoryLocks,
   seatInventory,
   flights,
   bookings,
@@ -778,33 +778,9 @@ export async function selectSeat(
 ): Promise<SeatInventoryItem> {
   const database = await requireDb();
   const assign = async (db: SettlementTx) => {
-    const { booking } = await lockDepartureContext(db, bookingId, flightId);
-    if (!booking)
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Booking not found for flight",
-      });
-    if (!["pending", "confirmed"].includes(booking.status))
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Booking cannot select a seat",
-      });
-    if (booking.status === "pending") {
-      const [hold] = booking.inventoryLockId
-        ? await db
-            .select()
-            .from(inventoryLocks)
-            .where(eq(inventoryLocks.id, booking.inventoryLockId))
-            .for("update")
-        : [];
-      if (
-        !hold ||
-        hold.status !== "active" ||
-        hold.expiresAt <= new Date() ||
-        hold.userId !== booking.userId
-      )
-        throw new Error("A current checkout hold is required to select seats");
-    }
+    const c = await lockDepartureContext(db, bookingId, flightId);
+    const { booking } = c;
+    await assertSeatSelectionContext(db, c);
     // One flight lock serializes assignments and exchanges without target/old-seat deadlocks.
     await db
       .select({ id: flights.id })
@@ -1007,12 +983,9 @@ export async function changeSeat(
 ): Promise<SeatInventoryItem> {
   const database = await requireDb();
   return database.transaction(async db => {
-    const { booking } = await lockDepartureContext(db, bookingId, flightId);
-    if (!booking || !["pending", "confirmed"].includes(booking.status))
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: "Booking cannot change seats",
-      });
+    const c = await lockDepartureContext(db, bookingId, flightId);
+    const { booking } = c;
+    await assertSeatSelectionContext(db, c);
     await db
       .select({ id: flights.id })
       .from(flights)
@@ -1459,11 +1432,19 @@ export async function generateBoardingPass(
     // Gate tables may not exist; boarding pass still valid without gate info
   }
 
-  const { token: barcodeData } = await issueBoardingPass(
+  const { token: barcodeData, payload } = await issueBoardingPass(
     { bookingId: booking.id, passengerId, flightId },
     { userId: booking.userId }
   );
 
+  if (
+    payload.flightNumber !== fd.flightNumber ||
+    payload.departureTime !== fd.departureTime.toISOString() ||
+    payload.seatNumber !== seat.seatNumber ||
+    payload.passengerName !==
+      `${passenger.firstName} ${passenger.lastName}`.trim()
+  )
+    throw new Error("Boarding document changed during generation; retry");
   return {
     flightNumber: fd.flightNumber,
     airline: {

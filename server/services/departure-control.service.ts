@@ -7,6 +7,7 @@ import {
   flights,
   passengers,
   seatInventory,
+  inventoryLocks,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -63,6 +64,44 @@ export async function lockDepartureContext(
     legs,
     reserved: member ? member.seatsReserved : booking.seatsReserved,
   };
+}
+
+export async function assertSeatSelectionContext(
+  tx: SettlementTx,
+  c: Awaited<ReturnType<typeof lockDepartureContext>>
+) {
+  if (
+    !["scheduled", "delayed"].includes(c.flight.status) ||
+    c.flight.departureTime <= new Date()
+  )
+    throw new Error("Flight is closed for seat selection");
+  if (c.booking.status === "confirmed") {
+    if (c.booking.paymentStatus !== "paid" || !c.reserved)
+      throw new Error("Seat selection requires funded inventory");
+    return;
+  }
+  if (c.booking.status !== "pending")
+    throw new Error("Booking cannot select seats");
+  const holdId = c.legs.length
+    ? c.legs.find(l => l.flightId === c.flight.id)?.inventoryLockId
+    : c.booking.inventoryLockId;
+  const [hold] = holdId
+    ? await tx
+        .select()
+        .from(inventoryLocks)
+        .where(eq(inventoryLocks.id, holdId))
+        .for("update")
+    : [];
+  if (
+    !hold ||
+    hold.status !== "active" ||
+    hold.expiresAt <= new Date() ||
+    hold.userId !== c.booking.userId ||
+    hold.flightId !== c.flight.id ||
+    hold.cabinClass !== c.booking.cabinClass ||
+    hold.numberOfSeats < c.booking.numberOfPassengers
+  )
+    throw new Error("A current checkout hold is required to select seats");
 }
 
 export function assertDepartureOpen(
