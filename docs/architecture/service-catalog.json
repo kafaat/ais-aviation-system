@@ -3877,6 +3877,7 @@
         "server/_core/context.ts",
         "server/_core/trpc.ts",
         "server/routers/admin.ts",
+        "server/routers/gates.ts",
         "server/routes/operational-integrations.ts",
         "server/services/access-control.service.ts",
         "server/services/data-warehouse.service.ts"
