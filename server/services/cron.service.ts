@@ -29,6 +29,16 @@ export async function cleanupExpiredLocks() {
 
 export const PERIODIC_JOB_CATALOG = [
   {
+    name: "operationalAlerts",
+    cron: "* * * * *",
+    periodMs: 60000,
+    run: async () => {
+      const { refreshOperationalAlerts } =
+        await import("./operational-observations.service");
+      await refreshOperationalAlerts();
+    },
+  },
+  {
     name: "flightCancellationRefunds",
     cron: "* * * * *",
     periodMs: 60000,

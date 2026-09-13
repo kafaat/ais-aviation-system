@@ -28,6 +28,15 @@ spec:
                   "const fs=require('node:fs');try{process.exit(Date.now()-fs.statSync('/tmp/ais-worker-ready').mtimeMs<30000?0:1)}catch{process.exit(1)}",
                 ]
             periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - node
+                - -e
+                - "const fs=require('node:fs');try{process.exit(Date.now()-fs.statSync('/tmp/ais-worker-ready').mtimeMs<30000?0:1)}catch{process.exit(1)}"
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
           startupProbe:
             exec:
               command:

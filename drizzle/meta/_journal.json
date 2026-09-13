@@ -253,6 +253,13 @@
       "when": 1789260537949,
       "tag": "0035_event_consumer_and_loyalty_receipts",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1789261843214,
+      "tag": "0036_durable_operations_observations",
+      "breakpoints": true
     }
   ]
 }

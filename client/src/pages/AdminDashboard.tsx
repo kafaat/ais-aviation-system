@@ -128,6 +128,14 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <div className="container py-3">
+        <Link href="/admin/operations">
+          {t(
+            "admin.operationsLink",
+            "مراقبة التكامل والتشغيل / Operations control"
+          )}
+        </Link>
+      </div>
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50">
         <div className="container py-4">

@@ -5901,3 +5901,33 @@ export const eventDeliveries = mysqlTable(
     pending: index("event_delivery_status_idx").on(t.status, t.updatedAt),
   })
 );
+
+/** Durable sampled observations; absence of samples is unknown, not uptime. */
+export const operationalSamples = mysqlTable(
+  "operational_samples",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    instanceId: varchar("instanceId", { length: 64 }).notNull(),
+    component: mysqlEnum("component", ["api", "worker"]).notNull(),
+    status: mysqlEnum("status", ["healthy", "degraded", "stopped"]).notNull(),
+    startedAt: timestamp("startedAt").notNull(),
+    endedAt: timestamp("endedAt").notNull(),
+    requests: int("requests").notNull().default(0),
+    errors: int("errors").notNull().default(0),
+    totalDurationMs: decimal("totalDurationMs", { precision: 20, scale: 3 })
+      .notNull()
+      .default("0"),
+  },
+  t => ({
+    window: index("operational_sample_window_idx").on(t.component, t.endedAt),
+  })
+);
+export const operationsAlerts = mysqlTable("operations_alerts", {
+  key: varchar("key", { length: 100 }).primaryKey(),
+  status: mysqlEnum("status", ["active", "resolved"]).notNull(),
+  message: varchar("message", { length: 500 }).notNull(),
+  acknowledgedBy: int("acknowledgedBy"),
+  acknowledgedAt: timestamp("acknowledgedAt"),
+  firstObservedAt: timestamp("firstObservedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});

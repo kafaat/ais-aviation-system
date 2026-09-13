@@ -83,6 +83,7 @@ const IROPSCommandCenter = lazy(
 );
 const RevenueAccounting = lazy(() => import("./pages/admin/RevenueAccounting"));
 const SeatEconomics = lazy(() => import("./pages/admin/SeatEconomics"));
+const OperationsControl = lazy(() => import("./pages/admin/OperationsControl"));
 const SLADashboard = lazy(() => import("./pages/admin/SLADashboard"));
 const CompensationManagement = lazy(
   () => import("./pages/admin/CompensationManagement")
@@ -469,6 +470,11 @@ function Router() {
               <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
                 <SeatEconomics />
               </Suspense>
+            </AdminRoute>
+          </Route>
+          <Route path="/admin/operations">
+            <AdminRoute>
+              <OperationsControl />
             </AdminRoute>
           </Route>
           <Route path="/admin/sla">
