@@ -29,6 +29,26 @@ export async function cleanupExpiredLocks() {
 
 export const PERIODIC_JOB_CATALOG = [
   {
+    name: "channelAllocationExpiry",
+    cron: "* * * * *",
+    periodMs: 60000,
+    run: async () => {
+      const { processExpiredOffers } = await import("./waitlist.service");
+      const { expireGroupAllocations } =
+        await import("./group-booking.service");
+      const results = await Promise.allSettled([
+        processExpiredOffers(),
+        expireGroupAllocations(),
+      ]);
+      const failed = results.filter(r => r.status === "rejected");
+      if (failed.length)
+        throw new AggregateError(
+          failed.map(r => r.reason),
+          "Allocation expiration failed"
+        );
+    },
+  },
+  {
     name: "orderServiceRefunds",
     cron: "* * * * *",
     periodMs: 60000,

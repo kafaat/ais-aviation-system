@@ -31,3 +31,23 @@ Validation: disposable MySQL/Redis regressions for R01/R02/R03/R04, secondary-le
 statistics, nonce revocation, cancellation, concurrent seat claims, check-in
 windows and booking-seat persistence; six cryptographic unit tests passed.
 No external provider or airport calls were made.
+
+## Patch 3 — One inventory authority across channels
+
+- Availability adjustments lock the flight, account for reserved itinerary legs,
+  legacy allocations and all active holds, and record an event with the actor.
+- Waitlist offers use expiring canonical holds. Decline/expiry release the hold;
+  customer acceptance transfers it once to a pending booking. Only settlement
+  decrements inventory. Both former waitlist writers use the same offer service.
+- Group approval is a temporary allocation to an identified organizer, not proof
+  of collection. The organizer enters every passenger and checks out against the
+  approved invoice. A group cannot consume an existing customer's checkout hold.
+- Scheduled cleanup releases group/waitlist allocations and physical seats from
+  expired unpaid checkout holds. Failures remain visible to the scheduler.
+- Migration 0033 adds nullable allocation links. Old offered waitlist rows and
+  confirmed groups without links require an operator's inventory reconciliation;
+  their inconsistent historical capacity writes cannot safely be inferred.
+
+Validation: R06/R10/R11 plus repeated decline, expiration, hold reuse rejection,
+waitlist-to-paid-booking handoff, group invoice settlement and physical-seat
+expiration passed on disposable MySQL. The runner now covers ten scenarios.

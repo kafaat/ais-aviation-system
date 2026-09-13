@@ -50,6 +50,7 @@ const DcsDashboard = lazy(() => import("./pages/admin/DcsDashboard"));
 const DeletedBookings = lazy(() => import("./pages/admin/DeletedBookings"));
 
 // Group booking pages
+const MyGroups = lazy(() => import("./pages/MyGroups"));
 const GroupBookingRequest = lazy(() => import("./pages/GroupBookingRequest"));
 
 // Split payment pages
@@ -255,6 +256,13 @@ function Router() {
             <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
               <CompareFlights />
             </Suspense>
+          </Route>
+          <Route path="/my-groups">
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <MyGroups />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/group-booking/:id">
             <Suspense fallback={<PageLoadingFallback variant="form" />}>

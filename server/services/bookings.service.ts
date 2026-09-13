@@ -1,7 +1,7 @@
 import { selectSeat } from "./seat-map.service";
 import { assertTenantOperational } from "./tenant.service";
 import { TRPCError } from "@trpc/server";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import * as db from "../db";
 import { getDb } from "../db";
 import {
@@ -13,6 +13,8 @@ import {
   ancillaryServices,
   priceLocks,
   seatInventory,
+  waitlist,
+  groupBookings,
 } from "../../drizzle/schema";
 import {
   createRetailOffer,
@@ -64,6 +66,8 @@ export interface CreateBookingInput {
   passengers: Passenger[];
   sessionId: string;
   lockId?: number;
+  waitlistId?: number;
+  groupBookingId?: number;
   priceLockId?: number;
   offerId?: string;
   idempotencyKey?: string;
@@ -140,27 +144,32 @@ export async function createBooking(
         code: "BAD_REQUEST",
         message: "Passengers are required",
       });
+    if (input.groupBookingId && (input.priceLockId || input.offerId))
+      throw new Error("Group allocation uses its approved price");
+    if (input.waitlistId && input.groupBookingId)
+      throw new Error("Choose one allocation");
     if (input.offerId && input.priceLockId)
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Choose an offer or a purchased price lock",
       });
-    const offerId = input.priceLockId
-      ? undefined
-      : (input.offerId ??
-        (
-          await createRetailOffer(
-            {
-              flightId: flight.id,
-              cabinClass: input.cabinClass,
-              passengerTypes: input.passengers.map(p => p.type),
-              userId: input.userId,
-              sessionId: input.sessionId,
-              channel: "direct",
-            },
-            transaction
-          )
-        ).id);
+    const offerId =
+      input.priceLockId || input.groupBookingId
+        ? undefined
+        : (input.offerId ??
+          (
+            await createRetailOffer(
+              {
+                flightId: flight.id,
+                cabinClass: input.cabinClass,
+                passengerTypes: input.passengers.map(p => p.type),
+                userId: input.userId,
+                sessionId: input.sessionId,
+                channel: "direct",
+              },
+              transaction
+            )
+          ).id);
 
     const bookingReference = db.generateBookingReference();
     const pnr = db.generateBookingReference();
@@ -174,6 +183,30 @@ export async function createBooking(
         userId: input.userId,
         request: input,
         run: async tx => {
+          const [group] = input.groupBookingId
+            ? await tx
+                .select()
+                .from(groupBookings)
+                .where(eq(groupBookings.id, input.groupBookingId))
+                .for("update")
+            : [];
+          if (
+            input.groupBookingId &&
+            (!group ||
+              group.organizerUserId !== input.userId ||
+              group.flightId !== input.flightId ||
+              group.cabinClass !== input.cabinClass ||
+              group.groupSize !== input.passengers.length ||
+              group.status !== "confirmed" ||
+              group.bookingId ||
+              !group.inventoryLockId ||
+              !group.totalPrice ||
+              !group.allocationExpiresAt ||
+              group.allocationExpiresAt <= new Date())
+          )
+            throw new Error(
+              "Group allocation is unavailable for this customer"
+            );
           const [currentFlight] = await tx
             .select()
             .from(flights)
@@ -198,7 +231,29 @@ export async function createBooking(
                 passengerTypes: input.passengers.map(p => p.type),
               })
             : undefined;
-          let lockId = input.lockId;
+          const [waiting] = input.waitlistId
+            ? await tx
+                .select()
+                .from(waitlist)
+                .where(eq(waitlist.id, input.waitlistId))
+                .for("update")
+            : [];
+          if (
+            input.waitlistId &&
+            (!waiting ||
+              waiting.userId !== input.userId ||
+              waiting.flightId !== input.flightId ||
+              waiting.cabinClass !== input.cabinClass ||
+              waiting.seats !== input.passengers.length ||
+              waiting.status !== "confirmed" ||
+              waiting.bookingId ||
+              !waiting.inventoryLockId)
+          )
+            throw new Error(
+              "Waitlist allocation is unavailable for this booking"
+            );
+          let lockId =
+            waiting?.inventoryLockId ?? group?.inventoryLockId ?? input.lockId;
           if (lockId) {
             const [hold] = await tx
               .select()
@@ -206,7 +261,9 @@ export async function createBooking(
               .where(
                 and(
                   eq(inventoryLocks.id, lockId),
-                  eq(inventoryLocks.sessionId, input.sessionId),
+                  waiting || group
+                    ? undefined
+                    : eq(inventoryLocks.sessionId, input.sessionId),
                   eq(inventoryLocks.userId, input.userId),
                   eq(inventoryLocks.flightId, input.flightId),
                   eq(inventoryLocks.cabinClass, input.cabinClass),
@@ -217,6 +274,18 @@ export async function createBooking(
               )
               .limit(1)
               .for("update");
+            const [linked] = await tx
+              .select({ id: bookings.id })
+              .from(bookings)
+              .where(
+                and(
+                  eq(bookings.inventoryLockId, lockId),
+                  sql`${bookings.status} <> 'cancelled'`
+                )
+              )
+              .limit(1);
+            if (linked)
+              throw new Error("Inventory hold already belongs to a booking");
             if (!hold)
               throw new Error(
                 "Inventory hold expired or does not match this booking"
@@ -275,7 +344,7 @@ export async function createBooking(
               totalPrice: service.price * item.quantity,
             });
           }
-          let fareAmount = selectedOffer?.totalAmount ?? 0;
+          let fareAmount = group?.totalPrice ?? selectedOffer?.totalAmount ?? 0;
           if (input.priceLockId) {
             const [priceLock] = await tx
               .select()
@@ -339,6 +408,16 @@ export async function createBooking(
             numberOfPassengers: input.passengers.length,
           });
           const bookingId = created.insertId;
+          if (waiting)
+            await tx
+              .update(waitlist)
+              .set({ bookingId })
+              .where(eq(waitlist.id, waiting.id));
+          if (group)
+            await tx
+              .update(groupBookings)
+              .set({ bookingId })
+              .where(eq(groupBookings.id, group.id));
           if (selectedOffer)
             await consumeRetailOffer(tx, selectedOffer, bookingId);
           for (const p of input.passengers) {

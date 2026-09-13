@@ -65,6 +65,8 @@ export const bookingsRouter = router({
           )
           .describe("List of passengers"),
         sessionId: z.string().describe("Booking session ID for inventory lock"),
+        waitlistId: z.number().int().positive().optional(),
+        groupBookingId: z.number().int().positive().optional(),
         lockId: z
           .number()
           .int()
@@ -105,6 +107,8 @@ export const bookingsRouter = router({
         passengers: input.passengers,
         sessionId: input.sessionId,
         lockId: input.lockId,
+        waitlistId: input.waitlistId,
+        groupBookingId: input.groupBookingId,
         priceLockId: input.priceLockId,
         offerId: input.offerId,
         idempotencyKey: input.idempotencyKey,
@@ -258,6 +262,70 @@ export const bookingsRouter = router({
       }
 
       return result;
+    }),
+
+  getAllocation: protectedProcedure
+    .input(
+      z.object({
+        waitlistId: z.number().int().positive().optional(),
+        groupBookingId: z.number().int().positive().optional(),
+      })
+    )
+    .output(
+      z.object({
+        flightId: z.number(),
+        cabinClass: z.enum(["economy", "business"]),
+        passengers: z.number(),
+        totalAmount: z.number().nullable(),
+        expiresAt: z.date(),
+        bookingId: z.number().nullable(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      if (Boolean(input.waitlistId) === Boolean(input.groupBookingId))
+        throw new Error("Select one allocation");
+      const database = db.getDb();
+      if (!database) throw new Error("Database unavailable");
+      const { waitlist, groupBookings, inventoryLocks } =
+        await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const [w] = input.waitlistId
+        ? await database
+            .select()
+            .from(waitlist)
+            .where(eq(waitlist.id, input.waitlistId))
+        : [];
+      const [g] = input.groupBookingId
+        ? await database
+            .select()
+            .from(groupBookings)
+            .where(eq(groupBookings.id, input.groupBookingId))
+        : [];
+      const row = w ?? g;
+      if (
+        !row ||
+        (w?.userId ?? g?.organizerUserId) !== ctx.user.id ||
+        row.status !== "confirmed" ||
+        !row.inventoryLockId
+      )
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Allocation unavailable",
+        });
+      const [hold] = await database
+        .select()
+        .from(inventoryLocks)
+        .where(eq(inventoryLocks.id, row.inventoryLockId));
+      if (!hold || hold.status !== "active" || hold.expiresAt <= new Date())
+        throw new Error("Allocation expired or already booked");
+      return {
+        flightId: row.flightId,
+        cabinClass: row.cabinClass,
+        passengers: w?.seats ?? g?.groupSize ?? 0,
+        totalAmount: g?.totalPrice ?? null,
+        expiresAt: hold.expiresAt,
+        bookingId: row.bookingId,
+      };
     }),
 
   getDepartureState: protectedProcedure

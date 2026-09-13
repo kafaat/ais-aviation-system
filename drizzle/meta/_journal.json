@@ -232,6 +232,13 @@
       "when": 1789258517165,
       "tag": "0032_departure_check_in_nonce",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1789259203618,
+      "tag": "0033_channel_inventory_allocations",
+      "breakpoints": true
     }
   ]
 }

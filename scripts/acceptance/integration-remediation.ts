@@ -369,6 +369,247 @@ try {
       return { persistedPhysicalSeat: true };
     }
   );
+  const { createInventoryLock, releaseInventoryLock, releaseExpiredLocks } =
+    await import("../../server/services/inventory-lock.service");
+  const { settleVerifiedPayment } =
+    await import("../../server/services/payment-settlement.service");
+  const { countActiveHolds } =
+    await import("../../server/services/inventory-capacity.service");
+  const { processWaitlist, declineOffer, acceptOffer, processExpiredOffers } =
+    await import("../../server/services/waitlist.service");
+  const {
+    createGroupBookingRequest,
+    approveGroupBooking,
+    expireGroupAllocations,
+  } = await import("../../server/services/group-booking.service");
+  const { createBooking } =
+    await import("../../server/services/bookings.service");
+  await record(
+    "R06",
+    "Manual capacity cannot exceed aircraft capacity or erase funded reservations",
+    async () => {
+      const { updateFlightAvailability } = await import("../../server/db");
+      await assert.rejects(
+        updateFlightAvailability(id + 6, "economy", 11, id, id)
+      );
+      await booking(6, 6, 9, false);
+      await db.transaction(tx =>
+        settleVerifiedPayment(tx, {
+          paymentIntentId: "pi_remediation_capacity",
+          amount: 90000,
+          currency: "sar",
+          metadata: { bookingId: String(id + 6), userId: String(id) },
+          eventId: "evt_remediation_capacity",
+        })
+      );
+      await assert.rejects(
+        updateFlightAvailability(id + 6, "economy", 2, id, id)
+      );
+      const [flight] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, id + 6));
+      assert.equal(flight.economyAvailable, 1);
+      return { capacityProtected: true, reserved: 9, available: 1 };
+    }
+  );
+  await record(
+    "R10",
+    "Waitlist decline, expiry and booking handoff preserve inventory",
+    async () => {
+      await db.insert(s.waitlist).values({
+        id,
+        userId: id,
+        flightId: id + 10,
+        seats: 1,
+        cabinClass: "economy",
+        priority: 1,
+      });
+      assert.equal((await processWaitlist(id + 10)).offeredCount, 1);
+      assert.equal(await countActiveHolds(db, id + 10, "economy"), 1);
+      await declineOffer(id, id);
+      await declineOffer(id, id);
+      assert.equal(await countActiveHolds(db, id + 10, "economy"), 0);
+      const [flight] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, id + 10));
+      assert.equal(flight.economyAvailable, 10);
+      await db.insert(s.waitlist).values({
+        id: id + 1,
+        userId: id,
+        flightId: id + 10,
+        seats: 1,
+        cabinClass: "economy",
+        priority: 2,
+      });
+      await processWaitlist(id + 10);
+      await db
+        .update(s.waitlist)
+        .set({ offerExpiresAt: hour(-1) })
+        .where(eq(s.waitlist.id, id + 1));
+      assert.equal((await processExpiredOffers()).expiredCount, 1);
+      assert.equal(await countActiveHolds(db, id + 10, "economy"), 0);
+      await db.insert(s.waitlist).values({
+        id: id + 2,
+        userId: id,
+        flightId: id + 10,
+        seats: 1,
+        cabinClass: "economy",
+        priority: 3,
+      });
+      await processWaitlist(id + 10);
+      await acceptOffer(id + 2, id);
+      const result = await createBooking({
+        userId: id,
+        tenantId: id,
+        flightId: id + 10,
+        cabinClass: "economy",
+        sessionId: "waitlist-handoff",
+        waitlistId: id + 2,
+        passengers: [
+          { type: "adult", firstName: "Waitlist", lastName: "Traveler" },
+        ],
+      });
+      assert.equal(await countActiveHolds(db, id + 10, "economy"), 1);
+      await assert.rejects(
+        createBooking({
+          userId: id,
+          tenantId: id,
+          flightId: id + 10,
+          cabinClass: "economy",
+          sessionId: "waitlist-reuse",
+          waitlistId: id + 2,
+          passengers: [
+            { type: "adult", firstName: "Waitlist", lastName: "Traveler" },
+          ],
+        })
+      );
+      await db.transaction(tx =>
+        settleVerifiedPayment(tx, {
+          paymentIntentId: "pi_remediation_waitlist",
+          amount: result.totalAmount,
+          currency: "sar",
+          metadata: { bookingId: String(result.bookingId), userId: String(id) },
+          eventId: "evt_remediation_waitlist",
+        })
+      );
+      assert.equal(await countActiveHolds(db, id + 10, "economy"), 0);
+      const [funded] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, id + 10));
+      assert.equal(funded.economyAvailable, 9);
+      return {
+        declinedOnce: true,
+        expiredOnce: true,
+        fundedSeats: 1,
+        available: 9,
+      };
+    }
+  );
+  await record(
+    "R11",
+    "Group allocations respect checkout holds and settle through canonical bookings",
+    async () => {
+      const hold = await createInventoryLock(
+        id + 11,
+        1,
+        "economy",
+        "protected-checkout",
+        id
+      );
+      const request = await createGroupBookingRequest({
+        organizerUserId: id,
+        organizerName: "Group",
+        organizerEmail: "group@example.invalid",
+        organizerPhone: "0000000000",
+        flightId: id + 11,
+        groupSize: 10,
+      });
+      await assert.rejects(approveGroupBooking(request.id, 5, id));
+      await releaseInventoryLock(hold.lockId);
+      const group = await approveGroupBooking(request.id, 5, id);
+      assert.equal(await countActiveHolds(db, id + 11, "economy"), 10);
+      const result = await createBooking({
+        userId: id,
+        tenantId: id,
+        flightId: id + 11,
+        cabinClass: "economy",
+        sessionId: "group-handoff",
+        groupBookingId: request.id,
+        passengers: Array.from({ length: 10 }, (_, n) => ({
+          type: "adult" as const,
+          firstName: "Group",
+          lastName: `Traveler${n}`,
+        })),
+      });
+      assert.equal(result.totalAmount, group.totalPrice);
+      await db.transaction(tx =>
+        settleVerifiedPayment(tx, {
+          paymentIntentId: "pi_remediation_group",
+          amount: result.totalAmount,
+          currency: "sar",
+          metadata: { bookingId: String(result.bookingId), userId: String(id) },
+          eventId: "evt_remediation_group",
+        })
+      );
+      assert.equal(await countActiveHolds(db, id + 11, "economy"), 0);
+      const [flight] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, id + 11));
+      assert.equal(flight.economyAvailable, 0);
+      return {
+        existingHoldProtected: true,
+        invoice: result.totalAmount,
+        fundedPassengers: 10,
+      };
+    }
+  );
+  await record(
+    "C04",
+    "Expired allocations release physical and group seats",
+    async () => {
+      const request = await createGroupBookingRequest({
+        organizerUserId: id,
+        organizerName: "Expiry",
+        organizerEmail: "expiry@example.invalid",
+        organizerPhone: "0000000000",
+        flightId: id + 12,
+        groupSize: 10,
+      });
+      await approveGroupBooking(request.id, 5, id);
+      await db
+        .update(s.groupBookings)
+        .set({ allocationExpiresAt: hour(-1) })
+        .where(eq(s.groupBookings.id, request.id));
+      assert.equal(await expireGroupAllocations(), 1);
+      assert.equal(await countActiveHolds(db, id + 12, "economy"), 0);
+      const [pendingSeat] = await db
+        .select()
+        .from(s.seatInventory)
+        .where(eq(s.seatInventory.flightId, id + 5));
+      assert(pendingSeat.bookingId);
+      const [pending] = await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, pendingSeat.bookingId));
+      assert(pending.inventoryLockId);
+      await db
+        .update(s.inventoryLocks)
+        .set({ expiresAt: hour(-1) })
+        .where(eq(s.inventoryLocks.id, pending.inventoryLockId));
+      assert.equal(await releaseExpiredLocks(), 1);
+      const [released] = await db
+        .select()
+        .from(s.seatInventory)
+        .where(eq(s.seatInventory.id, pendingSeat.id));
+      assert.equal(released.status, "available");
+      assert.equal(released.bookingId, null);
+      return { groupReleased: true, physicalSeatReleased: true };
+    }
+  );
   await writeFile(
     reportPath,
     JSON.stringify(

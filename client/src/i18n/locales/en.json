@@ -1164,7 +1164,7 @@
     "step3": "Receive confirmation email with payment instructions",
     "status": {
       "pending": "Pending Review",
-      "confirmed": "Confirmed",
+      "confirmed": "Approved allocation",
       "cancelled": "Cancelled"
     },
     "admin": {
@@ -1206,7 +1206,11 @@
       "rejectionReason": "Rejection Reason",
       "rejectionReasonPlaceholder": "Enter the reason for rejection",
       "confirmReject": "Reject Booking"
-    }
+    },
+    "myAllocations": "My group allocations",
+    "allocationNote": "Approval holds seats until the deadline. Enter every passenger and complete payment to confirm the booking.",
+    "completeAllocation": "Enter passengers and pay",
+    "organizerAccount": "Organizer account matching the request email"
   },
   "baggage": {
     "title": "Baggage Tracking",

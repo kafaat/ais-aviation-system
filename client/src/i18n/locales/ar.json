@@ -1164,7 +1164,7 @@
     "step3": "تتلقى بريداً إلكترونياً للتأكيد مع تعليمات الدفع",
     "status": {
       "pending": "قيد المراجعة",
-      "confirmed": "مؤكد",
+      "confirmed": "تخصيص معتمد",
       "cancelled": "ملغي"
     },
     "admin": {
@@ -1206,7 +1206,11 @@
       "rejectionReason": "سبب الرفض",
       "rejectionReasonPlaceholder": "أدخل سبب الرفض",
       "confirmReject": "تأكيد الرفض"
-    }
+    },
+    "myAllocations": "تخصيصات مجموعاتي",
+    "allocationNote": "تحفظ الموافقة المقاعد حتى المهلة المحددة. أدخل بيانات جميع المسافرين وأكمل الدفع لتأكيد الحجز.",
+    "completeAllocation": "إدخال المسافرين والدفع",
+    "organizerAccount": "حساب المنظّم المطابق لبريد الطلب"
   },
   "multiCity": {
     "oneWay": "ذهاب فقط",

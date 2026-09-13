@@ -17,6 +17,7 @@ import { issueBoardingPass } from "./boarding-pass.service";
 import { getDb } from "../db";
 import {
   seatMaps,
+  inventoryLocks,
   seatInventory,
   flights,
   bookings,
@@ -788,6 +789,22 @@ export async function selectSeat(
         code: "BAD_REQUEST",
         message: "Booking cannot select a seat",
       });
+    if (booking.status === "pending") {
+      const [hold] = booking.inventoryLockId
+        ? await db
+            .select()
+            .from(inventoryLocks)
+            .where(eq(inventoryLocks.id, booking.inventoryLockId))
+            .for("update")
+        : [];
+      if (
+        !hold ||
+        hold.status !== "active" ||
+        hold.expiresAt <= new Date() ||
+        hold.userId !== booking.userId
+      )
+        throw new Error("A current checkout hold is required to select seats");
+    }
     // One flight lock serializes assignments and exchanges without target/old-seat deadlocks.
     await db
       .select({ id: flights.id })

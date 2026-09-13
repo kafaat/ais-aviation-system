@@ -1,7 +1,12 @@
 import { responseContracts } from "../contracts/group-bookings";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { publicProcedure, adminProcedure, router } from "../_core/trpc";
+import {
+  publicProcedure,
+  protectedProcedure,
+  adminProcedure,
+  router,
+} from "../_core/trpc";
 import * as groupBookingService from "../services/group-booking.service";
 
 /**
@@ -9,10 +14,36 @@ import * as groupBookingService from "../services/group-booking.service";
  * Handles all group booking-related operations (10+ passengers)
  */
 export const groupBookingsRouter = router({
+  myAllocations: protectedProcedure
+    .output(
+      z.array(
+        z.object({
+          id: z.number(),
+          flightId: z.number(),
+          cabinClass: z.enum(["economy", "business"]),
+          groupSize: z.number(),
+          status: z.string(),
+          totalPrice: z.number().nullable(),
+          allocationExpiresAt: z.date().nullable(),
+          bookingId: z.number().nullable(),
+        })
+      )
+    )
+    .query(async ({ ctx }) => {
+      const { getDb } = await import("../db");
+      const { groupBookings } = await import("../../drizzle/schema");
+      const { eq } = await import("drizzle-orm");
+      const db = getDb();
+      if (!db) throw new Error("Database unavailable");
+      return await db
+        .select()
+        .from(groupBookings)
+        .where(eq(groupBookings.organizerUserId, ctx.user.id));
+    }),
   /**
    * Submit a new group booking request (public - no auth required)
    */
-  submitRequest: publicProcedure
+  submitRequest: protectedProcedure
     .meta({
       openapi: {
         method: "POST",
@@ -56,8 +87,11 @@ export const groupBookingsRouter = router({
         message: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
-      const result = await groupBookingService.createGroupBookingRequest(input);
+    .mutation(async ({ input, ctx }) => {
+      const result = await groupBookingService.createGroupBookingRequest({
+        ...input,
+        organizerUserId: ctx.user.id,
+      });
       return {
         ...result,
         message: `Group booking request submitted successfully. You will receive an email at ${input.organizerEmail} once it's reviewed.`,
@@ -216,6 +250,7 @@ export const groupBookingsRouter = router({
     })
     .input(
       z.object({
+        organizerUserId: z.number().int().positive().optional(),
         id: z.number().describe("Group booking ID"),
         discountPercent: z
           .number()
@@ -235,7 +270,8 @@ export const groupBookingsRouter = router({
       const booking = await groupBookingService.approveGroupBooking(
         input.id,
         input.discountPercent,
-        ctx.user.id
+        ctx.user.id,
+        input.organizerUserId
       );
       return {
         success: true,

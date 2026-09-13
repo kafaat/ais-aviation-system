@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useLocation, useRoute, Link } from "wouter";
+import { useLocation, useRoute, useSearch, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -76,12 +76,11 @@ type Passenger = {
 export default function BookingPage() {
   const { t, i18n } = useTranslation();
   const [, params] = useRoute("/booking/:id");
-  const [location] = useLocation();
   const { user, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
 
   const flightId = params?.id ? parseInt(params.id) : 0;
-  const searchParams = new URLSearchParams(location.split("?")[1]);
+  const searchParams = new URLSearchParams(useSearch());
   const cabinClass = (searchParams.get("class") || "economy") as
     | "economy"
     | "business";
@@ -91,6 +90,30 @@ export default function BookingPage() {
   const [passengers, setPassengers] = useState<Passenger[]>([
     { type: "adult", firstName: "", lastName: "" },
   ]);
+  const waitlistId = Number(searchParams.get("waitlistId")) || undefined;
+  const groupBookingId =
+    Number(searchParams.get("groupBookingId")) || undefined;
+  const allocation = trpc.bookings.getAllocation.useQuery(
+    { waitlistId, groupBookingId },
+    {
+      enabled: isAuthenticated && Boolean(waitlistId || groupBookingId),
+      retry: false,
+    }
+  );
+  const loadedAllocation = useRef("");
+  useEffect(() => {
+    const key = `${waitlistId}:${groupBookingId}`;
+    if (allocation.data && loadedAllocation.current !== key) {
+      loadedAllocation.current = key;
+      setPassengers(
+        Array.from({ length: allocation.data.passengers }, () => ({
+          type: "adult" as const,
+          firstName: "",
+          lastName: "",
+        }))
+      );
+    }
+  }, [allocation.data, waitlistId, groupBookingId]);
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>(
     {}
   );
@@ -145,7 +168,10 @@ export default function BookingPage() {
       cabinClass,
       passengers,
       selectedAncillaries,
-      offerId: activeOffer?.offerId,
+      selectedSeats,
+      waitlistId,
+      groupBookingId,
+      offerId: groupBookingId ? undefined : activeOffer?.offerId,
     });
     if (command.current?.fingerprint !== fingerprint) {
       command.current = {
@@ -263,6 +289,7 @@ export default function BookingPage() {
   };
 
   const addPassenger = () => {
+    if (waitlistId || groupBookingId) return;
     setPassengers([
       ...passengers,
       { type: "adult", firstName: "", lastName: "" },
@@ -270,6 +297,7 @@ export default function BookingPage() {
   };
 
   const removePassenger = (index: number) => {
+    if (waitlistId || groupBookingId) return;
     if (passengers.length > 1) {
       setPassengers(passengers.filter((_, i) => i !== index));
     }
@@ -352,6 +380,11 @@ export default function BookingPage() {
           seatNumber: selectedSeats[i]?.id,
         })),
         ...bookingCommand(),
+        ...(groupBookingId
+          ? { offerId: undefined, priceLockId: undefined }
+          : {}),
+        waitlistId: Number(searchParams.get("waitlistId")) || undefined,
+        groupBookingId: Number(searchParams.get("groupBookingId")) || undefined,
         ancillaries:
           selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
       });
@@ -420,6 +453,11 @@ export default function BookingPage() {
           seatNumber: selectedSeats[i]?.id,
         })),
         ...bookingCommand(),
+        ...(groupBookingId
+          ? { offerId: undefined, priceLockId: undefined }
+          : {}),
+        waitlistId: Number(searchParams.get("waitlistId")) || undefined,
+        groupBookingId: Number(searchParams.get("groupBookingId")) || undefined,
         ancillaries:
           selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
       });
@@ -499,9 +537,10 @@ export default function BookingPage() {
     activePriceLock?.lockedPrice ??
     (cabinClass === "economy" ? flight.economyPrice : flight.businessPrice);
   const baseAmount =
-    (activePriceLock
-      ? price * passengers.length + activePriceLock.lockFee
-      : (activeOffer?.totalAmount ?? price * passengers.length)) / 100;
+    (allocation.data?.totalAmount ??
+      (activePriceLock
+        ? price * passengers.length + activePriceLock.lockFee
+        : (activeOffer?.totalAmount ?? price * passengers.length))) / 100;
   const totalAmount = baseAmount + ancillariesTotalCost / 100;
 
   const handleAncillariesChange = (
@@ -1177,7 +1216,7 @@ export default function BookingPage() {
               </div>
 
               <div className="space-y-3">
-                {!activePriceLock && (
+                {!activePriceLock && !groupBookingId && (
                   <>
                     <Button
                       className="w-full"
@@ -1217,6 +1256,17 @@ export default function BookingPage() {
                     </p>
                   </>
                 )}
+                {(waitlistId || groupBookingId) && (
+                  <p
+                    role={allocation.error ? "alert" : "status"}
+                    className="text-sm"
+                  >
+                    {allocation.error?.message ??
+                      (allocation.data
+                        ? `${t("groupBooking.allocationNote")} ${new Date(allocation.data.expiresAt).toLocaleString()}`
+                        : t("common.loading"))}
+                  </p>
+                )}
                 <Button
                   onClick={handleSubmit}
                   className="w-full shadow-lg"
@@ -1224,7 +1274,9 @@ export default function BookingPage() {
                   disabled={
                     createBooking.isPending ||
                     createCheckout.isPending ||
-                    (!activePriceLock && !activeOffer)
+                    (!groupBookingId && !activePriceLock && !activeOffer) ||
+                    (Boolean(waitlistId || groupBookingId) &&
+                      (!allocation.data || allocation.isError))
                   }
                 >
                   <CreditCard className="h-5 w-5 mr-2" aria-hidden="true" />
@@ -1241,7 +1293,9 @@ export default function BookingPage() {
                   disabled={
                     createBooking.isPending ||
                     createCheckout.isPending ||
-                    (!activePriceLock && !activeOffer)
+                    (!groupBookingId && !activePriceLock && !activeOffer) ||
+                    (Boolean(waitlistId || groupBookingId) &&
+                      (!allocation.data || allocation.isError))
                   }
                 >
                   <Split className="h-5 w-5 mr-2" aria-hidden="true" />

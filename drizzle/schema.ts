@@ -1797,6 +1797,7 @@ export const waitlist = mysqlTable(
 
     // Resulting booking
     bookingId: int("bookingId"),
+    inventoryLockId: int("inventoryLockId"),
 
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -2212,6 +2213,10 @@ export const groupBookings = mysqlTable(
     organizerName: varchar("organizerName", { length: 255 }).notNull(),
     organizerEmail: varchar("organizerEmail", { length: 320 }).notNull(),
     organizerPhone: varchar("organizerPhone", { length: 20 }).notNull(),
+    organizerUserId: int("organizerUserId"),
+    inventoryLockId: int("inventoryLockId"),
+    bookingId: int("bookingId"),
+    allocationExpiresAt: timestamp("allocationExpiresAt"),
 
     // Group details
     groupSize: int("groupSize").notNull(), // Minimum 10 passengers
