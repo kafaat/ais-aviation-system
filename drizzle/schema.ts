@@ -5628,6 +5628,7 @@ export const outbox = mysqlTable(
     aggregateType: varchar("aggregateType", { length: 64 }).notNull(),
     aggregateId: varchar("aggregateId", { length: 64 }).notNull(),
     eventType: varchar("eventType", { length: 100 }).notNull(),
+    schemaVersion: int("schemaVersion").default(1).notNull(),
     // Tenant attribution (per-airline event streams in the SaaS model).
     tenantId: int("tenantId"),
     payload: json("payload").notNull(),

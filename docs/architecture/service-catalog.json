@@ -1365,6 +1365,7 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/contracts/domain-events.ts",
         "server/db.ts",
         "server/services/flight-state.service.ts",
         "server/services/idempotency-v2.service.ts",
@@ -3039,6 +3040,7 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/contracts/domain-events.ts",
         "server/db.ts",
         "server/services/event-inbox.service.ts",
         "server/services/flight-event-delivery.service.ts",

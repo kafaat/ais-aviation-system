@@ -373,6 +373,7 @@ export const scheduledTasks = mysqlTable("scheduled_tasks", {
 export const eventInbox = mysqlTable("event_inbox", {
   eventId: varchar("eventId", { length: 36 }).primaryKey(),
   eventType: varchar("eventType", { length: 100 }).notNull(),
+  schemaVersion: int("schemaVersion").default(1).notNull(),
   aggregateType: varchar("aggregateType", { length: 100 }).notNull(),
   aggregateId: varchar("aggregateId", { length: 255 }).notNull(),
   tenantId: int("tenantId"),

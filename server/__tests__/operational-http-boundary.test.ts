@@ -1,3 +1,4 @@
+import { toCloudEvent } from "../contracts/domain-events";
 import {
   afterAll,
   afterEach,
@@ -70,12 +71,13 @@ afterEach(() => vi.unstubAllEnvs());
 const send = (
   authorization?: string,
   identity = event.eventId,
-  body: unknown = event
+  body: unknown = event,
+  contentType = "application/json"
 ) =>
   fetch(`${base}/events/inbox`, {
     method: "POST",
     headers: {
-      "content-type": "application/json",
+      "content-type": contentType,
       "idempotency-key": identity,
       ...(authorization ? { authorization } : {}),
     },
@@ -95,7 +97,10 @@ it("validates the authenticated receiver schema and acknowledges a durable recei
   const response = await send(`Bearer ${token}`);
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ accepted: true, duplicate: false });
-  expect(state.consume).toHaveBeenCalledExactlyOnceWith(event);
+  expect(state.consume).toHaveBeenCalledExactlyOnceWith({
+    ...event,
+    schemaVersion: 1,
+  });
 });
 it("restricts saved export bytes to platform administrators and returns the integrity header", async () => {
   expect((await fetch(`${base}/data-warehouse/download/1`)).status).toBe(403);
@@ -108,4 +113,46 @@ it("restricts saved export bytes to platform administrators and returns the inte
   expect(response.headers.get("x-content-sha256")).toBe("a".repeat(64));
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(state.read).toHaveBeenCalledExactlyOnceWith(1);
+});
+
+it("parses authenticated structured CloudEvents and rejects unsupported versions before consumption", async () => {
+  const cloud = toCloudEvent({
+    ...event,
+    schemaVersion: 1,
+    createdAt: new Date("2026-09-13T00:00:00Z"),
+  });
+  expect(
+    (
+      await send(
+        `Bearer ${token}`,
+        event.eventId,
+        cloud,
+        "application/cloudevents+json"
+      )
+    ).status
+  ).toBe(200);
+  expect(state.consume).toHaveBeenCalledExactlyOnceWith({
+    ...event,
+    schemaVersion: 1,
+  });
+  state.consume.mockClear();
+  expect(
+    (
+      await send(
+        `Bearer ${token}`,
+        event.eventId,
+        { ...cloud, schemaversion: 2 },
+        "application/cloudevents+json"
+      )
+    ).status
+  ).toBe(400);
+  expect(
+    (
+      await send(`Bearer ${token}`, event.eventId, {
+        ...event,
+        schemaVersion: 2,
+      })
+    ).status
+  ).toBe(400);
+  expect(state.consume).not.toHaveBeenCalled();
 });

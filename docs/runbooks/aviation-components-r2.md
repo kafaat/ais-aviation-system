@@ -6,20 +6,20 @@ Implements the follow-up study _AIS Additional Components and Gap Solutions_,
 patches. Booking, payments, inventory, and the transactional outbox remain the
 authorities. Optional integrations do not establish provider acceptance.
 
-| Patch | Scope                                               | Evidence / status                           |
-| ----- | --------------------------------------------------- | ------------------------------------------- |
-| R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass |
-| R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass         |
-| R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass |
-| R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass |
-| R2-05 | Versioned event contracts                           | Pending                                     |
-| R2-06 | Provider/API contract laboratory                    | Pending                                     |
-| R2-07 | Transport fault acceptance                          | Pending                                     |
-| R2-08 | Trace context and data lineage                      | Pending                                     |
-| R2-09 | On-call delivery and acknowledgement                | Pending                                     |
-| R2-10 | Aviation weather source adapter                     | Pending                                     |
-| R2-11 | Advisory optimization and simulation pilot          | Pending                                     |
-| R2-12 | ONE Record cargo exchange pilot                     | Pending                                     |
+| Patch | Scope                                               | Evidence / status                                      |
+| ----- | --------------------------------------------------- | ------------------------------------------------------ |
+| R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass            |
+| R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass                    |
+| R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass            |
+| R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass            |
+| R2-05 | Versioned event contracts                           | Implemented; 65 focused checks and AsyncAPI validation |
+| R2-06 | Provider/API contract laboratory                    | Pending                                                |
+| R2-07 | Transport fault acceptance                          | Pending                                                |
+| R2-08 | Trace context and data lineage                      | Pending                                                |
+| R2-09 | On-call delivery and acknowledgement                | Pending                                                |
+| R2-10 | Aviation weather source adapter                     | Pending                                                |
+| R2-11 | Advisory optimization and simulation pilot          | Pending                                                |
+| R2-12 | ONE Record cargo exchange pilot                     | Pending                                                |
 
 No person, on-call rotation, production database, or provider acceptance is
 inferred from local tests. Each patch records its tested scope below.
@@ -129,3 +129,37 @@ Evidence: 23 unit/HTTP-boundary cases and a real MySQL/Redis acceptance run with
 ambiguous outcomes and concurrent claims; **no live supplier calls were made**.
 Property voucher certification, account-specific pricing, legacy manual receipts,
 local fees and actual transport acceptance remain deployment/operator work.
+
+## R2-05 — versioned event envelopes
+
+Migration 0040 gives both outbox and inbox a persisted `schemaVersion`, defaulting
+to 1 for legacy rows. Producers normalize JSON and validate before inserting.
+Consumers reject unsupported versions before effects and compare the version as
+part of the stored receipt identity. Ten booking-confirmation, gate and hotel
+event types have explicit additive v1 payload contracts. Other legacy event types
+retain a clearly labelled JSON-object envelope contract; their domain payloads
+are not claimed to be fully typed.
+
+Set `OUTBOX_MESSAGE_FORMAT=cloudevents` only when the receiver is ready. The default
+`legacy` format preserves existing integrations. The existing authenticated
+`/api/events/inbox` accepts both formats, validates source/tenant/subject/schema
+consistency and the idempotency header, and routes to the same durable consumer.
+CloudEvents exports exclude retry counts, lease tokens and database diagnostics.
+Its stable source and ID identify retries; the occurrence time comes from the
+persisted outbox row. A public event omits the tenant extension rather than
+sending a null extension value. This is an AIS-controlled receiver, not permission
+for arbitrary third parties to issue booking or payment events.
+
+`docs/architecture/domain-events.asyncapi.json` is generated from the runtime
+contracts. Run `node --import tsx scripts/generate-event-contracts.ts` after a
+reviewed additive v1 change; `--check` is required in Production Gates. A breaking
+payload change needs a new supported version and producer/consumer migration.
+The same workflow now type-checks **all scripts**, alongside acceptance.
+
+Validation: 65 focused tests including a real HTTP structured-mode request,
+unsupported-version and metadata rejection, and producer/consumer regressions;
+53 real MySQL/Redis checks, zero skips. The generated document passes the official
+AsyncAPI 3.0 JSON schema using jsonschema 4.26.0. No external broker is required.
+Sources: [CloudEvents 1.0.2](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/spec.md),
+[structured JSON](https://github.com/cloudevents/spec/blob/v1.0.2/cloudevents/formats/json-format.md),
+[AsyncAPI 3.0](https://www.asyncapi.com/docs/reference/specification/v3.0.0).

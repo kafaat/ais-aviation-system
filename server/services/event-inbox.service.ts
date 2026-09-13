@@ -1,3 +1,4 @@
+import { validateDomainEvent } from "../contracts/domain-events";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -25,13 +26,14 @@ export type InboxEvent = Pick<
   | "aggregateType"
   | "tenantId"
   | "payload"
->;
+> & { schemaVersion?: number };
 
 async function persistEnvelope(tx: SettlementTx, event: InboxEvent) {
-  const payload = z.record(z.string(), z.json()).parse(event.payload);
+  const validated = validateDomainEvent(event);
+  const payload = validated.payload;
   await tx
     .insert(eventInbox)
-    .values({ ...event, payload })
+    .values({ ...validated, payload })
     .onDuplicateKeyUpdate({ set: { eventId: sql`${eventInbox.eventId}` } });
   const [saved] = await tx
     .select()
@@ -41,6 +43,7 @@ async function persistEnvelope(tx: SettlementTx, event: InboxEvent) {
   if (
     !saved ||
     saved.eventType !== event.eventType ||
+    (saved.schemaVersion ?? 1) !== validated.schemaVersion ||
     saved.aggregateId !== event.aggregateId ||
     saved.aggregateType !== event.aggregateType ||
     saved.tenantId !== event.tenantId ||
