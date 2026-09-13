@@ -1,3 +1,4 @@
+import { selectSeat } from "./seat-map.service";
 import { assertTenantOperational } from "./tenant.service";
 import { TRPCError } from "@trpc/server";
 import { and, eq, gt } from "drizzle-orm";
@@ -11,6 +12,7 @@ import {
   bookingAncillaries,
   ancillaryServices,
   priceLocks,
+  seatInventory,
 } from "../../drizzle/schema";
 import {
   createRetailOffer,
@@ -43,6 +45,7 @@ export interface Passenger {
   passportNumber?: string;
   passportExpiry?: Date;
   nationality?: string;
+  seatNumber?: string;
 }
 
 export interface SelectedAncillary {
@@ -299,6 +302,27 @@ export async function createBooking(
               priceLock.lockedPrice * input.passengers.length +
               priceLock.lockFee;
           }
+          const requestedSeats = input.passengers.flatMap(p =>
+            p.seatNumber ? [p.seatNumber] : []
+          );
+          if (new Set(requestedSeats).size !== requestedSeats.length)
+            throw new Error("Duplicate requested seats");
+          for (const seatNumber of requestedSeats) {
+            const [seat] = await tx
+              .select()
+              .from(seatInventory)
+              .where(
+                and(
+                  eq(seatInventory.flightId, input.flightId),
+                  eq(seatInventory.seatNumber, seatNumber),
+                  eq(seatInventory.cabinClass, input.cabinClass),
+                  eq(seatInventory.status, "available")
+                )
+              )
+              .for("update");
+            if (!seat || seat.seatPrice !== 0)
+              throw new Error("Requested seat is unavailable");
+          }
           const totalAmount =
             fareAmount +
             selected.reduce((sum, item) => sum + item.totalPrice, 0);
@@ -317,8 +341,8 @@ export async function createBooking(
           const bookingId = created.insertId;
           if (selectedOffer)
             await consumeRetailOffer(tx, selectedOffer, bookingId);
-          await tx.insert(passengers).values(
-            input.passengers.map(p => ({
+          for (const p of input.passengers) {
+            const [row] = await tx.insert(passengers).values({
               tenantId: currentFlight.tenantId,
               bookingId,
               type: p.type,
@@ -329,8 +353,16 @@ export async function createBooking(
               passportNumber: p.passportNumber,
               passportExpiry: p.passportExpiry,
               nationality: p.nationality,
-            }))
-          );
+            });
+            if (p.seatNumber)
+              await selectSeat(
+                input.flightId,
+                p.seatNumber,
+                bookingId,
+                row.insertId,
+                tx
+              );
+          }
           if (selected.length)
             await tx
               .insert(bookingAncillaries)

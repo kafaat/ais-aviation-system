@@ -347,7 +347,10 @@ export default function BookingPage() {
       const booking = await createBooking.mutateAsync({
         flightId,
         cabinClass,
-        passengers,
+        passengers: passengers.map((p, i) => ({
+          ...p,
+          seatNumber: selectedSeats[i]?.id,
+        })),
         ...bookingCommand(),
         ancillaries:
           selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
@@ -412,7 +415,10 @@ export default function BookingPage() {
       const booking = await createBooking.mutateAsync({
         flightId,
         cabinClass,
-        passengers,
+        passengers: passengers.map((p, i) => ({
+          ...p,
+          seatNumber: selectedSeats[i]?.id,
+        })),
         ...bookingCommand(),
         ancillaries:
           selectedAncillaries.length > 0 ? selectedAncillaries : undefined,
@@ -1001,6 +1007,7 @@ export default function BookingPage() {
                 </div>
               </div>
               <SeatMap
+                flightId={flight.id}
                 cabinClass={cabinClass}
                 maxSeats={passengers.length}
                 aircraftType={flight.aircraftType ?? undefined}

@@ -51,7 +51,8 @@ export const kioskRouter = router({
     .input(
       z.object({
         capabilityToken: capabilityInput,
-        passengerId: z.number().positive(),
+        passengerId: z.number().int().positive(),
+        flightId: z.number().int().positive().optional(),
         seatNumber: z.string().max(5).optional(),
         baggageCount: z.number().nonnegative().optional(),
       })
@@ -63,7 +64,11 @@ export const kioskRouter = router({
       return await kioskService.performCheckIn(
         capability.bookingId,
         input.passengerId,
-        { seatNumber: input.seatNumber, baggageCount: input.baggageCount }
+        {
+          seatNumber: input.seatNumber,
+          baggageCount: input.baggageCount,
+          flightId: input.flightId,
+        }
       );
     }),
 
@@ -71,7 +76,8 @@ export const kioskRouter = router({
     .input(
       z.object({
         capabilityToken: capabilityInput,
-        passengerId: z.number().positive(),
+        passengerId: z.number().int().positive(),
+        flightId: z.number().int().positive().optional(),
         seatNumber: z.string().min(1).max(5),
       })
     )
@@ -82,7 +88,8 @@ export const kioskRouter = router({
       return await kioskService.selectSeat(
         capability.bookingId,
         input.passengerId,
-        input.seatNumber
+        input.seatNumber,
+        input.flightId
       );
     }),
 
@@ -90,7 +97,8 @@ export const kioskRouter = router({
     .input(
       z.object({
         capabilityToken: capabilityInput,
-        passengerId: z.number().positive(),
+        passengerId: z.number().int().positive(),
+        flightId: z.number().int().positive().optional(),
       })
     )
     .output(responseContracts["printBoardingPass"])
@@ -99,7 +107,8 @@ export const kioskRouter = router({
       assertPassengerInKioskCapability(capability, input.passengerId);
       return await kioskService.printBoardingPass(
         capability.bookingId,
-        input.passengerId
+        input.passengerId,
+        input.flightId
       );
     }),
 
@@ -107,7 +116,8 @@ export const kioskRouter = router({
     .input(
       z.object({
         capabilityToken: capabilityInput,
-        passengerId: z.number().positive(),
+        passengerId: z.number().int().positive(),
+        flightId: z.number().int().positive().optional(),
         bagCount: z.number().min(1).max(10),
       })
     )
@@ -127,7 +137,8 @@ export const kioskRouter = router({
       z.object({
         capabilityToken: capabilityInput,
         serviceType: z.string().min(1).max(50),
-        passengerId: z.number().positive(),
+        passengerId: z.number().int().positive(),
+        flightId: z.number().int().positive().optional(),
       })
     )
     .output(responseContracts["addAncillary"])

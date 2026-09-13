@@ -375,17 +375,21 @@
       "technicalOwner": "server/services/boarding-pass.service.ts",
       "accountableOwner": null,
       "consumers": [
+        "server/contracts/boarding-pass.ts",
         "server/routers/bag-drop.ts",
-        "server/routers/boarding-pass.ts"
+        "server/routers/boarding-pass.ts",
+        "server/services/seat-map.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/access-control.service.ts"
+        "server/services/access-control.service.ts",
+        "server/services/departure-control.service.ts",
+        "server/services/travel-clearance.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "flights", "passengers"],
-        "writes": []
+        "reads": ["passengers", "seatInventory"],
+        "writes": ["seatInventory"]
       },
       "replacement": null
     },
@@ -562,6 +566,7 @@
         "server/services/metrics.service.ts",
         "server/services/outbox.service.ts",
         "server/services/retail-offer.service.ts",
+        "server/services/seat-map.service.ts",
         "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
@@ -570,7 +575,8 @@
           "bookings",
           "flights",
           "inventoryLocks",
-          "priceLocks"
+          "priceLocks",
+          "seatInventory"
         ],
         "writes": ["bookingAncillaries", "bookings", "passengers", "priceLocks"]
       },
@@ -949,6 +955,35 @@
       "tableExpressions": {
         "reads": [],
         "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/departure-control.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/departure-control.service.ts",
+      "accountableOwner": null,
+      "consumers": [
+        "server/routers/bookings.ts",
+        "server/services/boarding-pass.service.ts",
+        "server/services/kiosk.service.ts",
+        "server/services/seat-map.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/outbox.service.ts",
+        "server/services/travel-clearance.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookingSegments",
+          "bookings",
+          "flights",
+          "passengers",
+          "seatInventory"
+        ],
+        "writes": ["bookings", "passengers", "seatInventory"]
       },
       "replacement": null
     },
@@ -1735,7 +1770,8 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/travel-clearance.service.ts"
+        "server/services/departure-control.service.ts",
+        "server/services/seat-map.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -1749,13 +1785,7 @@
           "kioskSessions",
           "passengers"
         ],
-        "writes": [
-          "bookingAncillaries",
-          "bookings",
-          "kioskDevices",
-          "kioskSessions",
-          "passengers"
-        ]
+        "writes": ["bookingAncillaries", "kioskDevices", "kioskSessions"]
       },
       "replacement": null
     },
@@ -2244,6 +2274,7 @@
         "server/services/bookings.service.ts",
         "server/services/crew-rule.service.ts",
         "server/services/cron.service.ts",
+        "server/services/departure-control.service.ts",
         "server/services/eticket.service.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/irops.service.ts",
@@ -3246,12 +3277,15 @@
       "accountableOwner": null,
       "consumers": [
         "server/routers/seat-map.ts",
+        "server/services/bookings.service.ts",
+        "server/services/kiosk.service.ts",
         "server/services/travel-scenarios.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/travel-clearance.service.ts"
+        "server/services/boarding-pass.service.ts",
+        "server/services/departure-control.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -3265,7 +3299,7 @@
           "seatInventory",
           "seatMaps"
         ],
-        "writes": ["bookings", "passengers", "seatInventory", "seatMaps"]
+        "writes": ["passengers", "seatInventory", "seatMaps"]
       },
       "replacement": null
     },
@@ -3615,8 +3649,8 @@
       "accountableOwner": null,
       "consumers": [
         "server/routers/aviation-integrations.ts",
-        "server/services/kiosk.service.ts",
-        "server/services/seat-map.service.ts"
+        "server/services/boarding-pass.service.ts",
+        "server/services/departure-control.service.ts"
       ],
       "dependencies": [
         "drizzle/operations-schema.ts",

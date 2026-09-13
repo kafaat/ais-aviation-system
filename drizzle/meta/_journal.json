@@ -225,6 +225,13 @@
       "when": 1789241494714,
       "tag": "0031_passenger_document_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1789258517165,
+      "tag": "0032_departure_check_in_nonce",
+      "breakpoints": true
     }
   ]
 }

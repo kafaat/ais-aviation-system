@@ -5385,6 +5385,8 @@ export const seatInventory = mysqlTable(
     // Check-in
     checkedInAt: timestamp("checkedInAt"),
     boardingPassIssued: boolean("boardingPassIssued").default(false).notNull(),
+    // Rotated on every check-in/seat change; null revokes all earlier tokens.
+    checkInNonce: varchar("checkInNonce", { length: 36 }),
     boardingGroup: varchar("boardingGroup", { length: 5 }), // e.g., "A", "B", "1", "2"
     boardingSequence: int("boardingSequence"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),

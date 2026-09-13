@@ -1,3 +1,4 @@
+import { checkInPassengers } from "../services/departure-control.service";
 import { responseContracts } from "../contracts/bookings";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -56,6 +57,10 @@ export const bookingsRouter = router({
                 .optional()
                 .describe("Passport expiry date"),
               nationality: z.string().optional().describe("Nationality code"),
+              seatNumber: z
+                .string()
+                .regex(/^[1-9][0-9]{0,2}[A-Z]$/)
+                .optional(),
             })
           )
           .describe("List of passengers"),
@@ -255,6 +260,99 @@ export const bookingsRouter = router({
       return result;
     }),
 
+  getDepartureState: protectedProcedure
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(
+      z.array(
+        z.object({
+          flightId: z.number(),
+          flightNumber: z.string(),
+          departureTime: z.date(),
+          status: z.string(),
+          open: z.boolean(),
+          passengers: z.array(
+            z.object({
+              passengerId: z.number(),
+              seatNumber: z.string().nullable(),
+              checkedIn: z.boolean(),
+            })
+          ),
+        })
+      )
+    )
+    .query(async ({ input, ctx }) => {
+      const booking = await db.getBookingByIdWithDetails(input.bookingId);
+      if (!booking)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Booking not found",
+        });
+      assertTenantMatch(booking.tenantId, ctx.tenantId);
+      if (booking.userId !== ctx.user.id)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Booking access denied",
+        });
+      const database = db.getDb();
+      if (!database) throw new Error("Database unavailable");
+      const { bookingSegments, flights, seatInventory, passengers } =
+        await import("../../drizzle/schema");
+      const { eq, inArray, asc } = await import("drizzle-orm");
+      const segments = await database
+        .select()
+        .from(bookingSegments)
+        .where(eq(bookingSegments.bookingId, booking.id))
+        .orderBy(asc(bookingSegments.segmentOrder));
+      const ids = segments.length
+        ? segments
+            .filter(l => l.status === "confirmed" || l.status === "pending")
+            .map(l => l.flightId)
+        : [booking.flightId];
+      if (!ids.length) return [];
+      const fs = await database
+        .select()
+        .from(flights)
+        .where(inArray(flights.id, ids));
+      const ps = await database
+        .select()
+        .from(passengers)
+        .where(eq(passengers.bookingId, booking.id));
+      const seats = await database
+        .select()
+        .from(seatInventory)
+        .where(eq(seatInventory.bookingId, booking.id));
+      return ids.flatMap(id => {
+        const f = fs.find(f => f.id === id);
+        if (!f) return [];
+        const remaining = f.departureTime.getTime() - Date.now();
+        return [
+          {
+            flightId: f.id,
+            flightNumber: f.flightNumber,
+            departureTime: f.departureTime,
+            status: f.status,
+            open:
+              booking.status === "confirmed" &&
+              booking.paymentStatus === "paid" &&
+              ["scheduled", "delayed"].includes(f.status) &&
+              remaining > 3600000 &&
+              remaining <= 48 * 3600000,
+            passengers: ps.map(p => {
+              const seat = seats.find(
+                s => s.flightId === f.id && s.passengerId === p.id
+              );
+              return {
+                passengerId: p.id,
+                seatNumber: seat?.seatNumber ?? null,
+                checkedIn:
+                  seat?.status === "checked_in" && Boolean(seat.checkInNonce),
+              };
+            }),
+          },
+        ];
+      });
+    }),
+
   checkIn: protectedProcedure
     .meta({
       openapi: {
@@ -269,14 +367,20 @@ export const bookingsRouter = router({
     })
     .input(
       z.object({
-        bookingId: z.number().describe("Booking ID"),
+        bookingId: z.number().int().positive().describe("Booking ID"),
+        flightId: z.number().int().positive().optional(),
         seatAssignments: z
           .array(
             z.object({
               passengerId: z.number().describe("Passenger ID"),
-              seatNumber: z.string().describe("Seat number (e.g., 12A)"),
+              seatNumber: z
+                .string()
+                .regex(/^[1-9][0-9]{0,2}[A-Z]$/)
+                .optional(),
             })
           )
+          .min(1)
+          .max(600)
           .describe("Seat assignments for each passenger"),
       })
     )
@@ -303,70 +407,12 @@ export const bookingsRouter = router({
         });
       }
 
-      const database = await db.getDb();
-      if (!database) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Database not available",
-        });
-      }
-
-      const { passengers, bookings } = await import("../../drizzle/schema");
-      const { and, eq } = await import("drizzle-orm");
-
-      await database.transaction(async tx => {
-        const [current] = await tx
-          .select()
-          .from(bookings)
-          .where(eq(bookings.id, input.bookingId))
-          .for("update");
-        if (
-          !current ||
-          current.userId !== ctx.user.id ||
-          current.status !== "confirmed" ||
-          current.paymentStatus !== "paid" ||
-          current.deletedAt
-        )
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Only an owned confirmed paid booking can be checked in",
-          });
-        assertTenantMatch(current.tenantId, ctx.tenantId);
-        for (const assignment of input.seatAssignments) {
-          const passengerWhere =
-            ctx.tenantId == null
-              ? and(
-                  eq(passengers.id, assignment.passengerId),
-                  eq(passengers.bookingId, input.bookingId)
-                )
-              : and(
-                  eq(passengers.id, assignment.passengerId),
-                  eq(passengers.bookingId, input.bookingId),
-                  eq(passengers.tenantId, ctx.tenantId)
-                );
-
-          const updated = await tx
-            .update(passengers)
-            .set({ seatNumber: assignment.seatNumber })
-            .where(passengerWhere);
-
-          if (updated[0].affectedRows !== 1) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "Passenger does not belong to this booking",
-            });
-          }
-        }
-
-        const bookingWhere =
-          ctx.tenantId == null
-            ? eq(bookings.id, input.bookingId)
-            : and(
-                eq(bookings.id, input.bookingId),
-                eq(bookings.tenantId, ctx.tenantId)
-              );
-
-        await tx.update(bookings).set({ checkedIn: true }).where(bookingWhere);
+      await checkInPassengers({
+        bookingId: input.bookingId,
+        flightId: input.flightId,
+        assignments: input.seatAssignments,
+        requireAllPassengers: true,
+        owner: { userId: ctx.user.id, tenantId: ctx.tenantId ?? null },
       });
 
       await auditBookingChange(

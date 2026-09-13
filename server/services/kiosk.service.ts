@@ -1,4 +1,9 @@
-import { assertTravelClearance } from "./travel-clearance.service";
+import { checkInPassengersTx } from "./departure-control.service";
+import {
+  selectSeat as assignPhysicalSeat,
+  getPassengerSeat,
+  generateBoardingPass,
+} from "./seat-map.service";
 export {
   kioskDevices,
   kioskSessions,
@@ -396,138 +401,35 @@ export async function performCheckIn(
   options: {
     seatNumber?: string;
     baggageCount?: number;
+    flightId?: number;
   }
 ) {
-  const database = await getDb();
-  if (!database)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+  const database = getDb();
+  if (!database) throw new Error("Database unavailable");
+  return await database.transaction(async tx => {
+    const [result] = await checkInPassengersTx(tx, {
+      bookingId,
+      flightId: options.flightId,
+      assignments: [{ passengerId, seatNumber: options.seatNumber }],
     });
-
-  return database.transaction(async db => {
-    // Verify booking exists and is confirmed
-    const [booking] = await db
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, bookingId))
-      .limit(1)
-      .for("update");
-
-    if (!booking)
-      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-
-    if (booking.status !== "confirmed" || booking.paymentStatus !== "paid") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Cannot check in: booking status is '${booking.status}'`,
-      });
-    }
-
-    // Verify passenger belongs to this booking
-    const [passenger] = await db
+    if (!result) throw new Error("Check-in did not return a seat");
+    const [p] = await tx
       .select()
       .from(passengers)
-      .where(
-        and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-      )
-      .limit(1);
-
-    if (!passenger)
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Passenger not found for this booking",
-      });
-
-    // Verify flight is still open for check-in
-    const [flight] = await db
-      .select({
-        id: flights.id,
-        departureTime: flights.departureTime,
-        status: flights.status,
-      })
-      .from(flights)
-      .where(eq(flights.id, booking.flightId))
-      .limit(1)
-      .for("update");
-
-    if (!flight)
-      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-
-    if (flight.status === "cancelled") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Cannot check in: flight has been cancelled",
-      });
-    }
-
-    const now = new Date();
-    const departureTime = new Date(flight.departureTime);
-    const hoursUntilDeparture =
-      (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-    if (hoursUntilDeparture < 1) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Check-in is closed (less than 1 hour before departure)",
-      });
-    }
-
-    await assertTravelClearance(db, bookingId, passengerId);
-
-    // Assign seat if provided
-    const requestedSeat = options.seatNumber;
-    if (requestedSeat) {
-      await db.transaction(async tx => {
-        // Check seat is not already taken
-        const [seatTaken] = await tx
-          .select({ id: passengers.id })
-          .from(passengers)
-          .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-          .where(
-            and(
-              eq(bookings.flightId, booking.flightId),
-              eq(passengers.seatNumber, requestedSeat),
-              sql`${bookings.status} IN ('confirmed', 'completed')`
-            )
-          )
-          .limit(1);
-
-        if (seatTaken) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: `Seat ${options.seatNumber} is already assigned to another passenger`,
-          });
-        }
-
-        await tx
-          .update(passengers)
-          .set({ seatNumber: requestedSeat })
-          .where(eq(passengers.id, passengerId));
-      });
-    }
-
-    // Mark booking as checked in
-    await db
-      .update(bookings)
-      .set({ checkedIn: true })
-      .where(eq(bookings.id, bookingId));
-
-    // Record session completion
-    await db.insert(kioskSessions).values({
+      .where(eq(passengers.id, passengerId));
+    await tx.insert(kioskSessions).values({
       bookingId,
       passengerId,
       sessionType: "check_in",
       status: "completed",
       completedAt: new Date(),
     });
-
     return {
       success: true,
       bookingId,
       passengerId,
-      passengerName: `${passenger.firstName} ${passenger.lastName}`,
-      seatNumber: options.seatNumber ?? passenger.seatNumber,
+      passengerName: `${p.firstName} ${p.lastName}`,
+      seatNumber: result.seat.seatNumber,
       checkedIn: true,
       message:
         "Check-in completed successfully. You may now print your boarding pass.",
@@ -545,103 +447,42 @@ export async function performCheckIn(
 export async function selectSeat(
   bookingId: number,
   passengerId: number,
-  seatNumber: string
+  seatNumber: string,
+  flightId?: number
 ) {
-  const database = await getDb();
-  if (!database)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  return database.transaction(async db => {
-    // Verify booking
-    const [booking] = await db
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, bookingId))
-      .limit(1)
-      .for("update");
-
-    if (!booking)
-      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-
-    if (booking.status !== "confirmed" || booking.paymentStatus !== "paid") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Cannot select seat: booking is not confirmed",
-      });
-    }
-
-    // Verify passenger belongs to this booking
-    const [passenger] = await db
-      .select()
-      .from(passengers)
-      .where(
-        and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-      )
-      .limit(1);
-
-    if (!passenger)
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Passenger not found for this booking",
-      });
-
-    await db
-      .select({ id: flights.id })
-      .from(flights)
-      .where(eq(flights.id, booking.flightId))
-      .for("update");
-    const oldSeat = passenger.seatNumber;
-
-    // Check seat availability and assign atomically within a transaction
-    await db.transaction(async tx => {
-      const [seatTaken] = await tx
-        .select({ id: passengers.id })
-        .from(passengers)
-        .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-        .where(
-          and(
-            eq(bookings.flightId, booking.flightId),
-            eq(passengers.seatNumber, seatNumber),
-            sql`${bookings.status} IN ('confirmed', 'completed')`,
-            sql`${passengers.id} != ${passengerId}`
-          )
-        )
-        .limit(1);
-
-      if (seatTaken) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: `Seat ${seatNumber} is already taken`,
-        });
-      }
-
-      // Update the seat assignment
-      await tx
-        .update(passengers)
-        .set({ seatNumber })
-        .where(eq(passengers.id, passengerId));
-    });
-
-    // Track session
-    await db.insert(kioskSessions).values({
-      bookingId,
-      passengerId,
-      sessionType: "seat_change",
-      status: "completed",
-      completedAt: new Date(),
-    });
-
-    return {
-      success: true,
-      passengerId,
-      passengerName: `${passenger.firstName} ${passenger.lastName}`,
-      previousSeat: oldSeat,
-      newSeat: seatNumber,
-    };
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [b] = await db
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, bookingId));
+  if (!b)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  const previous = await getPassengerSeat(bookingId, passengerId, flightId);
+  const seat = await assignPhysicalSeat(
+    flightId ?? b.flightId,
+    seatNumber,
+    bookingId,
+    passengerId
+  );
+  const [p] = await db
+    .select()
+    .from(passengers)
+    .where(eq(passengers.id, passengerId));
+  await db.insert(kioskSessions).values({
+    bookingId,
+    passengerId,
+    sessionType: "seat_change",
+    status: "completed",
+    completedAt: new Date(),
   });
+  return {
+    success: true,
+    passengerId,
+    passengerName: `${p.firstName} ${p.lastName}`,
+    previousSeat: previous?.seatNumber ?? null,
+    newSeat: seat.seatNumber,
+  };
 }
 
 // ============================================================================
@@ -653,160 +494,57 @@ export async function selectSeat(
  */
 export async function printBoardingPass(
   bookingId: number,
-  passengerId: number
+  passengerId: number,
+  flightId?: number
 ) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get booking
-  const [booking] = await db
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [b] = await db
     .select()
     .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-
-  if (!booking.checkedIn) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Passenger must be checked in before printing a boarding pass",
-    });
-  }
-
-  // Get passenger
-  const [passenger] = await db
+    .where(eq(bookings.id, bookingId));
+  const [p] = await db
     .select()
     .from(passengers)
     .where(
       and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
-
-  if (!passenger)
+    );
+  if (!b || !p)
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "Passenger not found for this booking",
+      message: "Passenger booking unavailable",
     });
-
-  // Get flight details
+  const data = await generateBoardingPass(flightId ?? b.flightId, passengerId);
   const [flight] = await db
-    .select({
-      id: flights.id,
-      flightNumber: flights.flightNumber,
-      departureTime: flights.departureTime,
-      arrivalTime: flights.arrivalTime,
-      aircraftType: flights.aircraftType,
-      airlineName: airlines.name,
-      airlineCode: airlines.code,
-    })
+    .select()
     .from(flights)
-    .innerJoin(airlines, eq(flights.airlineId, airlines.id))
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
-
-  if (!flight)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-
-  // Get airports
-  const [flightRoute] = await db
-    .select({
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-    })
-    .from(flights)
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
-
-  const [origin] = await db
-    .select({ code: airports.code, name: airports.name, city: airports.city })
-    .from(airports)
-    .where(eq(airports.id, flightRoute.originId))
-    .limit(1);
-
-  const [destination] = await db
-    .select({ code: airports.code, name: airports.name, city: airports.city })
-    .from(airports)
-    .where(eq(airports.id, flightRoute.destinationId))
-    .limit(1);
-
-  // Generate a boarding sequence number
-  const sequenceResult = await db
-    .select({
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(passengers)
-    .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        eq(bookings.flightId, booking.flightId),
-        eq(bookings.checkedIn, true),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
-
-  const sequence = Number(sequenceResult[0]?.count ?? 1);
-
-  // Compute boarding time (typically 30 minutes before departure)
-  const departureTime = new Date(flight.departureTime);
-  const boardingTime = new Date(departureTime.getTime() - 30 * 60 * 1000);
-
-  // Generate barcode data (IATA BCBP format simplified)
-  const barcodeData = [
-    passenger.firstName.charAt(0) + "/" + passenger.lastName,
-    booking.pnr,
-    flight.flightNumber,
-    passenger.seatNumber ?? "---",
-    String(sequence).padStart(4, "0"),
-  ].join("|");
-
-  // Track boarding pass printing in session
-  await db.insert(kioskSessions).values({
-    bookingId,
-    passengerId,
-    sessionType: "check_in",
-    status: "completed",
-    completedAt: new Date(),
-  });
-
+    .where(eq(flights.id, flightId ?? b.flightId));
   return {
     boardingPass: {
-      passengerName:
-        `${passenger.title ?? ""} ${passenger.firstName} ${passenger.lastName}`.trim(),
-      ticketNumber: passenger.ticketNumber,
-      bookingReference: booking.bookingReference,
-      pnr: booking.pnr,
+      passengerName: `${p.firstName} ${p.lastName}`,
+      ticketNumber: p.ticketNumber,
+      bookingReference: b.bookingReference,
+      pnr: b.pnr,
       flight: {
-        number: flight.flightNumber,
-        airline: flight.airlineName,
-        airlineCode: flight.airlineCode,
-        date: departureTime.toISOString().split("T")[0],
-        departureTime: flight.departureTime,
-        arrivalTime: flight.arrivalTime,
+        number: data.flightNumber,
+        airline: data.airline.name,
+        airlineCode: data.airline.code,
+        date: data.departureTime.toISOString().split("T")[0],
+        departureTime: data.departureTime,
+        arrivalTime: data.arrivalTime,
         aircraftType: flight.aircraftType,
       },
-      origin: {
-        code: origin?.code ?? "???",
-        name: origin?.name ?? "",
-        city: origin?.city ?? "",
-      },
-      destination: {
-        code: destination?.code ?? "???",
-        name: destination?.name ?? "",
-        city: destination?.city ?? "",
-      },
-      seat: passenger.seatNumber ?? "N/A",
-      cabinClass: booking.cabinClass,
-      boardingTime: boardingTime.toISOString(),
-      sequence: String(sequence).padStart(4, "0"),
-      gate: null, // To be assigned at gate management level
-      barcodeData,
-      printedAt: new Date().toISOString(),
+      origin: data.origin,
+      destination: data.destination,
+      seat: data.seat.seatNumber,
+      cabinClass: b.cabinClass,
+      boardingTime: (
+        data.boardingTime ?? new Date(data.departureTime.getTime() - 1800000)
+      ).toISOString(),
+      sequence: String(data.seat.boardingSequence).padStart(4, "0"),
+      gate: data.gate,
+      barcodeData: data.barcodeData,
+      printedAt: data.issuedAt.toISOString(),
     },
   };
 }

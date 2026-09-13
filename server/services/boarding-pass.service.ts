@@ -1,32 +1,45 @@
-/**
- * Boarding Pass Service (cryptographically signed, offline-verifiable)
- *
- * AIS already renders a boarding-pass PDF/QR, but the barcode payload is plain
- * text (PNR|ticket|name) — forgeable and not verifiable. This service issues a
- * SIGNED boarding-pass token (JWT, HS256) that a gate scanner can verify
- * OFFLINE (pure crypto, no DB round-trip) and that cannot be tampered with.
- *
- * Inspired by the Lufthansa-style BoardingPassService pattern, implemented
- * natively on AIS's existing tables (bookings, passengers, flights).
- *
- * Security model:
- *  - Signed with a dedicated BOARDING_PASS_SECRET (falls back to JWT_SECRET).
- *  - issuer/audience pinned so a boarding token can't be confused with an auth
- *    token, and vice-versa.
- *  - Short-lived (default 48h) so a leaked pass can't be replayed indefinitely.
- */
-
+/** Signed AIS passes. Signature checks alone are NOT boarding authorization. */
 import jwt from "jsonwebtoken";
+import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
-import { bookings, passengers, flights } from "../../drizzle/schema";
+import { passengers, seatInventory } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 import { assertBookingOwnership } from "./access-control.service";
+import {
+  assertDepartureOpen,
+  lockDepartureContext,
+} from "./departure-control.service";
+import {
+  assertTravelClearance,
+  documentContext,
+} from "./travel-clearance.service";
+import type { SettlementTx } from "./booking-settlement.service";
 
 export const BOARDING_PASS_ISSUER = "ais-boarding";
 export const BOARDING_PASS_AUDIENCE = "ais-gate";
-const DEFAULT_EXPIRY_SECONDS = 48 * 60 * 60; // 48h
-
+const DEFAULT_EXPIRY_SECONDS = 48 * 60 * 60;
+export const boardingPassPayloadSchema = z.object({
+  bookingId: z.number().int().positive(),
+  bookingReference: z.string(),
+  passengerId: z.number().int().positive(),
+  passengerName: z.string(),
+  flightId: z.number().int().positive(),
+  flightNumber: z.string(),
+  originId: z.number().int().positive(),
+  destinationId: z.number().int().positive(),
+  departureTime: z.iso.datetime(),
+  seatNumber: z.string().min(1),
+  cabinClass: z.string(),
+  sequence: z.number().int().positive(),
+  checkInNonce: z.uuid(),
+  documentDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  itineraryDigest: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export type BoardingPassPayload = z.infer<typeof boardingPassPayloadSchema>;
+export type VerifyResult =
+  | { valid: true; data: BoardingPassPayload }
+  | { valid: false; reason: string };
 function getSecret(override?: string): string {
   const secret =
     override ||
@@ -35,142 +48,55 @@ function getSecret(override?: string): string {
     (process.env.NODE_ENV === "production"
       ? undefined
       : "dev-insecure-boarding-pass-secret");
-  if (!secret) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "BOARDING_PASS_SECRET (or JWT_SECRET) is required",
-    });
-  }
+  if (!secret)
+    throw new Error("BOARDING_PASS_SECRET (or JWT_SECRET) is required");
   return secret;
 }
-
-export interface BoardingPassPayload {
-  bookingId: number;
-  bookingReference: string;
-  passengerId: number;
-  passengerName: string;
-  flightNumber: string;
-  originId: number;
-  destinationId: number;
-  departureTime: string; // ISO
-  seatNumber: string | null;
-  cabinClass: string | null;
-  sequence: number | null;
-}
-
-export type VerifyResult =
-  | { valid: true; data: BoardingPassPayload }
-  | { valid: false; reason: string };
-
-// ---------------------------------------------------------------------------
-// Pure crypto core (unit-testable without a database)
-// ---------------------------------------------------------------------------
-
-/** Sign a boarding-pass payload into a tamper-proof token. */
 export function signBoardingPass(
   payload: BoardingPassPayload,
   opts: { secret?: string; expiresInSeconds?: number } = {}
 ): string {
-  return jwt.sign(payload, getSecret(opts.secret), {
-    issuer: BOARDING_PASS_ISSUER,
-    audience: BOARDING_PASS_AUDIENCE,
-    expiresIn: opts.expiresInSeconds ?? DEFAULT_EXPIRY_SECONDS,
-  });
+  return jwt.sign(
+    boardingPassPayloadSchema.parse(payload),
+    getSecret(opts.secret),
+    {
+      algorithm: "HS256",
+      issuer: BOARDING_PASS_ISSUER,
+      audience: BOARDING_PASS_AUDIENCE,
+      expiresIn: opts.expiresInSeconds ?? DEFAULT_EXPIRY_SECONDS,
+    }
+  );
 }
-
-/**
- * Verify a boarding-pass token. Pure crypto — safe to run offline at the gate.
- * Never throws; returns a discriminated result so callers branch cleanly.
- */
+/** Cryptographic integrity only. Admission callers must use verifyActiveBoardingPass. */
 export function verifyBoardingPass(
   token: string,
   opts: { secret?: string } = {}
 ): VerifyResult {
   try {
     const decoded = jwt.verify(token, getSecret(opts.secret), {
+      algorithms: ["HS256"],
       issuer: BOARDING_PASS_ISSUER,
       audience: BOARDING_PASS_AUDIENCE,
-    }) as jwt.JwtPayload & BoardingPassPayload;
-
+    });
+    return { valid: true, data: boardingPassPayloadSchema.parse(decoded) };
+  } catch (error) {
     return {
-      valid: true,
-      data: {
-        bookingId: decoded.bookingId,
-        bookingReference: decoded.bookingReference,
-        passengerId: decoded.passengerId,
-        passengerName: decoded.passengerName,
-        flightNumber: decoded.flightNumber,
-        originId: decoded.originId,
-        destinationId: decoded.destinationId,
-        departureTime: decoded.departureTime,
-        seatNumber: decoded.seatNumber ?? null,
-        cabinClass: decoded.cabinClass ?? null,
-        sequence: decoded.sequence ?? null,
-      },
+      valid: false,
+      reason:
+        error instanceof jwt.TokenExpiredError
+          ? "Boarding pass expired"
+          : "Invalid or tampered boarding pass",
     };
-  } catch (err) {
-    if (err instanceof jwt.TokenExpiredError) {
-      return { valid: false, reason: "Boarding pass expired" };
-    }
-    if (err instanceof jwt.JsonWebTokenError) {
-      return { valid: false, reason: "Invalid or tampered boarding pass" };
-    }
-    return { valid: false, reason: "Boarding pass verification failed" };
   }
 }
-
-// ---------------------------------------------------------------------------
-// DB-backed issuance
-// ---------------------------------------------------------------------------
-
-/**
- * Issue a signed boarding pass for a passenger on a booking. Enforces that the
- * caller owns the booking and that the passenger actually belongs to it.
- */
-export async function issueBoardingPass(
-  input: { bookingId: number; passengerId: number },
-  ctx: { userId: number; role?: string },
-  opts: { expiresInSeconds?: number } = {}
-): Promise<{ token: string; payload: BoardingPassPayload }> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  // Ownership: caller must own the booking (admins bypass).
-  await assertBookingOwnership(input.bookingId, ctx.userId, ctx.role);
-
-  const [booking] = await db
-    .select({
-      bookingReference: bookings.bookingReference,
-      flightId: bookings.flightId,
-      cabinClass: bookings.cabinClass,
-      paymentStatus: bookings.paymentStatus,
-    })
-    .from(bookings)
-    .where(eq(bookings.id, input.bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-  }
-  if (booking.paymentStatus !== "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Boarding pass can only be issued for a paid booking",
-    });
-  }
-
-  const [passenger] = await db
-    .select({
-      firstName: passengers.firstName,
-      lastName: passengers.lastName,
-      seatNumber: passengers.seatNumber,
-      bookingId: passengers.bookingId,
-    })
+async function activePayload(
+  tx: SettlementTx,
+  input: { bookingId: number; passengerId: number; flightId?: number }
+) {
+  const c = await lockDepartureContext(tx, input.bookingId, input.flightId);
+  assertDepartureOpen(c, "boarding");
+  const [p] = await tx
+    .select()
     .from(passengers)
     .where(
       and(
@@ -178,47 +104,103 @@ export async function issueBoardingPass(
         eq(passengers.bookingId, input.bookingId)
       )
     )
-    .limit(1);
-
-  if (!passenger) {
+    .for("update");
+  if (!p) throw new Error("Passenger not found on this booking");
+  await assertTravelClearance(tx, input.bookingId, input.passengerId);
+  const docs = await documentContext(tx, input.bookingId, input.passengerId);
+  const [seat] = await tx
+    .select()
+    .from(seatInventory)
+    .where(
+      and(
+        eq(seatInventory.flightId, c.flight.id),
+        eq(seatInventory.bookingId, input.bookingId),
+        eq(seatInventory.passengerId, input.passengerId),
+        eq(seatInventory.status, "checked_in")
+      )
+    )
+    .for("update");
+  if (
+    !seat?.checkInNonce ||
+    !seat.checkedInAt ||
+    !seat.boardingSequence ||
+    seat.cabinClass !== c.booking.cabinClass
+  )
     throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found on this booking",
+      code: "PRECONDITION_FAILED",
+      message: "Passenger must have a current checked-in seat on this flight",
     });
-  }
-
-  const [flight] = await db
-    .select({
-      flightNumber: flights.flightNumber,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-      departureTime: flights.departureTime,
-    })
-    .from(flights)
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
-
-  if (!flight) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-  }
-
   const payload: BoardingPassPayload = {
     bookingId: input.bookingId,
-    bookingReference: booking.bookingReference,
-    passengerId: input.passengerId,
-    passengerName: `${passenger.firstName} ${passenger.lastName}`.trim(),
-    flightNumber: flight.flightNumber,
-    originId: flight.originId,
-    destinationId: flight.destinationId,
-    departureTime: flight.departureTime.toISOString(),
-    seatNumber: passenger.seatNumber ?? null,
-    cabinClass: booking.cabinClass ?? null,
-    sequence: null,
+    bookingReference: c.booking.bookingReference,
+    passengerId: p.id,
+    passengerName: `${p.firstName} ${p.lastName}`.trim(),
+    flightId: c.flight.id,
+    flightNumber: c.flight.flightNumber,
+    originId: c.flight.originId,
+    destinationId: c.flight.destinationId,
+    departureTime: c.flight.departureTime.toISOString(),
+    seatNumber: seat.seatNumber,
+    cabinClass: seat.cabinClass,
+    sequence: seat.boardingSequence,
+    checkInNonce: seat.checkInNonce,
+    documentDigest: docs.documentDigest,
+    itineraryDigest: docs.itineraryDigest,
   };
-
-  const token = signBoardingPass(payload, {
-    expiresInSeconds: opts.expiresInSeconds,
+  return { payload, seat };
+}
+export async function issueBoardingPass(
+  input: { bookingId: number; passengerId: number; flightId?: number },
+  ctx: { userId: number; role?: string },
+  opts: { expiresInSeconds?: number } = {}
+): Promise<{ token: string; payload: BoardingPassPayload }> {
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  await assertBookingOwnership(input.bookingId, ctx.userId, ctx.role);
+  return db.transaction(async tx => {
+    const { payload, seat } = await activePayload(tx, input);
+    const secondsToDeparture = Math.floor(
+      (Date.parse(payload.departureTime) - Date.now()) / 1000
+    );
+    const token = signBoardingPass(payload, {
+      expiresInSeconds: Math.min(
+        opts.expiresInSeconds ?? DEFAULT_EXPIRY_SECONDS,
+        DEFAULT_EXPIRY_SECONDS,
+        secondsToDeparture
+      ),
+    });
+    await tx
+      .update(seatInventory)
+      .set({ boardingPassIssued: true })
+      .where(eq(seatInventory.id, seat.id));
+    return { token, payload };
   });
-
-  return { token, payload };
+}
+/** Current eligibility, revocation, documents and itinerary are checked online. */
+export async function verifyActiveBoardingPass(
+  token: string
+): Promise<VerifyResult> {
+  const signed = verifyBoardingPass(token);
+  if (!signed.valid) return signed;
+  const db = getDb();
+  if (!db) return { valid: false, reason: "Boarding verification unavailable" };
+  try {
+    return await db.transaction(async tx => {
+      const { payload, seat } = await activePayload(tx, signed.data);
+      if (
+        !seat.boardingPassIssued ||
+        JSON.stringify(payload) !== JSON.stringify(signed.data)
+      )
+        return {
+          valid: false as const,
+          reason: "Boarding pass revoked or itinerary changed",
+        };
+      return { valid: true as const, data: payload };
+    });
+  } catch {
+    return {
+      valid: false,
+      reason: "Current passenger or flight eligibility could not be confirmed",
+    };
+  }
 }
