@@ -1,5 +1,38 @@
 # Changelog
 
+## What's Changed in v1.26.0
+
+### Features
+
+- feat(operations): reconcile supplier hotel fulfillment (R2-04) (122a12b)
+- feat(platform): version durable events and add CloudEvents contracts (R2-05) (dae3c00)
+
+### Bug Fixes
+
+- fix(payments): preserve wallet dispute tenant ownership (R2-01) (eea140a)
+- fix(release): resume publication without another version commit (R2-02) (3466e7d)
+- fix(departure): serialize gate reservations and invalidate stale assignments (R2-03) (c8d2a32)
+- fix(aviation): close six blocking defects found reviewing R2-01…R2-07 (e5674d6)
+- fix(aviation): close the remaining review findings from R2-01…R2-07 (428a5e9)
+- fix(catalog): record the gate router as an rbac consumer (033cd6c)
+- fix(labs): give the transport lab workable deadlines and real diagnostics (2a64236)
+- fix(labs): kill the lab's process group so a timeout cannot hang the job (5530caf)
+
+### Other Changes
+
+- test(integrations): exercise REST state and provider wire contracts (R2-06) (c52b6b0)
+- test(platform): prove TCP faults and killed-worker recovery (R2-07) (0edab63)
+- Merge pull request #152 from kafaat/claude/project-exploration-JWCKA (b436716)
+- Merge pull request #153 from kafaat/claude/project-exploration-JWCKA (f237008)
+- Merge pull request #154 from kafaat/claude/project-exploration-JWCKA (b0c0a4e)
+- Merge pull request #155 from kafaat/claude/project-exploration-JWCKA (bce787c)
+- Merge pull request #156 from kafaat/claude/project-exploration-JWCKA (42e86b4)
+- Merge pull request #151 from kafaat/codex/r2-aviation-components-20260913 (b163aad)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.25.0...v1.26.0
+
+---
+
 ## What's Changed in v1.25.0
 
 ### Features
