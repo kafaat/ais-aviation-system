@@ -6033,3 +6033,56 @@ export const weatherObservations = mysqlTable(
   })
 );
 export type WeatherObservation = typeof weatherObservations.$inferSelect;
+
+/** R2-09 — one row per on-call delivery attempt sequence.
+ *
+ * `dedupKey` is stable per incident and shared by the `raise` and its matching
+ * `close`, which is how the provider correlates them. Because the provider
+ * deduplicates on it, an `outcome_unknown` row is safe to re-send — unlike a
+ * hotel booking, where a lost response requires operator reconciliation.
+ *
+ * `delivered` records that the provider accepted the request. It is never a
+ * statement that a person was reached.
+ */
+export const alertDispatches = mysqlTable(
+  "alert_dispatches",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    alertKey: varchar("alertKey", { length: 100 }).notNull(),
+    action: mysqlEnum("action", ["raise", "close"]).notNull(),
+    dedupKey: varchar("dedupKey", { length: 100 }).notNull(),
+    summary: varchar("summary", { length: 200 }).notNull(),
+    details: varchar("details", { length: 1000 }).notNull().default(""),
+    status: mysqlEnum("status", [
+      "pending",
+      "outcome_unknown",
+      "delivered",
+      "failed",
+    ])
+      .default("pending")
+      .notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    nextAttemptAt: timestamp("nextAttemptAt"),
+    leaseToken: varchar("leaseToken", { length: 36 }),
+    leaseUntil: timestamp("leaseUntil"),
+    providerMode: mysqlEnum("providerMode", ["sandbox", "live"]).notNull(),
+    providerReference: varchar("providerReference", { length: 255 }).notNull(),
+    /** Redacted: provider responses can echo credentials. */
+    lastError: varchar("lastError", { length: 500 }),
+    deliveredAt: timestamp("deliveredAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    identity: uniqueIndex("alert_dispatch_identity_idx").on(
+      t.alertKey,
+      t.action,
+      t.dedupKey
+    ),
+    claimable: index("alert_dispatch_claimable_idx").on(
+      t.status,
+      t.nextAttemptAt
+    ),
+  })
+);
+export type AlertDispatch = typeof alertDispatches.$inferSelect;

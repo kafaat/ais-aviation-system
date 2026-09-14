@@ -16,7 +16,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | R2-06 | Provider/API contract laboratory                    | Implemented; real REST and Microcks CI passed           |
 | R2-07 | Transport fault acceptance                          | Implemented; TCP fault lab reaches and passes its cases |
 | R2-08 | Trace context and data lineage                      | Pending                                                 |
-| R2-09 | On-call delivery and acknowledgement                | Pending                                                 |
+| R2-09 | On-call delivery and acknowledgement                | Implemented; 20 unit and 6 MySQL acceptance cases pass  |
 | R2-10 | Aviation weather source adapter                     | Implemented; 35 unit and 7 MySQL acceptance cases pass  |
 | R2-11 | Advisory optimization and simulation pilot          | Pending                                                 |
 | R2-12 | ONE Record cargo exchange pilot                     | Pending                                                 |
@@ -383,3 +383,66 @@ the lab fail with `UndefinedStatusCode: Undocumented HTTP status code, Received:
 404`, which is how the declarations were verified — by HTTP conformance against
 a running host, not by reading the code. A new `rest-boundary` case locks the
 415 method rule, the pruning and the undeclared marking.
+
+## R2-09 — on-call delivery and acknowledgement
+
+Alert evaluation already existed: `refreshOperationalAlerts` wrote transitions
+into `operations_alerts` every minute. Nothing carried one to a person. An
+alert sat in that table until somebody happened to open the dashboard, and the
+`acknowledgedBy` column had no delivery to acknowledge. Migration 0042 adds the
+delivery leg and its receipts.
+
+Three facts are kept separate throughout, because conflating them is the easy
+mistake here:
+
+1. **The alert is active** — evaluation said so.
+2. **The provider accepted a page** — a delivery receipt. This is _not_ proof
+   that a person was reached; nothing in this system can observe that, and the
+   status label says so in both languages.
+3. **An operator acknowledged it in this system** — the only acknowledgement
+   that can honestly be recorded.
+
+`alert_dispatches` holds one row per raise or close, with a `dedupKey` that is
+stable per incident and shared by a raise and its matching close. The provider
+correlates them by that key, which is also what makes retrying safe: GoAlert
+folds a repeat of one key into the incident it already has, so re-sending after
+a lost response cannot page anyone twice. That property is asserted against the
+provider (`dedupes`) rather than assumed, so a future adapter without it cannot
+quietly inherit the retry path — it would need operator reconciliation instead,
+as the hotel worker does.
+
+The delivery worker follows the discipline the hotel worker earned: the row
+becomes `outcome_unknown` **before** the request, so a crash mid-flight leaves
+evidence that a send may have happened rather than a row that looks untouched;
+a fenced lease stops two workers delivering the same page; failures take an
+exponential backoff capped at thirty minutes instead of a per-minute hot loop
+against a provider that is already down; and the page is ordered
+oldest-attempt-first, NULL first, so rows stuck behind a long backoff never
+starve a fresh alert. After six attempts a dispatch is marked `failed` and kept
+— a page nobody can deliver is itself an operational fact — and the scheduled
+task raises so an operator sees it.
+
+The alert transition and its dispatch share one transaction: an alert cannot
+become active without a queued page, and a rolled-back transition leaves no page
+behind. Acknowledging an alert also queues the close, so an operator already
+handling it is not paged again by the rotation. A close is never queued without
+a raise to close, since a bare close would tell the provider about an incident
+nobody opened.
+
+Configure `ONCALL_MODE=disabled|sandbox|live`, default disabled. An
+unconfigured deployment pages nobody, and the dashboard then shows an active
+alert with no dispatch — the honest picture, not a fabricated receipt. `live`
+requires `ONCALL_ACCEPTANCE_REFERENCE`: a rotation that has never been
+exercised is not an on-call capability. The provider token travels in an
+`Authorization` header, never a query string that proxies and access logs would
+capture, and provider errors are never echoed into stored text because they can
+quote the request back, credential included.
+
+Evidence: 20 unit and adapter cases, and 6 cases in the live MySQL acceptance
+run, which went from 63 to **69 checks with zero skips and zero provider calls**.
+The acceptance path establishes the identity index, the transaction coupling,
+and real row locks fencing two concurrent workers — removing the lease check
+alone makes that case fail, which is how it was verified. **No request reached
+an on-call provider and no person was paged**; every send in the tests is a
+local double. Who is on call, what the rotation is, and whether anyone answers
+remain the provider's business and deployment work.

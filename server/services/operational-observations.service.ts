@@ -7,6 +7,8 @@ import {
   outbox,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
+import { configuredOnCallProvider } from "../integrations/on-call";
+import { queueAlertClose, queueAlertRaise } from "./on-call.service";
 import { createServiceLogger } from "../_core/logger";
 const log = createServiceLogger("operational-observations");
 export const observationInstanceId = randomUUID();
@@ -179,6 +181,9 @@ export async function refreshOperationalAlerts() {
       };
     }),
   ];
+  // Resolved once per refresh, outside the per-check transactions: reading the
+  // configuration is not a database concern and must not be repeated per row.
+  const onCall = configuredOnCallProvider();
   for (const check of checks)
     await db.transaction(async tx => {
       const [prior] = await tx
@@ -201,6 +206,18 @@ export async function refreshOperationalAlerts() {
             updatedAt: new Date(),
           },
         });
+      // The transition and its dispatch commit together, so an alert cannot
+      // become active without a queued page, and a rolled-back transition
+      // leaves no page behind. With no provider configured nothing is queued
+      // and the dashboard shows an active alert with no dispatch, which is the
+      // honest picture of a deployment that pages nobody.
+      if (status === "active")
+        await queueAlertRaise(
+          tx,
+          { alertKey: check.key, summary: check.message },
+          onCall
+        );
+      else await queueAlertClose(tx, check.key, onCall);
     });
   await db
     .delete(operationalSamples)
@@ -209,18 +226,32 @@ export async function refreshOperationalAlerts() {
     );
   return { checked: checks.length };
 }
+/** An operator taking the alert in this system.
+ *
+ * This is the only acknowledgement the system can honestly record. A delivery
+ * receipt says the provider accepted a page; it never says a person saw it.
+ * Acknowledging also asks the provider to close the incident, so an operator
+ * who is already handling it is not paged again by the rotation.
+ */
 export async function acknowledgeOperationalAlert(
   key: string,
   actorId: number
 ) {
   const db = getDb();
   if (!db) throw new Error("Operations database unavailable");
-  const [result] = await db
-    .update(operationsAlerts)
-    .set({ acknowledgedBy: actorId, acknowledgedAt: new Date() })
-    .where(
-      and(eq(operationsAlerts.key, key), eq(operationsAlerts.status, "active"))
-    );
-  if (result.affectedRows !== 1) throw new Error("Active alert not found");
-  return { acknowledged: true };
+  const onCall = configuredOnCallProvider();
+  return await db.transaction(async tx => {
+    const [result] = await tx
+      .update(operationsAlerts)
+      .set({ acknowledgedBy: actorId, acknowledgedAt: new Date() })
+      .where(
+        and(
+          eq(operationsAlerts.key, key),
+          eq(operationsAlerts.status, "active")
+        )
+      );
+    if (result.affectedRows !== 1) throw new Error("Active alert not found");
+    const closed = await queueAlertClose(tx, key, onCall);
+    return { acknowledged: true, closeQueued: closed !== null };
+  });
 }

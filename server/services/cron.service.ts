@@ -49,6 +49,15 @@ export const PERIODIC_JOB_CATALOG = [
     },
   },
   {
+    name: "onCallDelivery",
+    cron: "* * * * *",
+    periodMs: 60000,
+    run: async () => {
+      const { processOnCallDeliveries } = await import("./on-call.service");
+      await processOnCallDeliveries();
+    },
+  },
+  {
     name: "flightCancellationRefunds",
     cron: "* * * * *",
     periodMs: 60000,
