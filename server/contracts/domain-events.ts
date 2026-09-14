@@ -47,6 +47,16 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     mode: z.literal("sandbox"),
   }),
   "hotel.cancelled": hotelReceipt,
+  /** Station weather is field data, not tenant data: one bulletin describes
+   * the airport for every airline operating into it, so this event is always
+   * public-scoped and carries no booking or passenger identity. */
+  "weather.observed": z.looseObject({
+    icaoCode: z.string().regex(/^[A-Z]{2}[A-Z0-9]{2}$/),
+    kind: z.enum(["metar", "taf"]),
+    issuedAt: z.string().datetime(),
+    flightCategory: z.enum(["VFR", "MVFR", "IFR", "LIFR"]).nullable(),
+    sourceMode: z.enum(["sandbox", "live"]),
+  }),
 };
 export const domainEnvelope = z.object({
   eventId: z.string().min(1).max(36),

@@ -5957,3 +5957,79 @@ export const operationsAlerts = mysqlTable("operations_alerts", {
   firstObservedAt: timestamp("firstObservedAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+/** R2-10 — operator-recorded ICAO station for an airport.
+ *
+ * Kept as its own table rather than a column on `airports` so the mapping
+ * carries who recorded it and against which reference. IATA and ICAO are
+ * unrelated code spaces, so this mapping can only ever be recorded, never
+ * derived, and an unmapped airport stays explicitly uncovered.
+ */
+export const airportWeatherStations = mysqlTable(
+  "airport_weather_stations",
+  {
+    airportId: int("airportId").primaryKey(),
+    icaoCode: varchar("icaoCode", { length: 4 }).notNull(),
+    mappingEvidence: varchar("mappingEvidence", { length: 255 }).notNull(),
+    recordedBy: int("recordedBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    station: uniqueIndex("airport_weather_station_icao_idx").on(t.icaoCode),
+  })
+);
+export type AirportWeatherStation = typeof airportWeatherStations.$inferSelect;
+
+/** R2-10 — stored station bulletins.
+ *
+ * `rawText` is the bulletin as published, so any stored classification can be
+ * re-derived and audited. `flightCategory` is only ever set for a `metar`: a
+ * `taf` is a forecast and is never given an observed category. The identity
+ * index makes re-ingesting the same bulletin a no-op instead of a duplicate.
+ */
+export const weatherObservations = mysqlTable(
+  "weather_observations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    icaoCode: varchar("icaoCode", { length: 4 }).notNull(),
+    kind: mysqlEnum("kind", ["metar", "taf"]).notNull(),
+    issuedAt: timestamp("issuedAt").notNull(),
+    rawText: varchar("rawText", { length: 2048 }).notNull(),
+    bodyDigest: varchar("bodyDigest", { length: 64 }).notNull(),
+    windDirection: int("windDirection"),
+    windSpeed: int("windSpeed"),
+    windGust: int("windGust"),
+    visibilityStatuteMiles: decimal("visibilityStatuteMiles", {
+      precision: 5,
+      scale: 2,
+    }),
+    ceilingFeet: int("ceilingFeet"),
+    /** Distinguishes "no ceiling layer" from "a ceiling layer nobody measured",
+     * which the FAA thresholds treat very differently. */
+    ceilingIndeterminate: boolean("ceilingIndeterminate")
+      .default(false)
+      .notNull(),
+    temperatureC: int("temperatureC"),
+    dewpointC: int("dewpointC"),
+    altimeterHpa: decimal("altimeterHpa", { precision: 7, scale: 2 }),
+    flightCategory: mysqlEnum("flightCategory", ["VFR", "MVFR", "IFR", "LIFR"]),
+    sourceReference: varchar("sourceReference", { length: 255 }).notNull(),
+    sourceMode: mysqlEnum("sourceMode", ["sandbox", "live"]).notNull(),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+  },
+  t => ({
+    identity: uniqueIndex("weather_observation_identity_idx").on(
+      t.icaoCode,
+      t.kind,
+      t.issuedAt,
+      t.bodyDigest
+    ),
+    recent: index("weather_observation_recent_idx").on(
+      t.icaoCode,
+      t.kind,
+      t.issuedAt
+    ),
+  })
+);
+export type WeatherObservation = typeof weatherObservations.$inferSelect;

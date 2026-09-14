@@ -337,6 +337,34 @@
       "replacement": null
     },
     {
+      "file": "server/services/aviation-weather.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/aviation-weather.service.ts",
+      "domain": "airline-operations",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/routers/weather.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/integrations/aviation-weather.ts",
+        "server/services/outbox.service.ts",
+        "shared/aviation-weather.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "airportWeatherStations",
+          "airports",
+          "flights",
+          "weatherObservations"
+        ],
+        "writes": ["airportWeatherStations", "weatherObservations"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/bag-drop.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/bag-drop.service.ts",
@@ -3000,6 +3028,7 @@
         "server/services/agent-governance.service.ts",
         "server/services/aircraft-rotation.service.ts",
         "server/services/aviation-evidence.service.ts",
+        "server/services/aviation-weather.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-invoice.service.ts",
         "server/services/booking-settlement.service.ts",

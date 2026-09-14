@@ -6,20 +6,20 @@ Implements the follow-up study _AIS Additional Components and Gap Solutions_,
 patches. Booking, payments, inventory, and the transactional outbox remain the
 authorities. Optional integrations do not establish provider acceptance.
 
-| Patch | Scope                                               | Evidence / status                                      |
-| ----- | --------------------------------------------------- | ------------------------------------------------------ |
-| R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass            |
-| R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass                    |
-| R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass            |
-| R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass            |
-| R2-05 | Versioned event contracts                           | Implemented; 65 focused checks and AsyncAPI validation |
-| R2-06 | Provider/API contract laboratory                    | Implemented; real REST and Microcks CI passed          |
-| R2-07 | Transport fault acceptance                          | Pending                                                |
-| R2-08 | Trace context and data lineage                      | Pending                                                |
-| R2-09 | On-call delivery and acknowledgement                | Pending                                                |
-| R2-10 | Aviation weather source adapter                     | Pending                                                |
-| R2-11 | Advisory optimization and simulation pilot          | Pending                                                |
-| R2-12 | ONE Record cargo exchange pilot                     | Pending                                                |
+| Patch | Scope                                               | Evidence / status                                       |
+| ----- | --------------------------------------------------- | ------------------------------------------------------- |
+| R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass             |
+| R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass                     |
+| R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass             |
+| R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass             |
+| R2-05 | Versioned event contracts                           | Implemented; 65 focused checks and AsyncAPI validation  |
+| R2-06 | Provider/API contract laboratory                    | Implemented; real REST and Microcks CI passed           |
+| R2-07 | Transport fault acceptance                          | Implemented; TCP fault lab reaches and passes its cases |
+| R2-08 | Trace context and data lineage                      | Pending                                                 |
+| R2-09 | On-call delivery and acknowledgement                | Pending                                                 |
+| R2-10 | Aviation weather source adapter                     | Implemented; 35 unit and 7 MySQL acceptance cases pass  |
+| R2-11 | Advisory optimization and simulation pilot          | Pending                                                 |
+| R2-12 | ONE Record cargo exchange pilot                     | Pending                                                 |
 
 No person, on-call rotation, production database, or provider acceptance is
 inferred from local tests. Each patch records its tested scope below.
@@ -275,3 +275,67 @@ Local validation: **56 acceptance checks passed with zero skips and zero
 provider calls**, up from 55. Zero-warning ESLint, Prettier, Gitleaks, and all
 three TypeScript configurations pass. As with PR #152, no workflow triggers on a
 pull request whose base is not `main`, so this branch's evidence is local only.
+
+## R2-10 — aviation weather source adapter
+
+Migration 0041 adds two tables. `airport_weather_stations` records which ICAO
+station reports for an airport, with the operator who recorded it and the
+reference they verified it against. IATA and ICAO are unrelated code spaces, so
+this mapping is only ever recorded, never derived from an airport's IATA code,
+and one ICAO identifier cannot be mapped to two airports. `weather_observations`
+stores bulletins with the text as published beside the derived classification,
+so any stored category can be re-derived and audited against the bulletin the
+station actually issued.
+
+`shared/aviation-weather.ts` holds the decoding and classification as pure
+functions. Flight category follows the published FAA ceiling and visibility
+boundaries and takes the more restrictive of the two. Three distinctions are
+kept deliberately, because collapsing any of them would invent a condition:
+
+- A sky with only few and scattered layers has **no ceiling**, which is not the
+  same as a high one.
+- An obscured or broken layer reported without a base has an **unmeasured**
+  ceiling. That yields no category at all — not the unrestricted one.
+- A missing visibility yields no category either.
+
+`server/integrations/aviation-weather.ts` reads the Aviation Weather Center data
+API. METAR is an observation and is classified; TAF is a forecast, is stored as
+its bulletin text with its issue time, and never receives an observed category.
+A field that is present but undecodable rejects the whole report rather than
+being nulled, so provider schema drift fails loudly instead of turning into
+quietly missing weather. A response describing a station nobody requested is
+refused. Requests are bounded to 20 stations, 15 seconds and 2 MB.
+
+Configure `AVIATION_WEATHER_MODE=disabled|sandbox|live`, default disabled, so an
+unconfigured deployment fetches nothing. `live` additionally requires
+`AVIATION_WEATHER_SOURCE_REFERENCE`: the AWC API is a public service with no
+contract or availability commitment to this system, so an operator records which
+source they accepted before its bulletins are stored, and that reference is kept
+on every stored row. `sandbox` requires `AVIATION_WEATHER_BASE_URL`, because a
+sandbox silently pointing at the real service would not be one.
+
+The advisory reports origin and destination coverage as one of four states:
+`station_unmapped`, `no_observation`, `stale_observation` or `classified`. An
+expired bulletin keeps its text on screen — an operator reading "two hours old"
+is better served than one shown nothing — but yields no category and no
+concerns. **Missing coverage never produces a weather alert**: an alert saying
+the weather is bad when the truth is that no bulletin exists would be a
+fabricated observation. Freshness budgets are 90 minutes for a METAR, one issue
+cycle plus margin, and 480 minutes for a TAF.
+
+This closes a specific gap: `OperationalAlert` already accepted a `weather`
+type that nothing in the system could emit, and the operations agent returned an
+empty alert list. `weatherAlertsFrom` is now that producer. Every alert it emits
+carries "Advisory only: confirm against the operator's dispatch weather source
+before acting". Nothing here changes a flight, booking, gate, inventory row or
+payment, and none of it is a dispatch authority.
+
+Evidence: 35 unit and decoder cases, and 7 cases in the live MySQL acceptance
+run, which went from 56 to **63 checks with zero skips and zero provider calls**.
+The acceptance path proves what the in-memory double cannot — the unique index
+behind the duplicate check, `decimal(5,2)` and `timestamp` round-tripping, and
+the advisory through real SQL. Removing the unmeasured-ceiling distinction alone
+makes two cases fail, which is how that rule was verified. **No request reached
+the Aviation Weather Center**; every bulletin in the tests is a local fixture,
+and the response schema still needs verification against live responses before
+production trust.
