@@ -15,7 +15,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | R2-05 | Versioned event contracts                           | Implemented; 65 focused checks and AsyncAPI validation  |
 | R2-06 | Provider/API contract laboratory                    | Implemented; real REST and Microcks CI passed           |
 | R2-07 | Transport fault acceptance                          | Implemented; TCP fault lab reaches and passes its cases |
-| R2-08 | Trace context and data lineage                      | Pending                                                 |
+| R2-08 | Trace context and data lineage                      | Implemented; 29 unit and 7 MySQL acceptance cases pass  |
 | R2-09 | On-call delivery and acknowledgement                | Implemented; 20 unit and 6 MySQL acceptance cases pass  |
 | R2-10 | Aviation weather source adapter                     | Implemented; 35 unit and 7 MySQL acceptance cases pass  |
 | R2-11 | Advisory optimization and simulation pilot          | Pending                                                 |
@@ -446,3 +446,73 @@ alone makes that case fail, which is how it was verified. **No request reached
 an on-call provider and no person was paged**; every send in the tests is a
 local double. Who is on call, what the rotation is, and whether anyone answers
 remain the provider's business and deployment work.
+
+## R2-08 — trace context and data lineage
+
+### Trace context
+
+Migrations 0043 add `traceId` and `spanId` to both `outbox` and `event_inbox`.
+The gap closed is causal: a domain event carried no link to the request that
+produced it, so an event that misbehaved could not be traced back to its cause,
+and the whole background half of the system was uncorrelated.
+
+`shared/trace-context.ts` implements the W3C `traceparent` header exactly as
+specified, dependency-free. **This is not an OpenTelemetry installation**: no
+spans are sampled, batched, timed or exported to a collector. The wire format is
+the standard one, so adding an SDK later is compatible with everything stored,
+but nothing here should be read as claiming distributed tracing is deployed.
+
+Malformed, all-zero, repeated and future-version headers are all treated as
+absent and a fresh trace is started, so a hostile or unreadable header can
+never be adopted as a trace identity. An inbound trace is continued under a new
+span — reusing the caller's span id would merge two spans. The upstream
+`sampled` decision is preserved as received; this system is not the sampling
+authority.
+
+The context travels in an `AsyncLocalStorage` rather than through every
+signature. There are dozens of call sites between an HTTP handler and
+`recordEvent`; threading a parameter through all of them would be a large
+refactor to move one string, and any site that forgot to forward it would
+silently lose the correlation. The store is correct across awaits and cannot
+leak between concurrent requests, which a module-level variable could not
+promise — there is a test for exactly that.
+
+Three entry points establish a context: the Express middleware (which also
+echoes `traceresponse`, safe to return because trace ids are random and carry
+no user, tenant or payload data), the cron tick, and the outbox relay. The
+relay is the interesting one: each event is delivered **inside the trace of the
+request that produced it**, under a new span, so an event recorded by a
+consumer continues the original causal chain rather than joining the relay
+tick's trace. Where no trace exists, the columns stay null and the ambient
+context is used as-is; nothing fabricates an identifier, because a made-up one
+would correlate unrelated work.
+
+### Data lineage
+
+Migration 0044 adds `lineage_events`, holding OpenLineage run events in the
+specification's own shape, so a later transport can ship exactly what was
+recorded. **Nothing is transmitted today** and no lineage backend is configured
+or claimed.
+
+The warehouse export job emits START, then COMPLETE with the output's row
+count, byte size and sha256 — the same checksum stored on the export row, so a
+lineage record can actually verify the bytes served — or FAIL with a bounded
+error facet. The run id is derived from the export row rather than random, so a
+retried export is the _same_ logical run instead of appearing as several
+unrelated ones, and the identity index makes a repeated emission a no-op. A run
+with a START and no terminal event is reported as `running`, never as complete.
+
+`EXPORT_INPUT_TABLES` lists the tables each export actually reads, taken from
+the queries themselves — including the revenue export, whose inputs are
+`bookings` and `financial_ledger` because it reads through `getFinancialDays`,
+not a revenue table (there is none). An inaccurate input list is worse than no
+lineage graph, because it would be believed. Emission never fails its caller: a
+correct export must not be reported as failed because its lineage row could not
+be written, and the miss is logged so the gap is visible rather than silent.
+
+Evidence: 29 unit cases (21 trace, 8 lineage) and 7 cases in the live MySQL
+acceptance run, which went from 69 to **76 checks with zero skips and zero
+provider calls**, completing in about six seconds across three consecutive
+runs. The lineage acceptance runs a real export and checks the recorded inputs,
+the output checksum against the stored one, and the trace linkage. Making the
+run id random alone makes that case fail, which is how it was verified.

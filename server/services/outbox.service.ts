@@ -14,6 +14,8 @@ import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import { getDb } from "../db";
 import { outbox, type OutboxEvent } from "../../drizzle/schema";
+import { currentTrace, runWithTrace } from "../_core/trace";
+import { childSpan, formatTraceparent } from "../../shared/trace-context";
 import type * as schema from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
 
@@ -57,6 +59,9 @@ export async function recordEvent(
     tenantId: event.tenantId ?? null,
     payload: JSON.parse(JSON.stringify(event.payload)),
   });
+  // The ambient trace of whatever caused this write. Null when there is none;
+  // a fabricated identifier would correlate this event with unrelated work.
+  const trace = currentTrace();
   await db.insert(outbox).values({
     eventId,
     aggregateType: event.aggregateType,
@@ -66,6 +71,8 @@ export async function recordEvent(
     schemaVersion: validated.schemaVersion,
     payload: validated.payload,
     status: "pending",
+    traceId: trace?.traceId ?? null,
+    spanId: trace?.spanId ?? null,
   });
   return eventId;
 }
@@ -229,7 +236,21 @@ export async function processEvents(
 
   for (const event of events) {
     try {
-      await publisher(event);
+      // Deliver inside the trace of the request that produced the event, under
+      // a new span for the delivery. This is what makes a causal chain
+      // readable: an event recorded by a consumer inherits the trace of the
+      // event it reacted to, not the relay tick's. An event stored without a
+      // trace keeps the ambient one rather than being given a fabricated id.
+      await (event.traceId && event.spanId
+        ? runWithTrace(
+            childSpan({
+              traceId: event.traceId,
+              spanId: event.spanId,
+              flags: "01",
+            }),
+            () => publisher(event)
+          )
+        : publisher(event));
       publishedIds.push(event.id);
     } catch (err) {
       failed.push({
@@ -317,6 +338,21 @@ export const configuredPublisher: OutboxPublisher = async event => {
                 : "application/json",
             Authorization: `Bearer ${token}`,
             "Idempotency-Key": event.eventId,
+            // The receiver continues the trace of the request that produced
+            // the event, under a new span for the delivery itself. Omitted
+            // entirely for an event stored without a trace, rather than sent
+            // as a placeholder the receiver would treat as real.
+            ...(event.traceId && event.spanId
+              ? {
+                  traceparent: formatTraceparent(
+                    childSpan({
+                      traceId: event.traceId,
+                      spanId: event.spanId,
+                      flags: "01",
+                    })
+                  ),
+                }
+              : {}),
           },
           body: JSON.stringify(
             format === "cloudevents" ? toCloudEvent(event) : event

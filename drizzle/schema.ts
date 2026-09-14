@@ -5650,6 +5650,12 @@ export const outbox = mysqlTable(
     leaseToken: varchar("leaseToken", { length: 36 }),
     lockedAt: timestamp("lockedAt"),
     publishedAt: timestamp("publishedAt"),
+    /** R2-08 — W3C trace context of the request that produced this event, so
+     * an event can be traced back to its cause. Nullable: events recorded
+     * before this column, and any path with no established trace, carry none
+     * rather than a fabricated identifier. */
+    traceId: varchar("traceId", { length: 32 }),
+    spanId: varchar("spanId", { length: 16 }),
   },
   table => ({
     statusIdx: index("outbox_status_idx").on(table.status, table.createdAt),
@@ -6086,3 +6092,42 @@ export const alertDispatches = mysqlTable(
   })
 );
 export type AlertDispatch = typeof alertDispatches.$inferSelect;
+
+/** R2-08 — persisted OpenLineage run events.
+ *
+ * Stored, not transmitted: no lineage backend is configured or claimed. The
+ * `document` column holds the spec-shaped event verbatim so a later transport
+ * can ship exactly what was recorded, and `traceId` ties a data job run back
+ * to the request or scheduled tick that caused it.
+ */
+export const lineageEvents = mysqlTable(
+  "lineage_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    runId: varchar("runId", { length: 36 }).notNull(),
+    jobNamespace: varchar("jobNamespace", { length: 255 }).notNull(),
+    jobName: varchar("jobName", { length: 255 }).notNull(),
+    eventType: mysqlEnum("eventType", [
+      "START",
+      "RUNNING",
+      "COMPLETE",
+      "ABORT",
+      "FAIL",
+      "OTHER",
+    ]).notNull(),
+    eventTime: timestamp("eventTime").notNull(),
+    traceId: varchar("traceId", { length: 32 }),
+    document: json("document").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    /** One event of a kind per run: a retried emit is a no-op, not a second
+     * START for the same run. */
+    identity: uniqueIndex("lineage_event_identity_idx").on(
+      t.runId,
+      t.eventType
+    ),
+    byJob: index("lineage_event_job_idx").on(t.jobName, t.eventTime),
+  })
+);
+export type LineageEventRow = typeof lineageEvents.$inferSelect;

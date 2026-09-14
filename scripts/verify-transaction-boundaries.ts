@@ -10,6 +10,7 @@ import { verifyR2Gates } from "./acceptance/r2-gates";
 import { verifyR2Hotels } from "./acceptance/r2-hotels";
 import { verifyR2Weather } from "./acceptance/r2-weather";
 import { verifyR2OnCall } from "./acceptance/r2-oncall";
+import { verifyR2Trace, verifyR2Lineage } from "./acceptance/r2-trace";
 
 if (
   process.env.AIS_DISPOSABLE_DATABASE !== "true" ||
@@ -406,6 +407,8 @@ try {
   await verifyR2Hotels(db, id, check);
   await verifyR2Weather(db, id, check);
   await verifyR2OnCall(db, id, check);
+  await verifyR2Trace(db, id, check);
+  await verifyR2Lineage(db, id, check);
   completed = true;
 } finally {
   const report = {

@@ -26,14 +26,26 @@ export type InboxEvent = Pick<
   | "aggregateType"
   | "tenantId"
   | "payload"
-> & { schemaVersion?: number };
+> & {
+  schemaVersion?: number;
+  /** R2-08 — the trace of the request that produced the event, carried across
+   * the relay. Optional: an event stored before the trace columns, or produced
+   * on a path with no established trace, has none. */
+  traceId?: string | null;
+  spanId?: string | null;
+};
 
 async function persistEnvelope(tx: SettlementTx, event: InboxEvent) {
   const validated = validateDomainEvent(event);
   const payload = validated.payload;
   await tx
     .insert(eventInbox)
-    .values({ ...validated, payload })
+    .values({
+      ...validated,
+      payload,
+      traceId: event.traceId ?? null,
+      spanId: event.spanId ?? null,
+    })
     .onDuplicateKeyUpdate({ set: { eventId: sql`${eventInbox.eventId}` } });
   const [saved] = await tx
     .select()
@@ -49,6 +61,9 @@ async function persistEnvelope(tx: SettlementTx, event: InboxEvent) {
     saved.tenantId !== event.tenantId ||
     calculateRequestHash(saved.payload) !== calculateRequestHash(payload)
   )
+    // Trace identifiers are deliberately excluded from this comparison: a
+    // redelivery legitimately carries a different span, and treating that as
+    // an identity conflict would reject a correct replay.
     throw new Error("Event identity conflicts with its stored receipt");
   return saved;
 }

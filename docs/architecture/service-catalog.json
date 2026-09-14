@@ -1019,6 +1019,7 @@
       ],
       "dependencies": [
         "server/_core/logger.ts",
+        "server/_core/trace.ts",
         "server/jobs/check-in-reminder.job.ts",
         "server/jobs/loyalty-cleanup.job.ts",
         "server/services/bag-drop.service.ts",
@@ -1081,7 +1082,9 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/financial-reporting.service.ts",
-        "server/services/rbac.service.ts"
+        "server/services/lineage.service.ts",
+        "server/services/rbac.service.ts",
+        "shared/lineage.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -2375,6 +2378,32 @@
       "replacement": null
     },
     {
+      "file": "server/services/lineage.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/lineage.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/operations.ts",
+        "server/services/data-warehouse.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/_core/logger.ts",
+        "server/_core/trace.ts",
+        "server/db.ts",
+        "shared/lineage.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["lineageEvents"],
+        "writes": ["lineageEvents"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/load-planning.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/load-planning.service.ts",
@@ -3098,11 +3127,13 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/_core/trace.ts",
         "server/contracts/domain-events.ts",
         "server/db.ts",
         "server/services/event-inbox.service.ts",
         "server/services/flight-event-delivery.service.ts",
-        "server/webhooks/stripe.ts"
+        "server/webhooks/stripe.ts",
+        "shared/trace-context.ts"
       ],
       "tableExpressions": {
         "reads": ["outbox"],

@@ -31,6 +31,7 @@ import {
   errorResponseMiddleware,
 } from "./middleware/sentry.middleware";
 import { requestIdMiddleware } from "./middleware/request-id.middleware";
+import { traceMiddleware } from "./trace";
 import { requestTimeoutMiddleware } from "./middleware/request-timeout.middleware";
 import {
   apmRequestMiddleware,
@@ -122,6 +123,10 @@ async function startServer() {
 
   // Request ID middleware - generates unique ID for each request
   app.use(requestIdMiddleware);
+
+  // W3C trace context. Mounted before the routers so every handler, service
+  // and outbox write below it runs inside the request's trace.
+  app.use(traceMiddleware);
 
   // Request timeout middleware - 30s default for API requests
   app.use("/api", requestTimeoutMiddleware(30_000));

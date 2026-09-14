@@ -6,6 +6,7 @@ import {
 } from "../services/operations-dashboard.service";
 import { acknowledgeOperationalAlert } from "../services/operational-observations.service";
 import { readAlertDispatches } from "../services/on-call.service";
+import { readLineageRuns } from "../services/lineage.service";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import { scheduledTasks } from "../../drizzle/schema";
@@ -88,6 +89,25 @@ export const operationsRouter = router({
         available: c.deploymentReady === true,
       }))
     ),
+  /** Recorded data-job lineage. Stored locally in OpenLineage shape; no
+   * lineage backend is configured, so nothing here has been transmitted. */
+  lineageRuns: adminProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200).default(50) }))
+    .output(
+      z.array(
+        z.object({
+          runId: z.string(),
+          jobName: z.string(),
+          startedAt: z.string().nullable(),
+          finishedAt: z.string().nullable(),
+          outcome: z.enum(["running", "complete", "failed"]),
+          traceId: z.string().nullable(),
+          inputs: z.array(z.string()),
+          outputs: z.array(z.string()),
+        })
+      )
+    )
+    .query(({ input }) => readLineageRuns(input.limit)),
   scheduledTasks: adminProcedure
     .output(
       z.array(
