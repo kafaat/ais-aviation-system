@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 from pathlib import Path
+import signal
 import socket
 import subprocess
 import time
@@ -18,8 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 # These deadlines exist to stop a hang, not to police performance: keep them
 # well clear of a healthy run so a slow runner reports the real outcome. The
 # workflow's own timeout-minutes remains the outer bound.
-READY_DEADLINE_SECONDS = 60
-LAB_DEADLINE_SECONDS = 300
+# The workflow caps the job at 15 minutes. Keep the worst case well inside it:
+# three readiness attempts plus one lab deadline must still leave room to print
+# diagnostics, or the job dies without saying why.
+READY_DEADLINE_SECONDS = 45
+LAB_DEADLINE_SECONDS = 240
 
 
 @contextlib.contextmanager
@@ -80,6 +84,31 @@ def diagnose(report, container):
         print(f"Toxiproxy logs unavailable: {error}", flush=True)
 
 
+def run_lab(report, base):
+    """Run the lab in its own process group and kill the group on timeout.
+
+    The lab deliberately parks one forked worker forever so it can be SIGKILLed
+    mid-flight. Killing only the direct child leaves that worker holding the
+    inherited pipes, so the wait after a timeout never returns and the job dies
+    at the workflow cap with nothing printed. Signalling the group ends them all.
+    """
+    process = subprocess.Popen(
+        ["node", "--import", "tsx", "scripts/acceptance/r2-transport.ts", str(report.resolve())],
+        cwd=ROOT,
+        env=dict(os.environ, TOXIPROXY_CONTROL_URL=base),
+        start_new_session=True,
+    )
+    try:
+        code = process.wait(timeout=LAB_DEADLINE_SECONDS)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        process.wait(timeout=30)
+        raise
+    if code != 0:
+        raise subprocess.CalledProcessError(code, process.args)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--report", type=Path, required=True)
@@ -111,7 +140,7 @@ def main():
                     f"Toxiproxy control API unreachable after {attempts} attempts"
                 )
             try:
-                subprocess.run(["node", "--import", "tsx", "scripts/acceptance/r2-transport.ts", str(args.report.resolve())], cwd=ROOT, env=dict(os.environ, TOXIPROXY_CONTROL_URL=base), check=True, timeout=LAB_DEADLINE_SECONDS)
+                run_lab(args.report, base)
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
                 diagnose(args.report, container)
                 raise
