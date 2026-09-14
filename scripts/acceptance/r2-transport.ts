@@ -203,14 +203,25 @@ try {
   await new Promise<void>(resolve => receiver.listen(0, "127.0.0.1", resolve));
   const address = receiver.address();
   assert(address && typeof address !== "string");
-  const port = await unusedPort();
+  // unusedPort releases the port before Toxiproxy binds it, so another process
+  // can take it in between. Retry on a fresh port instead of failing the lab.
+  let port = 0;
+  for (let attempt = 1; ; attempt++) {
+    port = await unusedPort();
+    try {
+      await api("/proxies", "POST", {
+        name: proxyName,
+        listen: `127.0.0.1:${port}`,
+        upstream: `127.0.0.1:${address.port}`,
+        enabled: false,
+      });
+      break;
+    } catch (error) {
+      await api(`/proxies/${proxyName}`, "DELETE").catch(() => undefined);
+      if (attempt === 3) throw error;
+    }
+  }
   const endpoint = `http://127.0.0.1:${port}`;
-  await api("/proxies", "POST", {
-    name: proxyName,
-    listen: `127.0.0.1:${port}`,
-    upstream: `127.0.0.1:${address.port}`,
-    enabled: false,
-  });
   const outage = worker(endpoint, "fail");
   assert.equal(await outage.done, 0);
   assert(outage.messages.some(m => m.failed));
