@@ -19,7 +19,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | R2-09 | On-call delivery and acknowledgement                | Implemented; 20 unit and 6 MySQL acceptance cases pass  |
 | R2-10 | Aviation weather source adapter                     | Implemented; 35 unit and 7 MySQL acceptance cases pass  |
 | R2-11 | Advisory optimization and simulation pilot          | Assignment implemented; simulation not started          |
-| R2-12 | ONE Record cargo exchange pilot                     | Pending                                                 |
+| R2-12 | ONE Record cargo exchange pilot                     | Not started; no cargo domain, no counterparty           |
 
 No person, on-call rotation, production database, or provider acceptance is
 inferred from local tests. Each patch records its tested scope below.
@@ -571,3 +571,31 @@ arrival/service distribution to be worth anything, and there is no measured
 operational data here to fit one to. A simulation calibrated on invented
 distributions would produce confident numbers about nothing, so it is left
 undone rather than approximated.
+
+## R2-12 — ONE Record cargo exchange: not started, and why
+
+This package is deliberately not implemented. Two findings, both checkable:
+
+**There is no cargo domain to expose.** A search of the schema and services for
+cargo, shipment, waybill, AWB and consignment finds cargo only as an aggregate
+_weight_: `cargoZones` and `cargoDistribution` on the weight-and-balance
+tables, and `totalCargoWeight` in the DCS load calculation. There are no
+shipments, pieces, waybills, parties or cargo bookings anywhere. Building a
+ONE Record server would therefore mean first inventing an entire cargo booking
+domain — greenfield product work, not the closure of a gap.
+
+**A pilot needs a counterparty.** ONE Record's value is linked-data exchange
+between an airline, a forwarder and a ground handler, each publishing Logistics
+Objects at stable URIs and subscribing to each other's. Standing up the
+endpoints alone would produce an interface serving objects about nothing, and
+no local test could establish that any party accepted it.
+
+That is exactly the failure this study warns about — an interface or a database
+row is not a completed service — and the same pattern already present in this
+repository: two `OpenWeather` entries sat in the Data API allowlist with no
+caller, and `flight_tracking` carried temperature and wind columns with no
+source, until R2-10 replaced them with a real adapter.
+
+What R2-12 would need before it is worth starting: a cargo domain with real
+shipments, and a named counterparty willing to exchange against a sandbox.
+Both are product and commercial decisions, not engineering ones.
