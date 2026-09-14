@@ -1,0 +1,38 @@
+{
+  "baseline": "52aa07e2f6177ae537a6d88a3e58150faea50311",
+  "mutations": [
+    {
+      "area": "assignment",
+      "mutation": "restore baseline files",
+      "files": ["shared/reaccommodation.ts"],
+      "failingTests": 4,
+      "exitCode": 1
+    },
+    {
+      "area": "trace",
+      "mutation": "restore baseline files",
+      "files": ["shared/trace-context.ts"],
+      "failingTests": 3,
+      "exitCode": 1
+    },
+    {
+      "area": "oncall",
+      "mutation": "restore baseline files",
+      "files": [
+        "server/services/on-call.service.ts",
+        "server/integrations/on-call.ts"
+      ],
+      "failingTests": 10,
+      "exitCode": 1
+    },
+    {
+      "area": "priority",
+      "mutation": "swallow factor read failures",
+      "files": ["server/services/passenger-priority.service.ts"],
+      "failingTests": 1,
+      "exitCode": 1
+    }
+  ],
+  "restoredControlPassed": 66,
+  "restoredControlExitCode": 0
+}

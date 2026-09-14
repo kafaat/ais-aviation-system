@@ -4,11 +4,15 @@ import {
   airlines,
   airports,
   bookings,
+  bookingSegments,
   flights,
+  inventoryLocks,
+  seatHolds,
   passengers as passengerRows,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
 import { buildReaccommodationAdvisory } from "../../server/services/reaccommodation-advisory.service";
+import { rankPassengers } from "../../server/services/passenger-priority.service";
 
 /** R2-11 acceptance against real MySQL.
  *
@@ -219,6 +223,217 @@ export async function verifyR2Reaccommodation(
         assert.equal(entry.flightId, null);
         assert.match(entry.reason, /No acceptable seat/);
       }
+    }
+  );
+
+  await check(
+    "R2 reaccommodation: active holds reduce capacity without mutating expired or linked holds",
+    async () => {
+      await db.insert(flights).values(flight(10, 5, 0, 1));
+      const now = new Date(Math.floor(Date.now() / 1000) * 1000);
+      const future = new Date(now.getTime() + 3600_000);
+      await db.insert(inventoryLocks).values([
+        {
+          id,
+          flightId: id + 10,
+          cabinClass: "economy",
+          numberOfSeats: 2,
+          sessionId: "r2-hold",
+          expiresAt: future,
+        },
+        {
+          id: id + 1,
+          flightId: id + 10,
+          cabinClass: "economy",
+          numberOfSeats: 20,
+          sessionId: "r2-expired",
+          expiresAt: now,
+        },
+      ]);
+      await db.insert(seatHolds).values([
+        {
+          id,
+          flightId: id + 10,
+          cabinClass: "economy",
+          seats: 2,
+          sessionId: "r2-linked",
+          expiresAt: future,
+          inventoryLockId: id,
+        },
+        {
+          id: id + 1,
+          flightId: id + 10,
+          cabinClass: "economy",
+          seats: 2,
+          sessionId: "r2-legacy",
+          expiresAt: future,
+        },
+        {
+          id: id + 2,
+          flightId: id + 10,
+          cabinClass: "economy",
+          seats: 20,
+          sessionId: "r2-expired",
+          expiresAt: now,
+        },
+      ]);
+      const snapshot = async () => ({
+        flights: await db.select().from(flights),
+        bookings: await db.select().from(bookings),
+        segments: await db.select().from(bookingSegments),
+        locks: await db.select().from(inventoryLocks),
+        holds: await db.select().from(seatHolds),
+      });
+      const before = await snapshot();
+      const advisory = await buildReaccommodationAdvisory(id, now);
+      // 5 recorded - 2 canonical - 2 legacy = 1; linked alias is not counted twice.
+      assert.equal(
+        advisory.plan.assignments.filter(row => row.flightId === id + 10)
+          .length,
+        1
+      );
+      assert.equal(advisory.plan.unassigned.length, 1);
+      assert.deepEqual(await snapshot(), before);
+    }
+  );
+
+  await check(
+    "R2 reaccommodation: held and sold-out flights cannot crowd out later available options",
+    async () => {
+      await db
+        .update(flights)
+        .set({ economyAvailable: 0 })
+        .where(eq(flights.id, id + 10));
+      await db
+        .insert(flights)
+        .values(
+          Array.from({ length: 21 }, (_, index) =>
+            flight(20 + index, index === 20 ? 2 : index % 2, 0, 2 + index / 100)
+          )
+        );
+      await db.insert(inventoryLocks).values(
+        Array.from({ length: 10 }, (_, index) => ({
+          flightId: id + 21 + index * 2,
+          cabinClass: "economy" as const,
+          numberOfSeats: 1,
+          sessionId: `r2-full-${index}`,
+          expiresAt: new Date(Date.now() + 3600_000),
+        }))
+      );
+      const advisory = await buildReaccommodationAdvisory(id);
+      assert.equal(advisory.consideredOptions, 1);
+      assert.equal(advisory.optionsTruncated, false);
+      assert.deepEqual(advisory.plan.unassigned, []);
+      assert(advisory.plan.assignments.every(row => row.flightId === id + 40));
+    }
+  );
+
+  await check(
+    "R2 reaccommodation: current segments include later-leg passengers and exclude moved or cancelled legs",
+    async () => {
+      await db
+        .insert(bookings)
+        .values([
+          { ...booking(3, "confirmed", "economy"), flightId: id + 2 },
+          booking(4, "confirmed", "economy"),
+          booking(5, "confirmed", "economy"),
+        ]);
+      await db.insert(passengerRows).values(
+        [3, 4, 5].map(offset => ({
+          id: id + offset,
+          bookingId: id + offset,
+          firstName: "R2",
+          lastName: `Segment${offset}`,
+        }))
+      );
+      await db.insert(bookingSegments).values([
+        {
+          bookingId: id + 3,
+          flightId: id + 2,
+          segmentOrder: 1,
+          status: "completed",
+          departureDate: departure,
+        },
+        {
+          bookingId: id + 3,
+          flightId: id,
+          segmentOrder: 2,
+          status: "confirmed",
+          departureDate: departure,
+        },
+        {
+          bookingId: id + 4,
+          flightId: id + 2,
+          segmentOrder: 1,
+          status: "confirmed",
+          departureDate: departure,
+        },
+        {
+          bookingId: id + 5,
+          flightId: id,
+          segmentOrder: 1,
+          status: "cancelled",
+          departureDate: departure,
+        },
+      ]);
+      const ranked = await rankPassengers(id);
+      assert.deepEqual(ranked.map(row => row.passengerId).sort(), [
+        id,
+        id + 1,
+        id + 3,
+      ]);
+      assert(ranked.every(row => row.flightId === id));
+      const advisory = await buildReaccommodationAdvisory(id);
+      assert.deepEqual(
+        advisory.plan.assignments.map(row => row.passengerId).sort(),
+        [id, id + 1, id + 3]
+      );
+    }
+  );
+
+  await check(
+    "R2 reaccommodation: exceeding the manifest bound fails explicitly without dropping passengers",
+    async () => {
+      await db.insert(passengerRows).values(
+        Array.from({ length: 148 }, (_, index) => ({
+          id: id + 100 + index,
+          bookingId: id,
+          firstName: "R2",
+          lastName: `Bound${index}`,
+        }))
+      );
+      try {
+        await assert.rejects(
+          buildReaccommodationAdvisory(id),
+          /at most 150 passengers; flight has 151/
+        );
+      } finally {
+        await db
+          .delete(passengerRows)
+          .where(sql`${passengerRows.id} between ${id + 100} and ${id + 247}`);
+      }
+    }
+  );
+
+  await check(
+    "R2 reaccommodation: option limit is disclosed and orders candidates by arrival cost",
+    async () => {
+      await db
+        .insert(flights)
+        .values(
+          Array.from({ length: 21 }, (_, index) =>
+            flight(60 + index, 1, 0, 3 + index / 100)
+          )
+        );
+      const advisory = await buildReaccommodationAdvisory(id);
+      assert.equal(advisory.consideredOptions, 20);
+      assert.equal(advisory.optionsTruncated, true);
+      assert.equal(advisory.consideredPassengers, 3);
+      assert.equal(
+        advisory.plan.assignments.filter(row => row.flightId === id + 40)
+          .length,
+        2
+      );
     }
   );
 }

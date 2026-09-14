@@ -95,6 +95,37 @@ describe("queueing", () => {
     expect(rows[0].providerReference).toBe("sandbox:test");
   });
 
+  it("retains incident entropy even for a maximum-length alert key", async () => {
+    const fixture = seeded();
+    const keys = [];
+    for (let i = 0; i < 3; i++)
+      keys.push(
+        (await queueAlertRaise(
+          fixture.db,
+          { alertKey: "a".repeat(100), summary: "repeat" },
+          sandbox
+        ))!.dedupKey
+      );
+    expect(new Set(keys).size).toBe(3);
+    expect(keys.every(key => key.length <= 100)).toBe(true);
+  });
+
+  it("keeps a close bound to the original target, including an exhausted raise", async () => {
+    const fixture = seeded();
+    await queueAlertRaise(
+      fixture.db,
+      { alertKey: "target", summary: "x" },
+      sandbox
+    );
+    fixture.rows("alert_dispatches")[0].status = "failed";
+    await fixture.db.transaction((tx: any) =>
+      queueAlertClose(tx, "target", { mode: "live", reference: "other-target" })
+    );
+    const close = fixture.rows("alert_dispatches")[1];
+    expect(close.providerMode).toBe(sandbox.mode);
+    expect(close.providerReference).toBe(sandbox.reference);
+  });
+
   it("closes with the dedup key of the raise it is closing", async () => {
     const fixture = seeded();
     const raised = await fixture.db.transaction((tx: any) =>
@@ -122,6 +153,22 @@ describe("queueing", () => {
     );
     expect(closed).toBeNull();
     expect(fixture.rows("alert_dispatches")).toHaveLength(0);
+  });
+
+  it("retains closure intent while the provider is disabled", async () => {
+    const fixture = seeded();
+    const raise = await queueAlertRaise(
+      fixture.db,
+      { alertKey: "disabled", summary: "x" },
+      sandbox
+    );
+    const close = await fixture.db.transaction((tx: any) =>
+      queueAlertClose(tx, "disabled", null)
+    );
+    expect(close?.dedupKey).toBe(raise?.dedupKey);
+    expect(fixture.rows("alert_dispatches")[1].providerReference).toBe(
+      sandbox.reference
+    );
   });
 
   it("does not queue a second close for the same incident", async () => {
@@ -232,9 +279,84 @@ describe("delivery", () => {
     const later = new Date(first.getTime() + deliveryBackoffMs(1));
     // Without provider-side dedup a repeat would page twice, so the retry
     // path must not be inherited by such a provider.
-    await expect(
-      deliverDispatch(fixture.db, id, provider, later)
-    ).rejects.toThrow(/cannot be retried safely/);
+    expect(await deliverDispatch(fixture.db, id, provider, later)).toBe(
+      "failed"
+    );
+    expect(fixture.rows("alert_dispatches")[0]).toMatchObject({
+      leaseToken: null,
+      leaseUntil: null,
+      lastError: "On-call provider cannot be retried safely",
+    });
+  });
+
+  it("does not send a queued dispatch to a different provider identity or mode", async () => {
+    for (const change of [
+      { reference: "another-account" },
+      { mode: "live" as const },
+    ]) {
+      const fixture = seeded();
+      const id = await queued(fixture);
+      const provider = Object.assign(fakeProvider(), change);
+      expect(await deliverDispatch(fixture.db, id, provider)).toBe("failed");
+      expect(provider.sent).toHaveLength(0);
+      expect(fixture.rows("alert_dispatches")[0].attempts).toBe(0);
+    }
+  });
+
+  it("does not reopen a closed incident after a lost raise response", async () => {
+    const fixture = seeded();
+    const id = await queued(fixture);
+    let open = false;
+    let raises = 0;
+    const provider: OnCallProvider = {
+      ...sandbox,
+      dedupes: true,
+      async send(dispatch) {
+        // Model GoAlert deduplication: only OPEN alerts fold repeated raises.
+        if (dispatch.action === "close") {
+          open = false;
+          return;
+        }
+        if (!open) {
+          raises++;
+          open = true;
+        }
+        if (raises === 1) throw new Error("accepted, response lost");
+      },
+    };
+    const now = new Date(Date.now() + 1000);
+    expect(await deliverDispatch(fixture.db, id, provider, now)).toBe("retry");
+    await fixture.db.transaction((tx: any) =>
+      queueAlertClose(tx, "worker-observation", sandbox)
+    );
+    const closeId = fixture.rows("alert_dispatches")[1].id;
+    expect(await deliverDispatch(fixture.db, closeId, provider, now)).toBe(
+      "delivered"
+    );
+    expect(
+      await deliverDispatch(
+        fixture.db,
+        id,
+        provider,
+        new Date(now.getTime() + deliveryBackoffMs(1))
+      )
+    ).toBe("skipped");
+    expect(open).toBe(false);
+    expect(raises).toBe(1);
+    expect(fixture.rows("alert_dispatches")[0].status).toBe("cancelled");
+  });
+
+  it("honours the attempt ceiling after a crash left the last outcome unknown", async () => {
+    const fixture = seeded();
+    const id = await queued(fixture);
+    Object.assign(fixture.rows("alert_dispatches")[0], {
+      attempts: MAX_DELIVERY_ATTEMPTS,
+      status: "outcome_unknown",
+      leaseUntil: new Date(0),
+    });
+    const provider = fakeProvider();
+    expect(await deliverDispatch(fixture.db, id, provider)).toBe("failed");
+    expect(provider.sent).toHaveLength(0);
   });
 
   it("gives up after the attempt ceiling and keeps the record", async () => {
@@ -396,7 +518,9 @@ describe("configuration", () => {
       process.env.ONCALL_ACCEPTANCE_REFERENCE = "Ops rotation accepted 2026-09";
       const live = configuredOnCallProvider();
       expect(live?.mode).toBe("live");
-      expect(live?.reference).toBe("Ops rotation accepted 2026-09");
+      expect(live?.reference).toMatch(
+        /^Ops rotation accepted 2026-09#target:[0-9a-f]{64}$/
+      );
     } finally {
       vi.unstubAllEnvs();
       for (const key of Object.keys(process.env))
@@ -414,12 +538,34 @@ describe("configuration", () => {
       const { configuredOnCallProvider } =
         await import("../integrations/on-call");
       const reference = configuredOnCallProvider()!.reference;
-      expect(reference).toMatch(/^sandbox:[0-9a-f]{32}$/);
+      expect(reference).toMatch(/^sandbox#target:[0-9a-f]{64}$/);
       expect(reference).not.toContain("fixture token value");
     } finally {
       for (const key of Object.keys(process.env))
         if (!(key in previous)) delete process.env[key];
       Object.assign(process.env, previous);
     }
+  });
+
+  it("changes target identity when endpoint or credential changes, even with the same acceptance reference", () => {
+    const config = {
+      mode: "live" as const,
+      baseUrl: "https://goalert.invalid",
+      token: "fixture token value",
+      reference: "accepted rotation",
+    };
+    const original = createGoAlertProvider(config).reference;
+    expect(
+      createGoAlertProvider({ ...config, baseUrl: `${config.baseUrl}/` })
+        .reference
+    ).toBe(original);
+    expect(
+      createGoAlertProvider({ ...config, token: "another fixture value" })
+        .reference
+    ).not.toBe(original);
+    expect(
+      createGoAlertProvider({ ...config, baseUrl: "https://other.invalid" })
+        .reference
+    ).not.toBe(original);
   });
 });

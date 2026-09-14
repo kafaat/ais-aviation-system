@@ -9,6 +9,8 @@ import {
   bookingSegments,
 } from "../../drizzle/schema";
 import { eq, and, desc, ne, inArray } from "drizzle-orm";
+import { flightBookingCondition } from "./flight-state.service";
+import type { SettlementTx } from "./booking-settlement.service";
 
 // ============================================================================
 // Inline Schema Types
@@ -229,7 +231,8 @@ async function calculateLoyaltyScore(
       `[PassengerPriority] Failed to calculate loyalty score for userId=${userId}:`,
       error
     );
-    return 0;
+    // Missing data has explicit defaults above; a failed read is not a zero score.
+    throw error;
   }
 }
 
@@ -286,7 +289,8 @@ async function calculateFareClassScore(
       `[PassengerPriority] Failed to calculate fare class score for bookingId=${bookingId}, flightId=${flightId}:`,
       error
     );
-    return 0;
+    // Missing data has explicit defaults above; a failed read is not a zero score.
+    throw error;
   }
 }
 
@@ -349,7 +353,8 @@ async function calculateConnectionScore(
       `[PassengerPriority] Failed to calculate connection score for bookingId=${bookingId}, flightId=${flightId}:`,
       error
     );
-    return 0;
+    // Missing data has explicit defaults above; a failed read is not a zero score.
+    throw error;
   }
 }
 
@@ -417,7 +422,8 @@ async function calculateSpecialNeedsScore(
       `[PassengerPriority] Failed to calculate special needs score for passengerId=${passengerId}, bookingId=${bookingId}:`,
       error
     );
-    return 0;
+    // Missing data has explicit defaults above; a failed read is not a zero score.
+    throw error;
   }
 }
 
@@ -458,7 +464,8 @@ async function calculateTimeSensitivityScore(
       `[PassengerPriority] Failed to calculate time sensitivity score for flightId=${flightId}:`,
       error
     );
-    return 0;
+    // Missing data has explicit defaults above; a failed read is not a zero score.
+    throw error;
   }
 }
 
@@ -478,7 +485,7 @@ async function calculateBookingValueScore(
       .select({ totalAmount: bookings.totalAmount })
       .from(bookings)
       .where(
-        and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
+        and(flightBookingCondition(flightId), ne(bookings.status, "cancelled"))
       )
       .orderBy(desc(bookings.totalAmount));
 
@@ -514,7 +521,8 @@ async function calculateBookingValueScore(
       `[PassengerPriority] Failed to calculate booking value score for bookingId=${bookingId}, flightId=${flightId}:`,
       error
     );
-    return 0;
+    // Missing data has explicit defaults above; a failed read is not a zero score.
+    throw error;
   }
 }
 
@@ -527,9 +535,10 @@ async function calculateBookingValueScore(
  */
 export async function calculatePriorityScore(
   passengerId: number,
-  bookingId: number
+  bookingId: number,
+  context?: { db: SettlementTx; flightId: number }
 ): Promise<PassengerPriorityScore> {
-  const db = await getDb();
+  const db = context?.db ?? getDb();
   if (!db) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -568,7 +577,7 @@ export async function calculatePriorityScore(
     });
   }
 
-  const flightId = booking.flightId;
+  const flightId = context?.flightId ?? booking.flightId;
 
   // Calculate each factor in parallel
   const [
@@ -619,9 +628,10 @@ export async function calculatePriorityScore(
  * Rank all passengers on a disrupted flight by priority score (descending).
  */
 export async function rankPassengers(
-  flightId: number
+  flightId: number,
+  context?: { db: SettlementTx; maxPassengers?: number }
 ): Promise<PassengerPriorityScore[]> {
-  const db = await getDb();
+  const db = context?.db ?? getDb();
   if (!db) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -647,7 +657,7 @@ export async function rankPassengers(
     })
     .from(bookings)
     .where(
-      and(eq(bookings.flightId, flightId), ne(bookings.status, "cancelled"))
+      and(flightBookingCondition(flightId), ne(bookings.status, "cancelled"))
     );
 
   if (flightBookings.length === 0) return [];
@@ -663,20 +673,22 @@ export async function rankPassengers(
     .from(passengers)
     .where(inArray(passengers.bookingId, bookingIds));
 
+  if (
+    context?.maxPassengers !== undefined &&
+    flightPassengers.length > context.maxPassengers
+  )
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Reaccommodation advisory supports at most ${context.maxPassengers} passengers; flight has ${flightPassengers.length}`,
+    });
+
   // Score each passenger
   const scores: PassengerPriorityScore[] = [];
   for (const pax of flightPassengers) {
-    try {
-      const score = await calculatePriorityScore(pax.id, pax.bookingId);
-      scores.push(score);
-    } catch (error) {
-      // Skip passengers that cannot be scored (edge cases), but log the error
-      console.error(
-        `[PassengerPriority] Failed to score passengerId=${pax.id}, bookingId=${pax.bookingId}:`,
-        error
-      );
-      continue;
-    }
+    // An incomplete ranking must never masquerade as the full manifest.
+    scores.push(
+      await calculatePriorityScore(pax.id, pax.bookingId, { db, flightId })
+    );
   }
 
   // Sort by totalScore descending

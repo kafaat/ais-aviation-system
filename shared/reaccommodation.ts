@@ -38,6 +38,8 @@ const ACCEPTABLE: Record<Cabin, readonly Cabin[]> = {
 /** The declared objective. Every number a reader might want to argue with is
  * here, and nothing else weights the result. */
 export const OBJECTIVE = {
+  /** Lexicographic: seat as many people as possible, then minimise cost. */
+  order: "max-assigned-then-min-cost",
   /** Cost is weighted delay. A passenger's weight rises with priority, so an
    * hour of delay costs more for a higher-priority passenger — which is what
    * makes the optimum prefer to delay lower-priority passengers. */
@@ -45,9 +47,8 @@ export const OBJECTIVE = {
   weightPerPriorityPoint: 0.01,
   /** Equivalent delay charged for a cabin downgrade. */
   downgradeMinutes: 180,
-  /** Equivalent delay charged for not reaccommodating someone at all. Larger
-   * than any realistic option delay, so the optimum fills every seat it can
-   * before leaving anyone out. */
+  /** Secondary preference only. Coverage takes precedence even when an
+   * available alternative costs more than this value. */
   unassignedMinutes: 1440,
 } as const;
 
@@ -83,13 +84,40 @@ export type ReaccommodationOption = z.infer<typeof reaccommodationOption>;
 export const MAX_PASSENGERS = 150;
 export const MAX_SLOTS = 300;
 
-export const reaccommodationRequest = z.object({
-  disruptedFlightId: z.number().int().positive(),
-  /** The arrival the passengers were promised. Delay is measured from here. */
-  originalArrival: z.string().datetime(),
-  passengers: z.array(reaccommodationPassenger).max(MAX_PASSENGERS),
-  options: z.array(reaccommodationOption).max(50),
-});
+export const reaccommodationRequest = z
+  .object({
+    disruptedFlightId: z.number().int().positive(),
+    /** The arrival the passengers were promised. Delay is measured from here. */
+    originalArrival: z.string().datetime(),
+    passengers: z.array(reaccommodationPassenger).max(MAX_PASSENGERS),
+    options: z.array(reaccommodationOption).max(50),
+  })
+  .superRefine((request, context) => {
+    for (const [items, key, label] of [
+      [request.passengers, "passengerId", "passenger"],
+      [request.options, "flightId", "flight"],
+    ] as const) {
+      const ids = items.map(item =>
+        key === "passengerId"
+          ? (item as ReaccommodationPassenger).passengerId
+          : (item as ReaccommodationOption).flightId
+      );
+      if (new Set(ids).size !== ids.length)
+        context.addIssue({
+          code: "custom",
+          message: `Duplicate ${label} identity`,
+        });
+    }
+    if (
+      request.options.some(
+        option => option.flightId === request.disruptedFlightId
+      )
+    )
+      context.addIssue({
+        code: "custom",
+        message: "Disrupted flight cannot be an alternative",
+      });
+  });
 export type ReaccommodationRequest = z.infer<typeof reaccommodationRequest>;
 
 export interface Assignment {
@@ -107,8 +135,8 @@ export interface Assignment {
 
 export interface ReaccommodationPlan {
   disruptedFlightId: number;
-  /** Total objective value. Lower is better; comparable only within one
-   * request, since it depends on that request's passengers. */
+  /** Secondary objective value. Compare unassigned counts FIRST, then this
+   * cost, and only within the same request. */
   objectiveValue: number;
   assignments: Assignment[];
   unassigned: number[];
@@ -137,16 +165,32 @@ function delayMinutes(originalArrival: Date, arrival: Date): number {
 function buildSlots(request: ReaccommodationRequest): Slot[] {
   const originalArrival = new Date(request.originalArrival);
   const slots: Slot[] = [];
-  for (const option of request.options) {
+  // For this objective, all seats in one cabin differ only in delay. With N
+  // passengers an omitted seat is dominated by N earlier/equal seats in that
+  // cabin: at least one would still be free. Keep those N per cabin, at most
+  // 2N = MAX_SLOTS, without expanding all offered aircraft capacity.
+  const remaining = {
+    economy: request.passengers.length,
+    business: request.passengers.filter(p => p.cabin === "business").length,
+  };
+  const options = [...request.options].sort(
+    (a, b) =>
+      Date.parse(a.arrivalTime) - Date.parse(b.arrivalTime) ||
+      a.flightId - b.flightId
+  );
+  for (const option of options) {
     const delay = delayMinutes(originalArrival, new Date(option.arrivalTime));
-    for (const seatCabin of ["business", "economy"] as const)
-      for (let seat = 0; seat < option.seats[seatCabin]; seat++)
+    for (const seatCabin of ["business", "economy"] as const) {
+      const count = Math.min(option.seats[seatCabin], remaining[seatCabin]);
+      remaining[seatCabin] -= count;
+      for (let seat = 0; seat < count; seat++)
         slots.push({
           flightId: option.flightId,
           flightNumber: option.flightNumber,
           cabin: seatCabin,
           delayMinutes: delay,
         });
+    }
   }
   return slots;
 }
@@ -169,8 +213,8 @@ function unassignedCost(passenger: ReaccommodationPassenger): number {
   return passengerWeight(passenger.priorityScore) * OBJECTIVE.unassignedMinutes;
 }
 
-/** Exact minimum-cost assignment (Jonker–Volgenant shortest augmenting path
- * with potentials), O(n^2 m). Rows are passengers, columns are seats.
+/** Exact minimum-cost assignment by shortest augmenting paths with
+ * potentials, O(n^2 m). Rows are passengers, columns are seats.
  *
  * An exact method rather than a heuristic because the result is shown to an
  * operator as *the* recommendation: a heuristic that is usually good would
@@ -262,8 +306,7 @@ export function planReaccommodation(
       objective: OBJECTIVE,
     };
 
-  // One "unassigned" column per passenger, so the matrix is always solvable
-  // and leaving someone out is a priced choice rather than a failure mode.
+  // One dummy per passenger makes every request feasible.
   const columns = slots.length + passengers.length;
   const cost = passengers.map(passenger => {
     const row = new Array<number>(columns).fill(UNAVAILABLE);
@@ -275,7 +318,22 @@ export function planReaccommodation(
     return row;
   });
 
-  const chosen = minimumCostAssignment(cost);
+  // Every secondary total is nonnegative and at most the sum of row maxima.
+  // A UNIFORM dummy surcharge greater than that bound therefore makes one
+  // extra assignment dominate every possible secondary improvement. It must
+  // not be priority-weighted. Within a fixed cardinality it cancels out.
+  const coveragePenalty =
+    1 +
+    cost.reduce(
+      (sum, row) => sum + Math.max(...row.filter(Number.isFinite)),
+      0
+    );
+  const searchCost = cost.map(row =>
+    row.map((value, column) =>
+      column >= slots.length ? value + coveragePenalty : value
+    )
+  );
+  const chosen = minimumCostAssignment(searchCost);
   const assignments: Assignment[] = [];
   const unassigned: number[] = [];
   let objectiveValue = 0;

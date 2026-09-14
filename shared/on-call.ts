@@ -23,7 +23,7 @@ export const onCallAction = z.enum(["raise", "close"]);
 export type OnCallAction = z.infer<typeof onCallAction>;
 
 export const onCallDispatchStatus = z.enum([
-  /** Queued. Nothing has been sent. */
+  /** Awaiting initial delivery or retry; earlier attempts may have been sent. */
   "pending",
   /** A send was started and its outcome is not known. Retryable only because
    * the provider deduplicates on the dedup key — see `OnCallProvider`. */
@@ -32,6 +32,9 @@ export const onCallDispatchStatus = z.enum([
   "delivered",
   /** The provider refused in a way retrying cannot fix, or attempts ran out. */
   "failed",
+  /** No further raise will be sent because closure was requested. This does
+   * not assert that an earlier unknown send failed at the provider. */
+  "cancelled",
 ]);
 export type OnCallDispatchStatus = z.infer<typeof onCallDispatchStatus>;
 
@@ -66,7 +69,10 @@ export function dispatchStatusLabel(
   arabic = false
 ): string {
   const labels: Record<OnCallDispatchStatus, [string, string]> = {
-    pending: ["Queued, not sent", "في الانتظار، لم يُرسل"],
+    pending: [
+      "Awaiting delivery or retry",
+      "في انتظار الإرسال أو إعادة المحاولة",
+    ],
     outcome_unknown: [
       "Send started, outcome unknown",
       "بدأ الإرسال، والنتيجة غير معروفة",
@@ -78,6 +84,10 @@ export function dispatchStatusLabel(
     failed: [
       "Undeliverable; requires an operator",
       "غير قابل للتسليم؛ يحتاج مشغّلًا",
+    ],
+    cancelled: [
+      "Raise cancelled by incident closure",
+      "أُلغي الإرسال بطلب إغلاق الحادث",
     ],
   };
   return labels[status][arabic ? 1 : 0];

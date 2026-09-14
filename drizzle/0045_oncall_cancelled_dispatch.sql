@@ -1,0 +1,1 @@
+ALTER TABLE `alert_dispatches` MODIFY COLUMN `status` enum('pending','outcome_unknown','delivered','failed','cancelled') NOT NULL DEFAULT 'pending';

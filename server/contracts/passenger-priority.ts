@@ -170,6 +170,7 @@ export const reaccommodationAdvisory = z.object({
     unassigned: z.array(outputNumber),
     advisory: z.literal(true),
     objective: z.object({
+      order: z.literal("max-assigned-then-min-cost"),
       weightAtZeroPriority: outputNumber,
       weightPerPriorityPoint: outputNumber,
       downgradeMinutes: outputNumber,
@@ -178,5 +179,6 @@ export const reaccommodationAdvisory = z.object({
   }),
   consideredOptions: outputNumber,
   consideredPassengers: outputNumber,
+  optionsTruncated: z.boolean(),
   window: z.object({ fromISO: z.string(), toISO: z.string() }),
 });

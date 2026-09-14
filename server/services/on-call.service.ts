@@ -16,9 +16,9 @@
  * loop, and the page is ordered oldest-attempt-first so rows that cannot
  * resolve never starve new ones.
  *
- * It differs in one place, deliberately: a lost response here *is* retryable,
- * because the provider deduplicates on the dedup key. That is asserted against
- * the provider rather than assumed.
+ * Lost responses are retried only for a deduplicating provider and while no
+ * local closure has been requested. Remote closure or an unbounded delayed
+ * request requires reconciliation; deduplication is not an exactly-once proof.
  */
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
@@ -29,6 +29,7 @@ import {
   deliveryBackoffMs,
   onCallDispatch,
   type OnCallAction,
+  type OnCallDispatchStatus,
 } from "../../shared/on-call";
 import {
   configuredOnCallProvider,
@@ -77,7 +78,7 @@ export async function queueAlertRaise(
   if (!provider) return null;
   // One dedup key per incident. A fresh key per activation is what keeps a
   // re-activation after a resolve from being folded into the closed incident.
-  const dedupKey = `${input.alertKey}:${randomUUID()}`.slice(0, 100);
+  const dedupKey = `${input.alertKey.slice(0, 63)}:${randomUUID()}`;
   const dispatch = onCallDispatch.parse({
     alertKey: input.alertKey,
     action: "raise" satisfies OnCallAction,
@@ -98,31 +99,28 @@ export async function queueAlertRaise(
 /** Queues a close for the incident a raise opened.
  *
  * Reuses the raise's dedup key, which is how the provider matches the close to
- * the incident. With no delivered or in-flight raise there is nothing to close,
- * so nothing is queued: sending a bare close would invent an incident.
+ * the incident. Failed raises are included because an earlier send may have
+ * been accepted despite a lost response. The raise row serializes closers.
  */
 export async function queueAlertClose(
   tx: SettlementTx,
   alertKey: string,
-  provider: Pick<OnCallProvider, "mode" | "reference"> | null
+  _provider: Pick<OnCallProvider, "mode" | "reference"> | null
 ): Promise<{ dedupKey: string } | null> {
-  if (!provider) return null;
+  // Persist closure even while delivery is disabled; re-enabling a worker
+  // must not resurrect the old raise. The original row owns the target.
   const [raise] = await tx
     .select()
     .from(alertDispatches)
     .where(
       and(
         eq(alertDispatches.alertKey, alertKey),
-        eq(alertDispatches.action, "raise"),
-        inArray(alertDispatches.status, [
-          "pending",
-          "outcome_unknown",
-          "delivered",
-        ])
+        eq(alertDispatches.action, "raise")
       )
     )
     .orderBy(sql`${alertDispatches.id} desc`)
-    .limit(1);
+    .limit(1)
+    .for("update");
   if (!raise) return null;
 
   const [existing] = await tx
@@ -146,15 +144,16 @@ export async function queueAlertClose(
     details: "",
     status: "pending",
     nextAttemptAt: new Date(),
-    providerMode: provider.mode,
-    providerReference: provider.reference,
+    // Closure belongs to the original target even if configuration changed.
+    providerMode: raise.providerMode,
+    providerReference: raise.providerReference,
   });
   return { dedupKey: raise.dedupKey };
 }
 
 type ClaimOutcome =
   | { claimed: true; id: number; leaseToken: string }
-  | { claimed: false };
+  | { claimed: false; outcome?: "failed" };
 
 /** Takes a fenced lease and persists `outcome_unknown` in the same
  * transaction, before anything is sent. A crash between here and the request
@@ -163,18 +162,89 @@ type ClaimOutcome =
 async function claim(
   tx: SettlementTx,
   id: number,
-  now: Date
+  now: Date,
+  provider: OnCallProvider
 ): Promise<ClaimOutcome> {
-  const [row] = await tx
+  const [pointer] = await tx
     .select()
     .from(alertDispatches)
-    .where(eq(alertDispatches.id, id))
+    .where(eq(alertDispatches.id, id));
+  if (!pointer) return { claimed: false };
+  // Every sender and queueAlertClose locks the raise first. The current read
+  // under that lock includes a closure committed while this worker waited.
+  const [raise] = await tx
+    .select()
+    .from(alertDispatches)
+    .where(
+      and(
+        eq(alertDispatches.alertKey, pointer.alertKey),
+        eq(alertDispatches.dedupKey, pointer.dedupKey),
+        eq(alertDispatches.action, "raise")
+      )
+    )
     .for("update");
+  if (!raise) return { claimed: false };
+  const [close] = await tx
+    .select()
+    .from(alertDispatches)
+    .where(
+      and(
+        eq(alertDispatches.alertKey, pointer.alertKey),
+        eq(alertDispatches.dedupKey, pointer.dedupKey),
+        eq(alertDispatches.action, "close")
+      )
+    )
+    .for("update");
+  const row = pointer.action === "raise" ? raise : close;
   if (!row) return { claimed: false };
-  if (row.status === "delivered" || row.status === "failed")
+  if (["delivered", "failed", "cancelled"].includes(row.status))
     return { claimed: false };
-  if (row.leaseUntil && row.leaseUntil.getTime() > now.getTime())
+  if (
+    [raise, close].some(
+      entry => entry?.leaseUntil && entry.leaseUntil.getTime() > now.getTime()
+    )
+  )
     return { claimed: false };
+
+  if (close && ["pending", "outcome_unknown"].includes(raise.status)) {
+    await tx
+      .update(alertDispatches)
+      .set({
+        status: "cancelled",
+        nextAttemptAt: null,
+        leaseToken: null,
+        leaseUntil: null,
+        updatedAt: now,
+        lastError:
+          "Closure requested; no further raise attempts. Earlier send may have been accepted.",
+      })
+      .where(eq(alertDispatches.id, raise.id));
+    if (row.action === "raise") return { claimed: false };
+  }
+
+  const refusal =
+    row.providerMode !== provider.mode ||
+    row.providerReference !== provider.reference
+      ? "On-call target changed; reconcile the original target before redelivery"
+      : row.attempts >= MAX_DELIVERY_ATTEMPTS
+        ? "Delivery attempt limit reached; reconcile the unknown outcome"
+        : row.attempts > 0 && !provider.dedupes
+          ? "On-call provider cannot be retried safely"
+          : null;
+  if (refusal) {
+    await tx
+      .update(alertDispatches)
+      .set({
+        status: "failed",
+        lastError: refusal,
+        nextAttemptAt: null,
+        leaseToken: null,
+        leaseUntil: null,
+        updatedAt: now,
+      })
+      .where(eq(alertDispatches.id, id));
+    return { claimed: false, outcome: "failed" };
+  }
   if (row.nextAttemptAt && row.nextAttemptAt.getTime() > now.getTime())
     return { claimed: false };
 
@@ -200,20 +270,14 @@ export async function deliverDispatch(
   provider: OnCallProvider,
   now: Date = new Date()
 ): Promise<"delivered" | "retry" | "failed" | "skipped"> {
-  const claimed = await db.transaction(tx => claim(tx, id, now));
-  if (!claimed.claimed) return "skipped";
+  const claimed = await db.transaction(tx => claim(tx, id, now, provider));
+  if (!claimed.claimed) return claimed.outcome ?? "skipped";
 
   const [row] = await db
     .select()
     .from(alertDispatches)
     .where(eq(alertDispatches.id, id));
   if (!row) return "skipped";
-
-  // Retrying after an unknown outcome is only safe because the provider folds
-  // a repeated dedup key into one incident. Asserted, not assumed: a provider
-  // without that property must not inherit this retry path.
-  if (row.attempts > 1 && !provider.dedupes)
-    throw new Error("On-call provider cannot be retried safely");
 
   try {
     await provider.send(
@@ -227,7 +291,7 @@ export async function deliverDispatch(
     );
   } catch (error) {
     const exhausted = row.attempts >= MAX_DELIVERY_ATTEMPTS;
-    await db
+    const result = await db
       .update(alertDispatches)
       .set({
         // An exhausted dispatch stops retrying but is not forgotten: an
@@ -247,10 +311,14 @@ export async function deliverDispatch(
           eq(alertDispatches.leaseToken, claimed.leaseToken)
         )
       );
-    return exhausted ? "failed" : "retry";
+    return result[0].affectedRows
+      ? exhausted
+        ? "failed"
+        : "retry"
+      : "skipped";
   }
 
-  await db
+  const result = await db
     .update(alertDispatches)
     .set({
       status: "delivered",
@@ -267,7 +335,7 @@ export async function deliverDispatch(
         eq(alertDispatches.leaseToken, claimed.leaseToken)
       )
     );
-  return "delivered";
+  return result[0].affectedRows ? "delivered" : "skipped";
 }
 
 export interface DeliveryRun {
@@ -337,7 +405,7 @@ export interface DispatchView {
   id: number;
   alertKey: string;
   action: OnCallAction;
-  status: "pending" | "outcome_unknown" | "delivered" | "failed";
+  status: OnCallDispatchStatus;
   attempts: number;
   deliveredAt: string | null;
   nextAttemptAt: string | null;

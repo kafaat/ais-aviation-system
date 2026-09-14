@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  MAX_SLOTS,
   OBJECTIVE,
   greedyByPriority,
   minimumCostAssignment,
@@ -318,21 +317,129 @@ describe("reaccommodation planning", () => {
     expect(plan.objectiveValue).toBe(0);
   });
 
-  it("refuses an unbounded seat pool rather than computing for minutes", () => {
+  it("compresses equivalent seats without rejecting ordinary flight capacity", () => {
+    const plan = planReaccommodation(
+      request({
+        options: [
+          {
+            flightId: 10,
+            flightNumber: "SV10",
+            arrivalTime: at(30),
+            seats: { economy: 1000, business: 1000 },
+          },
+        ],
+      })
+    );
+    expect(plan.unassigned).toEqual([]);
+    expect(plan.assignments).toHaveLength(request().passengers.length);
+  });
+
+  it("fills acceptable seats even when delay exceeds the unassigned preference", () => {
+    const plan = planReaccommodation(
+      request({
+        passengers: [
+          {
+            passengerId: 1,
+            bookingId: 1,
+            priorityScore: 100,
+            cabin: "economy",
+          },
+        ],
+        options: [
+          {
+            flightId: 10,
+            flightNumber: "SV10",
+            arrivalTime: at(1800),
+            seats: { economy: 1, business: 0 },
+          },
+        ],
+      })
+    );
+    expect(plan.unassigned).toEqual([]);
+    expect(plan.assignments[0].cost).toBe(3600);
+  });
+
+  it("rejects duplicate identities before they can double count people or capacity", () => {
+    const input = request();
     expect(() =>
-      planReaccommodation(
-        request({
-          options: [
-            {
-              flightId: 10,
-              flightNumber: "SV10",
-              arrivalTime: at(30),
-              seats: { economy: MAX_SLOTS + 1, business: 0 },
-            },
-          ],
-        })
-      )
-    ).toThrow(/bounded to 300 seats/);
+      planReaccommodation({
+        ...input,
+        passengers: [input.passengers[0], input.passengers[0]],
+      })
+    ).toThrow(/Duplicate passenger/);
+    expect(() =>
+      planReaccommodation({
+        ...input,
+        options: [input.options[0], input.options[0]],
+      })
+    ).toThrow(/Duplicate flight/);
+  });
+
+  it("matches exhaustive lexicographic search over full passenger/flight plans", () => {
+    // The oracle enumerates real seats, including ones the planner may prune.
+    // It compares cardinality first, then the independently computed policy cost.
+    let seed = 7847;
+    const random = (max: number) => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed % max;
+    };
+    for (let trial = 0; trial < 80; trial++) {
+      const input = request({
+        passengers: Array.from({ length: 1 + random(4) }, (_, i) => ({
+          passengerId: i + 1,
+          bookingId: i + 1,
+          priorityScore: random(101),
+          cabin: random(2) ? "business" : "economy",
+        })),
+        options: Array.from({ length: 1 + random(3) }, (_, i) => ({
+          flightId: i + 10,
+          flightNumber: `SV${i}`,
+          arrivalTime: at(random(3001)),
+          seats: { economy: random(3), business: random(3) },
+        })),
+      });
+      const seats = input.options.flatMap(option =>
+        (["economy", "business"] as const).flatMap(cabin =>
+          Array.from({ length: option.seats[cabin] }, () => ({
+            cabin,
+            delay: (Date.parse(option.arrivalTime) - Date.parse(BASE)) / 60_000,
+          }))
+        )
+      );
+      let best = { missing: Infinity, cost: Infinity };
+      const used = new Set<number>();
+      const walk = (index: number, missing: number, cost: number) => {
+        if (index === input.passengers.length) {
+          if (
+            missing < best.missing ||
+            (missing === best.missing && cost < best.cost)
+          )
+            best = { missing, cost };
+          return;
+        }
+        const pax = input.passengers[index];
+        const weight = 1 + pax.priorityScore / 100;
+        walk(index + 1, missing + 1, cost + weight * 1440);
+        seats.forEach((seat, i) => {
+          if (
+            used.has(i) ||
+            (pax.cabin === "economy" && seat.cabin === "business")
+          )
+            return;
+          used.add(i);
+          walk(
+            index + 1,
+            missing,
+            cost + weight * (seat.delay + (pax.cabin !== seat.cabin ? 180 : 0))
+          );
+          used.delete(i);
+        });
+      };
+      walk(0, 0, 0);
+      const plan = planReaccommodation(input);
+      expect(plan.unassigned.length, `trial ${trial}`).toBe(best.missing);
+      expect(plan.objectiveValue, `trial ${trial}`).toBeCloseTo(best.cost, 3);
+    }
   });
 
   it("reports the objective it used, so the weights can be argued with", () => {

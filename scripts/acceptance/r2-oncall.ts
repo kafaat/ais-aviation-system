@@ -245,4 +245,170 @@ export async function verifyR2OnCall(
       );
     }
   );
+
+  await check(
+    "R2 on-call: close waits for an in-flight raise across competing workers",
+    async () => {
+      const incident = `${key}-ordered`;
+      await db.transaction(tx =>
+        queueAlertRaise(tx, { alertKey: incident, summary: "ordered" }, sandbox)
+      );
+      const [raise] = await db
+        .select()
+        .from(alertDispatches)
+        .where(eq(alertDispatches.alertKey, incident));
+      const started = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const actions: string[] = [];
+      const target: OnCallProvider = {
+        ...sandbox,
+        dedupes: true,
+        async send(dispatch) {
+          actions.push(`${dispatch.action}:start`);
+          if (dispatch.action === "raise") {
+            started.resolve();
+            await release.promise;
+          }
+          actions.push(`${dispatch.action}:end`);
+        },
+      };
+      const now = new Date(Date.now() + 1000);
+      const sending = deliverDispatch(db, raise.id, target, now);
+      await Promise.race([
+        started.promise,
+        sending.then(() => {
+          throw new Error("raise never started");
+        }),
+      ]);
+      try {
+        // Two closers share the same raise lock, so insertion is also idempotent.
+        await Promise.all(
+          [0, 1].map(() =>
+            db.transaction(tx => queueAlertClose(tx, incident, sandbox))
+          )
+        );
+        const rows = await db
+          .select()
+          .from(alertDispatches)
+          .where(eq(alertDispatches.alertKey, incident));
+        const closes = rows.filter(row => row.action === "close");
+        assert.equal(closes.length, 1);
+        assert.equal(
+          await deliverDispatch(db, closes[0].id, target, now),
+          "skipped"
+        );
+        assert.deepEqual(actions, ["raise:start"]);
+        release.resolve();
+        assert.equal(await sending, "delivered");
+        assert.equal(
+          await deliverDispatch(db, closes[0].id, target, now),
+          "delivered"
+        );
+        assert.deepEqual(actions, [
+          "raise:start",
+          "raise:end",
+          "close:start",
+          "close:end",
+        ]);
+      } finally {
+        release.resolve();
+        await sending;
+      }
+    }
+  );
+
+  await check(
+    "R2 on-call: a lost response followed by close cannot resurrect an incident",
+    async () => {
+      const incident = `${key}-lost`;
+      await db.transaction(tx =>
+        queueAlertRaise(tx, { alertKey: incident, summary: "lost" }, sandbox)
+      );
+      const [raise] = await db
+        .select()
+        .from(alertDispatches)
+        .where(eq(alertDispatches.alertKey, incident));
+      let open = false;
+      let raised = 0;
+      const target: OnCallProvider = {
+        ...sandbox,
+        dedupes: true,
+        async send(dispatch) {
+          if (dispatch.action === "close") {
+            open = false;
+            return;
+          }
+          if (!open) {
+            open = true;
+            raised++;
+          }
+          throw new Error("accepted then response lost");
+        },
+      };
+      const now = new Date(Date.now() + 1000);
+      assert.equal(await deliverDispatch(db, raise.id, target, now), "retry");
+      await db.transaction(tx => queueAlertClose(tx, incident, sandbox));
+      const [close] = await db
+        .select()
+        .from(alertDispatches)
+        .where(
+          and(
+            eq(alertDispatches.alertKey, incident),
+            eq(alertDispatches.action, "close")
+          )
+        );
+      assert.equal(
+        await deliverDispatch(db, close.id, target, now),
+        "delivered"
+      );
+      assert.equal(
+        await deliverDispatch(
+          db,
+          raise.id,
+          target,
+          new Date(now.getTime() + 180_000)
+        ),
+        "skipped"
+      );
+      assert.equal(open, false);
+      assert.equal(raised, 1);
+      const [after] = await db
+        .select()
+        .from(alertDispatches)
+        .where(eq(alertDispatches.id, raise.id));
+      assert.equal(after.status, "cancelled");
+      assert.equal(after.deliveredAt, null);
+    }
+  );
+
+  await check(
+    "R2 on-call: changed target is blocked before sending or consuming an attempt",
+    async () => {
+      const incident = `${key}-target`;
+      await db.transaction(tx =>
+        queueAlertRaise(tx, { alertKey: incident, summary: "target" }, sandbox)
+      );
+      const [raise] = await db
+        .select()
+        .from(alertDispatches)
+        .where(eq(alertDispatches.alertKey, incident));
+      const changed = { ...provider(), reference: "different-target" };
+      assert.equal(
+        await deliverDispatch(
+          db,
+          raise.id,
+          changed,
+          new Date(Date.now() + 1000)
+        ),
+        "failed"
+      );
+      assert.equal(changed.sent.length, 0);
+      const [after] = await db
+        .select()
+        .from(alertDispatches)
+        .where(eq(alertDispatches.id, raise.id));
+      assert.equal(after.attempts, 0);
+      assert.equal(after.leaseToken, null);
+    }
+  );
 }

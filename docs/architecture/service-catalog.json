@@ -1609,7 +1609,8 @@
         "server/services/flight-cancellation.service.ts",
         "server/services/flight-status.service.ts",
         "server/services/hotel-fulfillment.service.ts",
-        "server/services/irops.service.ts"
+        "server/services/irops.service.ts",
+        "server/services/passenger-priority.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -2176,6 +2177,7 @@
         "server/services/inventory/inventory.service.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/premium-experiment.service.ts",
+        "server/services/reaccommodation-advisory.service.ts",
         "server/services/waitlist.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
@@ -3145,7 +3147,7 @@
       "file": "server/services/passenger-priority.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/passenger-priority.service.ts",
-      "domain": "platform",
+      "domain": "airline-operations",
       "accountableOwner": null,
       "onCall": null,
       "ownershipAcceptance": null,
@@ -3154,7 +3156,11 @@
         "server/routers/passenger-priority.ts",
         "server/services/reaccommodation-advisory.service.ts"
       ],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/flight-state.service.ts"
+      ],
       "tableExpressions": {
         "reads": [
           "bookingSegments",
@@ -3985,7 +3991,7 @@
       "file": "server/services/reaccommodation-advisory.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/reaccommodation-advisory.service.ts",
-      "domain": "platform",
+      "domain": "airline-operations",
       "accountableOwner": null,
       "onCall": null,
       "ownershipAcceptance": null,
@@ -3994,6 +4000,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/inventory-capacity.service.ts",
         "server/services/passenger-priority.service.ts",
         "shared/reaccommodation.ts"
       ],

@@ -14,7 +14,7 @@
  * costs 19%.
  */
 import { TRPCError } from "@trpc/server";
-import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { bookings, flights } from "../../drizzle/schema";
 import {
   MAX_PASSENGERS,
@@ -26,6 +26,8 @@ import {
 } from "../../shared/reaccommodation";
 import { getDb } from "../db";
 import { rankPassengers } from "./passenger-priority.service";
+import { availableSeatsExpression } from "./inventory-capacity.service";
+import type { SettlementTx } from "./booking-settlement.service";
 
 /** How far ahead an alternative may depart and still count as protection. A
  * flight three days later is not a reaccommodation; it is a different trip. */
@@ -65,6 +67,8 @@ export interface AdvisoryInputs {
   /** Stated so a reader can see what the advisory was allowed to consider. */
   consideredOptions: number;
   consideredPassengers: number;
+  /** More eligible flights exist beyond the declared option scope. */
+  optionsTruncated: boolean;
   window: { fromISO: string; toISO: string };
 }
 
@@ -73,6 +77,20 @@ export async function buildReaccommodationAdvisory(
   now: Date = new Date()
 ): Promise<AdvisoryInputs> {
   const db = requireDb();
+  // The first SELECT establishes the repeatable-read snapshot. Drizzle's
+  // combined "with consistent snapshot read only" syntax lacks MySQL's comma;
+  // no explicit snapshot modifier is needed when every read uses this tx.
+  return await db.transaction(tx => readAdvisory(tx, disruptedFlightId, now), {
+    isolationLevel: "repeatable read",
+    accessMode: "read only",
+  });
+}
+
+async function readAdvisory(
+  db: SettlementTx,
+  disruptedFlightId: number,
+  now: Date
+): Promise<AdvisoryInputs> {
   const [flight] = await db
     .select({
       id: flights.id,
@@ -86,7 +104,10 @@ export async function buildReaccommodationAdvisory(
   if (!flight)
     throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
 
-  const scores = await rankPassengers(disruptedFlightId);
+  const scores = await rankPassengers(disruptedFlightId, {
+    db,
+    maxPassengers: MAX_PASSENGERS,
+  });
   const normalised = normaliseScores(scores);
 
   // Cabin comes from the booking, which is where the class was sold.
@@ -111,7 +132,6 @@ export async function buildReaccommodationAdvisory(
 
   const disruptedPassengers: ReaccommodationPassenger[] = scores
     .filter(score => cabinOf.has(score.bookingId))
-    .slice(0, MAX_PASSENGERS)
     .map(score => ({
       passengerId: score.passengerId,
       bookingId: score.bookingId,
@@ -122,13 +142,28 @@ export async function buildReaccommodationAdvisory(
   const windowEnd = new Date(
     now.getTime() + PROTECTION_WINDOW_HOURS * 3600_000
   );
+  const economyAvailable = availableSeatsExpression(
+    flights.id,
+    flights.economyAvailable,
+    "economy",
+    now
+  );
+  const businessAvailable = availableSeatsExpression(
+    flights.id,
+    flights.businessAvailable,
+    "business",
+    now
+  );
+  const businessAccepted = disruptedPassengers.some(
+    p => p.cabin === "business"
+  );
   const candidates = await db
     .select({
       id: flights.id,
       flightNumber: flights.flightNumber,
       arrivalTime: flights.arrivalTime,
-      economyAvailable: flights.economyAvailable,
-      businessAvailable: flights.businessAvailable,
+      economyAvailable,
+      businessAvailable,
     })
     .from(flights)
     .where(
@@ -137,27 +172,26 @@ export async function buildReaccommodationAdvisory(
         eq(flights.destinationId, flight.destinationId),
         ne(flights.id, flight.id),
         eq(flights.status, "scheduled"),
+        or(
+          gt(economyAvailable, 0),
+          businessAccepted ? gt(businessAvailable, 0) : undefined
+        ),
         gt(flights.departureTime, now),
         sql`${flights.departureTime} <= ${windowEnd}`
       )
     )
-    .orderBy(flights.departureTime)
-    .limit(MAX_OPTIONS);
+    .orderBy(flights.arrivalTime, flights.id)
+    .limit(MAX_OPTIONS + 1);
 
   const options: ReaccommodationOption[] = candidates
-    .filter(
-      candidate =>
-        candidate.economyAvailable > 0 || candidate.businessAvailable > 0
-    )
+    .slice(0, MAX_OPTIONS)
     .map(candidate => ({
       flightId: candidate.id,
       flightNumber: candidate.flightNumber,
       arrivalTime: candidate.arrivalTime.toISOString(),
       seats: {
-        // Availability as recorded by the inventory authority. This read takes
-        // no hold: between the advisory and any action a seat may be sold, and
-        // an advisory that pretended otherwise would be reserving inventory it
-        // has no authority over.
+        // One consistent snapshot, net of unexpired canonical and legacy
+        // holds. Inventory must still be revalidated when actually rebooking.
         economy: candidate.economyAvailable,
         business: candidate.businessAvailable,
       },
@@ -174,6 +208,7 @@ export async function buildReaccommodationAdvisory(
     plan,
     consideredOptions: options.length,
     consideredPassengers: disruptedPassengers.length,
+    optionsTruncated: candidates.length > MAX_OPTIONS,
     window: { fromISO: now.toISOString(), toISO: windowEnd.toISOString() },
   };
 }

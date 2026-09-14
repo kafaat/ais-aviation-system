@@ -6,9 +6,12 @@
  *   https://github.com/target/goalert
  *
  * The dedup key is load-bearing, not decoration. It is what makes a retry
- * after a lost response safe: the provider collapses a repeat of the same key
- * into the incident it already has, so re-sending cannot page anyone twice.
- * A provider that did not do that would need operator reconciliation instead,
+ * after a lost response converge while the incident remains open: repeats of
+ * the same key are folded into that open incident.
+ * GoAlert deduplicates OPEN incidents only. The dispatcher must serialize
+ * raise/close and suppress old raises once closure is requested. This is not
+ * an exactly-once guarantee for arbitrary remote failures.
+ * A provider that did not deduplicate would need operator reconciliation instead,
  * which is why `dedupes` is part of the interface and is asserted before any
  * retry — a future adapter cannot quietly inherit retry safety it lacks.
  *
@@ -22,7 +25,8 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 export interface OnCallProvider {
   mode: "sandbox" | "live";
-  /** The service or integration the operator recorded as accepted. */
+  /** Accepted reference bound to a credential/endpoint fingerprint. Persisted
+   * dispatches must never be silently rerouted after configuration changes. */
   reference: string;
   /** True only for a provider that collapses repeats of one dedup key into a
    * single incident. Retry-after-unknown depends on this. */
@@ -38,15 +42,18 @@ export interface OnCallConfig {
 }
 
 export function createGoAlertProvider(config: OnCallConfig): OnCallProvider {
+  const url = new URL(
+    "api/v2/generic/incoming",
+    config.baseUrl.endsWith("/") ? config.baseUrl : `${config.baseUrl}/`
+  );
+  const fingerprint = createHash("sha256")
+    .update(JSON.stringify([url.href, config.token]))
+    .digest("hex");
   return {
     mode: config.mode,
-    reference: config.reference,
+    reference: `${config.reference.slice(0, 183)}#target:${fingerprint}`,
     dedupes: true,
     async send(dispatch) {
-      const url = new URL(
-        "api/v2/generic/incoming",
-        config.baseUrl.endsWith("/") ? config.baseUrl : `${config.baseUrl}/`
-      );
       // The token is a credential, so it travels as a header rather than in a
       // query string that proxies and access logs would capture.
       const body = new URLSearchParams({
@@ -94,7 +101,7 @@ export function configuredOnCallProvider(): OnCallProvider | null {
     mode === "live"
       ? (process.env.ONCALL_ACCEPTANCE_REFERENCE as string).trim()
       : // Identifies the target without storing the credential itself.
-        `sandbox:${createHash("sha256").update(`${baseUrl}:${token}`).digest("hex").slice(0, 32)}`;
+        "sandbox";
   return createGoAlertProvider({
     mode,
     baseUrl,

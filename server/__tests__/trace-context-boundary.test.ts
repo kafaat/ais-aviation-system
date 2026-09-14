@@ -26,10 +26,12 @@ describe("traceparent parsing", () => {
     });
   });
 
-  it("normalises case and surrounding space", () => {
-    expect(parseTraceparent(`  ${VALID.toUpperCase()}  `)?.traceId).toBe(
+  it("accepts HTTP whitespace but rejects uppercase hexadecimal", () => {
+    expect(parseTraceparent(` \t${VALID}  `)?.traceId).toBe(
       "4bf92f3577b34da6a3ce929d0e0e4736"
     );
+    expect(parseTraceparent(VALID.toUpperCase())).toBeNull();
+    expect(parseTraceparent(`\n${VALID}`)).toBeNull();
   });
 
   it("refuses the all-zero identifiers the specification forbids", () => {
@@ -56,12 +58,33 @@ describe("traceparent parsing", () => {
       expect(parseTraceparent(invalid)).toBeNull();
   });
 
-  it("treats a future version as absent rather than storing what it cannot read", () => {
-    expect(
-      parseTraceparent(
-        "01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
-      )
-    ).toBeNull();
+  it("continues additive future versions using their known prefix", () => {
+    for (const version of ["01", "fe"]) {
+      const future = version + VALID.slice(2);
+      expect(parseTraceparent(future)).toEqual(parseTraceparent(VALID));
+      expect(parseTraceparent(`${future}-extra`)).toEqual(
+        parseTraceparent(VALID)
+      );
+      expect(traceContextFrom(future).continued).toBe(true);
+      expect(parseTraceparent(`${future}extra`)).toBeNull();
+    }
+    expect(parseTraceparent("ff" + VALID.slice(2))).toBeNull();
+    expect(parseTraceparent(`${VALID}-extra`)).toBeNull();
+  });
+
+  it("clears reserved flags on outgoing version 00 without losing the sampling bit", () => {
+    for (const [flags, expected] of [
+      ["ff", "01"],
+      ["fe", "00"],
+    ]) {
+      const parent = parseTraceparent(VALID.slice(0, -2) + flags)!;
+      expect(formatTraceparent(parent)).toBe(VALID.slice(0, -2) + expected);
+      expect(childSpan(parent).flags).toBe(expected);
+      expect(traceContextFrom(VALID.slice(0, -2) + flags).context.flags).toBe(
+        expected
+      );
+    }
+    expect(newTraceContext().flags).toBe("00");
   });
 
   it("refuses a repeated header, which does not say which trace is the parent", () => {

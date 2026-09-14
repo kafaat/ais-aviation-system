@@ -403,13 +403,22 @@ mistake here:
    that can honestly be recorded.
 
 `alert_dispatches` holds one row per raise or close, with a `dedupKey` that is
-stable per incident and shared by a raise and its matching close. The provider
-correlates them by that key, which is also what makes retrying safe: GoAlert
-folds a repeat of one key into the incident it already has, so re-sending after
-a lost response cannot page anyone twice. That property is asserted against the
-provider (`dedupes`) rather than assumed, so a future adapter without it cannot
-quietly inherit the retry path — it would need operator reconciliation instead,
-as the hotel worker does.
+stable per incident and shared by a raise and its matching close. GoAlert folds
+repeated keys into **open** incidents only. The dispatcher locks the incident's
+raise row before claiming either action, defers closure while a send lease is
+active, and cancels further raise attempts after a close is queued. Closure
+intent persists even while the provider is disabled. An arbitrary delayed
+remote request, or closure performed outside AIS, still requires reconciliation;
+this is not a remote exactly-once guarantee.
+
+Migration 0045 adds `cancelled` for superseded raises; it does not fabricate a
+delivery receipt. The entire UUID survives even a 100-character alert key.
+Dispatches bind to the original mode and a fingerprint of the endpoint and
+credential. A different target is blocked before a send or attempt increment.
+Legacy pending rows without the fingerprint require reconciliation against the
+original provider; do not rewrite their reference merely to make retries pass.
+Close rows inherit the raise's target, including exhausted raises whose remote
+outcome may be unknown.
 
 The delivery worker follows the discipline the hotel worker earned: the row
 becomes `outcome_unknown` **before** the request, so a crash mid-flight leaves
@@ -456,18 +465,19 @@ The gap closed is causal: a domain event carried no link to the request that
 produced it, so an event that misbehaved could not be traced back to its cause,
 and the whole background half of the system was uncorrelated.
 
-`shared/trace-context.ts` implements the W3C `traceparent` header exactly as
-specified, dependency-free. **This is not an OpenTelemetry installation**: no
+`shared/trace-context.ts` supports W3C `traceparent` correlation,
+dependency-free. It does not implement `tracestate` propagation or a complete
+tracing SDK. **This is not an OpenTelemetry installation**: no
 spans are sampled, batched, timed or exported to a collector. The wire format is
 the standard one, so adding an SDK later is compatible with everything stored,
 but nothing here should be read as claiming distributed tracing is deployed.
 
-Malformed, all-zero, repeated and future-version headers are all treated as
-absent and a fresh trace is started, so a hostile or unreadable header can
-never be adopted as a trace identity. An inbound trace is continued under a new
-span — reusing the caller's span id would merge two spans. The upstream
-`sampled` decision is preserved as received; this system is not the sampling
-authority.
+Malformed, uppercase-hex, all-zero and repeated headers restart the trace.
+Version `00` requires exactly 55 characters; version `ff` is invalid. Higher
+versions retain their valid known prefix, with a dash required before any
+extension. Outgoing version `00` clears reserved flags and preserves the
+upstream sampling bit. A new local trace defaults to unsampled. An inbound
+trace continues under a new span, preserving request-to-event causality.
 
 The context travels in an `AsyncLocalStorage` rather than through every
 signature. There are dozens of call sites between an HTTP handler and
@@ -523,7 +533,8 @@ The system already ranked disrupted passengers by priority, which answers "who
 first". It never answered "who on which flight". With several alternatives of
 differing capacity and arrival time, walking the ranked list and taking the
 best free seat is not the same as an optimal assignment, and it is measurably
-worse — the boundary suite carries an instance where greedy costs 19% more, and
+worse — the boundary suite carries an instance where the optimum costs about
+19% less than greedy (greedy costs about 23.4% more than the optimum), and
 that instance was **found by searching the instance space**, not constructed to
 flatter the optimiser. Its mechanism is worth stating: greedy lets the
 top-priority business passenger take a scarce early _economy_ seat at the
@@ -532,7 +543,7 @@ later; the optimum leaves the business passenger in business on the later
 flight and frees the early seat.
 
 `shared/reaccommodation.ts` computes an exact minimum-cost assignment
-(Jonker–Volgenant shortest augmenting path with potentials). Exact rather than
+(shortest augmenting paths with potentials). Exact rather than
 heuristic because the output is shown to an operator as _the_ recommendation: a
 heuristic that is usually good would make "why was this passenger left behind"
 unanswerable. **Optimality is verified against exhaustive search** over 120
@@ -553,17 +564,35 @@ Three refusals are deliberate:
   When seats run out, the unassigned are named with the objective's own penalty
   for leaving them out.
 
-The objective is declared in one exported constant — priority weight, downgrade
-penalty, unassigned penalty — and travels with every plan, so an operator can
-disagree with the weights rather than reverse-engineer them. An earlier
-alternative is priced as zero delay, never as a bonus: a negative cost would
-let the optimum chase early arrivals at the expense of everything else.
-Availability is read from the inventory authority without taking a hold, and
-the code says so: between the advisory and any action a seat may be sold.
+The objective is lexicographic: maximise assignments, then minimise weighted
+delay, downgrade cost and the secondary unassigned preference. A uniform dummy
+surcharge greater than the sum of row cost maxima enforces coverage; it is
+excluded from displayed costs. `objectiveValue` is comparable only after
+comparing unassigned counts within the same request. The 1440-minute preference
+does not reject a feasible seat after 24 hours. The policy travels with the plan.
 
-Evidence: 13 unit cases including the optimality proof, and 3 cases in the live
-MySQL acceptance run, which went from 76 to **79 checks with zero skips and
-zero provider calls**.
+The service uses the existing current-segment membership predicate and fails
+explicitly above 150 passengers or on a failed score read. It takes one MySQL
+read-only, repeatable-read snapshot and subtracts active canonical and unlinked
+legacy holds using the inventory authority's predicates. Expired rows stay
+untouched. Eligible alternatives are filtered before the 20-flight limit and
+ordered by arrival, with `optionsTruncated` exposing additional candidates.
+Only the best N economy and N business seats can matter for N independent
+passengers under this additive policy, so equivalent capacity is compressed
+to at most 300 columns without rejecting ordinary aircraft capacity. Duplicate
+passenger/flight identities are rejected. Inventory must be revalidated by the
+existing booking authority when acting on an advisory.
+
+The expanded tests enumerate 80 complete small passenger/flight problems as
+well as the original 120 kernel matrices. MySQL regression cases cover holds,
+segment membership, the passenger bound, option filtering and disclosure, and
+unchanged inventory rows. These checks establish bounded implementation
+evidence, not operational acceptance of the weights or unsupported group and
+connecting-itinerary constraints.
+
+Original R2-11 evidence was 13 unit cases and 3 MySQL cases (79 overall).
+The repair evidence and deployment notes are recorded in
+`docs/audits/20260914-r2-gap-repairs.md`.
 
 **Not included**: the simulation half of this package. A SimPy-class
 discrete-event model of turnaround or gate contention would need a validated

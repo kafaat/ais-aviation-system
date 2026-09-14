@@ -6064,6 +6064,7 @@ export const alertDispatches = mysqlTable(
       "outcome_unknown",
       "delivered",
       "failed",
+      "cancelled",
     ])
       .default("pending")
       .notNull(),

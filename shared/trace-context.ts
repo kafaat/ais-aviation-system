@@ -1,6 +1,6 @@
 /** W3C Trace Context (R2-08).
  *
- * Implements the `traceparent` header exactly as specified:
+ * Parses and propagates `traceparent` for request/event correlation:
  *   https://www.w3.org/TR/trace-context/
  *
  * Deliberately dependency-free. The value of trace context here is the
@@ -16,15 +16,9 @@
  * distributed tracing is deployed.
  */
 
-/** `00-<32 hex trace id>-<16 hex span id>-<2 hex flags>`.
- *
- * Version `00` only. The spec says a future version must be parsed
- * best-effort, but accepting one here would mean storing identifiers this code
- * cannot interpret, so an unknown version is treated as absent and a fresh
- * context is started instead. That is a loss of correlation, never a loss of
- * correctness.
- */
-const TRACEPARENT = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/;
+/** Known prefix, including future additive versions. Hex is lowercase only. */
+const TRACEPARENT =
+  /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})/;
 
 /** All-zero identifiers are explicitly invalid in the specification. */
 const ZERO_TRACE = "0".repeat(32);
@@ -33,8 +27,7 @@ const ZERO_SPAN = "0".repeat(16);
 export interface TraceContext {
   traceId: string;
   spanId: string;
-  /** Bit 0 is `sampled`. Preserved as received: this system is not the
-   * sampling authority and must not overrule an upstream decision. */
+  /** Bit 0 is sampled. Unknown bits are cleared when emitting version 00. */
   flags: string;
 }
 
@@ -60,7 +53,7 @@ function randomSpanId(): string {
   return id;
 }
 
-export function newTraceContext(sampled = true): TraceContext {
+export function newTraceContext(sampled = false): TraceContext {
   return {
     traceId: randomTraceId(),
     spanId: randomSpanId(),
@@ -77,15 +70,24 @@ export function parseTraceparent(
   // A repeated header is ambiguous about which trace is the parent, and
   // guessing would attribute work to the wrong one.
   if (typeof value !== "string") return null;
-  const match = TRACEPARENT.exec(value.trim().toLowerCase());
+  const header = value.replace(/^[ \t]+|[ \t]+$/g, "");
+  if (/[\r\n]/.test(header)) return null;
+  const match = TRACEPARENT.exec(header);
   if (!match) return null;
-  const [, traceId, spanId, flags] = match;
+  const [, version, traceId, spanId, flags] = match;
+  if (version === "ff") return null;
+  if (
+    version === "00"
+      ? header.length !== 55
+      : header.length > 55 && header[55] !== "-"
+  )
+    return null;
   if (traceId === ZERO_TRACE || spanId === ZERO_SPAN) return null;
   return { traceId, spanId, flags };
 }
 
 export function formatTraceparent(context: TraceContext): string {
-  return `00-${context.traceId}-${context.spanId}-${context.flags}`;
+  return `00-${context.traceId}-${context.spanId}-${isSampled(context) ? "01" : "00"}`;
 }
 
 /** Continues an inbound trace, or starts one when there is nothing valid to
@@ -103,7 +105,7 @@ export function traceContextFrom(value: string | string[] | undefined | null): {
     context: {
       traceId: parent.traceId,
       spanId: randomSpanId(),
-      flags: parent.flags,
+      flags: isSampled(parent) ? "01" : "00",
     },
     continued: true,
   };
@@ -112,7 +114,11 @@ export function traceContextFrom(value: string | string[] | undefined | null): {
 /** A child span of the given context, for work this system causes downstream —
  * a relayed event, a queued job. Keeps the trace, takes a new span. */
 export function childSpan(context: TraceContext): TraceContext {
-  return { ...context, spanId: randomSpanId() };
+  return {
+    ...context,
+    spanId: randomSpanId(),
+    flags: isSampled(context) ? "01" : "00",
+  };
 }
 
 export function isSampled(context: TraceContext): boolean {
