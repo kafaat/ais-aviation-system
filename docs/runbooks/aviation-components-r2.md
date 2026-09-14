@@ -339,3 +339,47 @@ makes two cases fail, which is how that rule was verified. **No request reached
 the Aviation Weather Center**; every bulletin in the tests is a local fixture,
 and the response schema still needs verification against live responses before
 production trust.
+
+## Review follow-up — the blanket OpenAPI error statuses
+
+This was the one review finding from PR #151 left open, recorded as needing the
+real status set of each procedure. It is now closed in three parts, each
+verifiable rather than asserted.
+
+**Transport statuses are derived, not assumed.** `createRestMiddleware` and the
+middleware mounted beside it in `_core/index.ts` establish exactly three
+statuses that any REST operation can return: 400, because every route parses
+its input with Zod and rejects a non-object query or body before that; 429,
+because `createUserRateLimitMiddleware({ scope: "api" })` covers the whole of
+`/api/rest`; and 500, because any non-`TRPCError` throw is reported as
+INTERNAL_SERVER_ERROR. 401 and 403 continue to come from the generator for
+protected routes. Documenting 429 everywhere turns out to be correct — that one
+was not padding.
+
+**415 is now documented only where it can occur.** The transport checks the
+content type only for methods that read a body, so a GET or DELETE can never
+return it. This dropped 415 from all 232 operations to the 122 that use a body,
+with no declaration needed from anyone.
+
+**A procedure can declare its own domain statuses.** `errorStatuses` in a
+procedure's meta names the statuses it can actually return; the document then
+carries the transport statuses plus exactly those, and the generator's default
+404 is pruned. Without the pruning the declaration would be decorative. A
+procedure that declares nothing keeps the previous permissive domain set, but
+every one of those responses is now marked `x-status-undeclared`, so a reader
+can tell an allowance from a claim. That is the honest intermediate state:
+nothing is silently asserted any more, and owners can declare their procedures
+incrementally.
+
+The four notification paths are declared, because the contract laboratory
+validates their real responses: `notifications.markAsRead` returns 404 when the
+row is absent or owned by another user, and `list`, `unreadCount` and
+`markAllAsRead` raise no domain rejection at all. Their documented sets went
+from twelve statuses each to six or seven.
+
+Evidence: the REST contract laboratory passes 4 items against the real host with
+zero provider calls. Removing the `[404]` declaration from `markAsRead` makes
+the lab fail with `UndefinedStatusCode: Undocumented HTTP status code, Received:
+404`, which is how the declarations were verified — by HTTP conformance against
+a running host, not by reading the code. A new `rest-boundary` case locks the
+415 method rule, the pruning and the undeclared marking.

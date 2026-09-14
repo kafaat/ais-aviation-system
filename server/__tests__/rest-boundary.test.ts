@@ -50,6 +50,13 @@ const testRouter = router({
   admin: adminProcedure
     .meta({ openapi: { method: "GET", path: "/admin" } })
     .query(() => ({ secret: true })),
+  declared: publicProcedure
+    .meta({
+      openapi: { method: "POST", path: "/declared" },
+      errorStatuses: [409],
+    })
+    .input(z.object({ id: z.number() }))
+    .mutation(({ input }) => input),
   auth: router({
     login: publicProcedure
       .meta({ openapi: { method: "POST", path: "/login" } })
@@ -179,7 +186,7 @@ describe("REST authority and serialization boundary", () => {
   });
   it("documents all real routes, public/protected access and unspecified responses honestly", () => {
     const doc = buildOpenApiDocument(testRouter);
-    expect(Object.keys(doc.paths!)).toHaveLength(5);
+    expect(Object.keys(doc.paths!)).toHaveLength(6);
     expect(doc.paths!["/items/search"].get!.security).toBeUndefined();
     expect(doc.paths!["/items/{id}"].post!.security).toHaveLength(2);
     expect(
@@ -189,6 +196,39 @@ describe("REST authority and serialization boundary", () => {
       name: "app_session_id",
     });
     expect(() => buildOpenApiDocument(router({}))).toThrow("no endpoints");
+  });
+  it("documents only the error statuses a route can actually return", () => {
+    const doc = buildOpenApiDocument(testRouter);
+    const statuses = (path: string, method: "get" | "post") =>
+      Object.keys(doc.paths![path][method]!.responses!).sort();
+
+    // The transport checks the content type only for methods that read a body,
+    // so 415 is reachable on the POST and unreachable on the GET.
+    expect(statuses("/items/search", "get")).not.toContain("415");
+    expect(statuses("/items/{id}", "post")).toContain("415");
+
+    // A declaring route documents the transport statuses plus exactly what it
+    // names. The generator's default 404 is pruned, which is what makes the
+    // declaration mean something rather than decorate the document.
+    expect(statuses("/declared", "post")).toEqual([
+      "200",
+      "400",
+      "409",
+      "415",
+      "429",
+      "500",
+    ]);
+
+    // An undeclared route keeps the permissive domain set, but every one of
+    // those responses is marked, so a reader can tell an allowance from a
+    // claim. Transport statuses are never marked: they are always reachable.
+    const undeclared = doc.paths!["/nested"].get!.responses! as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(Object.keys(undeclared)).toContain("503");
+    expect(undeclared["503"]["x-status-undeclared"]).toBe(true);
+    expect(undeclared["400"]["x-status-undeclared"]).toBeUndefined();
   });
   it("generates the complete application document and registers every enabled route", async () => {
     const { appRouter } = await import("../routers");
