@@ -267,6 +267,27 @@
       "when": 1789266991415,
       "tag": "0037_loyalty_credit_lot_conservation",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1789302868874,
+      "tag": "0038_gate_allocation_windows",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "5",
+      "when": 1789304700348,
+      "tag": "0039_hotel_provider_fulfillment",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "5",
+      "when": 1789305740161,
+      "tag": "0040_versioned_event_envelopes",
+      "breakpoints": true
     }
   ]
 }

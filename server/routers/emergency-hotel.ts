@@ -1,3 +1,9 @@
+import { hotelQuote, hotelStatus } from "../../shared/hotel-fulfillment";
+import {
+  hotelIntent,
+  prepareHotelQuote,
+  approveHotelQuote,
+} from "../services/hotel-fulfillment.service";
 import { responseContracts } from "../contracts/emergency-hotel";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
@@ -22,6 +28,34 @@ import { assertPassengerOwnership } from "../services/access-control.service";
  * Manages emergency hotel bookings for disrupted passengers
  */
 export const emergencyHotelRouter = router({
+  prepareProviderQuote: adminProcedure
+    .input(
+      z.object({
+        hotelBookingId: z.number().int().positive(),
+        hotelCode: z.number().int().positive(),
+        rateKey: z.string().min(1).max(2048),
+        mappingEvidence: z.string().min(5).max(255),
+      })
+    )
+    .output(
+      hotelQuote
+        .omit({ rateKey: true, account: true })
+        .extend({ quoteId: z.string().uuid() })
+    )
+    .mutation(({ input, ctx }) => prepareHotelQuote(input, ctx.user.id)),
+  approveProviderQuote: adminProcedure
+    .input(
+      z.object({
+        hotelBookingId: z.number().int().positive(),
+        quoteId: z.string().uuid(),
+        termsAccepted: z.literal(true),
+      })
+    )
+    .output(z.object({ status: hotelStatus }))
+    .mutation(({ input, ctx }) =>
+      approveHotelQuote(input.hotelBookingId, input.quoteId, ctx.user.id)
+    ),
+
   /**
    * Find available hotels near an airport
    */
@@ -58,24 +92,11 @@ export const emergencyHotelRouter = router({
    * Book an emergency hotel room (admin only)
    */
   bookRoom: adminProcedure
-    .input(
-      z.object({
-        hotelId: z.number(),
-        bookingId: z.number(),
-        flightId: z.number(),
-        passengerId: z.number(),
-        roomType: z.enum(["standard", "suite"]),
-        checkIn: z.date(),
-        checkOut: z.date(),
-        mealIncluded: z.boolean().optional(),
-        transportIncluded: z.boolean().optional(),
-        notes: z.string().max(1000).optional(),
-      })
-    )
+    .input(hotelIntent)
     .output(responseContracts["bookRoom"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
-        return await bookHotelRoom(input);
+        return await bookHotelRoom(input, ctx.user.id);
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -146,13 +167,18 @@ export const emergencyHotelRouter = router({
   cancelBooking: adminProcedure
     .input(
       z.object({
-        hotelBookingId: z.number(),
+        hotelBookingId: z.number().int().positive(),
+        maxCancellationCost: z.number().int().nonnegative().default(0),
       })
     )
     .output(responseContracts["cancelBooking"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
-        return await cancelHotelBooking(input.hotelBookingId);
+        return await cancelHotelBooking(
+          input.hotelBookingId,
+          ctx.user.id,
+          input.maxCancellationCost
+        );
       } catch (error) {
         throw new TRPCError({
           code: "BAD_REQUEST",

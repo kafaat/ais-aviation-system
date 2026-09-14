@@ -63,8 +63,12 @@ jobs:
         run: |
           pnpm run db:verify
           pnpm run db:verify-catalog
-      - name: Type-check the live acceptance runner
-        run: pnpm exec tsc -p tsconfig.acceptance.json --noEmit
+      - name: Type-check acceptance and all operational scripts
+        run: |
+          pnpm exec tsc -p tsconfig.acceptance.json --noEmit
+          pnpm check:scripts
+      - name: Verify versioned domain event contracts
+        run: node --import tsx scripts/generate-event-contracts.ts --check
       - name: Verify service producers, consumers and retired modules
         run: node --import tsx scripts/generate-service-catalog.ts --check
       - name: Verify backup failure boundaries and worker liveness

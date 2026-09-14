@@ -2,6 +2,7 @@ import { responseContracts } from "../contracts/gates";
 import { z } from "zod";
 import { publicProcedure, adminProcedure, router } from "../_core/trpc";
 import * as gateService from "../services/gate.service";
+import { isAdmin } from "../services/rbac.service";
 
 /**
  * Gates Router
@@ -113,13 +114,22 @@ export const gatesRouter = router({
         gateId: z.number().describe("Gate ID to assign"),
         boardingStartTime: z.date().optional().describe("Boarding start time"),
         boardingEndTime: z.date().optional().describe("Boarding end time"),
+        occupiedFrom: z.date().optional(),
+        occupiedUntil: z.date().optional(),
       })
     )
     .output(responseContracts["assignGate"])
     .mutation(async ({ input, ctx }) => {
       return await gateService.assignGate({
         ...input,
-        assignedBy: ctx.user?.id,
+        assignedBy: ctx.user.id,
+        actor: {
+          userId: ctx.user.id,
+          tenantId: ctx.tenantId ?? null,
+          // Only platform roles cross tenants. Hardcoding true made the tenant
+          // check in lockFlight dead code the moment a scoped role is added.
+          platformAdmin: isAdmin(ctx.user.role),
+        },
       });
     }),
 
@@ -151,29 +161,15 @@ export const gatesRouter = router({
     .mutation(async ({ input, ctx }) => {
       const result = await gateService.updateGateAssignment({
         ...input,
-        assignedBy: ctx.user?.id,
+        assignedBy: ctx.user.id,
+        actor: {
+          userId: ctx.user.id,
+          tenantId: ctx.tenantId ?? null,
+          // Only platform roles cross tenants. Hardcoding true made the tenant
+          // check in lockFlight dead code the moment a scoped role is added.
+          platformAdmin: isAdmin(ctx.user.role),
+        },
       });
-
-      // Get old gate info for notification
-      if (result.oldGateId) {
-        const oldGates = await gateService.getAirportGates(
-          (await gateService.getFlightGate(input.flightId))?.gateId || 0
-        );
-        const oldGate = oldGates.find(g => g.id === result.oldGateId);
-        if (oldGate) {
-          // Send notifications asynchronously
-          gateService
-            .notifyGateChange(
-              input.flightId,
-              oldGate.gateNumber,
-              result.newGateNumber,
-              result.newTerminal
-            )
-            .catch(err =>
-              console.error("Failed to send gate change notifications:", err)
-            );
-        }
-      }
 
       return result;
     }),
@@ -198,8 +194,14 @@ export const gatesRouter = router({
       })
     )
     .output(responseContracts["releaseGate"])
-    .mutation(async ({ input }) => {
-      return await gateService.releaseGate(input.flightId);
+    .mutation(async ({ input, ctx }) => {
+      return await gateService.releaseGate(input.flightId, {
+        userId: ctx.user.id,
+        tenantId: ctx.tenantId ?? null,
+        // Only platform roles cross tenants. Hardcoding true made the tenant
+        // check in lockFlight dead code the moment a scoped role is added.
+        platformAdmin: isAdmin(ctx.user.role),
+      });
     }),
 
   /**
@@ -296,6 +298,28 @@ export const gatesRouter = router({
     .mutation(async ({ input }) => {
       return await gateService.updateGateStatus(input);
     }),
+
+  updateGateCompatibility: adminProcedure
+    .meta({
+      openapi: {
+        method: "PUT",
+        path: "/gates/{gateId}/compatibility",
+        tags: ["Gates", "Admin"],
+        summary: "Record operator-approved aircraft compatibility",
+      },
+    })
+    .input(
+      z.object({
+        gateId: z.number().int().positive(),
+        aircraftTypes: z
+          .array(z.string().trim().min(1).max(50))
+          .min(1)
+          .max(100),
+        evidence: z.string().trim().min(1).max(255),
+      })
+    )
+    .output(z.object({ success: z.boolean() }))
+    .mutation(({ input }) => gateService.updateGateCompatibility(input)),
 
   /**
    * Delete a gate

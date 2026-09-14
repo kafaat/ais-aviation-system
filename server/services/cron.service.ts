@@ -29,6 +29,16 @@ export async function cleanupExpiredLocks() {
 
 export const PERIODIC_JOB_CATALOG = [
   {
+    name: "hotelFulfillment",
+    cron: "* * * * *",
+    periodMs: 60000,
+    run: async () => {
+      const { processHotelFulfillment } =
+        await import("./hotel-fulfillment.service");
+      await processHotelFulfillment();
+    },
+  },
+  {
     name: "operationalAlerts",
     cron: "* * * * *",
     periodMs: 60000,

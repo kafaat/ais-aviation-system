@@ -6,6 +6,8 @@ import { writeFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import * as schema from "../drizzle/schema";
+import { verifyR2Gates } from "./acceptance/r2-gates";
+import { verifyR2Hotels } from "./acceptance/r2-hotels";
 
 if (
   process.env.AIS_DISPOSABLE_DATABASE !== "true" ||
@@ -398,6 +400,8 @@ try {
   await verifyPaymentReadLimits(check);
   const { verifyDataAudit } = await import("./acceptance/data-audit");
   await verifyDataAudit(db, id, check);
+  await verifyR2Gates(db, id, check);
+  await verifyR2Hotels(db, id, check);
   completed = true;
 } finally {
   const report = {

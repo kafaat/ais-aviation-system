@@ -578,20 +578,23 @@ export async function verifyForensicWorkflows(
         distanceKm: 1,
         hasTransport: false,
       });
-      const room = await hotel.bookHotelRoom({
-        hotelId: accommodation.id,
-        bookingId: base,
-        flightId: base + 2,
-        passengerId: passenger.id,
-        roomType: "standard",
-        checkIn: departure,
-        checkOut: new Date(departure.getTime() + 86400000),
-      });
+      const room = await hotel.bookHotelRoom(
+        {
+          hotelId: accommodation.id,
+          bookingId: base,
+          flightId: base + 2,
+          passengerId: passenger.id,
+          roomType: "standard",
+          checkIn: departure,
+          checkOut: new Date(departure.getTime() + 86400000),
+        },
+        ownerId
+      );
       assert.equal(
         (await hotel.getHotelBookingsByPassenger(passenger.id)).length,
         1
       );
-      await hotel.cancelHotelBooking(room.id);
+      await hotel.cancelHotelBooking(room.id, ownerId);
       const device = await kiosk.registerKiosk(ownerId, "T1", "CI fixture");
       assert.equal(device.status, "offline");
       await kiosk.getKioskStatus(device.id);

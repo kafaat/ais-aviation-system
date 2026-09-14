@@ -1,3 +1,4 @@
+import { toCloudEvent, validateDomainEvent } from "../contracts/domain-events";
 /**
  * Outbox Service — transactional outbox pattern.
  *
@@ -31,6 +32,7 @@ export interface NewEvent {
   aggregateType: string;
   aggregateId: string | number;
   eventType: string;
+  schemaVersion?: number;
   tenantId?: number | null;
   payload: Record<string, unknown>;
 }
@@ -48,13 +50,21 @@ export async function recordEvent(
   event: NewEvent
 ): Promise<string> {
   const eventId = randomUUID();
+  const validated = validateDomainEvent({
+    ...event,
+    eventId,
+    aggregateId: String(event.aggregateId),
+    tenantId: event.tenantId ?? null,
+    payload: JSON.parse(JSON.stringify(event.payload)),
+  });
   await db.insert(outbox).values({
     eventId,
     aggregateType: event.aggregateType,
     aggregateId: String(event.aggregateId),
     eventType: event.eventType,
     tenantId: event.tenantId ?? null,
-    payload: event.payload,
+    schemaVersion: validated.schemaVersion,
+    payload: validated.payload,
     status: "pending",
   });
   return eventId;
@@ -261,6 +271,7 @@ export async function relayOutbox(
 
 /** Delivery is at least once; downstream receivers deduplicate the stable eventId. */
 export const configuredPublisher: OutboxPublisher = async event => {
+  validateDomainEvent(event);
   const { consumeLocalEvent, deliverExternalEffect } =
     await import("./event-inbox.service");
   const effects: Promise<unknown>[] = [consumeLocalEvent(event)];
@@ -292,16 +303,24 @@ export const configuredPublisher: OutboxPublisher = async event => {
           new URL(endpoint).protocol !== "https:"
         )
           throw new Error("Outbox receiver requires HTTPS");
+        const format = process.env.OUTBOX_MESSAGE_FORMAT ?? "legacy";
+        if (format !== "legacy" && format !== "cloudevents")
+          throw new Error("Invalid outbox message format");
         const response = await fetch(endpoint, {
           method: "POST",
           redirect: "error",
           signal: AbortSignal.timeout(15000),
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              format === "cloudevents"
+                ? "application/cloudevents+json"
+                : "application/json",
             Authorization: `Bearer ${token}`,
             "Idempotency-Key": event.eventId,
           },
-          body: JSON.stringify(event),
+          body: JSON.stringify(
+            format === "cloudevents" ? toCloudEvent(event) : event
+          ),
         });
         if (!response.ok)
           throw new Error(

@@ -1,3 +1,5 @@
+import { hotelStatusLabel } from "../../../../shared/hotel-fulfillment";
+import { HotelFulfillmentPanel } from "@/components/HotelFulfillmentPanel";
 /**
  * Emergency Hotel Management Page
  *
@@ -44,13 +46,6 @@ import {
 // Types
 // ============================================================================
 
-type BookingStatus =
-  | "reserved"
-  | "checked_in"
-  | "checked_out"
-  | "cancelled"
-  | "no_show";
-
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -63,41 +58,13 @@ function formatSAR(cents: number): string {
 // Status Badge
 // ============================================================================
 
-function BookingStatusBadge({ status }: { status: BookingStatus }) {
-  const { t } = useTranslation();
-
-  const config: Record<
-    BookingStatus,
-    {
-      variant: "default" | "secondary" | "destructive" | "outline";
-      label: string;
-    }
-  > = {
-    reserved: {
-      variant: "secondary",
-      label: t("emergencyHotel.status.reserved", "Reserved"),
-    },
-    checked_in: {
-      variant: "default",
-      label: t("emergencyHotel.status.checkedIn", "Checked In"),
-    },
-    checked_out: {
-      variant: "outline",
-      label: t("emergencyHotel.status.checkedOut", "Checked Out"),
-    },
-    cancelled: {
-      variant: "destructive",
-      label: t("emergencyHotel.status.cancelled", "Cancelled"),
-    },
-    no_show: {
-      variant: "destructive",
-      label: t("emergencyHotel.status.noShow", "No Show"),
-    },
-  };
-
-  const c = config[status] ?? config.reserved;
-
-  return <Badge variant={c.variant}>{c.label}</Badge>;
+function BookingStatusBadge({ status }: { status: string }) {
+  const { i18n } = useTranslation();
+  return (
+    <Badge variant={status === "confirmed" ? "default" : "outline"}>
+      {hotelStatusLabel(status, i18n.language === "ar")}
+    </Badge>
+  );
 }
 
 // ============================================================================
@@ -120,186 +87,6 @@ function StarRating({ rating }: { rating: number }) {
     </span>
   );
 }
-
-// ============================================================================
-// Mock Fallback Data
-// ============================================================================
-
-const MOCK_HOTELS = [
-  {
-    id: 1,
-    name: "Riyadh Airport Hotel",
-    airportId: 1,
-    address: "King Khalid International Airport, Riyadh",
-    phone: "+966-11-555-0001",
-    email: "reservations@riyadhairporthotel.com",
-    starRating: 4,
-    standardRate: 45000,
-    distanceKm: "2.50",
-    hasTransport: true,
-    isActive: true,
-    createdAt: new Date("2025-10-15"),
-    airportCode: "RUH",
-    airportCity: "Riyadh",
-  },
-  {
-    id: 2,
-    name: "Jeddah Crown Plaza",
-    airportId: 2,
-    address: "King Abdulaziz International Airport Road, Jeddah",
-    phone: "+966-12-555-0002",
-    email: "front@jeddahcrown.com",
-    starRating: 5,
-    standardRate: 65000,
-    distanceKm: "4.80",
-    hasTransport: true,
-    isActive: true,
-    createdAt: new Date("2025-11-01"),
-    airportCode: "JED",
-    airportCity: "Jeddah",
-  },
-  {
-    id: 3,
-    name: "Dammam Transit Lodge",
-    airportId: 3,
-    address: "Near King Fahd Airport, Dammam",
-    phone: "+966-13-555-0003",
-    email: "info@dammamtransit.com",
-    starRating: 3,
-    standardRate: 30000,
-    distanceKm: "1.20",
-    hasTransport: false,
-    isActive: true,
-    createdAt: new Date("2025-12-01"),
-    airportCode: "DMM",
-    airportCity: "Dammam",
-  },
-];
-
-const MOCK_BOOKINGS = [
-  {
-    id: 1,
-    hotelId: 1,
-    bookingId: 1042,
-    flightId: 305,
-    passengerId: 2001,
-    roomType: "standard" as const,
-    checkIn: new Date("2026-02-08T22:00:00"),
-    checkOut: new Date("2026-02-09T12:00:00"),
-    nightlyRate: 45000,
-    totalCost: 45000,
-    mealIncluded: true,
-    transportIncluded: true,
-    status: "reserved" as const,
-    confirmationNumber: "EH-A3K9B2XP",
-    notes: null,
-    createdAt: new Date("2026-02-08T20:00:00"),
-    hotelName: "Riyadh Airport Hotel",
-    hotelAddress: "King Khalid International Airport, Riyadh",
-    hotelPhone: "+966-11-555-0001",
-    hotelStarRating: 4,
-  },
-  {
-    id: 2,
-    hotelId: 2,
-    bookingId: 1050,
-    flightId: 305,
-    passengerId: 2002,
-    roomType: "suite" as const,
-    checkIn: new Date("2026-02-08T22:00:00"),
-    checkOut: new Date("2026-02-09T12:00:00"),
-    nightlyRate: 117000,
-    totalCost: 117000,
-    mealIncluded: true,
-    transportIncluded: true,
-    status: "checked_in" as const,
-    confirmationNumber: "EH-M7P3Q1NZ",
-    notes: "VIP passenger - loyalty gold member",
-    createdAt: new Date("2026-02-08T20:30:00"),
-    hotelName: "Jeddah Crown Plaza",
-    hotelAddress: "King Abdulaziz International Airport Road, Jeddah",
-    hotelPhone: "+966-12-555-0002",
-    hotelStarRating: 5,
-  },
-  {
-    id: 3,
-    hotelId: 1,
-    bookingId: 1055,
-    flightId: 310,
-    passengerId: 2010,
-    roomType: "standard" as const,
-    checkIn: new Date("2026-02-07T23:00:00"),
-    checkOut: new Date("2026-02-08T11:00:00"),
-    nightlyRate: 45000,
-    totalCost: 45000,
-    mealIncluded: true,
-    transportIncluded: false,
-    status: "checked_out" as const,
-    confirmationNumber: "EH-W2J5R8LD",
-    notes: null,
-    createdAt: new Date("2026-02-07T21:00:00"),
-    hotelName: "Riyadh Airport Hotel",
-    hotelAddress: "King Khalid International Airport, Riyadh",
-    hotelPhone: "+966-11-555-0001",
-    hotelStarRating: 4,
-  },
-  {
-    id: 4,
-    hotelId: 3,
-    bookingId: 1060,
-    flightId: 315,
-    passengerId: 2020,
-    roomType: "standard" as const,
-    checkIn: new Date("2026-02-06T21:00:00"),
-    checkOut: new Date("2026-02-07T10:00:00"),
-    nightlyRate: 30000,
-    totalCost: 30000,
-    mealIncluded: false,
-    transportIncluded: false,
-    status: "cancelled" as const,
-    confirmationNumber: "EH-X9C4F6HA",
-    notes: "Passenger rebooked on earlier flight",
-    createdAt: new Date("2026-02-06T19:00:00"),
-    hotelName: "Dammam Transit Lodge",
-    hotelAddress: "Near King Fahd Airport, Dammam",
-    hotelPhone: "+966-13-555-0003",
-    hotelStarRating: 3,
-  },
-];
-
-const MOCK_COSTS = {
-  summary: {
-    totalCost: 237000,
-    activeTotalCost: 207000,
-    totalBookings: 4,
-    cancelledBookings: 1,
-    activeBookings: 3,
-  },
-  byHotel: [
-    {
-      hotelId: 1,
-      hotelName: "Riyadh Airport Hotel",
-      totalCost: 90000,
-      bookingCount: 2,
-    },
-    {
-      hotelId: 2,
-      hotelName: "Jeddah Crown Plaza",
-      totalCost: 117000,
-      bookingCount: 1,
-    },
-    {
-      hotelId: 3,
-      hotelName: "Dammam Transit Lodge",
-      totalCost: 0,
-      bookingCount: 0,
-    },
-  ],
-  dateRange: {
-    from: new Date("2026-02-01"),
-    to: new Date("2026-02-28"),
-  },
-};
 
 // ============================================================================
 // Summary Cards
@@ -342,15 +129,18 @@ function SummaryCards() {
     );
   }
 
-  const hotelData = hotels ?? MOCK_HOTELS;
-  const costData = costs ?? MOCK_COSTS;
+  if (!hotels || !costs)
+    return (
+      <p role="status">
+        {t("emergencyHotel.dataUnavailable", "Hotel data unavailable")}
+      </p>
+    );
+  const hotelData = hotels;
+  const costData = costs;
 
   const contractedHotels = hotelData.length;
   const activeBookings = costData.summary.activeBookings;
-  const pendingAssignments =
-    costData.summary.totalBookings -
-    costData.summary.activeBookings -
-    costData.summary.cancelledBookings;
+  const pendingAssignments = costData.summary.pendingBookings;
   const monthlyCost = costData.summary.activeTotalCost;
 
   const cards = [
@@ -413,6 +203,7 @@ function BookingsTab() {
 
   const {
     data: bookings,
+    isError,
     isLoading,
     refetch,
   } = trpc.emergencyHotel.getFlightHotelBookings.useQuery(
@@ -427,8 +218,8 @@ function BookingsTab() {
     onSuccess: () => {
       toast.success(
         t(
-          "emergencyHotel.bookingCancelled",
-          "Hotel booking cancelled successfully"
+          "emergencyHotel.cancellationRequested",
+          "Cancellation request recorded; check provider status"
         )
       );
       refetch();
@@ -442,7 +233,7 @@ function BookingsTab() {
     cancelMutation.mutate({ hotelBookingId });
   };
 
-  const displayBookings = bookings ?? (flightIdFilter ? [] : MOCK_BOOKINGS);
+  const displayBookings = bookings ?? [];
 
   if (isLoading) {
     return (
@@ -455,6 +246,12 @@ function BookingsTab() {
 
   return (
     <div className="space-y-4">
+      <HotelFulfillmentPanel />
+      {isError && (
+        <p role="alert">
+          {t("emergencyHotel.dataUnavailable", "Hotel data unavailable")}
+        </p>
+      )}
       {/* Flight filter */}
       <div className="flex flex-wrap gap-3">
         <div className="w-64">
@@ -521,7 +318,9 @@ function BookingsTab() {
               displayBookings.map(booking => (
                 <TableRow key={booking.id}>
                   <TableCell className="font-mono text-xs">
-                    {booking.confirmationNumber}
+                    {booking.confirmationNumber ??
+                      booking.requestReference ??
+                      "—"}
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
@@ -592,10 +391,25 @@ function BookingsTab() {
                   </TableCell>
                   <TableCell>
                     <BookingStatusBadge status={booking.status} />
+                    {booking.providerLastError && (
+                      <p className="text-xs text-amber-700">
+                        {booking.providerLastError}
+                      </p>
+                    )}
                   </TableCell>
                   <TableCell>
-                    {(booking.status === "reserved" ||
-                      booking.status === "checked_in") && (
+                    {[
+                      "requested",
+                      "rejected",
+                      "pending_provider",
+                      "confirmed",
+                      "sandbox_confirmed",
+                      // Pre-R2-04 rows carry no provider state; the server
+                      // re-checks that and refuses if any is present.
+                      "reserved",
+                      "checked_in",
+                      "no_show",
+                    ].includes(booking.status) && (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -679,7 +493,7 @@ function HotelsTab() {
     });
   };
 
-  const displayHotels = hotels ?? MOCK_HOTELS;
+  const displayHotels = hotels ?? [];
 
   if (isLoading) {
     return (
@@ -859,7 +673,7 @@ function CostsTab() {
     }
   );
 
-  const displayCosts = costs ?? MOCK_COSTS;
+  const displayCosts = costs;
 
   if (isLoading) {
     return (
@@ -869,6 +683,14 @@ function CostsTab() {
       </div>
     );
   }
+
+  if (!displayCosts)
+    return (
+      <div role="status">
+        {t("emergencyHotel.dataUnavailable", "Hotel data unavailable")}{" "}
+        <Button onClick={() => refetch()}>{t("common.retry", "Retry")}</Button>
+      </div>
+    );
 
   return (
     <div className="space-y-6">
@@ -932,14 +754,13 @@ function CostsTab() {
         <Card className="shadow-sm rounded-xl">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">
-              {t("emergencyHotel.cancelledSavings", "Cancelled (Savings)")}
+              {t(
+                "emergencyHotel.cancellationFees",
+                "Confirmed cancellation fees"
+              )}
             </p>
             <p className="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400">
-              {formatSAR(
-                displayCosts.summary.totalCost -
-                  displayCosts.summary.activeTotalCost
-              )}{" "}
-              SAR
+              {formatSAR(displayCosts.summary.cancellationCost)} SAR
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {displayCosts.summary.cancelledBookings}{" "}

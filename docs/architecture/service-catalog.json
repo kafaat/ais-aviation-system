@@ -997,6 +997,7 @@
         "server/services/data-warehouse.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/group-booking.service.ts",
+        "server/services/hotel-fulfillment.service.ts",
         "server/services/inventory-lock.service.ts",
         "server/services/operational-observations.service.ts",
         "server/services/order-refunds.service.ts",
@@ -1311,7 +1312,11 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/routers/emergency-hotel.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/hotel-fulfillment.service.ts"
+      ],
       "tableExpressions": {
         "reads": [
           "airports",
@@ -1360,7 +1365,9 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/contracts/domain-events.ts",
         "server/db.ts",
+        "server/services/flight-state.service.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/loyalty.service.ts"
       ],
@@ -1369,6 +1376,8 @@
           "bookings",
           "eventDeliveries",
           "eventInbox",
+          "flights",
+          "gateAssignments",
           "groupBookings",
           "waitlist"
         ],
@@ -1564,12 +1573,15 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/services/disruption.service.ts",
+        "server/services/event-inbox.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/flight-status.service.ts",
+        "server/services/hotel-fulfillment.service.ts",
         "server/services/irops.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/services/gate-allocation.service.ts",
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
@@ -1651,6 +1663,29 @@
       "replacement": null
     },
     {
+      "file": "server/services/gate-allocation.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/gate-allocation.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/flight-state.service.ts",
+        "server/services/gate.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/services/outbox.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["airportGates", "airports", "flights", "gateAssignments"],
+        "writes": ["airportGates", "gateAssignments"]
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/gate.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/gate.service.ts",
@@ -1663,6 +1698,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/gate-allocation.service.ts",
         "server/services/notification.service.ts"
       ],
       "tableExpressions": {
@@ -1790,6 +1826,39 @@
       "tableExpressions": {
         "reads": [],
         "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/hotel-fulfillment.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/hotel-fulfillment.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/routers/emergency-hotel.ts",
+        "server/services/cron.service.ts",
+        "server/services/emergency-hotel.service.ts"
+      ],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/integrations/hotelbeds.ts",
+        "server/services/flight-state.service.ts",
+        "server/services/outbox.service.ts",
+        "shared/hotel-fulfillment.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "bookings",
+          "emergencyHotelBookings",
+          "emergencyHotels",
+          "passengers"
+        ],
+        "writes": ["emergencyHotelBookings"]
       },
       "replacement": null
     },
@@ -2942,7 +3011,9 @@
         "server/services/family-pool.service.ts",
         "server/services/flight-cancellation.service.ts",
         "server/services/flight-state.service.ts",
+        "server/services/gate-allocation.service.ts",
         "server/services/group-booking.service.ts",
+        "server/services/hotel-fulfillment.service.ts",
         "server/services/inventory-adjustment.service.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/irops.service.ts",
@@ -2969,6 +3040,7 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/contracts/domain-events.ts",
         "server/db.ts",
         "server/services/event-inbox.service.ts",
         "server/services/flight-event-delivery.service.ts",
@@ -3019,7 +3091,13 @@
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "financialLedger", "paymentReceipts", "payments"],
+        "reads": [
+          "bookings",
+          "financialLedger",
+          "paymentReceipts",
+          "payments",
+          "users"
+        ],
         "writes": ["financialLedger", "paymentHistory"]
       },
       "replacement": null
@@ -3799,6 +3877,7 @@
         "server/_core/context.ts",
         "server/_core/trpc.ts",
         "server/routers/admin.ts",
+        "server/routers/gates.ts",
         "server/routes/operational-integrations.ts",
         "server/services/access-control.service.ts",
         "server/services/data-warehouse.service.ts"

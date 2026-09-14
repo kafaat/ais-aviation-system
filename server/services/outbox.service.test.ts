@@ -18,6 +18,7 @@ function event(id: number): OutboxEvent {
     aggregateType: "agentDecision",
     aggregateId: String(id),
     eventType: "AgentDecisionOverridden",
+    schemaVersion: 1,
     tenantId: null,
     payload: { decisionId: id },
     status: "pending",

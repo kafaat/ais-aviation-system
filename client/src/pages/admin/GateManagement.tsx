@@ -84,6 +84,12 @@ export default function GateManagement() {
     new Date().toISOString().split("T")[0]
   );
   const [activeTab, setActiveTab] = useState("gates");
+  const [compatibility, setCompatibility] = useState<{
+    gateId: number;
+    aircraftTypes: string;
+    evidence: string;
+  } | null>(null);
+  const isArabic = i18n.language === "ar";
 
   // Fetch airports for dropdown
   const { data: airports } = trpc.reference.airports.useQuery();
@@ -111,6 +117,18 @@ export default function GateManagement() {
   );
 
   // Mutations
+  const compatibilityMutation = trpc.gates.updateGateCompatibility.useMutation({
+    onSuccess: () => {
+      toast.success(
+        isArabic
+          ? "حُفظ اعتماد الطرازات للبوابة"
+          : "Gate aircraft approval saved"
+      );
+      setCompatibility(null);
+      void refetchGates();
+    },
+    onError: error => toast.error(error.message),
+  });
   const createGateMutation = trpc.gates.createGate.useMutation({
     onSuccess: () => {
       toast.success(t("admin.gates.created"));
@@ -226,6 +244,77 @@ export default function GateManagement() {
         title={t("admin.gates.title")}
         description={t("admin.gates.description")}
       />
+
+      <Dialog
+        open={compatibility !== null}
+        onOpenChange={open => {
+          if (!open) setCompatibility(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {isArabic
+                ? "اعتماد طرازات الطائرات للبوابة"
+                : "Approve aircraft types for this gate"}
+            </DialogTitle>
+            <DialogDescription>
+              {isArabic
+                ? "أدخل الطرازات كما تظهر في سجل الرحلة ومرجع موافقة المشغّل. يجب تحرير التعيينات النشطة قبل تعديل الاعتماد."
+                : "Enter aircraft identifiers exactly as recorded on flights and the operator approval reference. Release active reservations before changing approval."}
+            </DialogDescription>
+          </DialogHeader>
+          <Label htmlFor="gate-aircraft-types">
+            {isArabic
+              ? "الطرازات، مفصولة بفواصل"
+              : "Aircraft types, comma separated"}
+          </Label>
+          <Input
+            id="gate-aircraft-types"
+            dir="ltr"
+            value={compatibility?.aircraftTypes ?? ""}
+            onChange={event =>
+              setCompatibility(value =>
+                value ? { ...value, aircraftTypes: event.target.value } : value
+              )
+            }
+          />
+          <Label htmlFor="gate-approval-reference">
+            {isArabic ? "مرجع موافقة المشغّل" : "Operator approval reference"}
+          </Label>
+          <Input
+            id="gate-approval-reference"
+            value={compatibility?.evidence ?? ""}
+            onChange={event =>
+              setCompatibility(value =>
+                value ? { ...value, evidence: event.target.value } : value
+              )
+            }
+          />
+          <DialogFooter>
+            <Button
+              disabled={
+                compatibilityMutation.isPending ||
+                !compatibility?.aircraftTypes.trim() ||
+                !compatibility.evidence.trim()
+              }
+              onClick={() => {
+                if (compatibility)
+                  compatibilityMutation.mutate({
+                    gateId: compatibility.gateId,
+                    aircraftTypes: compatibility.aircraftTypes
+                      .split(/[,،]/)
+                      .map(value => value.trim())
+                      .filter(Boolean),
+                    evidence: compatibility.evidence,
+                  });
+              }}
+            >
+              {isArabic ? "حفظ الاعتماد" : "Save approval"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex items-center justify-between">
         <div>
@@ -524,12 +613,38 @@ export default function GateManagement() {
                           <TableCell>
                             {getTypeBadge(gate.type as GateType)}
                           </TableCell>
-                          <TableCell>{gate.capacity || "-"}</TableCell>
+                          <TableCell>
+                            {gate.capacity || "-"}
+                            <p className="text-xs text-muted-foreground">
+                              {gate.compatibleAircraftTypes?.join(", ") ||
+                                (isArabic
+                                  ? "الطرازات غير معتمدة بعد"
+                                  : "Aircraft approval pending")}
+                            </p>
+                          </TableCell>
                           <TableCell>
                             {getStatusBadge(gate.status as GateStatus)}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setCompatibility({
+                                    gateId: gate.id,
+                                    aircraftTypes:
+                                      gate.compatibleAircraftTypes?.join(
+                                        ", "
+                                      ) ?? "",
+                                    evidence: "",
+                                  })
+                                }
+                              >
+                                {isArabic
+                                  ? "اعتماد الطرازات"
+                                  : "Aircraft approval"}
+                              </Button>
                               <Select
                                 value={gate.status}
                                 onValueChange={(value: GateStatus) =>

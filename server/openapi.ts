@@ -191,6 +191,49 @@ export function buildOpenApiDocument(router: AnyRouter): OpenAPIObject {
     if (operation && !(procedure._def as { output?: unknown }).output) {
       operation["x-response-schema-unavailable"] = true;
     }
+    // The REST adapter returns Zod issue metadata, not only issue.message.
+    // The generator's default strict error schema otherwise rejects real 400s.
+    if (operation) {
+      operation.responses ??= {};
+      // Original tRPC procedures and transport checks can return these errors.
+      for (const [status, description] of Object.entries({
+        404: "Resource not found or outside caller scope",
+        409: "Conflicting command or state",
+        412: "Precondition failed",
+        415: "Unsupported content type",
+        422: "Unprocessable input",
+        429: "Rate limit exceeded",
+        503: "Dependency unavailable",
+      }))
+        operation.responses[status] ??= { description };
+    }
+    for (const [status, response] of Object.entries(
+      operation?.responses ?? {}
+    )) {
+      if (status.startsWith("2") || "$ref" in response) continue;
+      response.content = {
+        "application/json": {
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["code", "message"],
+            properties: {
+              code: { type: "string" },
+              message: { type: "string" },
+              issues: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["message"],
+                  properties: { message: { type: "string" } },
+                  additionalProperties: true,
+                },
+              },
+            },
+          },
+        },
+      };
+    }
   }
   if (!Object.keys(doc.paths ?? {}).length)
     throw new Error("OpenAPI document has no endpoints");

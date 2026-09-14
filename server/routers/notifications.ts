@@ -27,12 +27,14 @@ export const notificationsRouter = router({
       z.object({
         limit: z
           .number()
+          .int()
           .min(1)
           .max(100)
           .default(20)
           .describe("Maximum notifications to return"),
         offset: z
           .number()
+          .int()
           .min(0)
           .default(0)
           .describe("Number of notifications to skip"),

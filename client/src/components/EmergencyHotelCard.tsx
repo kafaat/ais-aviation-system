@@ -1,3 +1,4 @@
+import { hotelStatusLabel } from "../../../shared/hotel-fulfillment";
 /**
  * EmergencyHotelCard Component
  *
@@ -64,7 +65,8 @@ export interface EmergencyHotelData {
 
 export interface HotelBookingConfirmation {
   id: number;
-  confirmationNumber: string;
+  confirmationNumber: string | null;
+  requestReference?: string | null;
   hotelName: string;
   hotelAddress: string;
   hotelPhone: string;
@@ -125,7 +127,7 @@ export function EmergencyHotelCard({
   disabled = false,
   className,
 }: EmergencyHotelCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [roomType, setRoomType] = useState<"standard" | "suite">("standard");
   const [transportIncluded, setTransportIncluded] = useState(
     hotel.hasTransport
@@ -146,7 +148,9 @@ export function EmergencyHotelCard({
     return (
       <Card
         className={cn(
-          "border-green-300 bg-green-50/50 dark:border-green-800 dark:bg-green-950/30",
+          confirmation.status === "confirmed"
+            ? "border-green-300"
+            : "border-amber-300",
           className
         )}
       >
@@ -157,12 +161,14 @@ export function EmergencyHotelCard({
             </div>
             <div>
               <CardTitle className="text-green-800 dark:text-green-200">
-                {t("emergencyHotel.bookingConfirmed", "Booking Confirmed")}
+                {hotelStatusLabel(confirmation.status, i18n.language === "ar")}
               </CardTitle>
               <CardDescription>
                 {t("emergencyHotel.confirmationNumber", "Confirmation")}:{" "}
                 <span className="font-mono font-semibold">
-                  {confirmation.confirmationNumber}
+                  {confirmation.confirmationNumber ??
+                    confirmation.requestReference ??
+                    "—"}
                 </span>
               </CardDescription>
             </div>
@@ -209,13 +215,16 @@ export function EmergencyHotelCard({
               {confirmation.mealIncluded && (
                 <span className="flex items-center gap-1 text-muted-foreground">
                   <UtensilsCrossed className="h-3.5 w-3.5" />
-                  {t("emergencyHotel.mealsIncluded", "Meals included")}
+                  {t("emergencyHotel.mealsRequested", "Meals requested")}
                 </span>
               )}
               {confirmation.transportIncluded && (
                 <span className="flex items-center gap-1 text-muted-foreground">
                   <Bus className="h-3.5 w-3.5" />
-                  {t("emergencyHotel.transportIncluded", "Transport included")}
+                  {t(
+                    "emergencyHotel.transportRequested",
+                    "Transport requested"
+                  )}
                 </span>
               )}
             </div>
@@ -223,7 +232,7 @@ export function EmergencyHotelCard({
             <div className="rounded-lg bg-green-100 p-3 dark:bg-green-900/50">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-green-800 dark:text-green-200">
-                  {t("emergencyHotel.totalCost", "Total Cost")}
+                  {t("emergencyHotel.recordedCost", "Recorded cost / estimate")}
                 </span>
                 <span className="text-lg font-bold text-green-800 dark:text-green-200">
                   {formatSAR(confirmation.totalCost)} {t("common.sar", "SAR")}
@@ -364,7 +373,7 @@ export function EmergencyHotelCard({
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary" className="gap-1">
               <UtensilsCrossed className="h-3 w-3" />
-              {t("emergencyHotel.mealsIncluded", "Meals included")}
+              {t("emergencyHotel.mealsRequested", "Meals requested")}
             </Badge>
             {hotel.estimatedNights !== undefined && (
               <Badge variant="outline">

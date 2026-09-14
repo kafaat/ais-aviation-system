@@ -1,3 +1,4 @@
+import type { HotelRequest, HotelReceipt } from "../shared/hotel-fulfillment";
 import {
   int,
   mysqlTable,
@@ -159,6 +160,16 @@ export const emergencyHotelBookings = mysqlTable(
     bookingId: int("bookingId").notNull(),
     flightId: int("flightId").notNull(),
     passengerId: int("passengerId").notNull(),
+    tenantId: int("tenantId"),
+    requestKey: varchar("requestKey", { length: 64 }).unique(),
+    requestHash: varchar("requestHash", { length: 64 }),
+    requestReference: varchar("requestReference", { length: 20 }).unique(),
+    providerRequest: json("providerRequest").$type<HotelRequest>(),
+    providerReceipt: json("providerReceipt").$type<HotelReceipt>(),
+    providerLease: varchar("providerLease", { length: 36 }),
+    providerLeaseUntil: timestamp("providerLeaseUntil", { fsp: 3 }),
+    providerNextAttemptAt: timestamp("providerNextAttemptAt", { fsp: 3 }),
+    providerLastError: varchar("providerLastError", { length: 255 }),
     roomType: mysqlEnum("roomType", ["standard", "suite"])
       .default("standard")
       .notNull(),
@@ -176,10 +187,18 @@ export const emergencyHotelBookings = mysqlTable(
       "checked_out",
       "cancelled",
       "no_show",
+      "requested",
+      "pending_provider",
+      "outcome_unknown",
+      "confirmed",
+      "sandbox_confirmed",
+      "cancellation_pending",
+      "cancellation_unknown",
+      "rejected",
     ])
       .default("reserved")
       .notNull(),
-    confirmationNumber: varchar("confirmationNumber", { length: 20 }).notNull(),
+    confirmationNumber: varchar("confirmationNumber", { length: 100 }),
     notes: text("notes"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -354,6 +373,7 @@ export const scheduledTasks = mysqlTable("scheduled_tasks", {
 export const eventInbox = mysqlTable("event_inbox", {
   eventId: varchar("eventId", { length: 36 }).primaryKey(),
   eventType: varchar("eventType", { length: 100 }).notNull(),
+  schemaVersion: int("schemaVersion").default(1).notNull(),
   aggregateType: varchar("aggregateType", { length: 100 }).notNull(),
   aggregateId: varchar("aggregateId", { length: 255 }).notNull(),
   tenantId: int("tenantId"),

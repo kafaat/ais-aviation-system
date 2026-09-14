@@ -3175,6 +3175,9 @@ export const airportGates = mysqlTable(
       .default("available")
       .notNull(),
     capacity: varchar("capacity", { length: 50 }), // Aircraft size capability, e.g., "narrow-body", "wide-body"
+    // Exact operator-approved aircraft identifiers; free-text capacity is not evidence.
+    compatibleAircraftTypes: json("compatibleAircraftTypes").$type<string[]>(),
+    compatibilityEvidence: varchar("compatibilityEvidence", { length: 255 }),
     amenities: text("amenities"), // JSON array of amenities like "jet_bridge", "wheelchair_access"
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -3224,6 +3227,10 @@ export const gateAssignments = mysqlTable(
     assignedAt: timestamp("assignedAt").defaultNow().notNull(),
     boardingStartTime: timestamp("boardingStartTime"),
     boardingEndTime: timestamp("boardingEndTime"),
+
+    // Half-open resource reservation. Null legacy windows block allocation until reviewed.
+    occupiedFrom: timestamp("occupiedFrom", { fsp: 3 }),
+    occupiedUntil: timestamp("occupiedUntil", { fsp: 3 }),
 
     // Status tracking
     status: mysqlEnum("status", [
@@ -5621,6 +5628,7 @@ export const outbox = mysqlTable(
     aggregateType: varchar("aggregateType", { length: 64 }).notNull(),
     aggregateId: varchar("aggregateId", { length: 64 }).notNull(),
     eventType: varchar("eventType", { length: 100 }).notNull(),
+    schemaVersion: int("schemaVersion").default(1).notNull(),
     // Tenant attribution (per-airline event streams in the SaaS model).
     tenantId: int("tenantId"),
     payload: json("payload").notNull(),

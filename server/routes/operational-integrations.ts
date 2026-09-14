@@ -1,4 +1,5 @@
-import { Router } from "express";
+import { fromCloudEvent } from "../contracts/domain-events";
+import { Router, json } from "express";
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { createContext } from "../_core/context";
@@ -48,38 +49,46 @@ operationalIntegrations.get(
 const event = z.object({
   eventId: z.string().uuid(),
   eventType: z.string().min(1).max(100),
+  schemaVersion: z.literal(1).default(1),
   aggregateId: z.string().min(1).max(255),
   aggregateType: z.string().min(1).max(100),
   tenantId: z.number().int().positive().nullable(),
   payload: z.record(z.string(), z.json()),
 });
-operationalIntegrations.post("/events/inbox", async (req, res, next) => {
-  try {
-    const expected = process.env.OUTBOX_PUBLISH_TOKEN;
-    const supplied = req.headers.authorization?.replace(/^Bearer /, "");
-    if (
-      !expected ||
-      expected.length < 32 ||
-      !supplied ||
-      Buffer.byteLength(expected) !== Buffer.byteLength(supplied) ||
-      !timingSafeEqual(Buffer.from(expected), Buffer.from(supplied))
-    ) {
-      res.status(401).json({ error: "Receiver authentication required" });
-      return;
+operationalIntegrations.post(
+  "/events/inbox",
+  json({ type: "application/cloudevents+json", limit: "1mb" }),
+  async (req, res, next) => {
+    try {
+      const expected = process.env.OUTBOX_PUBLISH_TOKEN;
+      const supplied = req.headers.authorization?.replace(/^Bearer /, "");
+      if (
+        !expected ||
+        expected.length < 32 ||
+        !supplied ||
+        Buffer.byteLength(expected) !== Buffer.byteLength(supplied) ||
+        !timingSafeEqual(Buffer.from(expected), Buffer.from(supplied))
+      ) {
+        res.status(401).json({ error: "Receiver authentication required" });
+        return;
+      }
+      const input = req.is("application/cloudevents+json")
+        ? fromCloudEvent(req.body)
+        : event.parse(req.body);
+      z.string().uuid().parse(input.eventId);
+      if (req.headers["idempotency-key"] !== input.eventId) {
+        res.status(400).json({ error: "Event identity mismatch" });
+        return;
+      }
+      res.json({ accepted: true, ...(await consumeLocalEvent(input)) });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res
+          .status(400)
+          .json({ error: "Invalid operational integration request" });
+        return;
+      }
+      next(error);
     }
-    const input = event.parse(req.body);
-    if (req.headers["idempotency-key"] !== input.eventId) {
-      res.status(400).json({ error: "Event identity mismatch" });
-      return;
-    }
-    res.json({ accepted: true, ...(await consumeLocalEvent(input)) });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      res
-        .status(400)
-        .json({ error: "Invalid operational integration request" });
-      return;
-    }
-    next(error);
   }
-});
+);

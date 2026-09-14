@@ -1,5 +1,6 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
+import { hotelStatus } from "../../shared/hotel-fulfillment";
 import { outputNumber } from "./primitives";
 export const responseContracts = {
   findHotels: z.array(
@@ -37,14 +38,9 @@ export const responseContracts = {
     totalCost: outputNumber,
     mealIncluded: z.boolean(),
     transportIncluded: z.boolean(),
-    status: z.enum([
-      "cancelled",
-      "checked_in",
-      "reserved",
-      "checked_out",
-      "no_show",
-    ]),
-    confirmationNumber: z.string(),
+    status: hotelStatus,
+    confirmationNumber: z.string().nullable(),
+    requestReference: z.string().nullable(),
     notes: z.union([z.null(), z.string()]),
     createdAt: z.date(),
     updatedAt: z.date(),
@@ -63,14 +59,9 @@ export const responseContracts = {
       totalCost: outputNumber,
       mealIncluded: z.boolean(),
       transportIncluded: z.boolean(),
-      status: z.enum([
-        "cancelled",
-        "checked_in",
-        "reserved",
-        "checked_out",
-        "no_show",
-      ]),
-      confirmationNumber: z.string(),
+      status: hotelStatus,
+      confirmationNumber: z.string().nullable(),
+      requestReference: z.string().nullable(),
       notes: z.union([z.null(), z.string()]),
       createdAt: z.date(),
       hotelName: z.string(),
@@ -94,14 +85,10 @@ export const responseContracts = {
       totalCost: outputNumber,
       mealIncluded: z.boolean(),
       transportIncluded: z.boolean(),
-      status: z.enum([
-        "cancelled",
-        "checked_in",
-        "reserved",
-        "checked_out",
-        "no_show",
-      ]),
-      confirmationNumber: z.string(),
+      status: hotelStatus,
+      providerLastError: z.string().nullable(),
+      confirmationNumber: z.string().nullable(),
+      requestReference: z.string().nullable(),
       notes: z.union([z.null(), z.string()]),
       createdAt: z.date(),
       hotelName: z.string(),
@@ -111,8 +98,9 @@ export const responseContracts = {
     })
   ),
   cancelBooking: z.object({
+    status: hotelStatus,
     success: z.boolean(),
-    confirmationNumber: z.string(),
+    confirmationNumber: z.string().nullable(),
   }),
   checkEntitlement: z.object({
     entitled: z.boolean(),
@@ -125,6 +113,8 @@ export const responseContracts = {
     summary: z.object({
       totalCost: outputNumber,
       activeTotalCost: outputNumber,
+      cancellationCost: outputNumber,
+      pendingBookings: outputNumber,
       totalBookings: outputNumber,
       cancelledBookings: outputNumber,
       activeBookings: outputNumber,
@@ -188,6 +178,6 @@ export const responseContracts = {
   assignTransport: z.object({
     success: z.boolean(),
     transportType: z.enum(["shuttle", "taxi", "private_car"]),
-    confirmationNumber: z.string(),
+    confirmationNumber: z.string().nullable(),
   }),
 };

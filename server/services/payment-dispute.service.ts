@@ -19,6 +19,7 @@ import {
   paymentHistory,
   paymentReceipts,
   payments,
+  users,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
 import { recordEvent } from "./outbox.service";
@@ -121,6 +122,7 @@ export async function recordVerifiedDispute(
       "Dispute references an unknown payment; retry after payment receipt"
     );
   let ownerBooking;
+  let ownerTenantId: number | null;
   if (hint.bookingId) {
     [ownerBooking] = await tx
       .select()
@@ -130,6 +132,21 @@ export async function recordVerifiedDispute(
       .for("update");
     if (!ownerBooking || ownerBooking.userId !== hint.userId)
       throw new Error("Dispute booking missing");
+    ownerTenantId = ownerBooking.tenantId;
+  } else if (hint.kind === "wallet_topup") {
+    // A wallet has no booking. Resolve its scope from the persisted account,
+    // never from webhook metadata. Null is an explicit public account scope;
+    // a missing account must not silently become a public event.
+    const [owner] = await tx
+      .select({ id: users.id, tenantId: users.tenantId })
+      .from(users)
+      .where(eq(users.id, hint.userId))
+      .limit(1)
+      .for("share");
+    if (!owner) throw new Error("Dispute wallet account missing");
+    ownerTenantId = owner.tenantId;
+  } else {
+    throw new Error("Dispute purchase owner missing");
   }
   const [receipt] = await tx
     .select()
@@ -141,6 +158,13 @@ export async function recordVerifiedDispute(
     throw new Error(
       "Dispute references an unknown payment; retry after payment receipt"
     );
+  if (
+    receipt.userId !== hint.userId ||
+    receipt.bookingId !== hint.bookingId ||
+    receipt.kind !== hint.kind ||
+    receipt.targetId !== hint.targetId
+  )
+    throw new Error("Dispute purchase owner changed");
   if (
     dispute.currency.toUpperCase() !== receipt.currency.toUpperCase() ||
     dispute.amount > receipt.amount
@@ -194,7 +218,7 @@ export async function recordVerifiedDispute(
     aggregateType: "payment",
     aggregateId: dispute.paymentIntentId,
     eventType: "payment.disputed",
-    tenantId: ownerBooking?.tenantId,
+    tenantId: ownerTenantId,
     payload: {
       userId: receipt.userId,
       bookingId: receipt.bookingId,
