@@ -3150,7 +3150,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/passenger-priority.ts"],
+      "consumers": [
+        "server/routers/passenger-priority.ts",
+        "server/services/reaccommodation-advisory.service.ts"
+      ],
       "dependencies": ["drizzle/schema.ts", "server/db.ts"],
       "tableExpressions": {
         "reads": [
@@ -3974,6 +3977,28 @@
       "dependencies": [],
       "tableExpressions": {
         "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/reaccommodation-advisory.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/reaccommodation-advisory.service.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/routers/passenger-priority.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/passenger-priority.service.ts",
+        "shared/reaccommodation.ts"
+      ],
+      "tableExpressions": {
+        "reads": ["bookings", "flights"],
         "writes": []
       },
       "replacement": null

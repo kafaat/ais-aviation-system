@@ -18,7 +18,7 @@ authorities. Optional integrations do not establish provider acceptance.
 | R2-08 | Trace context and data lineage                      | Implemented; 29 unit and 7 MySQL acceptance cases pass  |
 | R2-09 | On-call delivery and acknowledgement                | Implemented; 20 unit and 6 MySQL acceptance cases pass  |
 | R2-10 | Aviation weather source adapter                     | Implemented; 35 unit and 7 MySQL acceptance cases pass  |
-| R2-11 | Advisory optimization and simulation pilot          | Pending                                                 |
+| R2-11 | Advisory optimization and simulation pilot          | Assignment implemented; simulation not started          |
 | R2-12 | ONE Record cargo exchange pilot                     | Pending                                                 |
 
 No person, on-call rotation, production database, or provider acceptance is
@@ -516,3 +516,58 @@ provider calls**, completing in about six seconds across three consecutive
 runs. The lineage acceptance runs a real export and checks the recorded inputs,
 the output checksum against the stored one, and the trace linkage. Making the
 run id random alone makes that case fail, which is how it was verified.
+
+## R2-11 — advisory reaccommodation assignment
+
+The system already ranked disrupted passengers by priority, which answers "who
+first". It never answered "who on which flight". With several alternatives of
+differing capacity and arrival time, walking the ranked list and taking the
+best free seat is not the same as an optimal assignment, and it is measurably
+worse — the boundary suite carries an instance where greedy costs 19% more, and
+that instance was **found by searching the instance space**, not constructed to
+flatter the optimiser. Its mechanism is worth stating: greedy lets the
+top-priority business passenger take a scarce early _economy_ seat at the
+downgrade penalty, displacing an economy passenger into a flight five hours
+later; the optimum leaves the business passenger in business on the later
+flight and frees the early seat.
+
+`shared/reaccommodation.ts` computes an exact minimum-cost assignment
+(Jonker–Volgenant shortest augmenting path with potentials). Exact rather than
+heuristic because the output is shown to an operator as _the_ recommendation: a
+heuristic that is usually good would make "why was this passenger left behind"
+unanswerable. **Optimality is verified against exhaustive search** over 120
+random instances, half of them with forbidden pairings — that oracle is
+exponential and therefore only usable on tiny matrices, which is exactly what
+makes it trustworthy.
+
+Three refusals are deliberate:
+
+- **It never writes.** The service module contains no insert, update or delete
+  and calls nothing that writes. The acceptance run asserts every seat counter
+  and row count is byte-identical before and after, which is what makes the
+  advisory safe to run against live data.
+- **It never upgrades.** Moving a passenger into a higher cabin is a revenue
+  decision, and an optimiser has no authority to make one. An economy passenger
+  facing only business seats is reported as unassigned instead.
+- **It never silently drops anyone.** Every passenger appears in the result.
+  When seats run out, the unassigned are named with the objective's own penalty
+  for leaving them out.
+
+The objective is declared in one exported constant — priority weight, downgrade
+penalty, unassigned penalty — and travels with every plan, so an operator can
+disagree with the weights rather than reverse-engineer them. An earlier
+alternative is priced as zero delay, never as a bonus: a negative cost would
+let the optimum chase early arrivals at the expense of everything else.
+Availability is read from the inventory authority without taking a hold, and
+the code says so: between the advisory and any action a seat may be sold.
+
+Evidence: 13 unit cases including the optimality proof, and 3 cases in the live
+MySQL acceptance run, which went from 76 to **79 checks with zero skips and
+zero provider calls**.
+
+**Not included**: the simulation half of this package. A SimPy-class
+discrete-event model of turnaround or gate contention would need a validated
+arrival/service distribution to be worth anything, and there is no measured
+operational data here to fit one to. A simulation calibrated on invented
+distributions would produce confident numbers about nothing, so it is left
+undone rather than approximated.
