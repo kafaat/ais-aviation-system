@@ -123,6 +123,7 @@ export const bagDropRouter = router({
       const capability = bagSession(input.sessionToken);
       return await bagDropService.calculateExcessFee(
         capability.bookingId,
+        capability.passengerId,
         input.totalWeight
       );
     }),

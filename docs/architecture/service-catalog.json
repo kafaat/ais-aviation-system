@@ -389,11 +389,13 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/baggage-entitlement.service.ts",
         "server/services/demo-capability.ts"
       ],
       "tableExpressions": {
         "reads": [
           "airports",
+          "bookingSegments",
           "bookings",
           "flights",
           "passengers",
@@ -437,6 +439,31 @@
           "flights"
         ],
         "writes": ["baggageCustodyEvents", "baggageItems", "baggageTracking"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/baggage-entitlement.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/baggage-entitlement.service.ts",
+      "domain": "departure",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/bag-drop.service.ts"],
+      "dependencies": ["drizzle/schema.ts"],
+      "tableExpressions": {
+        "reads": [
+          "ancillaryServices",
+          "bookingAncillaries",
+          "bookingModifications",
+          "bookingSegments",
+          "bookings",
+          "passengers",
+          "paymentReceipts"
+        ],
+        "writes": []
       },
       "replacement": null
     },
@@ -670,17 +697,21 @@
       ],
       "tableExpressions": {
         "reads": [
+          "ancillaryServices",
+          "bookingAncillaries",
           "bookingRefundPlans",
           "bookingSegments",
           "financialLedger",
           "flights",
           "orderServiceRefunds",
+          "passengers",
           "paymentReceipts",
           "paymentSplits",
           "voucherUsage",
           "vouchers"
         ],
         "writes": [
+          "bookingAncillaries",
           "bookingSegments",
           "bookingStatusHistory",
           "bookings",
@@ -3281,6 +3312,7 @@
           "retailOffers"
         ],
         "writes": [
+          "bookingAncillaries",
           "bookingModifications",
           "bookingSegments",
           "bookings",

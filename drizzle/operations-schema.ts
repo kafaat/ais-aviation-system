@@ -414,6 +414,13 @@ export const bagDropSessions = mysqlTable(
     totalWeight: int("totalWeight").notNull().default(0),
     bagWeights: json("bagWeights").$type<number[]>().notNull(),
     allowanceWeight: int("allowanceWeight").notNull(),
+    entitlementSnapshot: json("entitlementSnapshot").$type<{
+      totalWeightGrams: number;
+      maxBagWeightGrams: number;
+      sourceReferences: string[];
+    }>(),
+    entitlementSnapshotAt: timestamp("entitlementSnapshotAt"),
+    entitlementSegmentId: int("entitlementSegmentId"),
     excessWeight: int("excessWeight").notNull().default(0),
     excessFee: int("excessFee").notNull().default(0),
     paymentStatus: mysqlEnum("paymentStatus", ["none", "pending", "paid"])

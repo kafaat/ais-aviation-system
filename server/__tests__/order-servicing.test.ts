@@ -63,6 +63,39 @@ beforeEach(() => {
         seatNumber: null,
       },
     ],
+    booking_segments: [
+      {
+        id: 21,
+        bookingId: 7,
+        segmentOrder: 1,
+        flightId: 11,
+        segmentAmount: 10000,
+        seatsReserved: true,
+        status: "confirmed",
+      },
+    ],
+    ancillary_services: [
+      {
+        id: 41,
+        code: "BAG_10KG",
+        category: "baggage",
+        name: "10kg Checked Baggage",
+        price: 5000,
+        currency: "SAR",
+        available: true,
+        weightGrams: 10000,
+      },
+      {
+        id: 42,
+        code: "BAG_SERVICE_RECOVERY",
+        category: "baggage",
+        name: "Recovery baggage allowance",
+        price: 0,
+        currency: "SAR",
+        available: true,
+        weightGrams: 5000,
+      },
+    ],
     flights: [
       {
         id: 11,
@@ -194,6 +227,75 @@ async function payment(modificationId: number, amount: number) {
   );
 }
 describe("paid order servicing", () => {
+  it("funds an explicitly scoped baggage snapshot only after collection", async () => {
+    const quote = await quotePaidOrderService(
+      {
+        bookingId: 7,
+        idempotencyKey: "baggage-paid-1",
+        ancillaries: [
+          {
+            ancillaryServiceId: 41,
+            passengerId: 1,
+            flightId: 11,
+            quantity: 1,
+          },
+        ],
+      },
+      1,
+      3
+    );
+    expect(fixture.rows("booking_ancillaries")).toHaveLength(0);
+    await createOrderServiceCheckout(
+      quote.modificationId,
+      1,
+      "https://ais.example"
+    );
+    await payment(quote.modificationId, 5000);
+    expect(fixture.rows("booking_ancillaries")[0]).toMatchObject({
+      passengerId: 1,
+      segmentId: 21,
+      scopeState: "specific_segment",
+      weightSnapshotGrams: 10000,
+      fundingReference: {
+        kind: "collected_modification",
+        modificationId: quote.modificationId,
+        paymentIntentId: "pi_mod",
+      },
+    });
+    expect(fixture.rows("booking_ancillaries")[0].fundedAt).toBeInstanceOf(
+      Date
+    );
+  });
+
+  it("records an explicit no-charge authority without a payment receipt", async () => {
+    const quote = await quotePaidOrderService(
+      {
+        bookingId: 7,
+        idempotencyKey: "baggage-no-charge-1",
+        ancillaries: [
+          {
+            ancillaryServiceId: 42,
+            passengerId: 1,
+            flightId: 11,
+            quantity: 1,
+          },
+        ],
+      },
+      1,
+      3
+    );
+    await confirmNoChargeService(quote.modificationId, 1);
+    expect(fixture.rows("booking_ancillaries")[0]).toMatchObject({
+      weightSnapshotGrams: 5000,
+      segmentId: 21,
+      scopeState: "specific_segment",
+      fundingReference: {
+        kind: "authorized_no_charge",
+        modificationId: quote.modificationId,
+      },
+    });
+  });
+
   it("uses the same quote for the existing date-change screen and retries", async () => {
     fixture.rows("flights")[1].destinationId = 3;
     fixture.rows("flights")[0].departureTime = new Date(

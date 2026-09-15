@@ -6,6 +6,7 @@ import { eq, and, inArray, gt, lt, asc, gte, lte, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
+  bookingSegments,
   passengers,
   flights,
   airports,
@@ -13,6 +14,11 @@ import {
   bagDropSessions as sessionsTable,
   bagDropTags as tagsTable,
 } from "../../drizzle/schema";
+import {
+  baggageEntitlementSnapshot,
+  computeBaggageEntitlement,
+  MAX_BAG_WEIGHT_GRAMS,
+} from "./baggage-entitlement.service";
 
 // ============================================================================
 // Automated Bag Drop Service
@@ -74,6 +80,13 @@ export interface BagDropSession {
   totalBags: number;
   totalWeight: number; // grams
   allowanceWeight: number; // grams
+  entitlementSnapshot: {
+    totalWeightGrams: number;
+    maxBagWeightGrams: number;
+    sourceReferences: string[];
+  } | null;
+  entitlementSnapshotAt: Date | null;
+  entitlementSegmentId: number | null;
   excessWeight: number; // grams
   excessFee: number; // SAR cents
   paymentStatus: BagDropPaymentStatus;
@@ -99,15 +112,6 @@ export interface BagTag {
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
-
-/** Default baggage allowance by cabin class (in grams) */
-const CABIN_ALLOWANCE_GRAMS: Record<string, number> = {
-  economy: 23000, // 23 kg
-  business: 32000, // 32 kg
-};
-
-/** Maximum single bag weight in grams */
-const MAX_BAG_WEIGHT_GRAMS = 32000; // 32 kg
 
 /** Excess baggage fee per kilogram in SAR cents */
 const EXCESS_FEE_PER_KG_CENTS = 5000; // 50 SAR per kg
@@ -167,6 +171,78 @@ async function saveSession(
   return { ...session, version: version + 1 };
 }
 
+async function entitlementSegmentId(
+  tx: SettlementTx,
+  booking: typeof bookings.$inferSelect
+) {
+  const legs = await tx
+    .select({ id: bookingSegments.id, flightId: bookingSegments.flightId })
+    .from(bookingSegments)
+    .where(
+      and(
+        eq(bookingSegments.bookingId, booking.id),
+        inArray(bookingSegments.status, ["pending", "confirmed"])
+      )
+    )
+    .orderBy(asc(bookingSegments.segmentOrder));
+  const current = legs.find(leg => leg.flightId === booking.flightId);
+  if (current) return current.id;
+  if (legs.length === 1) return legs[0].id;
+  throw new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message: "Bag-drop segment scope requires operator review",
+  });
+}
+
+async function verifiedEntitlement(
+  tx: SettlementTx,
+  bookingId: number,
+  passengerId: number,
+  segmentId: number
+) {
+  const entitlement = await computeBaggageEntitlement(tx, {
+    bookingId,
+    passengerId,
+    segmentId,
+  });
+  if (entitlement.requiresOperationalReview)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Baggage entitlement requires operator review",
+    });
+  return entitlement;
+}
+
+async function refreshSessionEntitlement(
+  tx: SettlementTx,
+  session: typeof sessionsTable.$inferSelect
+) {
+  if (!session.entitlementSegmentId)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Bag-drop session has no verified segment entitlement",
+    });
+  const entitlement = await verifiedEntitlement(
+    tx,
+    session.bookingId,
+    session.passengerId,
+    session.entitlementSegmentId
+  );
+  const previousFee = session.excessFee;
+  session.allowanceWeight = entitlement.totalWeightGrams;
+  session.entitlementSnapshot = baggageEntitlementSnapshot(entitlement);
+  session.entitlementSnapshotAt = new Date();
+  session.excessWeight = Math.max(
+    0,
+    session.totalWeight - entitlement.totalWeightGrams
+  );
+  session.excessFee =
+    Math.ceil(session.excessWeight / 1000) * EXCESS_FEE_PER_KG_CENTS;
+  if (session.paymentStatus === "paid" && session.excessFee !== previousFee)
+    session.paymentStatus = session.excessFee > 0 ? "pending" : "none";
+  return entitlement;
+}
+
 export async function initiateBagDrop(
   bookingId: number,
   passengerId: number
@@ -206,6 +282,13 @@ export async function initiateBagDrop(
         code: "NOT_FOUND",
         message: "Passenger does not belong to booking",
       });
+    const segmentId = await entitlementSegmentId(tx, booking);
+    const entitlement = await verifiedEntitlement(
+      tx,
+      bookingId,
+      passengerId,
+      segmentId
+    );
     const [existing] = await tx
       .select()
       .from(sessionsTable)
@@ -229,9 +312,10 @@ export async function initiateBagDrop(
       bookingId,
       passengerId,
       bagWeights: [],
-      allowanceWeight:
-        CABIN_ALLOWANCE_GRAMS[booking.cabinClass] ??
-        CABIN_ALLOWANCE_GRAMS.economy,
+      allowanceWeight: entitlement.totalWeightGrams,
+      entitlementSnapshot: baggageEntitlementSnapshot(entitlement),
+      entitlementSnapshotAt: new Date(),
+      entitlementSegmentId: segmentId,
     });
     const [session] = await tx
       .select()
@@ -260,6 +344,7 @@ export async function weighBag(
   const db = await requireDb();
   return db.transaction(async tx => {
     const session = await getActiveSession(tx, sessionId);
+    await refreshSessionEntitlement(tx, session);
     const number = bagNumber ?? session.totalBags + 1;
     if (number <= session.totalBags) {
       if (session.bagWeights[number - 1] !== weight)
@@ -394,6 +479,7 @@ export async function confirmBagDrop(sessionId: number) {
       .from(tagsTable)
       .where(eq(tagsTable.sessionId, sessionId));
     if (session.status === "complete") return { session, tags };
+    await refreshSessionEntitlement(tx, session);
     if (
       session.totalBags === 0 ||
       tags.length !== session.totalBags ||
@@ -639,49 +725,33 @@ export async function checkBagAllowance(
       message: "Database not available",
     });
 
-  // Validate booking
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Booking not found",
-    });
-  }
-
-  // Validate passenger belongs to booking
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
-
-  if (!passenger) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found or does not belong to this booking",
-    });
-  }
-
-  const allowanceWeight =
-    CABIN_ALLOWANCE_GRAMS[booking.cabinClass] ?? CABIN_ALLOWANCE_GRAMS.economy;
-
-  return {
-    allowanceWeightGrams: allowanceWeight,
-    cabinClass: booking.cabinClass,
-    maxBagWeightGrams: MAX_BAG_WEIGHT_GRAMS,
-    excessFeePerKgCents: EXCESS_FEE_PER_KG_CENTS,
-  };
+  return db.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
+    if (!booking)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    const segmentId = await entitlementSegmentId(tx, booking);
+    const entitlement = await verifiedEntitlement(
+      tx,
+      bookingId,
+      passengerId,
+      segmentId
+    );
+    return {
+      allowanceWeightGrams: entitlement.totalWeightGrams,
+      cabinClass: booking.cabinClass,
+      maxBagWeightGrams: entitlement.maxBagWeightGrams,
+      excessFeePerKgCents: EXCESS_FEE_PER_KG_CENTS,
+    };
+  });
 }
 
 export async function calculateExcessFee(
   bookingId: number,
+  passengerId: number,
   totalWeight: number
 ): Promise<{
   allowanceWeightGrams: number;
@@ -697,34 +767,33 @@ export async function calculateExcessFee(
       message: "Database not available",
     });
 
-  // Get booking for cabin class
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Booking not found",
-    });
-  }
-
-  const allowanceWeight =
-    CABIN_ALLOWANCE_GRAMS[booking.cabinClass] ?? CABIN_ALLOWANCE_GRAMS.economy;
-
-  const excessWeight = Math.max(0, totalWeight - allowanceWeight);
-  const excessKg = Math.ceil(excessWeight / 1000);
-  const excessFee = excessKg * EXCESS_FEE_PER_KG_CENTS;
-
-  return {
-    allowanceWeightGrams: allowanceWeight,
-    totalWeightGrams: totalWeight,
-    excessWeightGrams: excessWeight,
-    excessFeeCents: excessFee,
-    currency: "SAR",
-  };
+  return db.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
+    if (!booking)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+    const segmentId = await entitlementSegmentId(tx, booking);
+    const entitlement = await verifiedEntitlement(
+      tx,
+      bookingId,
+      passengerId,
+      segmentId
+    );
+    const excessWeight = Math.max(
+      0,
+      totalWeight - entitlement.totalWeightGrams
+    );
+    return {
+      allowanceWeightGrams: entitlement.totalWeightGrams,
+      totalWeightGrams: totalWeight,
+      excessWeightGrams: excessWeight,
+      excessFeeCents: Math.ceil(excessWeight / 1000) * EXCESS_FEE_PER_KG_CENTS,
+      currency: "SAR",
+    };
+  });
 }
 
 export async function getBagDropAnalytics(

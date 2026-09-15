@@ -32,8 +32,26 @@ beforeEach(() => {
         userId: 8,
         flightId: 1,
         bookingReference: "AB1234",
+        cabinClass: "economy",
+        status: "confirmed",
       },
     ],
+    passengers: [
+      { id: 1, bookingId: 1, firstName: "Test", lastName: "Passenger" },
+    ],
+    booking_segments: [
+      {
+        id: 1,
+        bookingId: 1,
+        segmentOrder: 1,
+        flightId: 1,
+        status: "confirmed",
+      },
+    ],
+    ancillary_services: [],
+    booking_ancillaries: [],
+    booking_modifications: [],
+    payment_receipts: [],
     flights: [{ id: 1, destinationId: 1 }],
     airports: [{ id: 1, code: "RUH" }],
     bag_drop_sessions: [
@@ -47,6 +65,13 @@ beforeEach(() => {
         totalBags: 0,
         totalWeight: 0,
         allowanceWeight: 23000,
+        entitlementSnapshot: {
+          totalWeightGrams: 23000,
+          maxBagWeightGrams: 32000,
+          sourceReferences: ["booking:1:cabin"],
+        },
+        entitlementSnapshotAt: new Date(),
+        entitlementSegmentId: 1,
         excessWeight: 0,
         excessFee: 0,
         paymentStatus: "none",
@@ -151,6 +176,68 @@ describe("durable integration effects", () => {
   });
 });
 describe("bag-drop persistence and evidence", () => {
+  it("revalidates a funded allowance at weighing and after cancellation", async () => {
+    vi.stubEnv("AIS_ENABLE_DEMOS", "true");
+    fixture.rows("ancillary_services").push({
+      id: 41,
+      category: "baggage",
+      name: "10kg baggage",
+    });
+    fixture.rows("booking_modifications").push({
+      id: 51,
+      bookingId: 1,
+      status: "completed",
+      paymentStatus: "paid",
+      totalCost: 5000,
+      stripePaymentIntentId: "pi_bag",
+      executionEventId: "event-bag",
+    });
+    fixture.rows("payment_receipts").push({
+      paymentIntentId: "pi_bag",
+      kind: "modification",
+      bookingId: 1,
+      targetId: 51,
+      settlementStatus: "applied",
+    });
+    const item = {
+      id: 61,
+      bookingId: 1,
+      passengerId: 1,
+      ancillaryServiceId: 41,
+      status: "active",
+      weightSnapshotGrams: 10000,
+      fundedAt: new Date(),
+      fundingReference: {
+        kind: "collected_modification",
+        modificationId: 51,
+        paymentIntentId: "pi_bag",
+        executionEventId: "event-bag",
+      },
+      metadata: JSON.stringify({ preferences: { modificationId: 51 } }),
+      segmentId: 1,
+      scopeState: "specific_segment",
+    };
+    fixture.rows("booking_ancillaries").push(item);
+    await weighBag(1, 20000, 1);
+    expect(fixture.rows("bag_drop_sessions")[0].allowanceWeight).toBe(33000);
+    item.status = "cancelled";
+    await weighBag(1, 5000, 2);
+    expect(fixture.rows("bag_drop_sessions")[0]).toMatchObject({
+      allowanceWeight: 23000,
+      totalWeight: 25000,
+      excessWeight: 2000,
+      excessFee: 10000,
+      paymentStatus: "pending",
+    });
+  });
+
+  it("rejects a single bag above the independent 32kg handling limit", async () => {
+    vi.stubEnv("AIS_ENABLE_DEMOS", "true");
+    await expect(weighBag(1, 33000, 1)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+  });
+
   it("keeps individual measurements, retries tags, and completes once", async () => {
     vi.stubEnv("AIS_ENABLE_DEMOS", "true");
     await weighBag(1, 8000, 1);

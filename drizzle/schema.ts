@@ -896,6 +896,9 @@ export const ancillaryServices = mysqlTable(
     ]).notNull(),
     name: varchar("name", { length: 255 }).notNull(), // e.g., "20kg Checked Baggage"
     description: text("description"),
+    // Per-unit structured allowance. Historical purchases retain their own
+    // snapshot so later catalog edits cannot change an issued entitlement.
+    weightGrams: int("weightGrams"),
     price: int("price").notNull(), // Price in SAR cents (e.g., 5000 = 50.00 SAR)
     currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
     available: boolean("available").default(true).notNull(),
@@ -930,6 +933,36 @@ export const bookingAncillaries = mysqlTable(
     quantity: int("quantity").default(1).notNull(),
     unitPrice: int("unitPrice").notNull(), // Price at time of purchase (in SAR cents)
     totalPrice: int("totalPrice").notNull(), // quantity * unitPrice
+    // Total allowance captured when the financial/authorized no-charge path
+    // completes. NULL remains unresolved and grants no automatic entitlement.
+    weightSnapshotGrams: int("weightSnapshotGrams"),
+    fundedAt: timestamp("fundedAt"),
+    fundingReference: json("fundingReference").$type<
+      | {
+          kind: "collected_modification";
+          modificationId: number;
+          paymentIntentId: string;
+          executionEventId: string;
+        }
+      | {
+          kind: "authorized_no_charge";
+          modificationId: number;
+          executionEventId: string;
+        }
+      | {
+          kind: "collected_booking";
+          bookingId: number;
+          paymentIntentId: string;
+        }
+    >(),
+    segmentId: int("segmentId"),
+    scopeState: mysqlEnum("scopeState", [
+      "unresolved",
+      "specific_segment",
+      "all_segments",
+    ])
+      .default("unresolved")
+      .notNull(),
     status: mysqlEnum("status", ["active", "cancelled", "refunded"])
       .default("active")
       .notNull(),
@@ -943,6 +976,12 @@ export const bookingAncillaries = mysqlTable(
     passengerIdIdx: index("passenger_id_idx").on(table.passengerId),
     ancillaryServiceIdIdx: index("ancillary_service_id_idx").on(
       table.ancillaryServiceId
+    ),
+    baggageEntitlementLookupIdx: index("baggage_entitlement_lookup_idx").on(
+      table.bookingId,
+      table.passengerId,
+      table.status,
+      table.fundedAt
     ),
   })
 );

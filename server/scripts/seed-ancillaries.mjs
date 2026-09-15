@@ -21,6 +21,7 @@ async function seedAncillaries() {
       category: "baggage",
       name: "20kg Checked Baggage",
       description: "Additional 20kg checked baggage allowance",
+      weightGrams: 20000,
       price: 15000, // 150 SAR
       currency: "SAR",
       icon: "luggage",
@@ -31,6 +32,7 @@ async function seedAncillaries() {
       category: "baggage",
       name: "30kg Checked Baggage",
       description: "Additional 30kg checked baggage allowance",
+      weightGrams: 30000,
       price: 22000, // 220 SAR
       currency: "SAR",
       icon: "luggage",

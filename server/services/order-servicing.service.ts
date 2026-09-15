@@ -2,7 +2,7 @@ import { assertBaggageNotInCustody } from "./baggage-custody.service";
 import { calculateModificationFee } from "./modification-fee";
 import { allocateProportional } from "./seat-economics.service";
 import { z } from "zod";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { getDb, getFlightById } from "../db";
 import {
   bookings,
@@ -401,9 +401,13 @@ export async function quotePaidOrderService(
 export async function applyPaidOrderModification(
   tx: SettlementTx,
   booking: Booking,
-  change: typeof bookingModifications.$inferSelect
+  change: typeof bookingModifications.$inferSelect,
+  funding:
+    | { kind: "collected_modification"; paymentIntentId: string }
+    | { kind: "authorized_no_charge" }
 ) {
   const plan = planSchema.parse(change.servicingPayload);
+  const createdAncillaryIds: number[] = [];
   if (
     booking.paymentStatus !== "paid" ||
     !booking.seatsReserved ||
@@ -561,17 +565,28 @@ export async function applyPaidOrderModification(
     }
   } else {
     let current = booking;
+    let custodyChecked = false;
     for (const item of plan.ancillaries) {
       const quote = await quoteInvoiceAncillary(tx, current, item);
       if (quote.totalPrice !== item.unitTotal)
         throw unavailable("Ancillary catalog changed");
-      await insertInvoiceAncillary(tx, current, {
-        ...item,
-        metadata: {
-          fulfillment: "entitlement_created",
-          modificationId: change.id,
+      if (quote.service.category === "baggage" && !custodyChecked) {
+        await assertBaggageNotInCustody(tx, booking.id);
+        custodyChecked = true;
+      }
+      const created = await insertInvoiceAncillary(
+        tx,
+        current,
+        {
+          ...item,
+          metadata: {
+            fulfillment: "entitlement_created",
+            modificationId: change.id,
+          },
         },
-      });
+        "completed_servicing"
+      );
+      createdAncillaryIds.push(created.id);
       current = {
         ...current,
         totalAmount: current.totalAmount + item.unitTotal,
@@ -606,6 +621,33 @@ export async function applyPaidOrderModification(
       completedAt: new Date(),
     })
     .where(eq(bookingModifications.id, change.id));
+  if (createdAncillaryIds.length) {
+    const fundingReference =
+      funding.kind === "collected_modification"
+        ? {
+            kind: funding.kind,
+            modificationId: change.id,
+            paymentIntentId: funding.paymentIntentId,
+            executionEventId: receipt,
+          }
+        : {
+            kind: funding.kind,
+            modificationId: change.id,
+            executionEventId: receipt,
+          };
+    await tx
+      .update(bookingAncillaries)
+      .set({ fundedAt: new Date(), fundingReference })
+      .where(
+        and(
+          inArray(bookingAncillaries.id, createdAncillaryIds),
+          eq(bookingAncillaries.scopeState, "specific_segment"),
+          isNotNull(bookingAncillaries.passengerId),
+          isNotNull(bookingAncillaries.segmentId),
+          isNotNull(bookingAncillaries.weightSnapshotGrams)
+        )
+      );
+  }
   return { receiptId: receipt, refundDue: Math.max(0, -change.totalCost) };
 }
 export async function confirmNoChargeService(
@@ -639,6 +681,8 @@ export async function confirmNoChargeService(
         receiptId: change.executionEventId,
         refundDue: Math.max(0, -change.totalCost),
       };
-    return applyPaidOrderModification(tx, booking, change);
+    return applyPaidOrderModification(tx, booking, change, {
+      kind: "authorized_no_charge",
+    });
   });
 }

@@ -14,6 +14,8 @@ import {
   inventoryLocks,
   bookingStatusHistory,
   paymentReceipts,
+  bookingAncillaries,
+  ancillaryServices,
   bookingSegments,
   seatHolds,
   seatInventory,
@@ -134,6 +136,48 @@ async function applyFundedBooking(
       updatedAt: new Date(),
     })
     .where(eq(bookings.id, booking.id));
+  if (paymentIntentId && segments.length === 1) {
+    const bookingPassengers = await tx
+      .select({ id: passengers.id })
+      .from(passengers)
+      .where(eq(passengers.bookingId, booking.id));
+    if (bookingPassengers.length === 1) {
+      const unresolved = await tx
+        .select()
+        .from(bookingAncillaries)
+        .where(
+          and(
+            eq(bookingAncillaries.bookingId, booking.id),
+            eq(bookingAncillaries.status, "active"),
+            isNull(bookingAncillaries.passengerId),
+            eq(bookingAncillaries.scopeState, "unresolved"),
+            isNotNull(bookingAncillaries.weightSnapshotGrams)
+          )
+        );
+      for (const ancillary of unresolved) {
+        const [service] = await tx
+          .select()
+          .from(ancillaryServices)
+          .where(eq(ancillaryServices.id, ancillary.ancillaryServiceId))
+          .limit(1);
+        if (service?.category !== "baggage") continue;
+        await tx
+          .update(bookingAncillaries)
+          .set({
+            passengerId: bookingPassengers[0].id,
+            segmentId: segments[0].id,
+            scopeState: "specific_segment",
+            fundedAt: new Date(),
+            fundingReference: {
+              kind: "collected_booking",
+              bookingId: booking.id,
+              paymentIntentId,
+            },
+          })
+          .where(eq(bookingAncillaries.id, ancillary.id));
+      }
+    }
+  }
   const holdIds = [
     ...new Set(
       [booking.inventoryLockId, ...segments.map(s => s.inventoryLockId)].filter(
