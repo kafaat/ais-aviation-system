@@ -3,6 +3,14 @@ import { z } from "zod";
 const id = z.number().int().positive();
 const jsonObject = z.record(z.string(), z.json());
 const hotelIdentity = z.looseObject({ hotelBookingId: id });
+const waitlistIdentity = z.looseObject({
+  waitlistId: id,
+  flightId: id,
+  userId: id,
+});
+const recoveryChoices = z.array(
+  z.looseObject({ bookingId: id, key: z.string().nullable() })
+);
 const hotelReceipt = hotelIdentity.extend({
   bookingId: id,
   mode: z.enum(["sandbox", "live"]),
@@ -24,6 +32,46 @@ const gateAssignment = z.looseObject({
  * JSON objects; they are explicitly described as envelope-only, not fully typed.
  */
 export const eventPayloadContracts: Record<string, z.ZodType> = {
+  "waitlist.offered": waitlistIdentity.extend({
+    expiresAt: z.string().datetime(),
+  }),
+  "waitlist.cancelled": waitlistIdentity,
+  "waitlist.expired": waitlistIdentity,
+  "irops.created": z.looseObject({
+    flightId: id,
+    type: z.enum(["delay", "cancellation", "diversion", "equipment_change"]),
+  }),
+  "irops.protection_planned": z.looseObject({
+    flightId: id,
+    actionsCreated: z.number().int().nonnegative(),
+  }),
+  "irops.notification_created": z.looseObject({ userId: id, flightId: id }),
+  "irops.escalated": z.looseObject({
+    level: z.enum(["low", "medium", "high", "critical"]),
+  }),
+  // The existing v1 producer records identity in the envelope, with empty data.
+  // Do not require new fields that would make historical receipts unreplayable.
+  "irops.resolved": z.looseObject({}),
+  "irops.reaccommodation_confirmed": z.looseObject({ bookingId: id }),
+  "irops.recovery_proposed": z.looseObject({
+    digest: z.string().min(1),
+    choices: recoveryChoices,
+    optimal: z.boolean(),
+    gap: z.number().nonnegative().nullable(),
+    unassignedPassengers: z.number().int().nonnegative(),
+    passengerDelayMinutes: z.number().int().nonnegative(),
+  }),
+  "irops.recovery_approved": z.looseObject({
+    actorId: id,
+    digest: z.string().min(1),
+  }),
+  "irops.recovery_executed": z.looseObject({
+    actorId: id,
+    digest: z.string().min(1),
+    choices: recoveryChoices,
+    unassignedPassengers: z.number().int().nonnegative(),
+    fulfillment: z.literal("awaiting_ticket_reissue"),
+  }),
   "booking.created": z.looseObject({
     bookingId: id,
     userId: id,

@@ -11,6 +11,42 @@
     "domainEvents": {
       "address": "/events/inbox",
       "messages": {
+        "waitlist_offered_v1": {
+          "$ref": "#/components/messages/waitlist_offered_v1"
+        },
+        "waitlist_cancelled_v1": {
+          "$ref": "#/components/messages/waitlist_cancelled_v1"
+        },
+        "waitlist_expired_v1": {
+          "$ref": "#/components/messages/waitlist_expired_v1"
+        },
+        "irops_created_v1": {
+          "$ref": "#/components/messages/irops_created_v1"
+        },
+        "irops_protection_planned_v1": {
+          "$ref": "#/components/messages/irops_protection_planned_v1"
+        },
+        "irops_notification_created_v1": {
+          "$ref": "#/components/messages/irops_notification_created_v1"
+        },
+        "irops_escalated_v1": {
+          "$ref": "#/components/messages/irops_escalated_v1"
+        },
+        "irops_resolved_v1": {
+          "$ref": "#/components/messages/irops_resolved_v1"
+        },
+        "irops_reaccommodation_confirmed_v1": {
+          "$ref": "#/components/messages/irops_reaccommodation_confirmed_v1"
+        },
+        "irops_recovery_proposed_v1": {
+          "$ref": "#/components/messages/irops_recovery_proposed_v1"
+        },
+        "irops_recovery_approved_v1": {
+          "$ref": "#/components/messages/irops_recovery_approved_v1"
+        },
+        "irops_recovery_executed_v1": {
+          "$ref": "#/components/messages/irops_recovery_executed_v1"
+        },
         "booking_created_v1": {
           "$ref": "#/components/messages/booking_created_v1"
         },
@@ -162,6 +198,985 @@
   },
   "components": {
     "messages": {
+      "waitlist_offered_v1": {
+        "name": "waitlist.offered v1",
+        "title": "waitlist.offered",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.waitlist.offered.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:waitlist.offered:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "waitlistId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["waitlistId", "flightId", "userId", "expiresAt"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "waitlist_cancelled_v1": {
+        "name": "waitlist.cancelled v1",
+        "title": "waitlist.cancelled",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.waitlist.cancelled.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:waitlist.cancelled:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "waitlistId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["waitlistId", "flightId", "userId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "waitlist_expired_v1": {
+        "name": "waitlist.expired v1",
+        "title": "waitlist.expired",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.waitlist.expired.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:waitlist.expired:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "waitlistId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["waitlistId", "flightId", "userId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_created_v1": {
+        "name": "irops.created v1",
+        "title": "irops.created",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.created.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:irops.created:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "delay",
+                    "cancellation",
+                    "diversion",
+                    "equipment_change"
+                  ]
+                }
+              },
+              "required": ["flightId", "type"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_protection_planned_v1": {
+        "name": "irops.protection_planned v1",
+        "title": "irops.protection_planned",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.protection_planned.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:irops.protection_planned:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actionsCreated": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["flightId", "actionsCreated"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_notification_created_v1": {
+        "name": "irops.notification_created v1",
+        "title": "irops.notification_created",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.notification_created.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:irops.notification_created:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["userId", "flightId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_escalated_v1": {
+        "name": "irops.escalated v1",
+        "title": "irops.escalated",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.escalated.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:irops.escalated:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "critical"]
+                }
+              },
+              "required": ["level"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_resolved_v1": {
+        "name": "irops.resolved v1",
+        "title": "irops.resolved",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.resolved.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:irops.resolved:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_reaccommodation_confirmed_v1": {
+        "name": "irops.reaccommodation_confirmed v1",
+        "title": "irops.reaccommodation_confirmed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.reaccommodation_confirmed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:irops.reaccommodation_confirmed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bookingId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_recovery_proposed_v1": {
+        "name": "irops.recovery_proposed v1",
+        "title": "irops.recovery_proposed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.recovery_proposed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:irops.recovery_proposed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "digest": { "type": "string", "minLength": 1 },
+                "choices": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "bookingId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "key": { "type": ["string", "null"] }
+                    },
+                    "required": ["bookingId", "key"],
+                    "additionalProperties": {}
+                  }
+                },
+                "optimal": { "type": "boolean" },
+                "gap": {
+                  "anyOf": [
+                    { "type": "number", "minimum": 0 },
+                    { "type": "null" }
+                  ]
+                },
+                "unassignedPassengers": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "passengerDelayMinutes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "digest",
+                "choices",
+                "optimal",
+                "gap",
+                "unassignedPassengers",
+                "passengerDelayMinutes"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_recovery_approved_v1": {
+        "name": "irops.recovery_approved v1",
+        "title": "irops.recovery_approved",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.recovery_approved.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:irops.recovery_approved:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "digest": { "type": "string", "minLength": 1 }
+              },
+              "required": ["actorId", "digest"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "irops_recovery_executed_v1": {
+        "name": "irops.recovery_executed v1",
+        "title": "irops.recovery_executed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.irops.recovery_executed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:irops.recovery_executed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "digest": { "type": "string", "minLength": 1 },
+                "choices": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "bookingId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "key": { "type": ["string", "null"] }
+                    },
+                    "required": ["bookingId", "key"],
+                    "additionalProperties": {}
+                  }
+                },
+                "unassignedPassengers": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "fulfillment": {
+                  "type": "string",
+                  "const": "awaiting_ticket_reissue"
+                }
+              },
+              "required": [
+                "actorId",
+                "digest",
+                "choices",
+                "unassignedPassengers",
+                "fulfillment"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
       "booking_created_v1": {
         "name": "booking.created v1",
         "title": "booking.created",
@@ -4355,6 +5370,18 @@
               "pattern": "^org\\.ais\\.[A-Za-z][A-Za-z0-9_.-]*\\.v1$",
               "not": {
                 "enum": [
+                  "org.ais.waitlist.offered.v1",
+                  "org.ais.waitlist.cancelled.v1",
+                  "org.ais.waitlist.expired.v1",
+                  "org.ais.irops.created.v1",
+                  "org.ais.irops.protection_planned.v1",
+                  "org.ais.irops.notification_created.v1",
+                  "org.ais.irops.escalated.v1",
+                  "org.ais.irops.resolved.v1",
+                  "org.ais.irops.reaccommodation_confirmed.v1",
+                  "org.ais.irops.recovery_proposed.v1",
+                  "org.ais.irops.recovery_approved.v1",
+                  "org.ais.irops.recovery_executed.v1",
                   "org.ais.booking.created.v1",
                   "org.ais.booking.cancelled.v1",
                   "org.ais.booking.modified.v1",
