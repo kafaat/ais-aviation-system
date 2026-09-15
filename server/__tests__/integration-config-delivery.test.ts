@@ -12,8 +12,18 @@ describe("provider configuration delivery", () => {
     for (const key of INTEGRATION_CONFIG_KEYS)
       expect(compose.split(`- ${key}=`).length - 1, key).toBe(4);
     const workflow = readFileSync(".github/workflows/ci-cd.yml", "utf8");
-    for (const key of INTEGRATION_CONFIG_KEYS)
-      expect(workflow.split(`--from-literal=${key}=`).length - 1, key).toBe(2);
+    const secretTransport = readFileSync(
+      "scripts/deploy/kubernetes_secrets.py",
+      "utf8"
+    );
+    for (const key of INTEGRATION_CONFIG_KEYS) {
+      expect(
+        workflow.match(new RegExp(`^          ${key}:`, "gm"))?.length ?? 0,
+        key
+      ).toBe(2);
+      expect(secretTransport, key).toContain(`"${key}"`);
+    }
+    expect(workflow).not.toContain("--from-literal");
     for (const file of ["k8s/base/deployment.yaml", "k8s/base/background.yaml"])
       expect(readFileSync(file, "utf8")).toContain("ais-secrets");
     // The alternative Compose deployment already shares its entire env_file.
