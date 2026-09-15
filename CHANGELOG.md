@@ -1,5 +1,31 @@
 # Changelog
 
+## What's Changed in v1.27.0
+
+### Features
+
+- feat(weather): add the aviation weather source adapter (R2-10) (1f17c25)
+- feat(oncall): deliver operational alerts and record acknowledgement (R2-09) (c849f6c)
+- feat(observability): propagate trace context and record data lineage (R2-08) (d09f3b8)
+- feat(irops): add an exact advisory reaccommodation assignment (R2-11) (240bb01)
+
+### Bug Fixes
+
+- fix(openapi): document only the error statuses a route can return (f4831bd)
+- fix(r2): close assignment, trace and incident-delivery gaps (3881d6d)
+
+### Documentation
+
+- docs(r2): record why the ONE Record cargo pilot is not started (52aa07e)
+
+### Other Changes
+
+- Merge pull request #157 from kafaat/codex/r2-gap-repairs (d44bc2d)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.26.0...v1.27.0
+
+---
+
 ## What's Changed in v1.26.0
 
 ### Features
