@@ -1,6 +1,7 @@
 import { z } from "zod";
 import ts from "typescript";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { format, resolveConfig } from "prettier";
 import { resolve, relative } from "node:path";
 const root = process.cwd();
 const config = ts.readConfigFile("tsconfig.json", ts.sys.readFile);
@@ -168,7 +169,15 @@ if (process.argv.includes("--check")) {
     throw new Error(
       "Service catalog changed; regenerate and review producers, consumers and ownership"
     );
-} else writeFileSync(destination, output);
+} else {
+  writeFileSync(
+    destination,
+    await format(output, {
+      ...(await resolveConfig(destination)),
+      filepath: destination,
+    })
+  );
+}
 console.info(
   JSON.stringify({
     services: services.length,

@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { format, resolveConfig } from "prettier";
 import { z } from "zod";
 import {
   cloudEventMetadata,
@@ -88,4 +89,12 @@ if (process.argv.includes("--check")) {
     throw new Error(
       "Event contracts changed; regenerate and review producer/consumer compatibility"
     );
-} else writeFileSync(path, JSON.stringify(document, null, 2) + "\n");
+} else {
+  writeFileSync(
+    path,
+    await format(JSON.stringify(document), {
+      ...(await resolveConfig(path)),
+      filepath: path,
+    })
+  );
+}

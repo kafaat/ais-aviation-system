@@ -1,5 +1,5 @@
 {
-  "status": "final_gates_in_progress",
+  "status": "local_gates_completed",
   "base": "d45ac688bfe93d8c1c08874bdebd0967b94cf300",
   "mergedPR157": "d44bc2d508e6fa10f8a2968a186b0499aa2c4e9c",
   "localAcceptance": {
@@ -157,12 +157,54 @@
         "pct": 100
       }
     },
-    "note": "Full suite passed before final cancellation wiring and zero-liability event refinement; those delta gates are running."
+    "note": "Full suite passed before final cancellation wiring and zero-liability event refinement. The final MySQL flight-status delta (4 tests), event-contract delta (11 tests), acceptance (108 checks), integration remediation (22 observations), and REST lab (4 tests) also passed. Targeted totals overlap the full suite and are not added to it."
   },
   "migrationCatalog": {
     "migrations": 50,
     "tables": 155,
     "verified": true
   },
-  "productionAcceptance": false
+  "productionAcceptance": false,
+  "testedSourceCommit": "ffef7303d445493318c203eb2bf98a2d2956ae7c",
+  "finalDeltaGates": {
+    "flightStatusMysql": {
+      "passed": 4,
+      "failed": 0
+    },
+    "eventContracts": {
+      "passed": 11,
+      "failed": 0
+    },
+    "integrationRemediation": {
+      "result": "PASS",
+      "observations": 22,
+      "outboundNetworkCalls": 0,
+      "stubbedHttpCalls": 1
+    },
+    "restContracts": {
+      "passed": 4,
+      "providerCalls": 0
+    },
+    "typescript": ["application", "scripts", "acceptance"],
+    "eslintWarnings": 0,
+    "coverageThresholds": "passed",
+    "frontendAndServerBuild": "passed",
+    "bundleSizeLimits": "passed",
+    "migrationReplayAndSchema": "passed"
+  },
+  "ciEvidence": {
+    "sourceCommit": "ffef7303d445493318c203eb2bf98a2d2956ae7c",
+    "passed": [
+      "Previous Release Upgrade Replay",
+      "TCP Faults and Worker Recovery",
+      "Docker Production Contract",
+      "Migration Replay and Live Transaction Acceptance",
+      "REST State Machine and Microcks Contracts",
+      "Build and validate production images (no push)",
+      "Dependency Audit",
+      "Review Dependencies"
+    ],
+    "formattingFailure": "Two generated JSON files required Prettier formatting. Corrected artifacts and generator output are submitted in the follow-up commit; CI must validate its new head.",
+    "remainingChecks": "Track current PR #158 head; previous successful checks do not certify a later commit."
+  }
 }
