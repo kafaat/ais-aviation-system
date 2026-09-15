@@ -365,6 +365,27 @@
       "when": 1789490574792,
       "tag": "0051_outbox_sampling",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "5",
+      "when": 1789502007184,
+      "tag": "0052_baggage_entitlement_phase0",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "5",
+      "when": 1789502024307,
+      "tag": "0053_baggage_catalog_weights",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "5",
+      "when": 1789502370263,
+      "tag": "0054_baggage_entitlement_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -75,7 +75,8 @@ export async function lockEditableInvoice(
 export async function setInvoiceTotal(
   tx: SettlementTx,
   booking: Booking,
-  totalAmount: number
+  totalAmount: number,
+  mode: "editable_invoice" | "completed_servicing" = "editable_invoice"
 ) {
   if (
     !Number.isSafeInteger(totalAmount) ||
@@ -98,8 +99,9 @@ export async function setInvoiceTotal(
     legs.length &&
     (legs.some(
       l =>
-        l.seatsReserved ||
-        l.status !== "pending" ||
+        (mode === "editable_invoice"
+          ? l.seatsReserved || l.status !== "pending"
+          : !l.seatsReserved || l.status !== "confirmed") ||
         l.segmentAmount == null ||
         l.segmentAmount < 0
     ) ||
@@ -248,13 +250,33 @@ export async function quoteInvoiceAncillary(
 export async function insertInvoiceAncillary(
   tx: SettlementTx,
   booking: Booking,
-  data: Parameters<typeof quoteInvoiceAncillary>[2]
+  data: Parameters<typeof quoteInvoiceAncillary>[2],
+  mode: "editable_invoice" | "completed_servicing" = "editable_invoice"
 ) {
   const { totalPrice, service, quantity } = await quoteInvoiceAncillary(
     tx,
     booking,
     data
   );
+  const [scopedSegment] =
+    service.category === "baggage" && data.passengerId && data.flightId
+      ? await tx
+          .select({ id: bookingSegments.id })
+          .from(bookingSegments)
+          .where(
+            and(
+              eq(bookingSegments.bookingId, booking.id),
+              eq(bookingSegments.flightId, data.flightId)
+            )
+          )
+          .limit(1)
+      : [];
+  const weightSnapshotGrams =
+    service.category === "baggage" &&
+    service.weightGrams != null &&
+    service.weightGrams > 0
+      ? service.weightGrams * quantity
+      : null;
   const [result] = await tx.insert(bookingAncillaries).values({
     bookingId: booking.id,
     passengerId: data.passengerId,
@@ -262,6 +284,9 @@ export async function insertInvoiceAncillary(
     quantity,
     unitPrice: service.price,
     totalPrice,
+    weightSnapshotGrams,
+    segmentId: scopedSegment?.id ?? null,
+    scopeState: scopedSegment ? "specific_segment" : "unresolved",
     status: "active",
     metadata: JSON.stringify({
       preferences: data.metadata ?? null,
@@ -272,6 +297,6 @@ export async function insertInvoiceAncillary(
           : "pending_payment",
     }),
   });
-  await setInvoiceTotal(tx, booking, booking.totalAmount + totalPrice);
+  await setInvoiceTotal(tx, booking, booking.totalAmount + totalPrice, mode);
   return { id: Number(result.insertId), totalPrice, service };
 }

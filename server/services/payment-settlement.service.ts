@@ -273,7 +273,10 @@ export async function settleVerifiedPayment(
             "Collected payment lacks the saved servicing checkout identity"
           );
         await tx.transaction(inner =>
-          applyPaidOrderModification(inner, booking, change)
+          applyPaidOrderModification(inner, booking, change, {
+            kind: "collected_modification",
+            paymentIntentId,
+          })
         );
         await tx
           .update(bookingModifications)
