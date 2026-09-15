@@ -764,6 +764,10 @@ export default function MyBookings() {
                                         className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700"
                                       >
                                         <div className="flex-1">
+                                          <BaggageEntitlement
+                                            bookingId={booking.id}
+                                            passengerId={passenger.id}
+                                          />
                                           <p className="text-sm font-medium text-slate-900 dark:text-white">
                                             {index + 1}. {passenger.firstName}{" "}
                                             {passenger.lastName}
@@ -979,3 +983,4 @@ export default function MyBookings() {
     </div>
   );
 }
+import { BaggageEntitlement } from "@/components/BaggageEntitlement";

@@ -200,7 +200,9 @@ it("F14 bag-drop analytics maps actual counters and units", () => {
     units: [],
   });
   show(<BagDropManagement />);
-  fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "1" } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: /Airport ID/ }), {
+    target: { value: "1" },
+  });
   tab(/Analytics/);
   expect(screen.queryByTestId("render-error")).toBeNull();
   for (const value of ["23", "17", "51", "32", "43"])

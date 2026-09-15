@@ -7,6 +7,7 @@ import * as bookingsService from "../services/bookings.service";
 import * as db from "../db";
 import { auditBookingChange } from "../services/audit.service";
 import { createNotification } from "../services/notification.service";
+import { listOwnedBaggageEntitlements } from "../services/baggage-entitlement.service";
 
 function assertTenantMatch(
   rowTenantId: number | null,
@@ -22,6 +23,24 @@ function assertTenantMatch(
  * Handles all booking-related operations
  */
 export const bookingsRouter = router({
+  baggageEntitlements: protectedProcedure
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(responseContracts.baggageEntitlements)
+    .query(({ ctx, input }) => {
+      const database = db.getDb();
+      if (!database)
+        throw new TRPCError({
+          code: "SERVICE_UNAVAILABLE",
+          message: "Database unavailable",
+        });
+      return database.transaction(tx =>
+        listOwnedBaggageEntitlements(tx, input.bookingId, {
+          id: ctx.user.id,
+          role: ctx.user.role,
+          tenantId: ctx.tenantId,
+        })
+      );
+    }),
   create: protectedProcedure
     .meta({
       openapi: {

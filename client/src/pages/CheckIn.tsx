@@ -10,11 +10,14 @@ import { Label } from "@/components/ui/label";
 import { SeatMap } from "@/components/SeatMap";
 import { Link } from "wouter";
 import { toast } from "sonner";
+import { BaggageEntitlement } from "@/components/BaggageEntitlement";
 
 function BoardingPass({
+  bookingId,
   flightId,
   passengerId,
 }: {
+  bookingId: number;
   flightId: number;
   passengerId: number;
 }) {
@@ -76,6 +79,11 @@ function BoardingPass({
         height={420}
         alt={t("checkIn.boardingPass")}
         className="max-w-full mx-auto"
+      />
+      <BaggageEntitlement
+        bookingId={bookingId}
+        passengerId={passengerId}
+        flightId={flightId}
       />
       <p className="text-sm text-muted-foreground">
         {t("checkIn.onlineVerification")}
@@ -236,13 +244,17 @@ export default function CheckIn() {
               )}
               {leg.passengers
                 .filter(p => p.checkedIn)
-                .map(p => (
-                  <BoardingPass
-                    key={`${leg.flightId}:${p.passengerId}`}
-                    flightId={leg.flightId}
-                    passengerId={p.passengerId}
-                  />
-                ))}
+                .map(
+                  p =>
+                    booking.data && (
+                      <BoardingPass
+                        bookingId={booking.data.id}
+                        key={`${leg.flightId}:${p.passengerId}`}
+                        flightId={leg.flightId}
+                        passengerId={p.passengerId}
+                      />
+                    )
+                )}
             </>
           )}
         </>

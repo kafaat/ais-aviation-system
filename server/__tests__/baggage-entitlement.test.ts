@@ -1,13 +1,24 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { transactionMemory } from "./helpers/transaction-memory";
-import { computeBaggageEntitlement } from "../services/baggage-entitlement.service";
+import {
+  computeBaggageEntitlement,
+  listOwnedBaggageEntitlements,
+} from "../services/baggage-entitlement.service";
 
 function baseSeed() {
   return {
-    bookings: [{ id: 7, cabinClass: "economy" }],
+    bookings: [
+      {
+        id: 7,
+        cabinClass: "economy",
+        userId: 1,
+        tenantId: 3,
+        status: "confirmed",
+      },
+    ],
     passengers: [
-      { id: 11, bookingId: 7 },
-      { id: 12, bookingId: 7 },
+      { id: 11, bookingId: 7, tenantId: 3 },
+      { id: 12, bookingId: 7, tenantId: 3 },
     ],
     booking_segments: [
       { id: 21, bookingId: 7, flightId: 31 },
@@ -85,6 +96,48 @@ describe("baggage entitlement authority", () => {
       segmentId,
     });
   }
+
+  it("presents owner-scoped entitlements without financial references", async () => {
+    seed.booking_ancillaries.push(paidBaggage());
+    const rows = await listOwnedBaggageEntitlements(
+      transactionMemory(seed).db,
+      7,
+      { id: 1, role: "user", tenantId: 3 }
+    );
+    expect(rows).toHaveLength(4);
+    expect(
+      rows.find(row => row.passengerId === 11 && row.segmentId === 21)
+        ?.totalWeightGrams
+    ).toBe(33000);
+    expect(JSON.stringify(rows)).not.toContain("pi_bag");
+    expect(JSON.stringify(rows)).not.toContain("fundingReference");
+  });
+  it("rejects another owner and an administrator from another tenant", async () => {
+    const db = transactionMemory(seed).db;
+    await expect(
+      listOwnedBaggageEntitlements(db, 7, { id: 2, role: "user", tenantId: 3 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      listOwnedBaggageEntitlements(db, 7, { id: 2, role: "admin", tenantId: 4 })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(
+      await listOwnedBaggageEntitlements(db, 7, {
+        id: 2,
+        role: "admin",
+        tenantId: 3,
+      })
+    ).toHaveLength(4);
+  });
+  it("does not present a cancelled booking as an active allowance", async () => {
+    seed.bookings[0].status = "cancelled";
+    expect(
+      await listOwnedBaggageEntitlements(transactionMemory(seed).db, 7, {
+        id: 1,
+        role: "user",
+        tenantId: 3,
+      })
+    ).toEqual([]);
+  });
 
   it("adds only a funded purchase snapshot and keeps the 32kg piece limit", async () => {
     seed.booking_ancillaries.push(paidBaggage());
