@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.27.1
+
+### Bug Fixes
+
+- fix(audit): enforce ownership and connect operational workflows (ffef730)
+- fix(ci): format generated contracts and catalog at generation time (aec00bb)
+- fix(review): preserve itinerary scope and serialize privacy transitions (da16d8f)
+
+### Other Changes
+
+- Merge pull request #158 from kafaat/codex/audit-gap-closure-20260915 (116bd25)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.27.0...v1.27.1
+
+---
+
 ## What's Changed in v1.27.0
 
 ### Features
