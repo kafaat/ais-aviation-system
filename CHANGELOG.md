@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.29.0
+
+### Features
+
+- feat: enforce funded baggage entitlements (#163) (5126357)
+
+### Other Changes
+
+- test: verify refund boundaries and harden deployment secret transport (#162) (b69c5a5)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.28.0...v1.29.0
+
+---
+
 ## What's Changed in v1.28.0
 
 ### Features
