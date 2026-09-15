@@ -38,13 +38,22 @@ WITH baggage_rows AS (
         JSON_ARRAY('invalid_specific_segment_scope'), JSON_ARRAY()),
       IF(scopeState <> 'specific_segment' AND segmentId IS NOT NULL,
         JSON_ARRAY('unexpected_segment_for_scope'), JSON_ARRAY()),
-      IF(catalogWeightGrams IS NULL, JSON_ARRAY('catalog_weight_undefined'), JSON_ARRAY()),
+      IF(scopeState = 'all_segments', JSON_ARRAY('unapproved_all_segments_scope'), JSON_ARRAY()),
+      IF(status <> 'active', JSON_ARRAY('status_not_active'), JSON_ARRAY()),
+      IF(weightSnapshotGrams <= 0, JSON_ARRAY('invalid_weight_snapshot'), JSON_ARRAY())
+    ) AS entitlementReasons,
+    IF(catalogWeightGrams IS NULL,
+      JSON_ARRAY('catalog_weight_undefined'), JSON_ARRAY()) AS catalogNotes,
+    JSON_MERGE_PRESERVE(
+      JSON_ARRAY(),
       IF(metadata IS NOT NULL AND NOT JSON_VALID(metadata),
         JSON_ARRAY('invalid_legacy_metadata'), JSON_ARRAY())
-    ) AS reasons
+    ) AS dataNotes
   FROM baggage_rows
 )
 SELECT *
 FROM classified
-WHERE JSON_LENGTH(reasons) > 0
+WHERE JSON_LENGTH(entitlementReasons) > 0
+   OR JSON_LENGTH(catalogNotes) > 0
+   OR JSON_LENGTH(dataNotes) > 0
 ORDER BY createdAt DESC, id DESC;

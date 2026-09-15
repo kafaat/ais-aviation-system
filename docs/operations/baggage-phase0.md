@@ -47,6 +47,24 @@ Do not put database credentials in command arguments. The detailed report can
 contain booking and passenger identifiers and must be handled as restricted
 operational evidence.
 
+The detail report separates `entitlementReasons` (structural eligibility
+deficiencies), `catalogNotes` and `dataNotes`. A valid purchase snapshot remains
+valid when the catalog weight is undefined. Rows with notes alone are included
+so reconciliation does not hide such purchases. These arrays contain no null
+entries. Empty eligibility reasons do not certify funding: the entitlement
+authority still verifies the referenced financial path. Cancelled items,
+unapproved all-segment scope, missing references and inconsistent segment scope
+are explicitly classified. The SQL reports themselves never update rows.
+
+`BAG-MYSQL-REPORT` in the guarded integration runner executes both actual SQL
+files against synthetic MySQL rows and checks malformed metadata, catalog-only
+notes, scope/funding/status defects, counts and unchanged purchase rows. Its
+success must be established by CI; static source assertions are insufficient.
+
+Catalog definitions already ship in journaled migration `0053`; moving that
+applied migration into a manual script would alter migration history and is not
+part of this follow-up. There is no historical purchase backfill.
+
 ## Roll forward and recovery
 
 The schema migration is additive. If application rollout must be reverted,

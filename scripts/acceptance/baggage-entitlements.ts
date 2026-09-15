@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { readFileSync } from "node:fs";
 import * as s from "../../drizzle/schema";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
 import {
@@ -178,6 +179,89 @@ export async function verifyBaggageEntitlements(
         .set({ scopeState: "specific_segment", segmentId: segments[0].id })
         .where(eq(s.bookingAncillaries.id, purchase.id));
       return { unresolvedExcluded: true };
+    }
+  );
+  await record(
+    "BAG-MYSQL-REPORT",
+    "Inventory separates catalog notes from entitlement deficiencies without writes",
+    async () => {
+      const query = readFileSync("scripts/audit-baggage-matching.sql", "utf8");
+      const summary = readFileSync("scripts/audit-baggage-summary.sql", "utf8");
+      const rows = async (queryText: string) => {
+        const [result] = await db.execute(sql.raw(queryText));
+        return result as unknown as Record<string, unknown>[];
+      };
+      const list = (value: unknown): string[] =>
+        typeof value === "string" ? JSON.parse(value) : (value as string[]);
+      const find = async () => {
+        const row = (await rows(query)).find(r => r.id === purchase.id);
+        assert(row, "Expected inventory row");
+        for (const key of ["entitlementReasons", "catalogNotes", "dataNotes"]) {
+          assert(Array.isArray(list(row[key])));
+          assert(!list(row[key]).includes(null as unknown as string));
+        }
+        return row;
+      };
+      await db
+        .update(s.ancillaryServices)
+        .set({ weightGrams: null })
+        .where(eq(s.ancillaryServices.id, service.id));
+      await db
+        .update(s.bookingAncillaries)
+        .set({ metadata: "not-json" })
+        .where(eq(s.bookingAncillaries.id, purchase.id));
+      const before = await db
+        .select()
+        .from(s.bookingAncillaries)
+        .where(eq(s.bookingAncillaries.id, purchase.id));
+      const row = await find();
+      assert.deepEqual(list(row.entitlementReasons), []);
+      assert.deepEqual(list(row.catalogNotes), ["catalog_weight_undefined"]);
+      assert.deepEqual(list(row.dataNotes), ["invalid_legacy_metadata"]);
+      assert.equal(row.metadataFlightId, null);
+      assert.equal((await read()).totalWeightGrams, 33000);
+      const totals = (await rows(summary)).filter(
+        r => r.serviceCode === "AUDIT_BAG_STRUCTURED"
+      );
+      assert.equal(totals.length, 1);
+      assert.equal(Number(totals[0].totalItems), 1);
+      assert.deepEqual(
+        await db
+          .select()
+          .from(s.bookingAncillaries)
+          .where(eq(s.bookingAncillaries.id, purchase.id)),
+        before
+      );
+      for (const [change, reason] of [
+        [{ fundingReference: null }, "missing_funding_reference"],
+        [{ segmentId: null }, "invalid_specific_segment_scope"],
+        [
+          { scopeState: "all_segments", segmentId: null },
+          "unapproved_all_segments_scope",
+        ],
+        [{ status: "cancelled" }, "status_not_active"],
+        [{ weightSnapshotGrams: 0 }, "invalid_weight_snapshot"],
+      ] as const) {
+        await db
+          .update(s.bookingAncillaries)
+          .set(change)
+          .where(eq(s.bookingAncillaries.id, purchase.id));
+        assert(list((await find()).entitlementReasons).includes(reason));
+        await db
+          .update(s.bookingAncillaries)
+          .set({ ...item, status: "active", metadata: null })
+          .where(eq(s.bookingAncillaries.id, purchase.id));
+      }
+      await db
+        .update(s.ancillaryServices)
+        .set({ weightGrams: 99000 })
+        .where(eq(s.ancillaryServices.id, service.id));
+      assert(!(await rows(query)).some(r => r.id === purchase.id));
+      return {
+        reportsReadOnly: true,
+        catalogIsNotPurchaseEvidence: true,
+        malformedMetadataHandled: true,
+      };
     }
   );
   await record(
