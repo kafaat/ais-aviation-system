@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.27.3
+
+### Bug Fixes
+
+- fix(events): validate pricing loyalty and tenant governance payloads (40bd4d6)
+- fix(events): cover operational producers and require registered payloads (e676c87)
+
+### Other Changes
+
+- Merge pull request #160 from kafaat/codex/governance-event-contracts-20260915 (914f4eb)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.27.2...v1.27.3
+
+---
+
 ## What's Changed in v1.27.2
 
 ### Bug Fixes
