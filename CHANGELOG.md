@@ -1,5 +1,15 @@
 # Changelog
 
+## What's Changed in v1.30.0
+
+### Features
+
+- feat: baggage entitlement consumers, mutation proofs and MySQL acceptance (#164) (45a3d5b)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.29.0...v1.30.0
+
+---
+
 ## What's Changed in v1.29.0
 
 ### Features
