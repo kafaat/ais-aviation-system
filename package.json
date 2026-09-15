@@ -51,6 +51,10 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",
     "@aws-sdk/s3-request-presigner": "^3.1127.0",
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "0.220.0",
+    "@opentelemetry/resources": "2.11.0",
+    "@opentelemetry/sdk-trace-base": "2.11.0",
     "@radix-ui/react-accordion": "^1.2.20",
     "@radix-ui/react-alert-dialog": "^1.1.23",
     "@radix-ui/react-aspect-ratio": "^1.1.15",
@@ -135,13 +139,13 @@
     "swagger-ui-express": "^5.0.1",
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "trpc-to-openapi": "^3.3.0",
     "uuid": "^13.0.2",
     "vaul": "^1.1.2",
     "web-vitals": "^4.2.4",
     "wouter": "^3.11.0",
     "ws": "^8.21.3",
     "zod": "^4.5.4",
-    "trpc-to-openapi": "^3.3.0",
     "zod-openapi": "^5.4.4"
   },
   "devDependencies": {

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import type { inferRouterOutputs } from "@trpc/server";
+import type { AppRouter } from "../../../../server/routers";
 import {
   Card,
   CardContent,
@@ -21,92 +23,10 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-// ============ Local Types (mirror server response shapes) ============
-
-interface RouteRevenueRow {
-  originCode: string;
-  originCity: string;
-  destinationCode: string;
-  destinationCity: string;
-  totalRevenue: number;
-  bookingCount: number;
-  averageRevenue: number;
-  passengerCount: number;
-}
-
-interface ClassRevenueRow {
-  classOfService: string;
-  totalRevenue: number;
-  bookingCount: number;
-  averageRevenue: number;
-  passengerCount: number;
-  percentageOfTotal: number;
-}
-
-interface ChannelRevenueRow {
-  channel: string;
-  totalRevenue: number;
-  bookingCount: number;
-  averageRevenue: number;
-  percentageOfTotal: number;
-}
-
-interface AncillaryBreakdownRow {
-  category: string;
-  totalRevenue: number;
-  quantity: number;
-  averagePrice: number;
-  percentageOfTotal: number;
-}
-
-interface YieldRow {
-  flightId: number;
-  flightNumber: string;
-  originCode: string;
-  destinationCode: string;
-  totalRevenue: number;
-  passengerCount: number;
-  distanceKm: number;
-  rpk: number;
-  yield: number;
-  loadFactor: number;
-}
-
-interface DeferredItem {
-  bookingId: number;
-  bookingReference: string;
-  flightNumber: string;
-  departureDate: string;
-  cabinClass: string;
-  amount: number;
-  passengerCount: number;
-}
-
-interface ReportRow {
-  id: string;
-  reportType: string;
-  periodStart: string;
-  periodEnd: string;
-  totalRevenue: number;
-  deferredRevenue: number;
-  recognizedRevenue: number;
-  refundAmount: number;
-  ancillaryRevenue: number;
-  status: string;
-  generatedAt: string;
-}
-
-interface DashboardData {
-  totalRevenue: number;
-  deferredRevenue: number;
-  recognizedRevenue: number;
-  ancillaryRevenue: number;
-  refundTotal: number;
-  netRevenue: number;
-  revenueGrowthPercent: number;
-  averageRevenuePerBooking: number;
-  totalBookings: number;
-}
+type YieldRow =
+  inferRouterOutputs<AppRouter>["revenueAccounting"]["getYieldAnalysis"][number];
+const evidenceLabel = (row: YieldRow) =>
+  row.evidenceId === null ? "—" : `${row.sourceId} / ${row.evidenceId}`;
 
 // ============ Helpers ============
 
@@ -182,62 +102,83 @@ export function RevenueAccounting() {
 
   // ============ Queries ============
 
-  // NOTE: These hooks will resolve once revenueAccountingRouter is registered
-  // in server/routers.ts. Type assertions ensure the component code stays
-  // type-safe regardless of router registration state.
-
-  const { data: dashboard, isLoading: dashboardLoading } =
-    trpc.revenueAccounting.getDashboard.useQuery(dateFilter) as {
-      data: DashboardData | undefined;
-      isLoading: boolean;
-    };
-
-  const { data: routeData, isLoading: routeLoading } =
-    trpc.revenueAccounting.getRevenueByRoute.useQuery(dateFilter, {
-      enabled: activeTab === "route",
-    }) as { data: RouteRevenueRow[] | undefined; isLoading: boolean };
-
-  const { data: classData, isLoading: classLoading } =
-    trpc.revenueAccounting.getRevenueByClass.useQuery(dateFilter, {
-      enabled: activeTab === "class",
-    }) as { data: ClassRevenueRow[] | undefined; isLoading: boolean };
-
-  const { data: channelData, isLoading: channelLoading } =
-    trpc.revenueAccounting.getRevenueByChannel.useQuery(dateFilter, {
-      enabled: activeTab === "channel",
-    }) as { data: ChannelRevenueRow[] | undefined; isLoading: boolean };
-
-  const { data: ancillaryData, isLoading: ancillaryLoading } =
-    trpc.revenueAccounting.getAncillaryRevenue.useQuery(dateFilter, {
-      enabled: activeTab === "ancillary",
-    }) as {
-      data: { total: number; breakdown: AncillaryBreakdownRow[] } | undefined;
-      isLoading: boolean;
-    };
-
-  const { data: yieldData, isLoading: yieldLoading } =
-    trpc.revenueAccounting.getYieldAnalysis.useQuery(
-      dateFilter ? { ...dateFilter, limit: 20 } : { limit: 20 },
-      { enabled: activeTab === "yield" }
-    ) as { data: YieldRow[] | undefined; isLoading: boolean };
-
-  const { data: reports, isLoading: reportsLoading } =
-    trpc.revenueAccounting.getReports.useQuery(undefined, {
-      enabled: activeTab === "reports",
-    }) as { data: ReportRow[] | undefined; isLoading: boolean };
-
-  const { data: deferredData, isLoading: deferredLoading } =
-    trpc.revenueAccounting.getDeferredRevenue.useQuery() as {
-      data: { total: number; items: DeferredItem[] } | undefined;
-      isLoading: boolean;
-    };
-
+  const dashboardQuery =
+    trpc.revenueAccounting.getDashboard.useQuery(dateFilter);
+  const routeQuery = trpc.revenueAccounting.getRevenueByRoute.useQuery(
+    dateFilter,
+    { enabled: activeTab === "route" }
+  );
+  const classQuery = trpc.revenueAccounting.getRevenueByClass.useQuery(
+    dateFilter,
+    { enabled: activeTab === "class" }
+  );
+  const channelQuery = trpc.revenueAccounting.getRevenueByChannel.useQuery(
+    dateFilter,
+    { enabled: activeTab === "channel" }
+  );
+  const ancillaryQuery = trpc.revenueAccounting.getAncillaryRevenue.useQuery(
+    dateFilter,
+    { enabled: activeTab === "ancillary" }
+  );
+  const yieldQuery = trpc.revenueAccounting.getYieldAnalysis.useQuery(
+    { ...dateFilter, limit: 20 },
+    { enabled: activeTab === "yield" }
+  );
+  const reportsQuery = trpc.revenueAccounting.getReports.useQuery(undefined, {
+    enabled: activeTab === "reports",
+  });
+  const deferredQuery = trpc.revenueAccounting.getDeferredRevenue.useQuery();
+  const { data: dashboard, isLoading: dashboardLoading } = dashboardQuery;
+  const { data: routeData, isLoading: routeLoading } = routeQuery;
+  const { data: classData, isLoading: classLoading } = classQuery;
+  const { data: channelData, isLoading: channelLoading } = channelQuery;
+  const { data: ancillaryData, isLoading: ancillaryLoading } = ancillaryQuery;
+  const { data: yieldData, isLoading: yieldLoading } = yieldQuery;
+  const { data: reports, isLoading: reportsLoading } = reportsQuery;
+  const { data: deferredData, isLoading: deferredLoading } = deferredQuery;
   const generateReportMutation =
-    trpc.revenueAccounting.generateReport.useMutation() as {
-      mutate: (input: { month: number; year: number }) => void;
-      data: ReportRow | undefined;
-      isPending: boolean;
-    };
+    trpc.revenueAccounting.generateReport.useMutation({
+      onSuccess: () => {
+        void reportsQuery.refetch();
+      },
+    });
+  const selectedQuery = {
+    route: routeQuery,
+    class: classQuery,
+    channel: channelQuery,
+    ancillary: ancillaryQuery,
+    yield: yieldQuery,
+    reports: reportsQuery,
+  }[activeTab];
+  const requiredQueries = [dashboardQuery, deferredQuery, selectedQuery];
+  if (requiredQueries.some(q => q.isError)) {
+    return (
+      <div className="container py-8">
+        <h1 className="text-3xl font-bold">
+          {t("revenueAccounting.title", "Revenue Accounting")}
+        </h1>
+        <div
+          role="alert"
+          className="my-6 rounded border border-destructive p-4"
+        >
+          <p>
+            {t(
+              "revenueAccounting.sourceUnavailable",
+              "Financial data could not be loaded. Amounts are unavailable."
+            )}
+          </p>
+          <Button
+            className="mt-3"
+            onClick={() => {
+              for (const query of requiredQueries) void query.refetch();
+            }}
+          >
+            {t("revenueAccounting.retry", "Retry")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // ============ Render ============
 
@@ -839,7 +780,7 @@ export function RevenueAccounting() {
               <CardDescription>
                 {t(
                   "revenueAccounting.yieldDesc",
-                  "Revenue per Revenue Passenger Kilometer (RPK) by flight"
+                  "Flight revenue and distance require approved evidence; passenger counts represent funded itinerary membership."
                 )}
               </CardDescription>
             </CardHeader>
@@ -858,14 +799,25 @@ export function RevenueAccounting() {
                         </th>
                         <th className="text-right p-3 font-medium">Pax</th>
                         <th className="text-right p-3 font-medium">
-                          Distance (km)
-                        </th>
-                        <th className="text-right p-3 font-medium">RPK</th>
-                        <th className="text-right p-3 font-medium">
-                          Yield (fils/RPK)
+                          {t("revenueAccounting.distanceKm", "Distance (km)")}
                         </th>
                         <th className="text-right p-3 font-medium">
-                          Load Factor
+                          {t(
+                            "revenueAccounting.fundedPassengerKm",
+                            "Funded passenger km"
+                          )}
+                        </th>
+                        <th className="text-right p-3 font-medium">
+                          {t(
+                            "revenueAccounting.fundedYield",
+                            "Revenue / funded passenger km"
+                          )}
+                        </th>
+                        <th className="text-right p-3 font-medium">
+                          {t("revenueAccounting.fundedLoad", "Funded load")}
+                        </th>
+                        <th className="text-left p-3">
+                          {t("revenueAccounting.evidence", "Evidence")}
                         </th>
                       </tr>
                     </thead>
@@ -882,19 +834,21 @@ export function RevenueAccounting() {
                             {row.originCode} - {row.destinationCode}
                           </td>
                           <td className="p-3 text-right font-semibold">
-                            {formatSAR(row.totalRevenue)}
+                            {row.totalRevenue === null
+                              ? "—"
+                              : formatSAR(row.totalRevenue)}
                           </td>
                           <td className="p-3 text-right">
                             {row.passengerCount}
                           </td>
                           <td className="p-3 text-right">
-                            {row.distanceKm.toLocaleString()}
+                            {row.distanceKm?.toLocaleString() ?? "—"}
                           </td>
                           <td className="p-3 text-right">
-                            {row.rpk.toLocaleString()}
+                            {row.rpk?.toLocaleString() ?? "—"}
                           </td>
                           <td className="p-3 text-right font-semibold">
-                            {row.yield}
+                            {row.yield?.toFixed(2) ?? "—"}
                           </td>
                           <td className="p-3 text-right">
                             <span
@@ -908,6 +862,15 @@ export function RevenueAccounting() {
                             >
                               {row.loadFactor}%
                             </span>
+                          </td>
+                          <td className="p-3">
+                            {evidenceLabel(row)}
+                            <div>
+                              {t(
+                                `revenueAccounting.coverage.${row.coverage}`,
+                                row.coverage
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -999,6 +962,14 @@ export function RevenueAccounting() {
                   </Button>
                 </div>
 
+                {generateReportMutation.isError && (
+                  <p role="alert">
+                    {t(
+                      "revenueAccounting.reportFailed",
+                      "Report generation failed. Retry when the source is available."
+                    )}
+                  </p>
+                )}
                 {/* Generated Report Result */}
                 {generateReportMutation.data && (
                   <div className="mt-6 border rounded-lg p-4 bg-muted/30">

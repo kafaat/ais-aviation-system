@@ -16,10 +16,13 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { RequestHandler } from "express";
+import { SpanKind, SpanStatusCode } from "@opentelemetry/api";
+import { beginTrace } from "./telemetry";
 import {
   formatTraceparent,
   traceContextFrom,
   newTraceContext,
+  parseTraceparent,
   type TraceContext,
 } from "../../shared/trace-context";
 
@@ -46,6 +49,39 @@ export function runInNewTrace<T>(run: () => T): T {
  * carry no user, tenant or payload data, so returning one discloses nothing.
  */
 export const traceMiddleware: RequestHandler = (req, res, next) => {
+  const active = beginTrace(
+    "http.request",
+    SpanKind.SERVER,
+    parseTraceparent(req.headers.traceparent)
+  );
+  if (active) {
+    const method = [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+      "HEAD",
+    ].includes(req.method)
+      ? req.method
+      : "OTHER";
+    active.span.setAttribute("http.request.method", method);
+    let finished = false;
+    const end = () => {
+      if (finished) return;
+      finished = true;
+      active.span.setAttribute("http.response.status_code", res.statusCode);
+      if (res.statusCode >= 500 || !res.writableFinished)
+        active.span.setStatus({ code: SpanStatusCode.ERROR });
+      active.span.end();
+    };
+    res.once("finish", end);
+    res.once("close", end);
+    res.setHeader("traceresponse", formatTraceparent(active.context));
+    runWithTrace(active.context, next);
+    return;
+  }
   const { context } = traceContextFrom(req.headers.traceparent);
   res.setHeader("traceresponse", formatTraceparent(context));
   runWithTrace(context, next);

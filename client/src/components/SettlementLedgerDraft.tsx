@@ -22,6 +22,8 @@ export function SettlementLedgerDraft() {
             <dd>{(query.data.collectedAmount / 100).toFixed(2)} SAR</dd>
             <dt>{l("تمويل غير نقدي", "Non-cash funding")}</dt>
             <dd>{(query.data.nonCashFundedAmount / 100).toFixed(2)} SAR</dd>
+            <dt>{l("تمويل غير نقدي مُعاد", "Returned non-cash funding")}</dt>
+            <dd>{(query.data.nonCashRefundedAmount / 100).toFixed(2)} SAR</dd>
             <dt>{l("المسترد", "Refunded")}</dt>
             <dd>{(query.data.refundedAmount / 100).toFixed(2)} SAR</dd>
             <dt>{l("الصافي", "Net")}</dt>

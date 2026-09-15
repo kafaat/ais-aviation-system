@@ -1,4 +1,5 @@
 import { verifyAuditGapClosure } from "./acceptance/audit-gap-closure";
+import { verifyProjectHardening } from "./acceptance/project-hardening";
 /** Destructive fixtures ONLY in an empty, disposable *_test database.
  * No mocks, test skipping, provider calls or production credentials. */
 import assert from "node:assert/strict";
@@ -449,6 +450,7 @@ try {
   await verifyR2Hotels(db, id, check);
   await verifyR2Weather(db, id, check);
   await verifyAuditGapClosure(db, id, check);
+  await verifyProjectHardening(db, id, check);
   await verifyR2OnCall(db, id, check);
   await verifyR2Trace(db, id, check);
   await verifyR2Lineage(db, id, check);

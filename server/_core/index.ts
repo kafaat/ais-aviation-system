@@ -1,4 +1,5 @@
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
+import { initTracing, stopTracing } from "./telemetry";
 import { privacyDownload } from "../routes/privacy-download";
 import {
   observeApiResponse,
@@ -69,6 +70,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function startServer() {
   assertIntegrationConfiguration();
+  initTracing("api");
   // Initialize Sentry for error tracking
   initSentry();
 
@@ -351,6 +353,7 @@ async function startServer() {
       // Flush Sentry events before shutdown
       try {
         await flushSentry(2000);
+        await stopTracing();
         log.info({ event: "sentry_flushed" }, "Sentry events flushed.");
       } catch (error) {
         log.error(

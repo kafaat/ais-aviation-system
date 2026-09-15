@@ -16,6 +16,9 @@ vi.mock("@/components/ExportReportButton", () => ({
 vi.mock("@/components/SplitRefundCancellation", () => ({
   SplitRefundCancellation: () => null,
 }));
+vi.mock("@/components/InternalFundingRefund", () => ({
+  InternalFundingRefund: () => null,
+}));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     refunds: {

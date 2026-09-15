@@ -351,6 +351,20 @@
       "when": 1789436827311,
       "tag": "0049_voucher_quota_release",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "5",
+      "when": 1789489737511,
+      "tag": "0050_privacy_export_chunks",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "5",
+      "when": 1789490574792,
+      "tag": "0051_outbox_sampling",
+      "breakpoints": true
     }
   ]
 }

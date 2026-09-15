@@ -12,15 +12,19 @@ export function ReaccommodationAdvisory() {
   const l = useOperationalLabels();
   const [flight, setFlight] = useState("");
   const [flightId, setFlightId] = useState(0);
+  const [selected, setSelected] = useState(0);
   const query = trpc.passengerPriority.reaccommodationAdvisory.useQuery(
     { flightId },
     { enabled: flightId > 0, retry: false }
   );
   const result = query.error ? undefined : query.data;
-  const bookings = [
-    ...new Set(result?.plan.assignments.map(a => a.bookingId) ?? []),
-  ];
-  const candidates = result?.candidateFlightIds ?? [];
+  const alternative =
+    selected > 0 ? result?.contingencies?.[selected - 1] : undefined;
+  const plan = alternative?.plan ?? result?.plan;
+  const bookings = [...new Set(plan?.assignments.map(a => a.bookingId) ?? [])];
+  const candidates = (result?.candidateFlightIds ?? []).filter(
+    id => !alternative?.excludedFlightIds.includes(id)
+  );
   return (
     <section className="space-y-4">
       <form
@@ -28,7 +32,10 @@ export function ReaccommodationAdvisory() {
         onSubmit={event => {
           event.preventDefault();
           const value = Number(flight);
-          if (Number.isSafeInteger(value) && value > 0) setFlightId(value);
+          if (Number.isSafeInteger(value) && value > 0) {
+            setFlightId(value);
+            setSelected(0);
+          }
         }}
       >
         <label>
@@ -45,8 +52,46 @@ export function ReaccommodationAdvisory() {
       </form>
       {flightId > 0 && (
         <OperationalReadState query={query}>
-          {result && (
+          {result && plan && (
             <>
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label={l("خطط الاستعادة", "Recovery plans")}
+              >
+                <Button
+                  variant="outline"
+                  aria-pressed={selected === 0}
+                  onClick={() => setSelected(0)}
+                >
+                  {l("الخطة الأساسية", "Primary plan")}
+                </Button>
+                {result.contingencies?.map((c, index) => (
+                  <Button
+                    key={c.excludedFlightIds.join(",")}
+                    variant="outline"
+                    aria-pressed={selected === index + 1}
+                    onClick={() => setSelected(index + 1)}
+                  >
+                    {l("تعذر الرحلات", "Flights unavailable")}:{" "}
+                    {c.excludedFlightIds.join(", ")}
+                  </Button>
+                ))}
+              </div>
+              <p>
+                {l(
+                  "البدائل تعيد الحساب بالهدف نفسه مع استبعاد الرحلات الموضحة. البحث محدود بثماني عمليات حل، وتظهر الخطط المختلفة المتاحة فقط.",
+                  "Fallbacks use the same objective with the displayed flights excluded. Search is bounded to eight additional solves; only distinct available plans are shown."
+                )}
+              </p>
+              {result.contingencySearchTruncated && (
+                <p role="status">
+                  {l(
+                    "لم تُستكشف جميع حالات تعذر الرحلات.",
+                    "Not every flight-unavailability scenario was explored."
+                  )}
+                </p>
+              )}
               <p>
                 {l(
                   "خطة استشارية لا تحجز مقاعد. تعظّم عدد المسافرين المخصصين، ثم تقلل التكلفة الموزونة.",
@@ -54,9 +99,8 @@ export function ReaccommodationAdvisory() {
                 )}
               </p>
               <p>
-                {l("التكلفة", "Cost")}: {result.plan.objectiveValue} ·{" "}
-                {l("غير المخصصين", "Unassigned")}:{" "}
-                {result.plan.unassigned.length} ·{" "}
+                {l("التكلفة", "Cost")}: {plan.objectiveValue} ·{" "}
+                {l("غير المخصصين", "Unassigned")}: {plan.unassigned.length} ·{" "}
                 {l("البدائل المدروسة", "Options considered")}:{" "}
                 {result.consideredOptions}
               </p>
@@ -76,7 +120,7 @@ export function ReaccommodationAdvisory() {
                   "عقوبة تخفيض الدرجة بالدقائق",
                   "Downgrade penalty in minutes"
                 )}
-                : {result.plan.objective.downgradeMinutes}.{" "}
+                : {plan.objective.downgradeMinutes}.{" "}
                 {l(
                   "الأولوية نسبية داخل هذا الطلب.",
                   "Priority is relative within this request."
@@ -96,7 +140,7 @@ export function ReaccommodationAdvisory() {
                   </tr>
                 </thead>
                 <tbody>
-                  {result.plan.assignments.map(a => (
+                  {plan.assignments.map(a => (
                     <tr key={a.passengerId}>
                       <td>
                         {a.passengerId} / {a.bookingId}

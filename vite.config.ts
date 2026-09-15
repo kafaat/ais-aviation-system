@@ -176,18 +176,10 @@ export default defineConfig(({ mode }): UserConfig => {
             return "assets/[name]-[hash][extname]";
           },
         },
-        // Tree shaking configuration
-        treeshake: {
-          // More aggressive tree shaking
-          moduleSideEffects: (id: string): boolean => {
-            // Keep side effects for CSS and certain libraries
-            if (id.endsWith(".css")) return true;
-            if (id.includes("@radix-ui")) return true;
-            return false;
-          },
-          // Remove unused properties
-          propertyReadSideEffects: false,
-        },
+        // Keep Rollup's side-effect analysis. App bootstrap modules such as
+        // i18n/config register runtime state via side-effect-only imports.
+        // Declaring every JS module side-effect-free drops that initialization
+        // from production builds, leaving i18n.language undefined in screens.
       },
     },
     // Optimization for dependencies

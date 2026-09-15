@@ -8,6 +8,7 @@ import {
   useOperationalLabels,
 } from "@/components/OperationalReadState";
 import { SettlementLedgerDraft } from "@/components/SettlementLedgerDraft";
+import { InternalFundingRefund } from "@/components/InternalFundingRefund";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -33,7 +34,12 @@ export default function AirlineConsole() {
         ) && <AirlineFlights />}
         {["airline_admin", "finance", "admin", "super_admin"].includes(
           user.role
-        ) && <SettlementLedgerDraft />}
+        ) && (
+          <>
+            <SettlementLedgerDraft />
+            <InternalFundingRefund />
+          </>
+        )}
       </main>
     </DashboardLayout>
   );

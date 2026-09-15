@@ -29,8 +29,8 @@ vi.mock("../services/event-inbox.service", () => ({
 vi.mock("../services/data-warehouse.service", () => ({
   readExportContent: state.read,
 }));
-vi.mock("../services/gdpr.service", () => ({
-  downloadDataExport: state.privacy,
+vi.mock("../services/privacy-export.service", () => ({
+  openPrivacyDownload: state.privacy,
 }));
 import { operationalIntegrations } from "../routes/operational-integrations";
 let server: Server;
@@ -169,7 +169,10 @@ it("F06 privacy download requires authentication, delegates exact owner and supp
   expect(state.privacy).not.toHaveBeenCalled();
   state.role = "user";
   state.privacy.mockResolvedValue({
-    content: '{"profile":{"id":1}}',
+    content: async function* () {
+      yield Buffer.from('{"profile":');
+      yield Buffer.from('{"id":1}}');
+    },
     contentType: "application/json",
   });
   const response = await fetch(`${base}/gdpr/download/17`);
@@ -186,4 +189,22 @@ it("F06 privacy download requires authentication, delegates exact owner and supp
   const missing = await fetch(`${base}/gdpr/download/18`);
   expect(missing.status).toBe(404);
   expect(await missing.text()).not.toContain("private details");
+});
+
+it("F06 a failed archive stream terminates the response without presenting a complete download", async () => {
+  state.role = "user";
+  state.privacy.mockResolvedValue({
+    contentType: "application/json",
+    content: async function* () {
+      yield Buffer.from('{"profile":');
+      await new Promise<void>(resolve => setImmediate(resolve));
+      throw new Error("private archive details");
+    },
+  });
+  await expect(
+    (async () => {
+      const response = await fetch(`${base}/gdpr/download/17`);
+      return response.text();
+    })()
+  ).rejects.toThrow();
 });

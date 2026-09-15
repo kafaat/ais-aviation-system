@@ -5658,6 +5658,7 @@ export const outbox = mysqlTable(
      * rather than a fabricated identifier. */
     traceId: varchar("traceId", { length: 32 }),
     spanId: varchar("spanId", { length: 16 }),
+    traceFlags: varchar("traceFlags", { length: 2 }),
   },
   table => ({
     statusIdx: index("outbox_status_idx").on(table.status, table.createdAt),
@@ -5669,7 +5670,10 @@ export const outbox = mysqlTable(
   })
 );
 
-export type OutboxEvent = typeof outbox.$inferSelect;
+// Historical serialized events may predate the sampling flag column.
+export type OutboxEvent = Omit<typeof outbox.$inferSelect, "traceFlags"> & {
+  traceFlags?: string | null;
+};
 export type InsertOutboxEvent = typeof outbox.$inferInsert;
 
 /** Durable detailed plans; version prevents stale concurrent writers. */
@@ -6142,8 +6146,31 @@ export const privacyExportArtifacts = mysqlTable("privacy_export_artifacts", {
   content: longtext("content").notNull(),
   contentType: varchar("contentType", { length: 64 }).notNull(),
   sha256: varchar("sha256", { length: 64 }).notNull(),
+  chunkCount: int("chunkCount").notNull().default(0),
   expiresAt: timestamp("expiresAt").notNull(),
 });
+
+/** Immutable export chunks, published atomically with their manifest. Content is
+ * base64 so chunk boundaries cannot split a database UTF-8 character. */
+export const privacyExportChunks = mysqlTable(
+  "privacy_export_chunks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    requestId: int("requestId").notNull(),
+    part: int("part").notNull(),
+    content: longtext("content").notNull(),
+    sha256: varchar("sha256", { length: 64 }).notNull(),
+    sizeBytes: int("sizeBytes").notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+  },
+  t => ({
+    identity: uniqueIndex("privacy_export_chunk_identity").on(
+      t.requestId,
+      t.part
+    ),
+    expiry: index("privacy_export_chunk_expiry").on(t.expiresAt),
+  })
+);
 
 /** Invitations are addressed to an existing authenticated account. Acceptance
  * needs both the opaque invitation ID and the matching recipient identity. */

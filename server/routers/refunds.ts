@@ -1,7 +1,16 @@
 import { responseContracts } from "../contracts/refunds";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { protectedProcedure, router } from "../_core/trpc";
+import {
+  protectedProcedure,
+  airlineFinanceProcedure,
+  router,
+} from "../_core/trpc";
+import {
+  refundInternalFunding,
+  internalRefundInput,
+  internalRefundResult,
+} from "../services/internal-refund.service";
 import * as refundsService from "../services/refunds.service";
 import {
   getRefundStats,
@@ -42,6 +51,10 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
  * Handles all refund-related operations
  */
 export const refundsRouter = router({
+  refundInternalFunding: airlineFinanceProcedure
+    .input(internalRefundInput)
+    .output(internalRefundResult)
+    .mutation(({ input, ctx }) => refundInternalFunding(input, ctx.user.id)),
   splitCancellationQueue: adminProcedure
     .input(
       z.object({

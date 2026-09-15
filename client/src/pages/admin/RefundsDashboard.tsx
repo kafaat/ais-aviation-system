@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { SplitRefundCancellation } from "@/components/SplitRefundCancellation";
+import { InternalFundingRefund } from "@/components/InternalFundingRefund";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -93,10 +94,16 @@ export default function RefundsDashboard() {
         <div>
           <h1 className="text-3xl font-bold">{t("admin.refunds.title")}</h1>
           <p className="text-muted-foreground">{t("admin.refunds.subtitle")}</p>
+          <p>
+            {locale?.startsWith("ar")
+              ? "الإحصاءات والسجل التاليان للاسترداد النقدي. ردّ الأرصدة الداخلية يظهر بوصل مستقل وفي المسودة المالية."
+              : "The statistics and history cover cash refunds. Internal credit returns have a separate receipt and appear in the settlement draft."}
+          </p>
         </div>
         <ExportReportButton reportType="refunds" filters={exportFilters} />
       </div>
 
+      <InternalFundingRefund />
       {/* Statistics Cards */}
       <Card className="p-6 space-y-3">
         <h2 className="text-xl font-semibold">

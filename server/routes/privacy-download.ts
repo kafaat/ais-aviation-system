@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import { createContext } from "../_core/context";
-import { downloadDataExport } from "../services/gdpr.service";
+import { openPrivacyDownload } from "../services/privacy-export.service";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { TRPCError } from "@trpc/server";
 
 export async function privacyDownload(req: Request, res: Response) {
@@ -17,14 +19,18 @@ export async function privacyDownload(req: Request, res: Response) {
       res.status(400).json({ error: "Invalid request" });
       return;
     }
-    const file = await downloadDataExport(user.id, requestId);
+    const file = await openPrivacyDownload(user.id, requestId);
     res.setHeader("Content-Type", `${file.contentType}; charset=utf-8`);
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="privacy-${requestId}.${file.contentType === "text/csv" ? "csv" : "json"}"`
     );
-    res.send(file.content);
+    await pipeline(Readable.from(file.content()), res);
   } catch (error) {
+    if (res.headersSent || res.destroyed) {
+      res.destroy();
+      return;
+    }
     res
       .status(
         error instanceof TRPCError && error.code === "UNAUTHORIZED"

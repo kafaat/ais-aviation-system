@@ -7,8 +7,8 @@
     "description": "At-least-once authenticated HTTP delivery. Deduplicate source/id, retain tenant scope and schema version. New writes require registered payload contracts; unlisted historical payloads remain readable for replay. Producer names are checked against this registry. No broker or production server is implied."
   },
   "x-ais-producer-coverage": {
-    "callSites": 71,
-    "eventTypes": 89,
+    "callSites": 72,
+    "eventTypes": 90,
     "unregistered": []
   },
   "defaultContentType": "application/cloudevents+json",
@@ -204,6 +204,9 @@
         },
         "payment_settlement_review_required_v1": {
           "$ref": "#/components/messages/payment_settlement_review_required_v1"
+        },
+        "payment_internal_refunded_v1": {
+          "$ref": "#/components/messages/payment_internal_refunded_v1"
         },
         "payment_disputed_v1": {
           "$ref": "#/components/messages/payment_disputed_v1"
@@ -5879,6 +5882,115 @@
           "additionalProperties": false
         }
       },
+      "payment_internal_refunded_v1": {
+        "name": "payment.internal_refunded v1",
+        "title": "payment.internal_refunded",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/internal-refund.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.payment.internal_refunded.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:payment.internal_refunded:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "ledgerId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "originalLedgerId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "amount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "tender": {
+                  "type": "string",
+                  "enum": ["user_credit", "corporate_credit"]
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "approvalReference": { "type": "string", "minLength": 3 },
+                "cancelItinerary": { "type": "boolean" }
+              },
+              "required": [
+                "bookingId",
+                "ledgerId",
+                "originalLedgerId",
+                "amount",
+                "tender",
+                "actorId",
+                "approvalReference",
+                "cancelItinerary"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
       "payment_disputed_v1": {
         "name": "payment.disputed v1",
         "title": "payment.disputed",
@@ -8540,6 +8652,7 @@
                   "org.ais.booking.split_refund_item_updated.v1",
                   "org.ais.payment.refunded.v1",
                   "org.ais.payment.settlement_review_required.v1",
+                  "org.ais.payment.internal_refunded.v1",
                   "org.ais.payment.disputed.v1",
                   "org.ais.order.refund_planned.v1",
                   "org.ais.order.refund_updated.v1",

@@ -288,6 +288,16 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     paymentIntentId: z.string().min(1),
     reason: z.string().min(1),
   }),
+  "payment.internal_refunded": z.looseObject({
+    bookingId: id,
+    ledgerId: id,
+    originalLedgerId: id,
+    amount: z.number().int().positive(),
+    tender: z.enum(["user_credit", "corporate_credit"]),
+    actorId: id,
+    approvalReference: z.string().min(3),
+    cancelItinerary: z.boolean(),
+  }),
   "payment.disputed": z.looseObject({
     userId: id,
     bookingId: id.nullable(),

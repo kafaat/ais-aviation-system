@@ -70,7 +70,9 @@ jobs:
         run: pnpm lint:ci
 
       - name: Run TypeScript check
-        run: pnpm run check
+        run: |
+          pnpm run check
+          pnpm exec tsc -p tsconfig.e2e.json --noEmit
 
       - name: Type-check every operational and acceptance script
         run: pnpm run check:scripts
@@ -397,7 +399,9 @@ jobs:
         run: pip install -r auth-service/requirements.txt
 
       - name: Verify auth database URL configuration
-        run: python -m unittest discover -s auth-service -p 'test_config.py' -v
+        run: |
+          python -m unittest discover -s auth-service -p 'test_config.py' -v
+          python auth-service/test_public_registration.py
 
       - name: Start auth service
         env:
@@ -468,7 +472,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run E2E smoke tests
+      - name: Run E2E smoke and funded journey tests
         env:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
           REDIS_URL: redis://127.0.0.1:6379
@@ -484,7 +488,8 @@ jobs:
           AUTH_SERVICE_URL: http://localhost:8000
           CI: true
           E2E_BASE_URL: http://localhost:3000
-        run: pnpm run test:e2e:smoke --project=chromium
+          AIS_DISPOSABLE_DATABASE: true
+        run: pnpm exec playwright test e2e/ci-smoke.spec.ts e2e/hardening-journeys.spec.ts --project=chromium
 
       - name: Upload E2E test results
         if: always()
@@ -775,6 +780,10 @@ jobs:
           ONCALL_BASE_URL: ${{ vars.ONCALL_BASE_URL }}
           ONCALL_TOKEN: ${{ secrets.ONCALL_TOKEN }}
           ONCALL_ACCEPTANCE_REFERENCE: ${{ vars.ONCALL_ACCEPTANCE_REFERENCE }}
+          AIS_OTEL_ENABLED: ${{ vars.AIS_OTEL_ENABLED || 'false' }}
+          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          OTEL_TRACES_SAMPLER_ARG: ${{ vars.OTEL_TRACES_SAMPLER_ARG || '0.1' }}
         run: |
           kubectl create secret generic ais-secrets \
             --namespace=ais-staging \
@@ -795,6 +804,10 @@ jobs:
             --from-literal=ONCALL_BASE_URL="$ONCALL_BASE_URL" \
             --from-literal=ONCALL_TOKEN="$ONCALL_TOKEN" \
             --from-literal=ONCALL_ACCEPTANCE_REFERENCE="$ONCALL_ACCEPTANCE_REFERENCE" \
+            --from-literal=AIS_OTEL_ENABLED="$AIS_OTEL_ENABLED" \
+            --from-literal=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" \
+            --from-literal=OTEL_EXPORTER_OTLP_HEADERS="$OTEL_EXPORTER_OTLP_HEADERS" \
+            --from-literal=OTEL_TRACES_SAMPLER_ARG="$OTEL_TRACES_SAMPLER_ARG" \
             --from-literal=DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.STAGING_JWT_SECRET }}" \
             --from-literal=CSRF_SECRET="${{ secrets.STAGING_CSRF_SECRET }}" \
@@ -975,6 +988,10 @@ jobs:
           ONCALL_BASE_URL: ${{ vars.ONCALL_BASE_URL }}
           ONCALL_TOKEN: ${{ secrets.ONCALL_TOKEN }}
           ONCALL_ACCEPTANCE_REFERENCE: ${{ vars.ONCALL_ACCEPTANCE_REFERENCE }}
+          AIS_OTEL_ENABLED: ${{ vars.AIS_OTEL_ENABLED || 'false' }}
+          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT }}
+          OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+          OTEL_TRACES_SAMPLER_ARG: ${{ vars.OTEL_TRACES_SAMPLER_ARG || '0.1' }}
         run: |
           kubectl create secret generic ais-secrets \
             --namespace=ais-production \
@@ -995,6 +1012,10 @@ jobs:
             --from-literal=ONCALL_BASE_URL="$ONCALL_BASE_URL" \
             --from-literal=ONCALL_TOKEN="$ONCALL_TOKEN" \
             --from-literal=ONCALL_ACCEPTANCE_REFERENCE="$ONCALL_ACCEPTANCE_REFERENCE" \
+            --from-literal=AIS_OTEL_ENABLED="$AIS_OTEL_ENABLED" \
+            --from-literal=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" \
+            --from-literal=OTEL_EXPORTER_OTLP_HEADERS="$OTEL_EXPORTER_OTLP_HEADERS" \
+            --from-literal=OTEL_TRACES_SAMPLER_ARG="$OTEL_TRACES_SAMPLER_ARG" \
             --from-literal=DATABASE_URL="${{ secrets.PRODUCTION_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.PRODUCTION_JWT_SECRET }}" \
             --from-literal=CSRF_SECRET="${{ secrets.PRODUCTION_CSRF_SECRET }}" \

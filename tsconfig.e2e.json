@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["e2e/**/*.ts", "scripts/e2e/**/*.ts"],
+  "exclude": ["node_modules"],
+  "compilerOptions": { "incremental": false }
+}
