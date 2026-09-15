@@ -309,6 +309,19 @@ export async function latestObservations(
   return latest;
 }
 
+function observationAge(observation: StoredObservation, now: Date) {
+  const ageMinutes = Math.floor(
+    (now.getTime() - observation.issuedAt.getTime()) / 60_000
+  );
+  return {
+    ageMinutes,
+    fresh:
+      now.getTime() >= observation.issuedAt.getTime() &&
+      now.getTime() - observation.issuedAt.getTime() <=
+        FRESHNESS_MINUTES[observation.kind] * 60_000,
+  };
+}
+
 function fieldWeather(
   role: "origin" | "destination",
   airport: { id: number; code: string },
@@ -330,9 +343,7 @@ function fieldWeather(
   if (!station) return { ...base, coverage: "station_unmapped" };
   if (!observation) return { ...base, coverage: "no_observation" };
 
-  const ageMinutes = Math.floor(
-    (now.getTime() - observation.issuedAt.getTime()) / 60_000
-  );
+  const { ageMinutes, fresh } = observationAge(observation, now);
   const shared = {
     ...base,
     issuedAt: observation.issuedAt.toISOString(),
@@ -342,8 +353,7 @@ function fieldWeather(
   // An expired bulletin keeps its text on screen, because an operator reading
   // "two hours old" is better served than one shown nothing, but it yields no
   // category and no concerns: those would assert conditions nobody observed.
-  if (ageMinutes > FRESHNESS_MINUTES[observation.kind])
-    return { ...shared, coverage: "stale_observation" };
+  if (!fresh) return { ...shared, coverage: "stale_observation" };
 
   const measurements = {
     visibilityStatuteMiles: observation.visibilityStatuteMiles,
@@ -536,7 +546,8 @@ export async function getFlightWeatherAdvisory(flightId: number) {
 
 export async function getStationWeather(
   stations: readonly string[],
-  kind: WeatherReportKind = "metar"
+  kind: WeatherReportKind = "metar",
+  now = new Date()
 ) {
   const db = requireDb();
   const codes = stations.map(station => {
@@ -548,8 +559,20 @@ export async function getStationWeather(
   const latest = await latestObservations(db, codes, kind);
   return codes.map(code => {
     const observation = latest.get(code);
+    const age = observation ? observationAge(observation, now) : null;
     return {
       icaoCode: code,
+      evaluatedAt: now.toISOString(),
+      ageMinutes: age?.ageMinutes ?? null,
+      coverage: !observation
+        ? ("no_observation" as const)
+        : age?.fresh
+          ? ("classified" as const)
+          : ("stale_observation" as const),
+      currentCategory:
+        age?.fresh && observation ? deriveFlightCategory(observation) : null,
+      currentConcerns:
+        age?.fresh && observation ? concernsFrom(observation) : [],
       observation: observation
         ? {
             ...observation,

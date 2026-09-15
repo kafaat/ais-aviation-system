@@ -323,6 +323,34 @@
       "when": 1789425121074,
       "tag": "0045_oncall_cancelled_dispatch",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "5",
+      "when": 1789434674272,
+      "tag": "0046_privacy_export_artifacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "5",
+      "when": 1789435319206,
+      "tag": "0047_corporate_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "5",
+      "when": 1789436107441,
+      "tag": "0048_compensation_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "5",
+      "when": 1789436827311,
+      "tag": "0049_voucher_quota_release",
+      "breakpoints": true
     }
   ]
 }

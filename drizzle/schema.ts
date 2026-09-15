@@ -1,6 +1,7 @@
 import {
   int,
   json,
+  longtext,
   mysqlEnum,
   mysqlTable,
   text,
@@ -3389,6 +3390,7 @@ export const voucherUsage = mysqlTable(
     bookingId: int("bookingId").notNull(), // Booking where voucher was applied
     discountApplied: int("discountApplied").notNull(), // Actual discount amount in cents
     usedAt: timestamp("usedAt").defaultNow().notNull(), // When voucher was used
+    releasedAt: timestamp("releasedAt"), // Unpaid cancellation releases quota, retaining the audit row
   },
   table => ({
     voucherIdIdx: index("voucher_usage_voucher_id_idx").on(table.voucherId),
@@ -6132,3 +6134,107 @@ export const lineageEvents = mysqlTable(
   })
 );
 export type LineageEventRow = typeof lineageEvents.$inferSelect;
+
+/** Expiring authenticated privacy downloads; request ID is the idempotency key. */
+export const privacyExportArtifacts = mysqlTable("privacy_export_artifacts", {
+  requestId: int("requestId").primaryKey(),
+  userId: int("userId").notNull(),
+  content: longtext("content").notNull(),
+  contentType: varchar("contentType", { length: 64 }).notNull(),
+  sha256: varchar("sha256", { length: 64 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+});
+
+/** Invitations are addressed to an existing authenticated account. Acceptance
+ * needs both the opaque invitation ID and the matching recipient identity. */
+export const corporateInvitations = mysqlTable(
+  "corporate_invitations",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    corporateAccountId: int("corporateAccountId").notNull(),
+    recipientUserId: int("recipientUserId").notNull(),
+    invitedBy: int("invitedBy").notNull(),
+    role: mysqlEnum("role", ["admin", "booker", "traveler"]).notNull(),
+    expiresAt: timestamp("expiresAt").notNull(),
+    acceptedAt: timestamp("acceptedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    recipientIdx: index("corporate_invitation_recipient_idx").on(
+      table.recipientUserId,
+      table.expiresAt
+    ),
+  })
+);
+
+/** Explicit claim workflow. Unknown entitlement is NULL, never an invented quote. */
+export const compensationClaims = mysqlTable(
+  "compensation_claims",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    flightId: int("flightId").notNull(),
+    passengerId: int("passengerId"),
+    regulationType: mysqlEnum("regulationType", [
+      "eu261",
+      "dot",
+      "local",
+    ]).notNull(),
+    claimType: mysqlEnum("claimType", [
+      "delay",
+      "cancellation",
+      "denied_boarding",
+      "downgrade",
+    ]).notNull(),
+    flightDistance: int("flightDistance"),
+    delayMinutes: int("delayMinutes"),
+    calculatedAmount: int("calculatedAmount"),
+    approvedAmount: int("approvedAmount"),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    status: mysqlEnum("status", [
+      "pending",
+      "under_review",
+      "approved",
+      "denied",
+      "paid",
+      "appealed",
+    ])
+      .default("under_review")
+      .notNull(),
+    reason: text("reason"),
+    denialReason: text("denialReason"),
+    reviewEvidence: json("reviewEvidence"),
+    filedAt: timestamp("filedAt").defaultNow().notNull(),
+    resolvedAt: timestamp("resolvedAt"),
+    paidAt: timestamp("paidAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    bookingIdx: index("compensation_claim_booking_idx").on(table.bookingId),
+    flightIdx: index("compensation_claim_flight_idx").on(table.flightId),
+  })
+);
+export const compensationRules = mysqlTable("compensation_rules", {
+  id: int("id").autoincrement().primaryKey(),
+  regulationType: mysqlEnum("regulationType", [
+    "eu261",
+    "dot",
+    "local",
+  ]).notNull(),
+  claimType: mysqlEnum("claimType", [
+    "delay",
+    "cancellation",
+    "denied_boarding",
+    "downgrade",
+  ]).notNull(),
+  minDelay: int("minDelay"),
+  maxDelay: int("maxDelay"),
+  distanceMin: int("distanceMin"),
+  distanceMax: int("distanceMax"),
+  compensationAmount: int("compensationAmount").notNull(),
+  currency: varchar("currency", { length: 3 }).notNull(),
+  conditions: json("conditions"),
+  isActive: boolean("isActive").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});

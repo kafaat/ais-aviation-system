@@ -1,9 +1,22 @@
+import { writePrivacyConsent } from "./consent-authority.service";
+import { createHash } from "node:crypto";
+import type { SettlementTx } from "./booking-settlement.service";
 import { TRPCError } from "@trpc/server";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, lte, isNotNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { getDb } from "../db";
 import {
   users,
+  refreshTokens,
+  savedPassengers,
+  wallets,
+  walletTransactions,
+  userCredits,
+  creditUsage,
+  consentRecords,
+  privacyExportArtifacts,
+  corporateInvitations,
+  compensationClaims,
   userConsents,
   consentHistory,
   dataExportRequests,
@@ -19,7 +32,6 @@ import {
   bookingModifications,
   type UserConsent,
   type InsertUserConsent,
-  type InsertConsentHistory,
   type InsertDataExportRequest,
   type InsertAccountDeletionRequest,
 } from "../../drizzle/schema";
@@ -184,89 +196,7 @@ export async function updateConsent(
   updates: ConsentUpdateInput,
   context?: RequestContext
 ): Promise<UserConsent> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  // Get current consent
-  const currentConsent = await getOrCreateUserConsent(userId, context);
-
-  // Track changes for history
-  const historyRecords: InsertConsentHistory[] = [];
-
-  for (const key of CONSENT_TYPES) {
-    const newValue = updates[key];
-    if (newValue !== undefined && newValue !== currentConsent[key]) {
-      historyRecords.push({
-        userId,
-        consentType: key,
-        previousValue: currentConsent[key],
-        newValue,
-        ipAddress: context?.ipAddress || null,
-        userAgent: context?.userAgent || null,
-        consentVersion: CURRENT_CONSENT_VERSION,
-        changeReason: "user_update",
-      });
-    }
-  }
-
-  // Only update if there are changes
-  if (historyRecords.length === 0) {
-    return currentConsent;
-  }
-
-  // Build update object
-  const updateData: Partial<InsertUserConsent> = {
-    ...updates,
-    consentVersion: CURRENT_CONSENT_VERSION,
-    ipAddressAtConsent: context?.ipAddress || null,
-    userAgentAtConsent: context?.userAgent || null,
-  };
-
-  // Update consent
-  await db
-    .update(userConsents)
-    .set(updateData)
-    .where(eq(userConsents.userId, userId));
-
-  // Record history
-  await db.insert(consentHistory).values(historyRecords);
-
-  // Log the update
-  await createAuditLog({
-    eventType: "SENSITIVE_DATA_ACCESS",
-    eventCategory: "user_management",
-    outcome: "success",
-    severity: "medium",
-    userId,
-    actorType: "user",
-    sourceIp: context?.ipAddress,
-    userAgent: context?.userAgent,
-    resourceType: "consent",
-    resourceId: String(userId),
-    previousValue: historyRecords.map(h => ({
-      type: h.consentType,
-      value: h.previousValue,
-    })),
-    newValue: historyRecords.map(h => ({
-      type: h.consentType,
-      value: h.newValue,
-    })),
-    changeDescription: `Updated ${historyRecords.length} consent preference(s)`,
-  });
-
-  // Fetch and return updated consent
-  const updated = await db
-    .select()
-    .from(userConsents)
-    .where(eq(userConsents.userId, userId))
-    .limit(1);
-
-  return updated[0];
+  return (await writePrivacyConsent(userId, updates, context)).privacy;
 }
 
 /**
@@ -385,75 +315,156 @@ export async function generateDataExport(requestId: number): Promise<{
   }
 
   try {
-    // Get export request
-    const request = await db
-      .select()
-      .from(dataExportRequests)
-      .where(eq(dataExportRequests.id, requestId))
-      .limit(1);
-
-    if (request.length === 0) {
-      return { success: false, error: "Export request not found" };
-    }
-
-    const exportRequest = request[0];
-    const userId = exportRequest.userId;
-
-    // Update status to processing
-    await db
-      .update(dataExportRequests)
-      .set({ status: "processing", processedAt: new Date() })
-      .where(eq(dataExportRequests.id, requestId));
-
-    // Collect all user data
-    const userData = await collectUserData(userId);
-
-    // Update status to completed
-    const downloadExpiresAt = new Date();
-    downloadExpiresAt.setHours(
-      downloadExpiresAt.getHours() + EXPORT_LINK_EXPIRY_HOURS
-    );
-
-    await db
-      .update(dataExportRequests)
-      .set({
-        status: "completed",
-        completedAt: new Date(),
-        downloadExpiresAt,
-        // In production, you would upload to S3/GCS and store the signed URL
-        downloadUrl: `/api/gdpr/download/${requestId}`,
-        fileSizeBytes: JSON.stringify(userData).length,
-      })
-      .where(eq(dataExportRequests.id, requestId));
-
-    logger.info({ requestId, userId }, "Data export completed successfully");
-
-    return { success: true, data: userData };
+    return await db.transaction(async tx => {
+      const [request] = await tx
+        .select()
+        .from(dataExportRequests)
+        .where(eq(dataExportRequests.id, requestId))
+        .for("update");
+      if (!request)
+        return { success: false, error: "Export request not found" };
+      if (request.status === "completed") return { success: true };
+      if (request.status === "expired")
+        return { success: false, error: "Export expired; request a new copy" };
+      const userData = await collectUserData(request.userId, tx);
+      const content =
+        request.format === "csv"
+          ? "section,data\r\n" +
+            Object.entries(userData)
+              .map(
+                ([key, value]) =>
+                  `"${key}","${JSON.stringify(value).replaceAll('"', '""')}"`
+              )
+              .join("\r\n")
+          : JSON.stringify(userData, null, 2);
+      const size = Buffer.byteLength(content, "utf8");
+      if (size > 16 * 1024 * 1024)
+        throw new Error(
+          "Export exceeds the supported download size; requires assisted export"
+        );
+      const expiresAt = new Date(
+        Date.now() + EXPORT_LINK_EXPIRY_HOURS * 3600_000
+      );
+      await tx.insert(privacyExportArtifacts).values({
+        requestId,
+        userId: request.userId,
+        content,
+        contentType: request.format === "csv" ? "text/csv" : "application/json",
+        sha256: createHash("sha256").update(content).digest("hex"),
+        expiresAt,
+      });
+      await tx
+        .update(dataExportRequests)
+        .set({
+          status: "completed",
+          processedAt: new Date(),
+          completedAt: new Date(),
+          downloadExpiresAt: expiresAt,
+          downloadUrl: `/api/gdpr/download/${requestId}`,
+          fileSizeBytes: size,
+          errorMessage: null,
+        })
+        .where(eq(dataExportRequests.id, requestId));
+      return { success: true, data: userData };
+    });
   } catch (error) {
-    logger.error({ error, requestId }, "Failed to generate data export");
-
-    await db
-      .update(dataExportRequests)
-      .set({
-        status: "failed",
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
-      })
-      .where(eq(dataExportRequests.id, requestId));
-
+    logger.error(
+      { requestId, error },
+      "Privacy export failed without publishing a download"
+    );
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: error instanceof Error ? error.message : "Export failed",
     };
   }
+}
+
+export async function downloadDataExport(userId: number, requestId: number) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+  const [artifact] = await db
+    .select()
+    .from(privacyExportArtifacts)
+    .innerJoin(
+      dataExportRequests,
+      eq(dataExportRequests.id, privacyExportArtifacts.requestId)
+    )
+    .where(
+      and(
+        eq(privacyExportArtifacts.requestId, requestId),
+        eq(privacyExportArtifacts.userId, userId),
+        eq(dataExportRequests.userId, userId),
+        eq(dataExportRequests.status, "completed")
+      )
+    );
+  const file = artifact?.privacy_export_artifacts;
+  if (!file || file.expiresAt <= new Date())
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Export not found or expired",
+    });
+  if (createHash("sha256").update(file.content).digest("hex") !== file.sha256)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Export integrity check failed",
+    });
+  return file;
+}
+
+export async function processPrivacyRequests() {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.transaction(async tx => {
+    const now = new Date();
+    await tx
+      .delete(privacyExportArtifacts)
+      .where(lte(privacyExportArtifacts.expiresAt, now));
+    await tx
+      .update(dataExportRequests)
+      .set({ status: "expired", downloadUrl: null })
+      .where(
+        and(
+          eq(dataExportRequests.status, "completed"),
+          lte(dataExportRequests.downloadExpiresAt, now)
+        )
+      );
+  });
+  const exports = await db
+    .select({ id: dataExportRequests.id })
+    .from(dataExportRequests)
+    .where(inArray(dataExportRequests.status, ["pending", "failed"]))
+    .orderBy(dataExportRequests.id)
+    .limit(20);
+  const deletions = await db
+    .select({ id: accountDeletionRequests.id })
+    .from(accountDeletionRequests)
+    .where(
+      and(
+        inArray(accountDeletionRequests.status, ["pending", "processing"]),
+        isNotNull(accountDeletionRequests.confirmedAt),
+        lte(accountDeletionRequests.scheduledDeletionAt, new Date())
+      )
+    )
+    .orderBy(accountDeletionRequests.id)
+    .limit(20);
+  const results = [];
+  for (const request of exports)
+    results.push(await generateDataExport(request.id));
+  for (const request of deletions)
+    results.push(await processAccountDeletion(request.id));
+  const failed = results.filter(result => !result.success);
+  if (failed.length)
+    throw new Error(`Privacy processing failed for ${failed.length} requests`);
+  return { processed: results.length };
 }
 
 /**
  * Collect all user data for export
  */
 async function collectUserData(
-  userId: number
+  userId: number,
+  db: SettlementTx
 ): Promise<Record<string, unknown>> {
-  const db = await getDb();
   if (!db) {
     throw new Error("Database not available");
   }
@@ -501,11 +512,7 @@ async function collectUserData(
       ? await db
           .select()
           .from(passengers)
-          .where(
-            bookingIds.length === 1
-              ? eq(passengers.bookingId, bookingIds[0])
-              : eq(passengers.bookingId, bookingIds[0])
-          )
+          .where(inArray(passengers.bookingId, bookingIds))
       : [];
 
   // Get all payments
@@ -522,11 +529,7 @@ async function collectUserData(
             createdAt: payments.createdAt,
           })
           .from(payments)
-          .where(
-            bookingIds.length === 1
-              ? eq(payments.bookingId, bookingIds[0])
-              : eq(payments.bookingId, bookingIds[0])
-          )
+          .where(inArray(payments.bookingId, bookingIds))
       : [];
 
   // Get loyalty account
@@ -576,7 +579,38 @@ async function collectUserData(
 
   return {
     exportedAt: new Date().toISOString(),
-    exportVersion: "1.0",
+    exportVersion: "2.0",
+    savedPassengers: await db
+      .select()
+      .from(savedPassengers)
+      .where(eq(savedPassengers.userId, userId)),
+    wallet: await db.select().from(wallets).where(eq(wallets.userId, userId)),
+    walletTransactions: await db
+      .select()
+      .from(walletTransactions)
+      .where(eq(walletTransactions.userId, userId)),
+    credits: await db
+      .select()
+      .from(userCredits)
+      .where(eq(userCredits.userId, userId)),
+    creditUsage: await db
+      .select()
+      .from(creditUsage)
+      .where(eq(creditUsage.userId, userId)),
+    corporateInvitations: await db
+      .select()
+      .from(corporateInvitations)
+      .where(eq(corporateInvitations.recipientUserId, userId)),
+    compensationClaims: bookingIds.length
+      ? await db
+          .select()
+          .from(compensationClaims)
+          .where(inArray(compensationClaims.bookingId, bookingIds))
+      : [],
+    cookieConsentHistory: await db
+      .select()
+      .from(consentRecords)
+      .where(eq(consentRecords.userId, userId)),
     profile: userProfile[0] || null,
     preferences: preferences[0] || null,
     consent: consent[0] || null,
@@ -861,167 +895,55 @@ export async function processAccountDeletion(
   requestId: number
 ): Promise<{ success: boolean; error?: string }> {
   const db = await getDb();
-  if (!db) {
-    return { success: false, error: "Database not available" };
-  }
-
-  try {
-    // Get deletion request
-    const request = await db
+  if (!db) return { success: false, error: "Database unavailable" };
+  // Freeze and revoke first, durably. An erasure failure must never restore
+  // access. Login/refresh take the same user lock and reject processed requests.
+  return db.transaction(async tx => {
+    const [reference] = await tx
       .select()
       .from(accountDeletionRequests)
-      .where(
-        and(
-          eq(accountDeletionRequests.id, requestId),
-          eq(accountDeletionRequests.status, "pending")
-        )
-      )
-      .limit(1);
-
-    if (request.length === 0) {
-      return {
-        success: false,
-        error: "Deletion request not found or already processed",
-      };
-    }
-
-    const deletionRequest = request[0];
-    const userId = deletionRequest.userId;
-
-    // Check if past scheduled deletion date and confirmed
-    if (!deletionRequest.confirmedAt) {
-      return {
-        success: false,
-        error: "Deletion request not confirmed by user",
-      };
-    }
-
+      .where(eq(accountDeletionRequests.id, requestId));
+    if (!reference)
+      return { success: false, error: "Deletion request not found" };
+    await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, reference.userId))
+      .for("update");
+    const [request] = await tx
+      .select()
+      .from(accountDeletionRequests)
+      .where(eq(accountDeletionRequests.id, requestId))
+      .for("update");
     if (
-      deletionRequest.scheduledDeletionAt &&
-      new Date() < deletionRequest.scheduledDeletionAt
-    ) {
-      return {
-        success: false,
-        error: "Scheduled deletion date not yet reached",
-      };
-    }
-
-    // Update status to processing
-    await db
-      .update(accountDeletionRequests)
-      .set({ status: "processing", processedAt: new Date() })
-      .where(eq(accountDeletionRequests.id, requestId));
-
-    // Perform anonymization
-    await anonymizeUserData(userId);
-
-    // Update status to completed
-    await db
-      .update(accountDeletionRequests)
-      .set({
-        status: "completed",
-        completedAt: new Date(),
-        dataAnonymizedAt: new Date(),
-      })
-      .where(eq(accountDeletionRequests.id, requestId));
-
-    logger.info(
-      { requestId, userId },
-      "Account deletion completed successfully"
-    );
-
-    return { success: true };
-  } catch (error) {
-    logger.error({ error, requestId }, "Failed to process account deletion");
-
-    await db
+      request.status === "cancelled" ||
+      !request.confirmedAt ||
+      !request.scheduledDeletionAt ||
+      request.scheduledDeletionAt > new Date()
+    )
+      return { success: false, error: "Deletion is not due and confirmed" };
+    if (request.status === "completed") return { success: true };
+    await tx
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(eq(refreshTokens.userId, request.userId));
+    // Booking passengers need subject attribution, and financial/audit records
+    // need an approved retention scope. Neither exists yet. Do not erase other
+    // travellers or invent a legal retention policy, nor certify completion.
+    const error =
+      "RETENTION_REVIEW_REQUIRED: access revoked; erasure awaits an approved data-subject and retention inventory";
+    await tx
       .update(accountDeletionRequests)
       .set({
         status: "failed",
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        processedAt: request.processedAt ?? new Date(),
+        completedAt: null,
+        errorMessage: error,
+        confirmationToken: null,
       })
       .where(eq(accountDeletionRequests.id, requestId));
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-}
-
-/**
- * Anonymize user data
- */
-async function anonymizeUserData(userId: number): Promise<void> {
-  const db = await getDb();
-  if (!db) {
-    throw new Error("Database not available");
-  }
-
-  const anonymizedEmail = `deleted_${nanoid(16)}@anonymized.local`;
-  const anonymizedName = "Deleted User";
-
-  // Anonymize user profile
-  await db
-    .update(users)
-    .set({
-      name: anonymizedName,
-      email: anonymizedEmail,
-      openId: `deleted_${nanoid(32)}`,
-    })
-    .where(eq(users.id, userId));
-
-  // Anonymize user preferences (delete sensitive data but keep record)
-  await db
-    .update(userPreferences)
-    .set({
-      passportNumber: null,
-      passportExpiry: null,
-      phoneNumber: null,
-      emergencyContact: null,
-      emergencyPhone: null,
-    })
-    .where(eq(userPreferences.userId, userId));
-
-  // Get all user bookings
-  const userBookings = await db
-    .select({ id: bookings.id })
-    .from(bookings)
-    .where(eq(bookings.userId, userId));
-
-  const bookingIds = userBookings.map(b => b.id);
-
-  // Anonymize passenger data (keep for legal/accounting but remove PII)
-  if (bookingIds.length > 0) {
-    for (const bookingId of bookingIds) {
-      await db
-        .update(passengers)
-        .set({
-          firstName: "REDACTED",
-          lastName: "REDACTED",
-          passportNumber: null,
-          dateOfBirth: null,
-        })
-        .where(eq(passengers.bookingId, bookingId));
-    }
-  }
-
-  // Delete favorites
-  await db.delete(favoriteFlights).where(eq(favoriteFlights.userId, userId));
-
-  // Anonymize reviews (keep for integrity but remove user association)
-  await db
-    .update(flightReviews)
-    .set({ userId: 0 }) // Anonymous user
-    .where(eq(flightReviews.userId, userId));
-
-  // Delete consent records
-  await db.delete(userConsents).where(eq(userConsents.userId, userId));
-
-  // Keep consent history for compliance (but data is anonymized via user)
-  // Keep booking and payment records for legal/accounting purposes
-
-  logger.info({ userId }, "User data anonymized successfully");
+    return { success: false, error };
+  });
 }
 
 /**
@@ -1051,7 +973,11 @@ export async function getDeletionStatus(userId: number): Promise<{
     .where(
       and(
         eq(accountDeletionRequests.userId, userId),
-        eq(accountDeletionRequests.status, "pending")
+        inArray(accountDeletionRequests.status, [
+          "pending",
+          "processing",
+          "failed",
+        ])
       )
     )
     .limit(1);

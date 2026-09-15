@@ -1,3 +1,4 @@
+import { OperationsEvidence } from "@/components/OperationsEvidence";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
@@ -31,8 +32,12 @@ export default function OperationsControl() {
   const utils = trpc.useUtils();
   const [reason, setReason] = useState("");
   const [eventId, setEventId] = useState("");
-  const [bookingIds, setBookingIds] = useState("");
-  const [candidateIds, setCandidateIds] = useState("");
+  const [bookingIds, setBookingIds] = useState(
+    () => new URLSearchParams(window.location.search).get("bookingIds") ?? ""
+  );
+  const [candidateIds, setCandidateIds] = useState(
+    () => new URLSearchParams(window.location.search).get("candidateIds") ?? ""
+  );
   const [flightId, setFlightId] = useState("");
   const [tail, setTail] = useState("");
   const [premiumId, setPremiumId] = useState("");
@@ -589,6 +594,7 @@ export default function OperationsControl() {
           </div>
         )}
       </Card>
+      <OperationsEvidence />
     </main>
   );
 }

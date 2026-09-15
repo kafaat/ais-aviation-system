@@ -1,3 +1,4 @@
+import { writePrivacyConsent } from "./consent-authority.service";
 export { consentRecords } from "../../drizzle/schema";
 import { consentRecords } from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
@@ -33,6 +34,7 @@ const CURRENT_CONSENT_VERSION = "1.0";
 // ---------------------------------------------------------------------------
 
 export interface ConsentInput {
+  expectedRevision?: number | null;
   essential: boolean;
   analytics: boolean;
   marketing: boolean;
@@ -59,6 +61,26 @@ export async function recordConsent(
   userId: number | null,
   context: RequestContext
 ): Promise<ConsentRecord> {
+  if (userId !== null)
+    return (
+      await writePrivacyConsent(
+        userId,
+        {
+          analyticsTracking: input.analytics,
+          personalizedAds: input.marketing,
+          marketingEmails: input.marketing,
+          marketingSms: input.marketing,
+          marketingPush: input.marketing,
+          thirdPartySharing: input.marketing,
+          partnerOffers: input.marketing,
+          personalizedContent: input.preferences,
+          performanceCookies: input.preferences,
+        },
+        context,
+        input.expectedRevision,
+        true
+      )
+    ).cookie;
   const db = await getDb();
   if (!db) {
     throw new TRPCError({

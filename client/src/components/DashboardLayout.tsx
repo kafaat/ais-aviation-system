@@ -375,7 +375,20 @@ function DashboardLayoutContent({
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
 
   // Get all menu items based on user role
-  const allMenuItems = isAdmin ? [...menuItems, ...adminMenuItems] : menuItems;
+  const airlineItems =
+    user && ["airline_admin", "ops", "finance"].includes(user.role)
+      ? [
+          {
+            icon: Settings,
+            labelKey: "Airline console / لوحة شركة الطيران",
+            path: "/airline",
+            adminOnly: false,
+          },
+        ]
+      : [];
+  const allMenuItems = isAdmin
+    ? [...menuItems, ...adminMenuItems]
+    : [...menuItems, ...airlineItems];
 
   const activeMenuItem = allMenuItems.find(item => item.path === location);
 

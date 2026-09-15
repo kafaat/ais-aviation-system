@@ -7,6 +7,7 @@ export const responseContracts = {
     totalRevenue: outputNumber,
     billedAmount: outputNumber,
     collectedAmount: outputNumber,
+    nonCashFundedAmount: outputNumber,
     refundedAmount: outputNumber,
     netCollectedAmount: outputNumber,
     earnedRevenue: z.null(),

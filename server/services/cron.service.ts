@@ -30,6 +30,35 @@ export async function cleanupExpiredLocks() {
 
 export const PERIODIC_JOB_CATALOG = [
   {
+    name: "weatherRefresh",
+    cron: "*/10 * * * *",
+    periodMs: 600_000,
+    run: async () => {
+      const { refreshWeatherOperations } =
+        await import("./weather-operations.service");
+      await refreshWeatherOperations();
+    },
+  },
+  {
+    name: "autoCheckIn",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { processAutoCheckIns } =
+        await import("./travel-scenarios.service");
+      await processAutoCheckIns();
+    },
+  },
+  {
+    name: "privacyRequests",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { processPrivacyRequests } = await import("./gdpr.service");
+      await processPrivacyRequests();
+    },
+  },
+  {
     name: "hotelFulfillment",
     cron: "* * * * *",
     periodMs: 60000,

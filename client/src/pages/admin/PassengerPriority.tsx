@@ -1,3 +1,4 @@
+import { ReaccommodationAdvisory } from "@/components/ReaccommodationAdvisory";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -22,13 +23,12 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Redirect } from "wouter";
 import {
   ListOrdered,
-  Star,
   Users,
+  Star,
   Shield,
   ArrowUpDown,
   Settings,
   Search,
-  TrendingUp,
   Loader2,
   Save,
   X,
@@ -72,233 +72,6 @@ const FACTOR_LABELS: Record<string, string> = {
 };
 
 // ============================================================================
-// Mock / Fallback Data
-// ============================================================================
-
-const MOCK_RANKINGS = [
-  {
-    passengerId: 1,
-    firstName: "Ahmad",
-    lastName: "Al-Rashid",
-    bookingId: 101,
-    bookingReference: "ABC123",
-    totalScore: 650,
-    tier: "critical" as const,
-    loyaltyTier: "platinum",
-    cabinClass: "business",
-  },
-  {
-    passengerId: 2,
-    firstName: "Sarah",
-    lastName: "Johnson",
-    bookingId: 102,
-    bookingReference: "DEF456",
-    totalScore: 475,
-    tier: "high" as const,
-    loyaltyTier: "gold",
-    cabinClass: "business",
-  },
-  {
-    passengerId: 3,
-    firstName: "Mohammed",
-    lastName: "Hassan",
-    bookingId: 103,
-    bookingReference: "GHI789",
-    totalScore: 325,
-    tier: "medium" as const,
-    loyaltyTier: "silver",
-    cabinClass: "economy",
-  },
-  {
-    passengerId: 4,
-    firstName: "Emily",
-    lastName: "Chen",
-    bookingId: 104,
-    bookingReference: "JKL012",
-    totalScore: 150,
-    tier: "low" as const,
-    loyaltyTier: null,
-    cabinClass: "economy",
-  },
-];
-
-const MOCK_RULES = [
-  {
-    id: 1,
-    factorName: "loyalty_tier",
-    factorKey: "platinum",
-    value: "platinum",
-    score: 300,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 2,
-    factorName: "loyalty_tier",
-    factorKey: "gold",
-    value: "gold",
-    score: 200,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 3,
-    factorName: "loyalty_tier",
-    factorKey: "silver",
-    value: "silver",
-    score: 100,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 4,
-    factorName: "loyalty_tier",
-    factorKey: "bronze",
-    value: "bronze",
-    score: 0,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 5,
-    factorName: "fare_class",
-    factorKey: "business",
-    value: "business",
-    score: 200,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 6,
-    factorName: "fare_class",
-    factorKey: "economy_full",
-    value: "economy_full",
-    score: 100,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 7,
-    factorName: "fare_class",
-    factorKey: "economy_discount",
-    value: "economy_discount",
-    score: 50,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 8,
-    factorName: "connection_risk",
-    factorKey: "tight_connection",
-    value: "tight_connection",
-    score: 150,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 9,
-    factorName: "connection_risk",
-    factorKey: "has_connection",
-    value: "has_connection",
-    score: 75,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 10,
-    factorName: "special_needs",
-    factorKey: "unaccompanied_minor",
-    value: "unaccompanied_minor",
-    score: 100,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 11,
-    factorName: "special_needs",
-    factorKey: "medical",
-    value: "medical_assistance",
-    score: 100,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 12,
-    factorName: "time_sensitivity",
-    factorKey: "same_day",
-    value: "same_day",
-    score: 100,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 13,
-    factorName: "booking_value",
-    factorKey: "top_10_percent",
-    value: "top_10_percent",
-    score: 100,
-    isActive: true,
-    createdAt: new Date(),
-  },
-  {
-    id: 14,
-    factorName: "booking_value",
-    factorKey: "top_25_percent",
-    value: "top_25_percent",
-    score: 50,
-    isActive: true,
-    createdAt: new Date(),
-  },
-];
-
-const MOCK_REBOOKING = [
-  {
-    passengerId: 1,
-    firstName: "Ahmad",
-    lastName: "Al-Rashid",
-    bookingId: 101,
-    bookingReference: "ABC123",
-    totalScore: 650,
-    tier: "critical" as const,
-    loyaltyTier: "platinum",
-    cabinClass: "business",
-  },
-  {
-    passengerId: 2,
-    firstName: "Sarah",
-    lastName: "Johnson",
-    bookingId: 102,
-    bookingReference: "DEF456",
-    totalScore: 475,
-    tier: "high" as const,
-    loyaltyTier: "gold",
-    cabinClass: "business",
-  },
-  {
-    passengerId: 3,
-    firstName: "Mohammed",
-    lastName: "Hassan",
-    bookingId: 103,
-    bookingReference: "GHI789",
-    totalScore: 325,
-    tier: "medium" as const,
-    loyaltyTier: "silver",
-    cabinClass: "economy",
-  },
-  {
-    passengerId: 4,
-    firstName: "Emily",
-    lastName: "Chen",
-    bookingId: 104,
-    bookingReference: "JKL012",
-    totalScore: 150,
-    tier: "low" as const,
-    loyaltyTier: null,
-    cabinClass: "economy",
-  },
-];
-
-// ============================================================================
 // Helper Components
 // ============================================================================
 
@@ -333,36 +106,6 @@ function LoyaltyBadge({ tier }: { tier: string | null }) {
     >
       {tier}
     </Badge>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  icon: Icon,
-  iconColor,
-  bgGradient,
-}: {
-  title: string;
-  value: string | number;
-  icon: typeof Users;
-  iconColor: string;
-  bgGradient: string;
-}) {
-  return (
-    <Card className="shadow-sm rounded-xl hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <p className="mt-1 text-2xl font-bold">{value}</p>
-          </div>
-          <div className={`p-2 rounded-lg ${bgGradient}`}>
-            <Icon className={`h-5 w-5 ${iconColor}`} />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -419,9 +162,9 @@ function RankingsTab() {
     }
   };
 
-  // Use real data if available, otherwise mock data for display purposes
+  // A failed request never produces a fabricated passenger list.
   const displayData =
-    rankings && rankings.length > 0
+    !error && rankings && rankings.length > 0
       ? rankings.map((r, idx) => ({
           rank: idx + 1,
           passengerId: r.passengerId,
@@ -434,14 +177,9 @@ function RankingsTab() {
           lastName: `#${r.passengerId}`,
           bookingReference: `B-${r.bookingId}`,
           loyaltyTier: null as string | null,
-          cabinClass: "economy",
+          cabinClass: "unknown",
         }))
-      : error && activeFlightId
-        ? MOCK_RANKINGS.map((r, idx) => ({
-            rank: idx + 1,
-            ...r,
-          }))
-        : null;
+      : null;
 
   // Attempt to use suggestRebookingOrder to get names when the ranking endpoint
   // returns only score objects (PassengerPriorityScore without names)
@@ -716,7 +454,7 @@ function RulesTab() {
   };
 
   // Use real data or mock fallback
-  const displayRules = rules ?? (error ? MOCK_RULES : null);
+  const displayRules = error ? undefined : rules;
 
   if (isLoading) {
     return (
@@ -956,13 +694,7 @@ function RebookingTab() {
     }
   };
 
-  // Use real data or mock fallback on error
-  const displayData =
-    rebookingOrder && rebookingOrder.length > 0
-      ? rebookingOrder
-      : error && activeFlightId
-        ? MOCK_REBOOKING
-        : rebookingOrder;
+  const displayData = error ? undefined : rebookingOrder;
 
   return (
     <div className="space-y-6">
@@ -1200,41 +932,12 @@ export default function PassengerPriority() {
         </p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard
-          title={t("passengerPriority.activeRules", "Active Rules")}
-          value={14}
-          icon={Settings}
-          iconColor="text-blue-500"
-          bgGradient="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950 dark:to-blue-900/30"
-        />
-        <SummaryCard
-          title={t("passengerPriority.flightsInIrops", "Flights in IROPS")}
-          value={3}
-          icon={Shield}
-          iconColor="text-red-500"
-          bgGradient="bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950 dark:to-red-900/30"
-        />
-        <SummaryCard
-          title={t("passengerPriority.passengersRanked", "Passengers Ranked")}
-          value={247}
-          icon={Users}
-          iconColor="text-green-500"
-          bgGradient="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950 dark:to-green-900/30"
-        />
-        <SummaryCard
-          title={t("passengerPriority.avgScore", "Avg Score")}
-          value={342}
-          icon={TrendingUp}
-          iconColor="text-amber-500"
-          bgGradient="bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950 dark:to-amber-900/30"
-        />
-      </div>
-
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
+          <TabsTrigger value="advisory">
+            {t("passengerPriority.advisory", "Assignment advisory")}
+          </TabsTrigger>
           <TabsTrigger value="rankings" className="gap-2">
             <ListOrdered className="h-4 w-4" />
             {t("passengerPriority.rankings", "Rankings")}
@@ -1249,6 +952,9 @@ export default function PassengerPriority() {
           </TabsTrigger>
         </TabsList>
 
+        <TabsContent value="advisory">
+          <ReaccommodationAdvisory />
+        </TabsContent>
         <TabsContent value="rankings" className="mt-4">
           <RankingsTab />
         </TabsContent>

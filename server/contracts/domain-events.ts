@@ -24,6 +24,201 @@ const gateAssignment = z.looseObject({
  * JSON objects; they are explicitly described as envelope-only, not fully typed.
  */
 export const eventPayloadContracts: Record<string, z.ZodType> = {
+  "booking.created": z.looseObject({
+    bookingId: id,
+    userId: id,
+    channel: z.string().min(1),
+    flightId: id.optional(),
+  }),
+  "booking.cancelled": z.looseObject({
+    bookingId: id,
+    reason: z.string(),
+    actorId: id.nullable(),
+  }),
+  "booking.modified": z.looseObject({ bookingId: id, modificationId: id }),
+  "booking.invoice_changed": z.looseObject({
+    bookingId: id,
+    previousTotal: z.number().int().nonnegative(),
+    totalAmount: z.number().int().positive(),
+  }),
+  "booking.checkout_requested": z.looseObject({
+    bookingId: id,
+    requestId: z.string().uuid(),
+    invoiceHash: z.string().min(1),
+  }),
+  "booking.checkout_expired": z.looseObject({
+    bookingId: id,
+    requestId: z.string().uuid(),
+    sessionId: z.string().min(1),
+  }),
+  "booking.split_payment_created": z.looseObject({
+    bookingId: id,
+    splitIds: z.array(id).min(1),
+    totalAmount: z.number().int().positive(),
+  }),
+  "booking.split_checkout_requested": z.looseObject({
+    bookingId: id,
+    splitId: id,
+    requestId: z.string().uuid(),
+  }),
+  "booking.split_payment_cancelled": z.looseObject({
+    bookingId: id,
+    splitId: id,
+  }),
+  "booking.split_refund_reserved": z.looseObject({
+    bookingId: id,
+    planId: z.string().uuid(),
+    actorId: id,
+    refundAmount: z.number().int().nonnegative(),
+    cancellationFee: z.number().int().nonnegative(),
+  }),
+  ...Object.fromEntries(
+    ["completed", "pending", "processing", "failed", "review_required"].map(
+      status => [
+        `booking.split_refund_${status}`,
+        z.looseObject({
+          bookingId: id,
+          planId: z.string().uuid(),
+          refundAmount: z.number().int().nonnegative(),
+          cancellationFee: z.number().int().nonnegative(),
+        }),
+      ]
+    )
+  ),
+  "booking.split_refund_item_review": z.looseObject({
+    bookingId: id,
+    splitId: id,
+    requestId: z.string().uuid(),
+    code: z.string().min(1),
+  }),
+  "booking.split_refund_item_updated": z.looseObject({
+    bookingId: id,
+    splitId: id,
+    requestId: z.string().uuid(),
+    status: z.string().min(1),
+  }),
+  "payment.refunded": z.looseObject({
+    userId: id,
+    bookingId: id.nullable(),
+    amount: z.number().int().positive(),
+  }),
+  "payment.settlement_review_required": z.looseObject({
+    bookingId: id,
+    paymentIntentId: z.string().min(1),
+    reason: z.string().min(1),
+  }),
+  "payment.disputed": z.looseObject({
+    userId: id,
+    bookingId: id.nullable(),
+    amount: z.number().int(),
+  }),
+  "order.refund_planned": z.looseObject({
+    modificationId: id.nullable(),
+    amount: z.number().int().positive(),
+    payers: z.number().int().positive(),
+  }),
+  "order.refund_updated": z.looseObject({
+    modificationId: id.nullable(),
+    requestId: z.string().uuid(),
+    status: z.string().min(1),
+    refundId: z.string().min(1),
+  }),
+  "order.servicing_quoted": z.looseObject({
+    modificationId: id,
+    totalCost: z.number().int(),
+    expiresAt: z.string().datetime(),
+  }),
+  "order.servicing_applied": z.looseObject({
+    modificationId: id,
+    previousTotal: z.number().int().nonnegative(),
+    totalAmount: z.number().int().positive(),
+    refundDue: z.number().int().nonnegative(),
+    fulfillment: z.enum(["awaiting_ticket_reissue", "entitlement_created"]),
+  }),
+  "order.servicing_cancelled": z.looseObject({
+    modificationId: id,
+    userId: id,
+  }),
+  "inventory.adjusted": z.looseObject({
+    cabinClass: z.enum(["economy", "business"]),
+    previous: z.number().int().nonnegative(),
+    available: z.number().int().nonnegative(),
+    capacity: z.number().int().nonnegative(),
+    reservedSeats: z.number().int().nonnegative(),
+    heldSeats: z.number().int().nonnegative(),
+    actorId: id.nullable(),
+    reason: z.string().min(1),
+  }),
+  "flight.refund_planned": z.looseObject({
+    flightId: id,
+    bookingId: id,
+    // An unpaid or already refunded booking has no remaining liability.
+    amount: z.number().int().nonnegative(),
+    jobId: id,
+  }),
+  "flight.status_changed": z.looseObject({
+    flightId: id,
+    flightNumber: z.string(),
+    oldStatus: z.string(),
+    newStatus: z.string(),
+    departureTime: z.string().datetime(),
+    arrivalTime: z.string().datetime(),
+    delayMinutes: z.number().nullable(),
+    reason: z.string().nullable(),
+    actorId: id.nullable(),
+    bookingIds: z.array(id),
+    disruptionId: id.nullable(),
+  }),
+  "passenger.checked_in": z.looseObject({
+    bookingId: id,
+    flightId: id,
+    passengerId: id,
+    seatNumber: z.string().min(1),
+  }),
+  "group.allocated": z.looseObject({
+    groupBookingId: id,
+    organizerUserId: id,
+    inventoryLockId: id,
+    expiresAt: z.string().datetime(),
+    totalPrice: z.number().int().nonnegative(),
+    actorId: id,
+  }),
+  "group.allocation_released": z.looseObject({
+    groupBookingId: id,
+    reason: z.string(),
+  }),
+  "retail.offer_consumed": z.looseObject({
+    bookingId: id,
+    digest: z.string().min(1),
+    channel: z.string().min(1),
+    totalAmount: z.number().int().positive(),
+  }),
+  PaymentConfirmed: z.looseObject({
+    bookingId: id,
+    bookingReference: z.string(),
+    amount: z.number().int().positive(),
+    currency: z.string().length(3),
+    paymentIntentId: z.string().min(1),
+  }),
+  ...Object.fromEntries(
+    ["BookingRefunded", "BookingPartiallyRefunded"].map(type => [
+      type,
+      z.looseObject({
+        bookingId: id,
+        bookingReference: z.string(),
+        amountRefunded: z.number().int().nonnegative(),
+        currency: z.string().length(3),
+        chargeId: z.string().min(1),
+      }),
+    ])
+  ),
+  ETicketIssued: z.looseObject({
+    bookingId: id,
+    passengerId: id,
+    ticketNumber: z.string(),
+    flightIds: z.array(id).min(1),
+    acceptance: z.literal("local_document_external_ticket_acceptance_required"),
+  }),
   "booking.confirmed": z.looseObject({ bookingId: id }),
   "gate.assigned": gateAssignment,
   "gate.changed": gateAssignment,

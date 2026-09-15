@@ -1,3 +1,5 @@
+import { assertIntegrationConfiguration } from "../services/integration-config.service";
+import { privacyDownload } from "../routes/privacy-download";
 import {
   observeApiResponse,
   startOperationalObservations,
@@ -66,6 +68,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  assertIntegrationConfiguration();
   // Initialize Sentry for error tracking
   initSentry();
 
@@ -219,6 +222,7 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use("/api", operationalIntegrations);
   // OAuth callback under /api/oauth/callback
+  app.get("/api/gdpr/download/:requestId", privacyDownload);
   registerOAuthRoutes(app);
 
   // =========================================================================

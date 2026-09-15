@@ -193,7 +193,7 @@ try {
       aggregateId: 984001,
       eventType: "booking.created",
       tenantId: null,
-      payload: {},
+      payload: { bookingId: 984001, userId: 984001, channel: "web" },
     })
   );
   await db

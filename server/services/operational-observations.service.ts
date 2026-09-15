@@ -181,6 +181,21 @@ export async function refreshOperationalAlerts() {
       };
     }),
   ];
+  await applyOperationalChecks(checks);
+  await db
+    .delete(operationalSamples)
+    .where(
+      lt(operationalSamples.endedAt, new Date(Date.now() - 30 * 86400000))
+    );
+  return { checked: checks.length };
+}
+export type OperationalCheck = { key: string; bad: boolean; message: string };
+/** All alert producers share the transition/outbound receipt transaction. */
+export async function applyOperationalChecks(
+  checks: readonly OperationalCheck[]
+) {
+  const db = getDb();
+  if (!db) throw new Error("Operations database unavailable");
   // Resolved once per refresh, outside the per-check transactions: reading the
   // configuration is not a database concern and must not be repeated per row.
   const onCall = configuredOnCallProvider();
@@ -219,12 +234,6 @@ export async function refreshOperationalAlerts() {
         );
       else await queueAlertClose(tx, check.key, onCall);
     });
-  await db
-    .delete(operationalSamples)
-    .where(
-      lt(operationalSamples.endedAt, new Date(Date.now() - 30 * 86400000))
-    );
-  return { checked: checks.length };
 }
 /** An operator taking the alert in this system.
  *

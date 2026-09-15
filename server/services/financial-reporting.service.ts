@@ -4,12 +4,14 @@ import { bookings, financialLedger } from "../../drizzle/schema";
 import { getDb } from "../db";
 
 export interface FinancialPeriod {
+  tenantId?: number;
   startDate?: Date;
   endDate?: Date;
 }
 export interface FinancialAmounts {
   billedAmount: number;
   collectedAmount: number;
+  nonCashFundedAmount: number;
   refundedAmount: number;
   netCollectedAmount: number;
   earnedRevenue: null;
@@ -31,6 +33,7 @@ export interface InvoiceDay {
 export interface SettlementDay {
   day: unknown;
   collected: unknown;
+  nonCashFunded?: unknown;
   refunded: unknown;
   unclassified: unknown;
 }
@@ -79,6 +82,7 @@ function emptyAmounts(): FinancialAmounts {
   return {
     billedAmount: 0,
     collectedAmount: 0,
+    nonCashFundedAmount: 0,
     refundedAmount: 0,
     netCollectedAmount: 0,
     earnedRevenue: null,
@@ -121,6 +125,9 @@ export function combineFinancialDays(
     row.collectedAmount = financialInteger(
       row.collectedAmount + financialInteger(settlement.collected)
     );
+    row.nonCashFundedAmount = financialInteger(
+      row.nonCashFundedAmount + financialInteger(settlement.nonCashFunded ?? 0)
+    );
     row.refundedAmount = financialInteger(
       row.refundedAmount + financialInteger(settlement.refunded)
     );
@@ -155,13 +162,21 @@ export async function getFinancialDays(
         ) THEN 1 ELSE 0 END)`,
           })
           .from(bookings)
-          .where(bounds(bookings.createdAt, period))
+          .where(
+            and(
+              bounds(bookings.createdAt, period),
+              period.tenantId === undefined
+                ? undefined
+                : eq(bookings.tenantId, period.tenantId)
+            )
+          )
           .groupBy(sql`FLOOR(UNIX_TIMESTAMP(${bookings.createdAt}) / 86400)`)
           .limit(50001);
         const settlements = await tx
           .select({
             day: sql<string>`FLOOR(UNIX_TIMESTAMP(${financialLedger.transactionDate}) / 86400)`,
-            collected: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'charge' THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
+            collected: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'charge' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(${financialLedger.metadata}) THEN ${financialLedger.metadata} ELSE '{}' END, '$.tender')), '') NOT IN ('corporate_credit', 'user_credit') THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
+            nonCashFunded: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'charge' AND JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(${financialLedger.metadata}) THEN ${financialLedger.metadata} ELSE '{}' END, '$.tender')) IN ('corporate_credit', 'user_credit') THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
             refunded: sql<string>`SUM(CASE WHEN ${financialLedger.type} IN ('refund','partial_refund') THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
             unclassified: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'adjustment' THEN 1 ELSE 0 END)`,
           })
@@ -170,7 +185,10 @@ export async function getFinancialDays(
             and(
               isNotNull(financialLedger.bookingId),
               eq(financialLedger.currency, "SAR"),
-              bounds(financialLedger.transactionDate, period)
+              bounds(financialLedger.transactionDate, period),
+              period.tenantId === undefined
+                ? undefined
+                : sql`EXISTS (SELECT 1 FROM bookings scoped_booking WHERE scoped_booking.id = ${financialLedger.bookingId} AND scoped_booking.tenantId = ${period.tenantId})`
             )
           )
           .groupBy(
@@ -203,6 +221,7 @@ export async function getFinancialSummary(
     for (const key of [
       "billedAmount",
       "collectedAmount",
+      "nonCashFundedAmount",
       "refundedAmount",
       "unreconciledBookings",
       "unclassifiedEntries",

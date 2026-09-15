@@ -21,7 +21,7 @@ const event = {
   aggregateType: "booking",
   aggregateId: "1",
   tenantId: 3,
-  payload: { bookingId: 1 },
+  payload: { bookingId: 1, userId: 8, channel: "web" },
 };
 beforeEach(() => {
   fixture = transactionMemory({
@@ -66,7 +66,10 @@ describe("durable integration effects", () => {
     expect(fixture.rows("notifications")).toHaveLength(1);
     expect(fixture.rows("notifications")[0].userId).toBe(8);
     await expect(
-      consumeLocalEvent({ ...event, payload: { bookingId: 2 } })
+      consumeLocalEvent({
+        ...event,
+        payload: { ...event.payload, bookingId: 2 },
+      })
     ).rejects.toThrow("conflicts");
   });
   it("records failure without claiming that the local effect committed", async () => {

@@ -5,6 +5,18 @@ export const responseContracts = {
   getAutoCheckIn: z.object({ autoCheckIn: z.boolean() }),
   setAutoCheckIn: z.object({ autoCheckIn: z.boolean() }),
   getShareableItinerary: z.object({
+    segments: z.array(
+      z.object({
+        segmentId: outputNumber.nullable(),
+        flightId: outputNumber,
+        segmentOrder: outputNumber,
+        flightNumber: z.string(),
+        departureTime: z.date(),
+        arrivalTime: z.date(),
+        origin: z.object({ code: z.string(), city: z.string() }),
+        destination: z.object({ code: z.string(), city: z.string() }),
+      })
+    ),
     bookingReference: z.string(),
     flightNumber: z.string(),
     cabinClass: z.enum(["economy", "business"]),

@@ -1,8 +1,12 @@
+import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 import { countActiveHolds } from "./inventory-capacity.service";
-import { and, eq, asc, inArray, sql, isNotNull } from "drizzle-orm";
+import { and, eq, asc, inArray, sql, isNotNull, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   bookings,
+  vouchers,
+  voucherUsage,
+  financialLedger,
   bookingRefundPlans,
   orderServiceRefunds,
   paymentSplits,
@@ -69,6 +73,7 @@ async function applyFundedBooking(
   if (booking.paymentStatus === "paid" && booking.seatsReserved) return;
   if (booking.status !== "pending")
     throw new BookingNotPendingError("Booking is not awaiting settlement");
+  await assertCorporatePaymentApproved(tx, booking.id);
   const segments = await tx
     .select()
     .from(bookingSegments)
@@ -314,6 +319,24 @@ export async function cancelBookingResources(
     throw new BookingNotPendingError("Completed booking cannot be cancelled");
   await assertNoCollectionReview(tx, booking.id);
   if (booking.paymentStatus === "paid") {
+    const internal = await tx
+      .select({ id: financialLedger.id })
+      .from(financialLedger)
+      .where(
+        and(
+          eq(financialLedger.bookingId, booking.id),
+          eq(financialLedger.type, "charge"),
+          sql`${financialLedger.stripeEventId} IN (${`internal-credit:${booking.id}`}, ${`corporate-credit:${booking.id}`})`
+        )
+      )
+      .limit(1);
+    if (internal.length)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Internal credit cancellation requires an approved refund to the original funding account",
+      });
+
     const [splitFunding] = await tx
       .select()
       .from(paymentSplits)
@@ -375,6 +398,52 @@ export async function cancelBookingResources(
           message:
             "Split-funded cancellation requires a refund plan for each payer",
         });
+    }
+  }
+  // Unpaid cancellation releases the promotion reservation. Paid invoices keep
+  // their historical discount; refund policy must never re-price that invoice.
+  if (booking.paymentStatus === "pending") {
+    const reservations = await tx
+      .select()
+      .from(voucherUsage)
+      .where(
+        and(
+          eq(voucherUsage.bookingId, booking.id),
+          isNull(voucherUsage.releasedAt)
+        )
+      )
+      .orderBy(asc(voucherUsage.voucherId));
+    for (const reservation of reservations) {
+      await tx
+        .select({ id: vouchers.id })
+        .from(vouchers)
+        .where(eq(vouchers.id, reservation.voucherId))
+        .for("update");
+      const [released] = await tx
+        .update(voucherUsage)
+        .set({ releasedAt: new Date() })
+        .where(
+          and(
+            eq(voucherUsage.id, reservation.id),
+            isNull(voucherUsage.releasedAt)
+          )
+        );
+      if (released.affectedRows === 1) {
+        const [decrement] = await tx
+          .update(vouchers)
+          .set({ usedCount: sql`${vouchers.usedCount} - 1` })
+          .where(
+            and(
+              eq(vouchers.id, reservation.voucherId),
+              sql`${vouchers.usedCount} > 0`
+            )
+          );
+        if (decrement.affectedRows !== 1)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Voucher quota requires reconciliation",
+          });
+      }
     }
   }
   await releaseBookingSeats(tx, booking);

@@ -1,3 +1,5 @@
+import { privacyDownload } from "../routes/privacy-download";
+import { TRPCError } from "@trpc/server";
 import { toCloudEvent } from "../contracts/domain-events";
 import {
   afterAll,
@@ -14,6 +16,7 @@ const state = vi.hoisted(() => ({
   role: null as string | null,
   consume: vi.fn(),
   read: vi.fn(),
+  privacy: vi.fn(),
 }));
 vi.mock("../_core/context", () => ({
   createContext: async () => ({
@@ -26,6 +29,9 @@ vi.mock("../services/event-inbox.service", () => ({
 vi.mock("../services/data-warehouse.service", () => ({
   readExportContent: state.read,
 }));
+vi.mock("../services/gdpr.service", () => ({
+  downloadDataExport: state.privacy,
+}));
 import { operationalIntegrations } from "../routes/operational-integrations";
 let server: Server;
 let base: string;
@@ -36,12 +42,13 @@ const event = {
   aggregateType: "booking",
   aggregateId: "1",
   tenantId: 1,
-  payload: { bookingId: 1 },
+  payload: { bookingId: 1, userId: 8, channel: "web" },
 };
 beforeAll(async () => {
   const app = express();
   app.use(express.json());
   app.use("/api", operationalIntegrations);
+  app.get("/api/gdpr/download/:requestId", privacyDownload);
   await new Promise<void>(resolve => {
     server = app.listen(0, "127.0.0.1", resolve);
   });
@@ -155,4 +162,28 @@ it("parses authenticated structured CloudEvents and rejects unsupported versions
     ).status
   ).toBe(400);
   expect(state.consume).not.toHaveBeenCalled();
+});
+
+it("F06 privacy download requires authentication, delegates exact owner and suppresses private cache", async () => {
+  expect((await fetch(`${base}/gdpr/download/17`)).status).toBe(401);
+  expect(state.privacy).not.toHaveBeenCalled();
+  state.role = "user";
+  state.privacy.mockResolvedValue({
+    content: '{"profile":{"id":1}}',
+    contentType: "application/json",
+  });
+  const response = await fetch(`${base}/gdpr/download/17`);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({ profile: { id: 1 } });
+  expect(state.privacy).toHaveBeenCalledWith(1, 17);
+  expect(response.headers.get("cache-control")).toContain("no-store");
+  expect(response.headers.get("content-disposition")).toBe(
+    'attachment; filename="privacy-17.json"'
+  );
+  state.privacy.mockRejectedValue(
+    new TRPCError({ code: "NOT_FOUND", message: "private details" })
+  );
+  const missing = await fetch(`${base}/gdpr/download/18`);
+  expect(missing.status).toBe(404);
+  expect(await missing.text()).not.toContain("private details");
 });

@@ -1,3 +1,8 @@
+import { getRefundExportRows } from "./refunds-stats.service";
+import {
+  getFinancialDays,
+  getFinancialSummary,
+} from "./financial-reporting.service";
 /**
  * Revenue Accounting Service
  * Handles revenue recognition, deferred revenue, yield analysis,
@@ -917,25 +922,13 @@ export async function generateRevenueReport(
       message: "Database not available",
     });
 
-  const periodStart = new Date(year, month - 1, 1);
-  const periodEnd = new Date(year, month, 0, 23, 59, 59, 999);
+  const periodStart = new Date(Date.UTC(year, month - 1, 1));
+  const periodEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
-  // Total revenue from confirmed bookings in the period
-  const [revenueStats] = await db
-    .select({
-      totalRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-      bookingCount: sql<number>`COUNT(*)`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        sql`${bookings.status} != 'cancelled'`,
-        eq(bookings.paymentStatus, "paid"),
-        gte(bookings.createdAt, periodStart),
-        lte(bookings.createdAt, periodEnd)
-      )
-    );
-
+  const cash = await getFinancialSummary({
+    startDate: periodStart,
+    endDate: periodEnd,
+  });
   // Deferred revenue: tickets sold in period for future flights
   const now = new Date();
   const [deferredStats] = await db
@@ -971,20 +964,6 @@ export async function generateRevenueReport(
       )
     );
 
-  // Refund amounts in the period
-  const [refundStats] = await db
-    .select({
-      refundAmount: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
-    })
-    .from(payments)
-    .where(
-      and(
-        eq(payments.status, "refunded"),
-        gte(payments.createdAt, periodStart),
-        lte(payments.createdAt, periodEnd)
-      )
-    );
-
   // Ancillary revenue in the period
   const [ancillaryStats] = await db
     .select({
@@ -1007,10 +986,10 @@ export async function generateRevenueReport(
     reportType: "monthly",
     periodStart: periodStart.toISOString().split("T")[0],
     periodEnd: periodEnd.toISOString().split("T")[0],
-    totalRevenue: revenueStats.totalRevenue || 0,
+    totalRevenue: cash.collectedAmount,
     deferredRevenue: deferredStats.deferredRevenue || 0,
     recognizedRevenue: recognizedStats.recognizedRevenue || 0,
-    refundAmount: refundStats.refundAmount || 0,
+    refundAmount: cash.refundedAmount,
     ancillaryRevenue: ancillaryStats.ancillaryRevenue || 0,
     status: "draft",
     generatedAt: new Date().toISOString(),
@@ -1024,75 +1003,33 @@ export async function getRefundImpact(
   startDate?: Date,
   endDate?: Date
 ): Promise<RefundImpact> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const refundConditions = [eq(payments.status, "refunded")];
-  const bookingConditions: ReturnType<typeof eq>[] = [];
-
-  if (startDate && endDate) {
-    refundConditions.push(
-      gte(payments.createdAt, startDate),
-      lte(payments.createdAt, endDate)
-    );
-    bookingConditions.push(
-      gte(bookings.createdAt, startDate),
-      lte(bookings.createdAt, endDate)
-    );
+  const rows = await getRefundExportRows({ startDate, endDate });
+  const days = await getFinancialDays({ startDate, endDate });
+  const months = new Map<
+    string,
+    { month: string; amount: number; count: number }
+  >();
+  for (const row of rows) {
+    const month = row.refundedAt.toISOString().slice(0, 7);
+    const group = months.get(month) ?? { month, amount: 0, count: 0 };
+    group.amount += row.amount;
+    group.count++;
+    months.set(month, group);
   }
-
-  // Refund totals
-  const [refundTotals] = await db
-    .select({
-      totalRefunds: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
-      refundCount: sql<number>`COUNT(*)`,
-    })
-    .from(payments)
-    .where(and(...refundConditions));
-
-  // Total bookings for refund rate calculation
-  const [bookingTotals] = await db
-    .select({
-      totalBookings: sql<number>`COUNT(*)`,
-    })
-    .from(bookings)
-    .where(
-      bookingConditions.length > 0 ? and(...bookingConditions) : undefined
-    );
-
-  // Refunds grouped by month
-  const refundsByMonth = await db
-    .select({
-      month: sql<string>`DATE_FORMAT(${payments.createdAt}, '%Y-%m')`,
-      amount: sql<number>`SUM(${payments.amount})`,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(payments)
-    .where(and(...refundConditions))
-    .groupBy(sql`DATE_FORMAT(${payments.createdAt}, '%Y-%m')`)
-    .orderBy(sql`DATE_FORMAT(${payments.createdAt}, '%Y-%m')`);
-
-  const totalRefunds = refundTotals.totalRefunds || 0;
-  const refundCount = refundTotals.refundCount || 0;
-
+  const totalRefunds = rows.reduce((sum, row) => sum + row.amount, 0);
+  const bookingCount = days.reduce((sum, day) => sum + day.bookings, 0);
   return {
     totalRefunds,
-    refundCount,
-    averageRefundAmount:
-      refundCount > 0 ? Math.round(totalRefunds / refundCount) : 0,
-    refundRate:
-      bookingTotals.totalBookings > 0
-        ? Math.round((refundCount / bookingTotals.totalBookings) * 1000) / 10
-        : 0,
-    refundsByMonth: refundsByMonth.map(row => ({
-      month: row.month,
-      amount: row.amount || 0,
-      count: row.count || 0,
-    })),
+    refundCount: rows.length,
+    averageRefundAmount: rows.length
+      ? Math.round(totalRefunds / rows.length)
+      : 0,
+    refundRate: bookingCount
+      ? (new Set(rows.map(row => row.bookingId)).size / bookingCount) * 100
+      : 0,
+    refundsByMonth: [...months.values()].sort((a, b) =>
+      a.month.localeCompare(b.month)
+    ),
   };
 }
 
@@ -1190,55 +1127,26 @@ export async function getRevenueDashboard(
     .from(bookingAncillaries)
     .where(and(...ancillaryConditions));
 
-  // Refund totals
-  const refundConditions = [eq(payments.status, "refunded")];
-  if (startDate && endDate) {
-    refundConditions.push(
-      gte(payments.createdAt, startDate),
-      lte(payments.createdAt, endDate)
-    );
-  }
-
-  const [refundStats] = await db
-    .select({
-      refundTotal: sql<number>`COALESCE(SUM(${payments.amount}), 0)`,
-    })
-    .from(payments)
-    .where(and(...refundConditions));
-
-  // Revenue growth: compare to previous period of same length
+  // Cash is read from the shared settlement ledger on its posting date.
+  const cash = await getFinancialSummary({ startDate, endDate });
   let revenueGrowthPercent = 0;
   if (startDate && endDate) {
-    const periodLengthMs = endDate.getTime() - startDate.getTime();
-    const prevStart = new Date(startDate.getTime() - periodLengthMs);
-    const prevEnd = new Date(startDate.getTime() - 1);
-
-    const [prevStats] = await db
-      .select({
-        totalRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-      })
-      .from(bookings)
-      .where(
-        and(
-          sql`${bookings.status} != 'cancelled'`,
-          eq(bookings.paymentStatus, "paid"),
-          gte(bookings.createdAt, prevStart),
-          lte(bookings.createdAt, prevEnd)
-        )
-      );
-
-    if (prevStats.totalRevenue > 0) {
+    const previous = await getFinancialSummary({
+      startDate: new Date(
+        startDate.getTime() - (endDate.getTime() - startDate.getTime() + 1)
+      ),
+      endDate: new Date(startDate.getTime() - 1),
+    });
+    if (previous.collectedAmount > 0)
       revenueGrowthPercent =
         Math.round(
-          (((totalStats.totalRevenue || 0) - prevStats.totalRevenue) /
-            prevStats.totalRevenue) *
+          ((cash.collectedAmount - previous.collectedAmount) /
+            previous.collectedAmount) *
             1000
         ) / 10;
-    }
   }
-
-  const totalRevenue = totalStats.totalRevenue || 0;
-  const refundTotal = refundStats.refundTotal || 0;
+  const totalRevenue = cash.collectedAmount;
+  const refundTotal = cash.refundedAmount;
   const totalBookings = totalStats.totalBookings || 0;
 
   return {

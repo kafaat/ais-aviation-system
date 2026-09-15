@@ -81,3 +81,29 @@ export const airlineAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
+/** Scoped role builders are opt-in: apply only where the service carries a
+ * tenant predicate through both reads and writes. */
+function scopedAirlineProcedure(roles: readonly string[]) {
+  return protectedProcedure.use(({ ctx, next }) => {
+    if (!isAdmin(ctx.user.role) && !roles.includes(ctx.user.role))
+      throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
+    if (
+      !isAdmin(ctx.user.role) &&
+      (ctx.user.tenantId == null || ctx.tenantId !== ctx.user.tenantId)
+    )
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Valid tenant context required",
+      });
+    return next({ ctx });
+  });
+}
+export const airlineOpsProcedure = scopedAirlineProcedure([
+  "airline_admin",
+  "ops",
+]);
+export const airlineFinanceProcedure = scopedAirlineProcedure([
+  "airline_admin",
+  "finance",
+]);

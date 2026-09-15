@@ -169,6 +169,7 @@ export const responseContracts = {
       bookingId: outputNumber,
       discountApplied: outputNumber,
       usedAt: z.date(),
+      releasedAt: z.date().nullable(),
     })
   ),
   addCredit: z.object({

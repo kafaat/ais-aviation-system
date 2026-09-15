@@ -30,22 +30,16 @@ export function ItineraryShare({ bookingId }: ItineraryShareProps) {
 
   const generateShareText = () => {
     if (!itinerary) return "";
-    const dep = format(
-      new Date(itinerary.departureTime),
-      "EEEE, d MMMM yyyy HH:mm",
-      { locale: dateLocale }
-    );
-    const arr = format(new Date(itinerary.arrivalTime), "HH:mm", {
-      locale: dateLocale,
-    });
     const passengerNames = itinerary.passengers
       .map(p => p.firstName)
       .join(", ");
 
     return [
-      `✈️ ${itinerary.flightNumber}`,
-      `${itinerary.origin.city} (${itinerary.origin.code}) → ${itinerary.destination.city} (${itinerary.destination.code})`,
-      `📅 ${dep} - ${arr}`,
+      ...itinerary.segments.flatMap(segment => [
+        `✈️ ${segment.flightNumber}`,
+        `${segment.origin.city} (${segment.origin.code}) → ${segment.destination.city} (${segment.destination.code})`,
+        `📅 ${format(new Date(segment.departureTime), "EEEE, d MMMM yyyy HH:mm", { locale: dateLocale })} - ${format(new Date(segment.arrivalTime), "HH:mm", { locale: dateLocale })}`,
+      ]),
       `👤 ${passengerNames}`,
       `🎫 ${t("rebook.ref")}: ${itinerary.bookingReference}`,
     ].join("\n");
@@ -122,6 +116,17 @@ export function ItineraryShare({ bookingId }: ItineraryShareProps) {
             </span>
           </div>
 
+          <ol className="space-y-2">
+            {itinerary.segments.map(segment => (
+              <li key={`${segment.segmentOrder}:${segment.flightId}`}>
+                <strong>{segment.flightNumber}</strong> {segment.origin.code} →{" "}
+                {segment.destination.code} ·{" "}
+                {format(new Date(segment.departureTime), "d MMM HH:mm", {
+                  locale: dateLocale,
+                })}
+              </li>
+            ))}
+          </ol>
           <p className="text-sm text-muted-foreground">
             {itinerary.passengers.map(p => p.firstName).join(", ")} (
             {itinerary.numberOfPassengers})

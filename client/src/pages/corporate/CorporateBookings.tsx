@@ -97,6 +97,17 @@ export default function CorporateBookings() {
   );
   type CorporateBooking = NonNullable<typeof bookings>[number];
 
+  const payMutation = trpc.corporate.payInvoice.useMutation({
+    onSuccess: () => {
+      toast.success(
+        i18n.language.startsWith("ar")
+          ? "تمت تسوية الفاتورة برصيد الشركة"
+          : "Invoice settled with company credit"
+      );
+      void refetchBookings();
+    },
+    onError: e => toast.error(e.message),
+  });
   // Mutations
   const approveMutation = trpc.corporate.approveBooking.useMutation({
     onSuccess: () => {
@@ -380,6 +391,21 @@ export default function CorporateBookings() {
                         >
                           {t("corporate.viewDetails")}
                         </Button>
+                        {booking.approvalStatus === "approved" &&
+                          booking.booking.paymentStatus === "pending" && (
+                            <Button
+                              disabled={payMutation.isPending}
+                              onClick={() =>
+                                payMutation.mutate({
+                                  bookingId: booking.booking.id,
+                                })
+                              }
+                            >
+                              {i18n.language.startsWith("ar")
+                                ? "الدفع برصيد الشركة"
+                                : "Pay with company credit"}
+                            </Button>
+                          )}
                         {isCorporateAdmin &&
                           booking.approvalStatus === "pending" && (
                             <>

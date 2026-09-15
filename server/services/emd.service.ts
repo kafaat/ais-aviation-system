@@ -1,3 +1,4 @@
+import { listCapabilities } from "./capability-catalog.service";
 /**
  * Electronic Miscellaneous Document (EMD) Service
  *
@@ -21,6 +22,19 @@ import {
   type InsertElectronicMiscDoc,
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, desc, sql, count } from "drizzle-orm";
+
+function assertEmdProviderAccepted() {
+  if (
+    !listCapabilities().some(
+      c => c.id === "ndcExternalFulfillment" && c.available
+    )
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "EMD issuance, servicing and refunds require a contracted provider acknowledgement and settlement integration",
+    });
+}
 
 // ============================================================================
 // Types
@@ -453,6 +467,7 @@ export function calculateEmdTax(
 export async function issueEmd(
   params: IssueEmdParams
 ): Promise<ElectronicMiscDoc> {
+  assertEmdProviderAccepted();
   const db = await requireDb();
 
   // Validate the issuing airline exists
@@ -727,6 +742,7 @@ export async function listEmds(filters: ListEmdsFilters = {}) {
  * @returns The updated EMD record
  */
 export async function useEmd(emdNumber: string): Promise<ElectronicMiscDoc> {
+  assertEmdProviderAccepted();
   const db = await requireDb();
 
   const [emd] = await db
@@ -788,6 +804,7 @@ export async function voidEmd(
   emdNumber: string,
   reason: string
 ): Promise<ElectronicMiscDoc> {
+  assertEmdProviderAccepted();
   const db = await requireDb();
 
   const [emd] = await db
@@ -850,6 +867,7 @@ export async function exchangeEmd(
   emdNumber: string,
   newParams: ExchangeEmdParams
 ): Promise<EmdExchangeResult> {
+  assertEmdProviderAccepted();
   const db = await requireDb();
 
   // Fetch the original EMD
@@ -975,6 +993,7 @@ export async function refundEmd(
   emdNumber: string,
   refundAmount?: number
 ): Promise<EmdRefundResult> {
+  assertEmdProviderAccepted();
   const db = await requireDb();
 
   const [emd] = await db

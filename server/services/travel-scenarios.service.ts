@@ -1,3 +1,4 @@
+import { flightBookingCondition } from "./flight-state.service";
 import {
   sourcedCarbon,
   sourcedTravelRequirements,
@@ -7,12 +8,13 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
   bookings,
+  bookingSegments,
   flights,
   airports,
   passengers,
   userPreferences,
 } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 /**
  * Travel Scenarios Service
@@ -87,17 +89,16 @@ export async function processAutoCheckIns() {
     .select({
       bookingId: bookings.id,
       userId: bookings.userId,
-      flightId: bookings.flightId,
+      flightId: flights.id,
       departureTime: flights.departureTime,
     })
     .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
+    .innerJoin(flights, flightBookingCondition(flights.id))
     .innerJoin(userPreferences, eq(bookings.userId, userPreferences.userId))
     .where(
       and(
         eq(bookings.status, "confirmed"),
         eq(bookings.paymentStatus, "paid"),
-        eq(bookings.checkedIn, false),
         eq(userPreferences.autoCheckIn, true)
       )
     );
@@ -140,79 +141,77 @@ export async function getShareableItinerary(bookingId: number, userId: number) {
     });
   }
 
-  const bookingResult = await database
-    .select({
-      id: bookings.id,
-      bookingReference: bookings.bookingReference,
-      userId: bookings.userId,
-      cabinClass: bookings.cabinClass,
-      numberOfPassengers: bookings.numberOfPassengers,
-      flightNumber: flights.flightNumber,
-      departureTime: flights.departureTime,
-      arrivalTime: flights.arrivalTime,
-      originCode: airports.code,
-      originCity: airports.city,
-    })
+  const [booking] = await database
+    .select()
     .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .innerJoin(airports, eq(flights.originId, airports.id))
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (bookingResult.length === 0) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-  }
-
-  const booking = bookingResult[0];
-  if (booking.userId !== userId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-  }
-
-  // Get destination separately (SQL alias)
-  const flightResult = await database
-    .select({
-      destinationId: flights.destinationId,
-    })
+    .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)));
+  if (!booking)
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Owned booking not found",
+    });
+  const all = await database
+    .select()
+    .from(bookingSegments)
+    .where(eq(bookingSegments.bookingId, bookingId))
+    .orderBy(bookingSegments.segmentOrder);
+  const active = all.length
+    ? all
+        .filter(s => ["pending", "confirmed"].includes(s.status))
+        .map(s => ({ id: s.id, flightId: s.flightId, order: s.segmentOrder }))
+    : [{ id: null, flightId: booking.flightId, order: 1 }];
+  if (!active.length || booking.status === "cancelled")
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "No active itinerary",
+    });
+  const selected = await database
+    .select()
     .from(flights)
-    .innerJoin(bookings, eq(bookings.flightId, flights.id))
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  let destinationCode = "";
-  let destinationCity = "";
-  if (flightResult.length > 0) {
-    const destResult = await database
-      .select({ code: airports.code, city: airports.city })
-      .from(airports)
-      .where(eq(airports.id, flightResult[0].destinationId))
-      .limit(1);
-    if (destResult.length > 0) {
-      destinationCode = destResult[0].code;
-      destinationCity = destResult[0].city;
-    }
-  }
-
-  // Get passenger first names only (privacy)
+    .where(
+      inArray(
+        flights.id,
+        active.map(s => s.flightId)
+      )
+    );
+  const fields = await database
+    .select()
+    .from(airports)
+    .where(
+      inArray(airports.id, [
+        ...new Set(selected.flatMap(f => [f.originId, f.destinationId])),
+      ])
+    );
+  const segments = active.map(s => {
+    const flight = selected.find(f => f.id === s.flightId);
+    const origin = fields.find(f => f.id === flight?.originId),
+      destination = fields.find(f => f.id === flight?.destinationId);
+    if (!flight || !origin || !destination)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Incomplete itinerary source",
+      });
+    return {
+      segmentId: s.id,
+      flightId: flight.id,
+      segmentOrder: s.order,
+      flightNumber: flight.flightNumber,
+      departureTime: flight.departureTime,
+      arrivalTime: flight.arrivalTime,
+      origin: { code: origin.code, city: origin.city },
+      destination: { code: destination.code, city: destination.city },
+    };
+  });
   const passengerList = await database
-    .select({
-      firstName: passengers.firstName,
-      type: passengers.type,
-    })
+    .select({ firstName: passengers.firstName, type: passengers.type })
     .from(passengers)
     .where(eq(passengers.bookingId, bookingId));
-
   return {
     bookingReference: booking.bookingReference,
-    flightNumber: booking.flightNumber,
     cabinClass: booking.cabinClass,
-    departureTime: booking.departureTime,
-    arrivalTime: booking.arrivalTime,
-    origin: { code: booking.originCode, city: booking.originCity },
-    destination: { code: destinationCode, city: destinationCity },
-    passengers: passengerList.map(p => ({
-      firstName: p.firstName,
-      type: p.type,
-    })),
+    ...segments[0],
+    segments,
+    passengers: passengerList,
     numberOfPassengers: booking.numberOfPassengers,
   };
 }

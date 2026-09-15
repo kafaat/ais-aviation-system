@@ -18,60 +18,44 @@ export async function createPriceLock(
       message: "Database not available",
     });
 
-  // Get current flight price (read-only, safe outside transaction)
-  const [flight] = await db
-    .select({
-      economyPrice: flights.economyPrice,
-      businessPrice: flights.businessPrice,
-      departureTime: flights.departureTime,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId))
-    .limit(1);
-
-  if (!flight) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-  }
-
-  // Cannot lock if flight departs within 24 hours
-  const now = new Date();
-  const hoursUntilDeparture =
-    (flight.departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-  if (hoursUntilDeparture < 24) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot lock price for flights departing within 24 hours",
-    });
-  }
-
-  const price =
-    cabinClass === "business" ? flight.businessPrice : flight.economyPrice;
-
-  const expiresAt = new Date(
-    now.getTime() + LOCK_DURATION_HOURS * 60 * 60 * 1000
-  );
-
-  // Use a transaction to atomically check-then-insert, preventing duplicate
-  // active locks from concurrent requests
-  return await db.transaction(async tx => {
-    // Check for existing active lock inside the transaction
-    const [existing] = await tx
+  // The flight is the existing resource lock, shared with booking creation.
+  // All creations for this logical key serialize even before its first row exists.
+  return db.transaction(async tx => {
+    const [flight] = await tx
       .select()
-      .from(priceLocks)
-      .where(
-        and(
-          eq(priceLocks.userId, userId),
-          eq(priceLocks.flightId, flightId),
-          eq(priceLocks.cabinClass, cabinClass),
-          eq(priceLocks.status, "active")
-        )
-      )
-      .limit(1);
-
-    if (existing) {
-      return { lock: existing, alreadyExists: true };
-    }
-
+      .from(flights)
+      .where(eq(flights.id, flightId))
+      .for("update");
+    if (!flight)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    const now = new Date();
+    if (
+      !["scheduled", "delayed"].includes(flight.status) ||
+      flight.departureTime.getTime() - now.getTime() < 24 * 3600_000
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Flight is unavailable for a price lock",
+      });
+    const key = and(
+      eq(priceLocks.userId, userId),
+      eq(priceLocks.flightId, flightId),
+      eq(priceLocks.cabinClass, cabinClass),
+      eq(priceLocks.status, "active")
+    );
+    await tx
+      .update(priceLocks)
+      .set({ status: "expired" })
+      .where(and(key, sql`${priceLocks.expiresAt} <= ${now}`));
+    const active = await tx.select().from(priceLocks).where(key).for("update");
+    if (active.length > 1)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Duplicate historical price locks require reconciliation",
+      });
+    if (active[0]) return { lock: active[0], alreadyExists: true };
+    const price =
+      cabinClass === "business" ? flight.businessPrice : flight.economyPrice;
     const [result] = await tx.insert(priceLocks).values({
       userId,
       flightId,
@@ -80,15 +64,12 @@ export async function createPriceLock(
       originalPrice: price,
       lockFee: LOCK_FEE_CENTS,
       status: "active",
-      expiresAt,
+      expiresAt: new Date(now.getTime() + LOCK_DURATION_HOURS * 3600_000),
     });
-
     const [lock] = await tx
       .select()
       .from(priceLocks)
-      .where(eq(priceLocks.id, result.insertId))
-      .limit(1);
-
+      .where(eq(priceLocks.id, result.insertId));
     return { lock, alreadyExists: false };
   });
 }
@@ -131,76 +112,24 @@ export async function cancelPriceLock(userId: number, lockId: number) {
       message: "Database not available",
     });
 
-  const [lock] = await db
-    .select()
-    .from(priceLocks)
-    .where(and(eq(priceLocks.id, lockId), eq(priceLocks.userId, userId)))
-    .limit(1);
-
-  if (!lock)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Price lock not found" });
-  if (lock.status !== "active")
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Price lock is not active",
-    });
-
-  await db
+  const [result] = await db
     .update(priceLocks)
     .set({ status: "cancelled" })
-    .where(eq(priceLocks.id, lockId));
-
+    .where(
+      and(
+        eq(priceLocks.id, lockId),
+        eq(priceLocks.userId, userId),
+        eq(priceLocks.status, "active")
+      )
+    );
+  if (result.affectedRows !== 1)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Price lock is missing or no longer active",
+    });
   return { success: true };
 }
-
-export async function usePriceLock(lockId: number, bookingId: number) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Validate the lock is active before marking as used, inside a transaction
-  // to prevent race conditions with concurrent use or expiration
-  await db.transaction(async tx => {
-    const [lock] = await tx
-      .select({ status: priceLocks.status, expiresAt: priceLocks.expiresAt })
-      .from(priceLocks)
-      .where(eq(priceLocks.id, lockId))
-      .limit(1);
-
-    if (!lock) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Price lock not found",
-      });
-    }
-
-    if (lock.status !== "active") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Price lock is ${lock.status}, cannot be used`,
-      });
-    }
-
-    if (lock.expiresAt < new Date()) {
-      await tx
-        .update(priceLocks)
-        .set({ status: "expired" })
-        .where(eq(priceLocks.id, lockId));
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Price lock has expired",
-      });
-    }
-
-    await tx
-      .update(priceLocks)
-      .set({ status: "used", bookingId })
-      .where(eq(priceLocks.id, lockId));
-  });
-}
+// Consumption is owned by bookings.service's booking transaction.
 
 export async function getActiveLockForFlight(
   userId: number,
@@ -236,7 +165,13 @@ export async function getActiveLockForFlight(
     await db
       .update(priceLocks)
       .set({ status: "expired" })
-      .where(eq(priceLocks.id, lock.id));
+      .where(
+        and(
+          eq(priceLocks.id, lock.id),
+          eq(priceLocks.status, "active"),
+          sql`${priceLocks.expiresAt} <= ${now}`
+        )
+      );
     return null;
   }
 

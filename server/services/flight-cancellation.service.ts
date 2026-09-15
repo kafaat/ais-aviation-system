@@ -23,6 +23,7 @@ export async function requestFlightCancellation(input: {
   flightId: number;
   reason: string;
   actorId?: number;
+  tenantId?: number;
 }) {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
@@ -34,6 +35,7 @@ export async function requestFlightCancellation(input: {
       status: "cancelled",
       reason: input.reason,
       adminUserId: input.actorId,
+      tenantId: input.tenantId,
     });
     const targets = await tx
       .select()

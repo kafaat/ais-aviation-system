@@ -261,7 +261,7 @@ export async function verifyForensicWorkflows(
         aggregateType: "booking",
         aggregateId: String(bookingId),
         tenantId: null,
-        payload: { bookingId },
+        payload: { bookingId, reason: "acceptance replay", actorId: null },
       };
       const before = (await db.select().from(schema.notifications)).length;
       await Promise.all(

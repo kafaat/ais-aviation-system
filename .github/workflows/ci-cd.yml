@@ -764,6 +764,17 @@ jobs:
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
+          HOTELBEDS_MODE: ${{ vars.HOTELBEDS_MODE }}
+          HOTELBEDS_API_KEY: ${{ secrets.HOTELBEDS_API_KEY }}
+          HOTELBEDS_SECRET: ${{ secrets.HOTELBEDS_SECRET }}
+          HOTELBEDS_ACCEPTANCE_REFERENCE: ${{ vars.HOTELBEDS_ACCEPTANCE_REFERENCE }}
+          AVIATION_WEATHER_MODE: ${{ vars.AVIATION_WEATHER_MODE }}
+          AVIATION_WEATHER_BASE_URL: ${{ vars.AVIATION_WEATHER_BASE_URL }}
+          AVIATION_WEATHER_SOURCE_REFERENCE: ${{ vars.AVIATION_WEATHER_SOURCE_REFERENCE }}
+          ONCALL_MODE: ${{ vars.ONCALL_MODE }}
+          ONCALL_BASE_URL: ${{ vars.ONCALL_BASE_URL }}
+          ONCALL_TOKEN: ${{ secrets.ONCALL_TOKEN }}
+          ONCALL_ACCEPTANCE_REFERENCE: ${{ vars.ONCALL_ACCEPTANCE_REFERENCE }}
         run: |
           kubectl create secret generic ais-secrets \
             --namespace=ais-staging \
@@ -773,6 +784,17 @@ jobs:
             --from-literal=TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
             --from-literal=TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
             --from-literal=TWILIO_PHONE_NUMBER="$TWILIO_PHONE_NUMBER" \
+            --from-literal=HOTELBEDS_MODE="$HOTELBEDS_MODE" \
+            --from-literal=HOTELBEDS_API_KEY="$HOTELBEDS_API_KEY" \
+            --from-literal=HOTELBEDS_SECRET="$HOTELBEDS_SECRET" \
+            --from-literal=HOTELBEDS_ACCEPTANCE_REFERENCE="$HOTELBEDS_ACCEPTANCE_REFERENCE" \
+            --from-literal=AVIATION_WEATHER_MODE="$AVIATION_WEATHER_MODE" \
+            --from-literal=AVIATION_WEATHER_BASE_URL="$AVIATION_WEATHER_BASE_URL" \
+            --from-literal=AVIATION_WEATHER_SOURCE_REFERENCE="$AVIATION_WEATHER_SOURCE_REFERENCE" \
+            --from-literal=ONCALL_MODE="$ONCALL_MODE" \
+            --from-literal=ONCALL_BASE_URL="$ONCALL_BASE_URL" \
+            --from-literal=ONCALL_TOKEN="$ONCALL_TOKEN" \
+            --from-literal=ONCALL_ACCEPTANCE_REFERENCE="$ONCALL_ACCEPTANCE_REFERENCE" \
             --from-literal=DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.STAGING_JWT_SECRET }}" \
             --from-literal=CSRF_SECRET="${{ secrets.STAGING_CSRF_SECRET }}" \
@@ -942,6 +964,17 @@ jobs:
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
+          HOTELBEDS_MODE: ${{ vars.HOTELBEDS_MODE }}
+          HOTELBEDS_API_KEY: ${{ secrets.HOTELBEDS_API_KEY }}
+          HOTELBEDS_SECRET: ${{ secrets.HOTELBEDS_SECRET }}
+          HOTELBEDS_ACCEPTANCE_REFERENCE: ${{ vars.HOTELBEDS_ACCEPTANCE_REFERENCE }}
+          AVIATION_WEATHER_MODE: ${{ vars.AVIATION_WEATHER_MODE }}
+          AVIATION_WEATHER_BASE_URL: ${{ vars.AVIATION_WEATHER_BASE_URL }}
+          AVIATION_WEATHER_SOURCE_REFERENCE: ${{ vars.AVIATION_WEATHER_SOURCE_REFERENCE }}
+          ONCALL_MODE: ${{ vars.ONCALL_MODE }}
+          ONCALL_BASE_URL: ${{ vars.ONCALL_BASE_URL }}
+          ONCALL_TOKEN: ${{ secrets.ONCALL_TOKEN }}
+          ONCALL_ACCEPTANCE_REFERENCE: ${{ vars.ONCALL_ACCEPTANCE_REFERENCE }}
         run: |
           kubectl create secret generic ais-secrets \
             --namespace=ais-production \
@@ -951,6 +984,17 @@ jobs:
             --from-literal=TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
             --from-literal=TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
             --from-literal=TWILIO_PHONE_NUMBER="$TWILIO_PHONE_NUMBER" \
+            --from-literal=HOTELBEDS_MODE="$HOTELBEDS_MODE" \
+            --from-literal=HOTELBEDS_API_KEY="$HOTELBEDS_API_KEY" \
+            --from-literal=HOTELBEDS_SECRET="$HOTELBEDS_SECRET" \
+            --from-literal=HOTELBEDS_ACCEPTANCE_REFERENCE="$HOTELBEDS_ACCEPTANCE_REFERENCE" \
+            --from-literal=AVIATION_WEATHER_MODE="$AVIATION_WEATHER_MODE" \
+            --from-literal=AVIATION_WEATHER_BASE_URL="$AVIATION_WEATHER_BASE_URL" \
+            --from-literal=AVIATION_WEATHER_SOURCE_REFERENCE="$AVIATION_WEATHER_SOURCE_REFERENCE" \
+            --from-literal=ONCALL_MODE="$ONCALL_MODE" \
+            --from-literal=ONCALL_BASE_URL="$ONCALL_BASE_URL" \
+            --from-literal=ONCALL_TOKEN="$ONCALL_TOKEN" \
+            --from-literal=ONCALL_ACCEPTANCE_REFERENCE="$ONCALL_ACCEPTANCE_REFERENCE" \
             --from-literal=DATABASE_URL="${{ secrets.PRODUCTION_DATABASE_URL }}" \
             --from-literal=JWT_SECRET="${{ secrets.PRODUCTION_JWT_SECRET }}" \
             --from-literal=CSRF_SECRET="${{ secrets.PRODUCTION_CSRF_SECRET }}" \

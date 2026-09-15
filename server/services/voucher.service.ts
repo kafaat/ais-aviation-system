@@ -5,9 +5,18 @@ import {
   userCredits,
   voucherUsage,
   creditUsage,
+  bookings,
+  users,
+  financialLedger,
   type InsertVoucher,
 } from "../../drizzle/schema";
-import { eq, and, lte, gte, gt, desc, or, isNull, sql } from "drizzle-orm";
+import { eq, and, lte, gte, gt, desc, or, isNull, sql, asc } from "drizzle-orm";
+
+import {
+  lockEditableInvoice,
+  setInvoiceTotal,
+} from "./booking-invoice.service";
+import { confirmFundedBooking } from "./booking-settlement.service";
 
 /**
  * Voucher & Credit Service
@@ -249,7 +258,8 @@ export async function validateVoucher(
         .where(
           and(
             eq(voucherUsage.voucherId, voucher.id),
-            eq(voucherUsage.userId, userId)
+            eq(voucherUsage.userId, userId),
+            isNull(voucherUsage.releasedAt)
           )
         )
         .limit(1);
@@ -299,7 +309,7 @@ export async function applyVoucher(
   code: string,
   bookingId: number,
   userId: number,
-  amount: number
+  _amount: number
 ) {
   const database = await getDb();
   if (!database) {
@@ -312,6 +322,16 @@ export async function applyVoucher(
   try {
     // Use a transaction to prevent race conditions on voucher usage count
     return await database.transaction(async tx => {
+      const [owned] = await tx
+        .select()
+        .from(bookings)
+        .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
+        .for("update");
+      if (!owned)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Owned booking not found",
+        });
       const now = new Date();
       const normalizedCode = code.toUpperCase().trim();
 
@@ -320,8 +340,35 @@ export async function applyVoucher(
         .select()
         .from(vouchers)
         .where(eq(vouchers.code, normalizedCode))
-        .limit(1);
+        .limit(1)
+        .for("update");
 
+      if (voucher) {
+        const [replay] = await tx
+          .select()
+          .from(voucherUsage)
+          .where(
+            and(
+              eq(voucherUsage.voucherId, voucher.id),
+              eq(voucherUsage.bookingId, bookingId),
+              eq(voucherUsage.userId, userId)
+            )
+          );
+        if (replay?.releasedAt)
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Voucher reservation was released on cancellation",
+          });
+        if (replay)
+          return {
+            success: true,
+            discountApplied: replay.discountApplied,
+            finalAmount: owned.totalAmount,
+            voucherCode: voucher.code,
+          };
+      }
+      const booking = await lockEditableInvoice(tx, bookingId, { userId });
+      const amount = booking.totalAmount;
       if (!voucher || !voucher.isActive) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -360,7 +407,8 @@ export async function applyVoucher(
         .where(
           and(
             eq(voucherUsage.voucherId, voucher.id),
-            eq(voucherUsage.userId, userId)
+            eq(voucherUsage.userId, userId),
+            isNull(voucherUsage.releasedAt)
           )
         )
         .limit(1);
@@ -383,7 +431,17 @@ export async function applyVoucher(
         }
       }
 
-      // Record the usage
+      if (
+        !Number.isSafeInteger(discountAmount) ||
+        discountAmount <= 0 ||
+        discountAmount >= amount
+      )
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Voucher must leave a positive payable invoice",
+        });
+      await setInvoiceTotal(tx, booking, amount - discountAmount);
+      // The quota and invoice revision commit or roll back together.
       await tx.insert(voucherUsage).values({
         voucherId: voucher.id,
         userId,
@@ -598,83 +656,129 @@ export async function useCredit(
     });
   }
 
-  try {
-    // Use a transaction to prevent double-spending of credits
-    return await database.transaction(async tx => {
-      const now = new Date();
-
-      // Get all valid credits inside transaction for consistency
-      const credits = await tx
+  if (!Number.isSafeInteger(amount) || amount <= 0)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Credit amount must be positive whole minor units",
+    });
+  return database.transaction(async tx => {
+    const [owned] = await tx
+      .select()
+      .from(bookings)
+      .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
+      .for("update");
+    if (!owned)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Owned booking not found",
+      });
+    const previous = await tx
+      .select()
+      .from(creditUsage)
+      .where(
+        and(
+          eq(creditUsage.bookingId, bookingId),
+          eq(creditUsage.userId, userId)
+        )
+      );
+    if (previous.length) {
+      const used = previous.reduce((sum, row) => sum + row.amountUsed, 0);
+      const [posted] = await tx
         .select()
-        .from(userCredits)
+        .from(financialLedger)
         .where(
           and(
-            eq(userCredits.userId, userId),
-            or(isNull(userCredits.expiresAt), gte(userCredits.expiresAt, now)),
-            gt(sql`${userCredits.amount} - ${userCredits.usedAmount}`, 0)
+            eq(financialLedger.bookingId, bookingId),
+            eq(financialLedger.stripeEventId, `internal-credit:${bookingId}`)
           )
-        )
-        .orderBy(userCredits.expiresAt, userCredits.createdAt);
-
-      // Calculate available balance inside transaction
-      const totalAvailable = credits.reduce((sum, credit) => {
-        return sum + Math.max(0, credit.amount - credit.usedAmount);
-      }, 0);
-
-      if (totalAvailable < amount) {
+        );
+      if (used !== amount || !posted)
         throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Insufficient credit balance",
+          code: "PRECONDITION_FAILED",
+          message: "Credit usage requires reconciliation",
         });
-      }
-
-      let remainingAmount = amount;
-      const usages: Array<{ creditId: number; amount: number }> = [];
-
-      for (const credit of credits) {
-        if (remainingAmount <= 0) break;
-
-        const available = credit.amount - credit.usedAmount;
-        if (available <= 0) continue;
-
-        const toUse = Math.min(available, remainingAmount);
-
-        // Update the credit
-        await tx
-          .update(userCredits)
-          .set({ usedAmount: credit.usedAmount + toUse })
-          .where(eq(userCredits.id, credit.id));
-
-        // Record the usage
-        await tx.insert(creditUsage).values({
-          userCreditId: credit.id,
-          userId,
-          bookingId,
-          amountUsed: toUse,
-        });
-
-        usages.push({ creditId: credit.id, amount: toUse });
-        remainingAmount -= toUse;
-      }
-
-      console.info(
-        `[Credits] Used ${amount} cents credit for user ${userId}, booking ${bookingId}`
-      );
-
       return {
         success: true,
-        amountUsed: amount,
-        usages,
+        amountUsed: used,
+        usages: previous.map(row => ({
+          creditId: row.userCreditId,
+          amount: row.amountUsed,
+        })),
       };
+    }
+    const booking = await lockEditableInvoice(tx, bookingId, { userId });
+    if (amount !== booking.totalAmount)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Credits currently settle the full invoice; partial tenders are unavailable",
+      });
+    // Account then lots: disjoint bookings cannot spend the same balance.
+    await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for("update");
+    const now = new Date();
+    const credits = await tx
+      .select()
+      .from(userCredits)
+      .where(
+        and(
+          eq(userCredits.userId, userId),
+          or(isNull(userCredits.expiresAt), gt(userCredits.expiresAt, now)),
+          gt(sql`${userCredits.amount} - ${userCredits.usedAmount}`, 0)
+        )
+      )
+      .orderBy(asc(userCredits.id))
+      .for("update");
+    if (credits.reduce((sum, c) => sum + c.amount - c.usedAmount, 0) < amount)
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Insufficient credit balance",
+      });
+    let remaining = amount;
+    const usages: Array<{ creditId: number; amount: number }> = [];
+    for (const credit of credits) {
+      if (!remaining) break;
+      const used = Math.min(remaining, credit.amount - credit.usedAmount);
+      const [result] = await tx
+        .update(userCredits)
+        .set({ usedAmount: sql`${userCredits.usedAmount} + ${used}` })
+        .where(
+          and(
+            eq(userCredits.id, credit.id),
+            sql`${userCredits.usedAmount} + ${used} <= ${userCredits.amount}`
+          )
+        );
+      if (result.affectedRows !== 1)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Credit balance changed",
+        });
+      await tx.insert(creditUsage).values({
+        userCreditId: credit.id,
+        userId,
+        bookingId,
+        amountUsed: used,
+      });
+      usages.push({ creditId: credit.id, amount: used });
+      remaining -= used;
+    }
+    // Inventory failure rolls back the debit and every usage row.
+    await confirmFundedBooking(tx, booking);
+    await tx.insert(financialLedger).values({
+      bookingId,
+      userId,
+      type: "charge",
+      amount: (amount / 100).toFixed(2),
+      currency: "SAR",
+      stripeEventId: `internal-credit:${bookingId}`,
+      description: "Internal credit invoice settlement",
+      metadata: JSON.stringify({ tender: "user_credit", usages }),
     });
-  } catch (error) {
-    if (error instanceof TRPCError) throw error;
-    console.error("Error using credit:", error);
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to use credit",
-    });
-  }
+    return { success: true, amountUsed: amount, usages };
+  });
 }
 
 /**
@@ -741,14 +845,7 @@ export async function processExpiredCredits() {
         )
       );
 
-    // Mark them as fully used (to effectively expire them)
-    for (const credit of expired) {
-      await database
-        .update(userCredits)
-        .set({ usedAmount: credit.amount })
-        .where(eq(userCredits.id, credit.id));
-    }
-
+    // Retain the original amount and actual usage for financial reconciliation.
     console.info(`[Credits] Expired ${expired.length} credit records`);
 
     return { processedCount: expired.length };

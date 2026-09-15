@@ -1,3 +1,4 @@
+import { assertIntegrationConfiguration } from "./services/integration-config.service";
 import { randomUUID } from "node:crypto";
 import {
   observationInstanceId,
@@ -57,7 +58,10 @@ let heartbeat: NodeJS.Timeout | undefined;
 // ============================================================================
 
 async function initialize(): Promise<void> {
-  log.info({}, "Worker process starting...");
+  log.info(
+    { integrations: assertIntegrationConfiguration() },
+    "Worker process starting..."
+  );
 
   // 1. Initialize database connection
   log.info({}, "Initializing database connection...");

@@ -1100,6 +1100,7 @@ try {
           eventType: "payment.refunded",
           aggregateType: "payment",
           aggregateId: "pi_audit_loyalty",
+          payload: { bookingId: id + 9, userId: id, amount: 4000 },
         };
         await consumeLocalEvent(partial);
         const [afterPartial] = await db
@@ -1118,7 +1119,11 @@ try {
             eventId: "audit_full_refund",
           })
         );
-        await consumeLocalEvent({ ...partial, eventId: randomUUID() });
+        await consumeLocalEvent({
+          ...partial,
+          eventId: randomUUID(),
+          payload: { ...partial.payload, amount: 6000 },
+        });
         await consumeLocalEvent({ ...event, eventId: randomUUID() }); // late confirmation
         await consumeLocalEvent(partial); // old partial after full refund
         const [after] = await db
@@ -1556,7 +1561,7 @@ try {
         aggregateType: "payment",
         aggregateId: "pi_audit_redeemed_refund",
         tenantId: id,
-        payload: { bookingId: id + 31 },
+        payload: { bookingId: id + 31, userId: id, amount: 10000 },
       });
       const [account] = await db
         .select()

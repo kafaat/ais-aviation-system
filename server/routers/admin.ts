@@ -1,7 +1,13 @@
+import { requireValue } from "../services/required-value";
 import { responseContracts } from "../contracts/admin";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { adminProcedure, airlineAdminProcedure, router } from "../_core/trpc";
+import {
+  adminProcedure,
+  airlineAdminProcedure,
+  airlineOpsProcedure,
+  router,
+} from "../_core/trpc";
 import { isAdmin } from "../services/rbac.service";
 import { tenantCondition } from "../services/tenant-scope.service";
 import * as db from "../db";
@@ -76,7 +82,7 @@ export const adminRouter = router({
   /**
    * Update flight availability
    */
-  updateFlightAvailability: airlineAdminProcedure
+  updateFlightAvailability: airlineOpsProcedure
     .input(
       z.object({
         flightId: z.number(),
@@ -176,7 +182,7 @@ export const adminRouter = router({
   /**
    * Update flight status
    */
-  updateFlightStatus: adminProcedure
+  updateFlightStatus: airlineOpsProcedure
     .input(
       z.object({
         flightId: z.number(),
@@ -207,6 +213,9 @@ export const adminRouter = router({
       const result = await flightStatusService.updateFlightStatus({
         ...input,
         adminUserId: ctx.user.id,
+        tenantId: isAdmin(ctx.user.role)
+          ? undefined
+          : requireValue(ctx.tenantId),
       });
 
       // Audit log: Flight status updated

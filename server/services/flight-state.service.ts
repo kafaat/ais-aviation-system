@@ -20,7 +20,7 @@ const transitions: Record<FlightStatus, FlightStatus[]> = {
   completed: [],
 };
 /** Current segment membership takes precedence over a historical primary flight. */
-export function flightBookingCondition(flightId: number) {
+export function flightBookingCondition(flightId: number | typeof flights.id) {
   return sql`((NOT EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id}) AND ${bookings.flightId} = ${flightId}) OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.flightId = ${flightId} AND bs.status IN ('pending','confirmed'))) `;
 }
 export async function transitionFlight(
@@ -31,6 +31,7 @@ export async function transitionFlight(
     delayMinutes?: number;
     reason?: string;
     adminUserId?: number;
+    tenantId?: number;
     newDepartureTime?: Date;
     newArrivalTime?: Date;
     disruptionId?: number;
@@ -51,7 +52,10 @@ export async function transitionFlight(
     .from(flights)
     .where(eq(flights.id, update.flightId))
     .for("update");
-  if (!flight)
+  if (
+    !flight ||
+    (update.tenantId !== undefined && flight.tenantId !== update.tenantId)
+  )
     throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
   if (
     update.delayMinutes !== undefined &&
