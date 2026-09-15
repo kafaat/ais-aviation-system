@@ -111,6 +111,16 @@ describe("baggage entitlement authority", () => {
     expect(result.requiresOperationalReview).toBe(true);
   });
 
+  it("requires the funding timestamp even when the receipt reference is valid", async () => {
+    seed.booking_ancillaries.push(paidBaggage({ fundedAt: null }));
+    const result = await entitlement();
+    expect(result.totalWeightGrams).toBe(23000);
+    expect(result.warnings.map(warning => warning.code)).toContain(
+      "missing_funding"
+    );
+    expect(result.requiresOperationalReview).toBe(true);
+  });
+
   it("isolates passenger and segment scopes", async () => {
     seed.booking_ancillaries.push(
       paidBaggage(),
