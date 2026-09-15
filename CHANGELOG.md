@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.27.2
+
+### Bug Fixes
+
+- fix(events): validate waitlist and recovery payload contracts (a7938cb)
+
+### Other Changes
+
+- Merge pull request #159 from kafaat/codex/event-payload-closure-20260915 (b4d6ef4)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.27.1...v1.27.2
+
+---
+
 ## What's Changed in v1.27.1
 
 ### Bug Fixes
