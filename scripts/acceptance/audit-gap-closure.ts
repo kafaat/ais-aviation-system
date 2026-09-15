@@ -1,3 +1,8 @@
+import {
+  requestFlightCancellation,
+  processFlightCancellations,
+} from "../../server/services/flight-cancellation.service";
+import { applyOperationalChecks } from "../../server/services/operational-observations.service";
 import { updateFlightStatus } from "../../server/services/flight-status.service";
 import {
   getRevenueDashboard,
@@ -29,9 +34,13 @@ import { getFinancialSummary } from "../../server/services/financial-reporting.s
 import { transitionFlight } from "../../server/services/flight-state.service";
 import { configuredOnCallProvider } from "../../server/integrations/on-call";
 import assert from "node:assert/strict";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
-import { applyVoucher, useCredit } from "../../server/services/voucher.service";
+import {
+  applyVoucher,
+  useCredit,
+  validateVoucher,
+} from "../../server/services/voucher.service";
 import { createPriceLock } from "../../server/services/price-lock.service";
 import {
   approveCorporateBooking,
@@ -45,6 +54,7 @@ import {
   downloadDataExport,
   withdrawAllConsent,
   processAccountDeletion,
+  cancelAccountDeletion,
 } from "../../server/services/gdpr.service";
 import {
   recordConsent,
@@ -392,7 +402,7 @@ export async function verifyAuditGapClosure(
           .select()
           .from(s.bookings)
           .where(eq(s.bookings.id, bookingId));
-        assert.equal(invoice.totalAmount, 9000);
+        assert.equal(invoice.totalAmount, 10000);
         assert.equal(
           (
             await db
@@ -610,7 +620,7 @@ export async function verifyAuditGapClosure(
       assert.equal(first.length, 2);
       assert(first.every(seat => seat.status === "checked_in"));
       const nonces = first.map(seat => seat.checkInNonce);
-      await processAutoCheckIns();
+      assert.equal((await processAutoCheckIns()).processed, 0);
       const second = await db
         .select()
         .from(s.seatInventory)
@@ -907,7 +917,22 @@ export async function verifyAuditGapClosure(
         confirmedAt: new Date(),
         scheduledDeletionAt: new Date(Date.now() - 1000),
       });
-      const result = await processAccountDeletion(created.insertId);
+      // The deadline itself blocks sessions, even before any worker has run.
+      await assert.rejects(
+        mobileAuthServiceV2.authenticateAccessToken(tokens.accessToken)
+      );
+      await assert.rejects(
+        mobileAuthServiceV2.refreshTokens(tokens.refreshToken)
+      );
+      await assert.rejects(mobileAuthServiceV2.login(id + 2), /suspended/);
+      const [result, cancellation] = await Promise.all([
+        processAccountDeletion(created.insertId),
+        cancelAccountDeletion(id + 2).then(
+          () => "cancelled",
+          () => "refused"
+        ),
+      ]);
+      assert.equal(cancellation, "refused");
       assert.equal(result.success, false);
       assert.match(result.error ?? "", /RETENTION_REVIEW_REQUIRED/);
       await assert.rejects(
@@ -1096,6 +1121,211 @@ export async function verifyAuditGapClosure(
           else process.env[key!] = value;
         }
       }
+    }
+  );
+  await check(
+    "Review: cancelling one paid itinerary leg preserves other legs and queues no refund",
+    async () => {
+      await db.insert(s.paymentReceipts).values({
+        paymentIntentId: `pi_audit_multileg_${multi}`,
+        kind: "booking",
+        bookingId: multi,
+        userId: id + 1,
+        targetId: multi,
+        amount: 10000,
+        currency: "SAR",
+      });
+      const before = await db
+        .select()
+        .from(s.bookingSegments)
+        .where(eq(s.bookingSegments.bookingId, multi));
+      const seats = await db
+        .select()
+        .from(s.seatInventory)
+        .where(eq(s.seatInventory.bookingId, multi));
+      await requestFlightCancellation({
+        flightId: multiFlights[1],
+        reason: "Synthetic isolated leg cancellation",
+      });
+      await processFlightCancellations();
+      const [job] = await db
+        .select()
+        .from(s.flightCancellationJobs)
+        .where(eq(s.flightCancellationJobs.bookingId, multi));
+      assert.equal(job.status, "review_required");
+      assert.match(job.errorCode ?? "", /segment_cancellation_requires_review/);
+      assert.deepEqual(
+        await db
+          .select()
+          .from(s.bookingSegments)
+          .where(eq(s.bookingSegments.bookingId, multi)),
+        before
+      );
+      assert.deepEqual(
+        await db
+          .select()
+          .from(s.seatInventory)
+          .where(eq(s.seatInventory.bookingId, multi)),
+        seats
+      );
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(s.orderServiceRefunds)
+            .where(eq(s.orderServiceRefunds.bookingId, multi))
+        ).length,
+        0
+      );
+      const [owner] = await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, multi));
+      assert.equal(owner.status, "confirmed");
+    }
+  );
+  await check(
+    "Review: rejection preserves the undiscounted invoice and permits personal payment only",
+    async () => {
+      const target = await booking(91, id + 1, 10000);
+      const link = await createCorporateBooking({
+        bookingId: target,
+        corporateAccountId: id,
+        bookedByUserId: id + 1,
+      });
+      await rejectCorporateBooking(link.id, id + 1, "Synthetic rejection");
+      const [invoice] = await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, target));
+      assert.equal(invoice.totalAmount, 10000);
+      await assert.rejects(payCorporateInvoice(target, id + 1), /approval/);
+      await reserveBookingCheckout({
+        bookingId: target,
+        userId: id + 1,
+        appBaseUrl: "https://fixture.example.invalid",
+      });
+    }
+  );
+  await check(
+    "Review: full-value vouchers fail validation as well as application",
+    async () => {
+      const target = await booking(92);
+      await db.insert(s.vouchers).values({
+        code: `FULL${id}`,
+        type: "fixed",
+        value: 8000,
+        validFrom: new Date(Date.now() - 60000),
+        validUntil: new Date(Date.now() + 3600000),
+      });
+      await assert.rejects(
+        validateVoucher(`FULL${id}`, 8000, id),
+        /positive payable/
+      );
+      await assert.rejects(
+        applyVoucher(`FULL${id}`, target, id, 8000),
+        /positive payable/
+      );
+    }
+  );
+  await check(
+    "Review: deletion can be cancelled during grace but never after processing starts",
+    async () => {
+      const [created] = await db.insert(s.accountDeletionRequests).values({
+        userId: id,
+        confirmedAt: new Date(),
+        scheduledDeletionAt: new Date(Date.now() + 86400000),
+      });
+      await cancelAccountDeletion(id);
+      const result = await processAccountDeletion(created.insertId);
+      assert.equal(result.success, false);
+      const [request] = await db
+        .select()
+        .from(s.accountDeletionRequests)
+        .where(eq(s.accountDeletionRequests.id, created.insertId));
+      assert.equal(request.status, "cancelled");
+      await mobileAuthServiceV2.login(id);
+    }
+  );
+  await check(
+    "Review: configuring on-call later reconciles one unacknowledged active incident",
+    async () => {
+      const keys = ["ONCALL_MODE", "ONCALL_BASE_URL", "ONCALL_TOKEN"] as const;
+      const saved = keys.map(key => process.env[key]);
+      const key = `audit-late-oncall:${id}`;
+      const checks = [
+        { key, bad: true, message: "Synthetic late configuration" },
+      ];
+      try {
+        process.env.ONCALL_MODE = "disabled";
+        await applyOperationalChecks(checks);
+        assert.equal(
+          (
+            await db
+              .select()
+              .from(s.alertDispatches)
+              .where(eq(s.alertDispatches.alertKey, key))
+          ).length,
+          0
+        );
+        process.env.ONCALL_MODE = "sandbox";
+        process.env.ONCALL_BASE_URL = "https://oncall.example.invalid";
+        process.env.ONCALL_TOKEN = "synthetic";
+        await Promise.all([
+          applyOperationalChecks(checks),
+          applyOperationalChecks(checks),
+        ]);
+        const rows = await db
+          .select()
+          .from(s.alertDispatches)
+          .where(eq(s.alertDispatches.alertKey, key));
+        assert.equal(rows.length, 1);
+        assert.equal(rows[0].action, "raise");
+      } finally {
+        keys.forEach((key, i) => {
+          if (saved[i] === undefined) delete process.env[key];
+          else process.env[key] = saved[i];
+        });
+      }
+    }
+  );
+  await check(
+    "Review: export rollback persists a terminal failure without an artifact or automatic retry",
+    async () => {
+      const [created] = await db
+        .insert(s.dataExportRequests)
+        .values({ userId: id, format: "json" });
+      await db.execute(
+        sql.raw(
+          "CREATE TRIGGER audit_export_insert_failure BEFORE INSERT ON privacy_export_artifacts FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'synthetic export storage failure'"
+        )
+      );
+      try {
+        assert.equal(
+          (await generateDataExport(created.insertId)).success,
+          false
+        );
+      } finally {
+        await db.execute(sql.raw("DROP TRIGGER audit_export_insert_failure"));
+      }
+      const [failed] = await db
+        .select()
+        .from(s.dataExportRequests)
+        .where(eq(s.dataExportRequests.id, created.insertId));
+      assert.equal(failed.status, "failed");
+      assert(failed.errorMessage);
+      assert.equal(failed.downloadUrl, null);
+      assert.equal(failed.completedAt, null);
+      assert.equal((await generateDataExport(created.insertId)).success, false);
+      assert.equal(
+        (
+          await db
+            .select()
+            .from(s.privacyExportArtifacts)
+            .where(eq(s.privacyExportArtifacts.requestId, created.insertId))
+        ).length,
+        0
+      );
     }
   );
 }

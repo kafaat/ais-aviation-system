@@ -217,3 +217,55 @@ it.each([KioskManagement, BagDropManagement])(
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
   }
 );
+
+it("hands unassigned bookings and considered flights to recovery review", async () => {
+  const { ReaccommodationAdvisory } =
+    await import("@/components/ReaccommodationAdvisory");
+  const { reaccommodationAdvisory } =
+    await import("../../../../../server/contracts/passenger-priority");
+  state.data["passengerPriority.reaccommodationAdvisory"] =
+    reaccommodationAdvisory.parse({
+      plan: {
+        disruptedFlightId: 1,
+        objectiveValue: 100,
+        advisory: true,
+        assignments: [
+          {
+            passengerId: 9,
+            bookingId: 7,
+            flightId: null,
+            flightNumber: null,
+            cabin: null,
+            delayMinutes: null,
+            downgraded: false,
+            cost: 100,
+            reason: "No capacity",
+          },
+        ],
+        unassigned: [9],
+        objective: {
+          order: "max-assigned-then-min-cost",
+          weightAtZeroPriority: 1,
+          weightPerPriorityPoint: 0.01,
+          downgradeMinutes: 60,
+          unassignedMinutes: 100,
+        },
+      },
+      candidateFlightIds: [2, 3],
+      consideredOptions: 2,
+      consideredPassengers: 1,
+      optionsTruncated: false,
+      window: {
+        fromISO: "2035-01-01T00:00:00Z",
+        toISO: "2035-01-02T00:00:00Z",
+      },
+    });
+  show(<ReaccommodationAdvisory />);
+  fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: /Compute assignment/i }));
+  expect(
+    screen
+      .getByRole("link", { name: /Review recovery plan/i })
+      .getAttribute("href")
+  ).toBe("/admin/operations?bookingIds=7&candidateIds=2,3");
+});

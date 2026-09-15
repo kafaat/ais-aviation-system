@@ -66,6 +66,7 @@ export interface AdvisoryInputs {
   plan: ReaccommodationPlan;
   /** Stated so a reader can see what the advisory was allowed to consider. */
   consideredOptions: number;
+  candidateFlightIds: number[];
   consideredPassengers: number;
   /** More eligible flights exist beyond the declared option scope. */
   optionsTruncated: boolean;
@@ -207,6 +208,7 @@ async function readAdvisory(
   return {
     plan,
     consideredOptions: options.length,
+    candidateFlightIds: options.map(option => option.flightId),
     consideredPassengers: disruptedPassengers.length,
     optionsTruncated: candidates.length > MAX_OPTIONS,
     window: { fromISO: now.toISOString(), toISO: windowEnd.toISOString() },

@@ -12,14 +12,16 @@ import type { SettlementTx } from "./booking-settlement.service";
 
 export async function assertCorporatePaymentApproved(
   tx: SettlementTx,
-  bookingId: number
+  bookingId: number,
+  requireCorporateFunding = false
 ) {
   const [link] = await tx
     .select()
     .from(corporateBookings)
     .where(eq(corporateBookings.bookingId, bookingId))
     .for("update");
-  if (!link) return;
+  if (!link || (link.approvalStatus === "rejected" && !requireCorporateFunding))
+    return;
   if (link.approvalStatus !== "approved")
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -79,7 +81,7 @@ export async function payCorporateInvoice(bookingId: number, actorId: number) {
       .from(financialLedger)
       .where(eq(financialLedger.stripeEventId, reference));
     if (receipt) return { settled: true as const, receiptId: receipt.id };
-    await assertCorporatePaymentApproved(tx, bookingId);
+    await assertCorporatePaymentApproved(tx, bookingId, true);
     if (
       !account ||
       !Number.isSafeInteger(account.creditLimit) ||

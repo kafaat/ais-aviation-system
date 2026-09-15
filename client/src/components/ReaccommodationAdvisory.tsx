@@ -18,19 +18,9 @@ export function ReaccommodationAdvisory() {
   );
   const result = query.error ? undefined : query.data;
   const bookings = [
-    ...new Set(
-      result?.plan.assignments
-        .filter(a => a.flightId !== null)
-        .map(a => a.bookingId) ?? []
-    ),
+    ...new Set(result?.plan.assignments.map(a => a.bookingId) ?? []),
   ];
-  const candidates = [
-    ...new Set(
-      result?.plan.assignments.flatMap(a =>
-        a.flightId === null ? [] : [a.flightId]
-      ) ?? []
-    ),
-  ];
+  const candidates = result?.candidateFlightIds ?? [];
   return (
     <section className="space-y-4">
       <form

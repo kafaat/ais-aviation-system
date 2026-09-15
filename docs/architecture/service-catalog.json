@@ -1673,6 +1673,7 @@
       ],
       "tableExpressions": {
         "reads": [
+          "bookingSegments",
           "bookings",
           "flightCancellationJobs",
           "flights",
@@ -3089,6 +3090,7 @@
       ],
       "tableExpressions": {
         "reads": [
+          "alertDispatches",
           "operationalSamples",
           "operationsAlerts",
           "outbox",
@@ -5166,6 +5168,7 @@
           "bookings",
           "flights",
           "passengers",
+          "seatInventory",
           "userPreferences"
         ],
         "writes": ["userPreferences"]

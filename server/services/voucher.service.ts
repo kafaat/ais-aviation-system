@@ -285,6 +285,15 @@ export async function validateVoucher(
       }
     }
 
+    if (
+      !Number.isSafeInteger(discountAmount) ||
+      discountAmount <= 0 ||
+      discountAmount >= amount
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Voucher must leave a positive payable invoice",
+      });
     return {
       valid: true,
       voucher,

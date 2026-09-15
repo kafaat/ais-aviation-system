@@ -12,6 +12,7 @@ import {
   flights,
   airports,
   passengers,
+  seatInventory,
   userPreferences,
 } from "../../drizzle/schema";
 import { eq, and, inArray } from "drizzle-orm";
@@ -115,9 +116,21 @@ export async function processAutoCheckIns() {
         .from(passengers)
         .where(eq(passengers.bookingId, booking.bookingId));
       try {
-        for (const passenger of travelers)
+        const checked = await database
+          .select({ passengerId: seatInventory.passengerId })
+          .from(seatInventory)
+          .where(
+            and(
+              eq(seatInventory.flightId, booking.flightId),
+              eq(seatInventory.bookingId, booking.bookingId),
+              eq(seatInventory.status, "checked_in")
+            )
+          );
+        const ids = new Set(checked.map(row => row.passengerId));
+        const pending = travelers.filter(passenger => !ids.has(passenger.id));
+        for (const passenger of pending)
           await checkIn(booking.flightId, booking.bookingId, passenger.id);
-        if (travelers.length) processed++;
+        if (pending.length) processed++;
       } catch {
         // Document review, unavailable seats or a concurrent check-in remain pending.
       }

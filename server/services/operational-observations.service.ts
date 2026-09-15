@@ -3,6 +3,7 @@ import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import {
   operationalSamples,
   operationsAlerts,
+  alertDispatches,
   scheduledTasks,
   outbox,
 } from "../../drizzle/schema";
@@ -208,7 +209,41 @@ export async function applyOperationalChecks(
         .for("update");
       if (!prior && !check.bad) return;
       const status = check.bad ? ("active" as const) : ("resolved" as const);
-      if (prior?.status === status) return;
+      if (prior?.status === status) {
+        if (status === "active" && !prior.acknowledgedAt && onCall) {
+          const [raise] = await tx
+            .select()
+            .from(alertDispatches)
+            .where(
+              and(
+                eq(alertDispatches.alertKey, check.key),
+                eq(alertDispatches.action, "raise")
+              )
+            )
+            .orderBy(desc(alertDispatches.id))
+            .limit(1);
+          const [closed] = raise
+            ? await tx
+                .select({ id: alertDispatches.id })
+                .from(alertDispatches)
+                .where(
+                  and(
+                    eq(alertDispatches.dedupKey, raise.dedupKey),
+                    eq(alertDispatches.action, "close")
+                  )
+                )
+            : [];
+          // An existing open dispatch retains its provider identity; do not
+          // silently retarget an incident after a configuration change.
+          if (!raise || closed)
+            await queueAlertRaise(
+              tx,
+              { alertKey: check.key, summary: check.message },
+              onCall
+            );
+        }
+        return;
+      }
       await tx
         .insert(operationsAlerts)
         .values({ key: check.key, status, message: check.message })

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
-import { and, eq, gt, isNull, lt, isNotNull, ne } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, isNotNull, ne, or, lte } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   accountDeletionRequests,
@@ -43,7 +43,13 @@ async function assertAccountAccessible(
     .where(
       and(
         eq(accountDeletionRequests.userId, userId),
-        isNotNull(accountDeletionRequests.processedAt),
+        or(
+          isNotNull(accountDeletionRequests.processedAt),
+          and(
+            isNotNull(accountDeletionRequests.confirmedAt),
+            lte(accountDeletionRequests.scheduledDeletionAt, new Date())
+          )
+        ),
         ne(accountDeletionRequests.status, "cancelled")
       )
     )

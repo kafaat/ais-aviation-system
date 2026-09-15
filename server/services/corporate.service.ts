@@ -667,18 +667,8 @@ export async function createCorporateBooking(
         });
       return existing;
     }
-    const { lockEditableInvoice, setInvoiceTotal } =
-      await import("./booking-invoice.service");
+    const { lockEditableInvoice } = await import("./booking-invoice.service");
     await lockEditableInvoice(tx, booking.id, { userId: data.bookedByUserId });
-    const percent = Number(account.discountPercent);
-    if (!Number.isFinite(percent) || percent < 0 || percent >= 100)
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "Corporate discount requires a valid approved percentage",
-      });
-    const discount = Math.floor((booking.totalAmount * percent) / 100);
-    if (discount > 0)
-      await setInvoiceTotal(tx, booking, booking.totalAmount - discount);
     const [result] = await tx
       .insert(corporateBookings)
       .values({ ...data, approvalStatus: "pending" });
@@ -776,6 +766,22 @@ async function decideCorporateBooking(
         code: "BAD_REQUEST",
         message: `Cannot ${status === "approved" ? "approve" : "reject"} a ${link.approvalStatus} booking`,
       });
+    if (status === "approved") {
+      const { lockEditableInvoice, setInvoiceTotal } =
+        await import("./booking-invoice.service");
+      const invoice = await lockEditableInvoice(tx, booking.id, {
+        userId: booking.userId,
+      });
+      const percent = Number(account.discountPercent);
+      if (!Number.isFinite(percent) || percent < 0 || percent >= 100)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Corporate discount requires a valid approved percentage",
+        });
+      const discount = Math.floor((invoice.totalAmount * percent) / 100);
+      if (discount > 0)
+        await setInvoiceTotal(tx, invoice, invoice.totalAmount - discount);
+    }
     await tx
       .update(corporateBookings)
       .set({

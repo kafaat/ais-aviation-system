@@ -324,6 +324,11 @@ export async function generateDataExport(requestId: number): Promise<{
       if (!request)
         return { success: false, error: "Export request not found" };
       if (request.status === "completed") return { success: true };
+      if (request.status === "failed")
+        return {
+          success: false,
+          error: request.errorMessage ?? "Export failed; request a new copy",
+        };
       if (request.status === "expired")
         return { success: false, error: "Export expired; request a new copy" };
       const userData = await collectUserData(request.userId, tx);
@@ -369,13 +374,25 @@ export async function generateDataExport(requestId: number): Promise<{
     });
   } catch (error) {
     logger.error(
-      { requestId, error },
+      { requestId },
       "Privacy export failed without publishing a download"
     );
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Export failed",
-    };
+    // The failed export transaction rolled back. Preserve a successful competing
+    // worker's completion and never store arbitrary database errors containing PII.
+    const message =
+      error instanceof Error && error.message.startsWith("Export exceeds")
+        ? "Export exceeds the supported download size; requires assisted export"
+        : "Export failed; request a new copy or contact support";
+    await db
+      .update(dataExportRequests)
+      .set({ status: "failed", errorMessage: message, processedAt: new Date() })
+      .where(
+        and(
+          eq(dataExportRequests.id, requestId),
+          eq(dataExportRequests.status, "pending")
+        )
+      );
+    return { success: false, error: message };
   }
 }
 
@@ -432,7 +449,7 @@ export async function processPrivacyRequests() {
   const exports = await db
     .select({ id: dataExportRequests.id })
     .from(dataExportRequests)
-    .where(inArray(dataExportRequests.status, ["pending", "failed"]))
+    .where(eq(dataExportRequests.status, "pending"))
     .orderBy(dataExportRequests.id)
     .limit(20);
   const deletions = await db
@@ -845,30 +862,49 @@ export async function cancelAccountDeletion(
     });
   }
 
-  // Find pending deletion request
-  const request = await db
-    .select()
-    .from(accountDeletionRequests)
-    .where(
-      and(
-        eq(accountDeletionRequests.userId, userId),
-        eq(accountDeletionRequests.status, "pending")
+  const requestId = await db.transaction(async tx => {
+    await tx
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .for("update");
+    const [request] = await tx
+      .select()
+      .from(accountDeletionRequests)
+      .where(
+        and(
+          eq(accountDeletionRequests.userId, userId),
+          eq(accountDeletionRequests.status, "pending")
+        )
       )
+      .limit(1)
+      .for("update");
+    if (!request)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "No pending deletion request found",
+      });
+    if (
+      request.processedAt ||
+      (request.confirmedAt &&
+        request.scheduledDeletionAt &&
+        request.scheduledDeletionAt <= new Date())
     )
-    .limit(1);
-
-  if (request.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "No pending deletion request found",
-    });
-  }
-
-  // Update request as cancelled
-  await db
-    .update(accountDeletionRequests)
-    .set({ status: "cancelled" })
-    .where(eq(accountDeletionRequests.id, request[0].id));
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Deletion grace period has ended; access cannot be restored",
+      });
+    await tx
+      .update(accountDeletionRequests)
+      .set({ status: "cancelled" })
+      .where(
+        and(
+          eq(accountDeletionRequests.id, request.id),
+          eq(accountDeletionRequests.status, "pending")
+        )
+      );
+    return request.id;
+  });
 
   // Log cancellation
   await createAuditLog({
@@ -881,7 +917,7 @@ export async function cancelAccountDeletion(
     sourceIp: context?.ipAddress,
     userAgent: context?.userAgent,
     resourceType: "account_deletion",
-    resourceId: String(request[0].id),
+    resourceId: String(requestId),
     changeDescription: "User cancelled account deletion request",
   });
 
