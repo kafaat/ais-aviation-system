@@ -1,3 +1,4 @@
+import { getClaimTargets } from "../services/booking-flight-membership.service";
 import { responseContracts } from "../contracts/compensation";
 import { z } from "zod";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
@@ -20,6 +21,23 @@ import { TRPCError } from "@trpc/server";
  * Handles EU261/DOT compensation claims for flight disruptions
  */
 export const compensationRouter = router({
+  claimTargets: protectedProcedure
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(
+      z.object({
+        flights: z.array(
+          z.object({ id: z.number(), flightNumber: z.string() })
+        ),
+        passengers: z.array(
+          z.object({
+            id: z.number(),
+            firstName: z.string(),
+            lastName: z.string(),
+          })
+        ),
+      })
+    )
+    .query(({ ctx, input }) => getClaimTargets(input.bookingId, ctx.user.id)),
   /**
    * File a new compensation claim (authenticated user)
    */
@@ -27,6 +45,8 @@ export const compensationRouter = router({
     .input(
       z.object({
         bookingId: z.number(),
+        flightId: z.number().int().positive().optional(),
+        passengerId: z.number().int().positive().optional(),
         regulationType: z.enum(["eu261", "dot", "local"]),
         claimType: z.enum([
           "delay",
@@ -42,6 +62,8 @@ export const compensationRouter = router({
       try {
         return await createClaim({
           bookingId: input.bookingId,
+          flightId: input.flightId,
+          passengerId: input.passengerId,
           regulationType: input.regulationType,
           claimType: input.claimType,
           reason: input.reason,
@@ -85,6 +107,7 @@ export const compensationRouter = router({
     .input(
       z.object({
         bookingId: z.number(),
+        flightId: z.number().int().positive().optional(),
         disruptionType: z.enum([
           "delay",
           "cancellation",
@@ -98,7 +121,8 @@ export const compensationRouter = router({
       return await autoAssessEligibility(
         input.bookingId,
         input.disruptionType,
-        ctx.user.id
+        ctx.user.id,
+        input.flightId
       );
     }),
 
@@ -109,16 +133,26 @@ export const compensationRouter = router({
     .input(
       z.object({
         claimId: z.number(),
+        evidence: z
+          .object({
+            policyReference: z.string().trim().min(5).max(500),
+            fxReference: z.string().trim().min(5).max(500),
+            distanceReference: z.string().trim().min(5).max(500),
+            distanceKm: z.number().int().positive(),
+          })
+          .optional(),
         decision: z.enum(["approved", "denied", "partial"]),
         approvedAmount: z.number().min(0).optional(),
         denialReason: z.string().max(1000).optional(),
       })
     )
     .output(responseContracts["processClaim"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       try {
         return await processClaim({
           claimId: input.claimId,
+          actorId: ctx.user.id,
+          evidence: input.evidence,
           decision: input.decision,
           approvedAmount: input.approvedAmount,
           denialReason: input.denialReason,

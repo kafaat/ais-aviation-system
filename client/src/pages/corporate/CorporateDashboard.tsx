@@ -1,3 +1,4 @@
+import { CorporateInvitations } from "@/components/CorporateInvitations";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -82,6 +83,18 @@ export default function CorporateDashboard() {
     { enabled: !!account }
   );
 
+  const inviteMutation = trpc.corporate.inviteUser.useMutation({
+    onSuccess: () => {
+      toast.success(
+        i18n.language.startsWith("ar")
+          ? "سُجلت الدعوة وأُرسلت إلى إشعارات الموظف"
+          : "Invitation saved in the employee's notifications"
+      );
+      setAddUserDialogOpen(false);
+      setNewUserEmail("");
+    },
+    onError: error => toast.error(error.message),
+  });
   // Mutations
   const approveMutation = trpc.corporate.approveBooking.useMutation({
     onSuccess: () => {
@@ -175,6 +188,7 @@ export default function CorporateDashboard() {
   if (!account) {
     return (
       <div className="p-6">
+        <CorporateInvitations />
         <Card className="p-12 text-center">
           <Building2 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-2">
@@ -504,7 +518,13 @@ export default function CorporateDashboard() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="email">{t("corporate.userEmail")}</Label>
+              <Label htmlFor="email">
+                {t("corporate.userEmail")} (
+                {i18n.language.startsWith("ar")
+                  ? "حساب موظف مسجل"
+                  : "registered employee account"}
+                )
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -550,14 +570,17 @@ export default function CorporateDashboard() {
             </Button>
             <Button
               onClick={() => {
-                // This would require a user lookup by email
-                // For now, show a placeholder message
-                toast.info(t("corporate.inviteSent"));
-                setAddUserDialogOpen(false);
-                setNewUserEmail("");
+                if (account)
+                  inviteMutation.mutate({
+                    corporateAccountId: account.id,
+                    email: newUserEmail,
+                    role: newUserRole,
+                  });
               }}
             >
-              {t("corporate.sendInvite")}
+              {inviteMutation.isPending
+                ? t("common.loading")
+                : t("corporate.sendInvite")}
             </Button>
           </DialogFooter>
         </DialogContent>

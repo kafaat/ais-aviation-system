@@ -136,7 +136,8 @@ function RegBadge({ type }: { type: RegulationType }) {
   );
 }
 
-function formatSAR(cents: number): string {
+function formatSAR(cents: number | null): string {
+  if (cents === null) return "—";
   return (cents / 100).toFixed(2);
 }
 
@@ -145,7 +146,8 @@ function formatSAR(cents: number): string {
 // ============================================================================
 
 function StatsCards() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRTL = i18n.language.startsWith("ar");
 
   const { data: stats, isLoading } = trpc.compensation.getStats.useQuery();
 
@@ -169,10 +171,10 @@ function StatsCards() {
       detail: `${stats.pendingClaims} ${t("compensation.admin.pending", "pending")}`,
     },
     {
-      title: t("compensation.admin.totalLiability", "Total Liability"),
-      value: `${formatSAR(stats.totalCalculated)} SAR`,
+      title: t("compensation.admin.approved", "Approved"),
+      value: `${formatSAR(stats.totalApproved)} SAR`,
       icon: <DollarSign className="h-5 w-5 text-muted-foreground" />,
-      detail: `${formatSAR(stats.totalApproved)} SAR ${t("compensation.admin.approved", "approved")}`,
+      detail: `${stats.unassessedClaims} ${isRTL ? "مطالبة بلا تقدير معتمد" : "claims without an accepted assessment"}`,
     },
     {
       title: t("compensation.admin.paidOut", "Paid Out"),
@@ -227,6 +229,10 @@ function ClaimsQueue() {
     "approved"
   );
   const [approvedAmount, setApprovedAmount] = useState("");
+  const [policyReference, setPolicyReference] = useState("");
+  const [fxReference, setFxReference] = useState("");
+  const [distanceReference, setDistanceReference] = useState("");
+  const [distanceKm, setDistanceKm] = useState("");
   const [denialReason, setDenialReason] = useState("");
 
   const {
@@ -259,6 +265,10 @@ function ClaimsQueue() {
 
   const resetProcessForm = () => {
     setSelectedClaimId(null);
+    setPolicyReference("");
+    setFxReference("");
+    setDistanceReference("");
+    setDistanceKm("");
     setDecision("approved");
     setApprovedAmount("");
     setDenialReason("");
@@ -271,10 +281,19 @@ function ClaimsQueue() {
       claimId: selectedClaimId,
       decision,
       approvedAmount:
-        decision === "partial" && approvedAmount
+        decision !== "denied" && approvedAmount
           ? Math.round(parseFloat(approvedAmount) * 100)
           : undefined,
       denialReason: decision === "denied" ? denialReason : undefined,
+      evidence:
+        decision === "denied"
+          ? undefined
+          : {
+              policyReference,
+              fxReference,
+              distanceReference,
+              distanceKm: Number(distanceKm),
+            },
     });
   };
 
@@ -545,7 +564,7 @@ function ClaimsQueue() {
               </Select>
             </div>
 
-            {decision === "partial" && (
+            {decision !== "denied" && (
               <div className="space-y-2">
                 <Label htmlFor="approved-amount">
                   {t(
@@ -565,6 +584,44 @@ function ClaimsQueue() {
               </div>
             )}
 
+            {decision !== "denied" && (
+              <div className="space-y-2">
+                {[
+                  {
+                    label: "Policy acceptance reference / مرجع السياسة",
+                    value: policyReference,
+                    set: setPolicyReference,
+                  },
+                  {
+                    label: "Currency conversion reference / مرجع التحويل",
+                    value: fxReference,
+                    set: setFxReference,
+                  },
+                  {
+                    label: "Distance source / مصدر المسافة",
+                    value: distanceReference,
+                    set: setDistanceReference,
+                  },
+                  {
+                    label: "Distance in km / المسافة كم",
+                    value: distanceKm,
+                    set: setDistanceKm,
+                  },
+                ].map(field => (
+                  <label className="block" key={field.label}>
+                    {field.label}
+                    <Input
+                      value={field.value}
+                      onChange={e => field.set(e.target.value)}
+                    />
+                  </label>
+                ))}
+                <p>
+                  Approval records entitlement; payout requires a separate
+                  settlement receipt.
+                </p>
+              </div>
+            )}
             {decision === "denied" && (
               <div className="space-y-2">
                 <Label htmlFor="denial-reason">
@@ -599,7 +656,12 @@ function ClaimsQueue() {
               disabled={
                 processClaimMutation.isPending ||
                 (decision === "denied" && !denialReason.trim()) ||
-                (decision === "partial" && !approvedAmount)
+                (decision !== "denied" &&
+                  (!approvedAmount ||
+                    !policyReference ||
+                    !fxReference ||
+                    !distanceReference ||
+                    !distanceKm))
               }
             >
               {processClaimMutation.isPending ? (
@@ -681,7 +743,9 @@ function FlightLiability() {
                   {t("compensation.admin.calculatedLiability", "Calculated")}
                 </p>
                 <p className="text-2xl font-bold">
-                  {formatSAR(liability.totalCalculated)}{" "}
+                  {liability.unassessedClaims > 0
+                    ? "—"
+                    : formatSAR(liability.totalCalculated)}{" "}
                   <span className="text-sm font-normal text-muted-foreground">
                     SAR
                   </span>

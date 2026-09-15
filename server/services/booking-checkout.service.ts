@@ -1,3 +1,4 @@
+import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -223,6 +224,7 @@ export async function reserveBookingCheckout(
   if (!db) throw unavailable("Database unavailable");
   return await db.transaction(async tx => {
     const booking = await ownedPending(tx, owner.bookingId, owner.userId);
+    await assertCorporatePaymentApproved(tx, booking.id);
     const [existing] = await tx
       .select()
       .from(bookingCheckoutRequests)

@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bookings,
+  bookingSegments,
   flights,
   flightCancellationJobs,
   orderServiceRefunds,
@@ -23,6 +24,7 @@ export async function requestFlightCancellation(input: {
   flightId: number;
   reason: string;
   actorId?: number;
+  tenantId?: number;
 }) {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
@@ -34,6 +36,7 @@ export async function requestFlightCancellation(input: {
       status: "cancelled",
       reason: input.reason,
       adminUserId: input.actorId,
+      tenantId: input.tenantId,
     });
     const targets = await tx
       .select()
@@ -118,6 +121,20 @@ export async function processFlightCancellations() {
           .where(eq(flights.id, hint.flightId));
         if (!booking || flight?.status !== "cancelled")
           throw new Error("cancellation_owner_state_changed");
+        // A flight cancellation is not consent to cancel an entire itinerary.
+        // Until segment-level refund allocation is approved, retain all resources
+        // and route multi-leg and moved bookings to operator recovery review.
+        const segments = await tx
+          .select()
+          .from(bookingSegments)
+          .where(eq(bookingSegments.bookingId, booking.id))
+          .for("update");
+        if (
+          segments.length > 1 ||
+          (segments.length === 1 && segments[0].flightId !== job.flightId) ||
+          (!segments.length && booking.flightId !== job.flightId)
+        )
+          throw new Error("segment_cancellation_requires_review");
         const receipts = await tx
           .select()
           .from(paymentReceipts)
@@ -167,7 +184,7 @@ export async function processFlightCancellations() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       const review =
-        /original_collection_requires_reconciliation|cancellation_owner_state_changed|refund liability|Cancellation refund plan|Original refundable payer|collection is awaiting|collected payment is awaiting/i.test(
+        /segment_cancellation_requires_review|original_collection_requires_reconciliation|cancellation_owner_state_changed|refund liability|Cancellation refund plan|Original refundable payer|collection is awaiting|collected payment is awaiting/i.test(
           message
         );
       if (!review) failures.push(error);
@@ -178,6 +195,7 @@ export async function processFlightCancellations() {
           errorCode:
             error instanceof Error &&
             [
+              "segment_cancellation_requires_review",
               "original_collection_requires_reconciliation",
               "cancellation_owner_state_changed",
             ].includes(error.message)

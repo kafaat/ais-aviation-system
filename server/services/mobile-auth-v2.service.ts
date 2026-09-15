@@ -1,15 +1,17 @@
 import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
-import { and, eq, gt, isNull, lt } from "drizzle-orm";
+import { and, eq, gt, isNull, lt, isNotNull, ne, or, lte } from "drizzle-orm";
 import { getDb } from "../db";
 import {
+  accountDeletionRequests,
   refreshTokens,
   users,
   mfaSettings,
   type User,
 } from "../../drizzle/schema";
 import { type MfaProof } from "./mfa.service";
+import type { SettlementTx } from "./booking-settlement.service";
 import { ENV } from "../_core/env";
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -30,6 +32,29 @@ async function database() {
       message: "Database unavailable",
     });
   return db;
+}
+async function assertAccountAccessible(
+  db: SettlementTx | NonNullable<ReturnType<typeof getDb>>,
+  userId: number
+) {
+  const [request] = await db
+    .select({ id: accountDeletionRequests.id })
+    .from(accountDeletionRequests)
+    .where(
+      and(
+        eq(accountDeletionRequests.userId, userId),
+        or(
+          isNotNull(accountDeletionRequests.processedAt),
+          and(
+            isNotNull(accountDeletionRequests.confirmedAt),
+            lte(accountDeletionRequests.scheduledDeletionAt, new Date())
+          )
+        ),
+        ne(accountDeletionRequests.status, "cancelled")
+      )
+    )
+    .limit(1);
+  if (request) throw unauthorized("Account is suspended for deletion");
 }
 export interface JwtPayload {
   userId: number;
@@ -123,6 +148,7 @@ export const mobileAuthServiceV2 = {
       )
       .limit(1);
     if (!row || (row.mfaEnabled && !row.mfaVerified)) throw unauthorized();
+    await assertAccountAccessible(db, row.user.id);
     return row.user;
   },
 
@@ -149,6 +175,7 @@ export const mobileAuthServiceV2 = {
         .limit(1)
         .for("update");
       if (!user) throw unauthorized();
+      await assertAccountAccessible(tx, user.id);
       const [mfa] = await tx
         .select()
         .from(mfaSettings)
@@ -223,10 +250,13 @@ export const mobileAuthServiceV2 = {
       });
       if (!record?.familyId)
         throw unauthorized("Invalid or expired refresh token");
-      const user = await tx.query.users.findFirst({
-        where: (t, { eq }) => eq(t.id, record.userId),
-      });
+      const [user] = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, record.userId))
+        .for("update");
       if (!user) throw unauthorized();
+      await assertAccountAccessible(tx, user.id);
       const [mfa] = await tx
         .select()
         .from(mfaSettings)

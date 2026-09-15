@@ -102,6 +102,8 @@ const EmergencyHotelManagement = lazy(
 );
 const PassengerPriority = lazy(() => import("./pages/admin/PassengerPriority"));
 
+const AirlineConsole = lazy(() => import("./pages/AirlineConsole"));
+
 // Corporate pages
 const CorporateDashboard = lazy(
   () => import("./pages/corporate/CorporateDashboard")
@@ -226,6 +228,13 @@ function Router() {
             <Suspense fallback={<PageLoadingFallback variant="form" />}>
               <CheckIn />
             </Suspense>
+          </Route>
+          <Route path="/airline">
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <AirlineConsole />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/profile">
             <ProtectedRoute>

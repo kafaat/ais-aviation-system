@@ -1,3 +1,4 @@
+import { resolveClaimFlight } from "./booking-flight-membership.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -5,12 +6,12 @@ import {
   flights,
   airports,
   passengers,
-  flightDisruptions,
+  compensationClaims,
 } from "../../drizzle/schema";
-import { eq, sql, desc, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 
 // ============================================================================
-// Inline Schema Types (not persisted as Drizzle tables)
+// API types for the migrated compensation tables
 // ============================================================================
 
 export interface CompensationClaim {
@@ -22,7 +23,7 @@ export interface CompensationClaim {
   claimType: "delay" | "cancellation" | "denied_boarding" | "downgrade";
   flightDistance: number | null;
   delayMinutes: number | null;
-  calculatedAmount: number; // SAR cents
+  calculatedAmount: number | null; // SAR cents; NULL until supported by approved evidence
   approvedAmount: number | null;
   currency: string;
   status:
@@ -64,15 +65,14 @@ export interface CompensationStats {
   paidClaims: number;
   appealedClaims: number;
   totalCalculated: number;
+  unassessedClaims: number;
   totalApproved: number;
   totalPaid: number;
   avgProcessingDays: number;
 }
 
 // ============================================================================
-// In-memory store for compensation claims and rules
-// In production these would be database tables; here we use SQL raw queries
-// against the tables described in the spec.
+// Persisted claims and rules; calculations require recorded review evidence.
 // ============================================================================
 
 // We use raw SQL to interact with `compensation_claims` and `compensation_rules`
@@ -393,158 +393,52 @@ function toRadians(degrees: number): number {
  */
 export async function createClaim(input: {
   bookingId: number;
+  flightId?: number;
+  passengerId?: number;
   regulationType: "eu261" | "dot" | "local";
   claimType: "delay" | "cancellation" | "denied_boarding" | "downgrade";
   reason?: string;
   userId: number;
 }): Promise<CompensationClaim> {
   const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get the booking with ownership check
-  const [booking] = await db
-    .select({
-      id: bookings.id,
-      userId: bookings.userId,
-      flightId: bookings.flightId,
-      status: bookings.status,
-      cabinClass: bookings.cabinClass,
-      totalAmount: bookings.totalAmount,
-    })
-    .from(bookings)
-    .where(eq(bookings.id, input.bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Booking not found",
-    });
-  }
-
-  if (booking.userId !== input.userId) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Access denied: you do not own this booking",
-    });
-  }
-
-  // Get flight info
-  const [flight] = await db
-    .select({
-      id: flights.id,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-      status: flights.status,
-      flightNumber: flights.flightNumber,
-    })
-    .from(flights)
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
-
-  if (!flight) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Flight not found",
-    });
-  }
-
-  // Calculate distance
-  const distance = await calculateFlightDistance(
-    flight.originId,
-    flight.destinationId
+  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+  const flightId = await resolveClaimFlight(
+    input.bookingId,
+    input.userId,
+    input.flightId
   );
-
-  // Get disruption info for delay minutes
-  const disruptions = await db
-    .select({
-      id: flightDisruptions.id,
-      type: flightDisruptions.type,
-      delayMinutes: flightDisruptions.delayMinutes,
-    })
-    .from(flightDisruptions)
-    .where(eq(flightDisruptions.flightId, flight.id))
-    .orderBy(desc(flightDisruptions.createdAt))
-    .limit(1);
-
-  const disruption = disruptions.length > 0 ? disruptions[0] : null;
-  const delayMinutes = disruption?.delayMinutes ?? 0;
-
-  // Calculate compensation amount
-  let calculatedAmount = 0;
-  if (input.regulationType === "eu261") {
-    const eu261 = await calculateEU261Compensation(
-      flight.id,
-      delayMinutes,
-      distance
-    );
-    calculatedAmount = eu261.amount;
-  } else if (input.regulationType === "dot") {
-    const dotType =
-      input.claimType === "denied_boarding"
-        ? "denied_boarding"
-        : "tarmac_delay";
-    const dot = await calculateDOTCompensation(flight.id, dotType);
-    calculatedAmount = dot.amount;
-  } else {
-    // Local regulation: 50% of ticket price as default
-    calculatedAmount = Math.round(booking.totalAmount * 0.5);
-  }
-
-  // Get first passenger for the booking
-  const bookingPassengers = await db
+  const travellers = await db
     .select({ id: passengers.id })
     .from(passengers)
-    .where(eq(passengers.bookingId, booking.id))
-    .limit(1);
-
-  const passengerId =
-    bookingPassengers.length > 0 ? bookingPassengers[0].id : null;
-
-  const now = new Date();
-
-  // Insert into compensation_claims table via raw SQL
-  const result = await db.execute(
-    sql`INSERT INTO ${sql.raw(CLAIMS_TABLE)} (
-      bookingId, flightId, passengerId, regulationType, claimType,
-      flightDistance, delayMinutes, calculatedAmount, approvedAmount,
-      currency, status, reason, denialReason, filedAt, resolvedAt, paidAt,
-      createdAt, updatedAt
-    ) VALUES (
-      ${booking.id}, ${flight.id}, ${passengerId}, ${input.regulationType},
-      ${input.claimType}, ${distance}, ${delayMinutes}, ${calculatedAmount},
-      NULL, 'SAR', 'pending', ${input.reason || null}, NULL, ${now}, NULL, NULL,
-      ${now}, ${now}
-    )`
-  );
-
-  const insertId = (result as unknown as [{ insertId: number }])[0]?.insertId;
-
-  return {
-    id: insertId,
-    bookingId: booking.id,
-    flightId: flight.id,
-    passengerId,
+    .where(eq(passengers.bookingId, input.bookingId));
+  if (
+    input.passengerId !== undefined &&
+    !travellers.some(p => p.id === input.passengerId)
+  )
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Passenger is not part of this booking",
+    });
+  if (input.passengerId === undefined && travellers.length > 1)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Choose the passenger for this claim",
+    });
+  const [inserted] = await db.insert(compensationClaims).values({
+    bookingId: input.bookingId,
+    flightId,
+    passengerId: input.passengerId ?? travellers[0]?.id ?? null,
     regulationType: input.regulationType,
     claimType: input.claimType,
-    flightDistance: distance,
-    delayMinutes,
-    calculatedAmount,
-    approvedAmount: null,
-    currency: "SAR",
-    status: "pending",
-    reason: input.reason || null,
-    denialReason: null,
-    filedAt: now,
-    resolvedAt: null,
-    paidAt: null,
-    createdAt: now,
-    updatedAt: now,
-  };
+    status: "under_review",
+    calculatedAmount: null,
+    reason: input.reason ?? null,
+  });
+  const [claim] = await db
+    .select()
+    .from(compensationClaims)
+    .where(eq(compensationClaims.id, inserted.insertId));
+  return claim;
 }
 
 /**
@@ -555,83 +449,80 @@ export async function processClaim(input: {
   decision: "approved" | "denied" | "partial";
   approvedAmount?: number;
   denialReason?: string;
+  evidence?: {
+    policyReference: string;
+    fxReference: string;
+    distanceReference: string;
+    distanceKm: number;
+  };
+  actorId: number;
 }): Promise<CompensationClaim> {
   const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get existing claim
-  const rows = await db.execute(
-    sql`SELECT * FROM ${sql.raw(CLAIMS_TABLE)} WHERE id = ${input.claimId} LIMIT 1`
-  );
-  const claimRows = rows as unknown as Array<Array<Record<string, unknown>>>;
-  const existing = claimRows[0]?.[0];
-
-  if (!existing) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Compensation claim not found",
-    });
-  }
-
-  const currentStatus = existing.status as string;
-  if (currentStatus === "paid") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot modify a paid claim",
-    });
-  }
-
-  const now = new Date();
-  let newStatus: string;
-  let approvedAmount: number | null = null;
-
-  if (input.decision === "approved") {
-    newStatus = "approved";
-    approvedAmount =
-      input.approvedAmount ?? (existing.calculatedAmount as number);
-  } else if (input.decision === "partial") {
-    newStatus = "approved";
-    if (!input.approvedAmount) {
+  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+  return await db.transaction(async tx => {
+    const [claim] = await tx
+      .select()
+      .from(compensationClaims)
+      .where(eq(compensationClaims.id, input.claimId))
+      .for("update");
+    if (!claim) throw new TRPCError({ code: "NOT_FOUND" });
+    if (!["pending", "under_review", "appealed"].includes(claim.status))
       throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Partial approval requires an approvedAmount",
+        code: "CONFLICT",
+        message: "Claim already resolved",
       });
-    }
-    approvedAmount = input.approvedAmount;
-  } else {
-    newStatus = "denied";
-    if (!input.denialReason) {
+    const approval = input.decision !== "denied";
+    if (
+      approval &&
+      (!input.evidence ||
+        !Number.isSafeInteger(input.approvedAmount) ||
+        (input.approvedAmount ?? 0) <= 0)
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Approval requires an amount and recorded policy, distance and currency evidence",
+      });
+    if (!approval && !input.denialReason?.trim())
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Denial requires a reason",
       });
-    }
-  }
-
-  await db.execute(
-    sql`UPDATE ${sql.raw(CLAIMS_TABLE)}
-        SET status = ${newStatus},
-            approvedAmount = ${approvedAmount},
-            denialReason = ${input.denialReason || null},
-            resolvedAt = ${now},
-            updatedAt = ${now}
-        WHERE id = ${input.claimId}`
-  );
-
-  // Re-fetch the updated claim
-  const updatedRows = await db.execute(
-    sql`SELECT * FROM ${sql.raw(CLAIMS_TABLE)} WHERE id = ${input.claimId} LIMIT 1`
-  );
-  const updatedClaimRows = updatedRows as unknown as Array<
-    Array<Record<string, unknown>>
-  >;
-  const updated = updatedClaimRows[0]?.[0];
-
-  return mapRowToClaim(updated as Record<string, unknown>);
+    if (
+      input.evidence &&
+      (!Number.isSafeInteger(input.evidence.distanceKm) ||
+        input.evidence.distanceKm <= 0 ||
+        [
+          input.evidence.policyReference,
+          input.evidence.fxReference,
+          input.evidence.distanceReference,
+        ].some(v => !v?.trim()))
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid compensation evidence",
+      });
+    await tx
+      .update(compensationClaims)
+      .set({
+        status: approval ? "approved" : "denied",
+        approvedAmount: approval ? input.approvedAmount : null,
+        denialReason: approval ? null : input.denialReason,
+        flightDistance: input.evidence?.distanceKm ?? claim.flightDistance,
+        reviewEvidence: {
+          ...input.evidence,
+          actorId: input.actorId,
+          reviewedAt: new Date().toISOString(),
+        },
+        resolvedAt: new Date(),
+      })
+      .where(eq(compensationClaims.id, claim.id));
+    const [updated] = await tx
+      .select()
+      .from(compensationClaims)
+      .where(eq(compensationClaims.id, claim.id));
+    return updated;
+  });
 }
 
 /**
@@ -752,6 +643,7 @@ export async function calculateTotalLiability(flightId: number): Promise<{
   flightNumber: string;
   totalClaims: number;
   totalCalculated: number;
+  unassessedClaims: number;
   totalApproved: number;
   totalPaid: number;
   statusBreakdown: Record<string, number>;
@@ -781,6 +673,7 @@ export async function calculateTotalLiability(flightId: number): Promise<{
     sql`SELECT
           COUNT(*) as totalClaims,
           COALESCE(SUM(calculatedAmount), 0) as totalCalculated,
+        SUM(CASE WHEN calculatedAmount IS NULL THEN 1 ELSE 0 END) as unassessedClaims,
           COALESCE(SUM(CASE WHEN status IN ('approved', 'paid') THEN COALESCE(approvedAmount, calculatedAmount) ELSE 0 END), 0) as totalApproved,
           COALESCE(SUM(CASE WHEN status = 'paid' THEN COALESCE(approvedAmount, calculatedAmount) ELSE 0 END), 0) as totalPaid
         FROM ${sql.raw(CLAIMS_TABLE)}
@@ -790,6 +683,7 @@ export async function calculateTotalLiability(flightId: number): Promise<{
     Array<{
       totalClaims: number | bigint;
       totalCalculated: number | bigint;
+      unassessedClaims: number | bigint;
       totalApproved: number | bigint;
       totalPaid: number | bigint;
     }>
@@ -816,6 +710,7 @@ export async function calculateTotalLiability(flightId: number): Promise<{
     flightNumber: flight.flightNumber,
     totalClaims: Number(agg?.totalClaims ?? 0),
     totalCalculated: Number(agg?.totalCalculated ?? 0),
+    unassessedClaims: Number(agg?.unassessedClaims ?? 0),
     totalApproved: Number(agg?.totalApproved ?? 0),
     totalPaid: Number(agg?.totalPaid ?? 0),
     statusBreakdown,
@@ -827,186 +722,26 @@ export async function calculateTotalLiability(flightId: number): Promise<{
  */
 export async function autoAssessEligibility(
   bookingId: number,
-  disruptionType: "delay" | "cancellation" | "denied_boarding" | "downgrade",
-  userId: number
-): Promise<{
-  eligible: boolean;
-  regulationType: "eu261" | "dot" | "local";
-  estimatedAmount: number;
-  currency: string;
-  reason: string;
-  flightDistance: number;
-  delayMinutes: number;
-}> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Get booking
-  const [booking] = await db
-    .select({
-      id: bookings.id,
-      userId: bookings.userId,
-      flightId: bookings.flightId,
-      status: bookings.status,
-      totalAmount: bookings.totalAmount,
-    })
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-  }
-
-  if (booking.userId !== userId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-  }
-
-  // Get flight details
-  const [flight] = await db
-    .select({
-      id: flights.id,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-      status: flights.status,
-    })
-    .from(flights)
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
-
-  if (!flight) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-  }
-
-  // Get origin and destination airports for regulation detection
-  const [origin] = await db
-    .select({ country: airports.country, code: airports.code })
-    .from(airports)
-    .where(eq(airports.id, flight.originId))
-    .limit(1);
-
-  const [destination] = await db
-    .select({ country: airports.country, code: airports.code })
-    .from(airports)
-    .where(eq(airports.id, flight.destinationId))
-    .limit(1);
-
-  // Calculate distance
-  const distance = await calculateFlightDistance(
-    flight.originId,
-    flight.destinationId
+  _disruptionType: "delay" | "cancellation" | "denied_boarding" | "downgrade",
+  userId: number,
+  requestedFlightId?: number
+) {
+  const flightId = await resolveClaimFlight(
+    bookingId,
+    userId,
+    requestedFlightId
   );
-
-  // Get disruption delay
-  const disruptions = await db
-    .select({ delayMinutes: flightDisruptions.delayMinutes })
-    .from(flightDisruptions)
-    .where(eq(flightDisruptions.flightId, flight.id))
-    .orderBy(desc(flightDisruptions.createdAt))
-    .limit(1);
-
-  const delayMinutes = disruptions[0]?.delayMinutes ?? 0;
-
-  // Determine applicable regulation
-  const euCountries = [
-    "United Kingdom",
-    "Germany",
-    "France",
-    "Italy",
-    "Spain",
-    "Netherlands",
-    "Belgium",
-    "Austria",
-    "Switzerland",
-    "Portugal",
-    "Greece",
-    "Ireland",
-    "Sweden",
-    "Norway",
-    "Denmark",
-    "Finland",
-    "Poland",
-    "Czech Republic",
-    "Romania",
-    "Hungary",
-    "Croatia",
-    "Bulgaria",
-    "Slovakia",
-    "Slovenia",
-    "Lithuania",
-    "Latvia",
-    "Estonia",
-    "Luxembourg",
-    "Malta",
-    "Cyprus",
-    "Iceland",
-  ];
-
-  const isEUOrigin = euCountries.includes(origin?.country ?? "");
-  const isUSRoute =
-    (origin?.country ?? "") === "United States" ||
-    (destination?.country ?? "") === "United States";
-
-  let regulationType: "eu261" | "dot" | "local";
-  let estimatedAmount = 0;
-  let reason = "";
-  let eligible = false;
-
-  if (isEUOrigin) {
-    regulationType = "eu261";
-    const eu261Result = await calculateEU261Compensation(
-      flight.id,
-      delayMinutes,
-      distance
-    );
-    eligible = eu261Result.eligible;
-    estimatedAmount = eu261Result.amount;
-    reason = eu261Result.reason;
-  } else if (isUSRoute) {
-    regulationType = "dot";
-    const dotType =
-      disruptionType === "denied_boarding" ? "denied_boarding" : "tarmac_delay";
-    const dotResult = await calculateDOTCompensation(flight.id, dotType);
-    eligible = dotResult.eligible;
-    estimatedAmount = dotResult.amount;
-    reason = dotResult.reason;
-  } else {
-    regulationType = "local";
-    // Local regulations: eligible for cancellations and significant delays
-    if (
-      disruptionType === "cancellation" ||
-      disruptionType === "denied_boarding"
-    ) {
-      eligible = true;
-      estimatedAmount = Math.round(booking.totalAmount * 0.5);
-      reason =
-        "Local regulation: 50% of ticket price for cancellation/denied boarding";
-    } else if (disruptionType === "delay" && delayMinutes >= 120) {
-      eligible = true;
-      estimatedAmount = Math.round(booking.totalAmount * 0.25);
-      reason = `Local regulation: 25% of ticket price for delay exceeding 2 hours (${delayMinutes} min)`;
-    } else if (disruptionType === "downgrade") {
-      eligible = true;
-      estimatedAmount = Math.round(booking.totalAmount * 0.3);
-      reason = "Local regulation: 30% refund for cabin downgrade";
-    } else {
-      eligible = false;
-      reason = `Delay of ${delayMinutes} minutes does not meet minimum threshold of 120 minutes`;
-    }
-  }
-
   return {
-    eligible,
-    regulationType,
-    estimatedAmount,
+    eligible: null,
+    regulationType: null,
+    estimatedAmount: null,
     currency: "SAR",
-    reason,
-    flightDistance: distance,
-    delayMinutes,
+    reason:
+      "Approved policy, route-distance and currency-conversion evidence are required for an assessment",
+    flightDistance: null,
+    delayMinutes: null,
+    flightId,
+    assessmentStatus: "needs_review" as const,
   };
 }
 
@@ -1128,12 +863,13 @@ export async function getCompensationStats(dateRange?: {
   const rows = await db.execute(
     sql`SELECT
         COUNT(*) as totalClaims,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pendingClaims,
+        SUM(CASE WHEN status IN ('pending','under_review') THEN 1 ELSE 0 END) as pendingClaims,
         SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approvedClaims,
         SUM(CASE WHEN status = 'denied' THEN 1 ELSE 0 END) as deniedClaims,
         SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paidClaims,
         SUM(CASE WHEN status = 'appealed' THEN 1 ELSE 0 END) as appealedClaims,
         COALESCE(SUM(calculatedAmount), 0) as totalCalculated,
+        SUM(CASE WHEN calculatedAmount IS NULL THEN 1 ELSE 0 END) as unassessedClaims,
         COALESCE(SUM(CASE WHEN status IN ('approved', 'paid') THEN COALESCE(approvedAmount, calculatedAmount) ELSE 0 END), 0) as totalApproved,
         COALESCE(SUM(CASE WHEN status = 'paid' THEN COALESCE(approvedAmount, calculatedAmount) ELSE 0 END), 0) as totalPaid,
         COALESCE(AVG(CASE WHEN resolvedAt IS NOT NULL THEN DATEDIFF(resolvedAt, filedAt) END), 0) as avgProcessingDays
@@ -1153,6 +889,7 @@ export async function getCompensationStats(dateRange?: {
     paidClaims: Number(s?.paidClaims ?? 0),
     appealedClaims: Number(s?.appealedClaims ?? 0),
     totalCalculated: Number(s?.totalCalculated ?? 0),
+    unassessedClaims: Number(s?.unassessedClaims ?? 0),
     totalApproved: Number(s?.totalApproved ?? 0),
     totalPaid: Number(s?.totalPaid ?? 0),
     avgProcessingDays: Number(s?.avgProcessingDays ?? 0),
@@ -1262,7 +999,8 @@ function mapRowToClaim(row: Record<string, unknown>): CompensationClaim {
     claimType: row.claimType as CompensationClaim["claimType"],
     flightDistance: row.flightDistance ? Number(row.flightDistance) : null,
     delayMinutes: row.delayMinutes ? Number(row.delayMinutes) : null,
-    calculatedAmount: Number(row.calculatedAmount ?? 0),
+    calculatedAmount:
+      row.calculatedAmount == null ? null : Number(row.calculatedAmount),
     approvedAmount: row.approvedAmount ? Number(row.approvedAmount) : null,
     currency: (row.currency as string) ?? "SAR",
     status: row.status as CompensationClaim["status"],

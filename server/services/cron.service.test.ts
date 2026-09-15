@@ -16,6 +16,20 @@ vi.mock("node-cron", () => ({
   },
 }));
 
+const auditJobs = vi.hoisted(() => ({
+  weather: vi.fn(),
+  privacy: vi.fn(),
+  checkIn: vi.fn(),
+}));
+vi.mock("./weather-operations.service", () => ({
+  refreshWeatherOperations: auditJobs.weather,
+}));
+vi.mock("./gdpr.service", () => ({
+  processPrivacyRequests: auditJobs.privacy,
+}));
+vi.mock("./travel-scenarios.service", () => ({
+  processAutoCheckIns: auditJobs.checkIn,
+}));
 vi.mock("../db");
 vi.mock("./order-refunds.service", () => ({
   processPendingOrderRefunds: vi.fn(async () => ({ processed: 0 })),
@@ -93,6 +107,21 @@ describe("cron.service scheduler", () => {
     await scheduled[index].fn();
     expect(processPendingOrderRefunds).toHaveBeenCalledTimes(1);
   });
+  it.each([
+    ["weatherRefresh", "*/10 * * * *", auditJobs.weather],
+    ["privacyRequests", "* * * * *", auditJobs.privacy],
+    ["autoCheckIn", "* * * * *", auditJobs.checkIn],
+  ] as const)(
+    "invokes %s through its durable scheduled tick",
+    async (name, cron, run) => {
+      startCronJobs();
+      const index = PERIODIC_JOB_CATALOG.findIndex(job => job.name === name);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(scheduled[index].expr).toBe(cron);
+      await scheduled[index].fn();
+      expect(run).toHaveBeenCalledTimes(1);
+    }
+  );
   it("the relay tick actually invokes the outbox relay", async () => {
     startCronJobs();
     const relayTask =

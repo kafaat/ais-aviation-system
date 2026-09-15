@@ -22,6 +22,15 @@ import {
 } from "../../drizzle/schema";
 import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm";
 
+/** No accepted electronic ticket/tax/BSP transport receipts exist in this
+ * deployment. Local booking amounts cannot be submitted as BSP documents. */
+function requireBspDocumentAuthority(): void {
+  throw new TRPCError({
+    code: "PRECONDITION_FAILED",
+    message:
+      "BSP document authority is unavailable: accepted ticket, tax and refund receipts are required. Use the ledger draft for internal reporting.",
+  });
+}
 // ============================================================================
 // Types
 // ============================================================================
@@ -230,6 +239,7 @@ export async function generateBSPReport(
   transactions: BSPTransaction[];
   agentSettlements: AgentSettlement[];
 }> {
+  requireBspDocumentAuthority();
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -276,6 +286,7 @@ export async function generateBSPReport(
     )
     .where(
       and(
+        sql`EXISTS (SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${bookings.id} AND l.type = 'charge' AND l.currency = 'SAR')`,
         gte(bookings.createdAt, periodStart),
         lte(bookings.createdAt, periodEnd)
       )
@@ -494,6 +505,7 @@ export async function generateAHCReport(
     totalCharges: number;
   }>;
 }> {
+  requireBspDocumentAuthority();
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -518,6 +530,7 @@ export async function generateAHCReport(
     .leftJoin(airlines, eq(flights.airlineId, airlines.id))
     .where(
       and(
+        sql`EXISTS (SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${bookings.id} AND l.type = 'charge' AND l.currency = 'SAR')`,
         gte(bookings.createdAt, periodStart),
         lte(bookings.createdAt, periodEnd),
         eq(bookings.status, "confirmed")
@@ -666,6 +679,7 @@ export async function calculateAgentCommissions(periodId: number): Promise<{
 export async function getSettlementCycle(
   cycleNumber: number
 ): Promise<SettlementCycle & { transactions: BSPTransaction[] }> {
+  requireBspDocumentAuthority();
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -686,6 +700,7 @@ export async function getSettlementCycle(
     .from(bookings)
     .where(
       and(
+        sql`EXISTS (SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${bookings.id} AND l.type = 'charge' AND l.currency = 'SAR')`,
         gte(bookings.createdAt, period.start),
         lte(bookings.createdAt, period.end)
       )
@@ -737,6 +752,7 @@ export async function getSettlementCycle(
     )
     .where(
       and(
+        sql`EXISTS (SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${bookings.id} AND l.type = 'charge' AND l.currency = 'SAR')`,
         gte(bookings.createdAt, period.start),
         lte(bookings.createdAt, period.end)
       )
@@ -807,6 +823,7 @@ export async function reconcileBSPTransactions(periodId: number): Promise<{
   reconciliationStatus: "clean" | "discrepancies_found";
   reconciledAt: Date;
 }> {
+  requireBspDocumentAuthority();
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -832,6 +849,7 @@ export async function reconcileBSPTransactions(periodId: number): Promise<{
     .leftJoin(payments, eq(bookings.id, payments.bookingId))
     .where(
       and(
+        sql`EXISTS (SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${bookings.id} AND l.type = 'charge' AND l.currency = 'SAR')`,
         gte(bookings.createdAt, period.start),
         lte(bookings.createdAt, period.end)
       )
@@ -922,6 +940,7 @@ export async function generateHOTFile(): Promise<{
   recordCount: number;
   generatedAt: Date;
 }> {
+  requireBspDocumentAuthority();
   const db = await getDb();
   if (!db) {
     throw new TRPCError({
@@ -964,6 +983,7 @@ export async function generateHOTFile(): Promise<{
     )
     .where(
       and(
+        sql`EXISTS (SELECT 1 FROM financial_ledger l WHERE l.bookingId = ${bookings.id} AND l.type = 'charge' AND l.currency = 'SAR')`,
         gte(bookings.createdAt, period.start),
         lte(bookings.createdAt, period.end),
         eq(bookings.status, "confirmed")
@@ -1055,6 +1075,7 @@ export async function generateHOTFile(): Promise<{
 export async function validateIATACompliance(
   reportId: string
 ): Promise<IATAComplianceResult> {
+  requireBspDocumentAuthority();
   const db = await getDb();
   if (!db) {
     throw new TRPCError({

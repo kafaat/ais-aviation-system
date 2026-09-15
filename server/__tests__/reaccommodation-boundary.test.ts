@@ -381,7 +381,7 @@ describe("reaccommodation planning", () => {
     let seed = 7847;
     const random = (max: number) => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return seed % max;
+      return Math.floor((seed / 0x1_0000_0000) * max);
     };
     for (let trial = 0; trial < 80; trial++) {
       const input = request({

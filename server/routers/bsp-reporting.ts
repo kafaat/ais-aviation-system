@@ -1,3 +1,6 @@
+import { requireValue } from "../services/required-value";
+import { isAdmin } from "../services/rbac.service";
+import { getFinancialSummary } from "../services/financial-reporting.service";
 import { responseContracts } from "../contracts/bsp-reporting";
 /**
  * BSP Reporting Router
@@ -8,7 +11,7 @@ import { responseContracts } from "../contracts/bsp-reporting";
  */
 
 import { z } from "zod";
-import { router, adminProcedure } from "../_core/trpc";
+import { router, adminProcedure, airlineFinanceProcedure } from "../_core/trpc";
 import {
   generateBSPReport,
   generateAHCReport,
@@ -20,6 +23,33 @@ import {
 } from "../services/bsp-reporting.service";
 
 export const bspReportingRouter = router({
+  ledgerDraft: airlineFinanceProcedure
+    .input(
+      z.object({ startDate: z.date().optional(), endDate: z.date().optional() })
+    )
+    .output(
+      z.object({
+        basis: z.literal("internal_ledger_not_bsp"),
+        billedAmount: z.number(),
+        collectedAmount: z.number(),
+        nonCashFundedAmount: z.number(),
+        refundedAmount: z.number(),
+        netCollectedAmount: z.number(),
+        currency: z.literal("SAR"),
+        amountUnit: z.literal("minor"),
+        unreconciledBookings: z.number(),
+        unclassifiedEntries: z.number(),
+      })
+    )
+    .query(async ({ input, ctx }) => ({
+      ...(await getFinancialSummary({
+        ...input,
+        tenantId: isAdmin(ctx.user.role)
+          ? undefined
+          : requireValue(ctx.tenantId),
+      })),
+      basis: "internal_ledger_not_bsp" as const,
+    })),
   /**
    * Generate a BSP or AHC report for a given period
    */

@@ -9,7 +9,7 @@
  * - Active flights list
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, Link } from "wouter";
 import { motion } from "framer-motion";
@@ -55,12 +55,12 @@ export default function LiveFlightTracking() {
   const [trackedFlightNumber, setTrackedFlightNumber] = useState<string | null>(
     null
   );
-  const [isConnected, _setIsConnected] = useState(true);
 
   // Query flight tracking data from backend
   const {
     data: trackingData,
     isLoading,
+    error: trackingError,
     refetch,
     isRefetching,
   } = trpc.flightTracking.trackByNumber.useQuery(
@@ -95,15 +95,22 @@ export default function LiveFlightTracking() {
         route: `${f.origin} - ${f.destination}`,
       }));
     }
-    return [
-      { number: "AIS-1234", route: "JED - DXB" },
-      { number: "AIS-5678", route: "RUH - CAI" },
-      { number: "AIS-9012", route: "DMM - AMM" },
-    ];
+    return [];
   }, [activeFlights]);
 
-  const flight = trackingData?.flight;
-  const position = trackingData?.currentPosition;
+  const [clock, setClock] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setClock(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+  const observed = trackingData?.currentPosition;
+  const age = observed
+    ? clock - new Date(observed.recordedAt).getTime()
+    : Infinity;
+  const isConnected = !!trackingData && !trackingError;
+  const flight = !trackingError ? trackingData?.flight : undefined;
+  const position =
+    !trackingError && age >= 0 && age <= 5 * 60000 ? observed : undefined;
 
   const phaseLabel = (phase: string) => {
     const labels: Record<string, string> = {
@@ -249,6 +256,16 @@ export default function LiveFlightTracking() {
           </Card>
         </motion.div>
 
+        {trackingError && (
+          <div role="alert">
+            <p>
+              {isRTL ? "بيانات التتبع غير متاحة" : "Tracking data unavailable"}
+            </p>
+            <Button onClick={() => void refetch()}>
+              {isRTL ? "إعادة المحاولة" : "Retry"}
+            </Button>
+          </div>
+        )}
         {/* Loading state */}
         {isLoading && trackedFlightNumber && (
           <div className="text-center py-16">
@@ -368,6 +385,22 @@ export default function LiveFlightTracking() {
               </CardContent>
             </Card>
 
+            {!position && (
+              <p role="status">
+                {isRTL
+                  ? "لا توجد قياسات حديثة للطائرة"
+                  : "No fresh aircraft telemetry"}
+                {observed
+                  ? ` (${new Date(observed.recordedAt).toLocaleString()})`
+                  : ""}
+              </p>
+            )}
+            {position && (
+              <p>
+                {isRTL ? "وقت القياس" : "Observed at"}:{" "}
+                {new Date(position.recordedAt).toLocaleString()}
+              </p>
+            )}
             {/* Telemetry Data */}
             {position && (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -461,11 +494,17 @@ export default function LiveFlightTracking() {
                   ? position.distanceCovered + position.distanceRemaining
                   : 0
               }
+              telemetry={position}
               showFlightData={true}
               className="border-0 shadow-lg bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm"
             />
 
             {/* Flight Timeline */}
+            <p>
+              {isRTL
+                ? "خط زمني تقديري حسب الجدول"
+                : "Estimated timeline based on the schedule"}
+            </p>
             <FlightTimeline
               departureTime={new Date(flight.departureTime)}
               arrivalTime={new Date(flight.arrivalTime)}
@@ -480,7 +519,7 @@ export default function LiveFlightTracking() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <MapPin className="h-5 w-5 text-primary" />
-                  {t("liveTracking.flightPath")}
+                  {isRTL ? "رسم توضيحي للمسار" : "Schematic route"}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -505,18 +544,20 @@ export default function LiveFlightTracking() {
                       className="fill-emerald-500"
                     />
                     <circle cx="90" cy="40" r="2" className="fill-blue-500" />
-                    <motion.g
-                      initial={{ offsetDistance: "0%" }}
-                      animate={{
-                        offsetDistance: `${position?.progressPercent ?? 40}%`,
-                      }}
-                      transition={{ duration: 2, ease: "easeOut" }}
-                      style={{
-                        offsetPath: "path('M 10 40 Q 50 5 90 40')",
-                      }}
-                    >
-                      <circle r="1.5" className="fill-blue-600" />
-                    </motion.g>
+                    {position && (
+                      <motion.g
+                        initial={{ offsetDistance: "0%" }}
+                        animate={{
+                          offsetDistance: `${position.progressPercent}%`,
+                        }}
+                        transition={{ duration: 2, ease: "easeOut" }}
+                        style={{
+                          offsetPath: "path('M 10 40 Q 50 5 90 40')",
+                        }}
+                      >
+                        <circle r="1.5" className="fill-blue-600" />
+                      </motion.g>
+                    )}
                   </svg>
                   <div className="absolute bottom-4 left-4 px-3 py-1 bg-white/90 dark:bg-slate-800/90 rounded-lg text-sm font-medium">
                     {flight.origin.code}
@@ -549,7 +590,7 @@ export default function LiveFlightTracking() {
         )}
 
         {/* Empty state */}
-        {!flight && !isLoading && (
+        {!flight && !isLoading && !trackingError && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

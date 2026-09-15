@@ -1,3 +1,9 @@
+import { payCorporateInvoice } from "../services/corporate-settlement.service";
+import {
+  inviteCorporateUser,
+  listCorporateInvitations,
+  acceptCorporateInvitation,
+} from "../services/corporate-invitations.service";
 import { responseContracts } from "../contracts/corporate";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -14,6 +20,51 @@ import * as corporateService from "../services/corporate.service";
  * Handles all corporate travel account operations
  */
 export const corporateRouter = router({
+  payInvoice: protectedProcedure
+    .input(z.object({ bookingId: z.number().int().positive() }))
+    .output(
+      z.object({
+        settled: z.literal(true),
+        receiptId: z.number().int().positive(),
+      })
+    )
+    .mutation(({ ctx, input }) =>
+      payCorporateInvoice(input.bookingId, ctx.user.id)
+    ),
+  inviteUser: protectedProcedure
+    .input(
+      z.object({
+        corporateAccountId: z.number().int().positive(),
+        email: z.string().email(),
+        role: z.enum(["admin", "booker", "traveler"]),
+      })
+    )
+    .output(
+      z.object({
+        id: z.string().uuid(),
+        expiresAt: z.date(),
+        status: z.literal("pending"),
+      })
+    )
+    .mutation(({ ctx, input }) => inviteCorporateUser(ctx.user.id, input)),
+  myInvitations: protectedProcedure
+    .output(
+      z.array(
+        z.object({
+          id: z.string().uuid(),
+          companyName: z.string(),
+          role: z.enum(["admin", "booker", "traveler"]),
+          expiresAt: z.date(),
+        })
+      )
+    )
+    .query(({ ctx }) => listCorporateInvitations(ctx.user.id)),
+  acceptInvitation: protectedProcedure
+    .input(z.object({ invitationId: z.string().uuid() }))
+    .output(z.object({ accepted: z.literal(true) }))
+    .mutation(({ ctx, input }) =>
+      acceptCorporateInvitation(ctx.user.id, input.invitationId)
+    ),
   // ============================================================================
   // Corporate Account Procedures
   // ============================================================================

@@ -66,6 +66,11 @@ export const responseContracts = {
   stations: z.array(
     z.object({
       icaoCode: z.string(),
+      evaluatedAt: z.string(),
+      ageMinutes: outputNumber.nullable(),
+      coverage: weatherCoverage,
+      currentCategory: flightCategory.nullable(),
+      currentConcerns: z.array(weatherConcern),
       observation: observation.nullable(),
     })
   ),

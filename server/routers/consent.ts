@@ -26,6 +26,7 @@ export const consentRouter = router({
   recordConsent: publicProcedure
     .input(
       z.object({
+        expectedRevision: z.number().int().positive().nullable().optional(),
         essential: z.boolean().default(true),
         analytics: z.boolean(),
         marketing: z.boolean(),
@@ -44,6 +45,7 @@ export const consentRouter = router({
 
       return await consentService.recordConsent(
         {
+          expectedRevision: input.expectedRevision,
           essential: true, // always true
           analytics: input.analytics,
           marketing: input.marketing,
@@ -72,6 +74,7 @@ export const consentRouter = router({
   updateConsent: protectedProcedure
     .input(
       z.object({
+        expectedRevision: z.number().int().positive().nullable().optional(),
         essential: z.boolean().default(true),
         analytics: z.boolean(),
         marketing: z.boolean(),
@@ -89,6 +92,7 @@ export const consentRouter = router({
       return await consentService.updateConsent(
         ctx.user.id,
         {
+          expectedRevision: input.expectedRevision,
           essential: true,
           analytics: input.analytics,
           marketing: input.marketing,

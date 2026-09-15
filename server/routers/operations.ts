@@ -1,3 +1,5 @@
+import { requireValue } from "../services/required-value";
+import { integrationConfiguration } from "../services/integration-config.service";
 import { operationsDashboard } from "../contracts/operations";
 import {
   readOperationsDashboard,
@@ -8,10 +10,57 @@ import { acknowledgeOperationalAlert } from "../services/operational-observation
 import { readAlertDispatches } from "../services/on-call.service";
 import { readLineageRuns } from "../services/lineage.service";
 import { z } from "zod";
-import { adminProcedure, router } from "../_core/trpc";
-import { scheduledTasks } from "../../drizzle/schema";
+import { adminProcedure, airlineOpsProcedure, router } from "../_core/trpc";
+import { isAdmin } from "../services/rbac.service";
+import { eq, asc } from "drizzle-orm";
+import { scheduledTasks, flights } from "../../drizzle/schema";
 import { getDb } from "../db";
 export const operationsRouter = router({
+  airlineFlights: airlineOpsProcedure
+    .output(
+      z.array(
+        z.object({
+          id: z.number(),
+          flightNumber: z.string(),
+          status: z.enum(["scheduled", "delayed", "cancelled", "completed"]),
+          departureTime: z.date(),
+          economyAvailable: z.number(),
+          businessAvailable: z.number(),
+        })
+      )
+    )
+    .query(async ({ ctx }) => {
+      const db = getDb();
+      if (!db) throw new Error("Flight source unavailable");
+      return await db
+        .select({
+          id: flights.id,
+          flightNumber: flights.flightNumber,
+          status: flights.status,
+          departureTime: flights.departureTime,
+          economyAvailable: flights.economyAvailable,
+          businessAvailable: flights.businessAvailable,
+        })
+        .from(flights)
+        .where(
+          isAdmin(ctx.user.role)
+            ? undefined
+            : eq(flights.tenantId, requireValue(ctx.tenantId))
+        )
+        .orderBy(asc(flights.departureTime))
+        .limit(200);
+    }),
+  integrationConfiguration: adminProcedure
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          state: z.enum(["configured", "disabled", "invalid"]),
+          reason: z.string().nullable(),
+        })
+      )
+    )
+    .query(() => integrationConfiguration()),
   dashboard: adminProcedure
     .output(operationsDashboard)
     .query(({ ctx }) => readOperationsDashboard(ctx.tenantId)),

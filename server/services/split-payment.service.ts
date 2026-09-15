@@ -1,3 +1,4 @@
+import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 /**
  * Split Payment Service
  * Handles splitting booking payments among multiple payers
@@ -157,6 +158,7 @@ export async function initiateSplitPayment(
 
     await assertTenantOperational(tx, booking.tenantId);
     await assertNoCollectionReview(tx, bookingId);
+    await assertCorporatePaymentApproved(tx, bookingId);
     await assertNoActiveCheckout(tx, booking);
     if (
       !Number.isInteger(expirationDays) ||

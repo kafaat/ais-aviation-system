@@ -1,3 +1,4 @@
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -193,12 +194,15 @@ export function CookieConsent() {
     preferences: false,
   });
 
-  // tRPC mutation to persist consent on the server (fire-and-forget)
-  const recordConsentMutation = trpc.consent.recordConsent.useMutation();
-
+  const { user, loading: authLoading } = useAuth();
+  const serverConsent = trpc.consent.getMyConsent.useQuery(undefined, {
+    enabled: !!user,
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
+  });
   // Check for existing consent on mount
   useEffect(() => {
-    const stored = getStoredConsent();
+    const stored = !authLoading && !user ? getStoredConsent() : null;
     if (stored) {
       setPreferences(stored.preferences);
       setVisible(false);
@@ -208,25 +212,50 @@ export function CookieConsent() {
     // Delay mount animation
     const timer = setTimeout(() => setMounted(true), 50);
     return () => clearTimeout(timer);
-  }, []);
+  }, [authLoading, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const c = serverConsent.data?.consent;
+    const next = {
+      essential: true,
+      analytics: c?.analytics ?? false,
+      marketing: c?.marketing ?? false,
+      preferences: c?.preferences ?? false,
+    };
+    storeConsent(next);
+    setPreferences(next);
+    setVisible(serverConsent.data?.needsReconsent ?? true);
+    window.dispatchEvent(new Event("ais-consent-changed"));
+  }, [user, serverConsent.data]);
+  // Authenticated changes are acknowledged before the browser grants consent.
+  const recordConsentMutation = trpc.consent.recordConsent.useMutation();
 
   const persistConsent = useCallback(
     (prefs: CookiePreferences) => {
-      storeConsent(prefs);
-      setPreferences(prefs);
-      setVisible(false);
-      setShowDetails(false);
-
-      // Record on server (best-effort for anonymous users too)
-      recordConsentMutation.mutate({
-        essential: prefs.essential,
-        analytics: prefs.analytics,
-        marketing: prefs.marketing,
-        preferences: prefs.preferences,
-        consentVersion: CONSENT_VERSION,
-      });
+      recordConsentMutation.mutate(
+        {
+          ...prefs,
+          consentVersion: CONSENT_VERSION,
+          expectedRevision: serverConsent.data?.consent?.id ?? null,
+        },
+        {
+          onSuccess: () => {
+            storeConsent(prefs);
+            setPreferences(prefs);
+            setVisible(false);
+            setShowDetails(false);
+            window.dispatchEvent(new Event("ais-consent-changed"));
+            if (user) void serverConsent.refetch();
+          },
+          onError: () => {
+            if (user) void serverConsent.refetch();
+            setVisible(true);
+          },
+        }
+      );
     },
-    [recordConsentMutation]
+    [recordConsentMutation, serverConsent, user]
   );
 
   const handleAcceptAll = useCallback(() => {

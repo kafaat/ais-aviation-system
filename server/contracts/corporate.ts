@@ -91,6 +91,7 @@ export const responseContracts = {
       corporateAccountId: outputNumber,
       bookedByUserId: outputNumber,
       booking: z.object({
+        paymentStatus: z.enum(["pending", "paid", "refunded", "failed"]),
         id: outputNumber,
         bookingReference: z.string(),
         status: z.string(),

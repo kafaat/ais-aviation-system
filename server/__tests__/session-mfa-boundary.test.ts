@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import {
+  accountDeletionRequests,
   mfaChallenges,
   mfaSettings,
   refreshTokens,
@@ -70,17 +71,19 @@ beforeEach(() => {
     select: (_projection: any) => {
       let table: any;
       const rows = () =>
-        table === users
-          ? [user]
-          : table === mfaSettings
-            ? [mfa]
-            : table === mfaChallenges
-              ? challenge.consumedAt
-                ? []
-                : [challenge]
-              : revoked
-                ? []
-                : [{ user, mfaEnabled: mfa.isEnabled, mfaVerified: true }];
+        table === accountDeletionRequests
+          ? []
+          : table === users
+            ? [user]
+            : table === mfaSettings
+              ? [mfa]
+              : table === mfaChallenges
+                ? challenge.consumedAt
+                  ? []
+                  : [challenge]
+                : revoked
+                  ? []
+                  : [{ user, mfaEnabled: mfa.isEnabled, mfaVerified: true }];
       const chain: any = {
         from(t: any) {
           table = t;

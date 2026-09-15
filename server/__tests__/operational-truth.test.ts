@@ -57,7 +57,7 @@ describe("operational truth", () => {
       aggregateId: "7",
       aggregateType: "booking",
       tenantId: null,
-      payload: {},
+      payload: { bookingId: 7, modificationId: 1 },
     } as any;
     await expect(configuredPublisher(event)).rejects.toThrow(
       "Outbox consumer delivery incomplete"

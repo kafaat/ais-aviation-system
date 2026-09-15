@@ -3,6 +3,7 @@ import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
 import {
   operationalSamples,
   operationsAlerts,
+  alertDispatches,
   scheduledTasks,
   outbox,
 } from "../../drizzle/schema";
@@ -181,6 +182,21 @@ export async function refreshOperationalAlerts() {
       };
     }),
   ];
+  await applyOperationalChecks(checks);
+  await db
+    .delete(operationalSamples)
+    .where(
+      lt(operationalSamples.endedAt, new Date(Date.now() - 30 * 86400000))
+    );
+  return { checked: checks.length };
+}
+export type OperationalCheck = { key: string; bad: boolean; message: string };
+/** All alert producers share the transition/outbound receipt transaction. */
+export async function applyOperationalChecks(
+  checks: readonly OperationalCheck[]
+) {
+  const db = getDb();
+  if (!db) throw new Error("Operations database unavailable");
   // Resolved once per refresh, outside the per-check transactions: reading the
   // configuration is not a database concern and must not be repeated per row.
   const onCall = configuredOnCallProvider();
@@ -193,7 +209,41 @@ export async function refreshOperationalAlerts() {
         .for("update");
       if (!prior && !check.bad) return;
       const status = check.bad ? ("active" as const) : ("resolved" as const);
-      if (prior?.status === status) return;
+      if (prior?.status === status) {
+        if (status === "active" && !prior.acknowledgedAt && onCall) {
+          const [raise] = await tx
+            .select()
+            .from(alertDispatches)
+            .where(
+              and(
+                eq(alertDispatches.alertKey, check.key),
+                eq(alertDispatches.action, "raise")
+              )
+            )
+            .orderBy(desc(alertDispatches.id))
+            .limit(1);
+          const [closed] = raise
+            ? await tx
+                .select({ id: alertDispatches.id })
+                .from(alertDispatches)
+                .where(
+                  and(
+                    eq(alertDispatches.dedupKey, raise.dedupKey),
+                    eq(alertDispatches.action, "close")
+                  )
+                )
+            : [];
+          // An existing open dispatch retains its provider identity; do not
+          // silently retarget an incident after a configuration change.
+          if (!raise || closed)
+            await queueAlertRaise(
+              tx,
+              { alertKey: check.key, summary: check.message },
+              onCall
+            );
+        }
+        return;
+      }
       await tx
         .insert(operationsAlerts)
         .values({ key: check.key, status, message: check.message })
@@ -219,12 +269,6 @@ export async function refreshOperationalAlerts() {
         );
       else await queueAlertClose(tx, check.key, onCall);
     });
-  await db
-    .delete(operationalSamples)
-    .where(
-      lt(operationalSamples.endedAt, new Date(Date.now() - 30 * 86400000))
-    );
-  return { checked: checks.length };
 }
 /** An operator taking the alert in this system.
  *

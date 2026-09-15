@@ -1,3 +1,4 @@
+import { SettlementLedgerDraft } from "@/components/SettlementLedgerDraft";
 /**
  * BSP Reporting Dashboard - Admin Panel
  *
@@ -409,6 +410,7 @@ export default function BSPReporting() {
         </div>
       )}
 
+      <SettlementLedgerDraft />
       {/* Main Tabs */}
       <Tabs
         value={activeTab}

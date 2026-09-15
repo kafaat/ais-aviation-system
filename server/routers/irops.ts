@@ -7,7 +7,7 @@ import {
 } from "../services/irops-recovery.service";
 import { responseContracts } from "../contracts/irops";
 import { z } from "zod";
-import { adminProcedure, router } from "../_core/trpc";
+import { adminProcedure, airlineOpsProcedure, router } from "../_core/trpc";
 import {
   getActiveIROPSDisruptions,
   createDisruptionEvent,
@@ -29,7 +29,7 @@ import { TRPCError } from "@trpc/server";
  * and recovery operations.
  */
 export const iropsRouter = router({
-  recoveryPlans: adminProcedure
+  recoveryPlans: airlineOpsProcedure
     .output(
       z.array(
         z.object({
@@ -48,7 +48,7 @@ export const iropsRouter = router({
       )
     )
     .query(({ ctx }) => listRecoveryPlans(ctx.tenantId)),
-  proposeRecovery: adminProcedure
+  proposeRecovery: airlineOpsProcedure
     .input(recoveryInput)
     .output(
       z.object({
@@ -67,13 +67,13 @@ export const iropsRouter = router({
       })
     )
     .mutation(({ input, ctx }) => proposeRecovery(input, ctx.tenantId)),
-  approveRecovery: adminProcedure
+  approveRecovery: airlineOpsProcedure
     .input(z.object({ id: z.string().uuid(), digest: z.string().length(64) }))
     .output(z.object({ id: z.string(), digest: z.string() }))
     .mutation(({ input, ctx }) =>
       approveRecovery(input.id, input.digest, ctx.user.id, ctx.tenantId)
     ),
-  executeRecovery: adminProcedure
+  executeRecovery: airlineOpsProcedure
     .input(z.object({ id: z.string().uuid(), digest: z.string().length(64) }))
     .output(z.object({ receiptId: z.string() }))
     .mutation(({ input, ctx }) =>

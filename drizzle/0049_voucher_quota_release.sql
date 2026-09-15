@@ -1,0 +1,1 @@
+ALTER TABLE `voucher_usage` ADD `releasedAt` timestamp;

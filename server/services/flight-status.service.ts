@@ -17,6 +17,7 @@ export interface FlightStatusUpdate {
   delayMinutes?: number;
   reason?: string;
   adminUserId?: number;
+  tenantId?: number;
 }
 
 /**
@@ -27,6 +28,17 @@ export async function updateFlightStatus(
 ): Promise<{ success: boolean; affectedBookings: number }> {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
+  if (update.status === "cancelled") {
+    const { requestFlightCancellation } =
+      await import("./flight-cancellation.service");
+    const result = await requestFlightCancellation({
+      flightId: update.flightId,
+      reason: update.reason ?? "Operator flight cancellation",
+      actorId: update.adminUserId,
+      tenantId: update.tenantId,
+    });
+    return { success: true, affectedBookings: result.requestedBookings };
+  }
   return await db.transaction(tx => transitionFlight(tx, update));
 }
 

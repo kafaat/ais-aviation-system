@@ -178,6 +178,7 @@ export const reaccommodationAdvisory = z.object({
     }),
   }),
   consideredOptions: outputNumber,
+  candidateFlightIds: z.array(outputNumber),
   consideredPassengers: outputNumber,
   optionsTruncated: z.boolean(),
   window: z.object({ fromISO: z.string(), toISO: z.string() }),

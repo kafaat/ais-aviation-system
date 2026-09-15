@@ -1,3 +1,4 @@
+import { flightBookingCondition } from "./flight-state.service";
 /**
  * Advance Passenger Information System (APIS) Service
  *
@@ -585,7 +586,7 @@ export async function getFlightAPISStatus(flightId: number) {
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
     .where(
       and(
-        eq(bookings.flightId, flightId),
+        flightBookingCondition(flightId),
         sql`${bookings.status} IN ('confirmed', 'completed')`
       )
     );
@@ -828,7 +829,7 @@ export async function flagIncompletePassengers(flightId: number) {
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
     .where(
       and(
-        eq(bookings.flightId, flightId),
+        flightBookingCondition(flightId),
         sql`${bookings.status} IN ('confirmed', 'completed')`
       )
     );
@@ -963,7 +964,7 @@ export async function generateAPISMessage(
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
     .where(
       and(
-        eq(bookings.flightId, flightId),
+        flightBookingCondition(flightId),
         sql`${bookings.status} IN ('confirmed', 'completed')`
       )
     );

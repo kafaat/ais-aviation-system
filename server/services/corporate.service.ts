@@ -5,6 +5,7 @@ import {
   corporateAccounts,
   corporateUsers,
   corporateBookings,
+  notifications,
   bookings,
   flights,
   users,
@@ -12,7 +13,6 @@ import {
   type CorporateUser,
   type CorporateBooking,
 } from "../../drizzle/schema";
-import { createNotification } from "./notification.service";
 
 /**
  * Corporate Travel Service
@@ -352,72 +352,55 @@ export async function addUserToCorporate(
     });
   }
 
-  // Check if corporate account exists and is active
-  const account = await getCorporateAccountById(data.corporateAccountId);
-  if (!account) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Corporate account not found",
-    });
-  }
-
-  if (account.status !== "active") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Corporate account is not active",
-    });
-  }
-
-  // Check if user exists
-  const user = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, data.userId))
-    .limit(1);
-
-  if (user.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "User not found",
-    });
-  }
-
-  // Check if user is already in a corporate account
-  const existingMembership = await db
-    .select()
-    .from(corporateUsers)
-    .where(
-      and(
-        eq(corporateUsers.userId, data.userId),
-        eq(corporateUsers.isActive, true)
-      )
-    )
-    .limit(1);
-
-  if (existingMembership.length > 0) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: "User is already a member of a corporate account",
-    });
-  }
-
-  // Add user to corporate account
-  const result = await db.insert(corporateUsers).values({
-    corporateAccountId: data.corporateAccountId,
-    userId: data.userId,
-    role: data.role,
-    isActive: true,
+  return await db.transaction(async tx => {
+    // All membership creation, including invitation acceptance, serializes on the user.
+    const [user] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.id, data.userId))
+      .for("update");
+    if (!user)
+      throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+    const [account] = await tx
+      .select()
+      .from(corporateAccounts)
+      .where(eq(corporateAccounts.id, data.corporateAccountId))
+      .for("update");
+    if (!account)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Corporate account not found",
+      });
+    if (account?.status !== "active")
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Corporate account is not active",
+      });
+    const existing = await tx
+      .select()
+      .from(corporateUsers)
+      .where(eq(corporateUsers.userId, data.userId))
+      .for("update");
+    if (existing.some(row => row.isActive))
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "User is already a member of a corporate account",
+      });
+    await tx
+      .insert(corporateUsers)
+      .values({ ...data, isActive: true })
+      .onDuplicateKeyUpdate({ set: { role: data.role, isActive: true } });
+    const [created] = await tx
+      .select()
+      .from(corporateUsers)
+      .where(
+        and(
+          eq(corporateUsers.userId, data.userId),
+          eq(corporateUsers.corporateAccountId, data.corporateAccountId)
+        )
+      );
+    return created;
   });
-
-  const insertId = result[0].insertId;
-
-  const created = await db
-    .select()
-    .from(corporateUsers)
-    .where(eq(corporateUsers.id, insertId))
-    .limit(1);
-
-  return created[0];
 }
 
 /**
@@ -621,56 +604,80 @@ export async function createCorporateBooking(
     });
   }
 
-  // Verify corporate account is active
-  const account = await getCorporateAccountById(data.corporateAccountId);
-  if (!account) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Corporate account not found",
-    });
-  }
-
-  if (account.status !== "active") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Corporate account is not active",
-    });
-  }
-
-  // Verify booking exists
-  const booking = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, data.bookingId))
-    .limit(1);
-
-  if (booking.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Booking not found",
-    });
-  }
-
-  // Create corporate booking record
-  const result = await db.insert(corporateBookings).values({
-    corporateAccountId: data.corporateAccountId,
-    bookingId: data.bookingId,
-    costCenter: data.costCenter,
-    projectCode: data.projectCode,
-    travelPurpose: data.travelPurpose,
-    bookedByUserId: data.bookedByUserId,
-    approvalStatus: "pending",
+  return db.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.id, data.bookingId),
+          eq(bookings.userId, data.bookedByUserId)
+        )
+      )
+      .for("update");
+    if (!booking)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Owned booking not found",
+      });
+    const [account] = await tx
+      .select()
+      .from(corporateAccounts)
+      .where(eq(corporateAccounts.id, data.corporateAccountId))
+      .for("update");
+    if (!account || account.status !== "active")
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Corporate account is unavailable",
+      });
+    const [member] = await tx
+      .select()
+      .from(corporateUsers)
+      .where(
+        and(
+          eq(corporateUsers.corporateAccountId, account.id),
+          eq(corporateUsers.userId, data.bookedByUserId),
+          eq(corporateUsers.isActive, true)
+        )
+      )
+      .for("update");
+    const [owner] = await tx
+      .select()
+      .from(users)
+      .where(eq(users.id, data.bookedByUserId));
+    if (
+      !member ||
+      !owner ||
+      (owner.tenantId !== null && owner.tenantId !== booking.tenantId)
+    )
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Corporate booking membership or tenant mismatch",
+      });
+    const [existing] = await tx
+      .select()
+      .from(corporateBookings)
+      .where(eq(corporateBookings.bookingId, booking.id))
+      .for("update");
+    if (existing) {
+      if (existing.corporateAccountId !== account.id)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Booking already linked to another company",
+        });
+      return existing;
+    }
+    const { lockEditableInvoice } = await import("./booking-invoice.service");
+    await lockEditableInvoice(tx, booking.id, { userId: data.bookedByUserId });
+    const [result] = await tx
+      .insert(corporateBookings)
+      .values({ ...data, approvalStatus: "pending" });
+    const [created] = await tx
+      .select()
+      .from(corporateBookings)
+      .where(eq(corporateBookings.id, result.insertId));
+    return created;
   });
-
-  const insertId = result[0].insertId;
-
-  const created = await db
-    .select()
-    .from(corporateBookings)
-    .where(eq(corporateBookings.id, insertId))
-    .limit(1);
-
-  return created[0];
 }
 
 /**
@@ -683,197 +690,120 @@ export async function approveCorporateBooking(
   bookingId: number,
   approverId: number
 ): Promise<CorporateBooking> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  const corporateBooking = await db
-    .select()
-    .from(corporateBookings)
-    .where(eq(corporateBookings.id, bookingId))
-    .limit(1);
-
-  if (corporateBooking.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Corporate booking not found",
-    });
-  }
-
-  if (corporateBooking[0].approvalStatus !== "pending") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Cannot approve a ${corporateBooking[0].approvalStatus} booking`,
-    });
-  }
-
-  // Verify approver has permission (is admin of the corporate account)
-  const approverMembership = await db
-    .select()
-    .from(corporateUsers)
-    .where(
-      and(
-        eq(
-          corporateUsers.corporateAccountId,
-          corporateBooking[0].corporateAccountId
-        ),
-        eq(corporateUsers.userId, approverId),
-        eq(corporateUsers.role, "admin"),
-        eq(corporateUsers.isActive, true)
-      )
-    )
-    .limit(1);
-
-  if (approverMembership.length === 0) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You do not have permission to approve bookings",
-    });
-  }
-
-  await db
-    .update(corporateBookings)
-    .set({
-      approvalStatus: "approved",
-      approvedBy: approverId,
-      approvedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(corporateBookings.id, bookingId));
-
-  // Send in-app notification to the booker
-  try {
-    await createNotification(
-      corporateBooking[0].bookedByUserId,
-      "booking",
-      "Corporate Booking Approved",
-      `Your corporate booking request #${bookingId} has been approved.`,
-      {
-        bookingId: corporateBooking[0].bookingId,
-        link: `/corporate`,
-      }
-    );
-  } catch (notifError) {
-    console.error(
-      "[Corporate] Error sending approval notification:",
-      notifError
-    );
-  }
-
-  const updated = await db
-    .select()
-    .from(corporateBookings)
-    .where(eq(corporateBookings.id, bookingId))
-    .limit(1);
-
-  return updated[0];
+  return await decideCorporateBooking(bookingId, approverId, "approved");
 }
-
-/**
- * Reject a corporate booking
- * @param bookingId - Corporate booking ID
- * @param approverId - User ID of the approver
- * @param reason - Rejection reason
- * @returns Updated corporate booking
- */
 export async function rejectCorporateBooking(
   bookingId: number,
   approverId: number,
   reason: string
 ): Promise<CorporateBooking> {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  const corporateBooking = await db
-    .select()
-    .from(corporateBookings)
-    .where(eq(corporateBookings.id, bookingId))
-    .limit(1);
-
-  if (corporateBooking.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Corporate booking not found",
-    });
-  }
-
-  if (corporateBooking[0].approvalStatus !== "pending") {
+  if (!reason.trim())
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: `Cannot reject a ${corporateBooking[0].approvalStatus} booking`,
+      message: "Rejection reason is required",
     });
-  }
-
-  // Verify approver has permission
-  const approverMembership = await db
-    .select()
-    .from(corporateUsers)
-    .where(
-      and(
-        eq(
-          corporateUsers.corporateAccountId,
-          corporateBooking[0].corporateAccountId
-        ),
-        eq(corporateUsers.userId, approverId),
-        eq(corporateUsers.role, "admin"),
-        eq(corporateUsers.isActive, true)
-      )
-    )
-    .limit(1);
-
-  if (approverMembership.length === 0) {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "You do not have permission to reject bookings",
-    });
-  }
-
-  await db
-    .update(corporateBookings)
-    .set({
-      approvalStatus: "rejected",
-      approvedBy: approverId,
-      approvedAt: new Date(),
-      rejectionReason: reason,
-      updatedAt: new Date(),
-    })
-    .where(eq(corporateBookings.id, bookingId));
-
-  // Send in-app notification to the booker about rejection
-  try {
-    await createNotification(
-      corporateBooking[0].bookedByUserId,
-      "booking",
-      "Corporate Booking Rejected",
-      `Your corporate booking request #${bookingId} has been rejected. Reason: ${reason}`,
-      {
-        bookingId: corporateBooking[0].bookingId,
-        link: `/corporate`,
-      }
-    );
-  } catch (notifError) {
-    console.error(
-      "[Corporate] Error sending rejection notification:",
-      notifError
-    );
-  }
-
-  const updated = await db
+  return await decideCorporateBooking(
+    bookingId,
+    approverId,
+    "rejected",
+    reason
+  );
+}
+async function decideCorporateBooking(
+  linkId: number,
+  actorId: number,
+  status: "approved" | "rejected",
+  reason?: string
+): Promise<CorporateBooking> {
+  const db = getDb();
+  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+  const [reference] = await db
     .select()
     .from(corporateBookings)
-    .where(eq(corporateBookings.id, bookingId))
-    .limit(1);
-
-  return updated[0];
+    .where(eq(corporateBookings.id, linkId));
+  if (!reference) throw new TRPCError({ code: "NOT_FOUND" });
+  return await db.transaction(async tx => {
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, reference.bookingId))
+      .for("update");
+    const [link] = await tx
+      .select()
+      .from(corporateBookings)
+      .where(eq(corporateBookings.id, linkId))
+      .for("update");
+    if (!booking || !link) throw new TRPCError({ code: "NOT_FOUND" });
+    const [account] = await tx
+      .select()
+      .from(corporateAccounts)
+      .where(eq(corporateAccounts.id, link.corporateAccountId))
+      .for("update");
+    const [actor] = await tx
+      .select()
+      .from(corporateUsers)
+      .where(
+        and(
+          eq(corporateUsers.corporateAccountId, link.corporateAccountId),
+          eq(corporateUsers.userId, actorId),
+          eq(corporateUsers.role, "admin"),
+          eq(corporateUsers.isActive, true)
+        )
+      )
+      .for("update");
+    if (!actor) throw new TRPCError({ code: "FORBIDDEN" });
+    if (
+      account?.status !== "active" ||
+      booking.status !== "pending" ||
+      booking.paymentStatus !== "pending"
+    )
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Corporate invoice is no longer awaiting approval",
+      });
+    if (link.approvalStatus !== "pending")
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Cannot ${status === "approved" ? "approve" : "reject"} a ${link.approvalStatus} booking`,
+      });
+    if (status === "approved") {
+      const { lockEditableInvoice, setInvoiceTotal } =
+        await import("./booking-invoice.service");
+      const invoice = await lockEditableInvoice(tx, booking.id, {
+        userId: booking.userId,
+      });
+      const percent = Number(account.discountPercent);
+      if (!Number.isFinite(percent) || percent < 0 || percent >= 100)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Corporate discount requires a valid approved percentage",
+        });
+      const discount = Math.floor((invoice.totalAmount * percent) / 100);
+      if (discount > 0)
+        await setInvoiceTotal(tx, invoice, invoice.totalAmount - discount);
+    }
+    await tx
+      .update(corporateBookings)
+      .set({
+        approvalStatus: status,
+        approvedBy: actorId,
+        approvedAt: new Date(),
+        rejectionReason: reason ?? null,
+      })
+      .where(eq(corporateBookings.id, linkId));
+    await tx.insert(notifications).values({
+      userId: link.bookedByUserId,
+      type: "booking",
+      title: `Corporate booking ${status}`,
+      message: `Corporate booking #${linkId}: ${status}${reason ? `. ${reason}` : ""}`,
+      data: JSON.stringify({ bookingId: booking.id, link: "/corporate" }),
+    });
+    const [updated] = await tx
+      .select()
+      .from(corporateBookings)
+      .where(eq(corporateBookings.id, linkId));
+    return updated;
+  });
 }
 
 /**
@@ -889,6 +819,7 @@ export async function getCorporateBookings(
   Array<
     CorporateBooking & {
       booking: {
+        paymentStatus: "pending" | "paid" | "refunded" | "failed";
         id: number;
         bookingReference: string;
         status: string;
@@ -949,6 +880,7 @@ export async function getCorporateBookings(
       createdAt: corporateBookings.createdAt,
       updatedAt: corporateBookings.updatedAt,
       booking: {
+        paymentStatus: bookings.paymentStatus,
         id: bookings.id,
         bookingReference: bookings.bookingReference,
         status: bookings.status,
@@ -1036,7 +968,7 @@ export async function getCorporateStats(corporateAccountId: number): Promise<{
       .filter(b => b.approvalStatus === "approved")
       .reduce((sum, b) => sum + b.totalAmount, 0),
     userCount: Number(userCountResult[0]?.count || 0),
-    creditRemaining: Math.max(0, account.creditLimit - account.balance),
+    creditRemaining: Math.max(0, account.creditLimit + account.balance),
   };
 
   return stats;

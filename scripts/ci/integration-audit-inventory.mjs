@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { latestSchemaSnapshot } from "./schema-snapshot.mjs";
 const root = path.resolve(process.argv[2] || process.cwd());
 const out = path.resolve(process.argv[3] || path.join(root, "audit-output"));
 fs.mkdirSync(out, { recursive: true });
@@ -137,6 +138,7 @@ const domains = mounts.map(m => ({
 }));
 const method =
   "Independent static AST inventory of tracked non-test TypeScript. Literal tRPC consumers and recordEvent calls only; aliases/dynamic dispatch may be omitted. DB writer arguments require manual validation. Import reachability does not certify execution.";
+const schemaHead = latestSchemaSnapshot(root);
 const summary = {
   commit: execFileSync("git", ["rev-parse", "HEAD"], {
     cwd: root,
@@ -157,17 +159,9 @@ const summary = {
     d => d.frontendConsumers.length
   ).length,
   literalRecordEventCallSites: events.length,
-  migrations: JSON.parse(
-    fs.readFileSync(path.join(root, "drizzle/meta/_journal.json"), "utf8")
-  ).entries.length,
-  tables: Object.keys(
-    JSON.parse(
-      fs.readFileSync(
-        path.join(root, "drizzle/meta/0031_snapshot.json"),
-        "utf8"
-      )
-    ).tables
-  ).length,
+  migrations: schemaHead.journal.entries.length,
+  schemaSnapshot: schemaHead.name,
+  tables: Object.keys(schemaHead.snapshot.tables).length,
 };
 fs.writeFileSync(
   path.join(out, "inventory.json"),

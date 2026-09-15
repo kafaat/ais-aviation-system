@@ -11,15 +11,121 @@
     "domainEvents": {
       "address": "/events/inbox",
       "messages": {
+        "booking_created_v1": {
+          "$ref": "#/components/messages/booking_created_v1"
+        },
+        "booking_cancelled_v1": {
+          "$ref": "#/components/messages/booking_cancelled_v1"
+        },
+        "booking_modified_v1": {
+          "$ref": "#/components/messages/booking_modified_v1"
+        },
+        "booking_invoice_changed_v1": {
+          "$ref": "#/components/messages/booking_invoice_changed_v1"
+        },
+        "booking_checkout_requested_v1": {
+          "$ref": "#/components/messages/booking_checkout_requested_v1"
+        },
+        "booking_checkout_expired_v1": {
+          "$ref": "#/components/messages/booking_checkout_expired_v1"
+        },
+        "booking_split_payment_created_v1": {
+          "$ref": "#/components/messages/booking_split_payment_created_v1"
+        },
+        "booking_split_checkout_requested_v1": {
+          "$ref": "#/components/messages/booking_split_checkout_requested_v1"
+        },
+        "booking_split_payment_cancelled_v1": {
+          "$ref": "#/components/messages/booking_split_payment_cancelled_v1"
+        },
+        "booking_split_refund_reserved_v1": {
+          "$ref": "#/components/messages/booking_split_refund_reserved_v1"
+        },
+        "booking_split_refund_completed_v1": {
+          "$ref": "#/components/messages/booking_split_refund_completed_v1"
+        },
+        "booking_split_refund_pending_v1": {
+          "$ref": "#/components/messages/booking_split_refund_pending_v1"
+        },
+        "booking_split_refund_processing_v1": {
+          "$ref": "#/components/messages/booking_split_refund_processing_v1"
+        },
+        "booking_split_refund_failed_v1": {
+          "$ref": "#/components/messages/booking_split_refund_failed_v1"
+        },
+        "booking_split_refund_review_required_v1": {
+          "$ref": "#/components/messages/booking_split_refund_review_required_v1"
+        },
+        "booking_split_refund_item_review_v1": {
+          "$ref": "#/components/messages/booking_split_refund_item_review_v1"
+        },
+        "booking_split_refund_item_updated_v1": {
+          "$ref": "#/components/messages/booking_split_refund_item_updated_v1"
+        },
+        "payment_refunded_v1": {
+          "$ref": "#/components/messages/payment_refunded_v1"
+        },
+        "payment_settlement_review_required_v1": {
+          "$ref": "#/components/messages/payment_settlement_review_required_v1"
+        },
+        "payment_disputed_v1": {
+          "$ref": "#/components/messages/payment_disputed_v1"
+        },
+        "order_refund_planned_v1": {
+          "$ref": "#/components/messages/order_refund_planned_v1"
+        },
+        "order_refund_updated_v1": {
+          "$ref": "#/components/messages/order_refund_updated_v1"
+        },
+        "order_servicing_quoted_v1": {
+          "$ref": "#/components/messages/order_servicing_quoted_v1"
+        },
+        "order_servicing_applied_v1": {
+          "$ref": "#/components/messages/order_servicing_applied_v1"
+        },
+        "order_servicing_cancelled_v1": {
+          "$ref": "#/components/messages/order_servicing_cancelled_v1"
+        },
+        "inventory_adjusted_v1": {
+          "$ref": "#/components/messages/inventory_adjusted_v1"
+        },
+        "flight_refund_planned_v1": {
+          "$ref": "#/components/messages/flight_refund_planned_v1"
+        },
+        "flight_status_changed_v1": {
+          "$ref": "#/components/messages/flight_status_changed_v1"
+        },
+        "passenger_checked_in_v1": {
+          "$ref": "#/components/messages/passenger_checked_in_v1"
+        },
+        "group_allocated_v1": {
+          "$ref": "#/components/messages/group_allocated_v1"
+        },
+        "group_allocation_released_v1": {
+          "$ref": "#/components/messages/group_allocation_released_v1"
+        },
+        "retail_offer_consumed_v1": {
+          "$ref": "#/components/messages/retail_offer_consumed_v1"
+        },
+        "PaymentConfirmed_v1": {
+          "$ref": "#/components/messages/PaymentConfirmed_v1"
+        },
+        "BookingRefunded_v1": {
+          "$ref": "#/components/messages/BookingRefunded_v1"
+        },
+        "BookingPartiallyRefunded_v1": {
+          "$ref": "#/components/messages/BookingPartiallyRefunded_v1"
+        },
+        "ETicketIssued_v1": {
+          "$ref": "#/components/messages/ETicketIssued_v1"
+        },
         "booking_confirmed_v1": {
           "$ref": "#/components/messages/booking_confirmed_v1"
         },
         "gate_assigned_v1": {
           "$ref": "#/components/messages/gate_assigned_v1"
         },
-        "gate_changed_v1": {
-          "$ref": "#/components/messages/gate_changed_v1"
-        },
+        "gate_changed_v1": { "$ref": "#/components/messages/gate_changed_v1" },
         "gate_released_v1": {
           "$ref": "#/components/messages/gate_released_v1"
         },
@@ -44,50 +150,271 @@
         "weather_observed_v1": {
           "$ref": "#/components/messages/weather_observed_v1"
         },
-        "legacy_v1": {
-          "$ref": "#/components/messages/legacy_v1"
-        }
+        "legacy_v1": { "$ref": "#/components/messages/legacy_v1" }
       }
     }
   },
   "operations": {
     "publishDomainEvent": {
       "action": "send",
-      "channel": {
-        "$ref": "#/channels/domainEvents"
-      }
+      "channel": { "$ref": "#/channels/domainEvents" }
     }
   },
   "components": {
     "messages": {
-      "booking_confirmed_v1": {
-        "name": "booking.confirmed v1",
-        "title": "booking.confirmed",
+      "booking_created_v1": {
+        "name": "booking.created v1",
+        "title": "booking.created",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.created.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
               "type": "string",
-              "const": "1.0"
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
             },
-            "id": {
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:booking.created:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 36
+              "maxLength": 64
             },
-            "source": {
+            "aggregateid": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 64
             },
-            "type": {
-              "const": "org.ais.booking.confirmed.v1"
-            },
-            "subject": {
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "channel": { "type": "string", "minLength": 1 },
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bookingId", "userId", "channel"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_cancelled_v1": {
+        "name": "booking.cancelled v1",
+        "title": "booking.cancelled",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.cancelled.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
               "type": "string",
-              "minLength": 1
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
             },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:booking.cancelled:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reason": { "type": "string" },
+                "actorId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              },
+              "required": ["bookingId", "reason", "actorId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_modified_v1": {
+        "name": "booking.modified v1",
+        "title": "booking.modified",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.modified.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:booking.modified:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "modificationId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bookingId", "modificationId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_invoice_changed_v1": {
+        "name": "booking.invoice_changed v1",
+        "title": "booking.invoice_changed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.invoice_changed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -98,21 +425,2953 @@
               "const": "application/json"
             },
             "dataschema": {
-              "const": "urn:ais:events:booking.confirmed:v1"
+              "const": "urn:ais:events:booking.invoice_changed:v1"
             },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
             },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "previousTotal": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "totalAmount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bookingId", "previousTotal", "totalAmount"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_checkout_requested_v1": {
+        "name": "booking.checkout_requested v1",
+        "title": "booking.checkout_requested",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.checkout_requested.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.checkout_requested:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "invoiceHash": { "type": "string", "minLength": 1 }
+              },
+              "required": ["bookingId", "requestId", "invoiceHash"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_checkout_expired_v1": {
+        "name": "booking.checkout_expired v1",
+        "title": "booking.checkout_expired",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.checkout_expired.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.checkout_expired:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "sessionId": { "type": "string", "minLength": 1 }
+              },
+              "required": ["bookingId", "requestId", "sessionId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_payment_created_v1": {
+        "name": "booking.split_payment_created v1",
+        "title": "booking.split_payment_created",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_payment_created.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_payment_created:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "splitIds": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "totalAmount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bookingId", "splitIds", "totalAmount"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_checkout_requested_v1": {
+        "name": "booking.split_checkout_requested v1",
+        "title": "booking.split_checkout_requested",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_checkout_requested.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_checkout_requested:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "splitId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              "required": ["bookingId", "splitId", "requestId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_payment_cancelled_v1": {
+        "name": "booking.split_payment_cancelled v1",
+        "title": "booking.split_payment_cancelled",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_payment_cancelled.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_payment_cancelled:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "splitId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bookingId", "splitId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_refund_reserved_v1": {
+        "name": "booking.split_refund_reserved v1",
+        "title": "booking.split_refund_reserved",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_refund_reserved.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_refund_reserved:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "planId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "refundAmount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "cancellationFee": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "bookingId",
+                "planId",
+                "actorId",
+                "refundAmount",
+                "cancellationFee"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_refund_completed_v1": {
+        "name": "booking.split_refund_completed v1",
+        "title": "booking.split_refund_completed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_refund_completed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_refund_completed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "planId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "refundAmount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "cancellationFee": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "bookingId",
+                "planId",
+                "refundAmount",
+                "cancellationFee"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_refund_pending_v1": {
+        "name": "booking.split_refund_pending v1",
+        "title": "booking.split_refund_pending",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_refund_pending.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_refund_pending:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "planId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "refundAmount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "cancellationFee": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "bookingId",
+                "planId",
+                "refundAmount",
+                "cancellationFee"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_refund_processing_v1": {
+        "name": "booking.split_refund_processing v1",
+        "title": "booking.split_refund_processing",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_refund_processing.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_refund_processing:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "planId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "refundAmount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "cancellationFee": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "bookingId",
+                "planId",
+                "refundAmount",
+                "cancellationFee"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_refund_failed_v1": {
+        "name": "booking.split_refund_failed v1",
+        "title": "booking.split_refund_failed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_refund_failed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_refund_failed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "planId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "refundAmount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "cancellationFee": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "bookingId",
+                "planId",
+                "refundAmount",
+                "cancellationFee"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_refund_review_required_v1": {
+        "name": "booking.split_refund_review_required v1",
+        "title": "booking.split_refund_review_required",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": {
+              "const": "org.ais.booking.split_refund_review_required.v1"
+            },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_refund_review_required:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "planId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "refundAmount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "cancellationFee": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "bookingId",
+                "planId",
+                "refundAmount",
+                "cancellationFee"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_refund_item_review_v1": {
+        "name": "booking.split_refund_item_review v1",
+        "title": "booking.split_refund_item_review",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_refund_item_review.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_refund_item_review:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "splitId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "code": { "type": "string", "minLength": 1 }
+              },
+              "required": ["bookingId", "splitId", "requestId", "code"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_split_refund_item_updated_v1": {
+        "name": "booking.split_refund_item_updated v1",
+        "title": "booking.split_refund_item_updated",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.split_refund_item_updated.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:booking.split_refund_item_updated:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "splitId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "status": { "type": "string", "minLength": 1 }
+              },
+              "required": ["bookingId", "splitId", "requestId", "status"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "payment_refunded_v1": {
+        "name": "payment.refunded v1",
+        "title": "payment.refunded",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.payment.refunded.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:payment.refunded:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "bookingId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "amount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["userId", "bookingId", "amount"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "payment_settlement_review_required_v1": {
+        "name": "payment.settlement_review_required v1",
+        "title": "payment.settlement_review_required",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": {
+              "const": "org.ais.payment.settlement_review_required.v1"
+            },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:payment.settlement_review_required:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "paymentIntentId": { "type": "string", "minLength": 1 },
+                "reason": { "type": "string", "minLength": 1 }
+              },
+              "required": ["bookingId", "paymentIntentId", "reason"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "payment_disputed_v1": {
+        "name": "payment.disputed v1",
+        "title": "payment.disputed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.payment.disputed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:payment.disputed:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "bookingId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "amount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["userId", "bookingId", "amount"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "order_refund_planned_v1": {
+        "name": "order.refund_planned v1",
+        "title": "order.refund_planned",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.order.refund_planned.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:order.refund_planned:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "modificationId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "amount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "payers": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["modificationId", "amount", "payers"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "order_refund_updated_v1": {
+        "name": "order.refund_updated v1",
+        "title": "order.refund_updated",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.order.refund_updated.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:order.refund_updated:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "modificationId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "status": { "type": "string", "minLength": 1 },
+                "refundId": { "type": "string", "minLength": 1 }
+              },
+              "required": ["modificationId", "requestId", "status", "refundId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "order_servicing_quoted_v1": {
+        "name": "order.servicing_quoted v1",
+        "title": "order.servicing_quoted",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.order.servicing_quoted.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:order.servicing_quoted:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "modificationId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "totalCost": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["modificationId", "totalCost", "expiresAt"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "order_servicing_applied_v1": {
+        "name": "order.servicing_applied v1",
+        "title": "order.servicing_applied",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.order.servicing_applied.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:order.servicing_applied:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "modificationId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "previousTotal": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "totalAmount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "refundDue": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "fulfillment": {
+                  "type": "string",
+                  "enum": ["awaiting_ticket_reissue", "entitlement_created"]
+                }
+              },
+              "required": [
+                "modificationId",
+                "previousTotal",
+                "totalAmount",
+                "refundDue",
+                "fulfillment"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "order_servicing_cancelled_v1": {
+        "name": "order.servicing_cancelled v1",
+        "title": "order.servicing_cancelled",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.order.servicing_cancelled.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:order.servicing_cancelled:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "modificationId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["modificationId", "userId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "inventory_adjusted_v1": {
+        "name": "inventory.adjusted v1",
+        "title": "inventory.adjusted",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.inventory.adjusted.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:inventory.adjusted:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "cabinClass": {
+                  "type": "string",
+                  "enum": ["economy", "business"]
+                },
+                "previous": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "available": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "capacity": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reservedSeats": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "heldSeats": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actorId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "reason": { "type": "string", "minLength": 1 }
+              },
+              "required": [
+                "cabinClass",
+                "previous",
+                "available",
+                "capacity",
+                "reservedSeats",
+                "heldSeats",
+                "actorId",
+                "reason"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "flight_refund_planned_v1": {
+        "name": "flight.refund_planned v1",
+        "title": "flight.refund_planned",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.flight.refund_planned.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:flight.refund_planned:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "amount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "jobId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["flightId", "bookingId", "amount", "jobId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "flight_status_changed_v1": {
+        "name": "flight.status_changed v1",
+        "title": "flight.status_changed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.flight.status_changed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:flight.status_changed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "flightNumber": { "type": "string" },
+                "oldStatus": { "type": "string" },
+                "newStatus": { "type": "string" },
+                "departureTime": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "arrivalTime": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "delayMinutes": { "type": ["number", "null"] },
+                "reason": { "type": ["string", "null"] },
+                "actorId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "bookingIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "disruptionId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              },
+              "required": [
+                "flightId",
+                "flightNumber",
+                "oldStatus",
+                "newStatus",
+                "departureTime",
+                "arrivalTime",
+                "delayMinutes",
+                "reason",
+                "actorId",
+                "bookingIds",
+                "disruptionId"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "passenger_checked_in_v1": {
+        "name": "passenger.checked_in v1",
+        "title": "passenger.checked_in",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.passenger.checked_in.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:passenger.checked_in:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "passengerId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "seatNumber": { "type": "string", "minLength": 1 }
+              },
+              "required": [
+                "bookingId",
+                "flightId",
+                "passengerId",
+                "seatNumber"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "group_allocated_v1": {
+        "name": "group.allocated v1",
+        "title": "group.allocated",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.group.allocated.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:group.allocated:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "groupBookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "organizerUserId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "inventoryLockId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "totalPrice": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "groupBookingId",
+                "organizerUserId",
+                "inventoryLockId",
+                "expiresAt",
+                "totalPrice",
+                "actorId"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "group_allocation_released_v1": {
+        "name": "group.allocation_released v1",
+        "title": "group.allocation_released",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.group.allocation_released.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:group.allocation_released:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "groupBookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reason": { "type": "string" }
+              },
+              "required": ["groupBookingId", "reason"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "retail_offer_consumed_v1": {
+        "name": "retail.offer_consumed v1",
+        "title": "retail.offer_consumed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.retail.offer_consumed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:retail.offer_consumed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "digest": { "type": "string", "minLength": 1 },
+                "channel": { "type": "string", "minLength": 1 },
+                "totalAmount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["bookingId", "digest", "channel", "totalAmount"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "PaymentConfirmed_v1": {
+        "name": "PaymentConfirmed v1",
+        "title": "PaymentConfirmed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.PaymentConfirmed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:PaymentConfirmed:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "bookingReference": { "type": "string" },
+                "amount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "currency": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                "paymentIntentId": { "type": "string", "minLength": 1 }
+              },
+              "required": [
+                "bookingId",
+                "bookingReference",
+                "amount",
+                "currency",
+                "paymentIntentId"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "BookingRefunded_v1": {
+        "name": "BookingRefunded v1",
+        "title": "BookingRefunded",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.BookingRefunded.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:BookingRefunded:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "bookingReference": { "type": "string" },
+                "amountRefunded": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "currency": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                "chargeId": { "type": "string", "minLength": 1 }
+              },
+              "required": [
+                "bookingId",
+                "bookingReference",
+                "amountRefunded",
+                "currency",
+                "chargeId"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "BookingPartiallyRefunded_v1": {
+        "name": "BookingPartiallyRefunded v1",
+        "title": "BookingPartiallyRefunded",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.BookingPartiallyRefunded.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:BookingPartiallyRefunded:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "bookingReference": { "type": "string" },
+                "amountRefunded": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "currency": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 3
+                },
+                "chargeId": { "type": "string", "minLength": 1 }
+              },
+              "required": [
+                "bookingId",
+                "bookingReference",
+                "amountRefunded",
+                "currency",
+                "chargeId"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "ETicketIssued_v1": {
+        "name": "ETicketIssued v1",
+        "title": "ETicketIssued",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.ETicketIssued.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:ETicketIssued:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "passengerId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "ticketNumber": { "type": "string" },
+                "flightIds": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "acceptance": {
+                  "type": "string",
+                  "const": "local_document_external_ticket_acceptance_required"
+                }
+              },
+              "required": [
+                "bookingId",
+                "passengerId",
+                "ticketNumber",
+                "flightIds",
+                "acceptance"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "booking_confirmed_v1": {
+        "name": "booking.confirmed v1",
+        "title": "booking.confirmed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.booking.confirmed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:booking.confirmed:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -162,26 +3421,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.gate.assigned.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.gate.assigned.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -191,22 +3435,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "const": "urn:ais:events:gate.assigned:v1"
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "const": "urn:ais:events:gate.assigned:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -235,9 +3471,7 @@
                   "exclusiveMinimum": 0,
                   "maximum": 9007199254740991
                 },
-                "gateNumber": {
-                  "type": "string"
-                },
+                "gateNumber": { "type": "string" },
                 "previousGateId": {
                   "anyOf": [
                     {
@@ -245,9 +3479,7 @@
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
-                    {
-                      "type": "null"
-                    }
+                    { "type": "null" }
                   ]
                 },
                 "actorId": {
@@ -305,26 +3537,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.gate.changed.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.gate.changed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -334,22 +3551,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "const": "urn:ais:events:gate.changed:v1"
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "const": "urn:ais:events:gate.changed:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -378,9 +3587,7 @@
                   "exclusiveMinimum": 0,
                   "maximum": 9007199254740991
                 },
-                "gateNumber": {
-                  "type": "string"
-                },
+                "gateNumber": { "type": "string" },
                 "previousGateId": {
                   "anyOf": [
                     {
@@ -388,9 +3595,7 @@
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
                     },
-                    {
-                      "type": "null"
-                    }
+                    { "type": "null" }
                   ]
                 },
                 "actorId": {
@@ -448,26 +3653,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.gate.released.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.gate.released.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -477,22 +3667,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "const": "urn:ais:events:gate.released:v1"
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "const": "urn:ais:events:gate.released:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -511,9 +3693,7 @@
                   "exclusiveMinimum": 0,
                   "maximum": 9007199254740991
                 },
-                "reason": {
-                  "type": "string"
-                },
+                "reason": { "type": "string" },
                 "gateIds": {
                   "type": "array",
                   "items": {
@@ -557,26 +3737,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.hotel.requested.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.hotel.requested.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -586,22 +3751,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "const": "urn:ais:events:hotel.requested:v1"
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "const": "urn:ais:events:hotel.requested:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -661,26 +3818,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.hotel.approved.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.hotel.approved.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -690,22 +3832,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "const": "urn:ais:events:hotel.approved:v1"
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "const": "urn:ais:events:hotel.approved:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -765,26 +3899,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.hotel.cancellation_requested.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.hotel.cancellation_requested.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -797,19 +3916,13 @@
             "dataschema": {
               "const": "urn:ais:events:hotel.cancellation_requested:v1"
             },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -873,26 +3986,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.hotel.confirmed.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.hotel.confirmed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -902,22 +4000,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "const": "urn:ais:events:hotel.confirmed:v1"
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "const": "urn:ais:events:hotel.confirmed:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -941,14 +4031,8 @@
                   "exclusiveMinimum": 0,
                   "maximum": 9007199254740991
                 },
-                "mode": {
-                  "type": "string",
-                  "const": "live"
-                },
-                "currency": {
-                  "type": "string",
-                  "const": "SAR"
-                },
+                "mode": { "type": "string", "const": "live" },
+                "currency": { "type": "string", "const": "SAR" },
                 "totalCost": {
                   "type": "integer",
                   "minimum": 0,
@@ -991,26 +4075,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.hotel.sandbox_confirmed.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.hotel.sandbox_confirmed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -1023,19 +4092,13 @@
             "dataschema": {
               "const": "urn:ais:events:hotel.sandbox_confirmed:v1"
             },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -1059,14 +4122,8 @@
                   "exclusiveMinimum": 0,
                   "maximum": 9007199254740991
                 },
-                "mode": {
-                  "type": "string",
-                  "const": "sandbox"
-                },
-                "currency": {
-                  "type": "string",
-                  "const": "SAR"
-                },
+                "mode": { "type": "string", "const": "sandbox" },
+                "currency": { "type": "string", "const": "SAR" },
                 "totalCost": {
                   "type": "integer",
                   "minimum": 0,
@@ -1109,26 +4166,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.hotel.cancelled.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.hotel.cancelled.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -1138,22 +4180,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "const": "urn:ais:events:hotel.cancelled:v1"
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "const": "urn:ais:events:hotel.cancelled:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -1177,14 +4211,8 @@
                   "exclusiveMinimum": 0,
                   "maximum": 9007199254740991
                 },
-                "mode": {
-                  "type": "string",
-                  "enum": ["sandbox", "live"]
-                },
-                "currency": {
-                  "type": "string",
-                  "const": "SAR"
-                },
+                "mode": { "type": "string", "enum": ["sandbox", "live"] },
+                "currency": { "type": "string", "const": "SAR" },
                 "totalCost": {
                   "type": "integer",
                   "minimum": 0,
@@ -1227,26 +4255,11 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
-            "type": {
-              "const": "org.ais.weather.observed.v1"
-            },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.weather.observed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -1256,22 +4269,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "const": "urn:ais:events:weather.observed:v1"
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "const": "urn:ais:events:weather.observed:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -1289,10 +4294,7 @@
                   "type": "string",
                   "pattern": "^[A-Z]{2}[A-Z0-9]{2}$"
                 },
-                "kind": {
-                  "type": "string",
-                  "enum": ["metar", "taf"]
-                },
+                "kind": { "type": "string", "enum": ["metar", "taf"] },
                 "issuedAt": {
                   "type": "string",
                   "format": "date-time",
@@ -1304,15 +4306,10 @@
                       "type": "string",
                       "enum": ["VFR", "MVFR", "IFR", "LIFR"]
                     },
-                    {
-                      "type": "null"
-                    }
+                    { "type": "null" }
                   ]
                 },
-                "sourceMode": {
-                  "type": "string",
-                  "enum": ["sandbox", "live"]
-                }
+                "sourceMode": { "type": "string", "enum": ["sandbox", "live"] }
               },
               "required": [
                 "icaoCode",
@@ -1350,24 +4347,50 @@
         "payload": {
           "type": "object",
           "properties": {
-            "specversion": {
-              "type": "string",
-              "const": "1.0"
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 36
-            },
-            "source": {
-              "type": "string",
-              "minLength": 1
-            },
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
             "type": {
               "type": "string",
               "pattern": "^org\\.ais\\.[A-Za-z][A-Za-z0-9_.-]*\\.v1$",
               "not": {
                 "enum": [
+                  "org.ais.booking.created.v1",
+                  "org.ais.booking.cancelled.v1",
+                  "org.ais.booking.modified.v1",
+                  "org.ais.booking.invoice_changed.v1",
+                  "org.ais.booking.checkout_requested.v1",
+                  "org.ais.booking.checkout_expired.v1",
+                  "org.ais.booking.split_payment_created.v1",
+                  "org.ais.booking.split_checkout_requested.v1",
+                  "org.ais.booking.split_payment_cancelled.v1",
+                  "org.ais.booking.split_refund_reserved.v1",
+                  "org.ais.booking.split_refund_completed.v1",
+                  "org.ais.booking.split_refund_pending.v1",
+                  "org.ais.booking.split_refund_processing.v1",
+                  "org.ais.booking.split_refund_failed.v1",
+                  "org.ais.booking.split_refund_review_required.v1",
+                  "org.ais.booking.split_refund_item_review.v1",
+                  "org.ais.booking.split_refund_item_updated.v1",
+                  "org.ais.payment.refunded.v1",
+                  "org.ais.payment.settlement_review_required.v1",
+                  "org.ais.payment.disputed.v1",
+                  "org.ais.order.refund_planned.v1",
+                  "org.ais.order.refund_updated.v1",
+                  "org.ais.order.servicing_quoted.v1",
+                  "org.ais.order.servicing_applied.v1",
+                  "org.ais.order.servicing_cancelled.v1",
+                  "org.ais.inventory.adjusted.v1",
+                  "org.ais.flight.refund_planned.v1",
+                  "org.ais.flight.status_changed.v1",
+                  "org.ais.passenger.checked_in.v1",
+                  "org.ais.group.allocated.v1",
+                  "org.ais.group.allocation_released.v1",
+                  "org.ais.retail.offer_consumed.v1",
+                  "org.ais.PaymentConfirmed.v1",
+                  "org.ais.BookingRefunded.v1",
+                  "org.ais.BookingPartiallyRefunded.v1",
+                  "org.ais.ETicketIssued.v1",
                   "org.ais.booking.confirmed.v1",
                   "org.ais.gate.assigned.v1",
                   "org.ais.gate.changed.v1",
@@ -1382,10 +4405,7 @@
                 ]
               }
             },
-            "subject": {
-              "type": "string",
-              "minLength": 1
-            },
+            "subject": { "type": "string", "minLength": 1 },
             "time": {
               "type": "string",
               "format": "date-time",
@@ -1395,23 +4415,14 @@
               "type": "string",
               "const": "application/json"
             },
-            "dataschema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "aisscope": {
-              "type": "string",
-              "enum": ["public", "tenant"]
-            },
+            "dataschema": { "type": "string", "minLength": 1 },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
             "tenantid": {
               "type": "integer",
               "exclusiveMinimum": 0,
               "maximum": 9007199254740991
             },
-            "schemaversion": {
-              "type": "number",
-              "const": 1
-            },
+            "schemaversion": { "type": "number", "const": 1 },
             "aggregatetype": {
               "type": "string",
               "minLength": 1,
@@ -1422,10 +4433,7 @@
               "minLength": 1,
               "maxLength": 64
             },
-            "data": {
-              "type": "object",
-              "additionalProperties": true
-            }
+            "data": { "type": "object", "additionalProperties": true }
           },
           "required": [
             "specversion",
