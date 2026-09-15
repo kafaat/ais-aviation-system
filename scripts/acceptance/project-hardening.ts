@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
+import { TRPCError } from "@trpc/server";
+import { cancelBooking } from "../../server/services/bookings.service";
 import { eq, and } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
@@ -28,6 +30,8 @@ export async function verifyProjectHardening(
   check: (name: string, run: () => Promise<void>) => Promise<void>
 ) {
   const id = seed + 100000;
+  let boundaryIndex = 0;
+  const boundaryOwner = id + 99;
   const [template] = await db
     .select()
     .from(s.flights)
@@ -35,6 +39,7 @@ export async function verifyProjectHardening(
   await db.insert(s.users).values([
     { id, openId: `hardening-${id}` },
     { id: id + 1, openId: `hardening-finance-${id}`, role: "admin" },
+    { id: boundaryOwner, openId: `hardening-boundaries-${id}` },
   ]);
   await db
     .insert(s.airlines)
@@ -405,6 +410,173 @@ export async function verifyProjectHardening(
       assert.equal(cashAfter.totalRefunds, cashBefore.totalRefunds);
     }
   );
+  for (const scenario of [
+    { name: "below limit", amount: 3000, count: 2, total: 6000 },
+    {
+      name: "exact limit without cancellation",
+      amount: 5000,
+      count: 1,
+      total: 5000,
+    },
+    { name: "above limit", amount: 6000, count: 1, total: 6000 },
+    { name: "two units above limit", amount: 5001, count: 1, total: 5001 },
+    {
+      name: "same command replay",
+      amount: 5000,
+      count: 2,
+      total: 5000,
+      replay: true,
+    },
+    {
+      name: "owner cancellation conflicts with partial refund",
+      amount: 3000,
+      count: 1,
+      total: 3000,
+      cancel: true,
+    },
+  ]) {
+    await check(`Refund boundaries: ${scenario.name}`, async () => {
+      const bookingId = id + 100 + boundaryIndex++;
+      await db.insert(s.flights).values({
+        ...template,
+        id: bookingId,
+        flightNumber: `BOUND${boundaryIndex}`,
+        status: "scheduled",
+        departureTime: new Date("2035-01-01T10:00:00Z"),
+        arrivalTime: new Date("2035-01-01T12:00:00Z"),
+        economyAvailable: 10,
+      });
+      await db.insert(s.bookings).values({
+        id: bookingId,
+        userId: boundaryOwner,
+        flightId: bookingId,
+        bookingReference: `BOUND${boundaryIndex}`,
+        pnr: `BOUND${boundaryIndex}`,
+        totalAmount: 10000,
+        cabinClass: "economy",
+        numberOfPassengers: 1,
+      });
+      await db.insert(s.bookingSegments).values({
+        bookingId,
+        flightId: bookingId,
+        segmentOrder: 1,
+        departureDate: new Date("2035-01-01T10:00:00Z"),
+        segmentAmount: 10000,
+        status: "confirmed",
+        seatsReserved: false,
+      });
+      await db
+        .insert(s.userCredits)
+        .values({ userId: boundaryOwner, amount: 10000, source: "promo" });
+      await useCredit(boundaryOwner, 10000, bookingId);
+      const command = {
+        bookingId,
+        amount: scenario.amount,
+        requestId: randomUUID(),
+        approvalReference: "synthetic-boundary-approval",
+        reason: "Synthetic boundary refund",
+        cancelItinerary: false,
+      };
+      const started = performance.now();
+      const results = await Promise.allSettled([
+        refundInternalFunding(command, id + 1),
+        scenario.cancel
+          ? cancelBooking(bookingId, boundaryOwner)
+          : refundInternalFunding(
+              {
+                ...command,
+                requestId: scenario.replay ? command.requestId : randomUUID(),
+              },
+              id + 1
+            ),
+      ]);
+      assert(
+        performance.now() - started < 10000,
+        "Concurrent commands exceeded 10 seconds"
+      );
+      assert.equal(
+        results.filter(r => r.status === "fulfilled").length,
+        scenario.count
+      );
+      for (const result of results) {
+        if (result.status === "rejected") {
+          assert(result.reason instanceof TRPCError);
+          assert.equal(result.reason.code, "PRECONDITION_FAILED");
+        }
+      }
+      if (scenario.replay) {
+        assert.deepEqual(results[0], results[1]);
+      }
+      const ledger = await db
+        .select()
+        .from(s.financialLedger)
+        .where(eq(s.financialLedger.bookingId, bookingId));
+      const refunds = ledger.filter(row =>
+        ["refund", "partial_refund"].includes(row.type)
+      );
+      assert.equal(refunds.length, scenario.replay ? 1 : scenario.count);
+      assert.equal(
+        refunds.reduce(
+          (sum, row) => sum + Math.round(Number(row.amount) * 100),
+          0
+        ),
+        scenario.total
+      );
+      const usage = await db
+        .select()
+        .from(s.creditUsage)
+        .where(eq(s.creditUsage.bookingId, bookingId));
+      assert.equal(
+        usage.reduce((sum, row) => sum + row.amountUsed, 0),
+        10000 - scenario.total
+      );
+      const [booking] = await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, bookingId));
+      const [segment] = await db
+        .select()
+        .from(s.bookingSegments)
+        .where(eq(s.bookingSegments.bookingId, bookingId));
+      const [flight] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, bookingId));
+      assert.equal(booking.status, "confirmed");
+      assert.equal(booking.paymentStatus, "paid");
+      assert.equal(booking.seatsReserved, true);
+      assert.equal(segment.status, "confirmed");
+      assert.equal(segment.seatsReserved, true);
+      assert.equal(flight.economyAvailable, 9);
+      // Exhausting the remaining funding requires an explicit cancellation.
+      await refundInternalFunding(
+        {
+          ...command,
+          requestId: randomUUID(),
+          amount: 10000 - scenario.total,
+          cancelItinerary: true,
+        },
+        id + 1
+      );
+      const [cancelled] = await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, bookingId));
+      const [released] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, bookingId));
+      assert.equal(cancelled.status, "cancelled");
+      assert.equal(cancelled.seatsReserved, false);
+      assert.equal(released.economyAvailable, 10);
+      const [cancelledSegment] = await db
+        .select()
+        .from(s.bookingSegments)
+        .where(eq(s.bookingSegments.bookingId, bookingId));
+      assert.equal(cancelledSegment.status, "cancelled");
+      assert.equal(cancelledSegment.seatsReserved, false);
+    });
+  }
   await check(
     "Internal refunds: corporate exposure is restored once and foreign finance is rejected",
     async () => {
