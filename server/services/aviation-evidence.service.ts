@@ -5,6 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { aviationEvidence } from "../../drizzle/schema";
 import { calculateRequestHash } from "./idempotency-v2.service";
 import { recordEvent } from "./outbox.service";
+import { aviationEvidenceKinds } from "../contracts/domain-events";
 import type { SettlementTx } from "./booking-settlement.service";
 
 export const evidenceEnvelope = z
@@ -135,6 +136,7 @@ export async function persistAviationEvidence(
       });
     return { evidenceId: existing.id, duplicate: true };
   }
+  const kind = aviationEvidenceKinds.parse(e.kind);
   const result = await tx.insert(aviationEvidence).values({
     sourceId: e.sourceId,
     sourceEventId: e.eventId,
@@ -153,7 +155,7 @@ export async function persistAviationEvidence(
     aggregateType: "aviationEvidence",
     aggregateId: evidenceId,
     tenantId: source.tenantId,
-    eventType: `aviation.${e.kind}`,
+    eventType: `aviation.${kind}`,
     payload: {
       evidenceId,
       sourceId: source.sourceId,

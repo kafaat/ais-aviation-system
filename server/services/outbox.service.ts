@@ -52,13 +52,16 @@ export async function recordEvent(
   event: NewEvent
 ): Promise<string> {
   const eventId = randomUUID();
-  const validated = validateDomainEvent({
-    ...event,
-    eventId,
-    aggregateId: String(event.aggregateId),
-    tenantId: event.tenantId ?? null,
-    payload: JSON.parse(JSON.stringify(event.payload)),
-  });
+  const validated = validateDomainEvent(
+    {
+      ...event,
+      eventId,
+      aggregateId: String(event.aggregateId),
+      tenantId: event.tenantId ?? null,
+      payload: JSON.parse(JSON.stringify(event.payload)),
+    },
+    { requirePayloadContract: true }
+  );
   // The ambient trace of whatever caused this write. Null when there is none;
   // a fabricated identifier would correlate this event with unrelated work.
   const trace = currentTrace();

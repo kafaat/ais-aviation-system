@@ -20,7 +20,12 @@ function event(id: number): OutboxEvent {
     eventType: "AgentDecisionOverridden",
     schemaVersion: 1,
     tenantId: null,
-    payload: { decisionId: id },
+    payload: {
+      decisionId: id,
+      overriddenBy: 1,
+      reason: "operator correction",
+      supersededBy: null,
+    },
     status: "pending",
     attempts: 0,
     lastError: null,
@@ -65,7 +70,7 @@ describe("recordEvent", () => {
     const eventId = await recordEvent(tx as never, {
       aggregateType: "booking",
       aggregateId: 42,
-      eventType: "BookingConfirmed",
+      eventType: "booking.confirmed",
       payload: { bookingId: 42 },
     });
     expect(typeof eventId).toBe("string");

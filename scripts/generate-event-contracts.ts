@@ -1,6 +1,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { format, resolveConfig } from "prettier";
 import { z } from "zod";
+import { resolve } from "node:path";
+import {
+  assertProducerContracts,
+  readEventProducers,
+} from "./event-producer-inventory";
 import {
   cloudEventMetadata,
   eventPayloadContracts,
@@ -8,6 +13,8 @@ import {
 } from "../server/contracts/domain-events";
 
 const metadata = z.toJSONSchema(cloudEventMetadata, { target: "draft-7" });
+const producers = readEventProducers(resolve(import.meta.dirname, ".."));
+assertProducerContracts(producers, eventPayloadContracts);
 const messages: Record<string, unknown> = {};
 for (const [name, payload] of [
   ...Object.entries(eventPayloadContracts),
@@ -25,7 +32,12 @@ for (const [name, payload] of [
     contentType: "application/cloudevents+json",
     summary: payload
       ? "Version 1 payload and CloudEvents envelope"
-      : "Envelope-only legacy contract; payload is not yet domain typed",
+      : "Historical replay only; new writes require a registered payload contract",
+    "x-ais-producers": [
+      ...new Set(
+        producers.filter(p => p.eventTypes.includes(name)).map(p => p.file)
+      ),
+    ].sort(),
     payload: {
       ...metaSchema,
       required: [...(metadata.required ?? []), "data"],
@@ -66,7 +78,12 @@ const document = {
     title: "AIS transactional domain events",
     version: "1.0.0",
     description:
-      "At-least-once authenticated HTTP delivery. Deduplicate source/id, retain tenant scope and schema version. No broker is required. Unlisted legacy payloads remain envelope-only. No production server is implied.",
+      "At-least-once authenticated HTTP delivery. Deduplicate source/id, retain tenant scope and schema version. New writes require registered payload contracts; unlisted historical payloads remain readable for replay. Producer names are checked against this registry. No broker or production server is implied.",
+  },
+  "x-ais-producer-coverage": {
+    callSites: producers.length,
+    eventTypes: new Set(producers.flatMap(p => p.eventTypes)).size,
+    unregistered: [],
   },
   defaultContentType: "application/cloudevents+json",
   channels: {
