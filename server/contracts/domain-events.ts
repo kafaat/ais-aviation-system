@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const id = z.number().int().positive();
+const tenantStatus = z.enum(["active", "suspended", "pending"]);
 const jsonObject = z.record(z.string(), z.json());
 const hotelIdentity = z.looseObject({ hotelBookingId: id });
 const waitlistIdentity = z.looseObject({
@@ -32,6 +33,52 @@ const gateAssignment = z.looseObject({
  * JSON objects; they are explicitly described as envelope-only, not fully typed.
  */
 export const eventPayloadContracts: Record<string, z.ZodType> = {
+  "tenant.status_changed": z.looseObject({
+    tenantId: id,
+    previous: tenantStatus,
+    status: tenantStatus,
+    actorId: id,
+  }),
+  "tenant.user_assigned": z.looseObject({
+    userId: id,
+    previousTenantId: id.nullable(),
+    tenantId: id,
+    actorId: id,
+  }),
+  "family.miles_contributed": z.looseObject({
+    groupId: id,
+    userId: id,
+    miles: z.number().int().positive(),
+  }),
+  "agent.price_approved": z.looseObject({
+    digest: z.string().min(1),
+    approvedBy: id,
+    expiresAt: z.string().datetime(),
+  }),
+  "agent.price_executed": z.looseObject({
+    digest: z.string().min(1),
+    approvedBy: id,
+    executedBy: id,
+    previousPrice: z.number().int().nonnegative(),
+    price: z.number().int().positive(),
+    flightId: id,
+  }),
+  AgentDecisionOverridden: z.looseObject({
+    decisionId: id,
+    overriddenBy: id,
+    reason: z.string(),
+    supersededBy: id.nullable(),
+  }),
+  "retail.premium_policy_approved": z.looseObject({
+    actorId: id,
+    evidenceId: id,
+    version: z.string().min(1),
+  }),
+  "retail.premium_exposure": z.looseObject({
+    policyId: z.string().uuid(),
+    variant: z.enum(["control", "treatment"]),
+  }),
+  "retail.premium_policy_paused": z.looseObject({ actorId: id }),
   "waitlist.offered": waitlistIdentity.extend({
     expiresAt: z.string().datetime(),
   }),

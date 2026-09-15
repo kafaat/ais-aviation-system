@@ -20,7 +20,12 @@ function event(id: number): OutboxEvent {
     eventType: "AgentDecisionOverridden",
     schemaVersion: 1,
     tenantId: null,
-    payload: { decisionId: id },
+    payload: {
+      decisionId: id,
+      overriddenBy: 1,
+      reason: "operator correction",
+      supersededBy: null,
+    },
     status: "pending",
     attempts: 0,
     lastError: null,

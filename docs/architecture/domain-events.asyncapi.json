@@ -11,6 +11,33 @@
     "domainEvents": {
       "address": "/events/inbox",
       "messages": {
+        "tenant_status_changed_v1": {
+          "$ref": "#/components/messages/tenant_status_changed_v1"
+        },
+        "tenant_user_assigned_v1": {
+          "$ref": "#/components/messages/tenant_user_assigned_v1"
+        },
+        "family_miles_contributed_v1": {
+          "$ref": "#/components/messages/family_miles_contributed_v1"
+        },
+        "agent_price_approved_v1": {
+          "$ref": "#/components/messages/agent_price_approved_v1"
+        },
+        "agent_price_executed_v1": {
+          "$ref": "#/components/messages/agent_price_executed_v1"
+        },
+        "AgentDecisionOverridden_v1": {
+          "$ref": "#/components/messages/AgentDecisionOverridden_v1"
+        },
+        "retail_premium_policy_approved_v1": {
+          "$ref": "#/components/messages/retail_premium_policy_approved_v1"
+        },
+        "retail_premium_exposure_v1": {
+          "$ref": "#/components/messages/retail_premium_exposure_v1"
+        },
+        "retail_premium_policy_paused_v1": {
+          "$ref": "#/components/messages/retail_premium_policy_paused_v1"
+        },
         "waitlist_offered_v1": {
           "$ref": "#/components/messages/waitlist_offered_v1"
         },
@@ -198,6 +225,765 @@
   },
   "components": {
     "messages": {
+      "tenant_status_changed_v1": {
+        "name": "tenant.status_changed v1",
+        "title": "tenant.status_changed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.tenant.status_changed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:tenant.status_changed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "tenantId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "previous": {
+                  "type": "string",
+                  "enum": ["active", "suspended", "pending"]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["active", "suspended", "pending"]
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["tenantId", "previous", "status", "actorId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "tenant_user_assigned_v1": {
+        "name": "tenant.user_assigned v1",
+        "title": "tenant.user_assigned",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.tenant.user_assigned.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:tenant.user_assigned:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "previousTenantId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "tenantId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["userId", "previousTenantId", "tenantId", "actorId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "family_miles_contributed_v1": {
+        "name": "family.miles_contributed v1",
+        "title": "family.miles_contributed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.family.miles_contributed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:family.miles_contributed:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "groupId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "userId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "miles": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["groupId", "userId", "miles"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "agent_price_approved_v1": {
+        "name": "agent.price_approved v1",
+        "title": "agent.price_approved",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.agent.price_approved.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:agent.price_approved:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "digest": { "type": "string", "minLength": 1 },
+                "approvedBy": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "expiresAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                }
+              },
+              "required": ["digest", "approvedBy", "expiresAt"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "agent_price_executed_v1": {
+        "name": "agent.price_executed v1",
+        "title": "agent.price_executed",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.agent.price_executed.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:agent.price_executed:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "digest": { "type": "string", "minLength": 1 },
+                "approvedBy": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "executedBy": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "previousPrice": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "price": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "digest",
+                "approvedBy",
+                "executedBy",
+                "previousPrice",
+                "price",
+                "flightId"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "AgentDecisionOverridden_v1": {
+        "name": "AgentDecisionOverridden v1",
+        "title": "AgentDecisionOverridden",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.AgentDecisionOverridden.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:AgentDecisionOverridden:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "decisionId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "overriddenBy": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reason": { "type": "string" },
+                "supersededBy": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              },
+              "required": [
+                "decisionId",
+                "overriddenBy",
+                "reason",
+                "supersededBy"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "retail_premium_policy_approved_v1": {
+        "name": "retail.premium_policy_approved v1",
+        "title": "retail.premium_policy_approved",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.retail.premium_policy_approved.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:retail.premium_policy_approved:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "version": { "type": "string", "minLength": 1 }
+              },
+              "required": ["actorId", "evidenceId", "version"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "retail_premium_exposure_v1": {
+        "name": "retail.premium_exposure v1",
+        "title": "retail.premium_exposure",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.retail.premium_exposure.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:retail.premium_exposure:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "policyId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "variant": {
+                  "type": "string",
+                  "enum": ["control", "treatment"]
+                }
+              },
+              "required": ["policyId", "variant"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "retail_premium_policy_paused_v1": {
+        "name": "retail.premium_policy_paused v1",
+        "title": "retail.premium_policy_paused",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.retail.premium_policy_paused.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:retail.premium_policy_paused:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["actorId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
       "waitlist_offered_v1": {
         "name": "waitlist.offered v1",
         "title": "waitlist.offered",
@@ -5370,6 +6156,15 @@
               "pattern": "^org\\.ais\\.[A-Za-z][A-Za-z0-9_.-]*\\.v1$",
               "not": {
                 "enum": [
+                  "org.ais.tenant.status_changed.v1",
+                  "org.ais.tenant.user_assigned.v1",
+                  "org.ais.family.miles_contributed.v1",
+                  "org.ais.agent.price_approved.v1",
+                  "org.ais.agent.price_executed.v1",
+                  "org.ais.AgentDecisionOverridden.v1",
+                  "org.ais.retail.premium_policy_approved.v1",
+                  "org.ais.retail.premium_exposure.v1",
+                  "org.ais.retail.premium_policy_paused.v1",
                   "org.ais.waitlist.offered.v1",
                   "org.ais.waitlist.cancelled.v1",
                   "org.ais.waitlist.expired.v1",
