@@ -34,3 +34,9 @@ The supplied test imports, string booking IDs, non-UUID request IDs, `.ok` resul
 The supplied secret scanner does not parse its advertised command-line options. Matching variable names does not establish value leakage; printing matched source lines can itself expose values. The proposed YAML block-scalar heredoc was checked with synthetic values: it appends a newline to a single-line value and fails YAML parsing for the supplied multiline interpolation pattern. Those snippets have not been deployed.
 
 Secret transport hardening, a runtime leakage harness, permission-matrix extraction, allocation policy, and release enforcement remain separate unfinished work. No operator approval, external secret store, role, route, or ruleset enforcement is fabricated by this follow-up.
+
+## Subsequent credential and transport follow-up
+
+The subsequent commit in this branch implements Kubernetes credential transport and seven synthetic leakage/byte-preservation tests; see `docs/operations/secrets.md`. It does not certify a live cluster or historical artifacts.
+
+GitHub's TCP fault lab passed all 127 database checks but timed out waiting for the late-ack consumer effect. Its 200 ms request deadline could expire during cold startup, before the receiver saw the request. The revised lab blocks downstream responses with Toxiproxy's timeout toxic, waits for the consumer's commit, and only then starts the sender's 200 ms acknowledgement deadline through IPC. It asserts that this specific deadline fired, preserving the later crash/reclaim and exactly-once effect checks. The 10-second request watchdog remains a separate bound. This changes the lab's fault coordination, not production delivery settings. Real Toxiproxy verification on the updated GitHub head is required; local type checking alone does not establish transport acceptance.

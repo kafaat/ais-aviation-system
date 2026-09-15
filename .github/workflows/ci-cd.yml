@@ -65,6 +65,9 @@ jobs:
           fi
           echo "All files are properly formatted."
 
+      - name: Verify deployment credential transport
+        run: python3 -m unittest discover -s scripts/deploy -p "test_*.py" -v
+
       # Every production warning fails this gate.
       - name: Run ESLint
         run: pnpm lint:ci
@@ -736,16 +739,9 @@ jobs:
 
       - name: Configure kubectl
         id: staging-kube-config
-        run: |
-          if [ -z "${{ secrets.STAGING_KUBECONFIG }}" ]; then
-            echo "configured=false" >> $GITHUB_OUTPUT
-            echo "::warning::STAGING_KUBECONFIG secret is not set. Skipping Kubernetes deployment."
-          else
-            mkdir -p ~/.kube
-            echo "${{ secrets.STAGING_KUBECONFIG }}" | base64 -d > ~/.kube/config
-            chmod 600 ~/.kube/config
-            echo "configured=true" >> $GITHUB_OUTPUT
-          fi
+        env:
+          AIS_KUBECONFIG_BASE64: ${{ secrets.STAGING_KUBECONFIG }}
+        run: python3 scripts/deploy/kubernetes_secrets.py configure
 
       - name: Verify cluster connectivity
         if: steps.staging-kube-config.outputs.configured == 'true'
@@ -784,42 +780,18 @@ jobs:
           OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
           OTEL_TRACES_SAMPLER_ARG: ${{ vars.OTEL_TRACES_SAMPLER_ARG || '0.1' }}
-        run: |
-          kubectl create secret generic ais-secrets \
-            --namespace=ais-staging \
-            --from-literal=SELF_SERVICE_CAPABILITY_SECRET="$SELF_SERVICE_CAPABILITY_SECRET" \
-            --from-literal=QUEUE_REDIS_URL="$QUEUE_REDIS_URL" \
-            --from-literal=SMS_PROVIDER="$SMS_PROVIDER" \
-            --from-literal=TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
-            --from-literal=TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
-            --from-literal=TWILIO_PHONE_NUMBER="$TWILIO_PHONE_NUMBER" \
-            --from-literal=HOTELBEDS_MODE="$HOTELBEDS_MODE" \
-            --from-literal=HOTELBEDS_API_KEY="$HOTELBEDS_API_KEY" \
-            --from-literal=HOTELBEDS_SECRET="$HOTELBEDS_SECRET" \
-            --from-literal=HOTELBEDS_ACCEPTANCE_REFERENCE="$HOTELBEDS_ACCEPTANCE_REFERENCE" \
-            --from-literal=AVIATION_WEATHER_MODE="$AVIATION_WEATHER_MODE" \
-            --from-literal=AVIATION_WEATHER_BASE_URL="$AVIATION_WEATHER_BASE_URL" \
-            --from-literal=AVIATION_WEATHER_SOURCE_REFERENCE="$AVIATION_WEATHER_SOURCE_REFERENCE" \
-            --from-literal=ONCALL_MODE="$ONCALL_MODE" \
-            --from-literal=ONCALL_BASE_URL="$ONCALL_BASE_URL" \
-            --from-literal=ONCALL_TOKEN="$ONCALL_TOKEN" \
-            --from-literal=ONCALL_ACCEPTANCE_REFERENCE="$ONCALL_ACCEPTANCE_REFERENCE" \
-            --from-literal=AIS_OTEL_ENABLED="$AIS_OTEL_ENABLED" \
-            --from-literal=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" \
-            --from-literal=OTEL_EXPORTER_OTLP_HEADERS="$OTEL_EXPORTER_OTLP_HEADERS" \
-            --from-literal=OTEL_TRACES_SAMPLER_ARG="$OTEL_TRACES_SAMPLER_ARG" \
-            --from-literal=DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}" \
-            --from-literal=JWT_SECRET="${{ secrets.STAGING_JWT_SECRET }}" \
-            --from-literal=CSRF_SECRET="${{ secrets.STAGING_CSRF_SECRET }}" \
-            --from-literal=AUTH_SERVICE_URL="http://ais-auth:8000" \
-            --from-literal=RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
-            --from-literal=EMAIL_FROM="${{ vars.EMAIL_FROM }}" \
-            --from-literal=OUTBOX_PUBLISH_URL="${{ vars.OUTBOX_PUBLISH_URL }}" \
-            --from-literal=OUTBOX_PUBLISH_TOKEN="${{ secrets.OUTBOX_PUBLISH_TOKEN }}" \
-            --from-literal=STRIPE_SECRET_KEY="${{ secrets.STAGING_STRIPE_SECRET_KEY }}" \
-            --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}" \
-            --from-literal=REDIS_URL="${{ secrets.STAGING_REDIS_URL }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.STAGING_JWT_SECRET }}
+          CSRF_SECRET: ${{ secrets.STAGING_CSRF_SECRET }}
+          AUTH_SERVICE_URL: "http://ais-auth:8000"
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+          OUTBOX_PUBLISH_URL: ${{ vars.OUTBOX_PUBLISH_URL }}
+          OUTBOX_PUBLISH_TOKEN: ${{ secrets.OUTBOX_PUBLISH_TOKEN }}
+          STRIPE_SECRET_KEY: ${{ secrets.STAGING_STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STAGING_STRIPE_WEBHOOK_SECRET }}
+          REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
+        run: python3 scripts/deploy/kubernetes_secrets.py apply --namespace ais-staging
 
       - name: Run database migrations
         if: steps.staging-kube-config.outputs.configured == 'true'
@@ -912,9 +884,13 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
-  # =============================================================================
-  # STAGE 7: Deploy to Production (with approval)
-  # =============================================================================
+      # =============================================================================
+      # STAGE 7: Deploy to Production (with approval)
+      # =============================================================================
+      - name: Remove runner Kubernetes credentials
+        if: always()
+        run: python3 scripts/deploy/kubernetes_secrets.py cleanup
+
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
@@ -944,16 +920,9 @@ jobs:
 
       - name: Configure kubectl
         id: kube-config
-        run: |
-          if [ -z "${{ secrets.PRODUCTION_KUBECONFIG }}" ]; then
-            echo "configured=false" >> $GITHUB_OUTPUT
-            echo "::warning::PRODUCTION_KUBECONFIG secret is not set. Skipping Kubernetes deployment."
-          else
-            mkdir -p ~/.kube
-            echo "${{ secrets.PRODUCTION_KUBECONFIG }}" | base64 -d > ~/.kube/config
-            chmod 600 ~/.kube/config
-            echo "configured=true" >> $GITHUB_OUTPUT
-          fi
+        env:
+          AIS_KUBECONFIG_BASE64: ${{ secrets.PRODUCTION_KUBECONFIG }}
+        run: python3 scripts/deploy/kubernetes_secrets.py configure
 
       - name: Verify cluster connectivity
         if: steps.kube-config.outputs.configured == 'true'
@@ -992,42 +961,18 @@ jobs:
           OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT }}
           OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
           OTEL_TRACES_SAMPLER_ARG: ${{ vars.OTEL_TRACES_SAMPLER_ARG || '0.1' }}
-        run: |
-          kubectl create secret generic ais-secrets \
-            --namespace=ais-production \
-            --from-literal=SELF_SERVICE_CAPABILITY_SECRET="$SELF_SERVICE_CAPABILITY_SECRET" \
-            --from-literal=QUEUE_REDIS_URL="$QUEUE_REDIS_URL" \
-            --from-literal=SMS_PROVIDER="$SMS_PROVIDER" \
-            --from-literal=TWILIO_ACCOUNT_SID="$TWILIO_ACCOUNT_SID" \
-            --from-literal=TWILIO_AUTH_TOKEN="$TWILIO_AUTH_TOKEN" \
-            --from-literal=TWILIO_PHONE_NUMBER="$TWILIO_PHONE_NUMBER" \
-            --from-literal=HOTELBEDS_MODE="$HOTELBEDS_MODE" \
-            --from-literal=HOTELBEDS_API_KEY="$HOTELBEDS_API_KEY" \
-            --from-literal=HOTELBEDS_SECRET="$HOTELBEDS_SECRET" \
-            --from-literal=HOTELBEDS_ACCEPTANCE_REFERENCE="$HOTELBEDS_ACCEPTANCE_REFERENCE" \
-            --from-literal=AVIATION_WEATHER_MODE="$AVIATION_WEATHER_MODE" \
-            --from-literal=AVIATION_WEATHER_BASE_URL="$AVIATION_WEATHER_BASE_URL" \
-            --from-literal=AVIATION_WEATHER_SOURCE_REFERENCE="$AVIATION_WEATHER_SOURCE_REFERENCE" \
-            --from-literal=ONCALL_MODE="$ONCALL_MODE" \
-            --from-literal=ONCALL_BASE_URL="$ONCALL_BASE_URL" \
-            --from-literal=ONCALL_TOKEN="$ONCALL_TOKEN" \
-            --from-literal=ONCALL_ACCEPTANCE_REFERENCE="$ONCALL_ACCEPTANCE_REFERENCE" \
-            --from-literal=AIS_OTEL_ENABLED="$AIS_OTEL_ENABLED" \
-            --from-literal=OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="$OTEL_EXPORTER_OTLP_TRACES_ENDPOINT" \
-            --from-literal=OTEL_EXPORTER_OTLP_HEADERS="$OTEL_EXPORTER_OTLP_HEADERS" \
-            --from-literal=OTEL_TRACES_SAMPLER_ARG="$OTEL_TRACES_SAMPLER_ARG" \
-            --from-literal=DATABASE_URL="${{ secrets.PRODUCTION_DATABASE_URL }}" \
-            --from-literal=JWT_SECRET="${{ secrets.PRODUCTION_JWT_SECRET }}" \
-            --from-literal=CSRF_SECRET="${{ secrets.PRODUCTION_CSRF_SECRET }}" \
-            --from-literal=AUTH_SERVICE_URL="http://ais-auth:8000" \
-            --from-literal=RESEND_API_KEY="${{ secrets.RESEND_API_KEY }}" \
-            --from-literal=EMAIL_FROM="${{ vars.EMAIL_FROM }}" \
-            --from-literal=OUTBOX_PUBLISH_URL="${{ vars.OUTBOX_PUBLISH_URL }}" \
-            --from-literal=OUTBOX_PUBLISH_TOKEN="${{ secrets.OUTBOX_PUBLISH_TOKEN }}" \
-            --from-literal=STRIPE_SECRET_KEY="${{ secrets.PRODUCTION_STRIPE_SECRET_KEY }}" \
-            --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.PRODUCTION_STRIPE_WEBHOOK_SECRET }}" \
-            --from-literal=REDIS_URL="${{ secrets.PRODUCTION_REDIS_URL }}" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.PRODUCTION_JWT_SECRET }}
+          CSRF_SECRET: ${{ secrets.PRODUCTION_CSRF_SECRET }}
+          AUTH_SERVICE_URL: "http://ais-auth:8000"
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
+          OUTBOX_PUBLISH_URL: ${{ vars.OUTBOX_PUBLISH_URL }}
+          OUTBOX_PUBLISH_TOKEN: ${{ secrets.OUTBOX_PUBLISH_TOKEN }}
+          STRIPE_SECRET_KEY: ${{ secrets.PRODUCTION_STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.PRODUCTION_STRIPE_WEBHOOK_SECRET }}
+          REDIS_URL: ${{ secrets.PRODUCTION_REDIS_URL }}
+        run: python3 scripts/deploy/kubernetes_secrets.py apply --namespace ais-production
 
       - name: Persist database backup before migration
         if: steps.kube-config.outputs.configured == 'true' && vars.ENABLE_DB_BACKUP == 'true'
@@ -1194,9 +1139,13 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
-  # =============================================================================
-  # STAGE 8: Post-Deployment Monitoring
-  # =============================================================================
+      # =============================================================================
+      # STAGE 8: Post-Deployment Monitoring
+      # =============================================================================
+      - name: Remove runner Kubernetes credentials
+        if: always()
+        run: python3 scripts/deploy/kubernetes_secrets.py cleanup
+
   post-deploy-monitoring:
     name: Post-Deployment Monitoring
     runs-on: ubuntu-latest

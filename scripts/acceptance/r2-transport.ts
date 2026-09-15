@@ -52,12 +52,21 @@ if (process.argv[2] === "worker") {
     event?.eventId === eventId && event.leaseToken,
     "Worker must claim this lab event first"
   );
+  const abort = new AbortController();
+  let acknowledgementTimer: ReturnType<typeof setTimeout> | undefined;
+  // The acknowledgement-loss scenario begins its short deadline only after
+  // the receiver proves it committed. Cold connection/DB startup is not the fault.
+  const committed = (message: unknown) => {
+    if (message === "consumer-committed" && !acknowledgementTimer)
+      acknowledgementTimer = setTimeout(() => abort.abort(), 200);
+  };
+  if (process.argv[5] === "late") process.on("message", committed);
   try {
     const response = await fetch(endpoint, {
       method: "POST",
       body: JSON.stringify(event),
       headers: { "Content-Type": "application/json" },
-      signal: AbortSignal.timeout(200),
+      signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10000)]),
     });
     assert.equal(response.status, 200);
     process.send?.({
@@ -72,8 +81,14 @@ if (process.argv[2] === "worker") {
     assert.equal(await markPublished([event]), 1);
   } catch (error) {
     await markFailed(event.id, "Synthetic transport fault", event.leaseToken);
-    if (process.argv[5] !== "fail") throw error;
-    process.send?.({ failed: true });
+    if (!["fail", "late"].includes(process.argv[5])) throw error;
+    process.send?.({
+      failed: true,
+      acknowledgementDeadline: abort.signal.aborted,
+    });
+  } finally {
+    if (acknowledgementTimer) clearTimeout(acknowledgementTimer);
+    process.off("message", committed);
   }
   await shutdown();
   process.exit(0);
@@ -142,6 +157,7 @@ function worker(endpoint: string, mode: string) {
   const messages: Array<{
     delivered?: boolean;
     failed?: boolean;
+    acknowledgementDeadline?: boolean;
     id: number;
     leaseToken: string;
   }> = [];
@@ -231,15 +247,18 @@ try {
   await api(`/proxies/${proxyName}`, "POST", { enabled: true });
   await api(`/proxies/${proxyName}/toxics`, "POST", {
     name: "late-ack",
-    type: "latency",
+    type: "timeout",
     stream: "downstream",
     toxicity: 1,
-    attributes: { latency: 1000, jitter: 0 },
+    // Zero holds downstream data until the toxic is removed. The request can
+    // reach the consumer, but its response cannot race the IPC acknowledgement.
+    attributes: { timeout: 0 },
   });
-  const late = worker(endpoint, "fail");
-  assert.equal(await late.done, 0);
-  assert(late.messages.some(m => m.failed));
+  const late = worker(endpoint, "late");
   await until(() => deliveries === 1);
+  late.child.send("consumer-committed");
+  assert.equal(await late.done, 0);
+  assert(late.messages.some(m => m.failed && m.acknowledgementDeadline));
   checks.push(
     "Consumer commits while downstream acknowledgement exceeds the sender deadline"
   );
