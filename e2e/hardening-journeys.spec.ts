@@ -1,5 +1,5 @@
 import { test, expect } from "./fixtures/base-test";
-import { loginAsAdmin as authenticateAdmin } from "./fixtures/test-helpers";
+import { useBrowserSession } from "./fixtures/browser-session";
 import type { Page } from "@playwright/test";
 import { ownedBooking, rpc, sqlRows } from "./fixtures/hardening";
 import type { RowDataPacket } from "mysql2/promise";
@@ -8,8 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 async function loginAsAdmin(page: Page) {
-  await page.context().clearCookies();
-  await authenticateAdmin(page);
+  await useBrowserSession(page, "admin");
 }
 
 test.describe("Funded journeys and truthful operational reads", () => {
@@ -51,9 +50,9 @@ test.describe("Funded journeys and truthful operational reads", () => {
     await card
       .getByRole("button", { name: "Confirm credit payment", exact: true })
       .click();
-    await expect(
-      card.getByRole("button", { name: "Pay using credits", exact: true })
-    ).toHaveCount(0);
+    // Observe the server-confirmed UI state before an API replay, so the
+    // replay cannot fund a booking after a broken UI mutation and mask it.
+    await expect(card.getByText("Paid", { exact: true })).toBeVisible();
     const client = rpc(page);
     await client.vouchers.useCredits.mutate({
       bookingId: booking.bookingId,
@@ -187,17 +186,26 @@ test.describe("Funded journeys and truthful operational reads", () => {
       page.getByRole("button", { name: "Retry", exact: true })
     ).toBeVisible();
   });
-  test("biometric event envelope renders the real empty state", async ({
+  test("biometric without an accepted adapter reports unavailable, not empty", async ({
     page,
   }) => {
     const errors: string[] = [];
     page.on("pageerror", e => errors.push(e.message));
     await loginAsAdmin(page);
+    await expect(
+      rpc(page).biometric.getEvents.query({ limit: 50, offset: 0 })
+    ).rejects.toMatchObject({ data: { code: "PRECONDITION_FAILED" } });
     await page.goto("/admin/biometric");
     await page.getByRole("tab", { name: "Events Log" }).click();
+    await expect(page.getByRole("alert")).toContainText(
+      "no verified production adapter configured"
+    );
+    await expect(
+      page.getByRole("button", { name: "Retry", exact: true })
+    ).toBeVisible();
     await expect(
       page.getByText("No recorded events", { exact: true })
-    ).toBeVisible();
+    ).toHaveCount(0);
     expect(errors).toEqual([]);
   });
   test("kiosk API has no registered devices and the screen shows that state", async ({

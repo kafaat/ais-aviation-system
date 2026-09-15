@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { BookingCreditPayment } from "@/components/BookingCreditPayment";
+import { OperationalReadState } from "@/components/OperationalReadState";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -104,10 +105,10 @@ export default function MyBookings() {
   // Sort state
   const [sortOption, setSortOption] = useState<SortOption>("dateDesc");
 
-  const { data: bookings, isLoading } = trpc.bookings.myBookings.useQuery(
-    undefined,
-    { enabled: isAuthenticated }
-  );
+  const bookingsQuery = trpc.bookings.myBookings.useQuery(undefined, {
+    enabled: isAuthenticated,
+  });
+  const { data: bookings, isLoading } = bookingsQuery;
   type Booking = NonNullable<typeof bookings>[number];
 
   // Get flight IDs for WebSocket subscription
@@ -284,6 +285,18 @@ export default function MyBookings() {
           </Button>
         </Card>
       </div>
+    );
+  }
+
+  if (bookingsQuery.error) {
+    return (
+      <main className="container py-8 space-y-6">
+        <SEO title={t("myBookings.title")} />
+        <h1 className="text-2xl font-bold">{t("myBookings.title")}</h1>
+        <OperationalReadState query={bookingsQuery}>
+          {null}
+        </OperationalReadState>
+      </main>
     );
   }
 

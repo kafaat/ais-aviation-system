@@ -8,7 +8,7 @@ import mysql, {
 import { randomUUID } from "node:crypto";
 import type { AppRouter } from "../../server/routers";
 import { disposableDatabaseUrl } from "../disposable-database";
-import { login } from "./test-helpers";
+import { useBrowserSession } from "./browser-session";
 
 export function rpc(page: Page) {
   return createTRPCClient<AppRouter>({
@@ -59,7 +59,7 @@ export async function fixtureFlight() {
   }
 }
 export async function ownedBooking(page: Page, funded = false) {
-  await login(page);
+  await useBrowserSession(page, "regular");
   const client = rpc(page),
     flightId = await fixtureFlight();
   const user = await client.auth.me.query();

@@ -57,6 +57,19 @@ Reference: [GitHub repository rules REST API](https://docs.github.com/en/rest/re
 
 The live acceptance gate adds original-credit restoration, corporate restoration, duplicate commands, foreign finance rejection, cash/noncash separation, accepted/revoked revenue evidence, batch duty equivalence, and a streamed Arabic archive larger than 16 MiB. It uses disposable MySQL/Redis and synthetic evidence with zero provider calls.
 
-CI runs eleven Chromium journeys: the existing two smoke tests plus booking/replay, credit checkout, partial/full finance returns, unauthorized mutations, authenticated privacy download, source failure, biometric events and empty kiosks. Fixture writes require test mode, an explicit disposable-database flag, a loopback host and a database name ending in `_test`. Failure to register accounts through the real authentication service fails setup. Local type-checking or test discovery is not a substitute for executing those browser journeys; consult the current PR SHA and its E2E job before declaring them passed.
+CI runs eleven Chromium journeys: the existing two smoke tests plus booking/replay, credit checkout, partial/full finance returns, unauthorized mutations, authenticated privacy download, source failure, unavailable biometrics and empty kiosks. Fixture writes require test mode, an explicit disposable-database flag, a loopback host and a database name ending in `_test`. Failure to register accounts through the real authentication service fails setup. Local type-checking or test discovery is not a substitute for executing those browser journeys; consult the current PR SHA and its E2E job before declaring them passed.
+
+### Browser-gate follow-up
+
+The first CI head (`e74d4a7`) failed nine browser journeys. There were distinct causes:
+
+- The custom Rollup policy declared every JavaScript module side-effect-free, dropping the side-effect-only i18n bootstrap from the production bundle. Screens reading `i18n.language` then failed to render. Keep the normal side-effect analysis; the home smoke now asserts translated text, not just visibility of an untranslated key. This failure reproduced locally with the production build after authentication setup was corrected.
+- Repeated UI logins across parallel tests/retries exhausted the real five-attempt IP quota. Global setup now performs two real UI logins and reuses their authenticated cookies in isolated browser contexts. Session state is temporary, mode `0600`, outside uploaded result directories, and deleted after the run. No production limiter is disabled or widened.
+- Authenticated cookie consent is server-authoritative. Setup records essential-only preferences through the real writer; localStorage preparation applies only to anonymous pages.
+- Without an accepted biometric adapter the correct response is `PRECONDITION_FAILED`, not an empty event list. The browser test verifies that rejection and the visible unavailable/retry state, and rejects a false empty state. Empty/populated event envelopes remain covered by the separate consumer contract tests. This is not hardware acceptance.
+
+Credit checkout must reach the server-confirmed paid UI state before the replay probe, so an API replay cannot hide a broken payment button. Failed booking reads now show an error and retry rather than a false empty list; disabling that rendering guard fails two regression tests.
+
+The eleven journeys subsequently passed locally with two Chromium workers against freshly migrated MySQL and Redis, using the production bundle. The local browser binary was Chromium 153.0.8010.0; CI still uses its pinned Playwright-managed browser. Local evidence does not substitute for the new SHA's GitHub Actions results.
 
 `docs/audits/2026-09-15-project-hardening-verification.json` records local gates and remaining limits. CI results are separate and must be read on the published head.

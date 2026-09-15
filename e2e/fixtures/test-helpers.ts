@@ -27,7 +27,16 @@ export async function login(
   await page.locator("input#password").fill(password);
 
   // Submit form
-  await page.locator('[data-testid="login-submit"]').click();
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      response =>
+        new URL(response.url()).pathname.includes("/api/trpc/auth.login") &&
+        response.request().method() === "POST"
+    ),
+    page.locator('[data-testid="login-submit"]').click(),
+  ]);
+  // Fail at the HTTP boundary (including 429) instead of a navigation timeout.
+  expect(response.status(), "Login API must succeed").toBe(200);
 
   // Wait for navigation after login
   await page.waitForURL(/^(?!.*\/login).*$/);

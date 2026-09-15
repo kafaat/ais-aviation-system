@@ -2,37 +2,37 @@
   "baseSha": "40e2cdc2052b68ae37198d3302ca58db6e0ec59b",
   "scope": "Project hardening after v1.27.3; local disposable services, no external acceptance",
   "unit": {
-    "passed": 2425,
+    "passed": 2428,
     "failed": 0,
     "skipped": 0,
-    "files": 169,
+    "files": 170,
     "command": "vitest run --coverage",
     "database": "freshly migrated MySQL 8.0.46",
     "configuredCoverageThresholdsPassed": true,
     "coverage": {
       "lines": {
-        "total": 34054,
-        "covered": 9042,
+        "total": 34057,
+        "covered": 9097,
         "skipped": 0,
-        "pct": 26.55
+        "pct": 26.71
       },
       "statements": {
-        "total": 35913,
-        "covered": 9410,
+        "total": 35916,
+        "covered": 9466,
         "skipped": 0,
-        "pct": 26.2
+        "pct": 26.35
       },
       "functions": {
         "total": 7755,
-        "covered": 1764,
+        "covered": 1776,
         "skipped": 0,
-        "pct": 22.74
+        "pct": 22.9
       },
       "branches": {
-        "total": 27653,
-        "covered": 6066,
+        "total": 27655,
+        "covered": 6105,
         "skipped": 0,
-        "pct": 21.93
+        "pct": 22.07
       },
       "branchesTrue": {
         "total": 0,
@@ -63,8 +63,22 @@
   },
   "browser": {
     "configuredCiJourneys": 11,
-    "localStatus": "not executed: Chromium download blocked by network proxy",
-    "ciStatus": "must be verified separately on the published head"
+    "localStatus": "passed against the production bundle, real MySQL, Redis and auth service",
+    "localPassed": 11,
+    "localFailed": 0,
+    "localSkipped": 0,
+    "workers": 2,
+    "retries": 0,
+    "chromiumVersion": "153.0.8010.0 (local runtime only; not a project dependency)",
+    "ciStatus": "must be verified separately on the new published head; e74d4a7 failed nine browser journeys",
+    "regressions": [
+      "Production i18n bootstrap is retained and the smoke asserts actual translated text",
+      "Two real UI logins supply temporary isolated browser contexts without changing the five-attempt IP limiter",
+      "Authenticated consent is recorded through the server authority",
+      "Credit payment must reach paid UI state before an API replay",
+      "Missing biometric acceptance is PRECONDITION_FAILED and visibly unavailable, not falsely empty",
+      "Disabling the booking-read error UI fails two of three new consumer tests"
+    ]
   },
   "productionChanges": {
     "migrationsApplied": false,
@@ -90,7 +104,7 @@
     "Historical envelope-only event reads remain supported",
     "No production collector or trace acceptance",
     "Reaccommodation alternatives are bounded outage contingencies, not globally k-best plans",
-    "Global line coverage is 26.55%; this does not claim the proposed 60% target",
+    "Global line coverage is 26.71%; this does not claim the proposed 60% target",
     "Cargo domain and calibrated discrete-event simulation remain out of scope without domain and measurements"
   ]
 }

@@ -6,6 +6,10 @@
  */
 import mysql from "mysql2/promise";
 import { disposableDatabaseUrl } from "./disposable-database";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import type { FullConfig } from "@playwright/test";
+import { prepareBrowserSessions } from "./fixtures/browser-session";
 
 const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL || "http://localhost:8000";
@@ -71,10 +75,19 @@ async function promoteAdminUsers() {
   }
 }
 
-export default async function globalSetup() {
+export default async function globalSetup(config: FullConfig) {
   disposableDatabaseUrl();
   console.info("[e2e-setup] Starting E2E test user setup...");
   await registerWithAuthService();
   await promoteAdminUsers();
-  console.info("[e2e-setup] E2E setup complete");
+  // Authenticated consent is server-authoritative; localStorage only dismisses
+  // the anonymous banner. Use the real writer for the two synthetic accounts.
+  await promisify(execFile)(
+    process.execPath,
+    ["--import", "tsx", "scripts/e2e/prepare-consent.ts"],
+    { timeout: 30000 }
+  );
+  const cleanup = await prepareBrowserSessions(config);
+  console.info("[e2e-setup] Real user/admin UI logins complete");
+  return cleanup;
 }

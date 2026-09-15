@@ -27,7 +27,11 @@ test.describe("CI smoke coverage", () => {
   test("home renders the current one-way search controls", async ({ page }) => {
     await page.goto("/");
 
-    await expect(page.locator("#hero-title")).toBeVisible();
+    // The production bundler must retain side-effect-only i18n bootstrap.
+    // Visibility alone also passes when the untranslated key is rendered.
+    await expect(page.locator("#hero-title")).toHaveText(
+      "Book Your Next Flight"
+    );
     await expect(page.getByTestId("home-origin-select")).toBeVisible();
     await expect(page.getByTestId("home-destination-select")).toBeVisible();
 
