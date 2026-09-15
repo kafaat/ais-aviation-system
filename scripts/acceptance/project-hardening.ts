@@ -220,6 +220,42 @@ export async function verifyProjectHardening(
               .select()
               .from(s.crewMembers)
               .where(eq(s.crewMembers.airlineId, id));
+            await db.insert(s.flights).values([
+              {
+                ...template,
+                id: id + 10,
+                airlineId: id,
+                flightNumber: "HDCONFLICT",
+                departureTime: new Date("2030-01-01T08:00:00Z"),
+                arrivalTime: new Date("2030-01-01T10:30:00Z"),
+              },
+              {
+                ...template,
+                id: id + 11,
+                airlineId: id,
+                flightNumber: "HDREST",
+                departureTime: new Date("2029-12-31T22:00:00Z"),
+                arrivalTime: new Date("2030-01-01T01:00:00Z"),
+              },
+            ]);
+            await db.insert(s.crewAssignments).values([
+              {
+                flightId: id + 10,
+                crewMemberId: id,
+                role: "captain",
+                assignedBy: id + 1,
+                dutyStartTime: new Date("2030-01-01T07:30:00Z"),
+                dutyEndTime: new Date("2030-01-01T10:45:00Z"),
+              },
+              {
+                flightId: id + 11,
+                crewMemberId: id + 1,
+                role: "captain",
+                assignedBy: id + 1,
+                dutyStartTime: new Date("2029-12-31T21:30:00Z"),
+                dutyEndTime: new Date("2030-01-01T01:15:00Z"),
+              },
+            ]);
             let reads = 0;
             const counted = new Proxy(db, {
               get(target, prop, receiver) {
@@ -238,8 +274,18 @@ export async function verifyProjectHardening(
             );
             assert.equal(reads, 2);
             assert.equal(batch.length, 20);
-            assert.equal(batch.filter(c => c.compliant).length, 19);
-            for (const candidate of [candidates[0], candidates[19]]) {
+            assert.equal(batch.filter(c => c.compliant).length, 17);
+            assert.deepEqual(
+              batch.find(c => c.crewMemberId === id)?.conflicts,
+              ["HDCONFLICT"]
+            );
+            assert.equal(
+              batch.find(c => c.crewMemberId === id + 1)?.dutyHours,
+              1.25
+            );
+            for (const candidate of candidates.filter(c =>
+              [id, id + 1, id + 2, id + 19].includes(c.id)
+            )) {
               const single = await evaluateCrewDuty(db, candidate.id, proposed);
               const grouped = batch.find(c => c.crewMemberId === candidate.id);
               assert.deepEqual(grouped?.violations, single.violations);
