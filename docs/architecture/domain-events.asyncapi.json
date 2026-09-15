@@ -4,13 +4,87 @@
   "info": {
     "title": "AIS transactional domain events",
     "version": "1.0.0",
-    "description": "At-least-once authenticated HTTP delivery. Deduplicate source/id, retain tenant scope and schema version. No broker is required. Unlisted legacy payloads remain envelope-only. No production server is implied."
+    "description": "At-least-once authenticated HTTP delivery. Deduplicate source/id, retain tenant scope and schema version. New writes require registered payload contracts; unlisted historical payloads remain readable for replay. Producer names are checked against this registry. No broker or production server is implied."
+  },
+  "x-ais-producer-coverage": {
+    "callSites": 71,
+    "eventTypes": 89,
+    "unregistered": []
   },
   "defaultContentType": "application/cloudevents+json",
   "channels": {
     "domainEvents": {
       "address": "/events/inbox",
       "messages": {
+        "aviation_maintenance_v1": {
+          "$ref": "#/components/messages/aviation_maintenance_v1"
+        },
+        "aviation_crew_rules_v1": {
+          "$ref": "#/components/messages/aviation_crew_rules_v1"
+        },
+        "aviation_baggage_custody_v1": {
+          "$ref": "#/components/messages/aviation_baggage_custody_v1"
+        },
+        "aviation_premium_policy_v1": {
+          "$ref": "#/components/messages/aviation_premium_policy_v1"
+        },
+        "aviation_departure_estimate_v1": {
+          "$ref": "#/components/messages/aviation_departure_estimate_v1"
+        },
+        "aviation_departure_actual_v1": {
+          "$ref": "#/components/messages/aviation_departure_actual_v1"
+        },
+        "aviation_arrival_actual_v1": {
+          "$ref": "#/components/messages/aviation_arrival_actual_v1"
+        },
+        "aviation_tobt_v1": {
+          "$ref": "#/components/messages/aviation_tobt_v1"
+        },
+        "aviation_tsat_v1": {
+          "$ref": "#/components/messages/aviation_tsat_v1"
+        },
+        "aviation_carbon_v1": {
+          "$ref": "#/components/messages/aviation_carbon_v1"
+        },
+        "aviation_travel_rules_v1": {
+          "$ref": "#/components/messages/aviation_travel_rules_v1"
+        },
+        "aviation_travel_clearance_v1": {
+          "$ref": "#/components/messages/aviation_travel_clearance_v1"
+        },
+        "aviation_flight_cost_v1": {
+          "$ref": "#/components/messages/aviation_flight_cost_v1"
+        },
+        "crew_rules_accepted_v1": {
+          "$ref": "#/components/messages/crew_rules_accepted_v1"
+        },
+        "crew_assignment_created_v1": {
+          "$ref": "#/components/messages/crew_assignment_created_v1"
+        },
+        "aircraft_rotation_planned_v1": {
+          "$ref": "#/components/messages/aircraft_rotation_planned_v1"
+        },
+        "operations_event_replay_requested_v1": {
+          "$ref": "#/components/messages/operations_event_replay_requested_v1"
+        },
+        "operations_cancellation_retry_requested_v1": {
+          "$ref": "#/components/messages/operations_cancellation_retry_requested_v1"
+        },
+        "travel_agent_owner_assigned_v1": {
+          "$ref": "#/components/messages/travel_agent_owner_assigned_v1"
+        },
+        "NdcOrderCreated_v1": {
+          "$ref": "#/components/messages/NdcOrderCreated_v1"
+        },
+        "NdcOrderCancelled_v1": {
+          "$ref": "#/components/messages/NdcOrderCancelled_v1"
+        },
+        "NdcUnpaidOrderChanged_v1": {
+          "$ref": "#/components/messages/NdcUnpaidOrderChanged_v1"
+        },
+        "NdcUnpaidServicesAdded_v1": {
+          "$ref": "#/components/messages/NdcUnpaidServicesAdded_v1"
+        },
         "tenant_status_changed_v1": {
           "$ref": "#/components/messages/tenant_status_changed_v1"
         },
@@ -225,11 +299,2181 @@
   },
   "components": {
     "messages": {
+      "aviation_maintenance_v1": {
+        "name": "aviation.maintenance v1",
+        "title": "aviation.maintenance",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.maintenance.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:aviation.maintenance:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_crew_rules_v1": {
+        "name": "aviation.crew_rules v1",
+        "title": "aviation.crew_rules",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.crew_rules.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:aviation.crew_rules:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_baggage_custody_v1": {
+        "name": "aviation.baggage_custody v1",
+        "title": "aviation.baggage_custody",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.baggage_custody.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aviation.baggage_custody:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_premium_policy_v1": {
+        "name": "aviation.premium_policy v1",
+        "title": "aviation.premium_policy",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.premium_policy.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aviation.premium_policy:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_departure_estimate_v1": {
+        "name": "aviation.departure_estimate v1",
+        "title": "aviation.departure_estimate",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.departure_estimate.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aviation.departure_estimate:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_departure_actual_v1": {
+        "name": "aviation.departure_actual v1",
+        "title": "aviation.departure_actual",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.departure_actual.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aviation.departure_actual:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_arrival_actual_v1": {
+        "name": "aviation.arrival_actual v1",
+        "title": "aviation.arrival_actual",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.arrival_actual.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aviation.arrival_actual:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_tobt_v1": {
+        "name": "aviation.tobt v1",
+        "title": "aviation.tobt",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.tobt.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:aviation.tobt:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_tsat_v1": {
+        "name": "aviation.tsat v1",
+        "title": "aviation.tsat",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.tsat.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:aviation.tsat:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_carbon_v1": {
+        "name": "aviation.carbon v1",
+        "title": "aviation.carbon",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.carbon.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:aviation.carbon:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_travel_rules_v1": {
+        "name": "aviation.travel_rules v1",
+        "title": "aviation.travel_rules",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.travel_rules.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aviation.travel_rules:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_travel_clearance_v1": {
+        "name": "aviation.travel_clearance v1",
+        "title": "aviation.travel_clearance",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.travel_clearance.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aviation.travel_clearance:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aviation_flight_cost_v1": {
+        "name": "aviation.flight_cost v1",
+        "title": "aviation.flight_cost",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-evidence.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aviation.flight_cost.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:aviation.flight_cost:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "evidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "sourceId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "flightId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "observedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "required": [
+                "evidenceId",
+                "sourceId",
+                "flightId",
+                "observedAt",
+                "digest"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "crew_rules_accepted_v1": {
+        "name": "crew.rules_accepted v1",
+        "title": "crew.rules_accepted",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/crew-rule.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.crew.rules_accepted.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:crew.rules_accepted:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "version": { "type": "string", "minLength": 1 },
+                "airlineId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["actorId", "version", "airlineId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "crew_assignment_created_v1": {
+        "name": "crew.assignment_created v1",
+        "title": "crew.assignment_created",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/crew-rule.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.crew.assignment_created.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:crew.assignment_created:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "crewMemberId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "ruleEvidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "assignedBy": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "crewMemberId",
+                "flightId",
+                "ruleEvidenceId",
+                "assignedBy"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "aircraft_rotation_planned_v1": {
+        "name": "aircraft.rotation_planned v1",
+        "title": "aircraft.rotation_planned",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aircraft-rotation.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.aircraft.rotation_planned.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:aircraft.rotation_planned:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "flightId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "airlineId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "tenantId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "tailNumber": { "type": "string", "minLength": 1 },
+                "maintenanceEvidenceId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "scheduleDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "assignedBy": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "acceptance": {
+                  "type": "string",
+                  "const": "planning_only_dispatch_required"
+                }
+              },
+              "required": [
+                "flightId",
+                "airlineId",
+                "tenantId",
+                "tailNumber",
+                "maintenanceEvidenceId",
+                "scheduleDigest",
+                "assignedBy",
+                "acceptance"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "operations_event_replay_requested_v1": {
+        "name": "operations.event_replay_requested v1",
+        "title": "operations.event_replay_requested",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/operations-dashboard.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.operations.event_replay_requested.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:operations.event_replay_requested:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "eventId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 36
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reason": { "type": "string" },
+                "previousAttempts": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["eventId", "actorId", "reason", "previousAttempts"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "operations_cancellation_retry_requested_v1": {
+        "name": "operations.cancellation_retry_requested v1",
+        "title": "operations.cancellation_retry_requested",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/operations-dashboard.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": {
+              "const": "org.ais.operations.cancellation_retry_requested.v1"
+            },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:operations.cancellation_retry_requested:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "jobId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reason": { "type": "string" }
+              },
+              "required": ["jobId", "actorId", "reason"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "travel_agent_owner_assigned_v1": {
+        "name": "travel_agent.owner_assigned v1",
+        "title": "travel_agent.owner_assigned",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/travel-agent.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.travel_agent.owner_assigned.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:travel_agent.owner_assigned:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "agentId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "previousOwnerId": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    { "type": "null" }
+                  ]
+                },
+                "ownerUserId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "agentId",
+                "previousOwnerId",
+                "ownerUserId",
+                "actorId"
+              ],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "NdcOrderCreated_v1": {
+        "name": "NdcOrderCreated v1",
+        "title": "NdcOrderCreated",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/ndc.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.NdcOrderCreated.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:NdcOrderCreated:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "orderId": { "type": "string", "minLength": 1 },
+                "offerId": { "type": "string", "minLength": 1 },
+                "totalAmount": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "currency": { "type": "string", "minLength": 3, "maxLength": 3 }
+              },
+              "required": ["orderId", "offerId", "totalAmount", "currency"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "NdcOrderCancelled_v1": {
+        "name": "NdcOrderCancelled v1",
+        "title": "NdcOrderCancelled",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/ndc.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.NdcOrderCancelled.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": { "const": "urn:ais:events:NdcOrderCancelled:v1" },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "orderId": { "type": "string", "minLength": 1 },
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reason": { "type": "string" },
+                "paymentStatus": {
+                  "type": "string",
+                  "enum": ["pending", "paid", "refunded", "failed"]
+                }
+              },
+              "required": ["orderId", "bookingId", "reason", "paymentStatus"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "NdcUnpaidOrderChanged_v1": {
+        "name": "NdcUnpaidOrderChanged v1",
+        "title": "NdcUnpaidOrderChanged",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/ndc-unpaid.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.NdcUnpaidOrderChanged.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:NdcUnpaidOrderChanged:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "orderId": { "type": "string", "minLength": 1 },
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["orderId", "bookingId", "actorId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "NdcUnpaidServicesAdded_v1": {
+        "name": "NdcUnpaidServicesAdded v1",
+        "title": "NdcUnpaidServicesAdded",
+        "contentType": "application/cloudevents+json",
+        "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/ndc-unpaid.service.ts"],
+        "payload": {
+          "type": "object",
+          "properties": {
+            "specversion": { "type": "string", "const": "1.0" },
+            "id": { "type": "string", "minLength": 1, "maxLength": 36 },
+            "source": { "type": "string", "minLength": 1 },
+            "type": { "const": "org.ais.NdcUnpaidServicesAdded.v1" },
+            "subject": { "type": "string", "minLength": 1 },
+            "time": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "datacontenttype": {
+              "type": "string",
+              "const": "application/json"
+            },
+            "dataschema": {
+              "const": "urn:ais:events:NdcUnpaidServicesAdded:v1"
+            },
+            "aisscope": { "type": "string", "enum": ["public", "tenant"] },
+            "tenantid": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "schemaversion": { "type": "number", "const": 1 },
+            "aggregatetype": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "aggregateid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "orderId": { "type": "string", "minLength": 1 },
+                "bookingId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "actorId": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["orderId", "bookingId", "actorId"],
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "specversion",
+            "id",
+            "source",
+            "type",
+            "subject",
+            "time",
+            "datacontenttype",
+            "dataschema",
+            "aisscope",
+            "schemaversion",
+            "aggregatetype",
+            "aggregateid",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      },
       "tenant_status_changed_v1": {
         "name": "tenant.status_changed v1",
         "title": "tenant.status_changed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/tenant.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -316,6 +2560,7 @@
         "title": "tenant.user_assigned",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/tenant.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -407,6 +2652,7 @@
         "title": "family.miles_contributed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/family-pool.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -490,6 +2736,7 @@
         "title": "agent.price_approved",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/pricing-approval.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -567,6 +2814,7 @@
         "title": "agent.price_executed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/pricing-approval.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -666,6 +2914,7 @@
         "title": "AgentDecisionOverridden",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/agent-governance.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -760,6 +3009,7 @@
         "title": "retail.premium_policy_approved",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/premium-experiment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -839,6 +3089,7 @@
         "title": "retail.premium_exposure",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/premium-experiment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -916,6 +3167,7 @@
         "title": "retail.premium_policy_paused",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/premium-experiment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -989,6 +3241,7 @@
         "title": "waitlist.offered",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/waitlist.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1075,6 +3328,7 @@
         "title": "waitlist.cancelled",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/waitlist.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1156,6 +3410,7 @@
         "title": "waitlist.expired",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/waitlist.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1237,6 +3492,11 @@
         "title": "irops.created",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": [
+          "server/services/disruption.service.ts",
+          "server/services/flight-state.service.ts",
+          "server/services/irops.service.ts"
+        ],
         "payload": {
           "type": "object",
           "properties": {
@@ -1317,6 +3577,7 @@
         "title": "irops.protection_planned",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/irops.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1395,6 +3656,7 @@
         "title": "irops.notification_created",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/irops.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1473,6 +3735,7 @@
         "title": "irops.escalated",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/irops.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1543,6 +3806,7 @@
         "title": "irops.resolved",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/irops.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1607,6 +3871,7 @@
         "title": "irops.reaccommodation_confirmed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/irops.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1680,6 +3945,7 @@
         "title": "irops.recovery_proposed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/irops-recovery.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1789,6 +4055,7 @@
         "title": "irops.recovery_approved",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/irops-recovery.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1863,6 +4130,7 @@
         "title": "irops.recovery_executed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/irops-recovery.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -1968,6 +4236,10 @@
         "title": "booking.created",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": [
+          "server/services/bookings.service.ts",
+          "server/services/multi-city.service.ts"
+        ],
         "payload": {
           "type": "object",
           "properties": {
@@ -2050,6 +4322,7 @@
         "title": "booking.cancelled",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/booking-settlement.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2132,6 +4405,7 @@
         "title": "booking.modified",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/payment-settlement.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2208,6 +4482,7 @@
         "title": "booking.invoice_changed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/booking-invoice.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2291,6 +4566,7 @@
         "title": "booking.checkout_requested",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/booking-checkout.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2370,6 +4646,7 @@
         "title": "booking.checkout_expired",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/booking-checkout.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2449,6 +4726,7 @@
         "title": "booking.split_payment_created",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-payment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2536,6 +4814,7 @@
         "title": "booking.split_checkout_requested",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-checkout.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2619,6 +4898,7 @@
         "title": "booking.split_payment_cancelled",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-checkout.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2697,6 +4977,7 @@
         "title": "booking.split_refund_reserved",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-refund.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2796,6 +5077,7 @@
         "title": "booking.split_refund_completed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-refund.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -2889,6 +5171,7 @@
         "title": "booking.split_refund_pending",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": [],
         "payload": {
           "type": "object",
           "properties": {
@@ -2982,6 +5265,7 @@
         "title": "booking.split_refund_processing",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-refund.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3075,6 +5359,7 @@
         "title": "booking.split_refund_failed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": [],
         "payload": {
           "type": "object",
           "properties": {
@@ -3168,6 +5453,7 @@
         "title": "booking.split_refund_review_required",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-refund.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3263,6 +5549,7 @@
         "title": "booking.split_refund_item_review",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-refund.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3347,6 +5634,7 @@
         "title": "booking.split_refund_item_updated",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/split-refund.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3431,6 +5719,7 @@
         "title": "payment.refunded",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/payment-settlement.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3517,6 +5806,7 @@
         "title": "payment.settlement_review_required",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/payment-settlement.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3594,6 +5884,7 @@
         "title": "payment.disputed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/payment-dispute.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3680,6 +5971,7 @@
         "title": "order.refund_planned",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/order-refunds.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3766,6 +6058,7 @@
         "title": "order.refund_updated",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/order-refunds.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3849,6 +6142,7 @@
         "title": "order.servicing_quoted",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/order-servicing.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -3932,6 +6226,7 @@
         "title": "order.servicing_applied",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/order-servicing.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4030,6 +6325,9 @@
         "title": "order.servicing_cancelled",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": [
+          "server/services/order-service-checkout.service.ts"
+        ],
         "payload": {
           "type": "object",
           "properties": {
@@ -4108,6 +6406,7 @@
         "title": "inventory.adjusted",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/inventory-adjustment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4223,6 +6522,7 @@
         "title": "flight.refund_planned",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/flight-cancellation.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4311,6 +6611,7 @@
         "title": "flight.status_changed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/flight-state.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4439,6 +6740,7 @@
         "title": "passenger.checked_in",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/departure-control.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4526,6 +6828,7 @@
         "title": "group.allocated",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/group-booking.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4629,6 +6932,7 @@
         "title": "group.allocation_released",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/group-booking.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4703,6 +7007,7 @@
         "title": "retail.offer_consumed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/retail-offer.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4783,6 +7088,7 @@
         "title": "PaymentConfirmed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/stripe-webhook.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4872,6 +7178,7 @@
         "title": "BookingRefunded",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/stripe-webhook.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -4961,6 +7268,7 @@
         "title": "BookingPartiallyRefunded",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/stripe-webhook.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5052,6 +7360,7 @@
         "title": "ETicketIssued",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/ticket-documents.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5148,6 +7457,7 @@
         "title": "booking.confirmed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/booking-settlement.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5219,6 +7529,7 @@
         "title": "gate.assigned",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/gate-allocation.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5335,6 +7646,7 @@
         "title": "gate.changed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/gate-allocation.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5451,6 +7763,7 @@
         "title": "gate.released",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/gate-allocation.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5535,6 +7848,7 @@
         "title": "hotel.requested",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/hotel-fulfillment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5616,6 +7930,7 @@
         "title": "hotel.approved",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/hotel-fulfillment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5697,6 +8012,7 @@
         "title": "hotel.cancellation_requested",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/hotel-fulfillment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5784,6 +8100,7 @@
         "title": "hotel.confirmed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/hotel-fulfillment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5873,6 +8190,7 @@
         "title": "hotel.sandbox_confirmed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/hotel-fulfillment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -5964,6 +8282,7 @@
         "title": "hotel.cancelled",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/hotel-fulfillment.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -6053,6 +8372,7 @@
         "title": "weather.observed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
+        "x-ais-producers": ["server/services/aviation-weather.service.ts"],
         "payload": {
           "type": "object",
           "properties": {
@@ -6144,7 +8464,8 @@
         "name": "Legacy domain event v1",
         "title": "legacy",
         "contentType": "application/cloudevents+json",
-        "summary": "Envelope-only legacy contract; payload is not yet domain typed",
+        "summary": "Historical replay only; new writes require a registered payload contract",
+        "x-ais-producers": [],
         "payload": {
           "type": "object",
           "properties": {
@@ -6156,6 +8477,29 @@
               "pattern": "^org\\.ais\\.[A-Za-z][A-Za-z0-9_.-]*\\.v1$",
               "not": {
                 "enum": [
+                  "org.ais.aviation.maintenance.v1",
+                  "org.ais.aviation.crew_rules.v1",
+                  "org.ais.aviation.baggage_custody.v1",
+                  "org.ais.aviation.premium_policy.v1",
+                  "org.ais.aviation.departure_estimate.v1",
+                  "org.ais.aviation.departure_actual.v1",
+                  "org.ais.aviation.arrival_actual.v1",
+                  "org.ais.aviation.tobt.v1",
+                  "org.ais.aviation.tsat.v1",
+                  "org.ais.aviation.carbon.v1",
+                  "org.ais.aviation.travel_rules.v1",
+                  "org.ais.aviation.travel_clearance.v1",
+                  "org.ais.aviation.flight_cost.v1",
+                  "org.ais.crew.rules_accepted.v1",
+                  "org.ais.crew.assignment_created.v1",
+                  "org.ais.aircraft.rotation_planned.v1",
+                  "org.ais.operations.event_replay_requested.v1",
+                  "org.ais.operations.cancellation_retry_requested.v1",
+                  "org.ais.travel_agent.owner_assigned.v1",
+                  "org.ais.NdcOrderCreated.v1",
+                  "org.ais.NdcOrderCancelled.v1",
+                  "org.ais.NdcUnpaidOrderChanged.v1",
+                  "org.ais.NdcUnpaidServicesAdded.v1",
                   "org.ais.tenant.status_changed.v1",
                   "org.ais.tenant.user_assigned.v1",
                   "org.ais.family.miles_contributed.v1",

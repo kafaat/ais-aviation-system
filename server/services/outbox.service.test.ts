@@ -70,7 +70,7 @@ describe("recordEvent", () => {
     const eventId = await recordEvent(tx as never, {
       aggregateType: "booking",
       aggregateId: 42,
-      eventType: "BookingConfirmed",
+      eventType: "booking.confirmed",
       payload: { bookingId: 42 },
     });
     expect(typeof eventId).toBe("string");

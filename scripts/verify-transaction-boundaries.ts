@@ -346,14 +346,54 @@ try {
       );
     }
   );
+  await check(
+    "F26: unknown and malformed event writes roll back on MySQL",
+    async () => {
+      const before = await db.select().from(schema.outbox);
+      const [original] = await db
+        .select()
+        .from(schema.users)
+        .where(eq(schema.users.id, id));
+      for (const event of [
+        { eventType: "acceptance.unregistered", payload: {} },
+        {
+          eventType: "crew.assignment_created",
+          payload: { crewMemberId: id, flightId: id, assignedBy: id },
+        },
+      ]) {
+        await assert.rejects(() =>
+          db.transaction(async tx => {
+            await tx
+              .update(schema.users)
+              .set({ name: "must roll back" })
+              .where(eq(schema.users.id, id));
+            await recordEvent(tx, {
+              aggregateType: "acceptance",
+              aggregateId: id,
+              ...event,
+            });
+          })
+        );
+        const [current] = await db
+          .select()
+          .from(schema.users)
+          .where(eq(schema.users.id, id));
+        assert.equal(current.name, original.name);
+        assert.equal(
+          (await db.select().from(schema.outbox)).length,
+          before.length
+        );
+      }
+    }
+  );
   await check("outbox leases fence stale writers on MySQL", async () => {
     // Close prior fixture events without external delivery, then isolate one lease.
     await markPublished(await claimPendingEvents(100));
     await recordEvent(db, {
       aggregateType: "acceptance",
       aggregateId: id,
-      eventType: "acceptance.lease",
-      payload: {},
+      eventType: "booking.confirmed",
+      payload: { bookingId: id },
     });
     const [old] = await claimPendingEvents(1);
     assert(old?.leaseToken);

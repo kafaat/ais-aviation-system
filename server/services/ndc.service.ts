@@ -523,7 +523,7 @@ async function resolveOrderUserId(
 async function emitNdcOrderEvent(
   db: Parameters<typeof recordEvent>[0],
   orderId: string,
-  eventType: string,
+  eventType: "NdcOrderCreated" | "NdcOrderCancelled",
   payload: Record<string, unknown>,
   tenantId: number | null = null
 ): Promise<void> {

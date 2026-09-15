@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-15",
+  "baseCommit": "40bd4d65fe5dfc1470971576e9316160cf1b6f4e",
+  "scope": "Current transactional outbox producer payload coverage; F26 remains scoped and historical replay remains envelope-only for unknown event names",
+  "producerCoverage": {
+    "callSites": 71,
+    "eventTypes": 89,
+    "payloadContracts": 91,
+    "unregistered": [],
+    "historicalRegisteredTypesWithoutCurrentProducer": [
+      "booking.split_refund_failed",
+      "booking.split_refund_pending"
+    ],
+    "unknownHistoricalReplayAllowed": true,
+    "unknownNewWritesAllowed": false
+  },
+  "localVerification": {
+    "vitest": {
+      "passed": 2404,
+      "skipped": 0,
+      "failed": 0,
+      "files": 164,
+      "configuredCoverageGates": "passed",
+      "database": "fresh migrated MySQL 8.0.46"
+    },
+    "acceptance": {
+      "passed": 115,
+      "skipped": 0,
+      "failed": 0,
+      "providerCalls": 0,
+      "services": ["MySQL", "Redis"]
+    },
+    "newTargetedTests": { "passed": 146, "overlapFullSuite": true },
+    "typeScript": [
+      "tsconfig.json",
+      "tsconfig.scripts.json",
+      "tsconfig.acceptance.json"
+    ],
+    "eslint": { "scope": "changed source files", "warnings": 0, "errors": 0 },
+    "generators": [
+      "generate-event-contracts --check",
+      "generate-service-catalog --check"
+    ],
+    "mutations": [
+      {
+        "change": "disable requirePayloadContract in recordEvent",
+        "failedTests": 3,
+        "restored": true
+      },
+      {
+        "change": "remove crew.rules_accepted contract",
+        "gate": "event generator",
+        "result": "Missing payload contract for crew.rules_accepted",
+        "restored": true
+      }
+    ]
+  },
+  "publishedHeadCi": "pending independent verification",
+  "externalAcceptanceE01ThroughE11": "open",
+  "productionAcceptance": false
+}

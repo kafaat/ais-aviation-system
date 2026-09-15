@@ -110,7 +110,7 @@ async function history(
   tx: SettlementTx,
   orderId: string,
   booking: typeof bookings.$inferSelect,
-  action: string,
+  action: "NdcUnpaidOrderChanged" | "NdcUnpaidServicesAdded",
   details: string,
   actor: number
 ) {

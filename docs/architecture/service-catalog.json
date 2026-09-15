@@ -331,6 +331,7 @@
       ],
       "dependencies": [
         "drizzle/schema.ts",
+        "server/contracts/domain-events.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/outbox.service.ts"
       ],

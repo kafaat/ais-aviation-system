@@ -3,6 +3,34 @@ import { z } from "zod";
 const id = z.number().int().positive();
 const tenantStatus = z.enum(["active", "suspended", "pending"]);
 const jsonObject = z.record(z.string(), z.json());
+/** Existing ingestion capabilities; adding one requires a payload contract. */
+export const aviationEvidenceKinds = z.enum([
+  "maintenance",
+  "crew_rules",
+  "baggage_custody",
+  "premium_policy",
+  "departure_estimate",
+  "departure_actual",
+  "arrival_actual",
+  "tobt",
+  "tsat",
+  "carbon",
+  "travel_rules",
+  "travel_clearance",
+  "flight_cost",
+]);
+const evidenceReceipt = z.looseObject({
+  evidenceId: id,
+  sourceId: z.string().min(1).max(64),
+  flightId: id.nullable(),
+  observedAt: z.string().datetime(),
+  digest: z.string().regex(/^[a-f0-9]{64}$/),
+});
+const unpaidNdcReceipt = z.looseObject({
+  orderId: z.string().min(1),
+  bookingId: id,
+  actorId: id,
+});
 const hotelIdentity = z.looseObject({ hotelBookingId: id });
 const waitlistIdentity = z.looseObject({
   waitlistId: id,
@@ -29,10 +57,68 @@ const gateAssignment = z.looseObject({
   occupiedUntil: z.string().datetime(),
 });
 
-/** Payload contracts are additive within v1. Unlisted legacy domain payloads remain
- * JSON objects; they are explicitly described as envelope-only, not fully typed.
+/** Payload contracts are additive within v1. Unlisted historical payloads remain
+ * readable as JSON objects; new writes must have a registered payload contract.
  */
 export const eventPayloadContracts: Record<string, z.ZodType> = {
+  ...Object.fromEntries(
+    aviationEvidenceKinds.options.map(kind => [
+      `aviation.${kind}`,
+      evidenceReceipt,
+    ])
+  ),
+  "crew.rules_accepted": z.looseObject({
+    actorId: id,
+    version: z.string().min(1),
+    airlineId: id,
+  }),
+  "crew.assignment_created": z.looseObject({
+    crewMemberId: id,
+    flightId: id,
+    ruleEvidenceId: id,
+    assignedBy: id,
+  }),
+  "aircraft.rotation_planned": z.looseObject({
+    flightId: id,
+    airlineId: id,
+    tenantId: id.nullable(),
+    tailNumber: z.string().min(1),
+    maintenanceEvidenceId: id,
+    scheduleDigest: z.string().regex(/^[a-f0-9]{64}$/),
+    assignedBy: id,
+    acceptance: z.literal("planning_only_dispatch_required"),
+  }),
+  "operations.event_replay_requested": z.looseObject({
+    eventId: z.string().min(1).max(36),
+    actorId: id,
+    reason: z.string(),
+    previousAttempts: z.number().int().nonnegative(),
+  }),
+  "operations.cancellation_retry_requested": z.looseObject({
+    jobId: id,
+    actorId: id,
+    reason: z.string(),
+  }),
+  "travel_agent.owner_assigned": z.looseObject({
+    agentId: id,
+    previousOwnerId: id.nullable(),
+    ownerUserId: id,
+    actorId: id,
+  }),
+  NdcOrderCreated: z.looseObject({
+    orderId: z.string().min(1),
+    offerId: z.string().min(1),
+    totalAmount: z.number().int().positive(),
+    currency: z.string().length(3),
+  }),
+  NdcOrderCancelled: z.looseObject({
+    orderId: z.string().min(1),
+    bookingId: id,
+    reason: z.string(),
+    paymentStatus: z.enum(["pending", "paid", "refunded", "failed"]),
+  }),
+  NdcUnpaidOrderChanged: unpaidNdcReceipt,
+  NdcUnpaidServicesAdded: unpaidNdcReceipt,
   "tenant.status_changed": z.looseObject({
     tenantId: id,
     previous: tenantStatus,
@@ -358,9 +444,16 @@ export const domainEnvelope = z.object({
   payload: jsonObject,
 });
 export type DomainEnvelope = z.infer<typeof domainEnvelope>;
-export function validateDomainEvent(value: unknown): DomainEnvelope {
+export function validateDomainEvent(
+  value: unknown,
+  options: { requirePayloadContract?: boolean } = {}
+): DomainEnvelope {
   const event = domainEnvelope.parse(value);
-  const contract = eventPayloadContracts[event.eventType];
+  const contract = Object.hasOwn(eventPayloadContracts, event.eventType)
+    ? eventPayloadContracts[event.eventType]
+    : undefined;
+  if (!contract && options.requirePayloadContract)
+    throw new Error(`Unregistered domain event type: ${event.eventType}`);
   if (contract) contract.parse(event.payload);
   return event;
 }
