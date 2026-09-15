@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Input } from "@/components/ui/input";
+import { BaggageEntitlement } from "@/components/BaggageEntitlement";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   AdminConsole,
@@ -18,6 +19,8 @@ export default function BagDropManagement() {
 function BagDropConsole() {
   const l = useOperationalLabels();
   const [airportId, setAirportId] = useState(0);
+  const [bookingId, setBookingId] = useState(0);
+  const [passengerId, setPassengerId] = useState(0);
   const period = useMemo(
     () => ({
       startDate: new Date(Date.now() - 86400000).toISOString(),
@@ -35,6 +38,30 @@ function BagDropConsole() {
   );
   return (
     <>
+      <section className="space-y-2">
+        <h2>{l("التحقق من سماح الأمتعة", "Verify baggage allowance")}</h2>
+        <label>
+          {l("رقم الحجز", "Booking ID")}
+          <Input
+            type="number"
+            min={1}
+            value={bookingId || ""}
+            onChange={e => setBookingId(Number(e.target.value))}
+          />
+        </label>
+        <label>
+          {l("رقم المسافر", "Passenger ID")}
+          <Input
+            type="number"
+            min={1}
+            value={passengerId || ""}
+            onChange={e => setPassengerId(Number(e.target.value))}
+          />
+        </label>
+        {bookingId > 0 && passengerId > 0 && (
+          <BaggageEntitlement bookingId={bookingId} passengerId={passengerId} />
+        )}
+      </section>
       <label>
         {l("رقم المطار للتحليلات", "Airport ID for analytics")}
         <Input

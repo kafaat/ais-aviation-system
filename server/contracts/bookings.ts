@@ -2,6 +2,27 @@
 import { z } from "zod";
 import { outputNumber } from "./primitives";
 export const responseContracts = {
+  baggageEntitlements: z.array(
+    z.object({
+      passengerId: outputNumber,
+      segmentId: outputNumber,
+      segmentOrder: outputNumber,
+      flightId: outputNumber,
+      totalWeightGrams: outputNumber,
+      maxBagWeightGrams: outputNumber,
+      requiresOperationalReview: z.boolean(),
+      warnings: z.array(
+        z.enum([
+          "missing_passenger",
+          "missing_scope",
+          "unapproved_all_segments_scope",
+          "missing_weight_snapshot",
+          "missing_funding",
+          "invalid_funding_evidence",
+        ])
+      ),
+    })
+  ),
   create: z.object({
     bookingId: outputNumber,
     bookingReference: z.string(),

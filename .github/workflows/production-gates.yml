@@ -73,6 +73,9 @@ jobs:
         run: node --import tsx scripts/generate-service-catalog.ts --check
       - name: Verify backup failure boundaries and worker liveness
         run: python3 -m unittest discover -s scripts/ci -p 'test_*.py' -v
+      - name: Verify baggage entitlement mutation sensitivity
+        timeout-minutes: 5
+        run: node scripts/ci/check-baggage-mutations.mjs
       - name: Prove transaction boundaries against live MySQL and Redis
         timeout-minutes: 3
         env:

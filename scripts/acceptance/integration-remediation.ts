@@ -1844,6 +1844,9 @@ try {
       };
     }
   );
+  await booking(70, 0, 2);
+  const { verifyBaggageEntitlements } = await import("./baggage-entitlements");
+  await verifyBaggageEntitlements(db, id + 70, id, record);
   await writeFile(
     reportPath,
     JSON.stringify(

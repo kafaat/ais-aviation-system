@@ -451,7 +451,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/services/bag-drop.service.ts"],
+      "consumers": [
+        "server/routers/bookings.ts",
+        "server/services/bag-drop.service.ts"
+      ],
       "dependencies": ["drizzle/schema.ts"],
       "tableExpressions": {
         "reads": [

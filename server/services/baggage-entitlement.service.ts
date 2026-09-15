@@ -13,6 +13,59 @@ import type { SettlementTx } from "./booking-settlement.service";
 
 export const MAX_BAG_WEIGHT_GRAMS = 32000;
 
+/** Read-only presentation path. It uses the same authority as bag-drop. */
+export async function listOwnedBaggageEntitlements(
+  tx: SettlementTx,
+  bookingId: number,
+  actor: { id: number; role: string; tenantId: number | null | undefined }
+) {
+  const [booking] = await tx
+    .select()
+    .from(bookings)
+    .where(eq(bookings.id, bookingId))
+    .limit(1);
+  if (
+    !booking ||
+    (actor.tenantId != null && booking.tenantId !== actor.tenantId)
+  )
+    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
+  if (booking.userId !== actor.id && actor.role !== "admin")
+    throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+  if (booking.status === "cancelled") return [];
+  const people = await tx
+    .select()
+    .from(passengers)
+    .where(eq(passengers.bookingId, bookingId));
+  const legs = await tx
+    .select()
+    .from(bookingSegments)
+    .where(eq(bookingSegments.bookingId, bookingId));
+  const result = [];
+  for (const leg of legs.filter(row => row.status !== "cancelled")) {
+    for (const person of people.filter(
+      row => actor.tenantId == null || row.tenantId === actor.tenantId
+    )) {
+      const value = await computeBaggageEntitlement(tx, {
+        bookingId,
+        passengerId: person.id,
+        segmentId: leg.id,
+      });
+      // Financial references and ancillary identifiers are not presentation data.
+      result.push({
+        passengerId: person.id,
+        segmentId: leg.id,
+        segmentOrder: leg.segmentOrder,
+        flightId: leg.flightId,
+        totalWeightGrams: value.totalWeightGrams,
+        maxBagWeightGrams: value.maxBagWeightGrams,
+        requiresOperationalReview: value.requiresOperationalReview,
+        warnings: [...new Set(value.warnings.map(warning => warning.code))],
+      });
+    }
+  }
+  return result;
+}
+
 const CABIN_ALLOWANCE_GRAMS: Record<string, number> = {
   economy: 23000,
   business: 32000,
