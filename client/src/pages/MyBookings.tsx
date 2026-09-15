@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { BookingCreditPayment } from "@/components/BookingCreditPayment";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -727,6 +728,13 @@ export default function MyBookings() {
                               {t("myBookings.checkedIn")}
                             </Badge>
                           )}
+                          {booking.paymentStatus === "pending" &&
+                            booking.status === "pending" && (
+                              <BookingCreditPayment
+                                bookingId={booking.id}
+                                amount={booking.totalAmount}
+                              />
+                            )}
                           {booking.paymentStatus === "paid" && (
                             <div className="space-y-3">
                               {/* Passengers List with Download Buttons */}

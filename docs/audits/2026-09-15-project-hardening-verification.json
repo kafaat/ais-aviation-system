@@ -1,0 +1,96 @@
+{
+  "baseSha": "40e2cdc2052b68ae37198d3302ca58db6e0ec59b",
+  "scope": "Project hardening after v1.27.3; local disposable services, no external acceptance",
+  "unit": {
+    "passed": 2425,
+    "failed": 0,
+    "skipped": 0,
+    "files": 169,
+    "command": "vitest run --coverage",
+    "database": "freshly migrated MySQL 8.0.46",
+    "configuredCoverageThresholdsPassed": true,
+    "coverage": {
+      "lines": {
+        "total": 34054,
+        "covered": 9042,
+        "skipped": 0,
+        "pct": 26.55
+      },
+      "statements": {
+        "total": 35913,
+        "covered": 9410,
+        "skipped": 0,
+        "pct": 26.2
+      },
+      "functions": {
+        "total": 7755,
+        "covered": 1764,
+        "skipped": 0,
+        "pct": 22.74
+      },
+      "branches": {
+        "total": 27653,
+        "covered": 6066,
+        "skipped": 0,
+        "pct": 21.93
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    }
+  },
+  "liveAcceptance": {
+    "completed": true,
+    "passed": 121,
+    "skipped": 0,
+    "providerCalls": 0,
+    "database": "real MySQL",
+    "cache": "real Redis"
+  },
+  "localGates": {
+    "applicationTypes": "passed",
+    "e2eTypes": "passed",
+    "scriptsTypes": "passed",
+    "acceptanceTypes": "passed",
+    "eslintZeroWarnings": "passed",
+    "pythonCiTests": 15,
+    "authConfigurationTests": 3,
+    "publicRegistrationRoleRegression": "passed",
+    "secretPolicyPositiveControls": 8
+  },
+  "browser": {
+    "configuredCiJourneys": 11,
+    "localStatus": "not executed: Chromium download blocked by network proxy",
+    "ciStatus": "must be verified separately on the published head"
+  },
+  "productionChanges": {
+    "migrationsApplied": false,
+    "providerCalls": 0,
+    "deployments": 0,
+    "repositoryRulesActivated": false
+  },
+  "mainProtection": {
+    "verifiedSha": "40e2cdc2052b68ae37198d3302ca58db6e0ec59b",
+    "protected": false,
+    "preparedPolicy": ".github/main-ruleset.json",
+    "blockers": [
+      "repository administration access",
+      "release workflow currently pushes version commits directly to main"
+    ]
+  },
+  "limits": [
+    "E01–E11 remain open",
+    "Mixed tender, wallet cash refunds and corporate receivable collection remain outside the new refund authority",
+    "Segment-specific refund allocation remains review_required",
+    "Erasure remains RETENTION_REVIEW_REQUIRED",
+    "F23 external payout, F24 remaining role matrix and F30 operator ownership are not closed",
+    "Historical envelope-only event reads remain supported",
+    "No production collector or trace acceptance",
+    "Reaccommodation alternatives are bounded outage contingencies, not globally k-best plans",
+    "Global line coverage is 26.55%; this does not claim the proposed 60% target",
+    "Cargo domain and calibrated discrete-event simulation remain out of scope without domain and measurements"
+  ]
+}

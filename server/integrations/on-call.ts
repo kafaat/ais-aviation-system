@@ -19,6 +19,7 @@
  * person answered. Those live in the provider.
  */
 import { createHash } from "node:crypto";
+import { tracedFetch } from "../_core/telemetry";
 import type { OnCallDispatch } from "../../shared/on-call";
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -62,7 +63,7 @@ export function createGoAlertProvider(config: OnCallConfig): OnCallProvider {
         dedup: dispatch.dedupKey,
         ...(dispatch.action === "close" ? { action: "close" } : {}),
       });
-      const response = await fetch(url, {
+      const response = await tracedFetch("provider.oncall", url, {
         method: "POST",
         headers: {
           "content-type": "application/x-www-form-urlencoded",

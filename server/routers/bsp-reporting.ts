@@ -33,6 +33,7 @@ export const bspReportingRouter = router({
         billedAmount: z.number(),
         collectedAmount: z.number(),
         nonCashFundedAmount: z.number(),
+        nonCashRefundedAmount: z.number(),
         refundedAmount: z.number(),
         netCollectedAmount: z.number(),
         currency: z.literal("SAR"),

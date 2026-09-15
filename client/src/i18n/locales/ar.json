@@ -3072,7 +3072,22 @@
     "revenueByChannel": "الإيرادات حسب القناة",
     "channel": "القناة",
     "noData": "لا تتوفر بيانات إيرادات للفترة المحددة",
-    "refreshData": "تحديث البيانات"
+    "refreshData": "تحديث البيانات",
+    "sourceUnavailable": "تعذر تحميل البيانات المالية. المبالغ غير متاحة.",
+    "retry": "إعادة المحاولة",
+    "reportFailed": "فشل إنشاء التقرير. أعد المحاولة عند توفر المصدر.",
+    "distanceKm": "المسافة (كم)",
+    "fundedPassengerKm": "كيلومترات الركاب الممولين",
+    "fundedYield": "الإيراد لكل كيلومتر راكب ممول",
+    "fundedLoad": "الإشغال الممول",
+    "evidence": "الدليل",
+    "coverage": {
+      "available": "متاح",
+      "missing_evidence": "الدليل مطلوب",
+      "unavailable_source": "المصدر لم يعد معتمدًا",
+      "missing_recognized_revenue": "الإيراد المعترف به غير متاح"
+    },
+    "yieldDesc": "يتطلب إيراد الرحلة ومسافتها دليلًا معتمدًا؛ عدد الركاب يمثل عضوية المقاطع الممولة."
   },
   "compensation": {
     "title": "تعويضات EU261/DOT",

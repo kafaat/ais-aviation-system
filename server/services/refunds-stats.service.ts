@@ -11,6 +11,7 @@ import {
   users,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
+import { nonCashFundingCondition } from "./financial-reporting.service";
 
 /** Read owner for SAR booking-refund reporting. Posted ledger deltas and
  * outstanding provider requests are distinct amounts. No provider calls. */
@@ -105,6 +106,7 @@ function settledWhere(period: RefundReportPeriod = {}) {
   return and(
     inArray(financialLedger.type, ["refund", "partial_refund"]),
     eq(financialLedger.currency, "SAR"),
+    sql`NOT (${nonCashFundingCondition()})`,
     period.startDate
       ? sql`UNIX_TIMESTAMP(${financialLedger.transactionDate}) >= ${period.startDate.getTime() / 1000}`
       : undefined,

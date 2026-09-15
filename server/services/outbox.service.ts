@@ -15,6 +15,8 @@ import type { MySql2Database } from "drizzle-orm/mysql2";
 import { getDb } from "../db";
 import { outbox, type OutboxEvent } from "../../drizzle/schema";
 import { currentTrace, runWithTrace } from "../_core/trace";
+import { tracedOperation, tracedFetch } from "../_core/telemetry";
+import { SpanKind } from "@opentelemetry/api";
 import { childSpan, formatTraceparent } from "../../shared/trace-context";
 import type * as schema from "../../drizzle/schema";
 import { TRPCError } from "@trpc/server";
@@ -76,6 +78,7 @@ export async function recordEvent(
     status: "pending",
     traceId: trace?.traceId ?? null,
     spanId: trace?.spanId ?? null,
+    traceFlags: trace?.flags ?? null,
   });
   return eventId;
 }
@@ -239,21 +242,34 @@ export async function processEvents(
 
   for (const event of events) {
     try {
+      const parent =
+        event.traceId && event.spanId
+          ? {
+              traceId: event.traceId,
+              spanId: event.spanId,
+              flags: event.traceFlags ?? "01",
+            }
+          : null;
       // Deliver inside the trace of the request that produced the event, under
       // a new span for the delivery. This is what makes a causal chain
       // readable: an event recorded by a consumer inherits the trace of the
       // event it reacted to, not the relay tick's. An event stored without a
       // trace keeps the ambient one rather than being given a fabricated id.
-      await (event.traceId && event.spanId
-        ? runWithTrace(
-            childSpan({
-              traceId: event.traceId,
-              spanId: event.spanId,
-              flags: "01",
-            }),
-            () => publisher(event)
+      await (parent
+        ? runWithTrace(childSpan(parent), () =>
+            tracedOperation(
+              "outbox.consume",
+              SpanKind.CONSUMER,
+              () => publisher(event),
+              {
+                ...parent,
+                flags: event.traceFlags ?? "00",
+              }
+            )
           )
-        : publisher(event));
+        : tracedOperation("outbox.consume", SpanKind.CONSUMER, () =>
+            publisher(event)
+          ));
       publishedIds.push(event.id);
     } catch (err) {
       failed.push({
@@ -330,7 +346,7 @@ export const configuredPublisher: OutboxPublisher = async event => {
         const format = process.env.OUTBOX_MESSAGE_FORMAT ?? "legacy";
         if (format !== "legacy" && format !== "cloudevents")
           throw new Error("Invalid outbox message format");
-        const response = await fetch(endpoint, {
+        const response = await tracedFetch("provider.outbox", endpoint, {
           method: "POST",
           redirect: "error",
           signal: AbortSignal.timeout(15000),
@@ -351,7 +367,7 @@ export const configuredPublisher: OutboxPublisher = async event => {
                     childSpan({
                       traceId: event.traceId,
                       spanId: event.spanId,
-                      flags: "01",
+                      flags: event.traceFlags ?? "01",
                     })
                   ),
                 }

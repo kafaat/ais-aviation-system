@@ -99,7 +99,7 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        account: z.any(),
+        account: responseContracts.getAccountById,
         message: z.string(),
       })
     )
@@ -196,7 +196,7 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        account: z.any(),
+        account: responseContracts.getAccountById,
         message: z.string(),
       })
     )
@@ -234,7 +234,7 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        account: z.any(),
+        account: responseContracts.getAccountById,
         message: z.string(),
       })
     )
@@ -276,7 +276,7 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        account: z.any(),
+        account: responseContracts.getAccountById,
         message: z.string(),
       })
     )
@@ -341,7 +341,7 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        corporateUser: z.any(),
+        corporateUser: responseContracts.getUsers.element.omit({ user: true }),
         message: z.string(),
       })
     )
@@ -495,7 +495,7 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        corporateUser: z.any(),
+        corporateUser: responseContracts.getUsers.element.omit({ user: true }),
         message: z.string(),
       })
     )
@@ -571,7 +571,10 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        corporateBooking: z.any(),
+        corporateBooking: responseContracts.getBookings.element.omit({
+          booking: true,
+          flight: true,
+        }),
         message: z.string(),
       })
     )
@@ -626,7 +629,10 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        corporateBooking: z.any(),
+        corporateBooking: responseContracts.getBookings.element.omit({
+          booking: true,
+          flight: true,
+        }),
         message: z.string(),
       })
     )
@@ -666,7 +672,10 @@ export const corporateRouter = router({
     .output(
       z.object({
         success: z.boolean(),
-        corporateBooking: z.any(),
+        corporateBooking: responseContracts.getBookings.element.omit({
+          booking: true,
+          flight: true,
+        }),
         message: z.string(),
       })
     )

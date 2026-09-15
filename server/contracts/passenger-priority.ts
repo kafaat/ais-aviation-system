@@ -150,33 +150,44 @@ export const responseContracts = {
  * `advisory` literal is part of the contract so no consumer can mistake this
  * for a booking, and the objective travels with the plan so the weights can
  * be argued with rather than reverse-engineered. */
-export const reaccommodationAdvisory = z.object({
-  plan: z.object({
-    disruptedFlightId: outputNumber,
-    objectiveValue: outputNumber,
-    assignments: z.array(
-      z.object({
-        passengerId: outputNumber,
-        bookingId: outputNumber,
-        flightId: outputNumber.nullable(),
-        flightNumber: z.string().nullable(),
-        cabin: z.enum(["economy", "business"]).nullable(),
-        delayMinutes: outputNumber.nullable(),
-        downgraded: z.boolean(),
-        cost: outputNumber,
-        reason: z.string(),
-      })
-    ),
-    unassigned: z.array(outputNumber),
-    advisory: z.literal(true),
-    objective: z.object({
-      order: z.literal("max-assigned-then-min-cost"),
-      weightAtZeroPriority: outputNumber,
-      weightPerPriorityPoint: outputNumber,
-      downgradeMinutes: outputNumber,
-      unassignedMinutes: outputNumber,
-    }),
+const reaccommodationPlan = z.object({
+  disruptedFlightId: outputNumber,
+  objectiveValue: outputNumber,
+  assignments: z.array(
+    z.object({
+      passengerId: outputNumber,
+      bookingId: outputNumber,
+      flightId: outputNumber.nullable(),
+      flightNumber: z.string().nullable(),
+      cabin: z.enum(["economy", "business"]).nullable(),
+      delayMinutes: outputNumber.nullable(),
+      downgraded: z.boolean(),
+      cost: outputNumber,
+      reason: z.string(),
+    })
+  ),
+  unassigned: z.array(outputNumber),
+  advisory: z.literal(true),
+  objective: z.object({
+    order: z.literal("max-assigned-then-min-cost"),
+    weightAtZeroPriority: outputNumber,
+    weightPerPriorityPoint: outputNumber,
+    downgradeMinutes: outputNumber,
+    unassignedMinutes: outputNumber,
   }),
+});
+export const reaccommodationAdvisory = z.object({
+  plan: reaccommodationPlan,
+  contingencies: z
+    .array(
+      z.object({
+        excludedFlightIds: z.array(outputNumber),
+        plan: reaccommodationPlan,
+      })
+    )
+    .max(2)
+    .default([]),
+  contingencySearchTruncated: z.boolean().default(false),
   consideredOptions: outputNumber,
   candidateFlightIds: z.array(outputNumber),
   consideredPassengers: outputNumber,

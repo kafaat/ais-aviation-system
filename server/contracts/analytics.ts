@@ -8,6 +8,7 @@ export const responseContracts = {
     billedAmount: outputNumber,
     collectedAmount: outputNumber,
     nonCashFundedAmount: outputNumber,
+    nonCashRefundedAmount: outputNumber,
     refundedAmount: outputNumber,
     netCollectedAmount: outputNumber,
     earnedRevenue: z.null(),

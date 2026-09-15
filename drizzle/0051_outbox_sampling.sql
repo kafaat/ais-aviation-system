@@ -1,0 +1,1 @@
+ALTER TABLE `outbox` ADD `traceFlags` varchar(2);

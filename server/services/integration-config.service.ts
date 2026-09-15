@@ -1,6 +1,7 @@
 import { configuredHotelProvider } from "../integrations/hotelbeds";
 import { configuredWeatherSource } from "../integrations/aviation-weather";
 import { configuredOnCallProvider } from "../integrations/on-call";
+import { tracingConfiguration } from "../_core/telemetry";
 
 export const INTEGRATION_CONFIG_KEYS = [
   "HOTELBEDS_MODE",
@@ -14,6 +15,10 @@ export const INTEGRATION_CONFIG_KEYS = [
   "ONCALL_BASE_URL",
   "ONCALL_TOKEN",
   "ONCALL_ACCEPTANCE_REFERENCE",
+  "AIS_OTEL_ENABLED",
+  "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+  "OTEL_EXPORTER_OTLP_HEADERS",
+  "OTEL_TRACES_SAMPLER_ARG",
 ] as const;
 
 /** Constructs adapters without making provider calls. Reports configuration
@@ -23,6 +28,7 @@ export function integrationConfiguration() {
     { id: "hotelbeds", configure: configuredHotelProvider },
     { id: "weather", configure: configuredWeatherSource },
     { id: "oncall", configure: configuredOnCallProvider },
+    { id: "tracing", configure: tracingConfiguration },
   ].map(({ id, configure }) => {
     try {
       const adapter = configure();

@@ -4,6 +4,8 @@ import { runScheduledTask } from "./scheduled-task.service";
 import { logger, logInfo, logError } from "../_core/logger";
 import { runOutboxRelay } from "./outbox.service";
 import { runInNewTrace } from "../_core/trace";
+import { tracedOperation } from "../_core/telemetry";
+import { SpanKind } from "@opentelemetry/api";
 
 /**
  * Publish pending transactional-outbox events to the bus.
@@ -225,16 +227,22 @@ async function runGuarded(name: string, job: () => Promise<void>) {
     // every event a scheduled task produces would be stored untraced and the
     // whole background half of the system would be uncorrelated.
     await runInNewTrace(() =>
-      runScheduledTask(
-        name,
-        String(
-          Math.floor(
-            Date.now() /
-              (PERIODIC_JOB_CATALOG.find(j => j.name === name)?.periodMs ??
-                60000)
-          )
-        ),
-        job
+      tracedOperation(
+        "worker.task",
+        SpanKind.INTERNAL,
+        () =>
+          runScheduledTask(
+            name,
+            String(
+              Math.floor(
+                Date.now() /
+                  (PERIODIC_JOB_CATALOG.find(j => j.name === name)?.periodMs ??
+                    60000)
+              )
+            ),
+            job
+          ),
+        null
       )
     );
   } finally {

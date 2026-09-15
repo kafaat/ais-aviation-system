@@ -1,6 +1,8 @@
 import { writePrivacyConsent } from "./consent-authority.service";
-import { createHash } from "node:crypto";
-import type { SettlementTx } from "./booking-settlement.service";
+import {
+  storePrivacyDocument,
+  openPrivacyDownload,
+} from "./privacy-export.service";
 import { TRPCError } from "@trpc/server";
 import { eq, and, desc, inArray, lte, isNotNull } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -8,28 +10,12 @@ import { getDb } from "../db";
 import {
   users,
   refreshTokens,
-  savedPassengers,
-  wallets,
-  walletTransactions,
-  userCredits,
-  creditUsage,
-  consentRecords,
   privacyExportArtifacts,
-  corporateInvitations,
-  compensationClaims,
+  privacyExportChunks,
   userConsents,
   consentHistory,
   dataExportRequests,
   accountDeletionRequests,
-  bookings,
-  passengers,
-  payments,
-  loyaltyAccounts,
-  milesTransactions,
-  userPreferences,
-  favoriteFlights,
-  flightReviews,
-  bookingModifications,
   type UserConsent,
   type InsertUserConsent,
   type InsertDataExportRequest,
@@ -331,33 +317,16 @@ export async function generateDataExport(requestId: number): Promise<{
         };
       if (request.status === "expired")
         return { success: false, error: "Export expired; request a new copy" };
-      const userData = await collectUserData(request.userId, tx);
-      const content =
-        request.format === "csv"
-          ? "section,data\r\n" +
-            Object.entries(userData)
-              .map(
-                ([key, value]) =>
-                  `"${key}","${JSON.stringify(value).replaceAll('"', '""')}"`
-              )
-              .join("\r\n")
-          : JSON.stringify(userData, null, 2);
-      const size = Buffer.byteLength(content, "utf8");
-      if (size > 16 * 1024 * 1024)
-        throw new Error(
-          "Export exceeds the supported download size; requires assisted export"
-        );
       const expiresAt = new Date(
         Date.now() + EXPORT_LINK_EXPIRY_HOURS * 3600_000
       );
-      await tx.insert(privacyExportArtifacts).values({
+      const size = await storePrivacyDocument(
+        tx,
         requestId,
-        userId: request.userId,
-        content,
-        contentType: request.format === "csv" ? "text/csv" : "application/json",
-        sha256: createHash("sha256").update(content).digest("hex"),
-        expiresAt,
-      });
+        request.userId,
+        request.format,
+        expiresAt
+      );
       await tx
         .update(dataExportRequests)
         .set({
@@ -370,7 +339,7 @@ export async function generateDataExport(requestId: number): Promise<{
           errorMessage: null,
         })
         .where(eq(dataExportRequests.id, requestId));
-      return { success: true, data: userData };
+      return { success: true };
     });
   } catch (error) {
     logger.error(
@@ -396,36 +365,20 @@ export async function generateDataExport(requestId: number): Promise<{
   }
 }
 
+/** Compatibility reader for internal callers. HTTP downloads stream the archive. */
 export async function downloadDataExport(userId: number, requestId: number) {
-  const db = await getDb();
-  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
-  const [artifact] = await db
-    .select()
-    .from(privacyExportArtifacts)
-    .innerJoin(
-      dataExportRequests,
-      eq(dataExportRequests.id, privacyExportArtifacts.requestId)
-    )
-    .where(
-      and(
-        eq(privacyExportArtifacts.requestId, requestId),
-        eq(privacyExportArtifacts.userId, userId),
-        eq(dataExportRequests.userId, userId),
-        eq(dataExportRequests.status, "completed")
-      )
-    );
-  const file = artifact?.privacy_export_artifacts;
-  if (!file || file.expiresAt <= new Date())
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Export not found or expired",
-    });
-  if (createHash("sha256").update(file.content).digest("hex") !== file.sha256)
+  const file = await openPrivacyDownload(userId, requestId);
+  if ((file.size ?? 0) > 16 * 1024 * 1024)
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Export integrity check failed",
+      message: "Use the streaming download endpoint for this archive",
     });
-  return file;
+  const chunks: Buffer[] = [];
+  for await (const chunk of file.content()) chunks.push(chunk);
+  return {
+    contentType: file.contentType,
+    content: Buffer.concat(chunks).toString("utf8"),
+  };
 }
 
 export async function processPrivacyRequests() {
@@ -433,6 +386,9 @@ export async function processPrivacyRequests() {
   if (!db) throw new Error("Database unavailable");
   await db.transaction(async tx => {
     const now = new Date();
+    await tx
+      .delete(privacyExportChunks)
+      .where(lte(privacyExportChunks.expiresAt, now));
     await tx
       .delete(privacyExportArtifacts)
       .where(lte(privacyExportArtifacts.expiresAt, now));
@@ -473,176 +429,6 @@ export async function processPrivacyRequests() {
   if (failed.length)
     throw new Error(`Privacy processing failed for ${failed.length} requests`);
   return { processed: results.length };
-}
-
-/**
- * Collect all user data for export
- */
-async function collectUserData(
-  userId: number,
-  db: SettlementTx
-): Promise<Record<string, unknown>> {
-  if (!db) {
-    throw new Error("Database not available");
-  }
-
-  // Get user profile
-  const userProfile = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      role: users.role,
-      createdAt: users.createdAt,
-      lastSignedIn: users.lastSignedIn,
-    })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  // Get user preferences
-  const preferences = await db
-    .select()
-    .from(userPreferences)
-    .where(eq(userPreferences.userId, userId))
-    .limit(1);
-
-  // Get consent settings
-  const consent = await db
-    .select()
-    .from(userConsents)
-    .where(eq(userConsents.userId, userId))
-    .limit(1);
-
-  // Get all bookings with passengers
-  const userBookings = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.userId, userId))
-    .orderBy(desc(bookings.createdAt));
-
-  const bookingIds = userBookings.map(b => b.id);
-
-  // Get passengers for all bookings
-  const bookingPassengers =
-    bookingIds.length > 0
-      ? await db
-          .select()
-          .from(passengers)
-          .where(inArray(passengers.bookingId, bookingIds))
-      : [];
-
-  // Get all payments
-  const userPayments =
-    bookingIds.length > 0
-      ? await db
-          .select({
-            id: payments.id,
-            bookingId: payments.bookingId,
-            amount: payments.amount,
-            currency: payments.currency,
-            method: payments.method,
-            status: payments.status,
-            createdAt: payments.createdAt,
-          })
-          .from(payments)
-          .where(inArray(payments.bookingId, bookingIds))
-      : [];
-
-  // Get loyalty account
-  const loyalty = await db
-    .select()
-    .from(loyaltyAccounts)
-    .where(eq(loyaltyAccounts.userId, userId))
-    .limit(1);
-
-  // Get miles transactions
-  const miles =
-    loyalty.length > 0
-      ? await db
-          .select()
-          .from(milesTransactions)
-          .where(eq(milesTransactions.userId, userId))
-          .orderBy(desc(milesTransactions.createdAt))
-      : [];
-
-  // Get favorite flights
-  const favorites = await db
-    .select()
-    .from(favoriteFlights)
-    .where(eq(favoriteFlights.userId, userId));
-
-  // Get reviews
-  const reviews = await db
-    .select()
-    .from(flightReviews)
-    .where(eq(flightReviews.userId, userId));
-
-  // Get booking modifications
-  const modifications =
-    bookingIds.length > 0
-      ? await db
-          .select()
-          .from(bookingModifications)
-          .where(eq(bookingModifications.userId, userId))
-      : [];
-
-  // Get consent history
-  const consentHistoryRecords = await db
-    .select()
-    .from(consentHistory)
-    .where(eq(consentHistory.userId, userId))
-    .orderBy(desc(consentHistory.createdAt));
-
-  return {
-    exportedAt: new Date().toISOString(),
-    exportVersion: "2.0",
-    savedPassengers: await db
-      .select()
-      .from(savedPassengers)
-      .where(eq(savedPassengers.userId, userId)),
-    wallet: await db.select().from(wallets).where(eq(wallets.userId, userId)),
-    walletTransactions: await db
-      .select()
-      .from(walletTransactions)
-      .where(eq(walletTransactions.userId, userId)),
-    credits: await db
-      .select()
-      .from(userCredits)
-      .where(eq(userCredits.userId, userId)),
-    creditUsage: await db
-      .select()
-      .from(creditUsage)
-      .where(eq(creditUsage.userId, userId)),
-    corporateInvitations: await db
-      .select()
-      .from(corporateInvitations)
-      .where(eq(corporateInvitations.recipientUserId, userId)),
-    compensationClaims: bookingIds.length
-      ? await db
-          .select()
-          .from(compensationClaims)
-          .where(inArray(compensationClaims.bookingId, bookingIds))
-      : [],
-    cookieConsentHistory: await db
-      .select()
-      .from(consentRecords)
-      .where(eq(consentRecords.userId, userId)),
-    profile: userProfile[0] || null,
-    preferences: preferences[0] || null,
-    consent: consent[0] || null,
-    consentHistory: consentHistoryRecords,
-    bookings: userBookings.map(booking => ({
-      ...booking,
-      passengers: bookingPassengers.filter(p => p.bookingId === booking.id),
-    })),
-    payments: userPayments,
-    loyalty: loyalty[0] || null,
-    milesTransactions: miles,
-    favorites,
-    reviews,
-    bookingModifications: modifications,
-  };
 }
 
 /**

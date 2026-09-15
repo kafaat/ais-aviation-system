@@ -23,6 +23,7 @@
  * production; nothing in the local tests establishes that.
  */
 import { z } from "zod";
+import { tracedFetch } from "../_core/telemetry";
 import {
   icaoCode,
   weatherReport,
@@ -240,7 +241,7 @@ export function createAviationWeatherSource(
       path.replace(/^\//, ""),
       config.baseUrl.endsWith("/") ? config.baseUrl : `${config.baseUrl}/`
     );
-    const response = await fetch(url, {
+    const response = await tracedFetch("provider.weather", url, {
       method: "GET",
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

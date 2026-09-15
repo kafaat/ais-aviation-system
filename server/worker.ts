@@ -1,4 +1,5 @@
 import { assertIntegrationConfiguration } from "./services/integration-config.service";
+import { initTracing, stopTracing } from "./_core/telemetry";
 import { randomUUID } from "node:crypto";
 import {
   observationInstanceId,
@@ -58,6 +59,7 @@ let heartbeat: NodeJS.Timeout | undefined;
 // ============================================================================
 
 async function initialize(): Promise<void> {
+  initTracing("worker");
   log.info(
     { integrations: assertIntegrationConfiguration() },
     "Worker process starting..."
@@ -223,6 +225,7 @@ async function shutdown(signal: string): Promise<void> {
     // 5. Close database connection pool
     log.info({}, "Closing database connection pool...");
     await closePool();
+    await stopTracing();
 
     clearTimeout(shutdownTimeout);
     log.info({}, "Graceful shutdown completed");

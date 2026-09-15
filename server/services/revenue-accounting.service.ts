@@ -21,7 +21,12 @@ import {
   bookingAncillaries,
   ancillaryServices,
 } from "../../drizzle/schema";
-import { sql, and, gte, lte, eq, desc } from "drizzle-orm";
+import { sql, and, gte, lte, eq, desc, inArray, isNull } from "drizzle-orm";
+import { flightBookingCondition } from "./flight-state.service";
+import { readFlightCosts } from "./flight-economics-evidence.service";
+import { requireCurrentAviationSource } from "./aviation-evidence.service";
+import type { z } from "zod";
+import type { responseContracts } from "../contracts/revenue-accounting";
 
 // ============ Inline Schema Types ============
 
@@ -105,18 +110,9 @@ export interface AncillaryRevenueBreakdown {
   percentageOfTotal: number;
 }
 
-export interface YieldAnalysis {
-  flightId: number;
-  flightNumber: string;
-  originCode: string;
-  destinationCode: string;
-  totalRevenue: number;
-  passengerCount: number;
-  distanceKm: number;
-  rpk: number; // Revenue Passenger Kilometers
-  yield: number; // Revenue per RPK in SAR cents
-  loadFactor: number; // percentage
-}
+export type YieldAnalysis = z.infer<
+  typeof responseContracts.getYieldAnalysis
+>[number];
 
 export interface GeneratedReport {
   id: string;
@@ -174,31 +170,6 @@ function _buildPaymentDateRange(startDate?: Date, endDate?: Date) {
     );
   }
   return undefined;
-}
-
-// ============ Estimated distance between airports (simplified) ============
-
-/**
- * Rough estimated distances in km for common Saudi/Middle East routes.
- * In production this would come from a distances table or API.
- * Falls back to a default of 1000 km for unknown routes.
- */
-function estimateDistanceKm(originId: number, destinationId: number): number {
-  // Simple hash-based estimate for consistent results
-  // In real implementation, this would use airport lat/lng or a reference table
-  const key = `${Math.min(originId, destinationId)}-${Math.max(originId, destinationId)}`;
-  const distances: Record<string, number> = {
-    "1-2": 950, // JED-RUH
-    "1-3": 1480, // JED-DMM
-    "2-3": 400, // RUH-DMM
-    "1-4": 630, // JED-MED
-    "2-4": 850, // RUH-MED
-    "1-5": 1960, // JED-DXB
-    "2-5": 1060, // RUH-DXB
-    "1-6": 2680, // JED-CAI
-    "2-6": 2400, // RUH-CAI
-  };
-  return distances[key] || 1000;
 }
 
 // ============ Service Functions ============
@@ -736,173 +707,131 @@ export async function getAncillaryRevenue(
 export async function calculateYield(
   flightId: number
 ): Promise<YieldAnalysis | null> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  const [flight] = await db
-    .select({
-      id: flights.id,
-      flightNumber: flights.flightNumber,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-      economySeats: flights.economySeats,
-      businessSeats: flights.businessSeats,
-    })
-    .from(flights)
-    .where(eq(flights.id, flightId));
-
-  if (!flight) return null;
-
-  const [bookingStats] = await db
-    .select({
-      totalRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-      passengerCount: sql<number>`COALESCE(SUM(${bookings.numberOfPassengers}), 0)`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        eq(bookings.flightId, flightId),
-        sql`${bookings.status} != 'cancelled'`,
-        eq(bookings.paymentStatus, "paid")
-      )
-    );
-
-  // Get airport codes
-  const airportList = await db
-    .select({
-      id: airports.id,
-      code: airports.code,
-    })
-    .from(airports)
-    .where(
-      sql`${airports.id} IN (${sql`${flight.originId}`}, ${sql`${flight.destinationId}`})`
-    );
-
-  const airportMap = new Map<number, string>();
-  for (const a of airportList) {
-    airportMap.set(a.id, a.code);
-  }
-
-  const distanceKm = estimateDistanceKm(flight.originId, flight.destinationId);
-  const passengerCount = bookingStats.passengerCount || 0;
-  const rpk = passengerCount * distanceKm;
-  const totalSeats = flight.economySeats + flight.businessSeats;
-
-  return {
-    flightId: flight.id,
-    flightNumber: flight.flightNumber,
-    originCode: airportMap.get(flight.originId) || "???",
-    destinationCode: airportMap.get(flight.destinationId) || "???",
-    totalRevenue: bookingStats.totalRevenue || 0,
-    passengerCount,
-    distanceKm,
-    rpk,
-    yield: rpk > 0 ? Math.round((bookingStats.totalRevenue || 0) / rpk) : 0,
-    loadFactor:
-      totalSeats > 0
-        ? Math.round((passengerCount / totalSeats) * 1000) / 10
-        : 0,
-  };
+  return (
+    (await readYieldAnalysis(undefined, undefined, 1, flightId))[0] ?? null
+  );
 }
 
-/**
- * Calculate yield analysis for top routes within a date range.
- */
-export async function getYieldAnalysis(
+/** Flight-scoped evidence supplies recognized revenue and distance. Booking totals
+ * cannot be allocated to individual legs without an approved revenue policy.
+ * Counts are funded current membership, explicitly not certified carried RPK. */
+export function getYieldAnalysis(
   startDate?: Date,
   endDate?: Date,
-  limit: number = 20
+  limit = 20
 ): Promise<YieldAnalysis[]> {
-  const db = await getDb();
-  if (!db)
+  return readYieldAnalysis(startDate, endDate, limit);
+}
+
+async function readYieldAnalysis(
+  startDate?: Date,
+  endDate?: Date,
+  limit = 20,
+  flightId?: number
+): Promise<YieldAnalysis[]> {
+  const db = getDb();
+  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      code: "BAD_REQUEST",
+      message: "Narrow the yield report",
     });
-
-  const conditions = [
-    sql`${bookings.status} != 'cancelled'`,
-    eq(bookings.paymentStatus, "paid"),
-  ];
-
-  if (startDate && endDate) {
-    conditions.push(
-      gte(flights.departureTime, startDate),
-      lte(flights.departureTime, endDate)
-    );
-  }
-
-  const flightStats = await db
+  const { validateFinancialPeriod } =
+    await import("./financial-reporting.service");
+  validateFinancialPeriod({ startDate, endDate });
+  const rows = await db
     .select({
       flightId: flights.id,
       flightNumber: flights.flightNumber,
+      tenantId: flights.tenantId,
+      airlineId: flights.airlineId,
       originId: flights.originId,
       destinationId: flights.destinationId,
       economySeats: flights.economySeats,
       businessSeats: flights.businessSeats,
-      totalRevenue: sql<number>`SUM(${bookings.totalAmount})`,
-      passengerCount: sql<number>`SUM(${bookings.numberOfPassengers})`,
+      passengerCount: sql<number>`COALESCE(SUM(${bookings.numberOfPassengers}), 0)`,
     })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(and(...conditions))
+    .from(flights)
+    .leftJoin(
+      bookings,
+      and(
+        flightBookingCondition(flights.id),
+        eq(bookings.paymentStatus, "paid"),
+        sql`${bookings.status} IN ('confirmed', 'completed')`,
+        isNull(bookings.deletedAt),
+        sql`${bookings.tenantId} <=> ${flights.tenantId}`
+      )
+    )
+    .where(
+      and(
+        flightId === undefined ? undefined : eq(flights.id, flightId),
+        startDate ? gte(flights.departureTime, startDate) : undefined,
+        endDate ? lte(flights.departureTime, endDate) : undefined
+      )
+    )
     .groupBy(
       flights.id,
       flights.flightNumber,
+      flights.tenantId,
+      flights.airlineId,
       flights.originId,
       flights.destinationId,
       flights.economySeats,
-      flights.businessSeats
+      flights.businessSeats,
+      flights.departureTime
     )
-    .orderBy(desc(sql`SUM(${bookings.totalAmount})`))
+    .orderBy(desc(flights.departureTime), flights.id)
     .limit(limit);
-
-  // Gather all airport IDs
-  const airportIds = new Set<number>();
-  for (const row of flightStats) {
-    airportIds.add(row.originId);
-    airportIds.add(row.destinationId);
-  }
-
-  const airportMap = new Map<number, string>();
-  if (airportIds.size > 0) {
-    const airportList = await db
-      .select({ id: airports.id, code: airports.code })
-      .from(airports)
-      .where(
-        sql`${airports.id} IN (${sql.join(
-          [...airportIds].map(id => sql`${id}`),
-          sql`, `
-        )})`
-      );
-    for (const a of airportList) {
-      airportMap.set(a.id, a.code);
+  const costs = await readFlightCosts(rows.map(r => r.flightId));
+  const ids = [...new Set(rows.flatMap(r => [r.originId, r.destinationId]))];
+  const places = ids.length
+    ? await db
+        .select({ id: airports.id, code: airports.code })
+        .from(airports)
+        .where(inArray(airports.id, ids))
+    : [];
+  const codes = new Map(places.map(p => [p.id, p.code]));
+  return rows.map(row => {
+    const cost = costs.get(row.flightId);
+    let coverage: YieldAnalysis["coverage"] = cost
+      ? "available"
+      : "missing_evidence";
+    if (cost) {
+      try {
+        requireCurrentAviationSource(
+          cost.sourceId,
+          "flight_cost",
+          row.tenantId,
+          row.airlineId
+        );
+      } catch {
+        coverage = "unavailable_source";
+      }
     }
-  }
-
-  return flightStats.map(row => {
-    const distanceKm = estimateDistanceKm(row.originId, row.destinationId);
-    const paxCount = row.passengerCount || 0;
-    const rpk = paxCount * distanceKm;
-    const totalSeats = row.economySeats + row.businessSeats;
-    const revenue = row.totalRevenue || 0;
-
+    const accepted = coverage === "available" ? cost : undefined;
+    const distanceKm = accepted?.payload.routeDistanceKm ?? null;
+    const totalRevenue = accepted?.payload.recognizedRevenueMinor ?? null;
+    if (accepted && totalRevenue === null)
+      coverage = "missing_recognized_revenue";
+    const passengerCount = Number(row.passengerCount);
+    const rpk = distanceKm === null ? null : passengerCount * distanceKm;
+    const seats = row.economySeats + row.businessSeats;
     return {
       flightId: row.flightId,
       flightNumber: row.flightNumber,
-      originCode: airportMap.get(row.originId) || "???",
-      destinationCode: airportMap.get(row.destinationId) || "???",
-      totalRevenue: revenue,
-      passengerCount: paxCount,
+      originCode: codes.get(row.originId) ?? "—",
+      destinationCode: codes.get(row.destinationId) ?? "—",
+      totalRevenue,
+      passengerCount,
       distanceKm,
       rpk,
-      yield: rpk > 0 ? Math.round(revenue / rpk) : 0,
+      yield: rpk && totalRevenue !== null ? totalRevenue / rpk : null,
       loadFactor:
-        totalSeats > 0 ? Math.round((paxCount / totalSeats) * 1000) / 10 : 0,
+        seats > 0 ? Math.round((passengerCount / seats) * 1000) / 10 : 0,
+      evidenceId: accepted?.evidenceId ?? null,
+      sourceId: accepted?.sourceId ?? null,
+      coverage,
+      passengerBasis: "funded_active_membership" as const,
     };
   });
 }

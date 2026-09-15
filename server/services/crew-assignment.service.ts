@@ -2,6 +2,7 @@ import { requireValue } from "./required-value";
 import {
   assignCrewWithRules,
   evaluateCrewDuty,
+  evaluateCrewCandidates,
   getCrewRules,
 } from "./crew-rule.service";
 /**
@@ -784,29 +785,15 @@ export async function findReplacementCrew(
   flightId: number,
   role: "captain" | "first_officer" | "purser" | "cabin_crew"
 ) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  // Get flight details
+  const db = getDb();
+  if (!db) throw new TRPCError({ code: "SERVICE_UNAVAILABLE" });
   const [flight] = await db
-    .select({
-      id: flights.id,
-      flightNumber: flights.flightNumber,
-      departureTime: flights.departureTime,
-      arrivalTime: flights.arrivalTime,
-      aircraftType: flights.aircraftType,
-      airlineId: flights.airlineId,
-    })
+    .select()
     .from(flights)
     .where(eq(flights.id, flightId))
     .limit(1);
-  if (!flight) {
+  if (!flight)
     throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-  }
-  // Get all active crew members with the required role from the same airline
   const candidates = await db
     .select()
     .from(crewMembers)
@@ -816,9 +803,14 @@ export async function findReplacementCrew(
         eq(crewMembers.status, "active"),
         eq(crewMembers.airlineId, flight.airlineId)
       )
+    )
+    .limit(501);
+  if (candidates.length > 500) {
+    throw new Error(
+      "Replacement candidate pool exceeds 500; narrow the search before evaluation"
     );
-  // Get crew already assigned to this flight
-  const alreadyAssigned = await db
+  }
+  const assigned = await db
     .select({ crewMemberId: crewAssignments.crewMemberId })
     .from(crewAssignments)
     .where(
@@ -827,102 +819,49 @@ export async function findReplacementCrew(
         ne(crewAssignments.status, "removed")
       )
     );
-  const assignedIds = new Set(alreadyAssigned.map(a => a.crewMemberId));
-  // TODO: N+1 query pattern - each candidate triggers individual queries for conflicts,
-  // FTL compliance, and duty time. This should be batched into bulk queries
-  // (e.g., fetch all assignments for all candidate IDs in one query) to avoid
-  // O(N) database round-trips when the candidate pool is large.
-  const results: Array<{
-    crewMember: {
-      id: number;
-      employeeId: string;
-      name: string;
-      role: string;
-      qualifiedAircraft: string[];
-      licenseExpiry: Date | null;
-      medicalExpiry: Date | null;
-    };
-    available: boolean;
-    ftlCompliant: boolean;
-    dutyHoursOnDate: number;
-    conflicts: string[];
-    score: number;
-  }> = [];
-  for (const candidate of candidates) {
-    // Skip if already assigned to this flight
-    if (assignedIds.has(candidate.id)) continue;
-    // Check for scheduling conflicts
-    const conflicting = await db
-      .select({
-        flightNumber: flights.flightNumber,
-      })
-      .from(crewAssignments)
-      .innerJoin(flights, eq(crewAssignments.flightId, flights.id))
-      .where(
-        and(
-          eq(crewAssignments.crewMemberId, candidate.id),
-          ne(crewAssignments.status, "removed"),
-          sql`${flights.departureTime} < ${flight.arrivalTime}`,
-          sql`${flights.arrivalTime} > ${flight.departureTime}`
-        )
-      );
-    const hasConflicts = conflicting.length > 0;
-    const conflicts = conflicting.map(c => c.flightNumber);
-    // FTL check
-    const ftl = await checkFTLCompliance(candidate.id, {
-      departureTime: flight.departureTime,
-      arrivalTime: flight.arrivalTime,
-    });
-    // Calculate duty hours on that date for ranking
-    const dutyTime = await calculateDutyTime(
-      candidate.id,
-      flight.departureTime
-    );
-    // Qualification check for aircraft type
-    const qualifiedAircraft = candidate.qualifiedAircraft
-      ? (JSON.parse(candidate.qualifiedAircraft) as string[])
-      : [];
-    const isQualified =
-      !flight.aircraftType ||
-      qualifiedAircraft.length === 0 ||
-      qualifiedAircraft.some(ac =>
-        flight.aircraftType?.toLowerCase().includes(ac.toLowerCase())
-      );
-    // Score: higher is better
-    let score = 0;
-    if (!hasConflicts) score += 50;
-    if (ftl.compliant) score += 30;
-    if (isQualified) score += 15;
-    // Prefer crew with less duty time (more rested)
-    score += Math.max(0, 5 - dutyTime.dutyHours);
-    // Check license/medical validity
-    const licenseValid =
-      !candidate.licenseExpiry ||
-      candidate.licenseExpiry >= flight.departureTime;
-    const medicalValid =
-      !candidate.medicalExpiry ||
-      candidate.medicalExpiry >= flight.departureTime;
-    if (!licenseValid) score -= 100;
-    if (!medicalValid) score -= 100;
-    results.push({
-      crewMember: {
-        id: candidate.id,
-        employeeId: candidate.employeeId,
-        name: `${candidate.firstName} ${candidate.lastName}`,
-        role: candidate.role,
-        qualifiedAircraft,
-        licenseExpiry: candidate.licenseExpiry,
-        medicalExpiry: candidate.medicalExpiry,
-      },
-      available: !hasConflicts && ftl.compliant && licenseValid && medicalValid,
-      ftlCompliant: ftl.compliant,
-      dutyHoursOnDate: dutyTime.dutyHours,
-      conflicts,
-      score,
-    });
-  }
-  // Sort by score descending (best candidates first)
-  results.sort((a, b) => b.score - a.score);
+  const assignedIds = new Set(assigned.map(a => a.crewMemberId));
+  const pool = candidates.filter(c => !assignedIds.has(c.id));
+  const checks = await evaluateCrewCandidates(db, pool, {
+    flightId,
+    departureTime: flight.departureTime,
+    arrivalTime: flight.arrivalTime,
+    aircraftType: flight.aircraftType,
+    tenantId: flight.tenantId,
+  });
+  const byCrew = new Map(checks.map(c => [c.crewMemberId, c]));
+  const results = pool
+    .map(candidate => {
+      const check = byCrew.get(candidate.id);
+      if (!check) throw new Error("Crew assessment is unavailable");
+      let qualifiedAircraft: string[] = [];
+      try {
+        const parsed: unknown = JSON.parse(
+          candidate.qualifiedAircraft ?? "null"
+        );
+        if (Array.isArray(parsed) && parsed.every(v => typeof v === "string"))
+          qualifiedAircraft = parsed;
+      } catch {
+        /* The shared rule authority rejects malformed qualifications. */
+      }
+      const available = check.compliant && check.conflicts.length === 0;
+      return {
+        crewMember: {
+          id: candidate.id,
+          employeeId: candidate.employeeId,
+          name: `${candidate.firstName} ${candidate.lastName}`,
+          role: candidate.role,
+          qualifiedAircraft,
+          licenseExpiry: candidate.licenseExpiry,
+          medicalExpiry: candidate.medicalExpiry,
+        },
+        available,
+        ftlCompliant: check.compliant,
+        dutyHoursOnDate: Math.round(check.dutyHours * 100) / 100,
+        conflicts: check.conflicts,
+        score: (available ? 95 : 0) + Math.max(0, 5 - check.dutyHours),
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.crewMember.id - b.crewMember.id);
   return {
     flightId,
     flightNumber: flight.flightNumber,

@@ -3,6 +3,11 @@ import { and, eq, isNotNull, sql, type AnyColumn } from "drizzle-orm";
 import { bookings, financialLedger } from "../../drizzle/schema";
 import { getDb } from "../db";
 
+/** The same tender classification is used by cash summaries and refund reports. */
+export function nonCashFundingCondition() {
+  return sql`COALESCE(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(${financialLedger.metadata}) THEN ${financialLedger.metadata} ELSE '{}' END, '$.tender')), '') IN ('corporate_credit', 'user_credit')`;
+}
+
 export interface FinancialPeriod {
   tenantId?: number;
   startDate?: Date;
@@ -12,6 +17,7 @@ export interface FinancialAmounts {
   billedAmount: number;
   collectedAmount: number;
   nonCashFundedAmount: number;
+  nonCashRefundedAmount: number;
   refundedAmount: number;
   netCollectedAmount: number;
   earnedRevenue: null;
@@ -34,6 +40,7 @@ export interface SettlementDay {
   day: unknown;
   collected: unknown;
   nonCashFunded?: unknown;
+  nonCashRefunded?: unknown;
   refunded: unknown;
   unclassified: unknown;
 }
@@ -83,6 +90,7 @@ function emptyAmounts(): FinancialAmounts {
     billedAmount: 0,
     collectedAmount: 0,
     nonCashFundedAmount: 0,
+    nonCashRefundedAmount: 0,
     refundedAmount: 0,
     netCollectedAmount: 0,
     earnedRevenue: null,
@@ -131,6 +139,10 @@ export function combineFinancialDays(
     row.refundedAmount = financialInteger(
       row.refundedAmount + financialInteger(settlement.refunded)
     );
+    row.nonCashRefundedAmount = financialInteger(
+      row.nonCashRefundedAmount +
+        financialInteger(settlement.nonCashRefunded ?? 0)
+    );
     row.unclassifiedEntries += financialInteger(settlement.unclassified);
     row.netCollectedAmount = row.collectedAmount - row.refundedAmount;
   }
@@ -175,9 +187,10 @@ export async function getFinancialDays(
         const settlements = await tx
           .select({
             day: sql<string>`FLOOR(UNIX_TIMESTAMP(${financialLedger.transactionDate}) / 86400)`,
-            collected: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'charge' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(${financialLedger.metadata}) THEN ${financialLedger.metadata} ELSE '{}' END, '$.tender')), '') NOT IN ('corporate_credit', 'user_credit') THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
-            nonCashFunded: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'charge' AND JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(${financialLedger.metadata}) THEN ${financialLedger.metadata} ELSE '{}' END, '$.tender')) IN ('corporate_credit', 'user_credit') THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
-            refunded: sql<string>`SUM(CASE WHEN ${financialLedger.type} IN ('refund','partial_refund') THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
+            collected: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'charge' AND NOT (${nonCashFundingCondition()}) THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
+            nonCashFunded: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'charge' AND ${nonCashFundingCondition()} THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
+            refunded: sql<string>`SUM(CASE WHEN ${financialLedger.type} IN ('refund','partial_refund') AND NOT (${nonCashFundingCondition()}) THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
+            nonCashRefunded: sql<string>`SUM(CASE WHEN ${financialLedger.type} IN ('refund','partial_refund') AND ${nonCashFundingCondition()} THEN ${financialLedger.amount} * 100 ELSE 0 END)`,
             unclassified: sql<string>`SUM(CASE WHEN ${financialLedger.type} = 'adjustment' THEN 1 ELSE 0 END)`,
           })
           .from(financialLedger)
@@ -222,6 +235,7 @@ export async function getFinancialSummary(
       "billedAmount",
       "collectedAmount",
       "nonCashFundedAmount",
+      "nonCashRefundedAmount",
       "refundedAmount",
       "unreconciledBookings",
       "unclassifiedEntries",

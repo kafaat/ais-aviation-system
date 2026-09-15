@@ -687,7 +687,8 @@ export async function useCredit(
       .where(
         and(
           eq(creditUsage.bookingId, bookingId),
-          eq(creditUsage.userId, userId)
+          eq(creditUsage.userId, userId),
+          gt(creditUsage.amountUsed, 0)
         )
       );
     if (previous.length) {

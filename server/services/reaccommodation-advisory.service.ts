@@ -18,12 +18,15 @@ import { and, eq, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { bookings, flights } from "../../drizzle/schema";
 import {
   MAX_PASSENGERS,
-  planReaccommodation,
   type Cabin,
   type ReaccommodationOption,
   type ReaccommodationPassenger,
   type ReaccommodationPlan,
 } from "../../shared/reaccommodation";
+import {
+  planReaccommodationContingencies,
+  type ContingencyPlan,
+} from "../../shared/reaccommodation-contingencies";
 import { getDb } from "../db";
 import { rankPassengers } from "./passenger-priority.service";
 import { availableSeatsExpression } from "./inventory-capacity.service";
@@ -64,6 +67,8 @@ function normaliseScores(
 
 export interface AdvisoryInputs {
   plan: ReaccommodationPlan;
+  contingencies: ContingencyPlan[];
+  contingencySearchTruncated: boolean;
   /** Stated so a reader can see what the advisory was allowed to consider. */
   consideredOptions: number;
   candidateFlightIds: number[];
@@ -198,7 +203,7 @@ async function readAdvisory(
       },
     }));
 
-  const plan = planReaccommodation({
+  const plans = planReaccommodationContingencies({
     disruptedFlightId,
     originalArrival: flight.arrivalTime.toISOString(),
     passengers: disruptedPassengers,
@@ -206,7 +211,7 @@ async function readAdvisory(
   });
 
   return {
-    plan,
+    ...plans,
     consideredOptions: options.length,
     candidateFlightIds: options.map(option => option.flightId),
     consideredPassengers: disruptedPassengers.length,

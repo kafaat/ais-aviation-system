@@ -3072,7 +3072,22 @@
     "revenueByChannel": "Revenue by Channel",
     "channel": "Channel",
     "noData": "No revenue data available for the selected period",
-    "refreshData": "Refresh Data"
+    "refreshData": "Refresh Data",
+    "sourceUnavailable": "Financial data could not be loaded. Amounts are unavailable.",
+    "retry": "Retry",
+    "reportFailed": "Report generation failed. Retry when the source is available.",
+    "distanceKm": "Distance (km)",
+    "fundedPassengerKm": "Funded passenger km",
+    "fundedYield": "Revenue / funded passenger km",
+    "fundedLoad": "Funded load",
+    "evidence": "Evidence",
+    "coverage": {
+      "available": "Available",
+      "missing_evidence": "Evidence required",
+      "unavailable_source": "Source no longer authorized",
+      "missing_recognized_revenue": "Recognized revenue unavailable"
+    },
+    "yieldDesc": "Flight revenue and distance require approved evidence; passenger counts represent funded itinerary membership."
   },
   "compensation": {
     "title": "EU261/DOT Compensation",
