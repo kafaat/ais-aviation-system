@@ -8,6 +8,10 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import * as schema from "../drizzle/schema";
 import { verifyR2Gates } from "./acceptance/r2-gates";
 import { verifyR2Hotels } from "./acceptance/r2-hotels";
+import { verifyR2Weather } from "./acceptance/r2-weather";
+import { verifyR2OnCall } from "./acceptance/r2-oncall";
+import { verifyR2Trace, verifyR2Lineage } from "./acceptance/r2-trace";
+import { verifyR2Reaccommodation } from "./acceptance/r2-reaccommodation";
 
 if (
   process.env.AIS_DISPOSABLE_DATABASE !== "true" ||
@@ -402,6 +406,11 @@ try {
   await verifyDataAudit(db, id, check);
   await verifyR2Gates(db, id, check);
   await verifyR2Hotels(db, id, check);
+  await verifyR2Weather(db, id, check);
+  await verifyR2OnCall(db, id, check);
+  await verifyR2Trace(db, id, check);
+  await verifyR2Lineage(db, id, check);
+  await verifyR2Reaccommodation(db, id, check);
   completed = true;
 } finally {
   const report = {

@@ -5650,6 +5650,12 @@ export const outbox = mysqlTable(
     leaseToken: varchar("leaseToken", { length: 36 }),
     lockedAt: timestamp("lockedAt"),
     publishedAt: timestamp("publishedAt"),
+    /** R2-08 — W3C trace context of the request that produced this event, so
+     * an event can be traced back to its cause. Nullable: events recorded
+     * before this column, and any path with no established trace, carry none
+     * rather than a fabricated identifier. */
+    traceId: varchar("traceId", { length: 32 }),
+    spanId: varchar("spanId", { length: 16 }),
   },
   table => ({
     statusIdx: index("outbox_status_idx").on(table.status, table.createdAt),
@@ -5957,3 +5963,172 @@ export const operationsAlerts = mysqlTable("operations_alerts", {
   firstObservedAt: timestamp("firstObservedAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+/** R2-10 — operator-recorded ICAO station for an airport.
+ *
+ * Kept as its own table rather than a column on `airports` so the mapping
+ * carries who recorded it and against which reference. IATA and ICAO are
+ * unrelated code spaces, so this mapping can only ever be recorded, never
+ * derived, and an unmapped airport stays explicitly uncovered.
+ */
+export const airportWeatherStations = mysqlTable(
+  "airport_weather_stations",
+  {
+    airportId: int("airportId").primaryKey(),
+    icaoCode: varchar("icaoCode", { length: 4 }).notNull(),
+    mappingEvidence: varchar("mappingEvidence", { length: 255 }).notNull(),
+    recordedBy: int("recordedBy").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    station: uniqueIndex("airport_weather_station_icao_idx").on(t.icaoCode),
+  })
+);
+export type AirportWeatherStation = typeof airportWeatherStations.$inferSelect;
+
+/** R2-10 — stored station bulletins.
+ *
+ * `rawText` is the bulletin as published, so any stored classification can be
+ * re-derived and audited. `flightCategory` is only ever set for a `metar`: a
+ * `taf` is a forecast and is never given an observed category. The identity
+ * index makes re-ingesting the same bulletin a no-op instead of a duplicate.
+ */
+export const weatherObservations = mysqlTable(
+  "weather_observations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    icaoCode: varchar("icaoCode", { length: 4 }).notNull(),
+    kind: mysqlEnum("kind", ["metar", "taf"]).notNull(),
+    issuedAt: timestamp("issuedAt").notNull(),
+    rawText: varchar("rawText", { length: 2048 }).notNull(),
+    bodyDigest: varchar("bodyDigest", { length: 64 }).notNull(),
+    windDirection: int("windDirection"),
+    windSpeed: int("windSpeed"),
+    windGust: int("windGust"),
+    visibilityStatuteMiles: decimal("visibilityStatuteMiles", {
+      precision: 5,
+      scale: 2,
+    }),
+    ceilingFeet: int("ceilingFeet"),
+    /** Distinguishes "no ceiling layer" from "a ceiling layer nobody measured",
+     * which the FAA thresholds treat very differently. */
+    ceilingIndeterminate: boolean("ceilingIndeterminate")
+      .default(false)
+      .notNull(),
+    temperatureC: int("temperatureC"),
+    dewpointC: int("dewpointC"),
+    altimeterHpa: decimal("altimeterHpa", { precision: 7, scale: 2 }),
+    flightCategory: mysqlEnum("flightCategory", ["VFR", "MVFR", "IFR", "LIFR"]),
+    sourceReference: varchar("sourceReference", { length: 255 }).notNull(),
+    sourceMode: mysqlEnum("sourceMode", ["sandbox", "live"]).notNull(),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+  },
+  t => ({
+    identity: uniqueIndex("weather_observation_identity_idx").on(
+      t.icaoCode,
+      t.kind,
+      t.issuedAt,
+      t.bodyDigest
+    ),
+    recent: index("weather_observation_recent_idx").on(
+      t.icaoCode,
+      t.kind,
+      t.issuedAt
+    ),
+  })
+);
+export type WeatherObservation = typeof weatherObservations.$inferSelect;
+
+/** R2-09 — one row per on-call delivery attempt sequence.
+ *
+ * `dedupKey` is stable per incident and shared by the `raise` and its matching
+ * `close`, which is how the provider correlates them. Because the provider
+ * deduplicates on it, an `outcome_unknown` row is safe to re-send — unlike a
+ * hotel booking, where a lost response requires operator reconciliation.
+ *
+ * `delivered` records that the provider accepted the request. It is never a
+ * statement that a person was reached.
+ */
+export const alertDispatches = mysqlTable(
+  "alert_dispatches",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    alertKey: varchar("alertKey", { length: 100 }).notNull(),
+    action: mysqlEnum("action", ["raise", "close"]).notNull(),
+    dedupKey: varchar("dedupKey", { length: 100 }).notNull(),
+    summary: varchar("summary", { length: 200 }).notNull(),
+    details: varchar("details", { length: 1000 }).notNull().default(""),
+    status: mysqlEnum("status", [
+      "pending",
+      "outcome_unknown",
+      "delivered",
+      "failed",
+      "cancelled",
+    ])
+      .default("pending")
+      .notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    nextAttemptAt: timestamp("nextAttemptAt"),
+    leaseToken: varchar("leaseToken", { length: 36 }),
+    leaseUntil: timestamp("leaseUntil"),
+    providerMode: mysqlEnum("providerMode", ["sandbox", "live"]).notNull(),
+    providerReference: varchar("providerReference", { length: 255 }).notNull(),
+    /** Redacted: provider responses can echo credentials. */
+    lastError: varchar("lastError", { length: 500 }),
+    deliveredAt: timestamp("deliveredAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    identity: uniqueIndex("alert_dispatch_identity_idx").on(
+      t.alertKey,
+      t.action,
+      t.dedupKey
+    ),
+    claimable: index("alert_dispatch_claimable_idx").on(
+      t.status,
+      t.nextAttemptAt
+    ),
+  })
+);
+export type AlertDispatch = typeof alertDispatches.$inferSelect;
+
+/** R2-08 — persisted OpenLineage run events.
+ *
+ * Stored, not transmitted: no lineage backend is configured or claimed. The
+ * `document` column holds the spec-shaped event verbatim so a later transport
+ * can ship exactly what was recorded, and `traceId` ties a data job run back
+ * to the request or scheduled tick that caused it.
+ */
+export const lineageEvents = mysqlTable(
+  "lineage_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    runId: varchar("runId", { length: 36 }).notNull(),
+    jobNamespace: varchar("jobNamespace", { length: 255 }).notNull(),
+    jobName: varchar("jobName", { length: 255 }).notNull(),
+    eventType: mysqlEnum("eventType", [
+      "START",
+      "RUNNING",
+      "COMPLETE",
+      "ABORT",
+      "FAIL",
+      "OTHER",
+    ]).notNull(),
+    eventTime: timestamp("eventTime").notNull(),
+    traceId: varchar("traceId", { length: 32 }),
+    document: json("document").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    /** One event of a kind per run: a retried emit is a no-op, not a second
+     * START for the same run. */
+    identity: uniqueIndex("lineage_event_identity_idx").on(
+      t.runId,
+      t.eventType
+    ),
+    byJob: index("lineage_event_job_idx").on(t.jobName, t.eventTime),
+  })
+);
+export type LineageEventRow = typeof lineageEvents.$inferSelect;

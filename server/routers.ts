@@ -41,6 +41,7 @@ import { priceCalendarRouter } from "./routers/price-calendar";
 import { travelAgentRouter } from "./routers/travel-agent";
 import { smsRouter } from "./routers/sms";
 import { gatesRouter } from "./routers/gates";
+import { weatherRouter } from "./routers/weather";
 import { vouchersRouter } from "./routers/vouchers";
 import { priceLockRouter } from "./routers/price-lock";
 import { familyPoolRouter } from "./routers/family-pool";
@@ -162,6 +163,7 @@ export const appRouter = router({
   travelAgent: travelAgentRouter,
   sms: smsRouter,
   gates: gatesRouter,
+  weather: weatherRouter,
   vouchers: vouchersRouter,
   priceLock: priceLockRouter,
   familyPool: familyPoolRouter,

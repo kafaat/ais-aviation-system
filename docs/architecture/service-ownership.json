@@ -20,7 +20,7 @@
     },
     {
       "id": "airline-operations",
-      "match": "crew|aircraft|flight-state|flight-status|disruption|irops|recovery|aviation|operational-events",
+      "match": "crew|aircraft|flight-state|flight-status|disruption|irops|recovery|aviation|operational-events|passenger-priority|reaccommodation",
       "accountableOwner": null,
       "onCall": null,
       "acceptanceEvidence": null

@@ -3,6 +3,7 @@ import { releaseExpiredLocks } from "./inventory-lock.service";
 import { runScheduledTask } from "./scheduled-task.service";
 import { logger, logInfo, logError } from "../_core/logger";
 import { runOutboxRelay } from "./outbox.service";
+import { runInNewTrace } from "../_core/trace";
 
 /**
  * Publish pending transactional-outbox events to the bus.
@@ -46,6 +47,15 @@ export const PERIODIC_JOB_CATALOG = [
       const { refreshOperationalAlerts } =
         await import("./operational-observations.service");
       await refreshOperationalAlerts();
+    },
+  },
+  {
+    name: "onCallDelivery",
+    cron: "* * * * *",
+    periodMs: 60000,
+    run: async () => {
+      const { processOnCallDeliveries } = await import("./on-call.service");
+      await processOnCallDeliveries();
     },
   },
   {
@@ -182,15 +192,21 @@ async function runGuarded(name: string, job: () => Promise<void>) {
   runningJobs.add(name);
   try {
     logger.debug({}, `Running cron job: ${name}`);
-    await runScheduledTask(
-      name,
-      String(
-        Math.floor(
-          Date.now() /
-            (PERIODIC_JOB_CATALOG.find(j => j.name === name)?.periodMs ?? 60000)
-        )
-      ),
-      job
+    // A tick has no inbound header, so it starts its own trace. Without this,
+    // every event a scheduled task produces would be stored untraced and the
+    // whole background half of the system would be uncorrelated.
+    await runInNewTrace(() =>
+      runScheduledTask(
+        name,
+        String(
+          Math.floor(
+            Date.now() /
+              (PERIODIC_JOB_CATALOG.find(j => j.name === name)?.periodMs ??
+                60000)
+          )
+        ),
+        job
+      )
     );
   } finally {
     runningJobs.delete(name);

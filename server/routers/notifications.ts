@@ -22,6 +22,9 @@ export const notificationsRouter = router({
           "Retrieve the authenticated user's notifications with optional filtering by type and read status.",
         protect: true,
       },
+      // Reads and writes the caller's own rows only; the service raises no
+      // domain rejection here, so its only failure is a 500.
+      errorStatuses: [],
     })
     .input(
       z.object({
@@ -67,6 +70,9 @@ export const notificationsRouter = router({
           "Get the count of unread notifications for the authenticated user.",
         protect: true,
       },
+      // Reads and writes the caller's own rows only; the service raises no
+      // domain rejection here, so its only failure is a 500.
+      errorStatuses: [],
     })
     .output(responseContracts["unreadCount"])
     .query(async ({ ctx }) => {
@@ -86,6 +92,9 @@ export const notificationsRouter = router({
         description: "Mark a specific notification as read.",
         protect: true,
       },
+      // The service rejects a notification that is absent or owned by another
+      // user with NOT_FOUND; every other failure it raises is a 500.
+      errorStatuses: [404],
     })
     .input(
       z.object({
@@ -111,6 +120,9 @@ export const notificationsRouter = router({
           "Mark all notifications as read for the authenticated user.",
         protect: true,
       },
+      // Reads and writes the caller's own rows only; the service raises no
+      // domain rejection here, so its only failure is a 500.
+      errorStatuses: [],
     })
     .output(responseContracts["markAllAsRead"])
     .mutation(async ({ ctx }) => {

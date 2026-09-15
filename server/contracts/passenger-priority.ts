@@ -145,3 +145,40 @@ export const responseContracts = {
     createdAt: z.date(),
   }),
 };
+
+/** R2-11 — advisory reaccommodation assignment. Explicitly advisory: the
+ * `advisory` literal is part of the contract so no consumer can mistake this
+ * for a booking, and the objective travels with the plan so the weights can
+ * be argued with rather than reverse-engineered. */
+export const reaccommodationAdvisory = z.object({
+  plan: z.object({
+    disruptedFlightId: outputNumber,
+    objectiveValue: outputNumber,
+    assignments: z.array(
+      z.object({
+        passengerId: outputNumber,
+        bookingId: outputNumber,
+        flightId: outputNumber.nullable(),
+        flightNumber: z.string().nullable(),
+        cabin: z.enum(["economy", "business"]).nullable(),
+        delayMinutes: outputNumber.nullable(),
+        downgraded: z.boolean(),
+        cost: outputNumber,
+        reason: z.string(),
+      })
+    ),
+    unassigned: z.array(outputNumber),
+    advisory: z.literal(true),
+    objective: z.object({
+      order: z.literal("max-assigned-then-min-cost"),
+      weightAtZeroPriority: outputNumber,
+      weightPerPriorityPoint: outputNumber,
+      downgradeMinutes: outputNumber,
+      unassignedMinutes: outputNumber,
+    }),
+  }),
+  consideredOptions: outputNumber,
+  consideredPassengers: outputNumber,
+  optionsTruncated: z.boolean(),
+  window: z.object({ fromISO: z.string(), toISO: z.string() }),
+});

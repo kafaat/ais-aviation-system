@@ -152,6 +152,60 @@ function documentInput(parser: unknown, method: string): unknown {
   return copy instanceof z.ZodOptional ? result.optional() : result;
 }
 
+/** Statuses the REST transport itself can return on any operation, read off
+ * `createRestMiddleware` and the middleware mounted beside it:
+ *
+ *  - 400: every route parses its input with Zod, and a non-object query or
+ *    body is rejected before that.
+ *  - 429: `createUserRateLimitMiddleware({ scope: "api" })` covers the whole
+ *    of `/api/rest`, so this is reachable on every route rather than assumed.
+ *  - 500: any non-`TRPCError` throw is reported as INTERNAL_SERVER_ERROR.
+ *
+ * 401 and 403 come from the generator itself for protected routes. */
+const TRANSPORT_ERRORS: Record<number, string> = {
+  400: "Invalid input",
+  429: "Rate limit exceeded",
+  500: "Internal server error",
+};
+
+/** 415 is reachable only where the transport checks a content type, which it
+ * does only for methods that read a body. A GET or DELETE cannot return it,
+ * so it is not documented on one. */
+const BODY_METHOD_ERRORS: Record<number, string> = {
+  415: "Unsupported content type",
+};
+
+/** Domain statuses allowed for a procedure that has not declared its own.
+ * Each is marked `x-status-undeclared` in the document: a procedure that
+ * declares `errorStatuses` gets exactly the statuses it names, unmarked. */
+const UNDECLARED_DOMAIN_ERRORS: Record<number, string> = {
+  404: "Resource not found or outside caller scope (not declared by this procedure)",
+  409: "Conflicting command or state (not declared by this procedure)",
+  412: "Precondition failed (not declared by this procedure)",
+  422: "Unprocessable input (not declared by this procedure)",
+  503: "Dependency unavailable (not declared by this procedure)",
+};
+
+const DOMAIN_ERROR_DESCRIPTIONS: Record<number, string> = {
+  404: "Resource not found or outside caller scope",
+  405: "Method not allowed",
+  409: "Conflicting command or state",
+  412: "Precondition failed",
+  422: "Unprocessable input",
+  451: "Unavailable for legal reasons",
+  503: "Dependency unavailable",
+};
+
+function domainErrorDescription(status: number): string {
+  return DOMAIN_ERROR_DESCRIPTIONS[status] ?? "Request rejected";
+}
+
+function transportErrors(method: string): Record<number, string> {
+  return ["GET", "DELETE"].includes(method)
+    ? TRANSPORT_ERRORS
+    : { ...TRANSPORT_ERRORS, ...BODY_METHOD_ERRORS };
+}
+
 export function buildOpenApiDocument(router: AnyRouter): OpenAPIObject {
   const routes = openApiProcedures(router);
   const procedures = Object.fromEntries(
@@ -195,17 +249,44 @@ export function buildOpenApiDocument(router: AnyRouter): OpenAPIObject {
     // The generator's default strict error schema otherwise rejects real 400s.
     if (operation) {
       operation.responses ??= {};
-      // Original tRPC procedures and transport checks can return these errors.
-      for (const [status, description] of Object.entries({
-        404: "Resource not found or outside caller scope",
-        409: "Conflicting command or state",
-        412: "Precondition failed",
-        415: "Unsupported content type",
-        422: "Unprocessable input",
-        429: "Rate limit exceeded",
-        503: "Dependency unavailable",
-      }))
+      for (const [status, description] of Object.entries(
+        transportErrors(meta.method)
+      ))
         operation.responses[status] ??= { description };
+
+      const declared = (
+        procedure._def.meta as { errorStatuses?: readonly number[] } | undefined
+      )?.errorStatuses;
+      if (declared) {
+        for (const status of declared)
+          operation.responses[String(status)] ??= {
+            description: domainErrorDescription(status),
+          };
+        // A declaration has to be able to say "not this one" as well, or the
+        // generator's own default 404 would survive on every route and the
+        // declaration would be decorative. Transport and auth statuses are
+        // never pruned: they do not belong to the procedure.
+        const keep = new Set([
+          ...Object.keys(transportErrors(meta.method)),
+          "401",
+          "403",
+          ...declared.map(String),
+        ]);
+        for (const status of Object.keys(operation.responses))
+          if (!status.startsWith("2") && !keep.has(status))
+            delete operation.responses[status];
+      } else {
+        // Undeclared: the document still allows the domain statuses a tRPC
+        // procedure can return, but each one is marked so a reader can tell an
+        // allowance from a claim. Declaring `errorStatuses` removes the mark.
+        for (const [status, description] of Object.entries(
+          UNDECLARED_DOMAIN_ERRORS
+        ))
+          operation.responses[status] ??= {
+            description,
+            "x-status-undeclared": true,
+          };
+      }
     }
     for (const [status, response] of Object.entries(
       operation?.responses ?? {}

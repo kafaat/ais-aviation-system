@@ -380,6 +380,10 @@ export const eventInbox = mysqlTable("event_inbox", {
   payload: json("payload").$type<Record<string, unknown>>().notNull(),
   processedAt: timestamp("processedAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
+  /** R2-08 — the trace the producing request belonged to, carried across the
+   * relay so a consumed event stays attributable to its origin. */
+  traceId: varchar("traceId", { length: 32 }),
+  spanId: varchar("spanId", { length: 16 }),
 });
 
 export const bagDropUnits = mysqlTable("bag_drop_units", {

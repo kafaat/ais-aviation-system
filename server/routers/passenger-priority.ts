@@ -1,4 +1,7 @@
-import { responseContracts } from "../contracts/passenger-priority";
+import {
+  responseContracts,
+  reaccommodationAdvisory,
+} from "../contracts/passenger-priority";
 import { z } from "zod";
 import { adminProcedure, router } from "../_core/trpc";
 import {
@@ -10,6 +13,7 @@ import {
   getRules,
   updateRule,
 } from "../services/passenger-priority.service";
+import { buildReaccommodationAdvisory } from "../services/reaccommodation-advisory.service";
 
 /**
  * Passenger Priority Router
@@ -76,6 +80,17 @@ export const passengerPriorityRouter = router({
     .query(async ({ input }) => {
       return await getProtectionOptions(input.passengerId, input.bookingId);
     }),
+
+  /**
+   * Advisory reaccommodation assignment for a disrupted flight (R2-11).
+   *
+   * Read-only. Ranking answers "who first"; this answers "who on which
+   * flight", which ranking alone cannot, and it books nothing.
+   */
+  reaccommodationAdvisory: adminProcedure
+    .input(z.object({ flightId: z.number().int().positive() }))
+    .output(reaccommodationAdvisory)
+    .query(({ input }) => buildReaccommodationAdvisory(input.flightId)),
 
   /**
    * Get all priority scoring rules

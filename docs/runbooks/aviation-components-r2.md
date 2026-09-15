@@ -6,20 +6,20 @@ Implements the follow-up study _AIS Additional Components and Gap Solutions_,
 patches. Booking, payments, inventory, and the transactional outbox remain the
 authorities. Optional integrations do not establish provider acceptance.
 
-| Patch | Scope                                               | Evidence / status                                      |
-| ----- | --------------------------------------------------- | ------------------------------------------------------ |
-| R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass            |
-| R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass                    |
-| R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass            |
-| R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass            |
-| R2-05 | Versioned event contracts                           | Implemented; 65 focused checks and AsyncAPI validation |
-| R2-06 | Provider/API contract laboratory                    | Implemented; real REST and Microcks CI passed          |
-| R2-07 | Transport fault acceptance                          | Pending                                                |
-| R2-08 | Trace context and data lineage                      | Pending                                                |
-| R2-09 | On-call delivery and acknowledgement                | Pending                                                |
-| R2-10 | Aviation weather source adapter                     | Pending                                                |
-| R2-11 | Advisory optimization and simulation pilot          | Pending                                                |
-| R2-12 | ONE Record cargo exchange pilot                     | Pending                                                |
+| Patch | Scope                                               | Evidence / status                                       |
+| ----- | --------------------------------------------------- | ------------------------------------------------------- |
+| R2-01 | Persisted wallet account scope for dispute evidence | Implemented; 11 dispute boundary tests pass             |
+| R2-02 | Resume publication of an existing release tag       | Implemented; 11 recovery tests pass                     |
+| R2-03 | Atomic gate allocation and conflict prevention      | Implemented; 11 unit and 5 MySQL cases pass             |
+| R2-04 | Provider-confirmed emergency hotel fulfillment      | Implemented; 23 unit and 3 MySQL cases pass             |
+| R2-05 | Versioned event contracts                           | Implemented; 65 focused checks and AsyncAPI validation  |
+| R2-06 | Provider/API contract laboratory                    | Implemented; real REST and Microcks CI passed           |
+| R2-07 | Transport fault acceptance                          | Implemented; TCP fault lab reaches and passes its cases |
+| R2-08 | Trace context and data lineage                      | Implemented; 29 unit and 7 MySQL acceptance cases pass  |
+| R2-09 | On-call delivery and acknowledgement                | Implemented; 20 unit and 6 MySQL acceptance cases pass  |
+| R2-10 | Aviation weather source adapter                     | Implemented; 35 unit and 7 MySQL acceptance cases pass  |
+| R2-11 | Advisory optimization and simulation pilot          | Assignment implemented; simulation not started          |
+| R2-12 | ONE Record cargo exchange pilot                     | Not started; no cargo domain, no counterparty           |
 
 No person, on-call rotation, production database, or provider acceptance is
 inferred from local tests. Each patch records its tested scope below.
@@ -275,3 +275,356 @@ Local validation: **56 acceptance checks passed with zero skips and zero
 provider calls**, up from 55. Zero-warning ESLint, Prettier, Gitleaks, and all
 three TypeScript configurations pass. As with PR #152, no workflow triggers on a
 pull request whose base is not `main`, so this branch's evidence is local only.
+
+## R2-10 — aviation weather source adapter
+
+Migration 0041 adds two tables. `airport_weather_stations` records which ICAO
+station reports for an airport, with the operator who recorded it and the
+reference they verified it against. IATA and ICAO are unrelated code spaces, so
+this mapping is only ever recorded, never derived from an airport's IATA code,
+and one ICAO identifier cannot be mapped to two airports. `weather_observations`
+stores bulletins with the text as published beside the derived classification,
+so any stored category can be re-derived and audited against the bulletin the
+station actually issued.
+
+`shared/aviation-weather.ts` holds the decoding and classification as pure
+functions. Flight category follows the published FAA ceiling and visibility
+boundaries and takes the more restrictive of the two. Three distinctions are
+kept deliberately, because collapsing any of them would invent a condition:
+
+- A sky with only few and scattered layers has **no ceiling**, which is not the
+  same as a high one.
+- An obscured or broken layer reported without a base has an **unmeasured**
+  ceiling. That yields no category at all — not the unrestricted one.
+- A missing visibility yields no category either.
+
+`server/integrations/aviation-weather.ts` reads the Aviation Weather Center data
+API. METAR is an observation and is classified; TAF is a forecast, is stored as
+its bulletin text with its issue time, and never receives an observed category.
+A field that is present but undecodable rejects the whole report rather than
+being nulled, so provider schema drift fails loudly instead of turning into
+quietly missing weather. A response describing a station nobody requested is
+refused. Requests are bounded to 20 stations, 15 seconds and 2 MB.
+
+Configure `AVIATION_WEATHER_MODE=disabled|sandbox|live`, default disabled, so an
+unconfigured deployment fetches nothing. `live` additionally requires
+`AVIATION_WEATHER_SOURCE_REFERENCE`: the AWC API is a public service with no
+contract or availability commitment to this system, so an operator records which
+source they accepted before its bulletins are stored, and that reference is kept
+on every stored row. `sandbox` requires `AVIATION_WEATHER_BASE_URL`, because a
+sandbox silently pointing at the real service would not be one.
+
+The advisory reports origin and destination coverage as one of four states:
+`station_unmapped`, `no_observation`, `stale_observation` or `classified`. An
+expired bulletin keeps its text on screen — an operator reading "two hours old"
+is better served than one shown nothing — but yields no category and no
+concerns. **Missing coverage never produces a weather alert**: an alert saying
+the weather is bad when the truth is that no bulletin exists would be a
+fabricated observation. Freshness budgets are 90 minutes for a METAR, one issue
+cycle plus margin, and 480 minutes for a TAF.
+
+This closes a specific gap: `OperationalAlert` already accepted a `weather`
+type that nothing in the system could emit, and the operations agent returned an
+empty alert list. `weatherAlertsFrom` is now that producer. Every alert it emits
+carries "Advisory only: confirm against the operator's dispatch weather source
+before acting". Nothing here changes a flight, booking, gate, inventory row or
+payment, and none of it is a dispatch authority.
+
+Evidence: 35 unit and decoder cases, and 7 cases in the live MySQL acceptance
+run, which went from 56 to **63 checks with zero skips and zero provider calls**.
+The acceptance path proves what the in-memory double cannot — the unique index
+behind the duplicate check, `decimal(5,2)` and `timestamp` round-tripping, and
+the advisory through real SQL. Removing the unmeasured-ceiling distinction alone
+makes two cases fail, which is how that rule was verified. **No request reached
+the Aviation Weather Center**; every bulletin in the tests is a local fixture,
+and the response schema still needs verification against live responses before
+production trust.
+
+## Review follow-up — the blanket OpenAPI error statuses
+
+This was the one review finding from PR #151 left open, recorded as needing the
+real status set of each procedure. It is now closed in three parts, each
+verifiable rather than asserted.
+
+**Transport statuses are derived, not assumed.** `createRestMiddleware` and the
+middleware mounted beside it in `_core/index.ts` establish exactly three
+statuses that any REST operation can return: 400, because every route parses
+its input with Zod and rejects a non-object query or body before that; 429,
+because `createUserRateLimitMiddleware({ scope: "api" })` covers the whole of
+`/api/rest`; and 500, because any non-`TRPCError` throw is reported as
+INTERNAL_SERVER_ERROR. 401 and 403 continue to come from the generator for
+protected routes. Documenting 429 everywhere turns out to be correct — that one
+was not padding.
+
+**415 is now documented only where it can occur.** The transport checks the
+content type only for methods that read a body, so a GET or DELETE can never
+return it. This dropped 415 from all 232 operations to the 122 that use a body,
+with no declaration needed from anyone.
+
+**A procedure can declare its own domain statuses.** `errorStatuses` in a
+procedure's meta names the statuses it can actually return; the document then
+carries the transport statuses plus exactly those, and the generator's default
+404 is pruned. Without the pruning the declaration would be decorative. A
+procedure that declares nothing keeps the previous permissive domain set, but
+every one of those responses is now marked `x-status-undeclared`, so a reader
+can tell an allowance from a claim. That is the honest intermediate state:
+nothing is silently asserted any more, and owners can declare their procedures
+incrementally.
+
+The four notification paths are declared, because the contract laboratory
+validates their real responses: `notifications.markAsRead` returns 404 when the
+row is absent or owned by another user, and `list`, `unreadCount` and
+`markAllAsRead` raise no domain rejection at all. Their documented sets went
+from twelve statuses each to six or seven.
+
+Evidence: the REST contract laboratory passes 4 items against the real host with
+zero provider calls. Removing the `[404]` declaration from `markAsRead` makes
+the lab fail with `UndefinedStatusCode: Undocumented HTTP status code, Received:
+404`, which is how the declarations were verified — by HTTP conformance against
+a running host, not by reading the code. A new `rest-boundary` case locks the
+415 method rule, the pruning and the undeclared marking.
+
+## R2-09 — on-call delivery and acknowledgement
+
+Alert evaluation already existed: `refreshOperationalAlerts` wrote transitions
+into `operations_alerts` every minute. Nothing carried one to a person. An
+alert sat in that table until somebody happened to open the dashboard, and the
+`acknowledgedBy` column had no delivery to acknowledge. Migration 0042 adds the
+delivery leg and its receipts.
+
+Three facts are kept separate throughout, because conflating them is the easy
+mistake here:
+
+1. **The alert is active** — evaluation said so.
+2. **The provider accepted a page** — a delivery receipt. This is _not_ proof
+   that a person was reached; nothing in this system can observe that, and the
+   status label says so in both languages.
+3. **An operator acknowledged it in this system** — the only acknowledgement
+   that can honestly be recorded.
+
+`alert_dispatches` holds one row per raise or close, with a `dedupKey` that is
+stable per incident and shared by a raise and its matching close. GoAlert folds
+repeated keys into **open** incidents only. The dispatcher locks the incident's
+raise row before claiming either action, defers closure while a send lease is
+active, and cancels further raise attempts after a close is queued. Closure
+intent persists even while the provider is disabled. An arbitrary delayed
+remote request, or closure performed outside AIS, still requires reconciliation;
+this is not a remote exactly-once guarantee.
+
+Migration 0045 adds `cancelled` for superseded raises; it does not fabricate a
+delivery receipt. The entire UUID survives even a 100-character alert key.
+Dispatches bind to the original mode and a fingerprint of the endpoint and
+credential. A different target is blocked before a send or attempt increment.
+Legacy pending rows without the fingerprint require reconciliation against the
+original provider; do not rewrite their reference merely to make retries pass.
+Close rows inherit the raise's target, including exhausted raises whose remote
+outcome may be unknown.
+
+The delivery worker follows the discipline the hotel worker earned: the row
+becomes `outcome_unknown` **before** the request, so a crash mid-flight leaves
+evidence that a send may have happened rather than a row that looks untouched;
+a fenced lease stops two workers delivering the same page; failures take an
+exponential backoff capped at thirty minutes instead of a per-minute hot loop
+against a provider that is already down; and the page is ordered
+oldest-attempt-first, NULL first, so rows stuck behind a long backoff never
+starve a fresh alert. After six attempts a dispatch is marked `failed` and kept
+— a page nobody can deliver is itself an operational fact — and the scheduled
+task raises so an operator sees it.
+
+The alert transition and its dispatch share one transaction: an alert cannot
+become active without a queued page, and a rolled-back transition leaves no page
+behind. Acknowledging an alert also queues the close, so an operator already
+handling it is not paged again by the rotation. A close is never queued without
+a raise to close, since a bare close would tell the provider about an incident
+nobody opened.
+
+Configure `ONCALL_MODE=disabled|sandbox|live`, default disabled. An
+unconfigured deployment pages nobody, and the dashboard then shows an active
+alert with no dispatch — the honest picture, not a fabricated receipt. `live`
+requires `ONCALL_ACCEPTANCE_REFERENCE`: a rotation that has never been
+exercised is not an on-call capability. The provider token travels in an
+`Authorization` header, never a query string that proxies and access logs would
+capture, and provider errors are never echoed into stored text because they can
+quote the request back, credential included.
+
+Evidence: 20 unit and adapter cases, and 6 cases in the live MySQL acceptance
+run, which went from 63 to **69 checks with zero skips and zero provider calls**.
+The acceptance path establishes the identity index, the transaction coupling,
+and real row locks fencing two concurrent workers — removing the lease check
+alone makes that case fail, which is how it was verified. **No request reached
+an on-call provider and no person was paged**; every send in the tests is a
+local double. Who is on call, what the rotation is, and whether anyone answers
+remain the provider's business and deployment work.
+
+## R2-08 — trace context and data lineage
+
+### Trace context
+
+Migrations 0043 add `traceId` and `spanId` to both `outbox` and `event_inbox`.
+The gap closed is causal: a domain event carried no link to the request that
+produced it, so an event that misbehaved could not be traced back to its cause,
+and the whole background half of the system was uncorrelated.
+
+`shared/trace-context.ts` supports W3C `traceparent` correlation,
+dependency-free. It does not implement `tracestate` propagation or a complete
+tracing SDK. **This is not an OpenTelemetry installation**: no
+spans are sampled, batched, timed or exported to a collector. The wire format is
+the standard one, so adding an SDK later is compatible with everything stored,
+but nothing here should be read as claiming distributed tracing is deployed.
+
+Malformed, uppercase-hex, all-zero and repeated headers restart the trace.
+Version `00` requires exactly 55 characters; version `ff` is invalid. Higher
+versions retain their valid known prefix, with a dash required before any
+extension. Outgoing version `00` clears reserved flags and preserves the
+upstream sampling bit. A new local trace defaults to unsampled. An inbound
+trace continues under a new span, preserving request-to-event causality.
+
+The context travels in an `AsyncLocalStorage` rather than through every
+signature. There are dozens of call sites between an HTTP handler and
+`recordEvent`; threading a parameter through all of them would be a large
+refactor to move one string, and any site that forgot to forward it would
+silently lose the correlation. The store is correct across awaits and cannot
+leak between concurrent requests, which a module-level variable could not
+promise — there is a test for exactly that.
+
+Three entry points establish a context: the Express middleware (which also
+echoes `traceresponse`, safe to return because trace ids are random and carry
+no user, tenant or payload data), the cron tick, and the outbox relay. The
+relay is the interesting one: each event is delivered **inside the trace of the
+request that produced it**, under a new span, so an event recorded by a
+consumer continues the original causal chain rather than joining the relay
+tick's trace. Where no trace exists, the columns stay null and the ambient
+context is used as-is; nothing fabricates an identifier, because a made-up one
+would correlate unrelated work.
+
+### Data lineage
+
+Migration 0044 adds `lineage_events`, holding OpenLineage run events in the
+specification's own shape, so a later transport can ship exactly what was
+recorded. **Nothing is transmitted today** and no lineage backend is configured
+or claimed.
+
+The warehouse export job emits START, then COMPLETE with the output's row
+count, byte size and sha256 — the same checksum stored on the export row, so a
+lineage record can actually verify the bytes served — or FAIL with a bounded
+error facet. The run id is derived from the export row rather than random, so a
+retried export is the _same_ logical run instead of appearing as several
+unrelated ones, and the identity index makes a repeated emission a no-op. A run
+with a START and no terminal event is reported as `running`, never as complete.
+
+`EXPORT_INPUT_TABLES` lists the tables each export actually reads, taken from
+the queries themselves — including the revenue export, whose inputs are
+`bookings` and `financial_ledger` because it reads through `getFinancialDays`,
+not a revenue table (there is none). An inaccurate input list is worse than no
+lineage graph, because it would be believed. Emission never fails its caller: a
+correct export must not be reported as failed because its lineage row could not
+be written, and the miss is logged so the gap is visible rather than silent.
+
+Evidence: 29 unit cases (21 trace, 8 lineage) and 7 cases in the live MySQL
+acceptance run, which went from 69 to **76 checks with zero skips and zero
+provider calls**, completing in about six seconds across three consecutive
+runs. The lineage acceptance runs a real export and checks the recorded inputs,
+the output checksum against the stored one, and the trace linkage. Making the
+run id random alone makes that case fail, which is how it was verified.
+
+## R2-11 — advisory reaccommodation assignment
+
+The system already ranked disrupted passengers by priority, which answers "who
+first". It never answered "who on which flight". With several alternatives of
+differing capacity and arrival time, walking the ranked list and taking the
+best free seat is not the same as an optimal assignment, and it is measurably
+worse — the boundary suite carries an instance where the optimum costs about
+19% less than greedy (greedy costs about 23.4% more than the optimum), and
+that instance was **found by searching the instance space**, not constructed to
+flatter the optimiser. Its mechanism is worth stating: greedy lets the
+top-priority business passenger take a scarce early _economy_ seat at the
+downgrade penalty, displacing an economy passenger into a flight five hours
+later; the optimum leaves the business passenger in business on the later
+flight and frees the early seat.
+
+`shared/reaccommodation.ts` computes an exact minimum-cost assignment
+(shortest augmenting paths with potentials). Exact rather than
+heuristic because the output is shown to an operator as _the_ recommendation: a
+heuristic that is usually good would make "why was this passenger left behind"
+unanswerable. **Optimality is verified against exhaustive search** over 120
+random instances, half of them with forbidden pairings — that oracle is
+exponential and therefore only usable on tiny matrices, which is exactly what
+makes it trustworthy.
+
+Three refusals are deliberate:
+
+- **It never writes.** The service module contains no insert, update or delete
+  and calls nothing that writes. The acceptance run asserts every seat counter
+  and row count is byte-identical before and after, which is what makes the
+  advisory safe to run against live data.
+- **It never upgrades.** Moving a passenger into a higher cabin is a revenue
+  decision, and an optimiser has no authority to make one. An economy passenger
+  facing only business seats is reported as unassigned instead.
+- **It never silently drops anyone.** Every passenger appears in the result.
+  When seats run out, the unassigned are named with the objective's own penalty
+  for leaving them out.
+
+The objective is lexicographic: maximise assignments, then minimise weighted
+delay, downgrade cost and the secondary unassigned preference. A uniform dummy
+surcharge greater than the sum of row cost maxima enforces coverage; it is
+excluded from displayed costs. `objectiveValue` is comparable only after
+comparing unassigned counts within the same request. The 1440-minute preference
+does not reject a feasible seat after 24 hours. The policy travels with the plan.
+
+The service uses the existing current-segment membership predicate and fails
+explicitly above 150 passengers or on a failed score read. It takes one MySQL
+read-only, repeatable-read snapshot and subtracts active canonical and unlinked
+legacy holds using the inventory authority's predicates. Expired rows stay
+untouched. Eligible alternatives are filtered before the 20-flight limit and
+ordered by arrival, with `optionsTruncated` exposing additional candidates.
+Only the best N economy and N business seats can matter for N independent
+passengers under this additive policy, so equivalent capacity is compressed
+to at most 300 columns without rejecting ordinary aircraft capacity. Duplicate
+passenger/flight identities are rejected. Inventory must be revalidated by the
+existing booking authority when acting on an advisory.
+
+The expanded tests enumerate 80 complete small passenger/flight problems as
+well as the original 120 kernel matrices. MySQL regression cases cover holds,
+segment membership, the passenger bound, option filtering and disclosure, and
+unchanged inventory rows. These checks establish bounded implementation
+evidence, not operational acceptance of the weights or unsupported group and
+connecting-itinerary constraints.
+
+Original R2-11 evidence was 13 unit cases and 3 MySQL cases (79 overall).
+The repair evidence and deployment notes are recorded in
+`docs/audits/20260914-r2-gap-repairs.md`.
+
+**Not included**: the simulation half of this package. A SimPy-class
+discrete-event model of turnaround or gate contention would need a validated
+arrival/service distribution to be worth anything, and there is no measured
+operational data here to fit one to. A simulation calibrated on invented
+distributions would produce confident numbers about nothing, so it is left
+undone rather than approximated.
+
+## R2-12 — ONE Record cargo exchange: not started, and why
+
+This package is deliberately not implemented. Two findings, both checkable:
+
+**There is no cargo domain to expose.** A search of the schema and services for
+cargo, shipment, waybill, AWB and consignment finds cargo only as an aggregate
+_weight_: `cargoZones` and `cargoDistribution` on the weight-and-balance
+tables, and `totalCargoWeight` in the DCS load calculation. There are no
+shipments, pieces, waybills, parties or cargo bookings anywhere. Building a
+ONE Record server would therefore mean first inventing an entire cargo booking
+domain — greenfield product work, not the closure of a gap.
+
+**A pilot needs a counterparty.** ONE Record's value is linked-data exchange
+between an airline, a forwarder and a ground handler, each publishing Logistics
+Objects at stable URIs and subscribing to each other's. Standing up the
+endpoints alone would produce an interface serving objects about nothing, and
+no local test could establish that any party accepted it.
+
+That is exactly the failure this study warns about — an interface or a database
+row is not a completed service — and the same pattern already present in this
+repository: two `OpenWeather` entries sat in the Data API allowlist with no
+caller, and `flight_tracking` carried temperature and wind columns with no
+source, until R2-10 replaced them with a real adapter.
+
+What R2-12 would need before it is worth starting: a cargo domain with real
+shipments, and a named counterparty willing to exchange against a sandbox.
+Both are product and commercial decisions, not engineering ones.

@@ -1,4 +1,11 @@
 import { getFinancialDays } from "./financial-reporting.service";
+import { emitLineageEvent, exportRunId } from "./lineage.service";
+import {
+  EXPORT_INPUT_TABLES,
+  LINEAGE_NAMESPACE,
+  LINEAGE_PRODUCER,
+  LINEAGE_SCHEMA_URL,
+} from "../../shared/lineage";
 import { createHash } from "node:crypto";
 /**
  * Data Warehouse Export Service
@@ -798,6 +805,23 @@ export async function createExportJob(
     .update(warehouseExports)
     .set({ status: "processing", errorMessage: null })
     .where(eq(warehouseExports.id, exportRecord.id));
+  // One lineage run per export row, so a retried export reports the same run
+  // rather than appearing as a second, unrelated one.
+  const runId = exportRunId(exportRecord.id);
+  await emitLineageEvent({
+    eventType: "START",
+    runId,
+    jobName: `warehouse-export.${exportType}`,
+    inputs: EXPORT_INPUT_TABLES[exportType],
+    runFacets: {
+      dateRange: {
+        _producer: LINEAGE_PRODUCER,
+        _schemaURL: LINEAGE_SCHEMA_URL,
+        startDate: dateRange.startDate.toISOString(),
+        endDate: dateRange.endDate.toISOString(),
+      },
+    },
+  });
   // Process the export
   try {
     exportRecord.status = "processing";
@@ -852,6 +876,33 @@ export async function createExportJob(
         completedAt: new Date(),
       })
       .where(eq(warehouseExports.id, exportRecord.id));
+    await emitLineageEvent({
+      eventType: "COMPLETE",
+      runId,
+      jobName: `warehouse-export.${exportType}`,
+      outputs: [
+        {
+          namespace: LINEAGE_NAMESPACE,
+          name: `warehouse_exports/${exportRecord.id}`,
+          facets: {
+            // The checksum is what makes the recorded output verifiable
+            // against the bytes actually served.
+            outputStatistics: {
+              _producer: LINEAGE_PRODUCER,
+              _schemaURL: LINEAGE_SCHEMA_URL,
+              rowCount: result.recordCount,
+              size: bytes,
+            },
+            checksum: {
+              _producer: LINEAGE_PRODUCER,
+              _schemaURL: LINEAGE_SCHEMA_URL,
+              algorithm: "sha256",
+              value: checksum,
+            },
+          },
+        },
+      ],
+    });
   } catch (error) {
     await db
       .update(warehouseExports)
@@ -860,6 +911,22 @@ export async function createExportJob(
         errorMessage: error instanceof Error ? error.message : "Export failed",
       })
       .where(eq(warehouseExports.id, exportRecord.id));
+    await emitLineageEvent({
+      eventType: "FAIL",
+      runId,
+      jobName: `warehouse-export.${exportType}`,
+      runFacets: {
+        errorMessage: {
+          _producer: LINEAGE_PRODUCER,
+          _schemaURL: LINEAGE_SCHEMA_URL,
+          message:
+            error instanceof Error
+              ? error.message.slice(0, 500)
+              : "Export failed",
+          programmingLanguage: "typescript",
+        },
+      },
+    });
   }
   const job = await getExportJobById(exportRecord.id);
   if (!job)
