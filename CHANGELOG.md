@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.30.1
+
+### Bug Fixes
+
+- fix: distinguish baggage inventory notes and prove custody guard (c350fe4)
+
+### Other Changes
+
+- Merge pull request #165 from kafaat/codex/baggage-report-verification-20260916 (cc6d9e3)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.30.0...v1.30.1
+
+---
+
 ## What's Changed in v1.30.0
 
 ### Features
