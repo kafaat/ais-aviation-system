@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.28.0
+
+### Features
+
+- feat: harden internal refunds, privacy exports and operational evidence (09be0a8)
+
+### Bug Fixes
+
+- fix(ci): retain production bootstrap and isolate browser sessions (1bade10)
+
+### Other Changes
+
+- test: exercise crew history in batch acceptance (e74d4a7)
+- Merge pull request #161 from kafaat/codex/project-hardening-20260915 (fe123b4)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.27.3...v1.28.0
+
+---
+
 ## What's Changed in v1.27.3
 
 ### Bug Fixes
