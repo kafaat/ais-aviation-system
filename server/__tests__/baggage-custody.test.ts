@@ -8,6 +8,7 @@ import {
   ingestBaggageCustody,
   getBaggageCustody,
   validateCustodyTransition,
+  assertBaggageNotInCustody,
 } from "../services/baggage-custody.service";
 import type { EvidenceEnvelope } from "../services/aviation-evidence.service";
 let fixture: ReturnType<typeof transactionMemory>;
@@ -93,6 +94,18 @@ async function scan(
   return { e, signature, result: await ingestBaggageCustody(e, signature) };
 }
 describe("baggage handover evidence", () => {
+  it("blocks the booking only after verified custody, without blocking another booking", async () => {
+    await expect(
+      assertBaggageNotInCustody(fixture.db, 7)
+    ).resolves.toBeUndefined();
+    await scan("acceptance", 11, 1, null);
+    await expect(assertBaggageNotInCustody(fixture.db, 7)).rejects.toThrow(
+      /verified rerouting/
+    );
+    await expect(
+      assertBaggageNotInCustody(fixture.db, 8)
+    ).resolves.toBeUndefined();
+  });
   it("follows acceptance, loading, arrival and transfer across all itinerary legs", async () => {
     let receipt = (await scan("acceptance", 11, 1, null)).result;
     receipt = (await scan("loading", 11, 1, receipt.evidenceId)).result;

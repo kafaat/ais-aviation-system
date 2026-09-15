@@ -17,8 +17,15 @@ const bagDrop = "server/services/bag-drop.service.ts";
 const tests = [
   "server/__tests__/baggage-entitlement.test.ts",
   "server/__tests__/durable-operations.test.ts",
+  "server/__tests__/baggage-custody.test.ts",
 ];
 const mutations = [
+  [
+    "M5c booking custody guard",
+    "server/services/baggage-custody.service.ts",
+    "if (custody)",
+    "if (false)",
+  ],
   [
     "M1 funding timestamp",
     authority,
