@@ -1,4 +1,5 @@
-import Stripe from "stripe";
+import type Stripe from "stripe";
+import { createStripeClient } from "../stripe/client-factory";
 import type {
   PaymentProvider,
   PaymentProviderInfo,
@@ -24,9 +25,7 @@ export class StripeProvider implements PaymentProvider {
       if (!stripeKey) {
         throw new Error("STRIPE_SECRET_KEY environment variable is not set");
       }
-      this.client = new Stripe(stripeKey, {
-        apiVersion: "2025-12-15.clover",
-      });
+      this.client = createStripeClient(stripeKey);
     }
     return this.client;
   }

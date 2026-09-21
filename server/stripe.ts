@@ -1,4 +1,5 @@
-import Stripe from "stripe";
+import type Stripe from "stripe";
+import { createStripeClient } from "./services/stripe/client-factory";
 
 let _stripe: Stripe | null = null;
 
@@ -7,8 +8,7 @@ function getStripe(): Stripe {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error("STRIPE_SECRET_KEY is not defined");
     }
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2025-12-15.clover",
+    _stripe = createStripeClient(process.env.STRIPE_SECRET_KEY, {
       typescript: true,
     });
   }
