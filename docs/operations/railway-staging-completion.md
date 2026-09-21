@@ -85,3 +85,87 @@ The five targeted suites passed 44 tests, zero failures and zero skips locally.
 Six new `BAG-MYSQL-*` checks are wired into the existing guarded disposable MySQL
 runner. Local execution is blocked by the unavailable MySQL server and container
 package-manager permissions; do not label these six checks passed until CI does.
+
+## Acceptance runner inside the environment
+
+Observed source: `857d138e71a845b986934a2c8befb5c1be39695a` on
+`claude/railway-acceptance-runner`, branched from `main` at v1.30.1.
+
+`pnpm test:acceptance:railway` (`scripts/ci/railway-acceptance.ts`) runs the
+repository's live MySQL/Redis acceptance suite _inside_ the Railway environment,
+against the environment's own MySQL and Redis services. Until now the suite had
+only ever run against a laptop or a CI container; this is the first evidence
+about the deployed dependencies themselves. The service `ais-acceptance`
+(`a929f4a9-2e31-4c2f-b2c5-df0f042b053a`) is a one-shot process: Railpack build,
+start command `pnpm test:acceptance:railway`, restart policy `NEVER`, no public
+domain, no volume. Re-running it is a redeploy.
+
+Its boundaries are enforced in code, not by convention, because each one is a
+line the staging runbook already draws:
+
+- **It is not the worker.** It starts no cron and imports nothing from
+  `server/worker.ts`. The worker stays blocked until provider boundaries are
+  isolated; this runner does not touch that decision, and the suite it runs is
+  the one proven to make zero provider calls.
+- **It is not a tenant of the application database.** It receives the MySQL
+  service's own URL (`${{MySQL.MYSQL_URL}}`), creates a disposable
+  `ais_acceptance_test` database on that server, and drops it in `finally`. It
+  refuses to run if the disposable name equals the application's database, and
+  the suite independently refuses any database not ending in `_test`.
+- **It does not share the application's Redis keyspace.** It uses logical
+  database index 9 — index 0, which the application uses, is refused — and
+  flushes only that index before and after.
+- **It carries no credentials into the suite.** The suite is spawned with a
+  replacement environment of exactly the five variables CI passes it
+  (`NODE_ENV`, `AIS_DISPOSABLE_DATABASE`, `DATABASE_URL`, `REDIS_URL`, a random
+  `JWT_SECRET`) plus `PATH` and `HOME`. No Stripe, Hotelbeds, weather or on-call
+  key exists in the service's variables, and none can reach the child.
+- **It applies the migration journal first, then verifies it** against the
+  declared schema, before the suite runs. That is the ordering the runbook
+  asked to prove ("migration completion before serving a changed schema").
+
+Connection strings are never printed. Hosts, ports, server versions and
+round-trip latencies are, and one `RAILWAY_ACCEPTANCE_SUMMARY` line carries the
+machine-readable result.
+
+This runner does **not** replace browser or booking acceptance, provider
+acceptance (E01–E11), or the worker's own readiness. It proves that the deployed
+MySQL and Redis accept the full migration journal and the transactional
+boundary suite, from inside the private network.
+
+### Runs on the environment, 21 September 2026
+
+Three consecutive runs of the runner against the environment's own services,
+each from a fresh Railpack build of the branch, agreed on every fact below.
+
+| Fact                                                           | Value                                                                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| MySQL reached over the private network                         | `mysql.railway.internal:3306`, **MySQL 9.7.2**, 3–5 ms round trip               |
+| Redis reached over the private network                         | `redis.railway.internal:6379`, **Redis 8.2.9**, 1–2 ms, logical database 9      |
+| Migration journal (50 migrations) applied to an empty database | 18–22 s, then `verify` confirmed the journal matches the declared schema        |
+| Acceptance checks passed before the first failure              | **116 of 127**, zero skipped, zero provider calls                               |
+| First failing check                                            | `R2 lineage: a real export records its declared inputs and its output checksum` |
+| Disposable database dropped afterwards                         | yes, every run                                                                  |
+
+Two things were learned that are not about the application's behaviour:
+
+- **The platform drops logs above 500 lines/second per replica.** Under
+  `NODE_ENV=test` the application logger defaults to `debug` and writes a line
+  per pool checkout; the first run lost over nine thousand messages, the
+  assertion text among them, and the first deployment showed no runtime log at
+  all. The runner now passes `LOG_LEVEL=warn` to the suite and pauses four
+  seconds after its summary so a one-shot container's last lines are shipped.
+- **CI and local development run MySQL 8.0; the environment runs MySQL 9.7.**
+  The 116 passing checks are the first evidence that the journal and the
+  transactional boundaries hold on the deployed server version. The one
+  failure is version-specific and reproducible: the `customers` warehouse
+  export's aggregate query is rejected by 9.7.2 and accepted by 8.0.46, while
+  the `flights` export in the forensic check passes on both. The failed export
+  row recorded only Drizzle's `Failed query: <sql>` text, not the server's
+  reason. The failure path now appends the driver code and `sqlMessage`, and
+  keeps only the statement line: Drizzle's message also carries the bound
+  parameter values, which the export row had been storing verbatim.
+
+These runs are evidence about the deployed MySQL and Redis and about the
+migration journal. They are not browser or booking acceptance, not provider
+acceptance, and not a statement about the worker, which remains blocked.
