@@ -277,10 +277,12 @@ One fact about that policy must not be lost: it is prepared, not enforced.
 Read through the public API on 21 September 2026, `main` reports
 `protected: false` and `rules/branches/main` returns an empty list. Every
 merge so far has therefore waited for green checks by discipline, not by
-GitHub refusing a red one. Activating the policy is the operator step
-described in `docs/runbooks/project-hardening.md`: it needs repository
-administration access and a release workflow that no longer pushes version
-commits straight to `main`, and nothing here pretends to have done either.
+GitHub refusing a red one. The release workflow no longer pushes version
+commits straight to `main`; it proposes them as pull requests and publishes
+from the merged commit, so the policy can be enforced without a bypass.
+Activating it remains the operator step described in
+`docs/runbooks/project-hardening.md` (`scripts/ci/apply-main-protection.mjs`
+with an administration token), which the tooling that prepared it cannot run.
 
 Sources consulted for the version facts (all public):
 

@@ -52,9 +52,11 @@ export function verifyReleaseCommit(git, tag, commit, sourceSha) {
     throw new Error("Release changes package.json beyond version");
 }
 
-export function prepareRelease(git, tag, sourceSha) {
+export function prepareRelease(git, tag, sourceSha, mergedSha = "") {
   validateTag(tag);
   if (!/^[a-f0-9]{40}$/.test(sourceSha)) throw new Error("Expected source SHA");
+  if (mergedSha && !/^[a-f0-9]{40}$/.test(mergedSha))
+    throw new Error("Expected merged SHA");
   let tagged;
   try {
     tagged = git("rev-parse", "--verify", `refs/tags/${tag}^{commit}`);
@@ -62,7 +64,10 @@ export function prepareRelease(git, tag, sourceSha) {
     /* No tag yet. */
   }
   const remote = git("rev-parse", "refs/remotes/origin/main");
-  const candidate = tagged || (remote !== sourceSha ? remote : null);
+  // A merged release commit is named explicitly, so a commit that lands on
+  // main after it does not change which commit gets tagged.
+  const candidate =
+    tagged || mergedSha || (remote !== sourceSha ? remote : null);
   if (!candidate) {
     if (git("rev-parse", "HEAD") !== sourceSha)
       throw new Error("Checkout does not match release source");
@@ -181,7 +186,8 @@ async function main() {
     const result = prepareRelease(
       git,
       tag,
-      process.env.RELEASE_SOURCE_SHA || ""
+      process.env.RELEASE_SOURCE_SHA || "",
+      process.env.RELEASE_MERGED_SHA || ""
     );
     if (!process.env.GITHUB_OUTPUT)
       throw new Error("GITHUB_OUTPUT is required");

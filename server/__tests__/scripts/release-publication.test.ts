@@ -73,6 +73,22 @@ describe("release publication recovery", () => {
     });
   });
 
+  it("tags the named merged commit even after main has advanced past it", () => {
+    writeFileSync(join(dir, "next.txt"), "later code");
+    git("add", ".");
+    git("commit", "-m", "later");
+    git("update-ref", "refs/remotes/origin/main", git("rev-parse", "HEAD"));
+    expect(prepareRelease(git, tag, source, commit)).toEqual({
+      reuse_commit: "true",
+      tag_exists: "false",
+      commit,
+    });
+    expect(git("rev-parse", "HEAD")).toBe(commit);
+    expect(() => prepareRelease(git, tag, source, "not-a-sha")).toThrow(
+      "merged SHA"
+    );
+  });
+
   it("only creates a new commit when checkout and remote still match the source", () => {
     git("checkout", "--detach", source);
     git("update-ref", "refs/remotes/origin/main", source);

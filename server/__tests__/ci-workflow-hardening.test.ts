@@ -58,6 +58,32 @@ describe("CI workflow hardening", () => {
     );
   });
 
+  // The release commit used to be pushed straight to main with GITHUB_TOKEN,
+  // which no ruleset could allow without a bypass. It now travels through a
+  // release branch and a pull request, and the checks the ruleset requires are
+  // started explicitly because a token-pushed branch starts none by itself.
+  it("routes the release commit through a pull request instead of pushing to main", () => {
+    const text = readFileSync(join(workflowDir, "release.yml"), "utf8");
+    expect(text).not.toContain("git push origin HEAD:main");
+    expect(text).toContain('git push origin "HEAD:refs/heads/$RELEASE_BRANCH"');
+    expect(text).toContain("gh pr create");
+    expect(text).toContain("--base main");
+    for (const workflow of [
+      "ci-cd.yml",
+      "production-gates.yml",
+      "component-labs.yml",
+      "docker-image-validation.yml",
+    ]) {
+      expect(text).toContain(workflow);
+      expect(readFileSync(join(workflowDir, workflow), "utf8")).toMatch(
+        /^\s*workflow_dispatch:/m
+      );
+    }
+    // Publication tags the merged commit itself, not whatever main points at
+    // by the time the job runs.
+    expect(text).toContain("RELEASE_MERGED_SHA: ${{ github.sha }}");
+  });
+
   // The dispatch input used to reach the release object directly. Once the
   // publisher inferred it from the tag, a custom version, which never gets the
   // -rc suffix, published a checked prerelease as a full release.
