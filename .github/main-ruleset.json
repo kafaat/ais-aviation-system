@@ -57,6 +57,10 @@
             "integration_id": 15368
           },
           {
+            "context": "Migration Replay and Live Transaction Acceptance (MySQL 9.7)",
+            "integration_id": 15368
+          },
+          {
             "context": "Previous Release Upgrade Replay",
             "integration_id": 15368
           },

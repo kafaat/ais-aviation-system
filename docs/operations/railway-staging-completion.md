@@ -268,9 +268,19 @@ job in `production-gates.yml` is now a two-leg matrix over `mysql:8.0` and
 `.github/main-ruleset.json` requires as a status check; the 9.7 leg is named
 `… (MySQL 9.7)` and uploads its own `live-transaction-acceptance-mysql-9.7`
 artifact. The backup-restore smoke receives the image it should expect through
-`MYSQL_SERVICE_IMAGE` instead of assuming 8.0. The 9.7 leg is not yet a required
-check: it must first prove itself stable on `main`, after which adding its
-context to the ruleset is a one-line change.
+`MYSQL_SERVICE_IMAGE` instead of assuming 8.0. After the 9.7 leg passed on four
+consecutive `main` heads (`5d23f3f`, `5a5c818`, `d48a5c7` and this change), its
+context was added to the prepared policy in `.github/main-ruleset.json` beside
+the 8.0 leg.
+
+One fact about that policy must not be lost: it is prepared, not enforced.
+Read through the public API on 21 September 2026, `main` reports
+`protected: false` and `rules/branches/main` returns an empty list. Every
+merge so far has therefore waited for green checks by discipline, not by
+GitHub refusing a red one. Activating the policy is the operator step
+described in `docs/runbooks/project-hardening.md`: it needs repository
+administration access and a release workflow that no longer pushes version
+commits straight to `main`, and nothing here pretends to have done either.
 
 Sources consulted for the version facts (all public):
 

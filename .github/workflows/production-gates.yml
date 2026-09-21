@@ -15,10 +15,11 @@ concurrency:
 
 jobs:
   migration-replay:
-    # The 8.0 leg keeps the exact name that .github/main-ruleset.json requires
-    # as a status check. The 9.7 leg exists because Railway staging runs MySQL
-    # 9.7 (LTS), where MD5()/SHA1() were moved out of the server in 9.6 and a
-    # query that passed on 8.0 failed there; nothing in the repository caught it.
+    # Both leg names are required status checks in .github/main-ruleset.json
+    # (the prepared policy); renaming either breaks that policy. The 9.7 leg
+    # exists because Railway staging runs MySQL 9.7 (LTS), where MD5()/SHA1()
+    # were moved out of the server in 9.6 and a query that passed on 8.0 failed
+    # there; nothing in the repository caught it.
     name: Migration Replay and Live Transaction Acceptance${{ matrix.mysql != '8.0' && format(' (MySQL {0})', matrix.mysql) || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
