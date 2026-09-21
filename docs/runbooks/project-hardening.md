@@ -65,10 +65,12 @@ The policy requires **zero approving reviews**. This was the operator's decision
 Activation writes repository settings and therefore needs a token with repository administration write access; the CI token never has it, and neither does the tooling that prepared this policy. An administrator runs, from a checkout of `main`:
 
 ```bash
-GITHUB_TOKEN=<fine-grained token: Administration read/write on this repository> \
-  node scripts/ci/apply-main-protection.mjs --dry-run   # shows POST or PUT and the payload
-GITHUB_TOKEN=<same token> node scripts/ci/apply-main-protection.mjs
+read -rsp "GitHub admin token: " GITHUB_TOKEN && echo
+export GITHUB_TOKEN
+node scripts/ci/apply-main-protection.mjs --dry-run     # shows POST or PUT and the payload
+node scripts/ci/apply-main-protection.mjs
 node scripts/ci/verify-main-protection.mjs              # independent read-back
+unset GITHUB_TOKEN
 ```
 
 The apply script creates the ruleset named in `.github/main-ruleset.json` or updates the existing one of that name in place, never deletes anything, and exits non-zero if the live rules for `main` still lack any required rule. Merge the release-flow change before activating; a policy activated first would block the old workflow's direct push, and a release proposal opened by the old workflow would not exist.

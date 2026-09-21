@@ -5,8 +5,10 @@
  * repository administration write access, which the CI token never has, so it
  * is run by an operator, not by a workflow:
  *
- *   GITHUB_TOKEN=<admin token> node scripts/ci/apply-main-protection.mjs
- *   GITHUB_TOKEN=<admin token> node scripts/ci/apply-main-protection.mjs --dry-run
+ *   read -rsp "GitHub admin token: " GITHUB_TOKEN && echo
+ *   export GITHUB_TOKEN
+ *   node scripts/ci/apply-main-protection.mjs
+ *   node scripts/ci/apply-main-protection.mjs --dry-run
  *
  * It creates the ruleset when none of that name exists and updates it in place
  * otherwise; it never deletes or touches any other ruleset. After writing it
