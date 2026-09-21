@@ -227,8 +227,12 @@ async function main(): Promise<number> {
       `CREATE DATABASE \`${databaseName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
     );
 
+    // The application logs every pool checkout at DEBUG; at that volume the
+    // platform's log shipper drops thousands of lines, and the assertion that
+    // failed is the first casualty. Warnings and errors are what a report needs.
     const migrateEnv = {
       NODE_ENV: "test",
+      LOG_LEVEL: "warn",
       DATABASE_URL: targetUrl.toString(),
     };
     let since = Date.now();
@@ -274,6 +278,7 @@ async function main(): Promise<number> {
       ],
       {
         NODE_ENV: "test",
+        LOG_LEVEL: "warn",
         AIS_DISPOSABLE_DATABASE: "true",
         DATABASE_URL: targetUrl.toString(),
         REDIS_URL: redisUrl.toString(),
