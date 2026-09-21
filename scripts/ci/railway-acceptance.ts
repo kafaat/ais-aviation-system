@@ -137,7 +137,22 @@ async function diagnose(
   };
 }
 
+/** One-shot containers can exit before the platform's log shipper has read
+ * their last lines; the first Railway run left no deployment log at all, and
+ * the migrate service shows the same gap. A short pause after the summary is
+ * what makes the report reliably observable. Written to both streams so it
+ * survives either one being dropped. */
+const LOG_FLUSH_MS = 4_000;
+
+function announce(line: string): void {
+  console.info(line);
+  console.error(line);
+}
+
 async function main(): Promise<number> {
+  announce(
+    `[railway-acceptance] starting on node ${process.version}, source ${process.env.RAILWAY_GIT_COMMIT_SHA ?? "local"}`
+  );
   if (process.env.NODE_ENV === "production")
     throw new Error("The acceptance runner refuses to run as production");
 
@@ -311,7 +326,8 @@ async function main(): Promise<number> {
       },
       exitCode,
     };
-    console.info(`RAILWAY_ACCEPTANCE_SUMMARY ${JSON.stringify(summary)}`);
+    announce(`RAILWAY_ACCEPTANCE_SUMMARY ${JSON.stringify(summary)}`);
+    await new Promise(resolve => setTimeout(resolve, LOG_FLUSH_MS));
   }
 }
 
@@ -319,11 +335,12 @@ main().then(
   code => {
     process.exitCode = code;
   },
-  error => {
-    console.error(
-      "[railway-acceptance] aborted:",
-      error instanceof Error ? error.message : error
+  async error => {
+    // A refused configuration is exactly the case that has to be readable.
+    announce(
+      `[railway-acceptance] aborted: ${error instanceof Error ? error.message : String(error)}`
     );
+    await new Promise(resolve => setTimeout(resolve, LOG_FLUSH_MS));
     process.exitCode = 1;
   }
 );
