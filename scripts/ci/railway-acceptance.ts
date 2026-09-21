@@ -51,6 +51,17 @@ interface Diagnosis {
   };
 }
 
+/** One health endpoint as seen from inside the private network. `body` is the
+ * endpoint's own JSON (the health contract exposes per-dependency status and a
+ * short error string, never a credential). */
+interface WebProbe {
+  path: string;
+  status: number | null;
+  latencyMs: number | null;
+  body: unknown;
+  error: string | null;
+}
+
 interface AcceptanceReport {
   completed: boolean;
   passed: number;
@@ -137,6 +148,57 @@ async function diagnose(
   };
 }
 
+/** Probes the web service's public health endpoints over the private network.
+ *
+ * This is read-only and unauthenticated by design: the endpoints are public,
+ * they return per-dependency status rather than data, and the point is
+ * evidence that the deployed web process is serving and which readiness
+ * dependency, if any, is failing — the runbook's open question. A probe that
+ * cannot connect is recorded as such and never fails the run. */
+async function probeWeb(baseUrl: URL): Promise<WebProbe[]> {
+  const probes: WebProbe[] = [];
+  for (const path of [
+    "/api/rest/health/live",
+    "/api/rest/health/ready",
+    "/api/rest/health",
+  ]) {
+    const started = Date.now();
+    try {
+      const response = await fetch(new URL(path, baseUrl), {
+        headers: { accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      const text = await response.text();
+      let body: unknown = text.slice(0, 2000);
+      try {
+        body = JSON.parse(text);
+      } catch {
+        // Non-JSON stays as bounded text.
+      }
+      probes.push({
+        path,
+        status: response.status,
+        latencyMs: Date.now() - started,
+        body,
+        error: null,
+      });
+    } catch (error) {
+      probes.push({
+        path,
+        status: null,
+        latencyMs: Date.now() - started,
+        body: null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const last = probes[probes.length - 1];
+    console.info(
+      `[railway-acceptance] web ${path} -> ${last.status ?? "unreachable"} (${last.latencyMs}ms)${last.error ? `: ${last.error}` : ""}`
+    );
+  }
+  return probes;
+}
+
 /** One-shot containers can exit before the platform's log shipper has read
  * their last lines; the first Railway run left no deployment log at all, and
  * the migrate service shows the same gap. A short pause after the summary is
@@ -206,6 +268,7 @@ async function main(): Promise<number> {
   let exitCode = 1;
   let report: AcceptanceReport | null = null;
   let diagnosis: Diagnosis | null = null;
+  let web: WebProbe[] | null = null;
   const timings: Record<string, number> = {};
   const mark = (label: string, since: number) => {
     timings[label] = Date.now() - since;
@@ -217,6 +280,10 @@ async function main(): Promise<number> {
     console.info(
       `[railway-acceptance] mysql ${diagnosis.mysql.version} (${diagnosis.mysql.latencyMs}ms), redis ${diagnosis.redis.version} (${diagnosis.redis.latencyMs}ms)`
     );
+
+    const webBase = process.env.ACCEPTANCE_WEB_BASE_URL?.trim();
+    if (webBase) web = await probeWeb(new URL(webBase));
+    else console.info("[railway-acceptance] web probe skipped: no base URL");
 
     // Only this index is ever flushed, and index 0 was refused above.
     await redis.flushdb();
@@ -319,6 +386,7 @@ async function main(): Promise<number> {
       source: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
       environment: process.env.RAILWAY_ENVIRONMENT_NAME ?? null,
       diagnosis,
+      web,
       timings,
       acceptance: report && {
         completed: report.completed,
