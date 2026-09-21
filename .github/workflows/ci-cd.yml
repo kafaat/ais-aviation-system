@@ -7,6 +7,10 @@ on:
       - "v*"
   pull_request:
     branches: [main, develop]
+  # Release Automation starts this workflow on a `release/vX.Y.Z` branch it
+  # pushed with GITHUB_TOKEN, because such pushes start no workflow on their
+  # own. Deploy jobs stay gated on a push to their branch and never run here.
+  workflow_dispatch:
 
 env:
   NODE_VERSION: "22.x"

@@ -1,5 +1,23 @@
 name: Release Automation
 
+# Two phases, both driven from main.
+#
+# 1. Propose: when main carries releasable commits (or on a manual dispatch),
+#    the version bump and changelog are committed to a `release/vX.Y.Z` branch
+#    and opened as a pull request. Nothing is pushed to main. Because the
+#    branch and the pull request are created with GITHUB_TOKEN, GitHub starts
+#    no workflow for them on its own; the required check workflows are started
+#    explicitly with workflow_dispatch on the release branch, which the token
+#    is allowed to do. The pull request then needs the same review and checks
+#    as any other change.
+#
+# 2. Publish: when the tip of main is a merged release commit (only
+#    package.json and CHANGELOG.md changed, version bumped, tag absent), the
+#    tag and the GitHub release are created from that exact commit.
+#
+# This is what lets the main ruleset be enforced: no commit reaches main
+# without a pull request, including the release bot's.
+
 on:
   push:
     branches:
@@ -46,33 +64,66 @@ env:
 
 jobs:
   # =============================================================================
-  # Check if Release is Needed
+  # Decide: publish a merged release commit, propose a new one, or nothing
   # =============================================================================
   check-release:
     name: Check Release Conditions
     runs-on: ubuntu-latest
     outputs:
-      should_release: ${{ steps.check.outputs.should_release }}
+      mode: ${{ steps.check.outputs.mode }}
       release_type: ${{ steps.check.outputs.release_type }}
+      tag: ${{ steps.check.outputs.tag }}
+      version: ${{ steps.check.outputs.version }}
+      source_sha: ${{ steps.check.outputs.source_sha }}
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
-      - name: Check commits for release triggers
+      - name: Classify the trigger
         id: check
         env:
           RESUME_TAG: ${{ inputs.resume_tag }}
           INPUT_RELEASE_TYPE: ${{ inputs.release_type }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          set -euo pipefail
+          emit() { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
+          emit release_type none; emit tag ""; emit version ""; emit source_sha ""
+
           if [ -n "$RESUME_TAG" ]; then
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            emit mode none
             exit 0
           fi
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "release_type=$INPUT_RELEASE_TYPE" >> $GITHUB_OUTPUT
+
+          # A merged release commit at the tip of main: publish it. The commit
+          # is recognised by its content, never by its message, and the
+          # publisher re-verifies the same facts before tagging.
+          if [ "$EVENT_NAME" = "push" ]; then
+            parent="$(git rev-parse HEAD^)"
+            changed="$(git diff --name-only "$parent" HEAD)"
+            unexpected="$(printf '%s\n' "$changed" | grep -vxE 'CHANGELOG\.md|package\.json' || true)"
+            before="$(git show "$parent:package.json" | jq -r '.version')"
+            after="$(jq -r '.version' package.json)"
+            if [ -z "$unexpected" ] && printf '%s\n' "$changed" | grep -qx 'package.json' && [ "$before" != "$after" ]; then
+              tag="v$after"
+              if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+                echo "::notice::$tag already exists; nothing to publish."
+                emit mode none
+                exit 0
+              fi
+              emit mode publish
+              emit tag "$tag"
+              emit version "$after"
+              emit source_sha "$parent"
+              exit 0
+            fi
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            emit mode propose
+            emit release_type "$INPUT_RELEASE_TYPE"
             exit 0
           fi
 
@@ -84,7 +135,6 @@ jobs:
           fi
 
           RELEASE_TYPE="none"
-
           if echo "$COMMITS" | grep -qE "^[a-f0-9]+ (feat|feature)(\(.+\))?!:"; then
             RELEASE_TYPE="major"
           elif echo "$COMMITS" | grep -qE "^[a-f0-9]+ BREAKING CHANGE"; then
@@ -96,11 +146,10 @@ jobs:
           fi
 
           if [ "$RELEASE_TYPE" != "none" ]; then
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+            emit mode propose
+            emit release_type "$RELEASE_TYPE"
           else
-            echo "should_release=false" >> $GITHUB_OUTPUT
-            echo "release_type=none" >> $GITHUB_OUTPUT
+            emit mode none
           fi
 
   # =============================================================================
@@ -109,7 +158,7 @@ jobs:
   version:
     name: Calculate Version
     needs: check-release
-    if: needs.check-release.outputs.should_release == 'true'
+    if: needs.check-release.outputs.mode == 'propose'
     runs-on: ubuntu-latest
     outputs:
       new_version: ${{ steps.version.outputs.new_version }}
@@ -215,15 +264,16 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
   # =============================================================================
-  # Create Release
+  # Propose: version bump on a release branch, opened as a pull request
   # =============================================================================
-  release:
-    name: Create Release
+  propose:
+    name: Propose Release Pull Request
     needs: [check-release, version, changelog]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      packages: write
+      pull-requests: write
+      actions: write
     steps:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -244,24 +294,36 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Reuse an already pushed release commit or tag
-        id: release-target
+      # One release proposal at a time. A second bump while one is open would
+      # produce two competing version commits; the operator closes or merges
+      # the open one first.
+      - name: Refuse a duplicate proposal
+        id: guard
         env:
           RELEASE_TAG: v${{ needs.version.outputs.new_version }}
-          RELEASE_SOURCE_SHA: ${{ github.sha }}
         run: |
-          git fetch origin main --tags
-          node scripts/ci/release-publication.js prepare
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::$RELEASE_TAG already exists; use resume_tag to publish it."
+            exit 1
+          fi
+          open="$(git ls-remote --heads origin 'refs/heads/release/v*' | awk '{print $2}' || true)"
+          if [ -n "$open" ]; then
+            echo "::notice::A release branch is already open: $open. Merge or delete it before proposing another."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Update version in package.json
-        if: steps.release-target.outputs.reuse_commit != 'true'
+        if: steps.guard.outputs.skip != 'true'
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
         run: |
           npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts
 
       - name: Update CHANGELOG.md
-        if: steps.release-target.outputs.reuse_commit != 'true'
+        if: steps.guard.outputs.skip != 'true'
         env:
           RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
         run: |
@@ -274,23 +336,22 @@ jobs:
           fi
 
       - name: Format CHANGELOG.md with Prettier
-        if: steps.release-target.outputs.reuse_commit != 'true'
+        if: steps.guard.outputs.skip != 'true'
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm exec prettier --write CHANGELOG.md
 
       - name: Commit version bump
-        if: steps.release-target.outputs.reuse_commit != 'true'
+        if: steps.guard.outputs.skip != 'true'
         run: |
           git add package.json CHANGELOG.md
           git commit -m "chore(release): v${{ needs.version.outputs.new_version }}"
 
-      # This commit becomes the tip of main, and it is the one commit on main that
-      # no workflow ever runs against: pushes made with GITHUB_TOKEN do not start
-      # new runs, so the gates only ever see the merge commit underneath it. That
-      # is acceptable only while the commit carries no code. Prove it here, before
-      # the push, instead of assuming it.
+      # The release commit is reviewed like any other, but its whole point is
+      # to carry nothing except the version bump and changelog. Prove that
+      # before it leaves this runner; the publisher proves it again on main.
       - name: Verify the release commit changes no code
+        if: steps.guard.outputs.skip != 'true'
         run: |
           set -euo pipefail
           unexpected=$(git diff --name-only HEAD~1 HEAD | grep -vxE 'CHANGELOG\.md|package\.json' || true)
@@ -308,23 +369,145 @@ jobs:
           echo "Release commit is limited to the version bump and changelog."
 
       - name: Push version bump
-        if: steps.release-target.outputs.reuse_commit != 'true'
-        run: git push origin HEAD:main
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
+        run: git push origin "HEAD:refs/heads/$RELEASE_BRANCH"
+
+      # The title carries no `release` scope on purpose: the PR title check
+      # rejects that scope. The squash commit on main is recognised by its
+      # content, so the title does not need to match a pattern.
+      - name: Open the release pull request
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
+          RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
+          RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"
+          {
+            echo "## Description"
+            echo
+            echo "Version bump to v$RELEASE_VERSION and its changelog entry. This pull request changes only \`package.json\` and \`CHANGELOG.md\`; the tag and the GitHub release are created from the merge commit once it reaches \`main\`."
+            echo
+            echo "## Type of Change"
+            echo
+            echo "- [x] Other (please describe): release version bump"
+            echo
+            echo "## Related Issues"
+            echo
+            echo "Release proposal generated by the Release Automation workflow."
+            echo
+            echo "## How to Test"
+            echo
+            echo "1. The required checks run on this branch; they were started by the workflow because a token-created branch starts none on its own."
+            echo "2. \`git diff --name-only main...HEAD\` lists only \`package.json\` and \`CHANGELOG.md\`."
+            echo "3. After merge, the Release Automation workflow publishes \`v$RELEASE_VERSION\` from the merge commit."
+            echo
+            echo "## Checklist"
+            echo
+            echo "- [x] My code follows the project's code style"
+            echo "- [x] I have performed a self-review of my changes"
+            echo "- [x] I have added tests that prove my fix/feature works — not applicable, version bump only"
+            echo "- [x] New and existing unit tests pass locally — verified by the checks on this branch"
+            echo "- [x] I have updated the documentation accordingly — changelog"
+            echo "- [x] My changes generate no new warnings"
+            echo "- [x] I have checked for potential security issues — no code changes"
+            echo
+            echo "## Additional Notes"
+            echo
+            echo "$RELEASE_NOTES"
+          } > "$body_file"
+          gh pr create \
+            --base main \
+            --head "$RELEASE_BRANCH" \
+            --title "chore: release v$RELEASE_VERSION" \
+            --body-file "$body_file"
+
+      # A branch pushed with GITHUB_TOKEN triggers no workflow, so the checks
+      # the ruleset requires must be started explicitly. workflow_dispatch is
+      # the one event that token may raise. The check runs attach to the
+      # branch head, which is the pull request head.
+      - name: Start the required checks on the release branch
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          for workflow in ci-cd.yml production-gates.yml component-labs.yml docker-image-validation.yml; do
+            gh workflow run "$workflow" --ref "$RELEASE_BRANCH"
+            echo "Started $workflow on $RELEASE_BRANCH"
+          done
+
+  # =============================================================================
+  # Publish: tag and release the merged release commit
+  # =============================================================================
+  release:
+    name: Create Release
+    needs: check-release
+    if: needs.check-release.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Verifies the merged commit is a direct child of the recorded source,
+      # changes only package.json and CHANGELOG.md, and bumps the version to
+      # the tag. Reuses an existing tag if a previous publication was cut off.
+      - name: Verify the merged release commit
+        id: release-target
+        env:
+          RELEASE_TAG: ${{ needs.check-release.outputs.tag }}
+          RELEASE_SOURCE_SHA: ${{ needs.check-release.outputs.source_sha }}
+          RELEASE_MERGED_SHA: ${{ github.sha }}
+        run: |
+          git fetch origin main --tags
+          node scripts/ci/release-publication.js prepare
+
+      - name: Read release notes from the changelog
+        id: notes
+        run: |
+          set -euo pipefail
+          {
+            echo "notes<<EOF"
+            awk 'BEGIN{p=0} /^## What.s Changed in /{ if (p) exit; p=1 } /^---$/{ if (p) exit } p{ print }' CHANGELOG.md
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
         if: steps.release-target.outputs.tag_exists != 'true'
+        env:
+          RELEASE_TAG: ${{ needs.check-release.outputs.tag }}
         run: |
-          git tag -a "v${{ needs.version.outputs.new_version }}" \
-            -m "Release v${{ needs.version.outputs.new_version }}"
-          git push origin "v${{ needs.version.outputs.new_version }}"
+          git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
 
       - name: Create GitHub Release
         run: node scripts/ci/release-publication.js publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: v${{ needs.version.outputs.new_version }}
-          RELEASE_SOURCE_SHA: ${{ github.sha }}
-          RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
+          RELEASE_TAG: ${{ needs.check-release.outputs.tag }}
+          RELEASE_SOURCE_SHA: ${{ needs.check-release.outputs.source_sha }}
+          RELEASE_NOTES: ${{ steps.notes.outputs.notes }}
           # Empty on a push, where the tag suffix decides. On a dispatch the
           # operator's choice must reach the release, including a custom
           # version, which never receives the -rc suffix.
@@ -342,7 +525,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*New Release: v${{ needs.version.outputs.new_version }}* :rocket:\n\nView release: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.version.outputs.new_version }}"
+                    "text": "*New Release: ${{ needs.check-release.outputs.tag }}* :rocket:\n\nView release: https://github.com/${{ github.repository }}/releases/tag/${{ needs.check-release.outputs.tag }}"
                   }
                 }
               ]
@@ -378,9 +561,9 @@ jobs:
   # =============================================================================
   trigger-deployment:
     name: Trigger Deployment
-    needs: [version, release]
+    needs: [check-release, release]
     runs-on: ubuntu-latest
-    if: github.event.inputs.prerelease != 'true'
+    if: needs.check-release.outputs.mode == 'publish' && !contains(needs.check-release.outputs.tag, '-')
     steps:
       - name: Detect deployment credential
         id: deployment-credential
@@ -400,4 +583,4 @@ jobs:
         with:
           token: ${{ secrets.DEPLOYMENT_PAT }}
           event-type: release-deployment
-          client-payload: '{"version": "${{ needs.version.outputs.new_version }}", "ref": "v${{ needs.version.outputs.new_version }}"}'
+          client-payload: '{"version": "${{ needs.check-release.outputs.version }}", "ref": "${{ needs.check-release.outputs.tag }}"}'

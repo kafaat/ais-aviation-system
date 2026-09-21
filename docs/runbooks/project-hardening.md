@@ -49,9 +49,31 @@ Reference: [OpenTelemetry JavaScript instrumentation](https://opentelemetry.io/d
 
 `.github/main-ruleset.json` is a prepared policy, not evidence that GitHub enforces it. It requires review, resolution of conversations, current-base checks from the GitHub Actions app, and prevents force pushes/deletion. `node scripts/ci/verify-main-protection.mjs` reads the current main SHA before and after inspection and fails if required rules are absent or the release workflow is incompatible. It never writes repository settings. Reading organization/repository bypass actors separately requires administrative access.
 
-At the verified base, `main` reports `protected: false`. The current release workflow pushes version commits directly to main with `GITHUB_TOKEN`; those pushes do not start the normal CI workflow. Requiring PRs without changing that workflow would break releases. Before activating the proposed policy, convert release version updates to reviewed PRs with checks on their exact SHA and publish the release from the merged version commit. Do not grant the release bot an unrestricted bypass to hide this dependency. Changing this release policy and activating repository settings require an operator decision and repository administration access, neither of which is fabricated here.
+At the verified base, `main` reported `protected: false`, and it still did on 21 September 2026 (`rules/branches/main` empty). The release workflow used to push version commits directly to main with `GITHUB_TOKEN`, which no ruleset could allow without a bypass; that dependency is now removed rather than hidden.
 
-Reference: [GitHub repository rules REST API](https://docs.github.com/en/rest/repos/rules).
+### Release flow that the ruleset allows
+
+`Release Automation` no longer writes to `main`. It has two phases, both recognised by content rather than by commit message:
+
+1. **Propose.** When `main` carries releasable commits since the last tag, or on a manual dispatch, the workflow commits the version bump and changelog to `release/vX.Y.Z`, proves that commit touches only `package.json` and `CHANGELOG.md`, pushes the branch and opens a pull request titled `chore: release vX.Y.Z` (the PR title check rejects a `release` scope, so the scope is omitted). A branch and pull request created with `GITHUB_TOKEN` start no workflow on their own, so the workflow then starts `ci-cd.yml`, `production-gates.yml`, `component-labs.yml` and `docker-image-validation.yml` on the release branch with `workflow_dispatch`, the one event that token may raise; their check runs attach to the branch head, which is the pull request head. Only one `release/v*` branch may exist at a time; a second proposal is skipped with a notice until the open one is merged or deleted. Deploy jobs in `ci-cd.yml` stay gated on a push to their branch and never run from a dispatch.
+2. **Publish.** When the tip of `main` is a merged release commit (only `package.json` and `CHANGELOG.md` changed against its first parent, version bumped, tag absent), the workflow verifies exactly that with `release-publication.js`, tags that commit (`RELEASE_MERGED_SHA`, not whatever `main` points at by then), and creates the GitHub release from the changelog's top section. `resume_tag` still republishes an existing tag.
+
+The release pull request needs the same approval as any other, from a collaborator other than its last pusher. With `require_last_push_approval` and one required approval, the repository's two collaborators can approve each other's pull requests but not their own; the release bot's pull requests can be approved by either. Do not grant the bot a bypass.
+
+### Activating the policy
+
+Activation writes repository settings and therefore needs a token with repository administration write access; the CI token never has it, and neither does the tooling that prepared this policy. An administrator runs, from a checkout of `main`:
+
+```bash
+GITHUB_TOKEN=<fine-grained token: Administration read/write on this repository> \
+  node scripts/ci/apply-main-protection.mjs --dry-run   # shows POST or PUT and the payload
+GITHUB_TOKEN=<same token> node scripts/ci/apply-main-protection.mjs
+node scripts/ci/verify-main-protection.mjs              # independent read-back
+```
+
+The apply script creates the ruleset named in `.github/main-ruleset.json` or updates the existing one of that name in place, never deletes anything, and exits non-zero if the live rules for `main` still lack any required rule. Merge the release-flow change before activating; a policy activated first would block the old workflow's direct push, and a release proposal opened by the old workflow would not exist.
+
+Reference: [GitHub repository rules REST API](https://docs.github.com/en/rest/repos/rules), [workflow_dispatch from GITHUB_TOKEN](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow).
 
 ## Verification
 
