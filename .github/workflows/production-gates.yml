@@ -15,12 +15,20 @@ concurrency:
 
 jobs:
   migration-replay:
-    name: Migration Replay and Live Transaction Acceptance
+    # The 8.0 leg keeps the exact name that .github/main-ruleset.json requires
+    # as a status check. The 9.7 leg exists because Railway staging runs MySQL
+    # 9.7 (LTS), where MD5()/SHA1() were moved out of the server in 9.6 and a
+    # query that passed on 8.0 failed there; nothing in the repository caught it.
+    name: Migration Replay and Live Transaction Acceptance${{ matrix.mysql != '8.0' && format(' (MySQL {0})', matrix.mysql) || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        mysql: ["8.0", "9.7"]
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:${{ matrix.mysql }}
         env:
           MYSQL_ROOT_PASSWORD: test_password
           MYSQL_DATABASE: ais_migration_test
@@ -106,6 +114,7 @@ jobs:
           NODE_ENV: test
           AIS_DISPOSABLE_DATABASE: "true"
           MYSQL_SERVICE_CONTAINER: ${{ job.services.mysql.id }}
+          MYSQL_SERVICE_IMAGE: mysql:${{ matrix.mysql }}
           MYSQL_DATABASE: ais_migration_test
           MYSQL_PWD: test_password
         run: python3 scripts/ci/backup-restore-smoke.py "$RUNNER_TEMP/backup-restore.json"
@@ -113,7 +122,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: live-transaction-acceptance
+          name: live-transaction-acceptance-mysql-${{ matrix.mysql }}
           path: |
             ${{ runner.temp }}/integration-remediation.json
             ${{ runner.temp }}/live-acceptance.json

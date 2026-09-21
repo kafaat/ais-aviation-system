@@ -39,6 +39,39 @@ web redeployment in the environment named `production` before the operator's
 manual redeployment. Worker creation remains blocked. No alternate tool or
 indirect execution may be used to bypass those rejections.
 
+### The isolated provider boundary now exists in code; deployment still awaits approval
+
+The block above names its prerequisite: an approved isolated provider boundary.
+The boundary is now a configured, testable property of the worker process
+rather than a hope about which variables happen to be set
+(`server/_core/provider-boundary.ts`, `server/services/stripe/client-factory.ts`,
+tests in `server/__tests__/provider-boundary.test.ts`):
+
+- `AIS_PROVIDER_BOUNDARY=open` is the default and changes nothing for
+  production or development.
+- `AIS_PROVIDER_BOUNDARY=isolated` makes the worker **refuse to start** when
+  any variable could reach a live provider: a `sk_live_`/`rk_live_` Stripe key,
+  a Resend, Twilio, OpenAI or Sentry credential, `SMS_PROVIDER=twilio`, an
+  `OUTBOX_PUBLISH_URL` or OTLP endpoint outside loopback or
+  `*.railway.internal`, a Hotelbeds, weather or on-call mode of `live`, or any
+  alternative-payment-provider credential. The refusal names providers and
+  variable names, never values.
+- A Stripe **test** key is allowed to exist under isolation but no client is
+  ever constructed against `api.stripe.com`: all three former constructors now
+  go through one factory, which under isolation only builds a client pointed at
+  `STRIPE_MOCK_HOST` (a `stripe-mock` instance) and otherwise throws before any
+  request. A job that reaches for Stripe therefore fails closed and its durable
+  retry machinery records the failure; nothing leaves the environment.
+
+What this does not do: it does not deploy the worker. Worker creation in this
+environment was rejected by the approval reviewer and that rejection stands
+until an operator lifts it. When they do, the intended configuration is
+`AIS_PROVIDER_BOUNDARY=isolated`, `STRIPE_MOCK_HOST` pointing at a private
+`stripe-mock` service, `SMS_PROVIDER=mock`, no Resend/OpenAI/Sentry credentials,
+and the startup log line `Worker process starting...` carrying a
+`providerBoundary` report whose findings are all `absent`, `mock`, `blocked` or
+`sandbox`.
+
 ## Required runtime evidence
 
 - Complete readiness diagnosis; registration/login and invalid-password API
@@ -221,3 +254,31 @@ passed against the server versions the environment actually runs. The
 `main`; after that it should be pointed at `main` so every push re-proves the
 journal and the boundaries against the deployed MySQL and Redis. Re-running it
 at any time is a redeploy of the service.
+
+### The repository's gate now runs the environment's MySQL version too
+
+The MD5 finding showed a gap: every repository gate ran `mysql:8.0` while the
+environment runs 9.7. The `Migration Replay and Live Transaction Acceptance`
+job in `production-gates.yml` is now a two-leg matrix over `mysql:8.0` and
+`mysql:9.7` with `fail-fast: false`. The 8.0 leg keeps its exact job name, which
+`.github/main-ruleset.json` requires as a status check; the 9.7 leg is named
+`… (MySQL 9.7)` and uploads its own `live-transaction-acceptance-mysql-9.7`
+artifact. The backup-restore smoke receives the image it should expect through
+`MYSQL_SERVICE_IMAGE` instead of assuming 8.0. The 9.7 leg is not yet a required
+check: it must first prove itself stable on `main`, after which adding its
+context to the ruleset is a one-line change.
+
+Sources consulted for the version facts (all public):
+
+- MySQL 9.4.0 release notes: `MD5()`, `SHA()`/`SHA1()` and related hashing
+  functions deprecated; MySQL 9.6.0 release notes: moved out of the server into
+  the Legacy Hashing component (dev.mysql.com/doc/relnotes/mysql/9.4/en/ and
+  /9.6/en/).
+- Docker Hub `mysql` tags: `9.7` is the current LTS line, aliased `lts` and
+  `9`; `8.0` is the previous line
+  (hub.docker.com/\_/mysql).
+- Railway log limits: 500 log lines per second per replica, excess dropped
+  (docs.railway.com/observability/logs).
+- Stripe Node SDK configuration: `host`, `port` and `protocol` options and the
+  `stripe-mock` server used here for the isolated client
+  (github.com/stripe/stripe-node, github.com/stripe/stripe-mock).
