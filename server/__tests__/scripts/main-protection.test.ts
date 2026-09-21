@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { missingMainRules } from "../../../scripts/ci/verify-main-protection.mjs";
+import {
+  missingMainRules,
+  policyApprovals,
+} from "../../../scripts/ci/verify-main-protection.mjs";
 import { planRulesetRequest } from "../../../scripts/ci/apply-main-protection.mjs";
 const policy = JSON.parse(
   readFileSync(
@@ -14,6 +17,12 @@ const checks = policy.rules
 describe("main protection evidence", () => {
   it("accepts the declared policy but identifies every missing rule", () => {
     expect(missingMainRules(policy.rules, checks)).toEqual([]);
+    // The repository chose zero required approvals; the stricter reading
+    // must still be expressible and must flag this policy.
+    expect(policyApprovals(policy)).toBe(0);
+    expect(missingMainRules(policy.rules, checks, 1)).toEqual([
+      "approving_review",
+    ]);
     for (const type of [
       "deletion",
       "non_fast_forward",

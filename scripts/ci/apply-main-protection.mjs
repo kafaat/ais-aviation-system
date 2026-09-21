@@ -15,7 +15,10 @@
  */
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { missingMainRules } from "./verify-main-protection.mjs";
+import {
+  missingMainRules,
+  policyApprovals,
+} from "./verify-main-protection.mjs";
 
 /** Decide whether the policy is created or updates the existing ruleset of the
  * same name. Pure, so the decision is testable without the API. */
@@ -80,7 +83,7 @@ async function main() {
   const expected = policy.rules
     .find(r => r.type === "required_status_checks")
     .parameters.required_status_checks.map(c => c.context);
-  const missing = missingMainRules(rules, expected);
+  const missing = missingMainRules(rules, expected, policyApprovals(policy));
   console.log(
     JSON.stringify(
       {
