@@ -756,6 +756,26 @@ export function generateETLManifest(
 /**
  * Create a new export job and execute it.
  */
+/** Drizzle reports a driver failure as "Failed query: <sql>" and keeps the
+ * server's own reason on `cause`. An operator reading the export row needs
+ * that reason — the SQL alone says which query failed, not why, and on a
+ * server version nobody has locally it is the only clue. The SQL carries `?`
+ * placeholders, never bound values, so nothing personal is recorded. */
+function exportFailureMessage(error: unknown): string {
+  if (!(error instanceof Error)) return "Export failed";
+  const cause = (
+    error as {
+      cause?: { code?: string; sqlMessage?: string; message?: string };
+    }
+  ).cause;
+  const reason = cause?.sqlMessage ?? cause?.message;
+  const detail = [cause?.code, reason].filter(Boolean).join(": ");
+  return (detail ? `${error.message} — ${detail}` : error.message).slice(
+    0,
+    4000
+  );
+}
+
 export async function createExportJob(
   exportType: ExportType,
   dateRange: DateRange,
@@ -908,7 +928,7 @@ export async function createExportJob(
       .update(warehouseExports)
       .set({
         status: "failed",
-        errorMessage: error instanceof Error ? error.message : "Export failed",
+        errorMessage: exportFailureMessage(error),
       })
       .where(eq(warehouseExports.id, exportRecord.id));
     await emitLineageEvent({
