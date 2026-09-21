@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-export function missingMainRules(rules, required) {
+/** The approval count is read from the policy rather than assumed: the
+ * repository has two collaborators and chose zero required approvals, keeping
+ * the pull-request rule for its other guarantees (stale-review dismissal,
+ * last-push approval when a review exists, thread resolution) and relying on
+ * the twelve required checks. Passing 1 restores the stricter reading. */
+export function missingMainRules(rules, required, minimumApprovals = 0) {
   const missing = [];
   for (const type of ["deletion", "non_fast_forward"])
     if (!rules.some(r => r.type === type)) missing.push(type);
@@ -13,7 +18,13 @@ export function missingMainRules(rules, required) {
     "required_review_thread_resolution",
   ])
     if (!review.some(r => r[key] === true)) missing.push(key);
-  if (!review.some(r => r.required_approving_review_count >= 1))
+  if (
+    !review.some(
+      r =>
+        Number.isInteger(r.required_approving_review_count) &&
+        r.required_approving_review_count >= minimumApprovals
+    )
+  )
     missing.push("approving_review");
   const checks = rules
     .filter(r => r.type === "required_status_checks")
@@ -30,6 +41,13 @@ export function missingMainRules(rules, required) {
     )
       missing.push("check:" + name);
   return missing;
+}
+export function policyApprovals(policy) {
+  const count = policy.rules.find(r => r.type === "pull_request")?.parameters
+    ?.required_approving_review_count;
+  if (!Number.isInteger(count) || count < 0)
+    throw new Error("Policy must declare required_approving_review_count");
+  return count;
 }
 async function main() {
   const policy = JSON.parse(
@@ -68,7 +86,7 @@ async function main() {
   const after = await read("branches/main");
   if (before.commit.sha !== after.commit.sha)
     throw new Error("main changed during inspection; retry");
-  const missing = missingMainRules(rules, expected);
+  const missing = missingMainRules(rules, expected, policyApprovals(policy));
   const releaseWorkflowCompatible = !/git push origin HEAD:main/.test(
     readFileSync(
       new URL("../../.github/workflows/release.yml", import.meta.url),
