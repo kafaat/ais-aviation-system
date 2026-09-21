@@ -17,7 +17,8 @@ The gate fails unless all of these hold:
 - A failed dump produces no completed artifact; an existing backup cannot be
   overwritten; a nonempty restore target is refused without changing its data.
 
-The artifact `live-transaction-acceptance/backup-restore.json` records the tested
+The artifact `live-transaction-acceptance-mysql-<version>/backup-restore.json`
+(one per MySQL version in the gate's matrix, currently 8.0 and 9.7) records the tested
 commit, command digest, before/after database digests, fixture counts and elapsed
 time. Raw SQL, session tokens and credentials are not uploaded. The runner deletes
 only its own target container and volume; GitHub owns the source service lifecycle.

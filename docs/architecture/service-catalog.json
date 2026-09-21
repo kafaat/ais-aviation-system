@@ -3613,7 +3613,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/services/payment-providers/index.ts"],
-      "dependencies": [],
+      "dependencies": ["server/services/stripe/client-factory.ts"],
       "tableExpressions": {
         "reads": [],
         "writes": []
@@ -5036,6 +5036,27 @@
       "replacement": "server/webhooks/stripe.ts"
     },
     {
+      "file": "server/services/stripe/client-factory.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/stripe/client-factory.ts",
+      "domain": "payments",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/services/payment-providers/stripe.provider.ts",
+        "server/services/stripe/stripe-reconciliation.service.ts",
+        "server/stripe.ts"
+      ],
+      "dependencies": ["server/_core/provider-boundary.ts"],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/stripe/stripe-reconciliation.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/stripe/stripe-reconciliation.service.ts",
@@ -5045,7 +5066,11 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/jobs/reconciliation.job.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/db.ts",
+        "server/services/stripe/client-factory.ts"
+      ],
       "tableExpressions": {
         "reads": ["bookings", "financialLedger", "payments"],
         "writes": ["bookings", "financialLedger", "payments"]

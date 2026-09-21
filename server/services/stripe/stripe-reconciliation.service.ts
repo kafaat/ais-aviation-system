@@ -12,7 +12,8 @@
  * @see PRODUCTION_GRADE_IMPLEMENTATION_GUIDE.md
  */
 
-import Stripe from "stripe";
+import type Stripe from "stripe";
+import { createStripeClient } from "./client-factory";
 import { eq, and, isNotNull, sql, inArray } from "drizzle-orm";
 import { getDb } from "../../db";
 import { payments, bookings, financialLedger } from "../../../drizzle/schema";
@@ -105,7 +106,7 @@ function getStripeClient(): Stripe {
   if (!secretKey) {
     throw new Error("STRIPE_SECRET_KEY is required for reconciliation");
   }
-  return new Stripe(secretKey, { apiVersion: "2025-12-15.clover" });
+  return createStripeClient(secretKey);
 }
 
 // ============================================================================

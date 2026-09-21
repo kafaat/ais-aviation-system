@@ -46,7 +46,13 @@ def main():
     info = json.loads(run(["docker", "inspect", source]).stdout)[0]
     require("AIS_DISPOSABLE_DATABASE=true" in info["Config"]["Env"],
             "Source container must be explicitly marked disposable")
-    require(info["Config"]["Image"] == "mysql:8.0", "Expected CI MySQL 8.0 service")
+    # The gate runs one leg per MySQL version in its matrix; the workflow names
+    # the image it started so the script never dumps an unexpected server.
+    expected_image = os.environ.get("MYSQL_SERVICE_IMAGE", "mysql:8.0")
+    require(re.fullmatch(r"mysql:[0-9][0-9.]*", expected_image),
+            "MYSQL_SERVICE_IMAGE must be an official mysql:<version> tag")
+    require(info["Config"]["Image"] == expected_image,
+            "Expected CI MySQL service image " + expected_image)
     suffix = uuid.uuid4().hex[:16]
     volume = "ais-restore-" + suffix
     target = "ais-restore-" + suffix

@@ -518,7 +518,9 @@ export async function exportCustomerData(
 
   const results = await db
     .select({
-      anonymizedUserId: sql<string>`MD5(CAST(${users.id} AS CHAR))`,
+      // Hashed in Node below: MySQL 9.7 removed MD5(). The digest and its
+      // format are unchanged, so downstream joins on the pseudonym still hold.
+      userId: users.id,
       userRole: users.role,
       registrationDate: sql<string>`DATE(${users.createdAt})`,
       lastActivity: sql<string>`DATE(${users.lastSignedIn})`,
@@ -568,7 +570,7 @@ export async function exportCustomerData(
   ];
 
   const data = formatExportData(results, format, headers, row => [
-    row.anonymizedUserId || "",
+    anonymizeUserId(row.userId),
     row.userRole || "",
     row.registrationDate || "",
     row.lastActivity || "",
@@ -756,6 +758,35 @@ export function generateETLManifest(
 /**
  * Create a new export job and execute it.
  */
+/** Drizzle reports a driver failure as "Failed query: <sql>" and keeps the
+ * server's own reason on `cause`. An operator reading the export row needs
+ * that reason — the SQL alone says which query failed, not why, and on a
+ * server version nobody has locally it is the only clue. The SQL carries `?`
+ * placeholders, never bound values, so nothing personal is recorded. */
+/** The same digest the export produced with MySQL's MD5(): the identifier is
+ * a pseudonym for BI joins, so its value must not change with the server
+ * version. Whether MD5 of a small integer is a strong pseudonym is a separate,
+ * pre-existing question for the data owner; it is not decided here. */
+function anonymizeUserId(id: number): string {
+  return createHash("md5").update(String(id)).digest("hex");
+}
+
+function exportFailureMessage(error: unknown): string {
+  if (!(error instanceof Error)) return "Export failed";
+  // Drizzle's message is two lines: the statement with `?` placeholders, then
+  // "params: <bound values>". Only the statement is kept. The values had been
+  // stored verbatim, and for some exports they identify people.
+  const [statement] = error.message.split("\n");
+  const cause = (
+    error as {
+      cause?: { code?: string; sqlMessage?: string; message?: string };
+    }
+  ).cause;
+  const reason = cause?.sqlMessage ?? cause?.message;
+  const detail = [cause?.code, reason].filter(Boolean).join(": ");
+  return (detail ? `${statement} — ${detail}` : statement).slice(0, 4000);
+}
+
 export async function createExportJob(
   exportType: ExportType,
   dateRange: DateRange,
@@ -908,7 +939,7 @@ export async function createExportJob(
       .update(warehouseExports)
       .set({
         status: "failed",
-        errorMessage: error instanceof Error ? error.message : "Export failed",
+        errorMessage: exportFailureMessage(error),
       })
       .where(eq(warehouseExports.id, exportRecord.id));
     await emitLineageEvent({

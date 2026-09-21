@@ -1,4 +1,5 @@
 import { assertIntegrationConfiguration } from "./services/integration-config.service";
+import { assertProviderBoundary } from "./_core/provider-boundary";
 import { initTracing, stopTracing } from "./_core/telemetry";
 import { randomUUID } from "node:crypto";
 import {
@@ -60,8 +61,14 @@ let heartbeat: NodeJS.Timeout | undefined;
 
 async function initialize(): Promise<void> {
   initTracing("worker");
+  // Both assertions refuse to start the process rather than log and continue:
+  // an invalid integration or a live provider behind an isolated boundary is a
+  // configuration error, not a runtime condition to retry.
   log.info(
-    { integrations: assertIntegrationConfiguration() },
+    {
+      integrations: assertIntegrationConfiguration(),
+      providerBoundary: assertProviderBoundary(),
+    },
     "Worker process starting..."
   );
 

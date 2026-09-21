@@ -159,7 +159,14 @@ export async function verifyR2Lineage(
       const job = await runWithTrace(trace, () =>
         createExportJob("customers", range, "json", seed)
       );
-      assert.equal(job.status, "completed");
+      // The export records its own failure reason; surface it here, because a
+      // bare status mismatch is unreadable when this runs on a server version
+      // nobody has a local copy of.
+      assert.equal(
+        job.status,
+        "completed",
+        `customers export did not complete: ${job.errorMessage ?? "no error recorded"}`
+      );
       runId = exportRunId(job.id);
 
       const rows = await db

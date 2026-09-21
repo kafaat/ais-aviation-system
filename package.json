@@ -46,6 +46,7 @@
     "db:verify-catalog": "tsx scripts/verify-database-schema.ts",
     "db:audit-data": "node --import tsx scripts/ci/forensic-data-audit.ts",
     "test:acceptance": "node --import tsx scripts/verify-transaction-boundaries.ts",
+    "test:acceptance:railway": "node --import tsx scripts/ci/railway-acceptance.ts",
     "check:scripts": "tsc -p tsconfig.scripts.json --noEmit"
   },
   "dependencies": {
