@@ -250,10 +250,14 @@ With the customers export hashing in Node, the fifth run
 
 This is the first time the repository's transactional acceptance suite has
 passed against the server versions the environment actually runs. The
-`ais-acceptance` service tracks the runner's branch until that branch reaches
-`main`; after that it should be pointed at `main` so every push re-proves the
-journal and the boundaries against the deployed MySQL and Redis. Re-running it
-at any time is a redeploy of the service.
+`ais-acceptance` service tracked the runner's branch until that branch reached
+`main` (pull request #166, squash commit `5d23f3f`). It was then pointed at
+`main`, and its first `main`-sourced deployment
+(`fd6f327e-37e5-4007-8a4d-68214f7c835d`) passed 127 of 127 with zero provider
+calls on the same MySQL 9.7.2 and Redis 8.2.9, with the web liveness, readiness
+and detailed-health results unchanged (200, 503, 401). From here on every push
+to `main` re-proves the journal and the boundaries against the deployed
+servers; re-running it at any time is a redeploy of the service.
 
 ### The repository's gate now runs the environment's MySQL version too
 
