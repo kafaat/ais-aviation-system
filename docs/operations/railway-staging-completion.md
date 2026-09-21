@@ -169,3 +169,55 @@ Two things were learned that are not about the application's behaviour:
 These runs are evidence about the deployed MySQL and Redis and about the
 migration journal. They are not browser or booking acceptance, not provider
 acceptance, and not a statement about the worker, which remains blocked.
+
+### Root cause of the one failing check, and the web service seen from inside
+
+The fourth run carried two additions and both paid off.
+
+**The failing check has one cause: MySQL 9.7.2 has removed `MD5()`.** The
+customers warehouse export pseudonymised user ids with
+`MD5(CAST(users.id AS CHAR))`; the server answered
+`ER_SP_DOES_NOT_EXIST: FUNCTION ais_acceptance_test.MD5 does not exist`. CI and
+local development run MySQL 8.0, which still has the function, so no gate in
+the repository could have found this; the environment did. A search of every
+SQL statement in the codebase for functions MySQL 9 removed or deprecated found
+this single use. The digest now runs in Node over the same input; it is
+byte-identical to MySQL's output (verified for several ids against 8.0.46), so
+downstream joins on the pseudonym hold. Whether MD5 of a small integer is a
+strong pseudonym is a pre-existing question for the data owner, not decided
+here.
+
+**`ais-web` is serving.** Probed over the private network at
+`http://ais-web.railway.internal:3000`, with no authentication and no data
+beyond the health contract:
+
+| Endpoint                 | Result                        | Meaning                                                                                                                                                                                                                 |
+| ------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/rest/health/live`  | 200 `{"alive":true}` in 73 ms | The web process is up and answering after the 19 September MySQL redeploy. Its last log lines had been `ECONNREFUSED`; this is the first positive evidence since.                                                       |
+| `/api/rest/health/ready` | 503 `SERVICE_UNAVAILABLE`     | Unchanged from the earlier finding. Readiness includes the Stripe key-format check, and staging has synthetic payment configuration; the runbook's instruction not to weaken readiness or plant a plausible key stands. |
+| `/api/rest/health`       | 401 `UNAUTHORIZED`            | Correct: the detailed per-dependency check is `adminProcedure` by design. The precise failing dependency therefore still needs an authenticated read, as recorded above.                                                |
+
+The liveness result is evidence that the process serves requests, not that
+every pool connection is healthy; the 116 passing acceptance checks against the
+same MySQL server are the evidence for the server side.
+
+### Fifth run: the full suite passes inside the environment
+
+With the customers export hashing in Node, the fifth run
+(`c9bb111e-957d-43ba-89fe-8f5aeaeeacb0`, source `ac04d5f`) completed:
+
+| Fact                                                        | Value                                                                                                    |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Acceptance checks                                           | **127 of 127**, zero skipped, zero provider calls                                                        |
+| Server                                                      | MySQL 9.7.2 at `mysql.railway.internal`, Redis 8.2.9 at `redis.railway.internal`                         |
+| Migration journal applied and verified on an empty database | 17.5 s + 1.3 s                                                                                           |
+| Suite duration                                              | 17.8 s                                                                                                   |
+| Web liveness / readiness over the private network           | 200 / 503, as in the fourth run                                                                          |
+| Exit code                                                   | 0; the deployment stayed `SUCCESS` (a non-zero exit shows as `CRASHED` under the `NEVER` restart policy) |
+
+This is the first time the repository's transactional acceptance suite has
+passed against the server versions the environment actually runs. The
+`ais-acceptance` service tracks the runner's branch until that branch reaches
+`main`; after that it should be pointed at `main` so every push re-proves the
+journal and the boundaries against the deployed MySQL and Redis. Re-running it
+at any time is a redeploy of the service.
