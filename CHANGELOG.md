@@ -1,5 +1,15 @@
 # Changelog
 
+## What's Changed in v1.31.0
+
+### Maintenance
+
+- ci: run the acceptance suite inside Railway and on MySQL 9.7; add the isolated provider boundary (#166) (5d23f3f)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.30.1...v1.31.0
+
+---
+
 ## What's Changed in v1.30.1
 
 ### Bug Fixes
