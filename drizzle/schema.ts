@@ -5756,6 +5756,11 @@ export const aviationEvidence = mysqlTable(
     digest: varchar("digest", { length: 64 }).notNull(),
     observedAt: timestamp("observedAt").notNull(),
     receivedAt: timestamp("receivedAt").defaultNow().notNull(),
+    /** Internal facts captured by AIS at ingest, outside the source-signed
+     * payload and its digest, so replays and signature checks are unaffected.
+     * Null for evidence recorded before this column existed. */
+    ingestSnapshot: json("ingestSnapshot").$type<Record<string, unknown>>(),
+    ingestSnapshotAt: timestamp("ingestSnapshotAt"),
   },
   t => ({
     sourceEvent: uniqueIndex("aviation_source_event_unique").on(

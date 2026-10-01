@@ -162,6 +162,19 @@ export const aviationIntegrationsRouter = router({
         availableSeatKm: z.number().nullable(),
         caskMinor: z.number().nullable(),
         raskMinor: z.number().nullable(),
+        // Which seat configuration ASK was derived from. "missing_ingest_snapshot"
+        // marks evidence recorded before capacity was captured at ingest; its
+        // costs and revenue stay visible, its per-ASK ratios do not.
+        capacityBasis: z
+          .enum(["ingest_snapshot", "missing_ingest_snapshot"])
+          .nullable(),
+        capacity: z
+          .object({
+            economySeats: z.number(),
+            businessSeats: z.number(),
+            capturedAt: z.date(),
+          })
+          .nullable(),
         costs: z
           .object({
             fuel: z.number(),

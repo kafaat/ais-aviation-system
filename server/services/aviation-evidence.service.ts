@@ -111,11 +111,19 @@ export function evidenceDigest(e: EvidenceEnvelope) {
   const { issuedAt: _issuedAt, ...content } = e;
   return calculateRequestHash(content);
 }
+/** Facts AIS observed at ingest, stored beside the signed payload. They are
+ * never part of the digest, so a replay of the same source event reuses the
+ * snapshot recorded first and never rewrites it. */
+export interface IngestSnapshot {
+  payload: Record<string, unknown>;
+  at: Date;
+}
 /** Caller holds the flight/entity lock. Records evidence and outbox atomically. */
 export async function persistAviationEvidence(
   tx: SettlementTx,
   e: EvidenceEnvelope,
-  source: AviationSource
+  source: AviationSource,
+  snapshot?: IngestSnapshot
 ) {
   const digest = evidenceDigest(e);
   const [existing] = await tx
@@ -147,6 +155,8 @@ export async function persistAviationEvidence(
     digest,
     observedAt: new Date(e.observedAt),
     receivedAt: new Date(),
+    ingestSnapshot: snapshot?.payload ?? null,
+    ingestSnapshotAt: snapshot?.at ?? null,
   });
   const evidenceId = Number(result[0].insertId);
   if (!Number.isSafeInteger(evidenceId) || evidenceId <= 0)
