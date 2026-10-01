@@ -35,6 +35,24 @@ export function costTotal(payload: z.infer<typeof flightCostSchema>) {
   if (!Number.isSafeInteger(total)) throw new Error("Invalid cost total");
   return total;
 }
+/** Seat configuration of the flight row as AIS held it when the closed cost
+ * evidence was ingested. It is recorded beside the signed payload, never
+ * inside it, so the source's digest and replays are untouched. It states what
+ * the system knew at ingest; it does not prove the configuration the flight
+ * actually operated with, which would need its own evidence. */
+export const flightCapacitySnapshotSchema = z
+  .object({
+    kind: z.literal("flight_capacity_at_ingest"),
+    source: z.literal("flights.row_at_ingest"),
+    economySeats: z.number().int().nonnegative(),
+    businessSeats: z.number().int().nonnegative(),
+    flightStatus: z.string().min(1).max(30),
+  })
+  .strict();
+export type FlightCapacitySnapshot = z.infer<
+  typeof flightCapacitySnapshotSchema
+>;
+export type CapacityBasis = "ingest_snapshot" | "missing_ingest_snapshot";
 export async function ingestFlightCost(e: EvidenceEnvelope, signature: string) {
   const payload = flightCostSchema.parse(e.payload),
     source = verifyAviationSource(e, signature, "flight_cost");
@@ -59,7 +77,17 @@ export async function ingestFlightCost(e: EvidenceEnvelope, signature: string) {
       throw new Error(
         "Closed cost evidence must match a completed operator flight"
       );
-    return persistAviationEvidence(tx, e, source);
+    const snapshot: FlightCapacitySnapshot = {
+      kind: "flight_capacity_at_ingest",
+      source: "flights.row_at_ingest",
+      economySeats: flight.economySeats,
+      businessSeats: flight.businessSeats,
+      flightStatus: flight.status,
+    };
+    return persistAviationEvidence(tx, e, source, {
+      payload: snapshot,
+      at: new Date(),
+    });
   });
 }
 /** Full closed-flight snapshots replace earlier snapshots from the same source, never sum replays. */
@@ -91,6 +119,8 @@ export async function readFlightCosts(
       sourceId: string;
       observedAt: Date;
       payload: z.infer<typeof flightCostSchema>;
+      /** Null for evidence ingested before capacity snapshots existed. */
+      capacity: (FlightCapacitySnapshot & { capturedAt: Date }) | null;
     }
   >();
   for (const id of flightIds) {
@@ -102,11 +132,18 @@ export async function readFlightCosts(
       if (!latest.has(row.sourceId)) latest.set(row.sourceId, row);
     if (latest.size !== 1) continue;
     const row = [...latest.values()][0];
+    const parsedSnapshot = row.ingestSnapshot
+      ? flightCapacitySnapshotSchema.safeParse(row.ingestSnapshot)
+      : null;
     result.set(id, {
       evidenceId: row.id,
       sourceId: row.sourceId,
       observedAt: row.observedAt,
       payload: flightCostSchema.parse(row.payload),
+      capacity:
+        parsedSnapshot?.success && row.ingestSnapshotAt
+          ? { ...parsedSnapshot.data, capturedAt: row.ingestSnapshotAt }
+          : null,
     });
   }
   return result;
@@ -126,10 +163,21 @@ export async function getFlightEconomics(
     throw new Error("Scoped flight unavailable");
   const cost = (await readFlightCosts([flightId], f.tenantId)).get(flightId);
   const total = cost ? costTotal(cost.payload) : null,
-    revenue = cost?.payload.recognizedRevenueMinor ?? null,
-    ask = cost
-      ? (f.economySeats + f.businessSeats) * cost.payload.routeDistanceKm
-      : null;
+    revenue = cost?.payload.recognizedRevenueMinor ?? null;
+  // ASK comes only from the capacity recorded at ingest. Reading the live
+  // flight row here would let a later seat reconfiguration silently rewrite a
+  // closed period's CASK and RASK; evidence without a snapshot reports the gap
+  // instead of being backfilled with today's configuration.
+  const capacity = cost?.capacity ?? null;
+  const ask = capacity
+    ? (capacity.economySeats + capacity.businessSeats) *
+      requireValue(cost).payload.routeDistanceKm
+    : null;
+  const capacityBasis: CapacityBasis | null = cost
+    ? capacity
+      ? "ingest_snapshot"
+      : "missing_ingest_snapshot"
+    : null;
   return {
     flightId,
     sourceId: cost?.sourceId ?? null,
@@ -143,6 +191,14 @@ export async function getFlightEconomics(
     availableSeatKm: ask,
     caskMinor: ask && total !== null ? total / ask : null,
     raskMinor: ask && revenue !== null ? revenue / ask : null,
+    capacityBasis,
+    capacity: capacity
+      ? {
+          economySeats: capacity.economySeats,
+          businessSeats: capacity.businessSeats,
+          capturedAt: capacity.capturedAt,
+        }
+      : null,
     costs: cost?.payload.costs ?? null,
   };
 }
