@@ -75,6 +75,16 @@ unset GITHUB_TOKEN
 
 The apply script creates the ruleset named in `.github/main-ruleset.json` or updates the existing one of that name in place, never deletes anything, and exits non-zero if the live rules for `main` still lack any required rule. Merge the release-flow change before activating; a policy activated first would block the old workflow's direct push, and a release proposal opened by the old workflow would not exist.
 
+#### Activating from GitHub Actions instead
+
+When no administrator shell is at hand, the `Apply Main Protection` workflow (`.github/workflows/apply-main-protection.yml`, `workflow_dispatch` only) runs the same two scripts on a runner. `GITHUB_TOKEN` cannot hold repository administration, so the workflow reads `REPO_ADMIN_TOKEN` from a deployment environment named `repository-administration`. The administrator sets that up once, in the repository settings:
+
+1. **Environments → New environment → `repository-administration`.** Enable **Required reviewers** and add the administrator account. This is what keeps the secret out of reach: every run that targets the environment pauses until a listed reviewer approves it in the Actions UI, so a collaborator with write access cannot dispatch a modified workflow and read the token.
+2. **Environment secret `REPO_ADMIN_TOKEN`**: a fine-grained personal access token restricted to this repository with **Administration: read and write** (metadata read is implied), expiring within days.
+3. Dispatch the workflow with `dry_run` first, approve the run, read the plan; dispatch again without `dry_run`, approve, and read the verifier's output. Delete the token afterwards; the ruleset stays.
+
+The assisted tooling that prepared this policy cannot run the local commands: its GitHub access goes through a proxy that replaces authentication and refuses writes to the rulesets path. It can dispatch this workflow and read the result; the approval and the token remain the administrator's.
+
 Reference: [GitHub repository rules REST API](https://docs.github.com/en/rest/repos/rules), [workflow_dispatch from GITHUB_TOKEN](https://docs.github.com/en/actions/security-for-github-actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow).
 
 ## Verification
