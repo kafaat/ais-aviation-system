@@ -1,5 +1,24 @@
 # Changelog
 
+## What's Changed in v1.31.2
+
+### Bug Fixes
+
+- fix: freeze seat capacity at cost ingest; historical gap analysis; ADR 0001 order record of truth (#179) (5342bcb)
+
+### Maintenance
+
+- build(deps): bump urllib3 (b77f254)
+- ci: drop a release branch once its version is tagged (#178) (04921be)
+
+### Other Changes
+
+- Merge pull request #175 from kafaat/dependabot/pip/scripts/contracts/pip-2a4a739b48 (a99e64d)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.31.1...v1.31.2
+
+---
+
 ## What's Changed in v1.31.1
 
 ### Bug Fixes
