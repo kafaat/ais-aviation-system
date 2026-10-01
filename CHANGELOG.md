@@ -1,5 +1,26 @@
 # Changelog
 
+## What's Changed in v1.31.1
+
+### Bug Fixes
+
+- fix: pin brace-expansion to patched lines for GHSA-6j4f-fj2g-mc7p (#174) (8c947d7)
+
+### Documentation
+
+- docs: record that ais-acceptance tracks main and its first main-sourced run (#167) (d48a5c7)
+- docs: remove inline GITHUB_TOKEN assignment examples from main-protection guidance (#172) (7565068)
+
+### Maintenance
+
+- ci: require the MySQL 9.7 gate leg in the prepared main policy; record the F27 follow-up (#168) (8ab8357)
+- ci: propose release version bumps as pull requests and publish from the merged commit (#169) (22cb75d)
+- ci: require zero approving reviews on main by operator decision (#170) (ab19081)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.31.0...v1.31.1
+
+---
+
 ## What's Changed in v1.31.0
 
 ### Maintenance
