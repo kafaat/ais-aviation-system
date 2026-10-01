@@ -296,34 +296,52 @@ jobs:
 
       # One release proposal at a time. A second bump while one is open would
       # produce two competing version commits; the operator closes or merges
-      # the open one first.
+      # the open one first. Three outcomes:
+      #   create: no release branch exists; bump, push, open the PR, start checks.
+      #   attach: this version's branch exists without an open PR (an earlier
+      #           run pushed it and then failed to open the PR); reuse it, open
+      #           the PR, start checks. This is how a re-run recovers.
+      #   neither: a branch for another version, or an open PR, already exists.
       - name: Refuse a duplicate proposal
         id: guard
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: v${{ needs.version.outputs.new_version }}
+          RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
         run: |
           set -euo pipefail
+          echo "create=false" >> "$GITHUB_OUTPUT"
+          echo "attach=false" >> "$GITHUB_OUTPUT"
           if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
             echo "::error::$RELEASE_TAG already exists; use resume_tag to publish it."
             exit 1
           fi
-          open="$(git ls-remote --heads origin 'refs/heads/release/v*' | awk '{print $2}' || true)"
-          if [ -n "$open" ]; then
-            echo "::notice::A release branch is already open: $open. Merge or delete it before proposing another."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+          open="$(git ls-remote --heads origin 'refs/heads/release/v*' | awk '{print $2}' | sed 's#^refs/heads/##' || true)"
+          if [ -z "$open" ]; then
+            echo "create=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          if [ "$open" = "$RELEASE_BRANCH" ]; then
+            existing="$(gh pr list --state open --head "$RELEASE_BRANCH" --json number --jq 'length')"
+            if [ "$existing" = "0" ]; then
+              echo "::notice::$RELEASE_BRANCH exists without an open pull request; reusing it."
+              echo "attach=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice::A pull request for $RELEASE_BRANCH is already open."
+            fi
+            exit 0
+          fi
+          echo "::notice::Another release branch is open: $open. Merge or delete it before proposing another."
 
       - name: Update version in package.json
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.create == 'true'
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
         run: |
           npm version "$RELEASE_VERSION" --no-git-tag-version --ignore-scripts
 
       - name: Update CHANGELOG.md
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.create == 'true'
         env:
           RELEASE_NOTES: ${{ needs.changelog.outputs.changelog }}
         run: |
@@ -336,13 +354,13 @@ jobs:
           fi
 
       - name: Format CHANGELOG.md with Prettier
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.create == 'true'
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm exec prettier --write CHANGELOG.md
 
       - name: Commit version bump
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.create == 'true'
         run: |
           git add package.json CHANGELOG.md
           git commit -m "chore(release): v${{ needs.version.outputs.new_version }}"
@@ -351,7 +369,7 @@ jobs:
       # to carry nothing except the version bump and changelog. Prove that
       # before it leaves this runner; the publisher proves it again on main.
       - name: Verify the release commit changes no code
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.create == 'true'
         run: |
           set -euo pipefail
           unexpected=$(git diff --name-only HEAD~1 HEAD | grep -vxE 'CHANGELOG\.md|package\.json' || true)
@@ -369,7 +387,7 @@ jobs:
           echo "Release commit is limited to the version bump and changelog."
 
       - name: Push version bump
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.create == 'true'
         env:
           RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
         run: git push origin "HEAD:refs/heads/$RELEASE_BRANCH"
@@ -378,7 +396,7 @@ jobs:
       # rejects that scope. The squash commit on main is recognised by its
       # content, so the title does not need to match a pattern.
       - name: Open the release pull request
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.create == 'true' || steps.guard.outputs.attach == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_VERSION: ${{ needs.version.outputs.new_version }}
@@ -420,18 +438,26 @@ jobs:
             echo
             echo "$RELEASE_NOTES"
           } > "$body_file"
-          gh pr create \
+          # Creating a pull request with GITHUB_TOKEN needs the repository
+          # setting "Allow GitHub Actions to create and approve pull requests"
+          # (Settings → Actions → General → Workflow permissions). Without it
+          # the branch is still pushed; a re-run of this workflow, or a
+          # manually opened pull request from the branch, continues from here.
+          if ! gh pr create \
             --base main \
             --head "$RELEASE_BRANCH" \
             --title "chore: release v$RELEASE_VERSION" \
-            --body-file "$body_file"
+            --body-file "$body_file"; then
+            echo "::error::Could not open the pull request for $RELEASE_BRANCH. If the message says GitHub Actions is not permitted to create pull requests, enable 'Allow GitHub Actions to create and approve pull requests' under Settings → Actions → General and re-run this workflow; the pushed branch is reused. Or open it by hand: https://github.com/${GITHUB_REPOSITORY}/compare/main...${RELEASE_BRANCH}?expand=1"
+            exit 1
+          fi
 
       # A branch pushed with GITHUB_TOKEN triggers no workflow, so the checks
       # the ruleset requires must be started explicitly. workflow_dispatch is
       # the one event that token may raise. The check runs attach to the
       # branch head, which is the pull request head.
       - name: Start the required checks on the release branch
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.guard.outputs.create == 'true' || steps.guard.outputs.attach == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
