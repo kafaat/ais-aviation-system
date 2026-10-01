@@ -1,0 +1,78 @@
+name: Apply Main Protection
+
+# Turns .github/main-ruleset.json into the enforced ruleset for main.
+#
+# GITHUB_TOKEN can never do this: repository administration is not a
+# permission a workflow token can hold. The job therefore reads a fine-grained
+# personal access token from the `repository-administration` environment,
+# which an administrator creates once with a required reviewer (themselves)
+# and a single secret, REPO_ADMIN_TOKEN, scoped to this repository with
+# Administration read/write. Because the secret lives in an environment with a
+# required reviewer, no dispatch, by anyone, reaches it until an administrator
+# approves that specific run in the Actions UI. Keep the token's expiry short
+# and delete it once the policy is enforced.
+#
+# The workflow only ever runs on demand. It writes exactly one ruleset, by
+# name, and reads the live rules back with the same check as
+# verify-main-protection.mjs; it never deletes anything and never prints the
+# token.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Show the planned request without writing"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apply-main-protection
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply the prepared main ruleset
+    runs-on: ubuntu-latest
+    environment: repository-administration
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22.x"
+
+      - name: Require the administration token
+        env:
+          REPO_ADMIN_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: |
+          if [ -z "$REPO_ADMIN_TOKEN" ]; then
+            echo "::error::REPO_ADMIN_TOKEN is not set in the repository-administration environment."
+            exit 1
+          fi
+
+      - name: Apply the ruleset
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" = "true" ]; then
+            node scripts/ci/apply-main-protection.mjs --dry-run
+          else
+            node scripts/ci/apply-main-protection.mjs
+          fi
+
+      # Independent read-back with the same token: fails if any required rule
+      # is still missing on main.
+      - name: Verify the live rules
+        if: inputs.dry_run != true
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: node scripts/ci/verify-main-protection.mjs
