@@ -316,7 +316,19 @@ jobs:
             echo "::error::$RELEASE_TAG already exists; use resume_tag to publish it."
             exit 1
           fi
-          open="$(git ls-remote --heads origin 'refs/heads/release/v*' | awk '{print $2}' | sed 's#^refs/heads/##' || true)"
+          # A release branch whose version is already tagged is a leftover of a
+          # published release, not an open proposal; drop it rather than let
+          # it block every later proposal.
+          open=""
+          for ref in $(git ls-remote --heads origin 'refs/heads/release/v*' | awk '{print $2}' | sed 's#^refs/heads/##'); do
+            tag="${ref#release/}"
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+              echo "::notice::$ref is already published as $tag; deleting the stale branch."
+              git push origin --delete "$ref"
+            else
+              open="${open:+$open }$ref"
+            fi
+          done
           if [ -z "$open" ]; then
             echo "create=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -526,6 +538,18 @@ jobs:
         run: |
           git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
           git push origin "$RELEASE_TAG"
+
+      # The proposal branch has done its job once the tag exists. Leaving it
+      # would make the next proposal see an "open" release branch.
+      - name: Delete the merged release branch
+        env:
+          RELEASE_BRANCH: release/${{ needs.check-release.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --heads origin "refs/heads/$RELEASE_BRANCH" >/dev/null 2>&1; then
+            git push origin --delete "$RELEASE_BRANCH"
+          else
+            echo "$RELEASE_BRANCH is already gone."
+          fi
 
       - name: Create GitHub Release
         run: node scripts/ci/release-publication.js publish
