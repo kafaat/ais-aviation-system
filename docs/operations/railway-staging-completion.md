@@ -202,6 +202,12 @@ Two things were learned that are not about the application's behaviour:
 These runs are evidence about the deployed MySQL and Redis and about the
 migration journal. They are not browser or booking acceptance, not provider
 acceptance, and not a statement about the worker, which remains blocked.
+Stated as what remains rather than what passed: an end-to-end booking journey
+through the deployed web application, provider acceptance for every external
+domain listed in `provider-acceptance.md`, delivery of each purchased service
+(not only its sale and refund), and worker readiness with a persisted
+heartbeat. A later `main` head is not covered by an earlier run; the summary
+line of each deployment names the commit it ran against.
 
 ### Root cause of the one failing check, and the web service seen from inside
 
