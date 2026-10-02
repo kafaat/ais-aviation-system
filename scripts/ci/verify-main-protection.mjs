@@ -3,8 +3,12 @@ import { pathToFileURL } from "node:url";
 /** The approval count is read from the policy rather than assumed: the
  * repository has two collaborators and chose zero required approvals, keeping
  * the pull-request rule for its other guarantees (stale-review dismissal,
- * last-push approval when a review exists, thread resolution) and relying on
- * the twelve required checks. Passing 1 restores the stricter reading. */
+ * thread resolution) and relying on the twelve required checks. Passing 1
+ * restores the stricter reading, and with it `require_last_push_approval`:
+ * GitHub enforces that flag even at zero approvals ("New changes require
+ * approval from someone other than the last pusher"), which would re-create
+ * exactly the two-collaborator deadlock the zero-approval decision removed,
+ * so it is only demanded when at least one approval is. */
 export function missingMainRules(rules, required, minimumApprovals = 0) {
   const missing = [];
   for (const type of ["deletion", "non_fast_forward"])
@@ -12,11 +16,12 @@ export function missingMainRules(rules, required, minimumApprovals = 0) {
   const review = rules
     .filter(r => r.type === "pull_request")
     .map(r => r.parameters ?? {});
-  for (const key of [
+  const flags = [
     "dismiss_stale_reviews_on_push",
-    "require_last_push_approval",
     "required_review_thread_resolution",
-  ])
+  ];
+  if (minimumApprovals > 0) flags.push("require_last_push_approval");
+  for (const key of flags)
     if (!review.some(r => r[key] === true)) missing.push(key);
   if (
     !review.some(
