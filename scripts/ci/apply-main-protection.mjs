@@ -65,10 +65,23 @@ async function main() {
         },
       }
     );
-    if (!response.ok)
+    if (!response.ok) {
+      // GitHub's error body names the reason (missing permission, plan
+      // limit, validation); it never echoes the token. Surface it so an
+      // operator can act on a 403 without guessing.
+      let detail = "";
+      try {
+        const body = await response.json();
+        detail = [body.message, body.documentation_url]
+          .filter(Boolean)
+          .join(" — ");
+      } catch {
+        /* non-JSON error body */
+      }
       throw new Error(
-        `GitHub ${options.method ?? "GET"} ${path} failed (HTTP ${response.status})`
+        `GitHub ${options.method ?? "GET"} ${path} failed (HTTP ${response.status})${detail ? `: ${detail}` : ""}`
       );
+    }
     return response.json();
   };
   const existing = await api("rulesets");
