@@ -21,7 +21,27 @@ describe("main protection evidence", () => {
     // must still be expressible and must flag this policy.
     expect(policyApprovals(policy)).toBe(0);
     expect(missingMainRules(policy.rules, checks, 1)).toEqual([
+      "require_last_push_approval",
       "approving_review",
+    ]);
+  });
+  it("does not require last-push approval at zero approvals, because GitHub enforces it regardless", () => {
+    // Observed 2 October 2026: with the flag on and zero approvals, GitHub
+    // refused every merge with "New changes require approval from someone
+    // other than the last pusher", which with two collaborators is the same
+    // deadlock the zero-approval decision was made to remove.
+    const review = policy.rules.find(
+      (r: { type: string }) => r.type === "pull_request"
+    ).parameters;
+    expect(review.require_last_push_approval).toBe(false);
+    expect(review.dismiss_stale_reviews_on_push).toBe(true);
+    expect(review.required_review_thread_resolution).toBe(true);
+    const stricter = structuredClone(policy);
+    stricter.rules.find(
+      (r: { type: string }) => r.type === "pull_request"
+    ).parameters.required_approving_review_count = 1;
+    expect(missingMainRules(stricter.rules, checks, 1)).toEqual([
+      "require_last_push_approval",
     ]);
     for (const type of [
       "deletion",
