@@ -51,6 +51,8 @@ Reference: [OpenTelemetry JavaScript instrumentation](https://opentelemetry.io/d
 
 At the verified base, `main` reported `protected: false`, and it still did on 21 September 2026 (`rules/branches/main` empty). The release workflow used to push version commits directly to main with `GITHUB_TOKEN`, which no ruleset could allow without a bypass; that dependency is now removed rather than hidden.
 
+**Activated on 2 October 2026.** The `Apply Main Protection` workflow (run 36948998664, approved by the administrator through the `repository-administration` environment) created ruleset 24342771, "AIS main review and verification", enforcement `active`. Read back through the public API immediately afterwards: `main` reports `protected: true`, and `rules/branches/main` lists the four rules of the prepared policy with all twelve required status checks from the GitHub Actions app and zero required approvals. The workflow's own verifier step passed on the same run. Two earlier attempts had failed closed and are worth recording as setup lessons: the environment secret was first saved under another name, then under an environment whose name differed by one character (GitHub auto-created the correctly named, empty environment on first dispatch), and the fine-grained token was first created without any repository or permission; `apply-main-protection.mjs` now prints GitHub's reason on a refusal so the next operator sees "Resource not accessible by personal access token" rather than a bare 403.
+
 ### Release flow that the ruleset allows
 
 `Release Automation` no longer writes to `main`. It has two phases, both recognised by content rather than by commit message:

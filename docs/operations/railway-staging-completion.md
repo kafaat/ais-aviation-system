@@ -279,16 +279,16 @@ consecutive `main` heads (`5d23f3f`, `5a5c818`, `d48a5c7` and this change), its
 context was added to the prepared policy in `.github/main-ruleset.json` beside
 the 8.0 leg.
 
-One fact about that policy must not be lost: it is prepared, not enforced.
-Read through the public API on 21 September 2026, `main` reports
-`protected: false` and `rules/branches/main` returns an empty list. Every
-merge so far has therefore waited for green checks by discipline, not by
-GitHub refusing a red one. The release workflow no longer pushes version
-commits straight to `main`; it proposes them as pull requests and publishes
-from the merged commit, so the policy can be enforced without a bypass.
-Activating it remains the operator step described in
-`docs/runbooks/project-hardening.md` (`scripts/ci/apply-main-protection.mjs`
-with an administration token), which the tooling that prepared it cannot run.
+Until 2 October 2026 that policy was prepared, not enforced: read through the
+public API on 21 September, `main` reported `protected: false` and
+`rules/branches/main` was empty, so every merge up to then waited for green
+checks by discipline, not by GitHub refusing a red one. The release workflow
+was first changed to propose version commits as pull requests and publish
+from the merged commit, so the policy could be enforced without a bypass.
+On 2 October 2026 the administrator activated it through the
+`Apply Main Protection` workflow; `main` now reports `protected: true` with
+both migration-replay legs among the twelve required checks
+(`docs/runbooks/project-hardening.md` records the run and the read-back).
 
 Sources consulted for the version facts (all public):
 
