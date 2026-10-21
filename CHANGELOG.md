@@ -1,5 +1,51 @@
 # Changelog
 
+## What's Changed in v1.32.0
+
+### Features
+
+- feat(finance): aggregate existing cash and booking day buckets by month (5586c57)
+
+### Bug Fixes
+
+- fix(finance): share monthly report projection between generation and listing (91baf9a)
+- fix(finance): make unverified revenue nullable and declare monthly cash read contract (6b7a73c)
+- fix(finance): render live cash reports without fabricating recognition (1e48e16)
+- fix(security): remediate Oct 2026 pnpm audit and Docker image vulnerabilities (af37b08)
+
+### Documentation
+
+- docs: record the main ruleset activation (#182) (825d7d1)
+- docs(finance): define monthly cash semantics and acceptance limitations (7fce8dd)
+- docs(security): format audit evidence without markdown table alignment drift (500742c)
+
+### Maintenance
+
+- ci: surface GitHub's error message when applying the main ruleset fails (#181) (d820737)
+- ci: turn off last-push approval in the main ruleset (#183) (0d4a0df)
+- chore(ci): temporarily print targeted formatting patch for verification (55661ad)
+- chore(ci): remove temporary formatting diagnostics (f8feb39)
+- ci(test): allow isolated MySQL acceptance only in disposable test job (fb051ee)
+- chore(ci): temporarily expose native-test Prettier diff (08e2b85)
+- chore(ci): remove temporary formatting trace and keep scoped MySQL test (4e4be94)
+- chore(finance): synchronize PR #184 with merged security fixes (#185) (8c1cc8d)
+
+### Other Changes
+
+- test(finance): reproduce divergent monthly report and list projections (de280a5)
+- style(finance): apply CI-produced Prettier formatting for RevenueAccounting.tsx (99dd5f4)
+- style(finance): apply CI-produced Prettier formatting for monthly-financial-report-consistency.test.ts (bd6cc43)
+- style(finance): apply CI-produced Prettier formatting for revenue-accounting.service.ts (09c7cd6)
+- test(finance): add disposable native MySQL monthly cash reconciliation (61d18b6)
+- test(finance): count distinct booking and ledger observation days (9e8dcbc)
+- style(finance): apply CI Prettier output for native MySQL acceptance (11a75d0)
+- Merge pull request #185 from kafaat/codex/ais-security-pnpm-cve-20261021 (8f5f19e)
+- Merge pull request #184 from kafaat/codex/ais-monthly-financial-consistency-20261021 (cf07e01)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.31.2...v1.32.0
+
+---
+
 ## What's Changed in v1.31.2
 
 ### Bug Fixes
