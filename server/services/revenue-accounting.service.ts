@@ -866,9 +866,7 @@ function monthlyReport(
     id: "REV-" + yearMonth,
     reportType: "monthly",
     periodStart: yearMonth + "-01",
-    periodEnd: new Date(Date.UTC(year, month, 0))
-      .toISOString()
-      .slice(0, 10),
+    periodEnd: new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
     totalRevenue: financial?.collectedAmount ?? 0,
     billedAmount: financial?.billedAmount ?? 0,
     collectedAmount: financial?.collectedAmount ?? 0,
