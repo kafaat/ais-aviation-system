@@ -1,5 +1,29 @@
 # Changelog
 
+## What's Changed in v1.31.3
+
+### Bug Fixes
+
+- fix(security): remediate Oct 2026 pnpm audit and Docker image vulnerabilities (af37b08)
+
+### Documentation
+
+- docs: record the main ruleset activation (#182) (825d7d1)
+- docs(security): format audit evidence without markdown table alignment drift (500742c)
+
+### Maintenance
+
+- ci: surface GitHub's error message when applying the main ruleset fails (#181) (d820737)
+- ci: turn off last-push approval in the main ruleset (#183) (0d4a0df)
+
+### Other Changes
+
+- Merge pull request #185 from kafaat/codex/ais-security-pnpm-cve-20261021 (8f5f19e)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.31.2...v1.31.3
+
+---
+
 ## What's Changed in v1.31.2
 
 ### Bug Fixes
