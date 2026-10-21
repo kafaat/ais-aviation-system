@@ -983,15 +983,47 @@ export function RevenueAccounting() {
                     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 text-sm">
                       {(
                         [
-                          { label: "Cash collected", amount: generateReportMutation.data.collectedAmount },
-                          { label: "Cash refunds", amount: generateReportMutation.data.refundAmount },
-                          { label: "Net cash collected", amount: generateReportMutation.data.netCollectedAmount },
-                          { label: "Booking totals (created)", amount: generateReportMutation.data.billedAmount },
-                          { label: "Non-cash funding", amount: generateReportMutation.data.nonCashFundedAmount },
-                          { label: "Non-cash refunds", amount: generateReportMutation.data.nonCashRefundedAmount },
-                          { label: "Deferred revenue", amount: generateReportMutation.data.deferredRevenue },
-                          { label: "Recognized revenue", amount: generateReportMutation.data.recognizedRevenue },
-                          { label: "Ancillary revenue", amount: generateReportMutation.data.ancillaryRevenue },
+                          {
+                            label: "Cash collected",
+                            amount: generateReportMutation.data.collectedAmount,
+                          },
+                          {
+                            label: "Cash refunds",
+                            amount: generateReportMutation.data.refundAmount,
+                          },
+                          {
+                            label: "Net cash collected",
+                            amount:
+                              generateReportMutation.data.netCollectedAmount,
+                          },
+                          {
+                            label: "Booking totals (created)",
+                            amount: generateReportMutation.data.billedAmount,
+                          },
+                          {
+                            label: "Non-cash funding",
+                            amount:
+                              generateReportMutation.data.nonCashFundedAmount,
+                          },
+                          {
+                            label: "Non-cash refunds",
+                            amount:
+                              generateReportMutation.data.nonCashRefundedAmount,
+                          },
+                          {
+                            label: "Deferred revenue",
+                            amount: generateReportMutation.data.deferredRevenue,
+                          },
+                          {
+                            label: "Recognized revenue",
+                            amount:
+                              generateReportMutation.data.recognizedRevenue,
+                          },
+                          {
+                            label: "Ancillary revenue",
+                            amount:
+                              generateReportMutation.data.ancillaryRevenue,
+                          },
                         ] as const
                       ).map(({ label, amount }) => (
                         <div key={label}>
@@ -999,7 +1031,9 @@ export function RevenueAccounting() {
                             {label}:{" "}
                           </span>
                           <span className="font-medium">
-                            {amount === null ? "Not verified" : formatSAR(amount) + " SAR"}
+                            {amount === null
+                              ? "Not verified"
+                              : formatSAR(amount) + " SAR"}
                           </span>
                         </div>
                       ))}
@@ -1024,7 +1058,8 @@ export function RevenueAccounting() {
               <CardHeader>
                 <CardTitle>Monthly Cash Views</CardTitle>
                 <CardDescription>
-                  Computed monthly views, not persisted reports; cash is grouped by ledger posting date.
+                  Computed monthly views, not persisted reports; cash is grouped
+                  by ledger posting date.
                 </CardDescription>
               </CardHeader>
               <CardContent>
