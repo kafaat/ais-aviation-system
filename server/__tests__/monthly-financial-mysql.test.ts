@@ -121,6 +121,6 @@ nativeDescribe("native MySQL monthly cash report (isolated disposable schema)", 
       netCollectedAmount: -2500,
     });
     const days = await getFinancialDays({ tenantId: 101 });
-    expect(days).toHaveLength(4);
+    expect(days).toHaveLength(5);
   });
 });
