@@ -55,7 +55,8 @@ function day(
     nonCashFundedAmount: 0,
     nonCashRefundedAmount: 0,
     refundedAmount: 0,
-    netCollectedAmount: (amount.collectedAmount ?? 0) - (amount.refundedAmount ?? 0),
+    netCollectedAmount:
+      (amount.collectedAmount ?? 0) - (amount.refundedAmount ?? 0),
     earnedRevenue: null,
     unreconciledBookings: 0,
     unclassifiedEntries: 0,
