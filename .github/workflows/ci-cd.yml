@@ -63,9 +63,6 @@ jobs:
           if [ -n "$(git diff --name-only)" ]; then
             echo "::error::The following files have formatting issues:"
             git diff --name-only
-            echo "===AIS_FORMAT_DIFF_BEGIN==="
-            git diff -- server/__tests__/monthly-financial-mysql.test.ts
-            echo "===AIS_FORMAT_DIFF_END==="
             echo ""
             echo "Run 'pnpm format' locally and commit the changes."
             exit 1
