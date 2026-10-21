@@ -1,7 +1,9 @@
 import { getRefundExportRows } from "./refunds-stats.service";
 import {
+  aggregateFinancialMonths,
   getFinancialDays,
   getFinancialSummary,
+  type FinancialMonth,
 } from "./financial-reporting.service";
 /**
  * Revenue Accounting Service
@@ -119,11 +121,24 @@ export interface GeneratedReport {
   reportType: "monthly" | "quarterly" | "annual";
   periodStart: string;
   periodEnd: string;
+  /** Compatibility alias for cash collected; NOT earned revenue. */
   totalRevenue: number;
-  deferredRevenue: number;
-  recognizedRevenue: number;
+  /** Booking-created total, not an issued invoice amount. */
+  billedAmount: number;
+  collectedAmount: number;
+  nonCashFundedAmount: number;
+  nonCashRefundedAmount: number;
   refundAmount: number;
-  ancillaryRevenue: number;
+  netCollectedAmount: number;
+  unreconciledBookings: number;
+  unclassifiedEntries: number;
+  deferredRevenue: number | null;
+  recognizedRevenue: number | null;
+  ancillaryRevenue: number | null;
+  currency: "SAR";
+  amountUnit: "minor";
+  sourceBasis: "booking_created_and_ledger_posted_epoch_day";
+  persisted: false;
   status: "draft" | "finalized";
   generatedAt: string;
 }
@@ -836,93 +851,74 @@ async function readYieldAnalysis(
   });
 }
 
-/**
- * Generate a monthly revenue reconciliation report.
- */
+/** Shared report builder; no saved report or accounting approval is implied. */
+function monthlyReport(
+  yearMonth: string,
+  financial: FinancialMonth | undefined,
+  generatedAt: string
+): GeneratedReport {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) {
+    throw new Error("Invalid report month");
+  }
+  const year = Number(yearMonth.slice(0, 4));
+  const month = Number(yearMonth.slice(5, 7));
+  return {
+    id: "REV-" + yearMonth,
+    reportType: "monthly",
+    periodStart: yearMonth + "-01",
+    periodEnd: new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
+    totalRevenue: financial?.collectedAmount ?? 0,
+    billedAmount: financial?.billedAmount ?? 0,
+    collectedAmount: financial?.collectedAmount ?? 0,
+    nonCashFundedAmount: financial?.nonCashFundedAmount ?? 0,
+    nonCashRefundedAmount: financial?.nonCashRefundedAmount ?? 0,
+    refundAmount: financial?.refundedAmount ?? 0,
+    netCollectedAmount: financial?.netCollectedAmount ?? 0,
+    unreconciledBookings: financial?.unreconciledBookings ?? 0,
+    unclassifiedEntries: financial?.unclassifiedEntries ?? 0,
+    // Flight status / active ancillary bookings are not recognition evidence.
+    deferredRevenue: null,
+    recognizedRevenue: null,
+    ancillaryRevenue: null,
+    currency: "SAR",
+    amountUnit: "minor",
+    sourceBasis: "booking_created_and_ledger_posted_epoch_day",
+    persisted: false,
+    status: "draft",
+    generatedAt,
+  };
+}
+
+/** Live view for an exact calendar month, using the list's read projection. */
 export async function generateRevenueReport(
   month: number,
   year: number,
   _generatedBy: number
 ): Promise<GeneratedReport> {
-  const db = await getDb();
-  if (!db)
+  if (
+    !Number.isSafeInteger(month) ||
+    month < 1 ||
+    month > 12 ||
+    !Number.isSafeInteger(year) ||
+    year < 2020 ||
+    year > 2100
+  ) {
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      code: "BAD_REQUEST",
+      message: "Invalid financial report month",
     });
-
-  const periodStart = new Date(Date.UTC(year, month - 1, 1));
-  const periodEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
-
-  const cash = await getFinancialSummary({
-    startDate: periodStart,
-    endDate: periodEnd,
-  });
-  // Deferred revenue: tickets sold in period for future flights
-  const now = new Date();
-  const [deferredStats] = await db
-    .select({
-      deferredRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-    })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(
-      and(
-        eq(bookings.status, "confirmed"),
-        eq(bookings.paymentStatus, "paid"),
-        gte(bookings.createdAt, periodStart),
-        lte(bookings.createdAt, periodEnd),
-        gte(flights.departureTime, now)
-      )
-    );
-
-  // Recognized revenue: tickets sold in period for completed flights
-  const [recognizedStats] = await db
-    .select({
-      recognizedRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-    })
-    .from(bookings)
-    .innerJoin(flights, eq(bookings.flightId, flights.id))
-    .where(
-      and(
-        eq(bookings.status, "confirmed"),
-        eq(bookings.paymentStatus, "paid"),
-        gte(bookings.createdAt, periodStart),
-        lte(bookings.createdAt, periodEnd),
-        eq(flights.status, "completed")
-      )
-    );
-
-  // Ancillary revenue in the period
-  const [ancillaryStats] = await db
-    .select({
-      ancillaryRevenue: sql<number>`COALESCE(SUM(${bookingAncillaries.totalPrice}), 0)`,
-    })
-    .from(bookingAncillaries)
-    .where(
-      and(
-        eq(bookingAncillaries.status, "active"),
-        gte(bookingAncillaries.createdAt, periodStart),
-        lte(bookingAncillaries.createdAt, periodEnd)
-      )
-    );
-
-  const monthStr = String(month).padStart(2, "0");
-  const reportId = `REV-${year}-${monthStr}`;
-
-  return {
-    id: reportId,
-    reportType: "monthly",
-    periodStart: periodStart.toISOString().split("T")[0],
-    periodEnd: periodEnd.toISOString().split("T")[0],
-    totalRevenue: cash.collectedAmount,
-    deferredRevenue: deferredStats.deferredRevenue || 0,
-    recognizedRevenue: recognizedStats.recognizedRevenue || 0,
-    refundAmount: cash.refundedAmount,
-    ancillaryRevenue: ancillaryStats.ancillaryRevenue || 0,
-    status: "draft",
-    generatedAt: new Date().toISOString(),
-  };
+  }
+  const startDate = new Date(Date.UTC(year, month - 1, 1));
+  const endDate = new Date(Date.UTC(year, month, 1) - 1);
+  const yearMonth = String(year) + "-" + String(month).padStart(2, "0");
+  const monthly = aggregateFinancialMonths(
+    await getFinancialDays({ startDate, endDate })
+  );
+  return monthlyReport(
+    yearMonth,
+    monthly.find(row => row.yearMonth === yearMonth),
+    new Date().toISOString()
+  );
 }
 
 /**
@@ -1092,54 +1088,19 @@ export async function getRevenueDashboard(
   };
 }
 
-/**
- * List generated reports (virtual - based on available monthly data).
- */
+/** Live monthly views from booking-created and ledger-posted day buckets. */
 export async function getReports(
   limit: number = 12
 ): Promise<GeneratedReport[]> {
-  const db = await getDb();
-  if (!db)
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
+      code: "BAD_REQUEST",
+      message: "Invalid financial reports limit",
     });
-
-  // Get months that have booking data
-  const monthlyData = await db
-    .select({
-      yearMonth: sql<string>`DATE_FORMAT(${bookings.createdAt}, '%Y-%m')`,
-      totalRevenue: sql<number>`COALESCE(SUM(${bookings.totalAmount}), 0)`,
-      bookingCount: sql<number>`COUNT(*)`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        sql`${bookings.status} != 'cancelled'`,
-        eq(bookings.paymentStatus, "paid")
-      )
-    )
-    .groupBy(sql`DATE_FORMAT(${bookings.createdAt}, '%Y-%m')`)
-    .orderBy(desc(sql`DATE_FORMAT(${bookings.createdAt}, '%Y-%m')`))
-    .limit(limit);
-
-  return monthlyData.map(row => {
-    const [year, month] = row.yearMonth.split("-");
-    const periodStart = new Date(parseInt(year), parseInt(month) - 1, 1);
-    const periodEnd = new Date(parseInt(year), parseInt(month), 0);
-
-    return {
-      id: `REV-${row.yearMonth}`,
-      reportType: "monthly" as const,
-      periodStart: periodStart.toISOString().split("T")[0],
-      periodEnd: periodEnd.toISOString().split("T")[0],
-      totalRevenue: row.totalRevenue || 0,
-      deferredRevenue: 0, // Requires detailed calculation per report
-      recognizedRevenue: 0,
-      refundAmount: 0,
-      ancillaryRevenue: 0,
-      status: "draft" as const,
-      generatedAt: new Date().toISOString(),
-    };
-  });
+  }
+  const months = aggregateFinancialMonths(await getFinancialDays());
+  const generatedAt = new Date().toISOString();
+  return months
+    .slice(0, limit)
+    .map(month => monthlyReport(month.yearMonth, month, generatedAt));
 }

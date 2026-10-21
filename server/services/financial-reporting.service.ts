@@ -149,6 +149,61 @@ export function combineFinancialDays(
   return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** Aggregate the existing booking/ledger day buckets into UTC calendar months.
+ * These amounts do not establish recognized or deferred accounting revenue.
+ */
+export interface FinancialMonth extends FinancialAmounts {
+  yearMonth: string;
+  bookings: number;
+}
+
+const MONTH_SUM_FIELDS = [
+  "billedAmount",
+  "collectedAmount",
+  "nonCashFundedAmount",
+  "nonCashRefundedAmount",
+  "refundedAmount",
+  "unreconciledBookings",
+  "unclassifiedEntries",
+] as const;
+
+export function aggregateFinancialMonths(
+  days: readonly FinancialDay[]
+): FinancialMonth[] {
+  const months = new Map<string, FinancialMonth>();
+  for (const day of days) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])-\d{2}$/.test(day.date)) {
+      throw new Error("Invalid financial day bucket");
+    }
+    if (
+      day.currency !== "SAR" ||
+      day.amountUnit !== "minor" ||
+      day.earnedRevenue !== null
+    ) {
+      throw new Error("Incompatible financial month input");
+    }
+    if (day.netCollectedAmount !== day.collectedAmount - day.refundedAmount) {
+      throw new Error("Inconsistent financial day net amount");
+    }
+    const yearMonth = day.date.slice(0, 7);
+    let month = months.get(yearMonth);
+    if (!month) {
+      month = { ...emptyAmounts(), yearMonth, bookings: 0 };
+      months.set(yearMonth, month);
+    }
+    for (const key of MONTH_SUM_FIELDS) {
+      month[key] = financialInteger(month[key] + financialInteger(day[key]));
+    }
+    month.bookings = financialInteger(
+      month.bookings + financialInteger(day.bookings)
+    );
+    month.netCollectedAmount = month.collectedAmount - month.refundedAmount;
+  }
+  return [...months.values()].sort((a, b) =>
+    b.yearMonth.localeCompare(a.yearMonth)
+  );
+}
+
 /** Read projection only. No inferred earned revenue, no second financial ledger.
  * Invoices use creation time; cash movements use posting time, both UTC. */
 export async function getFinancialDays(

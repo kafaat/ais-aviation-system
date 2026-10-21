@@ -1,6 +1,32 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const monthlyReportContract = z.object({
+  id: z.string(),
+  reportType: z.enum(["monthly", "quarterly", "annual"]),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+  // Legacy field is cash collected, not recognized revenue.
+  totalRevenue: outputNumber,
+  billedAmount: outputNumber,
+  collectedAmount: outputNumber,
+  nonCashFundedAmount: outputNumber,
+  nonCashRefundedAmount: outputNumber,
+  refundAmount: outputNumber,
+  netCollectedAmount: outputNumber,
+  unreconciledBookings: outputNumber,
+  unclassifiedEntries: outputNumber,
+  deferredRevenue: outputNumber.nullable(),
+  recognizedRevenue: outputNumber.nullable(),
+  ancillaryRevenue: outputNumber.nullable(),
+  currency: z.literal("SAR"),
+  amountUnit: z.literal("minor"),
+  sourceBasis: z.literal("booking_created_and_ledger_posted_epoch_day"),
+  persisted: z.literal(false),
+  status: z.enum(["draft", "finalized"]),
+  generatedAt: z.string(),
+});
+
 export const responseContracts = {
   getDashboard: z.object({
     totalRevenue: outputNumber,
@@ -70,34 +96,8 @@ export const responseContracts = {
       })
     ),
   }),
-  generateReport: z.object({
-    id: z.string(),
-    reportType: z.enum(["monthly", "quarterly", "annual"]),
-    periodStart: z.string(),
-    periodEnd: z.string(),
-    totalRevenue: outputNumber,
-    deferredRevenue: outputNumber,
-    recognizedRevenue: outputNumber,
-    refundAmount: outputNumber,
-    ancillaryRevenue: outputNumber,
-    status: z.enum(["draft", "finalized"]),
-    generatedAt: z.string(),
-  }),
-  getReports: z.array(
-    z.object({
-      id: z.string(),
-      reportType: z.enum(["monthly", "quarterly", "annual"]),
-      periodStart: z.string(),
-      periodEnd: z.string(),
-      totalRevenue: outputNumber,
-      deferredRevenue: outputNumber,
-      recognizedRevenue: outputNumber,
-      refundAmount: outputNumber,
-      ancillaryRevenue: outputNumber,
-      status: z.enum(["draft", "finalized"]),
-      generatedAt: z.string(),
-    })
-  ),
+  generateReport: monthlyReportContract,
+  getReports: z.array(monthlyReportContract),
   getYieldAnalysis: z.array(
     z.object({
       flightId: outputNumber,
