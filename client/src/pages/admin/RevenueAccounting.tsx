@@ -970,70 +970,50 @@ export function RevenueAccounting() {
                     )}
                   </p>
                 )}
-                {/* Generated Report Result */}
+                {/* This is a computed view, not a saved or approved report. */}
                 {generateReportMutation.data && (
                   <div className="mt-6 border rounded-lg p-4 bg-muted/30">
-                    <h4 className="font-semibold mb-3">
+                    <h4 className="font-semibold mb-2">
                       Report: {generateReportMutation.data.id}
                     </h4>
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      Calculated live from booking and ledger dates; not saved.
+                      Collected cash is not earned revenue.
+                    </p>
                     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Period: </span>
-                        <span className="font-medium">
-                          {generateReportMutation.data.periodStart} to{" "}
-                          {generateReportMutation.data.periodEnd}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">
-                          Total Revenue:{" "}
-                        </span>
-                        <span className="font-medium">
-                          {formatSAR(generateReportMutation.data.totalRevenue)}{" "}
-                          SAR
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">
-                          Recognized:{" "}
-                        </span>
-                        <span className="font-medium">
-                          {formatSAR(
-                            generateReportMutation.data.recognizedRevenue
-                          )}{" "}
-                          SAR
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">
-                          Deferred:{" "}
-                        </span>
-                        <span className="font-medium">
-                          {formatSAR(
-                            generateReportMutation.data.deferredRevenue
-                          )}{" "}
-                          SAR
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Refunds: </span>
-                        <span className="font-medium text-red-600">
-                          -{formatSAR(generateReportMutation.data.refundAmount)}{" "}
-                          SAR
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">
-                          Ancillary:{" "}
-                        </span>
-                        <span className="font-medium">
-                          {formatSAR(
-                            generateReportMutation.data.ancillaryRevenue
-                          )}{" "}
-                          SAR
-                        </span>
-                      </div>
+                      {(
+                        [
+                          { label: "Cash collected", amount: generateReportMutation.data.collectedAmount },
+                          { label: "Cash refunds", amount: generateReportMutation.data.refundAmount },
+                          { label: "Net cash collected", amount: generateReportMutation.data.netCollectedAmount },
+                          { label: "Booking totals (created)", amount: generateReportMutation.data.billedAmount },
+                          { label: "Non-cash funding", amount: generateReportMutation.data.nonCashFundedAmount },
+                          { label: "Non-cash refunds", amount: generateReportMutation.data.nonCashRefundedAmount },
+                          { label: "Deferred revenue", amount: generateReportMutation.data.deferredRevenue },
+                          { label: "Recognized revenue", amount: generateReportMutation.data.recognizedRevenue },
+                          { label: "Ancillary revenue", amount: generateReportMutation.data.ancillaryRevenue },
+                        ] as const
+                      ).map(({ label, amount }) => (
+                        <div key={label}>
+                          <span className="text-muted-foreground">
+                            {label}:{" "}
+                          </span>
+                          <span className="font-medium">
+                            {amount === null ? "Not verified" : formatSAR(amount) + " SAR"}
+                          </span>
+                        </div>
+                      ))}
                     </div>
+                    {(generateReportMutation.data.unreconciledBookings > 0 ||
+                      generateReportMutation.data.unclassifiedEntries > 0) && (
+                      <p role="alert" className="mt-3 text-sm">
+                        Evidence gaps:{" "}
+                        {generateReportMutation.data.unreconciledBookings}{" "}
+                        unreconciled bookings,{" "}
+                        {generateReportMutation.data.unclassifiedEntries}{" "}
+                        unclassified ledger entries.
+                      </p>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -1042,9 +1022,9 @@ export function RevenueAccounting() {
             {/* Report History */}
             <Card>
               <CardHeader>
-                <CardTitle>Report History</CardTitle>
+                <CardTitle>Monthly Cash Views</CardTitle>
                 <CardDescription>
-                  Monthly revenue reports with booking data
+                  Computed monthly views, not persisted reports; cash is grouped by ledger posting date.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -1060,7 +1040,7 @@ export function RevenueAccounting() {
                           </th>
                           <th className="text-left p-3 font-medium">Period</th>
                           <th className="text-right p-3 font-medium">
-                            Total Revenue (SAR)
+                            Cash Collected (SAR)
                           </th>
                           <th className="text-left p-3 font-medium">Status</th>
                         </tr>
@@ -1076,7 +1056,7 @@ export function RevenueAccounting() {
                               {report.periodStart} to {report.periodEnd}
                             </td>
                             <td className="p-3 text-right font-semibold">
-                              {formatSAR(report.totalRevenue)}
+                              {formatSAR(report.collectedAmount)}
                             </td>
                             <td className="p-3">
                               <span
@@ -1096,8 +1076,7 @@ export function RevenueAccounting() {
                   </div>
                 ) : (
                   <p className="text-center text-muted-foreground py-8">
-                    No reports available. Generate your first monthly report
-                    above.
+                    No monthly financial activity found.
                   </p>
                 )}
               </CardContent>
