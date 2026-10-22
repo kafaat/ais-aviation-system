@@ -167,6 +167,8 @@ jobs:
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test
+          # This MySQL service lives only for this GitHub Actions job.
+          AIS_DISPOSABLE_DATABASE: "true"
           JWT_SECRET: test-secret-key-for-ci
           STRIPE_SECRET_KEY: sk_test_mock_key
           STRIPE_WEBHOOK_SECRET: whsec_mock_secret
