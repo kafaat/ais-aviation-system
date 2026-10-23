@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.32.3
+
+### Bug Fixes
+
+- fix(booking): surface invalid optional passport before checkout (c2cfe10)
+- fix(booking): surface invalid optional passport before checkout (#194) (ac749e3)
+
+### Other Changes
+
+- style: stabilize Playwright assertion formatting (d32dc7c)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.32.2...v1.32.3
+
+---
+
 ## What's Changed in v1.32.2
 
 ### Bug Fixes
