@@ -13,18 +13,18 @@ Copy these four files into a destination branch:
 
 Replace and review each binding explicitly:
 
-| Binding | Required destination input |
-| --- | --- |
-| PROJECT_ID and workflow project ID | Independently observed project UUID |
-| STAGING_ID and workflow environment ID | Independently observed environment UUID |
-| EXPECTED_ENVIRONMENT_NAME | Exact observed name, never inferred from purpose |
-| Receipt environment_purpose and scope | Authorized purpose of this exact target |
-| Receipt name_purpose_mismatch | Explicit comparison of reviewed name and purpose |
-| AIS secret and artifact prefix | A separate destination/environment token and unique prefix |
-| refs/heads/main and expected_sha | Reviewed branch policy and exact merged commit |
-| Action pins and Python discovery | Destination's existing pin and test conventions |
-| CLI pin/version check | Same reviewed schema/version, updated together if changed |
-| Tests' target name/purpose assertions | New bindings plus wrong-project/environment cases |
+| Binding                                | Required destination input                                 |
+| -------------------------------------- | ---------------------------------------------------------- |
+| PROJECT_ID and workflow project ID     | Independently observed project UUID                        |
+| STAGING_ID and workflow environment ID | Independently observed environment UUID                    |
+| EXPECTED_ENVIRONMENT_NAME              | Exact observed name, never inferred from purpose           |
+| Receipt environment_purpose and scope  | Authorized purpose of this exact target                    |
+| Receipt name_purpose_mismatch          | Explicit comparison of reviewed name and purpose           |
+| AIS secret and artifact prefix         | A separate destination/environment token and unique prefix |
+| refs/heads/main and expected_sha       | Reviewed branch policy and exact merged commit             |
+| Action pins and Python discovery       | Destination's existing pin and test conventions            |
+| CLI pin/version check                  | Same reviewed schema/version, updated together if changed  |
+| Tests' target name/purpose assertions  | New bindings plus wrong-project/environment cases          |
 
 Keep token exposure limited to status, bounded private raw files, constant error
 codes, receipt allowlisting, exact one-edge scope, explicit boolean access,

@@ -8,13 +8,13 @@ https://github.com/kafaat/ai_platform_complete_v2.0.0_enhanced/issues/1259
 
 Railway list-projects and list-services on 2026-10-23 confirmed:
 
-| Field | Exact value |
-| --- | --- |
-| Project | ais-aviation-staging |
-| Project ID | d0425f39-b1dc-4cf3-b7d9-0aab68d6ae9b |
-| Environment ID | 6067b737-ceb8-465c-a798-5ecc8061ccef |
-| Environment display name | production |
-| Intended purpose | staging |
+| Field                    | Exact value                          |
+| ------------------------ | ------------------------------------ |
+| Project                  | ais-aviation-staging                 |
+| Project ID               | d0425f39-b1dc-4cf3-b7d9-0aab68d6ae9b |
+| Environment ID           | 6067b737-ceb8-465c-a798-5ecc8061ccef |
+| Environment display name | production                           |
+| Intended purpose         | staging                              |
 
 `docs/operations/railway-staging-completion.md` independently describes this
 project as a staging copy whose environment is named production. This exception
