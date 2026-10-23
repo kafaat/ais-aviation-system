@@ -1,3 +1,4 @@
+import { selectDepartureDate } from "./fixtures/test-helpers";
 import { test, expect } from "./fixtures/base-test";
 
 /**
@@ -96,9 +97,7 @@ test.describe("Multi-Currency Support", () => {
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    await page
-      .getByLabel("تاريخ المغادرة")
-      .fill(tomorrow.toISOString().split("T")[0]);
+    await selectDepartureDate(page, tomorrow);
 
     await page.getByRole("button", { name: "بحث" }).click();
 

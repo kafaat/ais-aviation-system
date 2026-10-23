@@ -1,3 +1,4 @@
+import { selectDepartureDate } from "./fixtures/test-helpers";
 import { test, expect } from "./fixtures/base-test";
 import {
   testUsers,
@@ -5,7 +6,6 @@ import {
   testPaymentCards,
   testRoutes,
   getNextWeekDate,
-  formatDateForInput,
   BOOKING_REF_PATTERN,
 } from "./fixtures/test-data";
 
@@ -35,9 +35,7 @@ test.describe("Checkout Flow", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
       await page.waitForSelector('[data-testid="flight-results"]', {
@@ -716,9 +714,7 @@ test.describe("Checkout Flow", () => {
           .click();
 
         const departureDate = getNextWeekDate();
-        await page
-          .getByLabel(/تاريخ المغادرة|Departure date/i)
-          .fill(formatDateForInput(departureDate));
+        await selectDepartureDate(page, departureDate);
 
         await page.getByRole("button", { name: /بحث|Search/i }).click();
         await page.waitForSelector('[data-testid="flight-results"]', {
