@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.32.3
+
+### Bug Fixes
+
+- Validate optional passport numbers before ordinary and split checkout, with accessible feedback (#194).
+- Restore airport and airline dates from Redis JSON cache without weakening response contracts (#196).
+
+### Tests
+
+- Select calendar dates through the visible control in English and Arabic, including a year boundary (#196).
+- Verify repeated reference HTTP reads and reject invalid passports before any booking or payment request.
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.32.2...v1.32.3
+
+---
+
 ## What's Changed in v1.32.2
 
 ### Bug Fixes
