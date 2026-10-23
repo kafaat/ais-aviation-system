@@ -44,6 +44,21 @@ test.describe("CI smoke coverage", () => {
     await expect(page.getByTestId("home-search-button")).toBeDisabled();
   });
 
+  for (const reference of ["airports", "airlines"]) {
+    test(`${reference} remains readable after its cache is populated`, async ({
+      page,
+    }) => {
+      const endpoint = `/api/trpc/reference.${reference}`;
+      const first = await page.request.get(endpoint);
+      expect(first.status()).toBe(200);
+      const cold = await first.json();
+      expect(cold.result.data.json.length).toBeGreaterThan(0);
+      const second = await page.request.get(endpoint);
+      expect(second.status()).toBe(200);
+      expect(await second.json()).toEqual(cold);
+    });
+  }
+
   for (const language of ["en", "ar"]) {
     test(`calendar selection reaches search in ${language} across a year boundary`, async ({
       page,
