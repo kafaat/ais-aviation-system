@@ -1,5 +1,10 @@
 # Portable read-only Railway adoption template
 
+Executable v1.0.0 is now in [templates/railway-connection](../../templates/railway-connection/README.md).
+It generates a configured workflow, verifier, tests, runbook and hash manifest
+without editing source constants. Use its installer for new adoptions; the
+manual mapping below records the original AIS transfer recipe.
+
 Reference implementation: AIS workflow, verifier and unittest module named
 `railway_staging_connection_preflight`; source lineage and target facts are in
 [the AIS runbook](RAILWAY_GITHUB_ACTIONS_CONNECTION.md).
