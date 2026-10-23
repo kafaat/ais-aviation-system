@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.32.4
+
+### Bug Fixes
+
+- fix(cache): restore and validate flight dates across Redis reads (745213b)
+- fix(cache): restore and validate flight dates across Redis reads (#198) (0f29583)
+
+### Maintenance
+
+- chore(catalog): record validated flight cache contract dependency (552947a)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.32.3...v1.32.4
+
+---
+
 ## What's Changed in v1.32.3
 
 ### Bug Fixes
