@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.32.2
+
+### Bug Fixes
+
+- fix(security): close remaining dependency advisories (e3ca25e)
+- fix(security): close remaining dependency advisories (#192) (522b060)
+
+### Other Changes
+
+- Merge released v1.32.1 main into dependency security closure (7db095d)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.32.1...v1.32.2
+
+---
+
 ## What's Changed in v1.32.1
 
 ### Bug Fixes
