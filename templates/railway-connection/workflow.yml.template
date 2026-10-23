@@ -1,0 +1,91 @@
+name: Railway read-only connection proof
+
+on:
+  pull_request:
+    paths:
+      - ".github/railway-connection.json"
+      - ".github/workflows/railway-connection.yml"
+      - "scripts/ci/railway_connection_verify.py"
+      - "scripts/ci/test_railway_connection.py"
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: "Exact reviewed merged main SHA"
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - run: python3 -m unittest discover -s scripts/ci -p 'test_railway_connection.py' -v
+
+  connection:
+    needs: contract
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      CI: "true"
+      RAILWAY_NO_AUTO_UPDATE: "1"
+      EXPECTED_SHA: ${{ inputs.expected_sha }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - name: Enforce reviewed main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "::error::MAIN_REQUIRED"; exit 1; }
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ && "$EXPECTED_SHA" == "$GITHUB_SHA" ]] || { echo "::error::SHA_MISMATCH"; exit 1; }
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || { echo "::error::CHECKOUT_MISMATCH"; exit 1; }
+      - name: Validate target before token exposure
+        id: target
+        run: python3 scripts/ci/railway_connection_verify.py --config .github/railway-connection.json --github-target >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "24.x"
+      - name: Install and verify pinned CLI without token
+        run: |
+          npm install --global @railway/cli@5.63.1
+          test "$(railway --version)" = "railway 5.63.1"
+      - name: Read exact target only
+        env:
+          RAILWAY_TOKEN: ${{ secrets.__PROJECT_TOKEN_SECRET__ }}
+          PROJECT_ID: ${{ steps.target.outputs.project_id }}
+          ENVIRONMENT_ID: ${{ steps.target.outputs.environment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ -n "${RAILWAY_TOKEN:-}" ]] || { echo "::error::PROJECT_TOKEN_MISSING"; exit 1; }
+          [[ -z "${RAILWAY_API_TOKEN:-}" ]] || { echo "::error::ACCOUNT_TOKEN_FORBIDDEN"; exit 1; }
+          if ! timeout 90s railway status --json --project "$PROJECT_ID" --environment "$ENVIRONMENT_ID" \
+              >"$RUNNER_TEMP/railway-status.json" 2>"$RUNNER_TEMP/railway-stderr.txt"; then
+            echo "::error::STATUS_READ_FAILED_RAW_WITHHELD"
+            exit 1
+          fi
+      - name: Emit allowlisted proof
+        run: |
+          python3 scripts/ci/railway_connection_verify.py \
+            --config .github/railway-connection.json \
+            --status-json "$RUNNER_TEMP/railway-status.json" \
+            --source-sha "$GITHUB_SHA" \
+            --evidence "$RUNNER_TEMP/railway-connection-evidence.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: railway-connection-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/railway-connection-evidence.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove raw files
+        if: always()
+        run: rm -f "$RUNNER_TEMP/railway-status.json" "$RUNNER_TEMP/railway-stderr.txt"
