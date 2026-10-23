@@ -1,3 +1,4 @@
+import { selectDepartureDate } from "./fixtures/test-helpers";
 import { test, expect } from "@playwright/test";
 
 const STORED_CONSENT = {
@@ -42,6 +43,54 @@ test.describe("CI smoke coverage", () => {
 
     await expect(page.getByTestId("home-search-button")).toBeDisabled();
   });
+
+  for (const reference of ["airports", "airlines"]) {
+    test(`${reference} remains readable after its cache is populated`, async ({
+      page,
+    }) => {
+      const endpoint = `/api/trpc/reference.${reference}`;
+      const first = await page.request.get(endpoint);
+      expect(first.status()).toBe(200);
+      const cold = await first.json();
+      expect(cold.result.data.json.length).toBeGreaterThan(0);
+      const second = await page.request.get(endpoint);
+      expect(second.status()).toBe(200);
+      expect(await second.json()).toEqual(cold);
+    });
+  }
+
+  for (const language of ["en", "ar"]) {
+    test(`calendar selection reaches search in ${language} across a year boundary`, async ({
+      page,
+    }) => {
+      await page.addInitScript(
+        lang => localStorage.setItem("i18nextLng", lang),
+        language
+      );
+      await page.goto("/");
+      await page.getByTestId("home-origin-select").click();
+      await page.getByRole("option", { name: /RUH/ }).click();
+      await page.getByTestId("home-destination-select").click();
+      await page.getByRole("option", { name: /JED/ }).click();
+      const date = new Date(
+        Date.UTC(new Date().getUTCFullYear() + 1, 0, 1, 12)
+      );
+      await selectDepartureDate(page, date);
+      await page.getByTestId("home-search-button").click();
+      await expect(page).toHaveURL(/\/search\?/);
+      const selectedDate = new URL(page.url()).searchParams.get("date");
+      expect(selectedDate).toBeTruthy();
+      const localDate = await page.evaluate(value => {
+        const selected = new Date(value!);
+        return [
+          selected.getFullYear(),
+          selected.getMonth(),
+          selected.getDate(),
+        ];
+      }, selectedDate);
+      expect(localDate).toEqual([date.getUTCFullYear(), 0, 1]);
+    });
+  }
 
   test("login renders the combined authentication form", async ({ page }) => {
     await page.goto("/login");

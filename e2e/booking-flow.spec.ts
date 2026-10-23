@@ -1,3 +1,4 @@
+import { selectDepartureDate } from "./fixtures/test-helpers";
 import { test, expect } from "./fixtures/base-test";
 
 /**
@@ -24,9 +25,7 @@ test.describe("Booking Flow", () => {
       // Select departure date (tomorrow)
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      await page
-        .getByLabel("تاريخ المغادرة")
-        .fill(tomorrow.toISOString().split("T")[0]);
+      await selectDepartureDate(page, tomorrow);
 
       // Select number of passengers
       await page.getByLabel("عدد المسافرين").fill("2");

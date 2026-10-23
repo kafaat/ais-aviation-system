@@ -4,12 +4,13 @@
 
 ### Bug Fixes
 
-- fix(booking): surface invalid optional passport before checkout (c2cfe10)
-- fix(booking): surface invalid optional passport before checkout (#194) (ac749e3)
+- Validate optional passport numbers before ordinary and split checkout, with accessible feedback (#194).
+- Restore airport and airline dates from Redis JSON cache without weakening response contracts (#196).
 
-### Other Changes
+### Tests
 
-- style: stabilize Playwright assertion formatting (d32dc7c)
+- Select calendar dates through the visible control in English and Arabic, including a year boundary (#196).
+- Verify repeated reference HTTP reads and reject invalid passports before any booking or payment request.
 
 **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.32.2...v1.32.3
 

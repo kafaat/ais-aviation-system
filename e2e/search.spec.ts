@@ -1,9 +1,6 @@
+import { selectDepartureDate } from "./fixtures/test-helpers";
 import { test, expect } from "./fixtures/base-test";
-import {
-  testRoutes,
-  getNextWeekDate,
-  formatDateForInput,
-} from "./fixtures/test-data";
+import { testRoutes, getNextWeekDate } from "./fixtures/test-data";
 
 /**
  * E2E Test: Flight Search
@@ -95,21 +92,7 @@ test.describe("Flight Search", () => {
     test("should select departure date from calendar", async ({ page }) => {
       const departureDate = getNextWeekDate();
 
-      // Click date input or calendar trigger
-      await page.getByLabel(/تاريخ المغادرة|Departure date/i).click();
-
-      // Wait for calendar to appear
-      await page.waitForSelector('[role="dialog"], [data-radix-calendar]', {
-        timeout: 5000,
-      });
-
-      // Fill date directly
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
-
-      // Close calendar if open
-      await page.keyboard.press("Escape");
+      await selectDepartureDate(page, departureDate);
     });
 
     test("should not allow past dates for departure", async ({ page }) => {
@@ -157,9 +140,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       // Perform search
       await page.getByRole("button", { name: /بحث|Search/i }).click();
@@ -192,9 +173,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
 
@@ -223,9 +202,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       // Click search and check for loading state
       await page.getByRole("button", { name: /بحث|Search/i }).click();
@@ -261,9 +238,7 @@ test.describe("Flight Search", () => {
       // Use a far future date
       const farFutureDate = new Date();
       farFutureDate.setMonth(farFutureDate.getMonth() + 12);
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(farFutureDate));
+      await selectDepartureDate(page, farFutureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
 
@@ -300,9 +275,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
       await page.waitForSelector('[data-testid="flight-results"]', {
@@ -391,9 +364,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
       await page.waitForSelector('[data-testid="flight-results"]', {
@@ -542,9 +513,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
       await page.waitForSelector('[data-testid="flight-results"]', {
@@ -629,9 +598,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
       await page.waitForSelector('[data-testid="flight-results"]', {
@@ -673,9 +640,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
       await page.waitForSelector('[data-testid="flight-results"]', {
@@ -716,9 +681,7 @@ test.describe("Flight Search", () => {
         .click();
 
       const departureDate = getNextWeekDate();
-      await page
-        .getByLabel(/تاريخ المغادرة|Departure date/i)
-        .fill(formatDateForInput(departureDate));
+      await selectDepartureDate(page, departureDate);
 
       await page.getByRole("button", { name: /بحث|Search/i }).click();
       await page.waitForSelector('[data-testid="flight-results"]', {

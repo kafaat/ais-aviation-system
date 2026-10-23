@@ -1,7 +1,21 @@
+import { z } from "zod";
 import { responseContracts } from "../contracts/reference";
 import { publicProcedure, router } from "../_core/trpc";
 import * as db from "../db";
 import { redisCacheService, CacheTTL } from "../services/redis-cache.service";
+
+// Redis JSON serialization turns Date objects into ISO strings. Parse only the
+// cache boundary; the public output contract and DB producer remain strict.
+const cachedDate = z.union([
+  z.date(),
+  z.iso.datetime().transform(value => new Date(value)),
+]);
+const cachedAirports = responseContracts.airports.element
+  .extend({ createdAt: cachedDate })
+  .array();
+const cachedAirlines = responseContracts.airlines.element
+  .extend({ createdAt: cachedDate })
+  .array();
 
 /**
  * Reference Data Router
@@ -18,9 +32,8 @@ export const referenceRouter = router({
     .query(async () => {
       // Try to get from cache
       const cached = await redisCacheService.getCachedAirlines();
-      if (cached) {
-        return cached as Awaited<ReturnType<typeof db.getAllAirlines>>;
-      }
+      const parsed = cachedAirlines.safeParse(cached);
+      if (parsed.success) return parsed.data;
 
       // Fetch from database
       const airlines = await db.getAllAirlines();
@@ -40,9 +53,8 @@ export const referenceRouter = router({
     .query(async () => {
       // Try to get from cache
       const cached = await redisCacheService.getCachedAirports();
-      if (cached) {
-        return cached as Awaited<ReturnType<typeof db.getAllAirports>>;
-      }
+      const parsed = cachedAirports.safeParse(cached);
+      if (parsed.success) return parsed.data;
 
       // Fetch from database
       const airports = await db.getAllAirports();

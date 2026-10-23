@@ -81,6 +81,37 @@ export async function isLoggedIn(page: Page): Promise<boolean> {
 /**
  * Search helpers
  */
+/** Choose a calendar day through the visible control, including month navigation. */
+export async function selectDepartureDate(
+  page: Page,
+  date: Date
+): Promise<void> {
+  const isoDate = formatDateForInput(date);
+  await page.getByTestId("home-date-trigger").click();
+  const calendar = page.locator('[data-slot="calendar"]');
+  await expect(calendar).toBeVisible();
+  // DayPicker's gridcell exposes an ISO date; the inner button's data-day is localized.
+  const day = calendar.locator(
+    `[role="gridcell"][data-day="${isoDate}"] button`
+  );
+  for (let month = 0; month < 24 && (await day.count()) === 0; month++) {
+    const firstDay = await calendar
+      .locator('[role="gridcell"][data-day]')
+      .first()
+      .getAttribute("data-day");
+    if (!firstDay) throw new Error("Calendar has no dated cells");
+    await calendar
+      .locator(isoDate < firstDay ? ".rdp-button_previous" : ".rdp-button_next")
+      .click();
+  }
+  await expect(day).toBeVisible();
+  await expect(day).toBeEnabled();
+  await day.click();
+  await expect(day).toHaveAttribute("data-selected-single", "true");
+  await page.keyboard.press("Escape");
+  await expect(calendar).not.toBeVisible();
+}
+
 export async function performFlightSearch(
   page: Page,
   options: {
@@ -106,9 +137,7 @@ export async function performFlightSearch(
   await page.getByRole("option", { name: new RegExp(destination) }).click();
 
   // Set departure date
-  await page
-    .getByLabel(/تاريخ المغادرة|Departure date/i)
-    .fill(formatDateForInput(departureDate));
+  await selectDepartureDate(page, departureDate);
 
   // Set passengers if input exists
   const passengersInput = page.getByLabel(/عدد المسافرين|Passengers/i);
