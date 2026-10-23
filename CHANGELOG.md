@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.32.1
+
+### Bug Fixes
+
+- fix(auth): remove unused vulnerable python-jose and sync main (76144a2)
+- fix(security): pin transitive DOMPurify to patched 3.4.17 (243e3bb)
+- fix(security): remove unused jose and patch DOMPurify (#186) (df4ecf5)
+
+### Maintenance
+
+- build(deps): bump the pip group across 2 directories with 2 updates (a8bf47f)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.32.0...v1.32.1
+
+---
+
 ## What's Changed in v1.32.0
 
 ### Features
