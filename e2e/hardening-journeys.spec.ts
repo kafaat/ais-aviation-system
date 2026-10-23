@@ -62,11 +62,9 @@ test.describe("Funded journeys and truthful operational reads", () => {
       await submit.click();
       // A toast as well as the field error proves the submit handler rejected it.
       await expect(
-        page
-          .locator("[data-sonner-toast]")
-          .filter({
-            hasText: "Passport number must be 6-12 alphanumeric characters",
-          })
+        page.locator("[data-sonner-toast]").filter({
+          hasText: "Passport number must be 6-12 alphanumeric characters",
+        })
       ).toBeVisible();
       expect(mutationRequests).toBe(0);
       expect(
