@@ -1,7 +1,27 @@
+import { z } from "zod";
+import { responseContracts } from "../contracts/flights";
 import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import { DynamicPricingService } from "./pricing/dynamic-pricing.service";
 import { redisCacheService, CacheTTL } from "./redis-cache.service";
+
+// Only known cache date fields are restored. Public contracts remain strict.
+const cachedDate = z.union([
+  z.date(),
+  z.iso.datetime().transform(value => new Date(value)),
+]);
+const cachedSearch = responseContracts.search.element
+  .extend({
+    departureTime: cachedDate,
+    arrivalTime: cachedDate,
+  })
+  .array();
+// tenantId is internal service data, deliberately absent from the public DTO.
+const cachedDetail = responseContracts.getById.options[1].extend({
+  departureTime: cachedDate,
+  arrivalTime: cachedDate,
+  tenantId: z.number().int().nullable(),
+});
 
 /**
  * Flights Service
@@ -40,9 +60,8 @@ export async function searchFlights(
 
     // Try to get from cache
     const cached = await redisCacheService.getCachedFlightSearch(cacheParams);
-    if (cached) {
-      return cached as FlightSearchResult;
-    }
+    const parsed = cachedSearch.safeParse(cached);
+    if (parsed.success) return parsed.data;
 
     // Fetch from database
     const results = await db.searchFlights(input);
@@ -68,13 +87,14 @@ export async function searchFlights(
  * Get flight details by ID
  * Results are cached for 5 minutes to improve performance
  */
-export async function getFlightById(input: GetFlightInput) {
+export async function getFlightById(
+  input: GetFlightInput
+): Promise<Awaited<ReturnType<typeof db.getFlightById>>> {
   try {
     // Try to get from cache
     const cached = await redisCacheService.getCachedFlightDetails(input.id);
-    if (cached) {
-      return cached as Awaited<ReturnType<typeof db.getFlightById>>;
-    }
+    const parsed = cachedDetail.safeParse(cached);
+    if (parsed.success && parsed.data.id === input.id) return parsed.data;
 
     // Fetch from database
     const flight = await db.getFlightById(input.id);

@@ -1866,6 +1866,7 @@
         "server/services/retail-offer.service.ts"
       ],
       "dependencies": [
+        "server/contracts/flights.ts",
         "server/db.ts",
         "server/services/pricing/dynamic-pricing.service.ts",
         "server/services/redis-cache.service.ts"

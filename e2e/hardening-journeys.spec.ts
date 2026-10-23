@@ -80,6 +80,37 @@ test.describe("Funded journeys and truthful operational reads", () => {
       await expect(passport).toHaveAttribute("aria-invalid", "false");
     });
   }
+  test("flight search and detail preserve dates across repeated Redis-backed HTTP reads", async ({
+    page,
+  }) => {
+    await useBrowserSession(page, "regular");
+    const flightId = await fixtureFlight();
+    const client = rpc(page);
+    const cold = await client.flights.getById.query({ id: flightId });
+    expect(cold).toBeTruthy();
+    if (!cold) throw new Error("Fixture flight missing");
+    const warm = await client.flights.getById.query({ id: flightId });
+    expect(warm).toEqual(cold);
+    expect(warm?.departureTime).toBeInstanceOf(Date);
+    expect(warm?.arrivalTime).toBeInstanceOf(Date);
+    const query = {
+      originId: cold.origin.id,
+      destinationId: cold.destination.id,
+      departureDate: cold.departureTime,
+    };
+    const firstSearch = await client.flights.search.query(query);
+    const secondSearch = await client.flights.search.query(query);
+    expect(firstSearch.some(flight => flight.id === flightId)).toBe(true);
+    expect(secondSearch).toEqual(firstSearch);
+    expect(
+      secondSearch.find(flight => flight.id === flightId)?.departureTime
+    ).toBeInstanceOf(Date);
+    expect(
+      secondSearch.find(flight => flight.id === flightId)?.arrivalTime
+    ).toBeInstanceOf(Date);
+    await page.goto(`/booking/${flightId}`);
+    await expect(page.locator("#pax-firstname-0")).toBeVisible();
+  });
   test("booking creation replays one unpaid invoice without consuming a seat", async ({
     page,
   }) => {
