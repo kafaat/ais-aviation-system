@@ -1,3 +1,4 @@
+import { registerProviderCheckoutTests } from "./fixtures/provider-checkout";
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
 import type { Page } from "@playwright/test";
@@ -11,6 +12,8 @@ import type { RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+
+registerProviderCheckoutTests();
 
 async function loginAsAdmin(page: Page) {
   await useBrowserSession(page, "admin");
