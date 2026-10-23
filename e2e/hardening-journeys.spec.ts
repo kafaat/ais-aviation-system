@@ -1,7 +1,12 @@
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
 import type { Page } from "@playwright/test";
-import { ownedBooking, rpc, sqlRows } from "./fixtures/hardening";
+import {
+  fixtureFlight,
+  ownedBooking,
+  rpc,
+  sqlRows,
+} from "./fixtures/hardening";
 import type { RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -15,6 +20,66 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
   });
+  for (const paymentButton of [
+    "Complete Booking & Payment",
+    "Split with Others",
+  ]) {
+    test(`invalid passport blocks ${paymentButton} before booking or payment`, async ({
+      page,
+    }) => {
+      await useBrowserSession(page, "regular");
+      const flightId = await fixtureFlight();
+      let mutationRequests = 0;
+      await page.route("**/api/trpc/*", async route => {
+        if (
+          /bookings\.create|payments\.createCheckoutSession/.test(
+            route.request().url()
+          )
+        ) {
+          mutationRequests++;
+          await route.abort();
+        } else {
+          await route.continue();
+        }
+      });
+      await page.goto(`/booking/${flightId}`);
+      await page.locator("#pax-firstname-0").fill("Synthetic");
+      await page.locator("#pax-lastname-0").fill("Passenger");
+      const passport = page.locator("#pax-passport-0");
+      await passport.fill("bad!");
+      await expect(passport).toHaveAttribute("aria-invalid", "true");
+      await expect(passport).toHaveAccessibleDescription(
+        "Passport number must be 6-12 alphanumeric characters"
+      );
+      await page
+        .getByRole("button", { name: "Refresh fare offer", exact: true })
+        .click();
+      const submit = page.getByRole("button", {
+        name: paymentButton,
+        exact: true,
+      });
+      await expect(submit).toBeEnabled();
+      await submit.click();
+      // A toast as well as the field error proves the submit handler rejected it.
+      await expect(
+        page.locator("[data-sonner-toast]").filter({
+          hasText: "Passport number must be 6-12 alphanumeric characters",
+        })
+      ).toBeVisible();
+      expect(mutationRequests).toBe(0);
+      expect(
+        await sqlRows<RowDataPacket>(
+          "SELECT id FROM bookings WHERE flightId=?",
+          [flightId]
+        )
+      ).toHaveLength(0);
+      await passport.fill("AB123456");
+      await expect(passport).toHaveAttribute("aria-invalid", "false");
+      await expect(passport).not.toHaveAttribute("aria-describedby");
+      await passport.fill("");
+      await expect(passport).toHaveAttribute("aria-invalid", "false");
+    });
+  }
   test("booking creation replays one unpaid invoice without consuming a seat", async ({
     page,
   }) => {

@@ -1,3 +1,4 @@
+import { hasValidOptionalPassport } from "@shared/passport";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -135,10 +136,7 @@ export default function Profile() {
     const errors: FormErrors = {};
 
     // Passport number validation (alphanumeric, 6-12 characters)
-    if (
-      formData.passportNumber &&
-      !/^[A-Za-z0-9]{6,12}$/.test(formData.passportNumber)
-    ) {
+    if (!hasValidOptionalPassport(formData.passportNumber)) {
       errors.passportNumber = t("profile.validation.invalidPassport");
     }
 

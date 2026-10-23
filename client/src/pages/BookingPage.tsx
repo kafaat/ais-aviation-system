@@ -1,3 +1,4 @@
+import { hasValidOptionalPassport } from "@shared/passport";
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute, useSearch, Link } from "wouter";
 import { useTranslation } from "react-i18next";
@@ -336,6 +337,9 @@ export default function BookingPage() {
     field: string,
     value: string | undefined
   ): string | null => {
+    if (field === "passportNumber" && !hasValidOptionalPassport(value)) {
+      return t("profile.validation.invalidPassport");
+    }
     const key = `${index}-${field}`;
     if (!touchedFields[key]) return null;
     if (!value || value.trim() === "") {
@@ -354,6 +358,11 @@ export default function BookingPage() {
   const handleSubmit = async () => {
     if (!isAuthenticated) {
       window.location.href = "/login";
+      return;
+    }
+
+    if (passengers.some(p => !hasValidOptionalPassport(p.passportNumber))) {
+      toast.error(t("profile.validation.invalidPassport"));
       return;
     }
 
@@ -427,6 +436,11 @@ export default function BookingPage() {
   const handleSplitPayment = async () => {
     if (!isAuthenticated) {
       window.location.href = "/login";
+      return;
+    }
+
+    if (passengers.some(p => !hasValidOptionalPassport(p.passportNumber))) {
+      toast.error(t("profile.validation.invalidPassport"));
       return;
     }
 
@@ -982,7 +996,30 @@ export default function BookingPage() {
                             )
                           }
                           placeholder={t("booking.passportNumber")}
+                          aria-invalid={
+                            !hasValidOptionalPassport(passenger.passportNumber)
+                          }
+                          aria-describedby={
+                            !hasValidOptionalPassport(passenger.passportNumber)
+                              ? `pax-passport-error-${index}`
+                              : undefined
+                          }
                         />
+                        {!hasValidOptionalPassport(
+                          passenger.passportNumber
+                        ) && (
+                          <p
+                            id={`pax-passport-error-${index}`}
+                            role="alert"
+                            className="text-xs text-destructive"
+                          >
+                            {getFieldError(
+                              index,
+                              "passportNumber",
+                              passenger.passportNumber
+                            )}
+                          </p>
+                        )}
                       </div>
 
                       <div className="space-y-2">
