@@ -1,5 +1,21 @@
 # Changelog
 
+## What's Changed in v1.32.4
+
+### Bug Fixes
+
+- Validate cached flight search and detail data, restore known date fields, and preserve internal tenant identity (#198).
+- Refresh malformed cache entries from the database and reject cached details for a different flight ID (#198).
+
+### Tests
+
+- Verify repeated Redis-backed flight HTTP reads and booking-screen rendering after warming the cache (#198).
+- Test hosted-provider handoff, provider failure and missing URL without live payment calls; assert invoices remain unpaid and seats unreserved (#200).
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.32.3...v1.32.4
+
+---
+
 ## What's Changed in v1.32.3
 
 ### Bug Fixes
