@@ -1,3 +1,4 @@
+import { hasValidOptionalPassport } from "@shared/passport";
 /**
  * BookingForm Component
  *
@@ -205,7 +206,24 @@ export function BookingForm({
                   placeholder={t("booking.passportNumber")}
                   disabled={disabled}
                   data-testid={`passenger-passport-${index}`}
+                  aria-invalid={
+                    !hasValidOptionalPassport(passenger.passportNumber)
+                  }
+                  aria-describedby={
+                    !hasValidOptionalPassport(passenger.passportNumber)
+                      ? `passenger-passport-error-${index}`
+                      : undefined
+                  }
                 />
+                {!hasValidOptionalPassport(passenger.passportNumber) && (
+                  <p
+                    id={`passenger-passport-error-${index}`}
+                    role="alert"
+                    className="text-xs text-destructive"
+                  >
+                    {t("profile.validation.invalidPassport")}
+                  </p>
+                )}
               </div>
 
               {/* Nationality */}

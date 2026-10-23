@@ -24,6 +24,8 @@ vi.mock("react-i18next", () => ({
         "booking.firstName": "First Name",
         "booking.lastName": "Last Name",
         "booking.passportNumber": "Passport Number",
+        "profile.validation.invalidPassport":
+          "Passport number must be 6-12 alphanumeric characters",
         "booking.nationality": "Nationality",
         "booking.adult": "Adult",
         "booking.child": "Child",
@@ -527,5 +529,47 @@ describe("BookingForm", () => {
 
       expect(onPassengerChange).toHaveBeenCalledWith(0, "firstName", "محمد");
     });
+  });
+});
+
+describe("optional passport feedback", () => {
+  it("associates each invalid passport with its own error and clears it after correction", () => {
+    const props = {
+      passengers: [
+        { ...createFilledPassenger(0), passportNumber: "bad!" },
+        { ...createFilledPassenger(1), passportNumber: "123" },
+      ],
+      onPassengerChange: vi.fn(),
+      onAddPassenger: vi.fn(),
+      onRemovePassenger: vi.fn(),
+    };
+    const { rerender } = render(<BookingForm {...props} />);
+    for (const index of [0, 1]) {
+      const input = screen.getByTestId(`passenger-passport-${index}`);
+      expect(input).toHaveAttribute("aria-invalid", "true");
+      expect(input).toHaveAccessibleDescription(
+        "Passport number must be 6-12 alphanumeric characters"
+      );
+    }
+    expect(screen.getAllByRole("alert")).toHaveLength(2);
+    rerender(
+      <BookingForm
+        {...props}
+        passengers={[
+          { ...props.passengers[0], passportNumber: "AB123456" },
+          { ...props.passengers[1], passportNumber: "" },
+        ]}
+      />
+    );
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    for (const index of [0, 1]) {
+      expect(screen.getByTestId(`passenger-passport-${index}`)).toHaveAttribute(
+        "aria-invalid",
+        "false"
+      );
+      expect(
+        screen.getByTestId(`passenger-passport-${index}`)
+      ).not.toHaveAttribute("aria-describedby");
+    }
   });
 });
