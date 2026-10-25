@@ -1,5 +1,23 @@
 # Changelog
 
+## What's Changed in v1.33.0
+
+### Features
+
+- feat(ci): package portable Railway connection template with offline installer (23f6cfa)
+
+### Maintenance
+
+- ci: adopt scoped read-only Railway connection proof for AIS (#201) (2f0786a)
+
+### Other Changes
+
+- Merge pull request #202: reusable Railway connection template (370ae7c)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.32.4...v1.33.0
+
+---
+
 ## What's Changed in v1.32.4
 
 ### Bug Fixes
