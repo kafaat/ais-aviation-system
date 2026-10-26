@@ -6,6 +6,10 @@
 
 - feat(ci): package portable Railway connection template with offline installer (23f6cfa)
 
+### Bug Fixes
+
+- fix(deps): patch zod and body-parser advisories and surface E2E consent failures (#204) (5c36977)
+
 ### Maintenance
 
 - ci: adopt scoped read-only Railway connection proof for AIS (#201) (2f0786a)
