@@ -4,6 +4,13 @@ import { z } from "zod";
  * Environment variables schema with Zod validation
  * This ensures all required environment variables are present and valid at startup
  */
+/** Values shipped in example files or CI fixtures; never a production key. */
+const INSECURE_JWT_SECRETS = new Set([
+  "your-super-secret-jwt-key-change-this-in-production",
+  "test-jwt-secret-key",
+  "test-secret-key-for-ci",
+]);
+
 const envSchema = z.object({
   // App Configuration
   VITE_APP_ID: z.string().min(1).default("ais-aviation-system"),
@@ -13,7 +20,19 @@ const envSchema = z.object({
 
   // Authentication
   SELF_SERVICE_CAPABILITY_SECRET: z.string().optional(),
-  JWT_SECRET: z.string().min(1, "JWT_SECRET is required"),
+  JWT_SECRET: z
+    .string()
+    .min(1, "JWT_SECRET is required")
+    .refine(
+      value => process.env.NODE_ENV !== "production" || value.length >= 32,
+      "JWT_SECRET must be at least 32 characters in production"
+    )
+    .refine(
+      value =>
+        process.env.NODE_ENV !== "production" ||
+        !INSECURE_JWT_SECRETS.has(value),
+      "JWT_SECRET must not be a placeholder value in production"
+    ),
   OAUTH_SERVER_URL: z
     .string()
     .url("OAUTH_SERVER_URL must be a valid URL")

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # Owner (auto-admin)
     OWNER_EMAIL: str = ""
 
+    # Shared secret the Node backend presents on every call. When set, every
+    # auth route requires it; nothing else may ask whether a password matches.
+    AUTH_SERVICE_TOKEN: str = ""
+
     @field_validator("DATABASE_URL")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
