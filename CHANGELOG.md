@@ -16,7 +16,9 @@
 - ci: gate images on Security Scan, run release checks once, fix auth healthcheck and the pre-commit hook (#211) (d62ab7b)
 - ci: do not count an action_required pull_request run as a started check (#213) (70dbd08)
 
-## **Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.0...v1.33.1
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.0...v1.33.1
+
+---
 
 ## What's Changed in v1.33.0
 
