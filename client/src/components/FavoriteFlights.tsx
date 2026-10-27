@@ -53,7 +53,7 @@ interface FavoriteData {
 }
 
 export function FavoriteFlights() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [editingAlert, setEditingAlert] = useState<number | null>(null);
   const [targetPrice, setTargetPrice] = useState<string>("");
 
@@ -106,10 +106,13 @@ export function FavoriteFlights() {
   };
 
   const formatPrice = (priceInCents: number) => {
-    return (priceInCents / 100).toLocaleString("ar-SA", {
-      style: "currency",
-      currency: "SAR",
-    });
+    return (priceInCents / 100).toLocaleString(
+      i18n.language === "ar" ? "ar-SA" : "en-US",
+      {
+        style: "currency",
+        currency: "SAR",
+      }
+    );
   };
 
   if (isLoading) {

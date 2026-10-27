@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -42,6 +43,7 @@ const statusLabels = {
 };
 
 export function FlightStatusTimeline({ flightId }: FlightStatusTimelineProps) {
+  const { i18n } = useTranslation();
   const { data, isLoading } = trpc.flights.getStatusHistory.useQuery({
     flightId,
   });
@@ -162,13 +164,16 @@ export function FlightStatusTimeline({ flightId }: FlightStatusTimelineProps) {
                         </div>
 
                         <time className="text-xs text-muted-foreground whitespace-nowrap">
-                          {new Date(item.createdAt).toLocaleString("ar-SA", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {new Date(item.createdAt).toLocaleString(
+                            i18n.language === "ar" ? "ar-SA" : "en-US",
+                            {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
                         </time>
                       </div>
                     </div>
