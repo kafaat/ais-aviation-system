@@ -370,7 +370,7 @@ export async function cancelBookingResources(
         and(
           eq(financialLedger.bookingId, booking.id),
           eq(financialLedger.type, "charge"),
-          sql`${financialLedger.stripeEventId} IN (${`internal-credit:${booking.id}`}, ${`corporate-credit:${booking.id}`})`
+          sql`${financialLedger.stripeEventId} IN (${`internal-credit:${booking.id}`}, ${`corporate-credit:${booking.id}`}, ${`wallet-credit:${booking.id}`})`
         )
       )
       .limit(1);

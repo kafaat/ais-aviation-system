@@ -5950,7 +5950,7 @@
                 },
                 "tender": {
                   "type": "string",
-                  "enum": ["user_credit", "corporate_credit"]
+                  "enum": ["user_credit", "corporate_credit", "wallet"]
                 },
                 "actorId": {
                   "type": "integer",

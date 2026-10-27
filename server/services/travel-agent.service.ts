@@ -16,7 +16,7 @@ import { withTransactionalIdempotency } from "./idempotency-v2.service";
 
 import { TRPCError } from "@trpc/server";
 import { and, eq, gte, lte, desc, sql, type SQL } from "drizzle-orm";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import { getDb } from "../db";
 import {
   travelAgents,
@@ -124,8 +124,9 @@ function hashApiSecret(secret: string): string {
  * Verify an API secret against stored hash
  */
 function verifyApiSecret(secret: string, hash: string): boolean {
-  const inputHash = hashApiSecret(secret);
-  return inputHash === hash;
+  const input = Buffer.from(hashApiSecret(secret), "hex");
+  const stored = Buffer.from(hash, "hex");
+  return input.length === stored.length && timingSafeEqual(input, stored);
 }
 
 // ============ Service Functions ============

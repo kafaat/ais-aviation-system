@@ -159,6 +159,7 @@ describe("Loyalty Service", () => {
       ],
     });
     vi.mocked(getDb).mockReturnValue(fixture.db);
+    return fixture;
   }
   beforeEach(() => {
     vi.clearAllMocks();
@@ -290,7 +291,7 @@ describe("Loyalty Service", () => {
 
     const milesToRedeem = 1000;
 
-    funded(accountWithMiles, testBookingId, 10000);
+    const fixture = funded(accountWithMiles, testBookingId, 10000);
 
     const { redeemMiles } = await import("./loyalty.service");
     const result = await redeemMiles(testUserId, milesToRedeem);
@@ -298,6 +299,20 @@ describe("Loyalty Service", () => {
     // 1 mile = 1 cent = 0.01 SAR
     expect(result.discountAmount).toBe(1000); // 10 SAR in cents
     expect(result.newBalance).toBe(10500);
+    // The value exists as a spendable credit lot, written in the same
+    // transaction as the miles debit; redeeming used to burn the miles only.
+    expect(fixture.rows("user_credits")).toMatchObject([
+      {
+        userId: testUserId,
+        amount: 1000,
+        source: "bonus",
+        usedAmount: 0,
+        description: "Redeemed 1000 miles",
+      },
+    ]);
+    expect(fixture.rows("user_credits")[0].expiresAt.getTime()).toBeGreaterThan(
+      Date.now() + 360 * 86400000
+    );
   });
 
   it("should throw error when redeeming more miles than available", async () => {

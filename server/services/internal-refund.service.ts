@@ -13,6 +13,8 @@ import {
   bookingModifications,
   seatInventory,
   flights,
+  wallets,
+  walletTransactions,
 } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { isAdmin } from "./rbac.service";
@@ -37,12 +39,12 @@ export const internalRefundResult = z.object({
   ledgerId: z.number().int().positive(),
   amount: z.number().int().positive(),
   remaining: z.number().int().nonnegative(),
-  tender: z.enum(["user_credit", "corporate_credit"]),
+  tender: z.enum(["user_credit", "corporate_credit", "wallet"]),
   cancelled: z.boolean(),
   currency: z.literal("SAR"),
 });
 const metadata = z.object({
-  tender: z.enum(["user_credit", "corporate_credit"]),
+  tender: z.enum(["user_credit", "corporate_credit", "wallet"]),
   corporateAccountId: z.number().int().positive().optional(),
   originalLedgerId: z.number().int().positive().optional(),
 });
@@ -185,7 +187,7 @@ export async function refundInternalFunding(
         !origin.success ||
         original.stripePaymentIntentId ||
         original.stripeEventId !==
-          `${origin.data.tender === "user_credit" ? "internal-credit" : "corporate-credit"}:${booking.id}`
+          `${{ user_credit: "internal-credit", corporate_credit: "corporate-credit", wallet: "wallet-credit" }[origin.data.tender]}:${booking.id}`
       )
         throw blocked("Original internal funding identity is unavailable");
       const originalAmount = minorUnits(original.amount);
@@ -278,6 +280,33 @@ export async function refundInternalFunding(
         }
         if (remaining)
           throw blocked("Original credit allocation is incomplete");
+      } else if (origin.data.tender === "wallet") {
+        const [wallet] = await tx
+          .select()
+          .from(wallets)
+          .where(eq(wallets.userId, booking.userId))
+          .for("update");
+        if (
+          !wallet ||
+          wallet.currency !== "SAR" ||
+          wallet.status === "closed" ||
+          wallet.balance + input.amount > 2147483647
+        )
+          throw blocked("Wallet requires reconciliation before a refund");
+        await tx
+          .update(wallets)
+          .set({ balance: sql`${wallets.balance} + ${input.amount}` })
+          .where(eq(wallets.id, wallet.id));
+        await tx.insert(walletTransactions).values({
+          walletId: wallet.id,
+          userId: booking.userId,
+          bookingId: booking.id,
+          type: "refund",
+          amount: input.amount,
+          balanceAfter: wallet.balance + input.amount,
+          description: input.reason,
+          status: "completed",
+        });
       } else {
         const accountId = origin.data.corporateAccountId;
         if (!accountId) throw blocked("Original corporate account is missing");
