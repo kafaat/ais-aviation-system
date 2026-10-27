@@ -86,7 +86,11 @@ export const baggageRouter = router({
     .query(async ({ input }) => {
       try {
         const result = await baggageService.trackBaggage(input.tagNumber);
-        return result;
+        // Public tracker: the lost report carries the owner's contact details.
+        return {
+          ...result,
+          baggage: { ...result.baggage, lostDescription: null },
+        };
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to track baggage";
@@ -115,7 +119,8 @@ export const baggageRouter = router({
           message: "Baggage not found",
         });
       }
-      return baggage;
+      // Public lookup: the lost report carries the owner's contact details.
+      return { ...baggage, lostDescription: null };
     }),
 
   /**
@@ -248,7 +253,17 @@ export const baggageRouter = router({
       })
     )
     .output(responseContracts["reportLost"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      // A tag number is printed on the physical bag and shown by the public
+      // tracker, so it is not a credential: only the booking owner (or an
+      // admin) may change the bag's status and attach contact details.
+      const owned = await baggageService.getBaggageByTag(input.tagNumber);
+      if (!owned)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Baggage not found",
+        });
+      await assertBookingOwnership(owned.bookingId, ctx.user.id, ctx.user.role);
       try {
         const result = await baggageService.reportLostBaggage({
           tagNumber: input.tagNumber,
