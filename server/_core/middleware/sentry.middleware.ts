@@ -71,18 +71,18 @@ export function errorResponseMiddleware(
   _next: NextFunction
 ): void {
   const statusCode = (err as Error & { statusCode?: number }).statusCode || 500;
+  // Only a developer's own machine gets raw messages and stacks: staging,
+  // test and an unset NODE_ENV used to leak them to callers.
+  const development = process.env.NODE_ENV === "development";
   const message =
-    process.env.NODE_ENV === "production" && statusCode >= 500
-      ? "Internal server error"
-      : err.message;
+    !development && statusCode >= 500 ? "Internal server error" : err.message;
 
-  // Don't expose stack traces in production
   const errorResponse: Record<string, unknown> = {
     error: message,
     statusCode,
   };
 
-  if (process.env.NODE_ENV !== "production") {
+  if (development) {
     errorResponse.stack = err.stack;
   }
 
