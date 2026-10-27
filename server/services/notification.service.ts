@@ -100,7 +100,7 @@ export async function createNotification(
         if (user?.email) {
           await sendNotificationEmail(user.email, title, message);
           console.info(
-            `[Notification] Email sent to ${user.email} for notification ${insertId}`
+            `[Notification] Email sent to ${user.email.replace(/^(.).*(@.*)$/, "$1***$2")} for notification ${insertId}`
           );
         }
       } catch (emailError) {

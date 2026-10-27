@@ -14,9 +14,14 @@
 
 import type Stripe from "stripe";
 import { createStripeClient } from "./client-factory";
-import { eq, and, isNotNull, sql, inArray } from "drizzle-orm";
+import { eq, and, isNotNull, sql } from "drizzle-orm";
 import { getDb } from "../../db";
 import { payments, bookings, financialLedger } from "../../../drizzle/schema";
+import {
+  assertNoCollectionReview,
+  cancelBookingResources,
+  confirmFundedBooking,
+} from "../booking-settlement.service";
 import { nanoid } from "nanoid";
 
 // ============================================================================
@@ -182,7 +187,11 @@ export async function runStripeReconciliation(
       and(
         eq(payments.status, "pending"),
         isNotNull(payments.stripePaymentIntentId),
-        sql`${payments.createdAt} >= ${cutoffDate}`
+        sql`${payments.createdAt} >= ${cutoffDate}`,
+        // requires_payment_method is also the state of an intent the
+        // customer is still paying; leave anything younger than the
+        // checkout session lifetime alone.
+        sql`${payments.createdAt} < ${new Date(Date.now() - 32 * 60 * 1000)}`
       )
     )
     .limit(limit);
@@ -441,20 +450,18 @@ async function handleSucceeded(
       })
       .where(eq(payments.id, payment.paymentId));
 
-    // 3) Update booking status
-    await tx
-      .update(bookings)
-      .set({
-        status: "confirmed",
-        paymentStatus: "paid",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(bookings.id, payment.bookingId),
-          inArray(bookings.status, ["pending"])
-        )
-      );
+    // 3) Confirm the booking through the settlement service, which reserves
+    //    the seats per segment and refuses a booking under collection
+    //    review; a raw status write confirmed without inventory.
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, payment.bookingId))
+      .for("update");
+    if (booking?.status === "pending") {
+      await assertNoCollectionReview(tx, booking.id);
+      await confirmFundedBooking(tx, booking, pi.id);
+    }
 
     // 4) Create ledger entry if not exists
     if (existingLedger.length === 0) {
@@ -550,18 +557,18 @@ async function handleFailed(
       })
       .where(eq(payments.id, payment.paymentId));
 
-    await tx
-      .update(bookings)
-      .set({
-        status: "cancelled",
-        paymentStatus: "failed",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(bookings.id, payment.bookingId),
-          inArray(bookings.status, ["pending"])
-        )
+    // Release seats, holds and voucher quota the way every other cancel
+    // path does; a raw status write left them reserved.
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, payment.bookingId))
+      .for("update");
+    if (booking?.status === "pending")
+      await cancelBookingResources(
+        tx,
+        booking,
+        `Payment ${pi.status} at provider (reconciliation)`
       );
   });
 
