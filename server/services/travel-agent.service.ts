@@ -32,7 +32,7 @@ import {
   fallbackAirportTimeZone,
   isValidTimeZone,
 } from "./civil-day";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import { getDb } from "../db";
 import {
   travelAgents,
@@ -140,8 +140,9 @@ function hashApiSecret(secret: string): string {
  * Verify an API secret against stored hash
  */
 function verifyApiSecret(secret: string, hash: string): boolean {
-  const inputHash = hashApiSecret(secret);
-  return inputHash === hash;
+  const input = Buffer.from(hashApiSecret(secret), "hex");
+  const stored = Buffer.from(hash, "hex");
+  return input.length === stored.length && timingSafeEqual(input, stored);
 }
 
 // ============ Service Functions ============

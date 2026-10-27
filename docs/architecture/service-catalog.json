@@ -2397,14 +2397,17 @@
           "seatInventory",
           "table",
           "userCredits",
-          "users"
+          "users",
+          "wallets"
         ],
         "writes": [
           "bookings",
           "corporateAccounts",
           "creditUsage",
           "financialLedger",
-          "userCredits"
+          "userCredits",
+          "walletTransactions",
+          "wallets"
         ]
       },
       "replacement": null
@@ -2772,7 +2775,7 @@
           "paymentReceipts",
           "walletTransactions"
         ],
-        "writes": ["bookingLoyaltyAccruals", "loyaltyAccounts"]
+        "writes": ["bookingLoyaltyAccruals", "loyaltyAccounts", "userCredits"]
       },
       "replacement": null
     },
@@ -5230,6 +5233,7 @@
           "airports",
           "bookings",
           "flights",
+          "hash",
           "travelAgents",
           "users"
         ],

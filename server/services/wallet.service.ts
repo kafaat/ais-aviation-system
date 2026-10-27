@@ -210,7 +210,12 @@ export async function payFromWallet(userId: number, bookingId: number) {
       type: "charge",
       amount: (amount / 100).toFixed(2),
       currency: "SAR",
+      // Same identity scheme as internal-credit:/corporate-credit:, so a
+      // cancellation is refused until finance returns the money through
+      // refundInternalFunding, which credits the wallet back.
+      stripeEventId: `wallet-credit:${bookingId}`,
       description: "Wallet booking settlement",
+      metadata: JSON.stringify({ tender: "wallet", walletId: wallet.id }),
     });
     return { balance: wallet.balance - amount, amountPaid: amount };
   });
