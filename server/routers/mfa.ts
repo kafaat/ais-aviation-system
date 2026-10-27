@@ -20,7 +20,7 @@ import { logger } from "../_core/logger";
 import {
   generateSecret,
   generateQRCodeURL,
-  verifyTOTP,
+  consumeTotpStep,
   generateBackupCodes,
   hashBackupCode,
   encryptSecret,
@@ -29,7 +29,6 @@ import {
   enableMfa,
   disableMfa,
   updateBackupCodes,
-  decryptSecret,
 } from "../services/mfa.service";
 
 // ============================================================================
@@ -137,8 +136,7 @@ export const mfaRouter = router({
       }
 
       // Decrypt and verify the token
-      const secret = decryptSecret(settings.secret);
-      const isValid = verifyTOTP(secret, input.token);
+      const isValid = await consumeTotpStep(userId, input.token);
 
       if (!isValid) {
         logger.warn({ userId }, "MFA verification failed - invalid token");
@@ -189,8 +187,7 @@ export const mfaRouter = router({
       }
 
       // Verify the token before disabling
-      const secret = decryptSecret(settings.secret);
-      const isValid = verifyTOTP(secret, input.token);
+      const isValid = await consumeTotpStep(userId, input.token);
 
       if (!isValid) {
         logger.warn({ userId }, "MFA disable attempt failed - invalid token");
@@ -241,8 +238,7 @@ export const mfaRouter = router({
       }
 
       // Verify the TOTP token
-      const secret = decryptSecret(settings.secret);
-      const isValid = verifyTOTP(secret, input.token);
+      const isValid = await consumeTotpStep(userId, input.token);
 
       if (!isValid) {
         throw new TRPCError({
