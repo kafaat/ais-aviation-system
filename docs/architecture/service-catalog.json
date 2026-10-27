@@ -14,9 +14,11 @@
       "consumers": [
         "server/routers/apis.ts",
         "server/routers/baggage.ts",
+        "server/routers/emd.ts",
         "server/routers/emergency-hotel.ts",
         "server/routers/modifications.ts",
         "server/routers/multi-city.ts",
+        "server/routers/payments.ts",
         "server/routers/refunds.ts",
         "server/routers/split-payments.ts",
         "server/services/biometric.service.ts",
@@ -686,6 +688,7 @@
         "server/services/order-servicing.service.ts",
         "server/services/payment-settlement.service.ts",
         "server/services/queue-v2.service.ts",
+        "server/services/refunds.service.ts",
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/split-refund.service.ts",
@@ -4197,7 +4200,7 @@
         "server/webhooks/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookings", "paymentReceipts"],
+        "reads": ["bookingCheckoutRequests", "bookings", "paymentReceipts"],
         "writes": ["stripeEvents"]
       },
       "replacement": null
@@ -4273,8 +4276,11 @@
         "server/_core/trpc.ts",
         "server/routers/admin.ts",
         "server/routers/bsp-reporting.ts",
+        "server/routers/corporate.ts",
+        "server/routers/emd.ts",
         "server/routers/gates.ts",
         "server/routers/operations.ts",
+        "server/routers/payments.ts",
         "server/routes/operational-integrations.ts",
         "server/services/access-control.service.ts",
         "server/services/data-warehouse.service.ts",
@@ -4461,6 +4467,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/booking-settlement.service.ts",
         "server/services/cancellation-fees.service.ts",
         "server/services/email.service.ts",
         "server/services/metrics.service.ts",

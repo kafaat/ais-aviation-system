@@ -103,7 +103,7 @@ export const intelligenceRouter = router({
   /**
    * Assess fraud risk for a specific booking
    */
-  assessFraud: protectedProcedure
+  assessFraud: adminProcedure
     .input(fraudAssessInput)
     .output(responseContracts["assessFraud"])
     .query(async ({ input, ctx }) => {

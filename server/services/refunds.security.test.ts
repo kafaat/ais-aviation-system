@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   listRefunds: vi.fn(),
   calculateFee: vi.fn(),
   settle: vi.fn(),
+  cancel: vi.fn(),
   refundsState: [] as Array<{
     id: string;
     amount: number;
@@ -23,6 +24,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("./payment-settlement.service", () => ({
   settleVerifiedRefund: mocks.settle,
+}));
+vi.mock("./booking-settlement.service", () => ({
+  cancelBookingResources: mocks.cancel,
 }));
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
 vi.mock("../stripe", () => ({
@@ -97,7 +101,8 @@ beforeEach(() => {
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])
     .mockResolvedValueOnce([]) // No pending order-service refund liability.
-    .mockResolvedValueOnce([booking])
+    .mockResolvedValueOnce([{ paymentIntentId: "pi_test" }]) // Collection receipt.
+    .mockResolvedValueOnce([booking]) // Locked re-read after settlement.
     .mockResolvedValueOnce([])
     .mockResolvedValueOnce([]);
   mocks.update.mockReturnValue({
@@ -316,5 +321,51 @@ describe("refund amount validation", () => {
     expect(result.refundId).toBe("re_existing");
     expect(result.cumulativeRefundedAmount).toBe(8000);
     expect(mocks.refund).not.toHaveBeenCalled();
+  });
+});
+
+describe("refund cancels the itinerary", () => {
+  it("cancels the booking in the settlement transaction after a fee-bearing refund", async () => {
+    await createRefund({ ...input, reason: "plans changed" }, owner);
+    expect(mocks.refund).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 8000 }),
+      expect.anything()
+    );
+    expect(mocks.settle).toHaveBeenCalledTimes(1);
+    expect(mocks.cancel).toHaveBeenCalledTimes(1);
+    expect(mocks.cancel).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 10, status: "confirmed" }),
+      expect.stringContaining("cancellation-fee refund"),
+      owner.id
+    );
+  });
+  it("does not cancel twice when settlement already cancelled a fully refunded booking", async () => {
+    mocks.limit.mockReset();
+    mocks.limit
+      .mockResolvedValueOnce([booking])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ paymentIntentId: "pi_test" }])
+      .mockResolvedValueOnce([{ ...booking, status: "cancelled" }]);
+    mocks.calculateFee.mockReturnValue({ refundAmount: 10000 });
+    await createRefund(input, owner);
+    expect(mocks.settle).toHaveBeenCalledTimes(1);
+    expect(mocks.cancel).not.toHaveBeenCalled();
+  });
+  it("refuses to move money for a paid booking whose collection has no receipt", async () => {
+    mocks.limit.mockReset();
+    mocks.limit
+      .mockResolvedValueOnce([booking])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ departureTime: new Date("2030-01-01") }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]); // No receipt for pi_test.
+    await expect(createRefund(input, owner)).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+    });
+    expectNoFinancialWrites();
+    expect(mocks.cancel).not.toHaveBeenCalled();
   });
 });
