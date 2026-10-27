@@ -39,6 +39,7 @@ describe("search cache key", () => {
     ["London local midnight", new Date("2026-11-15T00:00:00.000Z")],
     ["New York local midnight", new Date("2026-11-15T05:00:00.000Z")],
     ["civil date string", "2026-11-15"],
+    ["legacy ISO instant string", "2026-11-14T21:00:00.000Z"],
   ])("keys %s for 15 Nov 2026 as 2026-11-15", async (_label, departureDate) => {
     await searchFlights({ originId: 1, destinationId: 2, departureDate });
     expect(spies.get).toHaveBeenCalledWith({
@@ -60,12 +61,12 @@ describe("search cache key", () => {
     });
   });
 
-  it("rejects a date-time string instead of guessing a day", async () => {
+  it("rejects an unparseable date instead of guessing a day", async () => {
     await expect(
       searchFlights({
         originId: 1,
         destinationId: 2,
-        departureDate: "2026-11-15T00:00:00Z",
+        departureDate: "tomorrow",
       })
     ).rejects.toThrow();
     expect(spies.search).not.toHaveBeenCalled();

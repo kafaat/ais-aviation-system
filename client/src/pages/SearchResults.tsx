@@ -36,18 +36,23 @@ import {
   Eye,
 } from "lucide-react";
 import { format } from "date-fns";
-
-/** The calendar day a search date means, as YYYY-MM-DD. */
-function civilDay(value: Date | string): string {
-  return typeof value === "string" ? value : format(value, "yyyy-MM-dd");
-}
-/** A local-midnight Date for display of a civil day. */
-function civilDayAsLocalDate(value: Date | string): Date {
-  return typeof value === "string" ? new Date(`${value}T00:00:00`) : value;
-}
 import { ar, enUS } from "date-fns/locale";
 import { toast } from "sonner";
 import type { FlightData } from "@/components/FlightCard";
+
+const CIVIL_DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** The calendar day a search date means, as YYYY-MM-DD. An older link
+ * carries the browser's local-midnight instant, which formats back to the
+ * same day in that browser. */
+function civilDay(value: string): string {
+  return CIVIL_DAY.test(value) ? value : format(new Date(value), "yyyy-MM-dd");
+}
+/** A local-midnight Date for display of a civil day. */
+function civilDayAsLocalDate(value: string): Date {
+  return CIVIL_DAY.test(value)
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
+}
 
 interface FilterOptions {
   priceRange: [number, number];
@@ -65,7 +70,7 @@ export default function SearchResults() {
     originId: number;
     destinationId: number;
     /** YYYY-MM-DD; older links carry an ISO instant, handled by the server. */
-    departureDate: Date | string;
+    departureDate: string;
   } | null>(null);
 
   // Flight comparison state
@@ -101,13 +106,13 @@ export default function SearchResults() {
       setParams({
         originId: parseInt(origin),
         destinationId: parseInt(destination),
-        departureDate: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date(date),
+        departureDate: date,
       });
     }
   }, [location]);
 
   const { data: flights, isLoading } = trpc.flights.search.useQuery(
-    params ?? { originId: 0, destinationId: 0, departureDate: new Date() },
+    params ?? { originId: 0, destinationId: 0, departureDate: "1970-01-01" },
     {
       enabled: !!params,
     }

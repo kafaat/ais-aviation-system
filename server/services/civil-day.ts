@@ -20,9 +20,13 @@ export const CIVIL_DATE = /^\d{4}-\d{2}-\d{2}$/;
  * to the day the user chose or the next one, never to the day before. */
 export function civilDateOf(value: Date | string): string {
   if (typeof value === "string") {
-    if (!CIVIL_DATE.test(value) || Number.isNaN(Date.parse(value)))
+    if (CIVIL_DATE.test(value) && !Number.isNaN(Date.parse(value)))
+      return value;
+    // Older clients and bookmarked links carry the browser's local-midnight
+    // instant as an ISO date-time; read it the same way as a Date.
+    if (Number.isNaN(Date.parse(value)))
       throw new RangeError("Departure date must be YYYY-MM-DD");
-    return value;
+    value = new Date(value);
   }
   if (Number.isNaN(value.getTime()))
     throw new RangeError("Departure date is invalid");

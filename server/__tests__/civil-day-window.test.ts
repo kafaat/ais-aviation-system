@@ -15,7 +15,9 @@ import {
 describe("civilDateOf", () => {
   it("passes a civil date through and rejects anything else", () => {
     expect(civilDateOf("2026-11-15")).toBe("2026-11-15");
-    expect(() => civilDateOf("2026-11-15T00:00:00Z")).toThrow(RangeError);
+    // A legacy ISO instant is read like a Date (local midnight in Riyadh).
+    expect(civilDateOf("2026-11-14T21:00:00.000Z")).toBe("2026-11-15");
+    expect(() => civilDateOf("not a date")).toThrow(RangeError);
     expect(() => civilDateOf("2026-13-45")).toThrow(RangeError);
     expect(() => civilDateOf(new Date("nonsense"))).toThrow(RangeError);
   });

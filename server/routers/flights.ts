@@ -68,8 +68,18 @@ export const flightsRouter = router({
         .object({
           originId: z.number().describe("Origin airport ID"),
           destinationId: z.number().describe("Destination airport ID"),
+          // A plain string: the OpenAPI adapter accepts only primitive
+          // query fields. The civil day is resolved in the origin airport's
+          // zone; a full ISO date-time (older clients, bookmarked links) is
+          // read as that browser's local midnight.
           departureDate: z
-            .union([z.iso.date(), z.date()])
+            .string()
+            .refine(
+              value =>
+                /^\d{4}-\d{2}-\d{2}$/.test(value) ||
+                !Number.isNaN(Date.parse(value)),
+              "Departure date must be YYYY-MM-DD"
+            )
             .describe(
               "Departure calendar day at the origin airport (YYYY-MM-DD). A full ISO date-time is accepted for older clients and read as that browser's local midnight."
             ),
