@@ -18,7 +18,12 @@ import { Queue, Worker, Job } from "bullmq";
 import { redisConnectionOptions } from "../queue/redis-config";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { stripeEvents, bookings, paymentReceipts } from "../../drizzle/schema";
+import {
+  stripeEvents,
+  bookings,
+  paymentReceipts,
+  bookingCheckoutRequests,
+} from "../../drizzle/schema";
 import { eq, and, lt, gt, asc } from "drizzle-orm";
 
 // ============================================================================
@@ -598,6 +603,8 @@ async function runCleanup(data: CleanupJobData): Promise<void> {
 /**
  * Cleanup expired pending bookings
  */
+/** Provider checkout lifetime (31 min) plus a minute for webhook delivery. */
+const CHECKOUT_SESSION_GRACE_MS = 32 * 60 * 1000;
 export async function cleanupExpiredBookings(): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable during booking expiry");
@@ -644,6 +651,25 @@ export async function cleanupExpiredBookings(): Promise<void> {
           )
           .limit(1);
         if (review) return; // Collected funds require review, never automatic expiry.
+        // A checkout session the customer may still be paying in must not be
+        // cancelled underneath them: the funds would land on a cancelled
+        // booking and be parked in review. Sessions are created with a
+        // 31-minute provider expiry (see booking-checkout.service), so a
+        // "ready" claim older than that window is no longer payable.
+        const [claim] = await tx
+          .select({
+            status: bookingCheckoutRequests.status,
+            updatedAt: bookingCheckoutRequests.updatedAt,
+          })
+          .from(bookingCheckoutRequests)
+          .where(eq(bookingCheckoutRequests.bookingId, booking.id))
+          .limit(1);
+        if (
+          claim &&
+          claim.status !== "expired" &&
+          claim.updatedAt.getTime() > Date.now() - CHECKOUT_SESSION_GRACE_MS
+        )
+          return;
         await cancelBookingResources(tx, booking, "Unpaid booking expired");
       });
       cursor = candidate.id;
