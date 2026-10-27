@@ -481,7 +481,10 @@ jobs:
           set -euo pipefail
           sleep 30
           for workflow in ci-cd.yml production-gates.yml component-labs.yml docker-image-validation.yml; do
-            started="$(gh run list --workflow "$workflow" --branch "$RELEASE_BRANCH" --event pull_request --json databaseId --jq 'length')"
+            # A pull_request run that GitHub parked as action_required
+            # (awaiting workflow approval) never ran and never will on its
+            # own; it must not count as started.
+            started="$(gh run list --workflow "$workflow" --branch "$RELEASE_BRANCH" --event pull_request --json databaseId,conclusion --jq '[.[] | select(.conclusion != "action_required")] | length')"
             if [ "$started" != "0" ]; then
               echo "$workflow already runs on $RELEASE_BRANCH from the pull request event"
               continue
