@@ -14,8 +14,14 @@ import {
 } from "../_core/trpc";
 import { stripe } from "../stripe";
 import { getDb } from "../db";
-import { bookings, bookingModifications } from "../../drizzle/schema";
+import {
+  bookings,
+  bookingModifications,
+  paymentSplits,
+} from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
+import { isAdmin } from "../services/rbac.service";
+import { isBookingOwnedBy } from "../services/access-control.service";
 import { assertNoCollectionReview } from "../services/booking-settlement.service";
 import {
   listSettlementReviews,
@@ -361,7 +367,12 @@ export const paymentsRouter = router({
     })
     .input(
       z.object({
-        sessionId: z.string().describe("Provider session ID"),
+        sessionId: z
+          .string()
+          .min(1)
+          .max(255)
+          .regex(/^[A-Za-z0-9_-]+$/)
+          .describe("Provider session ID"),
         provider: providerEnum.optional().default("stripe"),
       })
     )
@@ -371,8 +382,48 @@ export const paymentsRouter = router({
         customerEmail: z.string().nullable().describe("Customer email"),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const providerId = (input.provider || "stripe") as PaymentProviderType;
+
+      // A session id reaches the browser through success_url, logs and
+      // referers, so it is not a credential. Only a session that belongs
+      // to one of the caller's bookings (or any session, for an admin) is
+      // looked up at the provider; anything else is indistinguishable from
+      // a session that does not exist.
+      if (!isAdmin(ctx.user.role)) {
+        const db = await getDb();
+        if (!db)
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        const [ownedBooking] = await db
+          .select({ id: bookings.id })
+          .from(bookings)
+          .where(
+            and(
+              eq(bookings.stripeCheckoutSessionId, input.sessionId),
+              eq(bookings.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        let owned = Boolean(ownedBooking);
+        if (!owned) {
+          const [split] = await db
+            .select({ bookingId: paymentSplits.bookingId })
+            .from(paymentSplits)
+            .where(eq(paymentSplits.stripeCheckoutSessionId, input.sessionId))
+            .limit(1);
+          owned = split
+            ? await isBookingOwnedBy(split.bookingId, ctx.user.id)
+            : false;
+        }
+        if (!owned)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Payment session not found",
+          });
+      }
 
       if (providerId === "stripe") {
         const session = await stripe.checkout.sessions.retrieve(

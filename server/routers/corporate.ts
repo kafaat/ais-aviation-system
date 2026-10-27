@@ -14,6 +14,7 @@ import {
   router,
 } from "../_core/trpc";
 import * as corporateService from "../services/corporate.service";
+import { isAdmin } from "../services/rbac.service";
 
 /**
  * Corporate Travel Router
@@ -346,18 +347,17 @@ export const corporateRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Check if current user is corporate admin or system admin
-      const userAccount = await corporateService.getUserCorporateAccount(
-        ctx.user.id
-      );
-      const isSystemAdmin = ctx.user.role === "admin";
-      const isCorporateAdmin =
-        userAccount?.id === input.accountId && userAccount?.role === "admin";
-
-      if (!isSystemAdmin && !isCorporateAdmin) {
+      // Direct enrolment skips the target's consent: a corporate admin
+      // could attach any user id to their company, expose that user's name
+      // and email to every member, and block them from accepting their real
+      // employer's invitation (one active membership per user). Corporate
+      // admins use inviteUser → acceptInvitation; only platform admins may
+      // enrol directly.
+      if (!isAdmin(ctx.user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "You do not have permission to add users to this account",
+          message:
+            "Only platform administrators may add users directly; invite them instead",
         });
       }
 

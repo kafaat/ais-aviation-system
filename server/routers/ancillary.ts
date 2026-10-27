@@ -91,7 +91,12 @@ export const ancillaryRouter = router({
         ancillaryServiceId: z.number(),
         quantity: z.number().int().min(1).max(10).optional(),
         idempotencyKey: z.string().min(1).max(255),
-        metadata: z.any().optional(),
+        metadata: z
+          .record(z.string().max(64), z.string().max(500))
+          .refine(value => Object.keys(value).length <= 20, {
+            message: "At most 20 metadata fields",
+          })
+          .optional(),
       })
     )
     .output(responseContracts["addToBooking"])
