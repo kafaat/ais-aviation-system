@@ -4,12 +4,13 @@ name: Release Automation
 #
 # 1. Propose: when main carries releasable commits (or on a manual dispatch),
 #    the version bump and changelog are committed to a `release/vX.Y.Z` branch
-#    and opened as a pull request. Nothing is pushed to main. Because the
-#    branch and the pull request are created with GITHUB_TOKEN, GitHub starts
-#    no workflow for them on its own; the required check workflows are started
-#    explicitly with workflow_dispatch on the release branch, which the token
-#    is allowed to do. The pull request then needs the same review and checks
-#    as any other change.
+#    and opened as a pull request. Nothing is pushed to main. The pull
+#    request is created with GITHUB_TOKEN; once the repository allows Actions
+#    to create pull requests, that creation raises pull_request events and the
+#    required checks start on their own. The branch push alone starts nothing,
+#    so when no pull_request run appears the checks are started explicitly
+#    with workflow_dispatch, which that token may raise. The pull request then
+#    needs the same review and checks as any other change.
 #
 # 2. Publish: when the tip of main is a merged release commit (only
 #    package.json and CHANGELOG.md changed, version bumped, tag absent), the
@@ -432,7 +433,7 @@ jobs:
             echo
             echo "## How to Test"
             echo
-            echo "1. The required checks run on this branch; they were started by the workflow because a token-created branch starts none on its own."
+            echo "1. The required checks run on this branch, started by the pull_request event (or by the workflow when that event did not fire)."
             echo "2. \`git diff --name-only main...HEAD\` lists only \`package.json\` and \`CHANGELOG.md\`."
             echo "3. After merge, the Release Automation workflow publishes \`v$RELEASE_VERSION\` from the merge commit."
             echo
@@ -464,10 +465,13 @@ jobs:
             exit 1
           fi
 
-      # A branch pushed with GITHUB_TOKEN triggers no workflow, so the checks
-      # the ruleset requires must be started explicitly. workflow_dispatch is
-      # the one event that token may raise. The check runs attach to the
-      # branch head, which is the pull request head.
+      # A branch pushed with GITHUB_TOKEN triggers no workflow. The pull
+      # request opened above does raise pull_request events when the
+      # repository allows Actions to create pull requests, and then every
+      # required check already runs once; dispatching again ran each gate a
+      # second time on the same head. workflow_dispatch is kept as the
+      # fallback for the case where no pull_request run appeared. The check
+      # runs attach to the branch head, which is the pull request head.
       - name: Start the required checks on the release branch
         if: steps.guard.outputs.create == 'true' || steps.guard.outputs.attach == 'true'
         env:
@@ -475,7 +479,13 @@ jobs:
           RELEASE_BRANCH: release/v${{ needs.version.outputs.new_version }}
         run: |
           set -euo pipefail
+          sleep 30
           for workflow in ci-cd.yml production-gates.yml component-labs.yml docker-image-validation.yml; do
+            started="$(gh run list --workflow "$workflow" --branch "$RELEASE_BRANCH" --event pull_request --json databaseId --jq 'length')"
+            if [ "$started" != "0" ]; then
+              echo "$workflow already runs on $RELEASE_BRANCH from the pull request event"
+              continue
+            fi
             gh workflow run "$workflow" --ref "$RELEASE_BRANCH"
             echo "Started $workflow on $RELEASE_BRANCH"
           done
