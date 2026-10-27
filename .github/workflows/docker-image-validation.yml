@@ -20,7 +20,9 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Two quick merges to main must not cancel the earlier run and lose its
+  # docker-build-evidence artifact; only pull request runs supersede.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:
