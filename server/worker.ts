@@ -184,7 +184,7 @@ async function initialize(): Promise<void> {
 // Graceful Shutdown
 // ============================================================================
 
-async function shutdown(signal: string): Promise<void> {
+async function shutdown(signal: string, exitCode = 0): Promise<void> {
   if (isShuttingDown) {
     log.warn({}, `Received ${signal} again during shutdown, forcing exit`);
     process.exit(1);
@@ -236,7 +236,7 @@ async function shutdown(signal: string): Promise<void> {
 
     clearTimeout(shutdownTimeout);
     log.info({}, "Graceful shutdown completed");
-    process.exit(0);
+    process.exit(exitCode);
   } catch (err) {
     clearTimeout(shutdownTimeout);
     log.error({ error: err }, "Error during shutdown");
@@ -254,12 +254,12 @@ process.on("uncaughtException", (err: Error) => {
     { error: err.message, stack: err.stack },
     "Uncaught exception in worker process"
   );
-  shutdown("uncaughtException");
+  shutdown("uncaughtException", 1);
 });
 
 process.on("unhandledRejection", (reason: unknown) => {
   log.error({ reason }, "Unhandled rejection in worker process");
-  shutdown("unhandledRejection");
+  shutdown("unhandledRejection", 1);
 });
 
 // ============================================================================

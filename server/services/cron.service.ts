@@ -208,7 +208,7 @@ export const PERIODIC_JOB_CATALOG = [
 ] as const;
 
 const scheduledTasks: Array<{ stop: () => void | Promise<void> }> = [];
-const runningJobs = new Set<string>();
+const runningJobs = new Map<string, Promise<void>>();
 
 /**
  * Run a cron tick with an in-process re-entrancy guard: if the previous tick
@@ -220,8 +220,7 @@ async function runGuarded(name: string, job: () => Promise<void>) {
     logger.warn({ job: name }, "Previous cron tick still running; skipping");
     return;
   }
-  runningJobs.add(name);
-  try {
+  const tick = (async () => {
     logger.debug({}, `Running cron job: ${name}`);
     // A tick has no inbound header, so it starts its own trace. Without this,
     // every event a scheduled task produces would be stored untraced and the
@@ -245,6 +244,10 @@ async function runGuarded(name: string, job: () => Promise<void>) {
         null
       )
     );
+  })();
+  runningJobs.set(name, tick);
+  try {
+    await tick;
   } finally {
     runningJobs.delete(name);
   }
@@ -286,6 +289,14 @@ export async function stopCronJobs() {
   logger.info({}, "Stopping cron jobs...");
   for (const task of scheduledTasks.splice(0)) {
     await task.stop();
+  }
+  // node-cron's stop() only clears timers; a tick already executing keeps
+  // running. Wait for it, or the pool closes under it, its lease release
+  // fails and the task is skipped for up to 15 minutes after restart.
+  const inFlight = [...runningJobs.values()];
+  if (inFlight.length) {
+    logger.info({ count: inFlight.length }, "Waiting for in-flight cron ticks");
+    await Promise.allSettled(inFlight);
   }
 }
 
