@@ -216,24 +216,26 @@ export default function AnalyticsDashboard() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <Card className="p-8 text-center max-w-md">
-          <h2 className="text-2xl font-bold mb-4">{t("login.required")}</h2>
+          <h2 className="text-2xl font-bold mb-4">
+            {t("common.loginRequired")}
+          </h2>
           <Button asChild className="w-full">
-            <a href="/login">{t("login.submit")}</a>
+            <a href="/login">{t("common.submit")}</a>
           </Button>
         </Card>
       </div>
     );
   }
 
-  if (user?.role !== "admin") {
+  if (user?.role !== "admin" && user?.role !== "super_admin") {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <Card className="p-8 text-center max-w-md">
           <h2 className="text-2xl font-bold mb-4">
-            {t("common.unauthorized")}
+            {t("admin.dashboard.unauthorized")}
           </h2>
           <Button asChild>
-            <Link href="/">{t("common.backToHome")}</Link>
+            <Link href="/">{t("admin.dashboard.backToHome")}</Link>
           </Button>
         </Card>
       </div>
