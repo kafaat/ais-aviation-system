@@ -285,7 +285,9 @@ export default function LoyaltyDashboard() {
   const redeemMiles = trpc.loyalty.redeemMiles.useMutation({
     onSuccess: data => {
       toast.success(
-        t("loyalty.redeemSuccess", { discount: data.discountAmount })
+        t("loyalty.redeemSuccess", {
+          discount: (data.discountAmount / 100).toFixed(2),
+        })
       );
       setMilesToRedeem("");
     },
@@ -903,7 +905,7 @@ export default function LoyaltyDashboard() {
                         <p className="text-sm text-green-800">
                           {t("loyalty.discountValue")}:{" "}
                           <span className="font-bold">
-                            {(parseInt(milesToRedeem) / 10).toFixed(2)}{" "}
+                            {(parseInt(milesToRedeem) / 100).toFixed(2)}{" "}
                             {t("common.currency")}
                           </span>
                         </p>

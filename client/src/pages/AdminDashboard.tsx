@@ -106,7 +106,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (user?.role !== "admin") {
+  if (user?.role !== "admin" && user?.role !== "super_admin") {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="p-8 text-center max-w-md">

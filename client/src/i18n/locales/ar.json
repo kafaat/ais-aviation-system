@@ -67,7 +67,8 @@
     "actions": "الإجراءات",
     "status": "الحالة",
     "dismiss": "تجاهل",
-    "refresh": "تحديث"
+    "refresh": "تحديث",
+    "saving": "جاري الحفظ..."
   },
   "nav": {
     "home": "الرئيسية",
@@ -265,7 +266,9 @@
     "remainingCount": "المتبقون",
     "seatPricing": "تسعير المقاعد",
     "upgradePrice": "سعر الترقية",
-    "noSeatMaps": "لم يتم إعداد خرائط مقاعد"
+    "noSeatMaps": "لم يتم إعداد خرائط مقاعد",
+    "sectionDescription": "اختر مقاعد كل راكب الآن، أو تجاوز هذه الخطوة وسنخصّصها عند تسجيل الوصول.",
+    "selectedSeats": "المقاعد المختارة"
   },
   "priceLock": {
     "lockPrice": "تثبيت السعر",
@@ -314,7 +317,8 @@
     "balance": "الرصيد",
     "topUp": "شحن",
     "payment": "دفع",
-    "refund": "استرداد"
+    "refund": "استرداد",
+    "topUpError": "تعذّر بدء عملية الشحن. يرجى المحاولة مرة أخرى."
   },
   "calendar": {
     "jan": "يناير",
@@ -567,7 +571,7 @@
     "milesToRedeem": "الأميال المراد استردادها",
     "discountValue": "قيمة الخصم",
     "redeem": "استرداد",
-    "redeemNote": "10 أميال = 1 ريال سعودي",
+    "redeemNote": "100 ميل = 1 ريال سعودي",
     "redeemSuccess": "تم الاسترداد بنجاح! خصم: {{discount}} ر.س",
     "invalidMiles": "الرجاء إدخال عدد صحيح من الأميال",
     "insufficientMiles": "رصيد الأميال غير كافٍ",
@@ -1547,7 +1551,9 @@
     "alreadyPaid": "تم الدفع مسبقاً",
     "alreadyPaidDescription": "مرحباً {{name}}، تم إتمام دفعتك بالفعل.",
     "paymentCancelledTitle": "تم إلغاء الدفع",
-    "paymentCancelledDescription": "تم إلغاء طلب الدفع هذا من قبل المنظم."
+    "paymentCancelledDescription": "تم إلغاء طلب الدفع هذا من قبل المنظم.",
+    "verifyingPayment": "جارٍ تأكيد دفعتك لدى مزوّد الدفع...",
+    "verifyingPaymentHint": "تُحدَّث هذه الصفحة تلقائيًا. يُرسل بريد التأكيد فور التحقق من الدفعة."
   },
   "waitlist": {
     "joinWaitlist": "انضم لقائمة الانتظار",
