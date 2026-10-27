@@ -99,7 +99,9 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const query = {
       originId: cold.origin.id,
       destinationId: cold.destination.id,
-      departureDate: cold.departureTime,
+      // The search day is a civil date; the fixture airports carry no zone,
+      // so the UTC calendar day of the departure is the right one.
+      departureDate: cold.departureTime.toISOString().slice(0, 10),
     };
     const firstSearch = await client.flights.search.query(query);
     const secondSearch = await client.flights.search.query(query);

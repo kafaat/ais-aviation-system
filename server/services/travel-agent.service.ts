@@ -15,7 +15,23 @@ import { withTransactionalIdempotency } from "./idempotency-v2.service";
  */
 
 import { TRPCError } from "@trpc/server";
-import { and, eq, gte, lte, desc, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  lt,
+  lte,
+  inArray,
+  desc,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import {
+  civilDateOf,
+  civilDayWindowUtc,
+  fallbackAirportTimeZone,
+  isValidTimeZone,
+} from "./civil-day";
 import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import { getDb } from "../db";
 import {
@@ -335,12 +351,13 @@ export async function searchFlightsForAgent(
     });
   }
 
-  // Build search query
-  const startOfDay = new Date(params.departureDate);
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const endOfDay = new Date(params.departureDate);
-  endOfDay.setHours(23, 59, 59, 999);
+  // The requested day is a calendar day at the origin airport.
+  const { start: startOfDay, end: endOfDay } = civilDayWindowUtc(
+    civilDateOf(params.departureDate),
+    isValidTimeZone(originAirport.timezone)
+      ? originAirport.timezone
+      : fallbackAirportTimeZone()
+  );
 
   const results = await db
     .select({
@@ -356,8 +373,8 @@ export async function searchFlightsForAgent(
         eq(flights.originId, originAirport.id),
         eq(flights.destinationId, destinationAirport.id),
         gte(flights.departureTime, startOfDay),
-        lte(flights.departureTime, endOfDay),
-        eq(flights.status, "scheduled")
+        lt(flights.departureTime, endOfDay),
+        inArray(flights.status, ["scheduled", "delayed"])
       )
     )
     .orderBy(flights.departureTime);

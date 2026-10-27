@@ -915,6 +915,27 @@
       "replacement": null
     },
     {
+      "file": "server/services/civil-day.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/civil-day.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": [
+        "server/db.ts",
+        "server/services/flights.service.ts",
+        "server/services/travel-agent.service.ts"
+      ],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/codeshare.service.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/codeshare.service.ts",
@@ -1872,6 +1893,7 @@
       "dependencies": [
         "server/contracts/flights.ts",
         "server/db.ts",
+        "server/services/civil-day.ts",
         "server/services/pricing/dynamic-pricing.service.ts",
         "server/services/redis-cache.service.ts"
       ],
@@ -5206,6 +5228,7 @@
         "server/_core/logger.ts",
         "server/db.ts",
         "server/services/bookings.service.ts",
+        "server/services/civil-day.ts",
         "server/services/idempotency-v2.service.ts",
         "server/services/outbox.service.ts",
         "server/services/tenant.service.ts"
