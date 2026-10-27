@@ -15,6 +15,7 @@ import { calculateCancellationFee } from "./cancellation-fees.service";
 import { trackRefundIssued } from "./metrics.service";
 import { notifyRefundProcessed } from "./notification.service";
 import { settleVerifiedRefund } from "./payment-settlement.service";
+import { cancelBookingResources } from "./booking-settlement.service";
 import { stripe } from "../stripe";
 
 export interface CreateRefundInput {
@@ -181,6 +182,21 @@ export async function createRefund(
     }
 
     await assertNoOrderRefundPending(database, booking.id);
+    // A refund is applied against the receipt that recorded the collection.
+    // Legacy paid rows without one used to get the provider refund and then
+    // fail locally forever (and every charge.refunded delivery with them),
+    // so refuse before any money moves.
+    const [receipt] = await database
+      .select({ paymentIntentId: paymentReceipts.paymentIntentId })
+      .from(paymentReceipts)
+      .where(eq(paymentReceipts.paymentIntentId, booking.stripePaymentIntentId))
+      .limit(1);
+    if (!receipt)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Payment collection is not reconciled yet; the refund can be issued once the receipt is recorded",
+      });
     const existingRefunds = await listActiveRefunds(
       booking.stripePaymentIntentId
     );
@@ -243,16 +259,33 @@ export async function createRefund(
         typeof refund.charge === "string" ? refund.charge : refund.charge?.id;
       if (!chargeId) throw new Error("Provider refund is missing its charge");
       const charge = await stripe.charges.retrieve(chargeId);
-      await database.transaction(tx =>
-        settleVerifiedRefund(tx, {
+      await database.transaction(async tx => {
+        await settleVerifiedRefund(tx, {
           paymentIntentId,
           chargeId,
           amount: charge.amount,
           amountRefunded: charge.amount_refunded,
           currency: charge.currency,
           eventId: `refund-reconcile:${refund.id}`,
-        })
-      );
+        });
+        // This endpoint is the customer's cancellation. A full refund already
+        // cancels the booking inside settlement; a fee-bearing (partial)
+        // refund did not, which left the customer with a confirmed, seat-
+        // reserved, check-in-able booking they had been refunded for.
+        const [current] = await tx
+          .select()
+          .from(bookings)
+          .where(eq(bookings.id, booking.id))
+          .for("update")
+          .limit(1);
+        if (current && current.status !== "cancelled")
+          await cancelBookingResources(
+            tx,
+            current,
+            "Cancelled by customer with cancellation-fee refund",
+            input.userId
+          );
+      });
     }
 
     trackRefundIssued({

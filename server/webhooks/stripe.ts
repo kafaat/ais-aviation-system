@@ -435,17 +435,14 @@ async function handlePaymentFailed(
     return;
   }
 
-  // Only update if in pending state
+  // Only record while the invoice is still open. A declined card inside
+  // Checkout is not terminal: the customer can retry in the same session
+  // or open a new one, and the 30-minute expiry sweeper still applies. The
+  // booking therefore keeps paymentStatus "pending"; writing "failed" here
+  // used to strand the booking, because every checkout, expiry and
+  // voucher-release path requires "pending" and nothing ever wrote it back.
   if (booking.status === "pending") {
     const previousStatus = booking.status;
-
-    await tx
-      .update(bookings)
-      .set({
-        paymentStatus: "failed",
-        updatedAt: new Date(),
-      })
-      .where(eq(bookings.id, booking.id));
 
     // Record status history
     await tx.insert(bookingStatusHistory).values({
@@ -460,7 +457,7 @@ async function handlePaymentFailed(
 
     log.info(
       { event: "booking_payment_failed", bookingId: booking.id },
-      `Booking ${booking.id} marked as payment failed`
+      `Booking ${booking.id} payment attempt failed; invoice stays open`
     );
 
     // Send in-app notification about payment failure
