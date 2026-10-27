@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.33.1
+
+### Bug Fixes
+
+- fix(client): correct loyalty value, super_admin gating and raw i18n keys (#208) (3ca35eb)
+
+### Maintenance
+
+- build(deps): bump certifi from 2026.7.22 to 2026.10.18 in /scripts/contracts (#205) (6b7a42f)
+- chore(deps): pin fast-uri 3.x to the patched 3.1.9 (#206) (abd9618)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.0...v1.33.1
+
+---
+
 ## What's Changed in v1.33.0
 
 ### Features
