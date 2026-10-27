@@ -6,6 +6,7 @@ import {
   mysqlTable,
   text,
   timestamp,
+  datetime,
   varchar,
   decimal,
   boolean,
@@ -362,9 +363,9 @@ export const passengers = mysqlTable(
     title: varchar("title", { length: 10 }), // Mr, Mrs, Ms, Dr
     firstName: varchar("firstName", { length: 100 }).notNull(),
     lastName: varchar("lastName", { length: 100 }).notNull(),
-    dateOfBirth: timestamp("dateOfBirth"),
+    dateOfBirth: datetime("dateOfBirth"),
     passportNumber: varchar("passportNumber", { length: 20 }),
-    passportExpiry: timestamp("passportExpiry"),
+    passportExpiry: datetime("passportExpiry"),
     nationality: varchar("nationality", { length: 3 }), // ISO country code
     seatNumber: varchar("seatNumber", { length: 5 }), // e.g., "12A"
     ticketNumber: varchar("ticketNumber", { length: 13 }), // IATA 13-digit ticket number
@@ -851,7 +852,7 @@ export const userPreferences = mysqlTable(
 
     // Saved passport info
     passportNumber: varchar("passportNumber", { length: 50 }),
-    passportExpiry: timestamp("passportExpiry"),
+    passportExpiry: datetime("passportExpiry"),
     nationality: varchar("nationality", { length: 100 }),
 
     // Contact preferences
@@ -2789,12 +2790,12 @@ export const savedPassengers = mysqlTable(
     // Passenger details
     firstName: varchar("firstName", { length: 100 }).notNull(),
     lastName: varchar("lastName", { length: 100 }).notNull(),
-    dateOfBirth: timestamp("dateOfBirth"),
+    dateOfBirth: datetime("dateOfBirth"),
     nationality: varchar("nationality", { length: 100 }),
 
     // Passport information
     passportNumber: varchar("passportNumber", { length: 50 }),
-    passportExpiry: timestamp("passportExpiry"),
+    passportExpiry: datetime("passportExpiry"),
 
     // Contact information
     email: varchar("email", { length: 320 }),
@@ -3857,8 +3858,8 @@ export const crewMembers = mysqlTable(
 
     // Qualifications
     licenseNumber: varchar("licenseNumber", { length: 50 }),
-    licenseExpiry: timestamp("licenseExpiry"),
-    medicalExpiry: timestamp("medicalExpiry"),
+    licenseExpiry: datetime("licenseExpiry"),
+    medicalExpiry: datetime("medicalExpiry"),
 
     // Qualified aircraft types (JSON array of codes)
     qualifiedAircraft: text("qualifiedAircraft"), // JSON: ["B777", "A320"]
