@@ -35,7 +35,14 @@ class AuthServiceClient {
     this.client = axios.create({
       baseURL: AUTH_SERVICE_URL,
       timeout: 5000,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // The auth service answers password questions for any email; only
+        // this backend may ask. Optional until every deployment sets it.
+        ...(process.env.AUTH_SERVICE_TOKEN
+          ? { "X-Auth-Service-Token": process.env.AUTH_SERVICE_TOKEN }
+          : {}),
+      },
     });
 
     log.info({ url: AUTH_SERVICE_URL }, "Auth service client initialized");

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MySqlDialect } from "drizzle-orm/mysql-core";
 import {
   accountDeletionRequests,
+  accountLocks,
   mfaChallenges,
   mfaSettings,
   refreshTokens,
@@ -71,7 +72,7 @@ beforeEach(() => {
     select: (_projection: any) => {
       let table: any;
       const rows = () =>
-        table === accountDeletionRequests
+        table === accountDeletionRequests || table === accountLocks
           ? []
           : table === users
             ? [user]
