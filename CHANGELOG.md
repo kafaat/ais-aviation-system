@@ -1,5 +1,15 @@
 # Changelog
 
+## What's Changed in v1.33.2
+
+### Bug Fixes
+
+- fix(value): grant redeemed miles as credit, protect wallet-funded bookings, one voucher per invoice (#214) (0e62d54)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.1...v1.33.2
+
+---
+
 ## What's Changed in v1.33.1
 
 ### Bug Fixes
