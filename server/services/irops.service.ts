@@ -758,6 +758,7 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
   // Get the disrupted flight details
   const [flight] = await db
     .select({
+      departureTime: flights.departureTime,
       arrivalTime: flights.arrivalTime,
       destinationId: flights.destinationId,
       status: flights.status,
@@ -770,7 +771,10 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
 
   // Get disruption info for delay
   const [disruption] = await db
-    .select({ delayMinutes: flightDisruptions.delayMinutes })
+    .select({
+      delayMinutes: flightDisruptions.delayMinutes,
+      originalDepartureTime: flightDisruptions.originalDepartureTime,
+    })
     .from(flightDisruptions)
     .where(
       and(
@@ -781,9 +785,24 @@ export async function getConnectionsAtRisk(flightId: number): Promise<
     .orderBy(desc(flightDisruptions.createdAt))
     .limit(1);
 
+  // A disruption created with a new departure time already shifted the
+  // flight's schedule by that amount; only the part of the recorded delay
+  // not yet reflected in the schedule is still ahead of the stored arrival.
   const delayMinutes = disruption?.delayMinutes ?? 0;
-  const estimatedArrival = new Date(flight.arrivalTime);
-  estimatedArrival.setMinutes(estimatedArrival.getMinutes() + delayMinutes);
+  const alreadyShiftedMinutes = disruption?.originalDepartureTime
+    ? Math.max(
+        0,
+        Math.round(
+          (flight.departureTime.getTime() -
+            disruption.originalDepartureTime.getTime()) /
+            60000
+        )
+      )
+    : 0;
+  const estimatedArrival = new Date(
+    flight.arrivalTime.getTime() +
+      Math.max(0, delayMinutes - alreadyShiftedMinutes) * 60000
+  );
 
   // Get all affected user IDs
   const affectedBookings = await db
