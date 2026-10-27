@@ -692,6 +692,7 @@
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/split-refund.service.ts",
+        "server/services/stripe/stripe-reconciliation.service.ts",
         "server/services/voucher.service.ts",
         "server/services/wallet.service.ts"
       ],
@@ -4203,7 +4204,12 @@
         "server/webhooks/stripe.ts"
       ],
       "tableExpressions": {
-        "reads": ["bookingCheckoutRequests", "bookings", "paymentReceipts"],
+        "reads": [
+          "bookingCheckoutRequests",
+          "bookings",
+          "paymentReceipts",
+          "stripeEvents"
+        ],
         "writes": ["stripeEvents"]
       },
       "replacement": null
@@ -5080,11 +5086,12 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/booking-settlement.service.ts",
         "server/services/stripe/client-factory.ts"
       ],
       "tableExpressions": {
         "reads": ["bookings", "financialLedger", "payments"],
-        "writes": ["bookings", "financialLedger", "payments"]
+        "writes": ["financialLedger", "payments"]
       },
       "replacement": null
     },
