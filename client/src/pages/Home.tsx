@@ -203,7 +203,7 @@ export default function Home() {
                   </a>
                 </Link>
               )}
-              {user?.role === "admin" && (
+              {(user?.role === "admin" || user?.role === "super_admin") && (
                 <>
                   <Link href="/admin">
                     <a className="text-sm font-medium hover:text-primary transition-colors">

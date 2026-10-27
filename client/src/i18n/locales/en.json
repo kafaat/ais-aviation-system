@@ -67,7 +67,8 @@
     "loginRequired": "Please login first",
     "close": "Close",
     "fillAllFields": "Please fill all required fields",
-    "to": "to"
+    "to": "to",
+    "saving": "Saving..."
   },
   "nav": {
     "home": "Home",
@@ -265,7 +266,9 @@
     "remainingCount": "Remaining",
     "seatPricing": "Seat Pricing",
     "upgradePrice": "Upgrade Price",
-    "noSeatMaps": "No seat maps configured"
+    "noSeatMaps": "No seat maps configured",
+    "sectionDescription": "Choose seats for each passenger now, or skip and let us assign them at check-in.",
+    "selectedSeats": "Selected seats"
   },
   "priceLock": {
     "lockPrice": "Lock Price",
@@ -314,7 +317,8 @@
     "balance": "Balance",
     "topUp": "Top Up",
     "payment": "Payment",
-    "refund": "Refund"
+    "refund": "Refund",
+    "topUpError": "Could not start the top-up. Please try again."
   },
   "calendar": {
     "jan": "January",
@@ -567,7 +571,7 @@
     "milesToRedeem": "Miles to Redeem",
     "discountValue": "Discount Value",
     "redeem": "Redeem",
-    "redeemNote": "10 miles = 1 SAR",
+    "redeemNote": "100 miles = 1 SAR",
     "redeemSuccess": "Redeemed successfully! Discount: {{discount}} SAR",
     "invalidMiles": "Please enter a valid number of miles",
     "insufficientMiles": "Insufficient miles balance",
@@ -1547,7 +1551,9 @@
     "alreadyPaid": "Already Paid",
     "alreadyPaidDescription": "Hello {{name}}, your payment has already been completed.",
     "paymentCancelledTitle": "Payment Cancelled",
-    "paymentCancelledDescription": "This payment request has been cancelled by the organizer."
+    "paymentCancelledDescription": "This payment request has been cancelled by the organizer.",
+    "verifyingPayment": "Confirming your payment with the provider...",
+    "verifyingPaymentHint": "This page refreshes automatically. Your confirmation email is sent once the payment is verified."
   },
   "waitlist": {
     "joinWaitlist": "Join Waitlist",
