@@ -975,7 +975,10 @@ export async function updateBulkLoad(
       description: `Bulk cargo - ${compartmentCode}`,
       pieces: 1,
       weight,
-      volume: Math.round(weight * 0.6), // rough volume estimate
+      // weight is kg×100 and volume m³×100: 0.6 m³ per 100 kg of bulk
+      // cargo (≈167 kg/m³). The factor used to be applied to the scaled
+      // weight, so anything over ~20 kg overflowed the compartment volume.
+      volume: Math.round((weight / 100) * 0.6),
       uldNumber: null,
       status: "planned",
       createdAt: new Date().toISOString(),

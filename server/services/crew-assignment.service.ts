@@ -415,14 +415,11 @@ export async function checkCrewAvailability(crewMemberId: number, date: Date) {
       arrivalTime: a.arrivalTime,
     }))
   );
+  const duty = await calculateDutyTime(crewMemberId, date);
   return {
-    available:
-      (await calculateDutyTime(crewMemberId, date)).ftlStatus !== "red",
+    available: duty.ftlStatus !== "red",
     dutyHoursOnDate: Math.round(dutyHours * 100) / 100,
-    remainingDutyHours:
-      Math.round(
-        (await calculateDutyTime(crewMemberId, date)).remainingHours * 100
-      ) / 100,
+    remainingDutyHours: Math.round(duty.remainingHours * 100) / 100,
     crewMember: {
       id: crew.id,
       name: `${crew.firstName} ${crew.lastName}`,
@@ -712,7 +709,10 @@ export async function calculateDutyTime(crewMemberId: number, date: Date) {
     maxHours > 0 ? Math.round((dutyHours / maxHours) * 100) : 0;
   // A summary without certified duty bounds must never show a green compliance assertion.
   let ftlStatus: "green" | "yellow" | "red" = "red";
-  if (profile && assignments.length) {
+  if (profile && !assignments.length) {
+    // Certified bounds exist and nothing is scheduled: fully rested.
+    ftlStatus = "green";
+  } else if (profile && assignments.length) {
     const checks = await Promise.all(
       assignments.map(a =>
         evaluateCrewDuty(db, crewMemberId, {

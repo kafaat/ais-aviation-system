@@ -1449,6 +1449,7 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/flight-state.service.ts",
+        "server/services/irops.service.ts",
         "server/services/outbox.service.ts"
       ],
       "tableExpressions": {
@@ -2597,6 +2598,7 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/routers/irops.ts",
+        "server/services/disruption.service.ts",
         "server/services/irops-recovery.service.ts"
       ],
       "dependencies": [
