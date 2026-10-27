@@ -168,8 +168,7 @@ export const paymentsRouter = router({
         name: ctx.user.name,
         appBaseUrl:
           process.env.VITE_APP_URL ||
-          ctx.req.headers.origin ||
-          `${ctx.req.protocol}://${ctx.req.get("host")}`,
+          `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`,
       });
     }),
 
@@ -264,15 +263,16 @@ export const paymentsRouter = router({
           input.modificationId,
           ctx.user.id,
           process.env.VITE_APP_URL ||
-            `${ctx.req.protocol}://${ctx.req.get("host")}`
+            `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`
         );
       }
       const authoritativeAmount = modification.totalCost;
       await assertNoCollectionReview(database, bookingData.id);
+      // Never the client's Origin: a bearer client could point the
+      // post-payment redirect (carrying the session id) anywhere.
       const appBaseUrl =
-        ctx.req.headers.origin ||
         process.env.VITE_APP_URL ||
-        `${ctx.req.protocol}://${ctx.req.get("host")}`;
+        `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`;
 
       const providerId = (input.provider || "stripe") as PaymentProviderType;
 

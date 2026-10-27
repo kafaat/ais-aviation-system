@@ -527,7 +527,8 @@ export async function queryAuditLogs(
   }
 
   if (params.searchTerm) {
-    const searchPattern = `%${params.searchTerm}%`;
+    // The term is a literal: LIKE wildcards in it must not widen the match.
+    const searchPattern = `%${params.searchTerm.replace(/[\\%_]/g, m => `\\${m}`)}%`;
     conditions.push(
       or(
         like(auditLogs.eventType, searchPattern),

@@ -1,4 +1,5 @@
 import { transitionFlight } from "./flight-state.service";
+import { resolveIROPSEvent } from "./irops.service";
 import { recordEvent } from "./outbox.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -320,18 +321,10 @@ export async function getActiveDisruptions() {
  * Resolve a disruption (admin)
  */
 export async function resolveDisruption(disruptionId: number) {
-  const db = await getDb();
-  if (!db) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-  }
-
-  await db
-    .update(flightDisruptions)
-    .set({ status: "resolved", resolvedAt: new Date() })
-    .where(eq(flightDisruptions.id, disruptionId));
-
+  // An unguarded status flip closed events that still had pending rebook
+  // actions, after which the recovery flow refused to run for them. The
+  // IROPS resolver locks the row, requires every action completed and
+  // records the irops.resolved event.
+  await resolveIROPSEvent(disruptionId);
   return { success: true };
 }

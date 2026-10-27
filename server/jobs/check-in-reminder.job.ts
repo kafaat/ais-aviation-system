@@ -40,10 +40,14 @@ export async function findBookingsForReminder(): Promise<
   if (!db) throw new Error("Database not available");
 
   const now = new Date();
-  const in24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  // Departures from 2 h to 26 h ahead that have not been reminded. The
+  // lower bound used to be 24 h, so a worker outage spanning two hourly
+  // ticks skipped those departures for good; checkInReminderSentAt keeps
+  // the catch-up idempotent.
+  const in2Hours = new Date(now.getTime() + 2 * 60 * 60 * 1000);
   const in26Hours = new Date(now.getTime() + 26 * 60 * 60 * 1000);
 
-  // Find confirmed bookings with flights departing in the next 24-26 hours
+  // Find confirmed bookings with flights departing in the next 2-26 hours
   // that haven't been sent a check-in reminder yet
   const results = await db
     .select({
@@ -59,7 +63,7 @@ export async function findBookingsForReminder(): Promise<
     .where(
       and(
         eq(bookings.status, "confirmed"),
-        gte(flights.departureTime, in24Hours),
+        gte(flights.departureTime, in2Hours),
         lt(flights.departureTime, in26Hours),
         isNull(bookings.checkInReminderSentAt)
       )
@@ -135,6 +139,10 @@ export async function runCheckInReminderJob(): Promise<ReminderResult> {
       try {
         result.processed++;
 
+        if (!process.env.FRONTEND_URL && process.env.NODE_ENV === "production")
+          throw new Error(
+            "FRONTEND_URL is not set; refusing to email a localhost check-in link"
+          );
         const checkInUrl = `${process.env.FRONTEND_URL || "http://localhost:3000"}/check-in?booking=${item.booking.bookingReference}`;
 
         // Skip if user has no email

@@ -306,9 +306,9 @@ export function generateBackupCodes(): string[] {
 
   for (let i = 0; i < BACKUP_CODE_COUNT; i++) {
     let code = "";
-    const randomBytes = crypto.randomBytes(BACKUP_CODE_LENGTH);
     for (let j = 0; j < BACKUP_CODE_LENGTH; j++) {
-      code += charset[randomBytes[j] % charset.length];
+      // randomInt is unbiased; a byte modulo 36 favours the first 4 symbols.
+      code += charset[crypto.randomInt(charset.length)];
     }
     codes.push(code);
   }
@@ -323,6 +323,15 @@ export function generateBackupCodes(): string[] {
  * @returns The SHA-256 hex digest
  */
 export function hashBackupCode(code: string): string {
+  // Keyed with the MFA encryption key: a leaked mfa_settings table no longer
+  // yields the codes to an offline search of the 36^8 space.
+  return crypto
+    .createHmac("sha256", ENCRYPTION_KEY)
+    .update(code.toLowerCase().trim())
+    .digest("hex");
+}
+/** Codes issued before keyed hashing were stored as a bare SHA-256. */
+function legacyHashBackupCode(code: string): string {
   return crypto
     .createHash("sha256")
     .update(code.toLowerCase().trim())
@@ -341,13 +350,15 @@ export function verifyBackupCode(
   code: string,
   hashedCodes: string[]
 ): { valid: boolean; remainingCodes: string[] } {
-  const hashed = hashBackupCode(code);
-  const index = hashedCodes.findIndex(stored =>
-    crypto.timingSafeEqual(
-      Buffer.from(stored, "hex"),
-      Buffer.from(hashed, "hex")
-    )
+  const candidates = [hashBackupCode(code), legacyHashBackupCode(code)].map(h =>
+    Buffer.from(h, "hex")
   );
+  const index = hashedCodes.findIndex(stored => {
+    const buffer = Buffer.from(stored, "hex");
+    return candidates.some(
+      c => c.length === buffer.length && crypto.timingSafeEqual(buffer, c)
+    );
+  });
 
   if (index === -1) {
     return { valid: false, remainingCodes: hashedCodes };
@@ -530,6 +541,45 @@ export async function updateBackupCodes(
   await db.execute(
     sql`UPDATE mfa_settings SET backupCodes = ${codesJson}, updatedAt = ${now} WHERE userId = ${userId}`
   );
+}
+
+/**
+ * Verify a TOTP code for an account change (enable, disable, regenerate
+ * backup codes) and consume its time step, so a code observed at login
+ * cannot be replayed within its window to change the account. Same rule as
+ * completeMfaChallenge. Returns false for an unknown user or a bad code.
+ */
+export async function consumeTotpStep(
+  userId: number,
+  token: string
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Database not available",
+    });
+  }
+  return db.transaction(async tx => {
+    const [settings] = await tx
+      .select()
+      .from(mfaSettings)
+      .where(eq(mfaSettings.userId, userId))
+      .limit(1)
+      .for("update");
+    if (!settings) return false;
+    const step = matchingTotpStep(decryptSecret(settings.secret), token);
+    if (
+      step === null ||
+      (settings.lastUsedStep != null && step <= settings.lastUsedStep)
+    )
+      return false;
+    await tx
+      .update(mfaSettings)
+      .set({ lastUsedStep: step, updatedAt: new Date() })
+      .where(eq(mfaSettings.userId, userId));
+    return true;
+  });
 }
 
 /**

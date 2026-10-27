@@ -14,7 +14,8 @@ import { cancelBookingResources } from "./booking-settlement.service";
  * @date 2026-01-26
  */
 
-import { Queue, Worker, Job } from "bullmq";
+import { Queue, Worker, Job, UnrecoverableError } from "bullmq";
+import { randomUUID } from "node:crypto";
 import { redisConnectionOptions } from "../queue/redis-config";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -24,7 +25,7 @@ import {
   paymentReceipts,
   bookingCheckoutRequests,
 } from "../../drizzle/schema";
-import { eq, and, lt, gt, asc } from "drizzle-orm";
+import { eq, and, lt, gt, asc, sql } from "drizzle-orm";
 
 // ============================================================================
 // CONFIGURATION
@@ -196,7 +197,10 @@ export async function queueWebhookRetry(opts: {
       eventId: opts.eventId,
     } as WebhookRetryJobData,
     {
-      jobId: `webhook-retry-${opts.eventId}`,
+      // BullMQ ignores an add whose jobId still exists in any kept state, and
+      // failed jobs are kept for a week; a fixed id made every later re-queue
+      // of an exhausted event a silent no-op.
+      jobId: `webhook-retry-${opts.eventId}-${randomUUID()}`,
       delay: opts.delay || 60000, // Default 1 minute delay
     }
   );
@@ -410,7 +414,8 @@ export function startWebhookRetryWorker(): Worker {
         return;
       }
 
-      // Check retry count
+      // Check retry count. An exhausted event must land in the failed set,
+      // not complete quietly with processed=false and nobody told.
       if (event.retryCount >= 5) {
         console.warn(
           `[Worker] Event ${eventId} exceeded max retries, marking as failed`
@@ -421,7 +426,9 @@ export function startWebhookRetryWorker(): Worker {
             error: "Max retries exceeded",
           })
           .where(eq(stripeEvents.id, eventId));
-        return;
+        throw new UnrecoverableError(
+          `Stripe event ${eventId} exceeded max retries`
+        );
       }
 
       // Retry processing
@@ -449,6 +456,15 @@ export function startWebhookRetryWorker(): Worker {
           return;
         }
         await db.transaction(async tx => {
+          // Same claim as the live webhook handler: a concurrent delivery
+          // or a second retry job must find the row processed, not race it.
+          const [locked] = await tx
+            .select({ processed: stripeEvents.processed })
+            .from(stripeEvents)
+            .where(eq(stripeEvents.id, eventId))
+            .limit(1)
+            .for("update");
+          if (!locked || locked.processed) return;
           await processStripeEvent(tx, {
             id: event.id,
             type: event.type,
@@ -469,10 +485,20 @@ export function startWebhookRetryWorker(): Worker {
           `[Worker] Event ${eventId} processed successfully on retry`
         );
       } catch (err) {
-        console.error(
-          `[Worker] Webhook retry failed for ${eventId}:`,
-          err instanceof Error ? err.message : err
-        );
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[Worker] Webhook retry failed for ${eventId}:`, message);
+        // The retry budget was never spent before this: the live handler is
+        // the only path that incremented retryCount.
+        await db
+          .update(stripeEvents)
+          .set({
+            retryCount: sql`${stripeEvents.retryCount} + 1`,
+            error: message.slice(0, 1000),
+          })
+          .where(
+            and(eq(stripeEvents.id, eventId), eq(stripeEvents.processed, false))
+          )
+          .catch(() => undefined);
         throw err;
       }
     },
@@ -540,12 +566,13 @@ async function runReconciliation(_data: ReconciliationJobData): Promise<void> {
     });
   }
 
-  // Find unprocessed events from last 24 hours
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // Find unprocessed events from the last 7 days (Stripe's own retry
+  // horizon); a 24-hour window silently dropped anything older.
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   const unprocessedEvents = await db.query.stripeEvents.findMany({
     where: (t, { and, eq, gt }) =>
-      and(eq(t.processed, false), gt(t.createdAt, oneDayAgo)),
+      and(eq(t.processed, false), gt(t.createdAt, sevenDaysAgo)),
     limit: 100,
   });
 

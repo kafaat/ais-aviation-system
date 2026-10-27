@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   verifyPassword: vi.fn(),
   login: vi.fn(),
   getDb: vi.fn(),
+  recordLoginAttempt: vi.fn(),
   findFirst: vi.fn(),
   createSessionToken: vi.fn(),
   cookie: vi.fn(),
@@ -28,6 +29,9 @@ vi.mock("../_core/middleware/procedure-rate-limit", () => ({
   enforceProcedureRateLimit: vi.fn(),
 }));
 vi.mock("../db", () => ({ getDb: mocks.getDb }));
+vi.mock("../services/account-lock.service", () => ({
+  recordLoginAttempt: mocks.recordLoginAttempt,
+}));
 vi.mock("../_core/sdk", () => ({
   sdk: { createSessionToken: mocks.createSessionToken },
 }));

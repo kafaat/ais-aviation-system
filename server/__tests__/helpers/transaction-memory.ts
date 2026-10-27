@@ -93,11 +93,21 @@ export function transactionMemory(seed: Record<string, any[]>) {
                   );
                 const query = dialect.sqlToQuery(value).sql;
                 if (/count\(\*\)/i.test(query)) return [key, found.length];
-                const column = query.match(/SUM\(`[^`]+`\.`([^`]+)`\)/i)?.[1];
-                if (!column) throw new Error(`Unsupported aggregate: ${query}`);
+                const aggregate = query.match(
+                  /(SUM|MAX|MIN)\(`[^`]+`\.`([^`]+)`\)/i
+                );
+                if (!aggregate)
+                  throw new Error(`Unsupported aggregate: ${query}`);
+                const [, fn, column] = aggregate;
+                const values = found.map(row => Number(row[column] ?? 0));
+                if (fn.toUpperCase() === "SUM")
+                  return [key, values.reduce((sum, v) => sum + v, 0)];
+                if (!values.length) return [key, null];
                 return [
                   key,
-                  found.reduce((sum, row) => sum + Number(row[column] ?? 0), 0),
+                  fn.toUpperCase() === "MAX"
+                    ? Math.max(...values)
+                    : Math.min(...values),
                 ];
               })
             ),

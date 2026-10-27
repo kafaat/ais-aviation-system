@@ -394,7 +394,7 @@ export const adminRouter = router({
         resourceId: z.string().optional(),
         startDate: z.date().optional(),
         endDate: z.date().optional(),
-        searchTerm: z.string().optional(),
+        searchTerm: z.string().max(100).optional(),
         limit: z.number().min(1).max(500).default(50),
         offset: z.number().min(0).default(0),
       })

@@ -8,7 +8,7 @@ import {
   specialServices,
   bookingSegments,
 } from "../../drizzle/schema";
-import { eq, and, desc, ne, inArray } from "drizzle-orm";
+import { eq, and, asc, desc, ne, inArray } from "drizzle-orm";
 import { flightBookingCondition } from "./flight-state.service";
 import type { SettlementTx } from "./booking-settlement.service";
 
@@ -671,7 +671,8 @@ export async function rankPassengers(
       bookingId: passengers.bookingId,
     })
     .from(passengers)
-    .where(inArray(passengers.bookingId, bookingIds));
+    .where(inArray(passengers.bookingId, bookingIds))
+    .orderBy(asc(passengers.id));
 
   if (
     context?.maxPassengers !== undefined &&
@@ -691,8 +692,11 @@ export async function rankPassengers(
     );
   }
 
-  // Sort by totalScore descending
-  scores.sort((a, b) => b.totalScore - a.totalScore);
+  // Sort by totalScore descending; equal scores keep a stable passenger
+  // order so consecutive calls present the same queue.
+  scores.sort(
+    (a, b) => b.totalScore - a.totalScore || a.passengerId - b.passengerId
+  );
 
   return scores;
 }

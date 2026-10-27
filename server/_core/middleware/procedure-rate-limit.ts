@@ -11,7 +11,9 @@ export function sensitiveProcedureScope(
   if (/^auth\..*(?:reset|forgot)/i.test(path)) return "passwordReset";
   if (
     /^auth\.(login|register|completeMfa)$/.test(path) ||
-    /^mfa\.(setup|verify|disable|regenerateBackupCodes)$/.test(path)
+    /^mfa\.(setup|verify|disable|regenerateBackupCodes)$/.test(path) ||
+    // Agent credential validation is a public password-style check.
+    /^travelAgent\.validateCredentials$/.test(path)
   )
     return "auth";
   if (/^(payments|wallet|splitPayments|refunds)\./.test(path))

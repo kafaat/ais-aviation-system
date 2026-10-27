@@ -436,8 +436,16 @@ export async function addToWaitlist(
     throw new Error("Database connection not available");
   }
 
-  const currentCount = await getWaitlistCount(flightId, cabinClass);
-  const priority = currentCount + 1;
+  // COUNT(waiting) + 1 re-issued a number lower than an existing waiting
+  // entry's as soon as any earlier entry had been offered or expired, so a
+  // newcomer jumped the queue. Same rule as waitlist.service.getNextPriority.
+  const [top] = await database
+    .select({ maxPriority: sql<number | null>`MAX(${waitlist.priority})` })
+    .from(waitlist)
+    .where(
+      and(eq(waitlist.flightId, flightId), eq(waitlist.cabinClass, cabinClass))
+    );
+  const priority = (Number(top?.maxPriority) || 0) + 1;
 
   const result = await database.insert(waitlist).values({
     flightId,
@@ -1027,17 +1035,15 @@ export async function expireWaitlistOffers(): Promise<number> {
     return 0;
   }
 
-  // Update expired offers
-  await database
-    .update(waitlist)
-    .set({ status: "expired", updatedAt: now })
-    .where(
-      and(eq(waitlist.status, "offered"), lt(waitlist.offerExpiresAt, now))
-    );
+  // The canonical path releases the inventory lock, records the
+  // waitlist.expired event (which notifies the passenger) and re-offers the
+  // seat; a bulk status flip did none of that.
+  const { processExpiredOffers } = await import("../waitlist.service");
+  const result = await processExpiredOffers();
 
   console.info(`[Inventory] Expired ${expiredOffers.length} waitlist offers`);
 
-  return expiredOffers.length;
+  return result.expiredCount ?? expiredOffers.length;
 }
 
 // ============================================================================

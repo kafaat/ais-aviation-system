@@ -651,8 +651,8 @@ export async function sendBookingConfirmationEmail(
       throw new Error("Booking confirmation email was not accepted");
 
     log.info(
-      { event: "confirmation_sent", bookingId, email: booking.userEmail },
-      `Sent booking confirmation to ${booking.userEmail}`
+      { event: "confirmation_sent", bookingId },
+      `Sent booking confirmation to ${booking.userEmail.replace(/^(.).*(@.*)$/, "$1***$2")}`
     );
   } catch (error) {
     log.error(
