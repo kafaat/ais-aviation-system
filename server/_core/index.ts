@@ -83,6 +83,12 @@ async function startServer() {
     next();
   });
   // Configure trusted proxy addresses/CIDRs explicitly; never trust arbitrary headers.
+  // Behind a reverse proxy with this unset every client shares the proxy's
+  // address, so the per-IP login limiter (5 per 15 min) becomes site-wide.
+  if (!process.env.TRUSTED_PROXIES && process.env.NODE_ENV === "production")
+    console.warn(
+      "[security] TRUSTED_PROXIES is not set: if a reverse proxy fronts this process, every client shares one rate-limit bucket. Set it to the proxy address, CIDR or 'uniquelocal'."
+    );
   if (process.env.TRUSTED_PROXIES) {
     app.set(
       "trust proxy",

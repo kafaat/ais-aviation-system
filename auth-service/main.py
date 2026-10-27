@@ -2,10 +2,11 @@
 FastAPI Auth Service for AIS Aviation System.
 Provides registration, login, and password verification endpoints.
 """
+import hmac
 import uuid
-from typing import Generator
+from typing import Generator, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
@@ -34,6 +35,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Password hashing
 # ---------------------------------------------------------------------------
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Verified on the unknown-user branch so a missing account costs the same
+# time as a wrong password; otherwise response timing enumerates accounts.
+_DUMMY_HASH = pwd_context.hash(uuid.uuid4().hex)
 
 # ---------------------------------------------------------------------------
 # FastAPI app
@@ -63,11 +67,26 @@ def get_db() -> Generator[Session, None, None]:
     finally:
         db.close()
 
+def require_service_token(
+    x_auth_service_token: Optional[str] = Header(default=None),
+) -> None:
+    """Only the Node backend may use this service. Enforced whenever a token is configured."""
+    expected = settings.AUTH_SERVICE_TOKEN
+    if not expected:
+        return
+    if not x_auth_service_token or not hmac.compare_digest(
+        x_auth_service_token.encode(), expected.encode()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Service credential required.",
+        )
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.post("/auth/register", response_model=AuthResponse)
+@app.post("/auth/register", response_model=AuthResponse, dependencies=[Depends(require_service_token)])
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new user with email and password."""
     existing = db.query(User).filter(User.email == body.email).first()
@@ -101,11 +120,12 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 
-@app.post("/auth/login", response_model=AuthResponse)
+@app.post("/auth/login", response_model=AuthResponse, dependencies=[Depends(require_service_token)])
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     """Authenticate a user with email and password."""
     user = db.query(User).filter(User.email == body.email).first()
     if not user or not user.passwordHash:
+        pwd_context.verify(body.password, _DUMMY_HASH)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",
@@ -124,15 +144,17 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
-@app.post("/auth/verify-password", response_model=AuthResponse)
+@app.post("/auth/verify-password", response_model=AuthResponse, dependencies=[Depends(require_service_token)])
 def verify_password(body: VerifyPasswordRequest, db: Session = Depends(get_db)):
     """Verify a password against the stored hash. Used by the Node.js backend."""
     user = db.query(User).filter(User.email == body.email).first()
     if not user or not user.passwordHash:
-        return AuthResponse(success=False, message="User not found or no password set.")
+        # One message and one bcrypt cost for both failure kinds.
+        pwd_context.verify(body.password, _DUMMY_HASH)
+        return AuthResponse(success=False, message="Invalid email or password.")
 
     if not pwd_context.verify(body.password, user.passwordHash):
-        return AuthResponse(success=False, message="Password does not match.")
+        return AuthResponse(success=False, message="Invalid email or password.")
 
     return AuthResponse(
         success=True,

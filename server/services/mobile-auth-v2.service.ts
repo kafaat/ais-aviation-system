@@ -9,6 +9,7 @@ import {
   users,
   mfaSettings,
   type User,
+  accountLocks,
 } from "../../drizzle/schema";
 import { type MfaProof } from "./mfa.service";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -55,6 +56,18 @@ async function assertAccountAccessible(
     )
     .limit(1);
   if (request) throw unauthorized("Account is suspended for deletion");
+  // Administrative and automatic locks (account-lock.service) were recorded
+  // but never consulted on login, refresh or session authentication. Read
+  // through the caller's transaction; an expired auto-unlock no longer binds.
+  const [lock] = await db
+    .select({ autoUnlockAt: accountLocks.autoUnlockAt })
+    .from(accountLocks)
+    .where(
+      and(eq(accountLocks.userId, userId), eq(accountLocks.isActive, true))
+    )
+    .limit(1);
+  if (lock && (!lock.autoUnlockAt || lock.autoUnlockAt > new Date()))
+    throw unauthorized("Account is locked");
 }
 export interface JwtPayload {
   userId: number;
@@ -248,8 +261,26 @@ export const mobileAuthServiceV2 = {
             isNull(t.revokedAt)
           ),
       });
-      if (!record?.familyId)
+      if (!record?.familyId) {
+        // A token that was already rotated is being presented again: either
+        // the legitimate client replayed it or a thief used it first. Both
+        // chains end here, so the victim must sign in again and the stolen
+        // chain dies with them.
+        const reused = await tx.query.refreshTokens.findFirst({
+          where: (t, { eq }) => eq(t.token, hashToken(token)),
+        });
+        if (reused?.familyId)
+          await tx
+            .update(refreshTokens)
+            .set({ revokedAt: new Date() })
+            .where(
+              and(
+                eq(refreshTokens.familyId, reused.familyId),
+                isNull(refreshTokens.revokedAt)
+              )
+            );
         throw unauthorized("Invalid or expired refresh token");
+      }
       const [user] = await tx
         .select()
         .from(users)
