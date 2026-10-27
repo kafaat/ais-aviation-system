@@ -49,7 +49,7 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/security.ts"],
+      "consumers": ["server/routers/auth.ts", "server/routers/security.ts"],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
@@ -2829,7 +2829,7 @@
         "reads": [
           "bytes",
           "expectedToken",
-          "hashed",
+          "h",
           "mfaChallenges",
           "mfaSettings",
           "stored",
@@ -2874,6 +2874,7 @@
       "tableExpressions": {
         "reads": [
           "accountDeletionRequests",
+          "accountLocks",
           "mfaSettings",
           "refreshTokens",
           "users"

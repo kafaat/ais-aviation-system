@@ -12,6 +12,7 @@
  */
 
 import { z } from "zod";
+import { recordLoginAttempt } from "../services/account-lock.service";
 import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "../_core/trpc";
 import {
@@ -84,6 +85,14 @@ async function issueSession(
 // Input Schemas
 // ============================================================================
 
+/** bcrypt hashes only the first 72 bytes; a longer password would verify
+ * with any suffix. Refuse it instead of silently truncating. */
+export const registrationPassword = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .refine(value => new TextEncoder().encode(value).length <= 72, {
+    message: "Password must be at most 72 bytes",
+  });
 const loginInputSchema = z.object({
   email: z.string().email("Invalid email format"),
   password: z.string().min(1, "Password is required"),
@@ -217,7 +226,7 @@ export const authRouter = router({
     .input(
       z.object({
         email: z.string().email("Invalid email format"),
-        password: z.string().min(8, "Password must be at least 8 characters"),
+        password: registrationPassword,
         name: z.string().optional(),
       })
     )
@@ -290,12 +299,29 @@ export const authRouter = router({
       ])
     )
     .mutation(async ({ input, ctx }) => {
+      const ipAddress =
+        ctx.req.ip || ctx.req.socket?.remoteAddress || "unknown";
+      const userAgent = ctx.req.headers["user-agent"];
       const user = await authenticateWithPassword(input.email, input.password);
+      // The attempt log feeds the automatic lockout; a logging failure must
+      // not turn a valid credential into an outage, so it is best effort.
+      try {
+        await recordLoginAttempt({
+          email: input.email,
+          ipAddress,
+          userAgent,
+          success: Boolean(user),
+          failureReason: user ? undefined : "invalid_credentials",
+        });
+      } catch {
+        /* attempt logging is best effort */
+      }
       if (!user)
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Invalid email or password",
         });
+      // Locks are enforced when the session is issued (assertAccountAccessible).
       const mfa = await getMfaSettings(user.id);
       if (mfa?.isEnabled) {
         return {
