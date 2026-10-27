@@ -421,6 +421,9 @@ services:
       - REFRESH_TOKEN_PEPPER=${REFRESH_TOKEN_PEPPER:-}
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
+      # Reminder and notification links are built from this; without it the
+      # worker linked customers to http://localhost:3000.
+      - FRONTEND_URL=${FRONTEND_URL}
       - OUTBOX_PUBLISH_URL=${OUTBOX_PUBLISH_URL:-}
       - OUTBOX_PUBLISH_TOKEN=${OUTBOX_PUBLISH_TOKEN:-}
       - DATABASE_URL=mysql://${DB_USER}:${DB_PASSWORD}@mysql:3306/${DB_NAME}

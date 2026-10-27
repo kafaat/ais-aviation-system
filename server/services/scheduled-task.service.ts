@@ -35,7 +35,6 @@ export async function runScheduledTask(
         leaseToken: token,
         leaseUntil: new Date(Date.now() + leaseMs),
         lastStartedAt: new Date(),
-        lastError: null,
       })
       .where(eq(scheduledTasks.name, name));
     return true;
