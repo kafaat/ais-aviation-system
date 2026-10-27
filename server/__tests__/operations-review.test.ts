@@ -65,7 +65,10 @@ describe("waitlist priority", () => {
 });
 
 describe("disruption resolution", () => {
-  beforeEach(() => state.resolve.mockReset());
+  beforeEach(() => {
+    // A hook that returns the mock would register it as a cleanup callback.
+    state.resolve.mockReset();
+  });
 
   it("delegates to the IROPS resolver, which refuses pending actions", async () => {
     state.resolve.mockResolvedValue({ id: 11, status: "resolved" });
