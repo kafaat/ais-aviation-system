@@ -1,5 +1,20 @@
 # Changelog
 
+## What's Changed in v1.33.2
+
+### Bug Fixes
+
+- fix(value): grant redeemed miles as credit, protect wallet-funded bookings, one voucher per invoice (#214) (0e62d54)
+- fix(search): resolve the search day in the origin airport's zone (#215) (bb48cf7)
+- fix(auth): enforce account locks, detect refresh reuse, harden MFA and the auth-service boundary (#216) (c458389)
+- fix(ops): correct bulk-cargo volume, waitlist priority, crew availability, disruption resolution and delay arithmetic (#217) (8f6cbaf)
+- fix(jobs): make background processing recoverable and honest (#219) (ee87813)
+- fix(edge): bound request bodies and batches, enforce AI chat caps, hide error details outside development (#220) (fe2d4fc)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.1...v1.33.2
+
+---
+
 ## What's Changed in v1.33.1
 
 ### Bug Fixes
