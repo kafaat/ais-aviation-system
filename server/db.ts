@@ -12,6 +12,12 @@ import {
   isNull,
   SQL,
 } from "drizzle-orm";
+import {
+  civilDateOf,
+  civilDayWindowUtc,
+  fallbackAirportTimeZone,
+  isValidTimeZone,
+} from "./services/civil-day";
 import { drizzle, MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import { readFileSync } from "node:fs";
@@ -543,18 +549,41 @@ export async function getUserByEmail(email: string) {
 }
 
 // ============ Flight Functions ============
+/** A search is for a calendar day at the origin airport: the day is
+ * resolved in that airport's zone (falling back to DEFAULT_AIRPORT_TZ or
+ * UTC), never in the server's or the browser's. */
+export async function searchDayWindow(
+  db: NonNullable<ReturnType<typeof getDb>>,
+  originId: number,
+  departureDate: Date | string
+) {
+  const [origin] = await db
+    .select({ timezone: airports.timezone })
+    .from(airports)
+    .where(eq(airports.id, originId))
+    .limit(1);
+  const timeZone = isValidTimeZone(origin?.timezone)
+    ? origin.timezone
+    : fallbackAirportTimeZone();
+  return {
+    timeZone,
+    ...civilDayWindowUtc(civilDateOf(departureDate), timeZone),
+  };
+}
+
 export async function searchFlights(params: {
   originId: number;
   destinationId: number;
-  departureDate: Date;
+  departureDate: Date | string;
 }) {
   const db = await getDb();
   if (!db) return [];
 
-  const startOfDay = new Date(params.departureDate);
-  startOfDay.setHours(0, 0, 0, 0);
-  const endOfDay = new Date(params.departureDate);
-  endOfDay.setHours(23, 59, 59, 999);
+  const { start: startOfDay, end: endOfDay } = await searchDayWindow(
+    db,
+    params.originId,
+    params.departureDate
+  );
 
   const result = await db
     .select({
@@ -593,11 +622,13 @@ export async function searchFlights(params: {
         eq(flights.originId, params.originId),
         eq(flights.destinationId, params.destinationId),
         gte(flights.departureTime, startOfDay),
-        lte(flights.departureTime, endOfDay),
-        eq(flights.status, "scheduled")
+        lt(flights.departureTime, endOfDay),
+        // Delayed flights are still sold and checked in; only cancelled
+        // and completed ones leave the shelf.
+        inArray(flights.status, ["scheduled", "delayed"])
       )
     )
-    .orderBy(asc(flights.departureTime));
+    .orderBy(asc(flights.departureTime), asc(flights.id));
 
   return result;
 }

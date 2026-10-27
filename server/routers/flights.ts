@@ -68,7 +68,11 @@ export const flightsRouter = router({
         .object({
           originId: z.number().describe("Origin airport ID"),
           destinationId: z.number().describe("Destination airport ID"),
-          departureDate: z.date().describe("Departure date (ISO 8601 format)"),
+          departureDate: z
+            .union([z.iso.date(), z.date()])
+            .describe(
+              "Departure calendar day at the origin airport (YYYY-MM-DD). A full ISO date-time is accepted for older clients and read as that browser's local midnight."
+            ),
         })
         .refine(data => data.originId !== data.destinationId, {
           message: "Origin and destination airports must be different",

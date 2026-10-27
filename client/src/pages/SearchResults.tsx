@@ -36,6 +36,15 @@ import {
   Eye,
 } from "lucide-react";
 import { format } from "date-fns";
+
+/** The calendar day a search date means, as YYYY-MM-DD. */
+function civilDay(value: Date | string): string {
+  return typeof value === "string" ? value : format(value, "yyyy-MM-dd");
+}
+/** A local-midnight Date for display of a civil day. */
+function civilDayAsLocalDate(value: Date | string): Date {
+  return typeof value === "string" ? new Date(`${value}T00:00:00`) : value;
+}
 import { ar, enUS } from "date-fns/locale";
 import { toast } from "sonner";
 import type { FlightData } from "@/components/FlightCard";
@@ -55,7 +64,8 @@ export default function SearchResults() {
   const [params, setParams] = useState<{
     originId: number;
     destinationId: number;
-    departureDate: Date;
+    /** YYYY-MM-DD; older links carry an ISO instant, handled by the server. */
+    departureDate: Date | string;
   } | null>(null);
 
   // Flight comparison state
@@ -91,7 +101,7 @@ export default function SearchResults() {
       setParams({
         originId: parseInt(origin),
         destinationId: parseInt(destination),
-        departureDate: new Date(date),
+        departureDate: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date(date),
       });
     }
   }, [location]);
@@ -165,7 +175,7 @@ export default function SearchResults() {
         originCity: flight.origin.city,
         destinationCode: flight.destination.code,
         destinationCity: flight.destination.city,
-        departureDate: params.departureDate.toISOString().split("T")[0],
+        departureDate: civilDay(params.departureDate),
         cabinClass: "economy",
         passengers: 1,
       });
@@ -352,7 +362,7 @@ export default function SearchResults() {
                 <h1 className="text-xl font-bold">{t("search.title")}</h1>
                 {params && (
                   <p className="text-sm text-muted-foreground">
-                    {format(params.departureDate, "PPP", {
+                    {format(civilDayAsLocalDate(params.departureDate), "PPP", {
                       locale: currentLocale,
                     })}
                   </p>
