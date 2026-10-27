@@ -1,5 +1,25 @@
 # Changelog
 
+## What's Changed in v1.33.1
+
+### Bug Fixes
+
+- fix(client): correct loyalty value, super_admin gating and raw i18n keys (#208) (3ca35eb)
+- fix(auth): tie identifier-keyed handlers to the caller (#207) (8a08adb)
+- fix(payments): cancel on fee-bearing refunds, keep declined invoices open, guard expiry against live checkouts (#209) (20fc53e)
+- fix(db): store dates of birth and document expiries as DATETIME (#212) (105dd3c)
+
+### Maintenance
+
+- build(deps): bump certifi from 2026.7.22 to 2026.10.18 in /scripts/contracts (#205) (6b7a42f)
+- chore(deps): pin fast-uri 3.x to the patched 3.1.9 (#206) (abd9618)
+- ci: gate images on Security Scan, run release checks once, fix auth healthcheck and the pre-commit hook (#211) (d62ab7b)
+- ci: do not count an action_required pull_request run as a started check (#213) (70dbd08)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.0...v1.33.1
+
+---
+
 ## What's Changed in v1.33.0
 
 ### Features
