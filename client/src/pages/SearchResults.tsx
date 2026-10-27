@@ -40,6 +40,20 @@ import { ar, enUS } from "date-fns/locale";
 import { toast } from "sonner";
 import type { FlightData } from "@/components/FlightCard";
 
+const CIVIL_DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** The calendar day a search date means, as YYYY-MM-DD. An older link
+ * carries the browser's local-midnight instant, which formats back to the
+ * same day in that browser. */
+function civilDay(value: string): string {
+  return CIVIL_DAY.test(value) ? value : format(new Date(value), "yyyy-MM-dd");
+}
+/** A local-midnight Date for display of a civil day. */
+function civilDayAsLocalDate(value: string): Date {
+  return CIVIL_DAY.test(value)
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
+}
+
 interface FilterOptions {
   priceRange: [number, number];
   airlines: string[];
@@ -55,7 +69,8 @@ export default function SearchResults() {
   const [params, setParams] = useState<{
     originId: number;
     destinationId: number;
-    departureDate: Date;
+    /** YYYY-MM-DD; older links carry an ISO instant, handled by the server. */
+    departureDate: string;
   } | null>(null);
 
   // Flight comparison state
@@ -91,13 +106,13 @@ export default function SearchResults() {
       setParams({
         originId: parseInt(origin),
         destinationId: parseInt(destination),
-        departureDate: new Date(date),
+        departureDate: date,
       });
     }
   }, [location]);
 
   const { data: flights, isLoading } = trpc.flights.search.useQuery(
-    params ?? { originId: 0, destinationId: 0, departureDate: new Date() },
+    params ?? { originId: 0, destinationId: 0, departureDate: "1970-01-01" },
     {
       enabled: !!params,
     }
@@ -165,7 +180,7 @@ export default function SearchResults() {
         originCity: flight.origin.city,
         destinationCode: flight.destination.code,
         destinationCity: flight.destination.city,
-        departureDate: params.departureDate.toISOString().split("T")[0],
+        departureDate: civilDay(params.departureDate),
         cabinClass: "economy",
         passengers: 1,
       });
@@ -352,7 +367,7 @@ export default function SearchResults() {
                 <h1 className="text-xl font-bold">{t("search.title")}</h1>
                 {params && (
                   <p className="text-sm text-muted-foreground">
-                    {format(params.departureDate, "PPP", {
+                    {format(civilDayAsLocalDate(params.departureDate), "PPP", {
                       locale: currentLocale,
                     })}
                   </p>
