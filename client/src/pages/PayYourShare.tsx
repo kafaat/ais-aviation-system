@@ -161,7 +161,7 @@ function AlreadyPaid({ payerName }: { payerName: string }) {
 }
 
 export function PayYourShare() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [, params] = useRoute("/pay/:token/:status?");
   const [, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
@@ -177,7 +177,13 @@ export function PayYourShare() {
     error,
   } = trpc.splitPayments.getPayerDetails.useQuery(
     { paymentToken },
-    { enabled: !!paymentToken && paymentToken.length === 64 }
+    {
+      enabled: !!paymentToken && paymentToken.length === 64,
+      // After the provider redirect the webhook may not have landed yet:
+      // poll until the server says the share is paid.
+      refetchInterval: query =>
+        successStatus && query.state.data?.status !== "paid" ? 3000 : false,
+    }
   );
 
   const checkoutMutation = trpc.splitPayments.createPayerCheckout.useMutation({
@@ -228,10 +234,30 @@ export function PayYourShare() {
       </div>
     );
   }
-  if (successStatus && sessionId && paymentDetails) {
+  // "success" in the URL only means the provider redirected back; the
+  // payment is confirmed only once the server has verified it.
+  if (successStatus && sessionId && paymentDetails?.status === "paid") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <PaymentSuccess bookingReference={paymentDetails.bookingReference} />
+      </div>
+    );
+  }
+  if (successStatus && sessionId && paymentDetails) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div
+          className="max-w-md w-full rounded-lg border bg-card p-8 text-center"
+          role="status"
+          aria-live="polite"
+        >
+          <h2 className="text-xl font-semibold mb-2">
+            {t("splitPayment.verifyingPayment")}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {t("splitPayment.verifyingPaymentHint")}
+          </p>
+        </div>
       </div>
     );
   }
@@ -308,14 +334,17 @@ export function PayYourShare() {
   };
 
   const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString("ar-SA", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return new Date(date).toLocaleDateString(
+      i18n.language === "ar" ? "ar-SA" : "en-US",
+      {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
   };
 
   return (
@@ -386,7 +415,7 @@ export function PayYourShare() {
               <AlertDescription>
                 {t("splitPayment.expiresAt", {
                   date: new Date(paymentDetails.expiresAt).toLocaleDateString(
-                    "ar-SA"
+                    i18n.language === "ar" ? "ar-SA" : "en-US"
                   ),
                 })}
               </AlertDescription>
