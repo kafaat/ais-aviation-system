@@ -45,7 +45,12 @@ export const specialServicesRouter = router({
           "medical_assistance",
         ]),
         serviceCode: z.string().max(20),
-        details: z.any().optional(),
+        details: z
+          .record(z.string().max(64), z.string().max(500))
+          .refine(value => Object.keys(value).length <= 20, {
+            message: "At most 20 detail fields",
+          })
+          .optional(),
       })
     )
     .output(responseContracts["requestService"])

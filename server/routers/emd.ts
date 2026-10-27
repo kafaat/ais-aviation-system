@@ -16,6 +16,8 @@ import {
 import { getDb } from "../db";
 import { bookings } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { isAdmin } from "../services/rbac.service";
+import { isBookingOwnedBy } from "../services/access-control.service";
 
 // ============================================================================
 // Shared Zod Schemas
@@ -110,9 +112,17 @@ export const emdRouter = router({
       })
     )
     .output(responseContracts["get"])
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const emd = await getEmd(input.emdNumber);
-      if (!emd) {
+      // The document number is printed on receipts, so it is not a
+      // credential: an EMD is visible to its booking's owner or an admin.
+      // A non-owner gets the same NOT_FOUND as a missing number.
+      if (
+        !emd ||
+        (!isAdmin(ctx.user.role) &&
+          (emd.bookingId === null ||
+            !(await isBookingOwnedBy(emd.bookingId, ctx.user.id))))
+      ) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `EMD ${input.emdNumber} not found`,
