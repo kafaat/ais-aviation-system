@@ -219,9 +219,11 @@ async function startServer() {
     })
   );
 
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // No route accepts uploads through these parsers (documents are returned
+  // base64, never received), and they run before any rate limiter, so a
+  // 50 MB limit let an anonymous client cost a 50 MB JSON parse per request.
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ limit: "1mb", extended: true }));
   app.use("/api", operationalIntegrations);
   // OAuth callback under /api/oauth/callback
   app.get("/api/gdpr/download/:requestId", privacyDownload);
@@ -299,6 +301,9 @@ async function startServer() {
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      // The per-user limiter counts one HTTP request; without a cap a single
+      // batched request carried hundreds of procedure calls for one unit.
+      maxBatchSize: 10,
     })
   );
   // development mode uses Vite, production mode uses static files

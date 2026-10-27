@@ -111,6 +111,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/ai-guardrails.service.ts",
         "server/services/flights.service.ts",
         "server/services/intelligence/gateway.ts"
       ],
@@ -129,7 +130,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/ai-chat.ts"],
+      "consumers": [
+        "server/routers/ai-chat.ts",
+        "server/services/ai-chat-booking.service.ts"
+      ],
       "dependencies": [],
       "tableExpressions": {
         "reads": [],

@@ -5,7 +5,11 @@
  * Supports natural language flight search, recommendations, and booking
  */
 
-import { eq, and, desc, lt } from "drizzle-orm";
+import { eq, and, desc, lt, sql } from "drizzle-orm";
+import { AI_LIMITS } from "./ai-guardrails.service";
+
+/** Messages sent to the model per turn; older turns stay in the transcript. */
+const CHAT_HISTORY_WINDOW = 20;
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -118,6 +122,22 @@ export async function startConversation(
       message: "Database not available",
     });
 
+  // The declared per-user cap was never enforced.
+  const [open] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(chatConversations)
+    .where(
+      and(
+        eq(chatConversations.userId, input.userId),
+        eq(chatConversations.status, "active")
+      )
+    );
+  if (Number(open?.count ?? 0) >= AI_LIMITS.maxConversationsPerUser)
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Too many open conversations; close one before starting another",
+    });
+
   // Create conversation record
   const [result] = await db.insert(chatConversations).values({
     userId: input.userId,
@@ -191,6 +211,14 @@ export async function sendMessage(
     });
   }
 
+  // The declared per-conversation cap was never enforced; every turn also
+  // re-sent the entire history, so cost grew with the square of its length.
+  if (conversation.messageCount >= AI_LIMITS.maxMessagesPerConversation)
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "This conversation has reached its limit; start a new one",
+    });
+
   // Store user message
   await db.insert(chatMessages).values({
     conversationId: input.conversationId,
@@ -198,12 +226,16 @@ export async function sendMessage(
     content: input.message,
   });
 
-  // Get conversation history
-  const history = await db
-    .select()
-    .from(chatMessages)
-    .where(eq(chatMessages.conversationId, input.conversationId))
-    .orderBy(chatMessages.createdAt);
+  // Get the recent conversation history (the model needs context, not the
+  // whole transcript)
+  const history = (
+    await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, input.conversationId))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(CHAT_HISTORY_WINDOW)
+  ).reverse();
 
   // Build LLM messages
   const llmMessages: Message[] = [

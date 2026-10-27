@@ -168,7 +168,6 @@ export const paymentsRouter = router({
         name: ctx.user.name,
         appBaseUrl:
           process.env.VITE_APP_URL ||
-          ctx.req.headers.origin ||
           `${ctx.req.protocol}://${ctx.req.get("host")}`,
       });
     }),
@@ -269,8 +268,9 @@ export const paymentsRouter = router({
       }
       const authoritativeAmount = modification.totalCost;
       await assertNoCollectionReview(database, bookingData.id);
+      // Never the client's Origin: a bearer client could point the
+      // post-payment redirect (carrying the session id) anywhere.
       const appBaseUrl =
-        ctx.req.headers.origin ||
         process.env.VITE_APP_URL ||
         `${ctx.req.protocol}://${ctx.req.get("host")}`;
 
