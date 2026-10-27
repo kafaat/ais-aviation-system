@@ -193,6 +193,12 @@ function requestFor(
     payment_method_types: ["card"],
     mode: "payment",
     allow_promotion_codes: false,
+    // The booking itself expires 30 minutes after creation; without this
+    // the provider kept the session payable for 24 hours, so a customer
+    // could pay a booking the sweeper had already cancelled. 31 minutes is
+    // the provider minimum plus a minute for the API call. The value is
+    // part of the frozen claim so idempotent retries replay it unchanged.
+    expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
     line_items: [
       {
         price_data: {
