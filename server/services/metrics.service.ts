@@ -298,7 +298,8 @@ export function trackSearch(params: {
   sessionId?: string;
   originId: number;
   destinationId: number;
-  departureDate: Date;
+  /** The civil day searched (YYYY-MM-DD) or a legacy Date. */
+  departureDate: Date | string;
   resultsCount: number;
   responseTimeMs?: number;
 }): void {
@@ -310,7 +311,10 @@ export function trackSearch(params: {
     metadata: {
       originId: params.originId,
       destinationId: params.destinationId,
-      departureDate: params.departureDate.toISOString(),
+      departureDate:
+        typeof params.departureDate === "string"
+          ? params.departureDate
+          : params.departureDate.toISOString(),
       resultsCount: params.resultsCount,
       responseTimeMs: params.responseTimeMs,
     },
