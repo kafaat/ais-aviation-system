@@ -4,6 +4,7 @@ import { TRPCError } from "@trpc/server";
 import * as db from "../db";
 import { DynamicPricingService } from "./pricing/dynamic-pricing.service";
 import { redisCacheService, CacheTTL } from "./redis-cache.service";
+import { civilDateOf } from "./civil-day";
 
 // Only known cache date fields are restored. Public contracts remain strict.
 const cachedDate = z.union([
@@ -31,7 +32,8 @@ const cachedDetail = responseContracts.getById.options[1].extend({
 export interface SearchFlightsInput {
   originId: number;
   destinationId: number;
-  departureDate: Date;
+  /** YYYY-MM-DD at the origin airport, or a legacy browser-local-midnight Date. */
+  departureDate: Date | string;
 }
 
 export interface GetFlightInput {
@@ -55,7 +57,9 @@ export async function searchFlights(
     const cacheParams = {
       originId: input.originId,
       destinationId: input.destinationId,
-      departureDate: input.departureDate.toISOString().split("T")[0],
+      // The civil day, so a Riyadh-encoded and a London-encoded Date for
+      // the same calendar day share one entry.
+      departureDate: civilDateOf(input.departureDate),
     };
 
     // Try to get from cache

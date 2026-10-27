@@ -52,7 +52,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
     {
       originId: booking.originId ?? 0,
       destinationId: booking.destinationId ?? 0,
-      departureDate: new Date(`${date}T00:00:00Z`),
+      departureDate: date,
     },
     {
       enabled:

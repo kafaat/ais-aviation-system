@@ -66,7 +66,7 @@ describe.skipIf(!dbAvailable)("Booking APIs", () => {
     const flights = await publicCaller.flights.search({
       originId: 1,
       destinationId: 2,
-      departureDate: tomorrow,
+      departureDate: tomorrow.toISOString().slice(0, 10),
     });
 
     if (flights.length === 0) {

@@ -38,14 +38,14 @@ describe("Flights Router", () => {
       const result = await caller.search({
         originId: 1,
         destinationId: 2,
-        departureDate: new Date("2025-01-01"),
+        departureDate: "2025-01-01",
       });
 
       expect(result).toEqual(mockFlights);
       expect(flightsService.searchFlights).toHaveBeenCalledWith({
         originId: 1,
         destinationId: 2,
-        departureDate: expect.any(Date),
+        departureDate: "2025-01-01",
       });
     });
   });

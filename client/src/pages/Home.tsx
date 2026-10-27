@@ -78,7 +78,8 @@ export default function Home() {
       const params = new URLSearchParams({
         origin: originId,
         destination: destinationId,
-        date: departureDate.toISOString(),
+        // The calendar day the user chose, not its local-midnight instant.
+        date: format(departureDate, "yyyy-MM-dd"),
       });
       setLocation(`/search?${params.toString()}`);
     }
