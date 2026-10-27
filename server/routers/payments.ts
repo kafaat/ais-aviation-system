@@ -168,7 +168,7 @@ export const paymentsRouter = router({
         name: ctx.user.name,
         appBaseUrl:
           process.env.VITE_APP_URL ||
-          `${ctx.req.protocol}://${ctx.req.get("host")}`,
+          `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`,
       });
     }),
 
@@ -263,7 +263,7 @@ export const paymentsRouter = router({
           input.modificationId,
           ctx.user.id,
           process.env.VITE_APP_URL ||
-            `${ctx.req.protocol}://${ctx.req.get("host")}`
+            `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`
         );
       }
       const authoritativeAmount = modification.totalCost;
@@ -272,7 +272,7 @@ export const paymentsRouter = router({
       // post-payment redirect (carrying the session id) anywhere.
       const appBaseUrl =
         process.env.VITE_APP_URL ||
-        `${ctx.req.protocol}://${ctx.req.get("host")}`;
+        `${ctx.req.protocol}://${ctx.req.get?.("host") ?? ctx.req.headers.host}`;
 
       const providerId = (input.provider || "stripe") as PaymentProviderType;
 
