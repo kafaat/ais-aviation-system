@@ -16,6 +16,7 @@ import {
   paymentReceipts,
   walletTransactions,
   bookingLoyaltyAccruals,
+  userCredits,
 } from "../../drizzle/schema";
 import { and, eq, desc, sql } from "drizzle-orm";
 
@@ -301,7 +302,23 @@ export async function redeemMiles(
         bookingId,
         reason: "Miles redeemed for discount",
       });
+      // 1 mile = 1 cent. The value must exist somewhere the customer can
+      // spend it: a booking credit lot in the same transaction as the miles
+      // debit. Until this was added the miles were debited and nothing was
+      // granted. The lot follows the ordinary credit rules at checkout.
       const discountAmount = milesToRedeem;
+      const expiresAt = new Date();
+      expiresAt.setUTCFullYear(expiresAt.getUTCFullYear() + 1);
+      await tx.insert(userCredits).values({
+        userId,
+        amount: discountAmount,
+        source: "bonus",
+        description: `Redeemed ${milesToRedeem} miles`,
+        expiresAt,
+        bookingId: bookingId ?? null,
+        createdBy: null,
+        usedAmount: 0,
+      });
       return {
         discountAmount,
         newBalance,

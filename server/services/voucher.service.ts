@@ -378,6 +378,23 @@ export async function applyVoucher(
       }
       const booking = await lockEditableInvoice(tx, bookingId, { userId });
       const amount = booking.totalAmount;
+      // One promotion per invoice: a second code would be computed on the
+      // already-discounted base and consume another voucher's quota.
+      const [stacked] = await tx
+        .select({ voucherId: voucherUsage.voucherId })
+        .from(voucherUsage)
+        .where(
+          and(
+            eq(voucherUsage.bookingId, bookingId),
+            isNull(voucherUsage.releasedAt)
+          )
+        )
+        .limit(1);
+      if (stacked)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "A voucher is already applied to this booking",
+        });
       if (!voucher || !voucher.isActive) {
         throw new TRPCError({
           code: "BAD_REQUEST",

@@ -293,7 +293,7 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     ledgerId: id,
     originalLedgerId: id,
     amount: z.number().int().positive(),
-    tender: z.enum(["user_credit", "corporate_credit"]),
+    tender: z.enum(["user_credit", "corporate_credit", "wallet"]),
     actorId: id,
     approvalReference: z.string().min(3),
     cancelItinerary: z.boolean(),
