@@ -74,11 +74,16 @@ describe("disruption resolution", () => {
   });
 
   it("propagates the resolver's refusal instead of flipping the status", async () => {
-    state.resolve.mockImplementation(async () => {
-      throw new Error("Recovery actions are pending");
-    });
-    await expect(resolveDisruption(11)).rejects.toThrow(
-      "Recovery actions are pending"
+    state.resolve.mockImplementation(() =>
+      Promise.reject(new Error("Recovery actions are pending"))
     );
+    let caught: unknown;
+    try {
+      await resolveDisruption(11);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("Recovery actions are pending");
   });
 });
