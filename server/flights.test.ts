@@ -28,7 +28,7 @@ describe.skipIf(!dbAvailable)("Flight APIs", () => {
     const result = await caller.flights.search({
       originId: 1, // RUH
       destinationId: 2, // JED
-      departureDate: tomorrow,
+      departureDate: tomorrow.toISOString().slice(0, 10),
     });
 
     expect(Array.isArray(result)).toBe(true);
@@ -52,7 +52,7 @@ describe.skipIf(!dbAvailable)("Flight APIs", () => {
     const searchResults = await caller.flights.search({
       originId: 1,
       destinationId: 2,
-      departureDate: tomorrow,
+      departureDate: tomorrow.toISOString().slice(0, 10),
     });
 
     if (searchResults.length === 0) {

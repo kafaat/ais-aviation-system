@@ -1,5 +1,7 @@
 # Use a smaller base image for production
 FROM node:22-alpine AS base
+# Server-local date arithmetic must be deterministic across hosts.
+ENV TZ=UTC
 
 # Keep the Alpine runtime patched before any application layers are added.
 # The final runner and migrator stages both inherit these security updates.
