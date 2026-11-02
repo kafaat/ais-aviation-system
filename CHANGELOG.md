@@ -4,6 +4,8 @@
 
 ### Bug Fixes
 
+- fix(auth): give MFA its own encryption key and gate the metrics endpoint (#222) (ac696e8)
+- fix(price-calendar): bucket and bound calendar days in the origin airport's zone (#224) (6e35730)
 - fix(search): serve live seat counts and status from cached results, keep delayed flights everywhere (#221) (80f36f8)
 
 ### Maintenance
