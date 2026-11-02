@@ -1,11 +1,44 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, gte, lte, sql, inArray } from "drizzle-orm";
+import { and, eq, gte, lt, lte, sql, inArray } from "drizzle-orm";
+import {
+  addCivilDays,
+  civilDateOf,
+  civilDayWindowUtc,
+  fallbackAirportTimeZone,
+  isValidTimeZone,
+  zoneOffsetLiteral,
+} from "./civil-day";
+
 import { getDb } from "../db";
-import { flights } from "../../drizzle/schema";
+import { airports, flights } from "../../drizzle/schema";
 import { redisCacheService, CacheTTL } from "./redis-cache.service";
 import { createServiceLogger } from "../_core/logger";
 
 const log = createServiceLogger("price-calendar");
+
+/** Calendar days are the origin airport's days. A day's price bucket and
+ * its boundaries used to mix the server's zone, the MySQL session zone and
+ * UTC, which shifted days by one for any non-UTC deployment. */
+async function originTimeZone(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  originId: number
+): Promise<string> {
+  const [origin] = await db
+    .select({ timezone: airports.timezone })
+    .from(airports)
+    .where(eq(airports.id, originId))
+    .limit(1);
+  return isValidTimeZone(origin?.timezone)
+    ? origin.timezone
+    : fallbackAirportTimeZone();
+}
+/** `DATE()` of a departure in the origin's zone. CONVERT_TZ with offset
+ * literals needs no MySQL time-zone tables; the offset is taken at the
+ * window start (a daylight-saving change inside the window moves a flight
+ * within an hour of local midnight by one day, which is acceptable for a
+ * price overview). */
+const localDate = (offset: string) =>
+  sql<string>`DATE(CONVERT_TZ(${flights.departureTime}, @@session.time_zone, ${offset}))`;
 
 /**
  * Price Calendar Service
@@ -96,9 +129,16 @@ export async function getMonthlyPrices(
   }
 
   try {
-    // Calculate month boundaries
-    const startOfMonth = new Date(input.year, input.month - 1, 1, 0, 0, 0, 0);
-    const endOfMonth = new Date(input.year, input.month, 0, 23, 59, 59, 999);
+    // Month boundaries as the origin's civil days, end exclusive
+    const timeZone = await originTimeZone(db, input.originId);
+    const firstDay = `${input.year}-${String(input.month).padStart(2, "0")}-01`;
+    const daysInMonth = new Date(
+      Date.UTC(input.year, input.month, 0)
+    ).getUTCDate();
+    const lastDay = addCivilDays(firstDay, daysInMonth - 1);
+    const startOfMonth = civilDayWindowUtc(firstDay, timeZone).start;
+    const endOfMonth = civilDayWindowUtc(lastDay, timeZone).end;
+    const offset = zoneOffsetLiteral(startOfMonth, timeZone);
 
     // Get price column based on cabin class
     const priceColumn =
@@ -107,9 +147,7 @@ export async function getMonthlyPrices(
     // Query flights for the month with aggregations per day
     const flightData = await db
       .select({
-        departureDate: sql<string>`DATE(${flights.departureTime})`.as(
-          "departureDate"
-        ),
+        departureDate: localDate(offset).as("departureDate"),
         minPrice: sql<number>`MIN(${priceColumn})`.as("minPrice"),
         maxPrice: sql<number>`MAX(${priceColumn})`.as("maxPrice"),
         avgPrice: sql<number>`AVG(${priceColumn})`.as("avgPrice"),
@@ -121,12 +159,12 @@ export async function getMonthlyPrices(
           eq(flights.originId, input.originId),
           eq(flights.destinationId, input.destinationId),
           gte(flights.departureTime, startOfMonth),
-          lte(flights.departureTime, endOfMonth),
+          lt(flights.departureTime, endOfMonth),
           inArray(flights.status, ["scheduled", "delayed"])
         )
       )
-      .groupBy(sql`DATE(${flights.departureTime})`)
-      .orderBy(sql`DATE(${flights.departureTime})`);
+      .groupBy(localDate(offset))
+      .orderBy(localDate(offset));
 
     // Build price map by date
     const priceMap = new Map<string, DayPrice>();
@@ -144,7 +182,6 @@ export async function getMonthlyPrices(
     }
 
     // Generate all days in the month
-    const daysInMonth = new Date(input.year, input.month, 0).getDate();
     const prices: DayPrice[] = [];
     let lowestMonthPrice: number | null = null;
     let highestMonthPrice: number | null = null;
@@ -226,8 +263,8 @@ export async function getFlexiblePrices(
   const cabinClass = input.cabinClass || "economy";
   const flexDays = input.flexDays ?? 3;
 
-  // Create cache key
-  const centerDateStr = input.date.toISOString().split("T")[0];
+  // Create cache key from the civil day the client chose
+  const centerDateStr = civilDateOf(input.date);
   const cacheKey = `price-calendar:flexible:${input.originId}:${input.destinationId}:${centerDateStr}:${flexDays}:${cabinClass}`;
 
   try {
@@ -250,14 +287,13 @@ export async function getFlexiblePrices(
   }
 
   try {
-    // Calculate date range
-    const startDate = new Date(input.date);
-    startDate.setDate(startDate.getDate() - flexDays);
-    startDate.setHours(0, 0, 0, 0);
-
-    const endDate = new Date(input.date);
-    endDate.setDate(endDate.getDate() + flexDays);
-    endDate.setHours(23, 59, 59, 999);
+    // Date range as the origin's civil days, end exclusive
+    const timeZone = await originTimeZone(db, input.originId);
+    const firstDay = addCivilDays(centerDateStr, -flexDays);
+    const lastDay = addCivilDays(centerDateStr, flexDays);
+    const startDate = civilDayWindowUtc(firstDay, timeZone).start;
+    const endDate = civilDayWindowUtc(lastDay, timeZone).end;
+    const offset = zoneOffsetLiteral(startDate, timeZone);
 
     // Get price column based on cabin class
     const priceColumn =
@@ -266,9 +302,7 @@ export async function getFlexiblePrices(
     // Query flights for the date range with aggregations per day
     const flightData = await db
       .select({
-        departureDate: sql<string>`DATE(${flights.departureTime})`.as(
-          "departureDate"
-        ),
+        departureDate: localDate(offset).as("departureDate"),
         minPrice: sql<number>`MIN(${priceColumn})`.as("minPrice"),
         maxPrice: sql<number>`MAX(${priceColumn})`.as("maxPrice"),
         avgPrice: sql<number>`AVG(${priceColumn})`.as("avgPrice"),
@@ -280,12 +314,12 @@ export async function getFlexiblePrices(
           eq(flights.originId, input.originId),
           eq(flights.destinationId, input.destinationId),
           gte(flights.departureTime, startDate),
-          lte(flights.departureTime, endDate),
+          lt(flights.departureTime, endDate),
           inArray(flights.status, ["scheduled", "delayed"])
         )
       )
-      .groupBy(sql`DATE(${flights.departureTime})`)
-      .orderBy(sql`DATE(${flights.departureTime})`);
+      .groupBy(localDate(offset))
+      .orderBy(localDate(offset));
 
     // Build price map by date
     const priceMap = new Map<string, DayPrice>();
@@ -308,9 +342,8 @@ export async function getFlexiblePrices(
     let minPrice: number | null = null;
     let maxPrice: number | null = null;
 
-    const currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split("T")[0];
+    for (let i = 0; i <= 2 * flexDays; i++) {
+      const dateStr = addCivilDays(firstDay, i);
       const dayData = priceMap.get(dateStr);
 
       if (dayData) {
@@ -351,8 +384,6 @@ export async function getFlexiblePrices(
           hasFlights: false,
         });
       }
-
-      currentDate.setDate(currentDate.getDate() + 1);
     }
 
     const result: FlexiblePriceResult = {
