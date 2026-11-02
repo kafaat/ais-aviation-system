@@ -1,3 +1,7 @@
+import {
+  arrivalDelayTariffXdr,
+  GACA_PASSENGER_RIGHTS,
+} from "@shared/gaca-arrival-delay";
 import { useState } from "react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -23,6 +27,8 @@ export function CompensationClaim({
     [passengerId, setPassenger] = useState(0);
   const [type, setType] = useState<Disruption>("delay");
   const [regulation, setRegulation] = useState<Regulation | "">("");
+  const [arrivalDelay, setArrivalDelay] = useState("");
+  const minutes = arrivalDelay.trim() ? Number(arrivalDelay) : NaN;
   const [reason, setReason] = useState("");
   const targets = trpc.compensation.claimTargets.useQuery({ bookingId });
   const claims = trpc.compensation.getMyClaims.useQuery(undefined, {
@@ -192,6 +198,49 @@ export function CompensationClaim({
           </Button>
         </form>
       </OperationalReadState>
+      {regulation === "local" && type === "delay" && (
+        <fieldset className="space-y-2 border p-3">
+          <legend>
+            {l("دليل تأخير الوصول في السعودية", "Saudi arrival delay guide")}
+          </legend>
+          <label className="block">
+            {l(
+              "الدقائق بين الوصول المحدد في الحجز والوصول الفعلي",
+              "Minutes between your booked and actual arrival"
+            )}
+            <input
+              className="border block p-2"
+              type="number"
+              min="0"
+              step="any"
+              value={arrivalDelay}
+              onChange={event => setArrivalDelay(event.target.value)}
+            />
+          </label>
+          {Number.isFinite(minutes) && minutes >= 0 && (
+            <p aria-live="polite">
+              {l(
+                "قيمة شريحة التأخير إذا انطبقت المادة ١٠",
+                "Delay tariff if article 10 applies"
+              )}
+              : {arrivalDelayTariffXdr(minutes)}{" "}
+              {l("وحدة حقوق سحب خاصة", "SDR")}
+            </p>
+          )}
+          <p>
+            {l(
+              "يراجع المختص انطباق اللائحة وظروف الرحلة قبل اعتماد التعويض. تُقيَّم حقوق الرعاية وفق تأخير المغادرة.",
+              "A reviewer checks the route and circumstances before approving compensation. Care depends on departure delay."
+            )}
+          </p>
+          <a className="underline" href={GACA_PASSENGER_RIGHTS}>
+            {l(
+              "لائحة حماية حقوق المسافرين، المادة العاشرة",
+              "GACA Passenger Rights Protection Regulations, article 10 (Arabic)"
+            )}
+          </a>
+        </fieldset>
+      )}
     </section>
   );
 }

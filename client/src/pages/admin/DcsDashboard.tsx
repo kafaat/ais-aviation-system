@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { downloadFile } from "@/lib/downloadFile";
+import { escapeCSV } from "@shared/csv";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -235,6 +237,47 @@ function ManifestTab() {
             <FileText className="h-4 w-4 mr-2" />
             {t("dcs.manifest.generate", "Generate Manifest")}
           </Button>
+          {manifest && manifest.flight.id === parsedFlightId && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const rows = [
+                  [
+                    "Flight",
+                    "Origin",
+                    "Destination",
+                    "Departure UTC",
+                    "Manifest generated UTC",
+                    "Name",
+                    "PNR",
+                    "Class",
+                    "Seat",
+                  ],
+                  ...manifest.passengers.list.map(p => [
+                    manifest.flight.flightNumber,
+                    manifest.flight.origin.code,
+                    manifest.flight.destination.code,
+                    new Date(manifest.flight.departureTime).toISOString(),
+                    manifest.generatedAt,
+                    p.name,
+                    p.pnr,
+                    p.cabinClass,
+                    p.seat ?? "",
+                  ]),
+                ];
+                const csv = rows
+                  .map(row => row.map(escapeCSV).join(","))
+                  .join("\r\n");
+                downloadFile(
+                  "\uFEFF" + csv,
+                  `manifest-${manifest.flight.id}.csv`,
+                  "text/csv;charset=utf-8"
+                );
+              }}
+            >
+              {t("reports.exportCSV")}
+            </Button>
+          )}
         </div>
       </Card>
 

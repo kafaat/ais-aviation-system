@@ -3682,11 +3682,11 @@
       "passengerRejections": "passenger rejections"
     },
     "submitSuccess": "APIS data submitted successfully for {{flight}}",
-    "generateSuccess": "{{format}} message generated for {{count}} passengers",
+    "generateSuccess": "{{format}} local draft. Validated travel records: {{validated}} of {{total}} passengers. No transmission.",
     "enterFlightIdPrompt": "Enter a Flight ID above to view APIS submissions and passenger status.",
     "flightStatus": "Flight {{number}} - APIS Status",
     "generatePAXLST": "Generate PAXLST",
-    "generatePNRGOV": "Generate PNR/GOV",
+    "generatePNRGOV": "Preview PNR data (text)",
     "submitToAuthorities": "Submit to Authorities",
     "notReadyWarning": "All passengers must have validated APIS data before submission.",
     "passengerStatuses": "Passenger APIS Status",

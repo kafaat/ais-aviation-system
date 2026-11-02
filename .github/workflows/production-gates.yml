@@ -78,6 +78,8 @@ jobs:
         run: |
           pnpm exec tsc -p tsconfig.acceptance.json --noEmit
           pnpm check:scripts
+      - name: Verify capability documentation matches the implementation catalog
+        run: node --import tsx scripts/generate-capability-docs.mjs --check
       - name: Verify versioned domain event contracts
         run: node --import tsx scripts/generate-event-contracts.ts --check
       - name: Verify service producers, consumers and retired modules

@@ -3682,11 +3682,11 @@
       "passengerRejections": "حالات رفض للمسافرين"
     },
     "submitSuccess": "تم إرسال بيانات APIS للرحلة {{flight}} بنجاح",
-    "generateSuccess": "تم إنشاء رسالة {{format}} لعدد {{count}} مسافر",
+    "generateSuccess": "مسودة {{format}} محلية. اكتمل التحقق من وثائق {{validated}} من أصل {{total}} مسافراً. لم تُرسل الرسالة.",
     "enterFlightIdPrompt": "أدخل رقم الرحلة أعلاه لعرض تقديمات APIS وحالة المسافرين.",
     "flightStatus": "الرحلة {{number}} - حالة APIS",
     "generatePAXLST": "إنشاء رسالة PAXLST",
-    "generatePNRGOV": "إنشاء رسالة PNR/GOV",
+    "generatePNRGOV": "معاينة بيانات الحجز كنص",
     "submitToAuthorities": "إرسال إلى السلطات",
     "notReadyWarning": "يجب التحقق من بيانات APIS لجميع المسافرين قبل التقديم.",
     "passengerStatuses": "حالة APIS للمسافرين",

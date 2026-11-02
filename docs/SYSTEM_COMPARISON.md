@@ -7,6 +7,36 @@
 
 ---
 
+## حالة قدرات AIS الحالية
+
+المقارنة المؤرخة بفبراير 2026 مرجع تاريخي. يعرض الجدول التالي حالة الكود الحالي وشروط قبول القدرات التي يغطيها الكتالوج. راجع [تحليل نوفمبر 2026](research/2026-11-market-gap-analysis/README.md) للمقارنة الأحدث.
+
+<!-- capability-catalog:start -->
+<!-- prettier-ignore -->
+| Capability | Implementation | Acceptance requirement |
+| --- | --- | --- |
+| hotelFulfillment | implemented | Default disabled; Hotelbeds single adult/room, net SAR, explicit quote and hotel mapping approval; sandbox confirmation is not a real stay. Live credentials, certification, local fees/transport and property acceptance remain operator responsibilities. |
+| ndcUnpaidServicing | implemented | Unpaid pending invoice, no active checkout, same airline/tenant SAR economy or business offer, canonical passengers; no EMD or external fulfillment certification |
+| ndcPaidServicing | implemented | Local paid SAR itinerary exchange and catalog entitlements before check-in; same tenant/airline and cabin across up to six segments, no unresolved ancillary fulfillment. Original Stripe payer refund receipts required for a lower fare. |
+| ndcExternalFulfillment | blocked | Contracted ticket reissue/EMD acceptance remains separate from local reservation, collection and refund receipts |
+| kioskHardware | blocked | Authenticated device heartbeat and physical printer/scanner acceptance; digital documents are separate |
+| dcsDispatch | demo | Verified departure-control provider and dispatch acceptance |
+| gdsSynchronization | demo | Contracted GDS connection and round-trip order synchronization |
+| biometricIdentity | demo | Approved biometric processor, measured verification and privacy controls |
+| multiRegionFailover | demo | Infrastructure adapter, replication evidence and controlled failover drill |
+| apisSubmission | blocked | Authority transport, credentials, acknowledgement and rejection fixtures |
+| alternatePayments | blocked | Invoice/session binding, amount/currency verification, settlement and refund acceptance for each provider |
+| bagDropHardware | demo | Certified scale, printer, conveyor and device heartbeat adapter |
+| weightBalance | demo | Approved aircraft data, calculation validation and operational sign-off |
+| loadPlanning | demo | Aircraft configuration, measured cargo and approved dispatch workflow |
+| disasterRecovery | demo | Infrastructure adapter and observed restore/failover exercise |
+| warehouseExports | implemented | Migration applied; shared database and authorized export owner |
+| eventInbox | implemented | Migration applied; local transaction or authenticated receiver acknowledgement |
+| scheduledTasks | implemented | Shared database lease and observed lastSuccessAt |
+| slaObservations | implemented | Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA |
+
+<!-- capability-catalog:end -->
+
 ## الملخص التنفيذي | Executive Summary
 
 يقدم هذا التقرير مقارنة شاملة بين نظام AIS للطيران والأنظمة العالمية الرائدة في صناعة الطيران. يغطي التحليل **17 محوراً رئيسياً** عبر **7 أنظمة منافسة**، ويحدد نقاط القوة والفجوات مع توصيات للتطوير.

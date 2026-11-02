@@ -5,6 +5,7 @@
  * Supports analytics, bookings, financial, and refunds reports
  */
 
+import { escapeCSV } from "../../shared/csv";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -525,24 +526,6 @@ export async function generateRevenuePDF(
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Escape CSV field value
- */
-function escapeCSV(value: string): string {
-  // Spreadsheet applications interpret formula-leading untrusted text on open.
-  if (/^[\s\u0000-\u001f]*[=+@-]/u.test(value) || /^[\t\r\n]/u.test(value))
-    value = "'" + value;
-  if (
-    value.includes(",") ||
-    value.includes('"') ||
-    value.includes("\n") ||
-    value.includes("\r")
-  ) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
 
 /**
  * Get report filename with timestamp
