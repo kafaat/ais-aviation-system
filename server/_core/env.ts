@@ -33,6 +33,12 @@ const envSchema = z.object({
         !INSECURE_JWT_SECRETS.has(value),
       "JWT_SECRET must not be a placeholder value in production"
     ),
+  // Dedicated key for MFA secrets and backup-code hashes, so rotating
+  // JWT_SECRET does not lock MFA users out. Optional until set once.
+  MFA_ENCRYPTION_KEY: z
+    .string()
+    .min(32, "MFA_ENCRYPTION_KEY must be at least 32 characters")
+    .optional(),
   OAUTH_SERVER_URL: z
     .string()
     .url("OAUTH_SERVER_URL must be a valid URL")
@@ -97,6 +103,7 @@ const validatedEnv = validateEnv();
 export const ENV = {
   appId: validatedEnv.VITE_APP_ID,
   cookieSecret: validatedEnv.JWT_SECRET,
+  mfaEncryptionKey: validatedEnv.MFA_ENCRYPTION_KEY,
   databaseUrl: validatedEnv.DATABASE_URL,
   oAuthServerUrl: validatedEnv.OAUTH_SERVER_URL,
   authServiceUrl: validatedEnv.AUTH_SERVICE_URL,

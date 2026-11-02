@@ -1,4 +1,5 @@
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
+import { timingSafeEqual } from "node:crypto";
 import { initTracing, stopTracing } from "./telemetry";
 import { privacyDownload } from "../routes/privacy-download";
 import {
@@ -109,7 +110,26 @@ async function startServer() {
   );
 
   // Prometheus metrics endpoint (before APM middleware to avoid self-tracking)
-  app.get("/api/metrics", (_req, res) => {
+  // Route labels, memory, CPU and error rates are operational detail;
+  // require the scraper's token when one is configured.
+  if (!process.env.METRICS_TOKEN && process.env.NODE_ENV === "production")
+    console.warn(
+      "[security] METRICS_TOKEN is not set: /api/metrics is readable by anyone who can reach this process."
+    );
+  app.get("/api/metrics", (req, res) => {
+    const expected = process.env.METRICS_TOKEN;
+    if (expected) {
+      const presented = (req.headers.authorization ?? "").replace(
+        /^Bearer\s+/i,
+        ""
+      );
+      const a = Buffer.from(presented);
+      const b = Buffer.from(expected);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        res.status(401).set("Cache-Control", "no-store").send("Unauthorized");
+        return;
+      }
+    }
     res.set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
     res.send(getPrometheusMetrics());
   });

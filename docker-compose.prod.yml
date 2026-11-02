@@ -12,6 +12,8 @@ services:
     environment:
       AUTH_SERVICE_URL: http://auth-service:8000
       AUTH_SERVICE_TOKEN: ${AUTH_SERVICE_TOKEN:-}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-uniquelocal}
     depends_on:
       migrator:
