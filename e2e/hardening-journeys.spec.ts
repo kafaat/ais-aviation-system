@@ -1,3 +1,4 @@
+import { passengerRightsSource } from "../shared/passenger-policy";
 import { registerProviderCheckoutTests } from "./fixtures/provider-checkout";
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
@@ -23,6 +24,29 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
   });
+  test("passenger-rights referral cites an official source and keeps follow-ups local", async ({
+    page,
+  }) => {
+    await useBrowserSession(page, "regular");
+    await page.goto("/ai-chat");
+    await page.getByRole("button", { name: "Start Conversation" }).click();
+    await page
+      .getByRole("button", { name: "Passenger rights and refunds" })
+      .click();
+    const source = page.getByRole("link", {
+      name: /^Source: Saudi Passenger Rights Protection Regulations/,
+    });
+    await expect(source).toHaveAttribute("href", passengerRightsSource.en);
+    await page
+      .getByRole("textbox", { name: "Your message" })
+      .fill("What about my child?");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(source).toHaveCount(2);
+    await expect(page.getByRole("log")).toContainText(
+      "This chat has not issued a refund"
+    );
+  });
+
   for (const paymentButton of [
     "Complete Booking & Payment",
     "Split with Others",
