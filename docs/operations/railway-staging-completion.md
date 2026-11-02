@@ -29,7 +29,7 @@ alongside DB and Redis. Staging has synthetic payment configuration: do not
 replace it with a plausible-looking fake key or weaken readiness to get green.
 The precise failing dependency still needs authenticated operational evidence.
 
-## Worker deployment remains blocked
+## Worker deployment: blocked until 2 November 2026, then deployed under isolation
 
 The existing worker starts reconciliation, refund processing and other scheduled
 jobs. A synthetic Stripe key does not prevent outbound requests. Do not deploy
@@ -63,21 +63,75 @@ tests in `server/__tests__/provider-boundary.test.ts`):
   request. A job that reaches for Stripe therefore fails closed and its durable
   retry machinery records the failure; nothing leaves the environment.
 
-What this does not do: it does not deploy the worker. Worker creation in this
-environment was rejected by the approval reviewer and that rejection stands
-until an operator lifts it. When they do, the intended configuration is
-`AIS_PROVIDER_BOUNDARY=isolated`, `STRIPE_MOCK_HOST` pointing at a private
-`stripe-mock` service, `SMS_PROVIDER=mock`, no Resend/OpenAI/Sentry credentials,
-and the startup log line `Worker process starting...` carrying a
-`providerBoundary` report whose findings are all `absent`, `mock`, `blocked` or
-`sandbox`.
+That rejection stood until the operator lifted it on 2 November 2026. The
+intended configuration was `AIS_PROVIDER_BOUNDARY=isolated`, `STRIPE_MOCK_HOST`
+pointing at a private `stripe-mock` service, `SMS_PROVIDER=mock`, no
+Resend/OpenAI/Sentry credentials, and the startup log line
+`Worker process starting...` carrying a `providerBoundary` report whose findings
+are all `absent`, `mock`, `blocked` or `sandbox`. The section below records
+what was deployed and what the logs showed.
+
+### Worker deployed under isolation, 2 November 2026
+
+The operator raised the Railway plan limit, approved creation of an isolated
+worker in writing, and committed the staged environment patch from the
+dashboard (the tool-side commit asked for confirmation and timed out; nothing
+was applied until the operator acted). Two services were created in one
+non-destructive patch, both in `asia-southeast1-eqsg3a` beside MySQL and Redis:
+
+| Service       | Id                                     | Configuration                                                                                                                                                                  |
+| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ais-worker`  | `36b7cace-cafa-4c53-87e5-e46bda08c43e` | Source `kafaat/ais-aviation-system` on `main`, `Dockerfile.prod`, start command `node dist/worker.js`, restart policy `ON_FAILURE` (10 retries), one replica, no public domain |
+| `stripe-mock` | `48294f1d-ac8f-40af-be34-c1ef64340246` | Image `stripe/stripe-mock:latest` (0.206.0 at deploy), private endpoint `stripe-mock`, listening on `[::]:12111`, restart policy `ALWAYS`, no public domain                    |
+
+The worker's variables are `AIS_PROVIDER_BOUNDARY=isolated`,
+`STRIPE_MOCK_HOST=http://stripe-mock.railway.internal:12111`,
+`SMS_PROVIDER=mock`, `NODE_ENV=production`, `FRONTEND_URL` set to the public web
+domain, and references (`${{ais-web.<NAME>}}`, no copied values) for
+`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `SELF_SERVICE_CAPABILITY_SECRET`,
+`CSRF_SECRET`, `AUTH_SERVICE_URL`, `OAUTH_SERVER_URL`, `OWNER_OPEN_ID`,
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `LOG_FORMAT`. No Resend,
+OpenAI, Sentry, Twilio or built-in Forge credential exists on the service. In
+production the `mock` SMS name resolves to the unavailable provider, so SMS
+fails closed; the boundary reports it as `mock`.
+
+First deployment `36b568cd-4599-443a-a7b4-75000999e193`, built from `main` at
+`6792543`, reached `SUCCESS`, and its deploy log showed in order:
+
+- `Worker process starting...` with `providerBoundary.boundary = isolated` and
+  every finding allowed: stripe `mock` (client redirected to `STRIPE_MOCK_HOST`),
+  sms `mock`, and resend, openai, sentry, outbox-receiver, otel-collector,
+  hotelbeds, weather, oncall and alternative-payment-providers all `absent`.
+  The four integrations (hotelbeds, weather, oncall, tracing) reported
+  `disabled`, not `invalid`.
+- Database pool initialised, Redis connected, queues initialised, the
+  mandatory queue workers (email, webhook retry, scheduled) and V2 workers
+  started, daily reconciliation and cleanup jobs registered, cron jobs started.
+  The production-only check that the queue Redis runs
+  `maxmemory-policy noeviction` passed, since a failure would have refused
+  start-up.
+- `Worker dependencies and mandatory consumers are ready` at 19:11:36 UTC,
+  after which the readiness file and the ten-second dependency heartbeat run.
+- Over the following ten minutes: the five-minute `cleanup` schedule ran twice
+  (`seat-holds cleanup completed`), no `Worker readiness lost`, no error line,
+  one running replica and zero crashes.
+
+The service autodeploys from `main`; the next push (`7fb642c`, release
+v1.33.3) started a new deployment immediately.
+
+What this does **not** prove, stated as what remains: the persisted heartbeat
+rows in the operational-observations table were not read (that needs an
+authenticated read, as with readiness); no job has yet exercised the
+`stripe-mock` client path; and browser, booking and provider acceptance are
+unchanged from the sections below.
 
 ## Required runtime evidence
 
 - Complete readiness diagnosis; registration/login and invalid-password API
   probes have passed, but browser and booking acceptance remain outstanding.
-- Worker isolation from live providers, then dependency readiness and a fresh
-  persisted heartbeat. Process startup is insufficient.
+- Worker isolation from live providers and dependency readiness are observed
+  in the deploy log above; a fresh persisted heartbeat still needs an
+  authenticated read. Process startup alone is insufficient.
 - A synthetic booking journey, with internal funding only and no live provider calls.
 - Migration completion before serving a changed schema; independent concurrent
   autodeployments do not prove deployment ordering.
@@ -137,9 +191,10 @@ Its boundaries are enforced in code, not by convention, because each one is a
 line the staging runbook already draws:
 
 - **It is not the worker.** It starts no cron and imports nothing from
-  `server/worker.ts`. The worker stays blocked until provider boundaries are
-  isolated; this runner does not touch that decision, and the suite it runs is
-  the one proven to make zero provider calls.
+  `server/worker.ts`. The worker was blocked until provider boundaries were
+  isolated and now runs as its own service (see above); this runner does not
+  touch that decision, and the suite it runs is the one proven to make zero
+  provider calls.
 - **It is not a tenant of the application database.** It receives the MySQL
   service's own URL (`${{MySQL.MYSQL_URL}}`), creates a disposable
   `ais_acceptance_test` database on that server, and drops it in `finally`. It
@@ -201,7 +256,8 @@ Two things were learned that are not about the application's behaviour:
 
 These runs are evidence about the deployed MySQL and Redis and about the
 migration journal. They are not browser or booking acceptance, not provider
-acceptance, and not a statement about the worker, which remains blocked.
+acceptance, and not a statement about the worker, which was blocked at the
+time (it was deployed under isolation on 2 November 2026, recorded above).
 Stated as what remains rather than what passed: an end-to-end booking journey
 through the deployed web application, provider acceptance for every external
 domain listed in `provider-acceptance.md`, delivery of each purchased service
