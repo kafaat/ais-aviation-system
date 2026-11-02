@@ -73,7 +73,15 @@ const payment = (
 });
 try {
   await check("live services and empty database", async () => {
-    await db.execute(sql`SELECT 1`);
+    const [sessionRows] = await db.execute(
+      sql`SELECT @@session.time_zone AS sessionZone`
+    );
+    assert.equal(
+      (sessionRows as { sessionZone: string }[])[0].sessionZone,
+      "+00:00",
+      "Each application SQL session must interpret UTC timestamp parameters independently of the server default"
+    );
+
     for (const table of [
       schema.users,
       schema.airlines,
