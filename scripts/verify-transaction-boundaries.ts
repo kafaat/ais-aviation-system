@@ -73,11 +73,11 @@ const payment = (
 });
 try {
   await check("live services and empty database", async () => {
-    const [sessionRows] = await db.execute(
+    const [sessionRows] = await db.execute<{ sessionZone: string }>(
       sql`SELECT @@session.time_zone AS sessionZone`
     );
     assert.equal(
-      (sessionRows as { sessionZone: string }[])[0].sessionZone,
+      sessionRows[0].sessionZone,
       "+00:00",
       "Each application SQL session must interpret UTC timestamp parameters independently of the server default"
     );
