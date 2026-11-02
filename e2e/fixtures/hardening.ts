@@ -49,7 +49,12 @@ export async function fixtureFlight() {
   const db = await mysql.createConnection(disposableDatabaseUrl());
   try {
     const [flight] = await db.execute<ResultSetHeader>(
-      "INSERT INTO flights (flightNumber, airlineId, originId, destinationId, departureTime, arrivalTime, aircraftType, economySeats, businessSeats, economyPrice, businessPrice, economyAvailable, businessAvailable) SELECT ?, airlineId, originId, destinationId, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 2 DAY), DATE_ADD(UTC_TIMESTAMP(), INTERVAL 2 DAY)+INTERVAL 2 HOUR, 'B737', 10, 2, 10000, 20000, 10, 2 FROM flights ORDER BY id LIMIT 1",
+      // Departs at 12:00 UTC two days out: the same civil day in UTC and in
+      // every airport zone between UTC-11 and UTC+11, so a search for the UTC
+      // date finds it whatever zone the seeded origin airport carries and
+      // whatever hour the suite runs (it failed between 21:00 and 24:00 UTC,
+      // when the Riyadh day had already turned).
+      "INSERT INTO flights (flightNumber, airlineId, originId, destinationId, departureTime, arrivalTime, aircraftType, economySeats, businessSeats, economyPrice, businessPrice, economyAvailable, businessAvailable) SELECT ?, airlineId, originId, destinationId, TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '12:00:00'), TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '14:00:00'), 'B737', 10, 2, 10000, 20000, 10, 2 FROM flights ORDER BY id LIMIT 1",
       ["H" + randomUUID().replaceAll("-", "").slice(0, 8)]
     );
     if (!flight.affectedRows) throw new Error("Seed flight missing");
