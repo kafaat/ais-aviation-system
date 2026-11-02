@@ -77,23 +77,23 @@ function SubmissionStatusBadge({ status }: { status: APISSubmissionStatus }) {
   > = {
     pending: {
       variant: "secondary",
-      label: t("apis.status.pending", "Pending"),
+      label: t("apis.statuses.pending", "Pending"),
     },
     submitted: {
       variant: "default",
-      label: t("apis.status.submitted", "Submitted"),
+      label: t("apis.statuses.submitted", "Submitted"),
     },
     acknowledged: {
       variant: "default",
-      label: t("apis.status.acknowledged", "Acknowledged"),
+      label: t("apis.statuses.acknowledged", "Acknowledged"),
     },
     rejected: {
       variant: "destructive",
-      label: t("apis.status.rejected", "Rejected"),
+      label: t("apis.statuses.rejected", "Rejected"),
     },
     error: {
       variant: "destructive",
-      label: t("apis.status.error", "Error"),
+      label: t("apis.statuses.error", "Error"),
     },
   };
 
