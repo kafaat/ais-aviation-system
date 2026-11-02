@@ -28,6 +28,12 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { useLocation } from "wouter";
+import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
+import {
+  dayOffset,
+  formatFlightDate,
+  formatFlightTime,
+} from "@/lib/flight-time";
 
 interface Message {
   id: number;
@@ -42,6 +48,9 @@ interface FlightSuggestion {
   airline: string;
   origin: string;
   destination: string;
+  /** IANA zones of the airports; absent from older server responses. */
+  originTimezone?: string | null;
+  destinationTimezone?: string | null;
   departureTime: string;
   arrivalTime: string;
   price: number;
@@ -252,7 +261,10 @@ export default function AIChatBooking({
         <div className="flex items-center gap-4 mb-3">
           <div className="text-center">
             <p className="text-lg font-bold">
-              {format(new Date(suggestion.departureTime), "HH:mm")}
+              {formatFlightTime(
+                suggestion.departureTime,
+                suggestion.originTimezone
+              )}
             </p>
             <p className="text-xs text-muted-foreground">{suggestion.origin}</p>
           </div>
@@ -265,7 +277,18 @@ export default function AIChatBooking({
 
           <div className="text-center">
             <p className="text-lg font-bold">
-              {format(new Date(suggestion.arrivalTime), "HH:mm")}
+              {formatFlightTime(
+                suggestion.arrivalTime,
+                suggestion.destinationTimezone
+              )}
+              <ArrivalDayOffset
+                offset={dayOffset(
+                  suggestion.departureTime,
+                  suggestion.originTimezone,
+                  suggestion.arrivalTime,
+                  suggestion.destinationTimezone
+                )}
+              />
             </p>
             <p className="text-xs text-muted-foreground">
               {suggestion.destination}
@@ -277,7 +300,12 @@ export default function AIChatBooking({
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Calendar className="w-4 h-4" />
             <span>
-              {format(new Date(suggestion.departureTime), "dd MMM", { locale })}
+              {formatFlightDate(
+                suggestion.departureTime,
+                suggestion.originTimezone,
+                i18n.language,
+                { day: "2-digit", month: "short" }
+              )}
             </span>
           </div>
           <p className="text-lg font-bold text-primary">

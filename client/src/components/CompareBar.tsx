@@ -14,9 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Plane, X, ArrowRight, Scale } from "lucide-react";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
+import { formatFlightTime } from "@/lib/flight-time";
 import type { FlightData } from "@/components/FlightCard";
 import { MIN_FLIGHTS, MAX_FLIGHTS } from "@/contexts/FlightCompareContext";
 import { cn } from "@/lib/utils";
@@ -42,11 +41,6 @@ export function CompareBar({
 }: CompareBarProps) {
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
-  const currentLocale = isArabic ? ar : enUS;
-
-  const formatTime = (date: Date) => {
-    return format(new Date(date), "HH:mm", { locale: currentLocale });
-  };
 
   const formatPrice = (price: number) => {
     return (price / 100).toLocaleString(isArabic ? "ar-SA" : "en-US");
@@ -199,7 +193,12 @@ export function CompareBar({
                                 <ArrowRight className="h-3 w-3" />
                                 <span>{flight.destination.code}</span>
                                 <span className="mx-1">|</span>
-                                <span>{formatTime(flight.departureTime)}</span>
+                                <span>
+                                  {formatFlightTime(
+                                    flight.departureTime,
+                                    flight.origin.timezone
+                                  )}
+                                </span>
                               </div>
                             </div>
                             <div className="text-sm font-semibold text-primary whitespace-nowrap">

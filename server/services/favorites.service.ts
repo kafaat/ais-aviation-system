@@ -687,6 +687,7 @@ export async function getUserFlightFavorites(userId: number) {
           name: airports.name,
           city: airports.city,
           country: airports.country,
+          timezone: airports.timezone,
         },
         destination: {
           id: sql<number>`dest.id`,
@@ -694,6 +695,7 @@ export async function getUserFlightFavorites(userId: number) {
           name: sql<string>`dest.name`,
           city: sql<string>`dest.city`,
           country: sql<string>`dest.country`,
+          timezone: sql<string | null>`dest.timezone`,
         },
         airline: {
           id: airlines.id,

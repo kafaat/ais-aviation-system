@@ -44,8 +44,18 @@ const row = (id: number) => ({
   economyAvailable: 9,
   businessAvailable: 2,
   airline: { code: "ZX", name: "Synthetic", logo: null },
-  origin: { code: "RUH", name: "Origin", city: "Riyadh" },
-  destination: { code: "JED", name: "Destination", city: "Jeddah" },
+  origin: {
+    code: "RUH",
+    name: "Origin",
+    city: "Riyadh",
+    timezone: "Asia/Riyadh",
+  },
+  destination: {
+    code: "JED",
+    name: "Destination",
+    city: "Jeddah",
+    timezone: null,
+  },
 });
 const query = { originId: 1, destinationId: 2, departureDate: "2026-11-15" };
 
@@ -106,6 +116,7 @@ describe("cached flight details", () => {
         name: "Origin",
         city: "Riyadh",
         country: "SA",
+        timezone: "Asia/Riyadh",
       },
       destination: {
         id: 2,
@@ -113,6 +124,7 @@ describe("cached flight details", () => {
         name: "Destination",
         city: "Jeddah",
         country: "SA",
+        timezone: null,
       },
     };
     spies.live.mockResolvedValue([

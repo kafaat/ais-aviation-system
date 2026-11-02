@@ -11,6 +11,7 @@ export const responseContracts = {
       gateNumber: z.string(),
       terminal: z.union([z.null(), z.string()]),
       gateType: z.enum(["international", "domestic", "both"]),
+      airportTimezone: z.union([z.null(), z.string()]),
       boardingStartTime: z.union([z.null(), z.date()]),
       boardingEndTime: z.union([z.null(), z.date()]),
       occupiedFrom: z.date().nullable(),

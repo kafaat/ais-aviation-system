@@ -607,11 +607,15 @@ export async function searchFlights(params: {
         code: airports.code,
         name: airports.name,
         city: airports.city,
+        // IANA zone so the client renders departure in the airport's local
+        // time, not the browser's.
+        timezone: airports.timezone,
       },
       destination: {
         code: sql<string>`dest.code`,
         name: sql<string>`dest.name`,
         city: sql<string>`dest.city`,
+        timezone: sql<string | null>`dest.timezone`,
       },
     })
     .from(flights)
@@ -682,6 +686,7 @@ export async function getFlightById(id: number) {
         name: airports.name,
         city: airports.city,
         country: airports.country,
+        timezone: airports.timezone,
       },
       destination: {
         id: sql<number>`dest.id`,
@@ -689,6 +694,7 @@ export async function getFlightById(id: number) {
         name: sql<string>`dest.name`,
         city: sql<string>`dest.city`,
         country: sql<string>`dest.country`,
+        timezone: sql<string | null>`dest.timezone`,
       },
     })
     .from(flights)
@@ -747,6 +753,8 @@ export async function getBookingsByUserId(
         status: flights.status,
         origin: airports.code,
         destination: sql<string>`dest.code`,
+        originTimezone: airports.timezone,
+        destinationTimezone: sql<string | null>`dest.timezone`,
       },
     })
     .from(bookings)

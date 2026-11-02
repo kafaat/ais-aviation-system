@@ -67,6 +67,8 @@ export const responseContracts = {
         status: z.enum(["scheduled", "delayed", "cancelled", "completed"]),
         origin: z.string(),
         destination: z.string(),
+        originTimezone: z.union([z.null(), z.string()]),
+        destinationTimezone: z.union([z.null(), z.string()]),
       }),
     })
   ),

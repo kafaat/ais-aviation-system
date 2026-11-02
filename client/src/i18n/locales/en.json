@@ -3594,5 +3594,9 @@
     "high": "High",
     "medium": "Medium",
     "low": "Low"
+  },
+  "flightTime": {
+    "localTime": "Local airport time",
+    "dayOffset": "Arrives {{offset}} calendar day(s) from the departure date"
   }
 }

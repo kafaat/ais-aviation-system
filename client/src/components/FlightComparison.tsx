@@ -4,13 +4,15 @@ import { Badge } from "@/components/ui/badge";
 import { X, Plane, Clock, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
+import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
+import { dayOffset, formatFlightTime } from "@/lib/flight-time";
 
 interface Flight {
   id: number;
   flightNumber: string;
   airline: { name: string; logo?: string };
-  origin: { code: string; city: string };
-  destination: { code: string; city: string };
+  origin: { code: string; city: string; timezone?: string | null };
+  destination: { code: string; city: string; timezone?: string | null };
   departureTime: Date;
   arrivalTime: Date;
   economyPrice: number;
@@ -36,13 +38,6 @@ export function FlightComparison({
   if (flights.length === 0) {
     return null;
   }
-
-  const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
 
   const formatPrice = (price: number) => {
     return `${(price / 100).toFixed(2)} ${t("common.currency")}`;
@@ -102,7 +97,10 @@ export function FlightComparison({
                   <div>
                     <p className="font-semibold">{flight.origin.code}</p>
                     <p className="text-sm text-muted-foreground">
-                      {formatTime(flight.departureTime)}
+                      {formatFlightTime(
+                        flight.departureTime,
+                        flight.origin.timezone
+                      )}
                     </p>
                   </div>
                   <div className="text-center">
@@ -117,7 +115,18 @@ export function FlightComparison({
                   <div className="text-right">
                     <p className="font-semibold">{flight.destination.code}</p>
                     <p className="text-sm text-muted-foreground">
-                      {formatTime(flight.arrivalTime)}
+                      {formatFlightTime(
+                        flight.arrivalTime,
+                        flight.destination.timezone
+                      )}
+                      <ArrivalDayOffset
+                        offset={dayOffset(
+                          flight.departureTime,
+                          flight.origin.timezone,
+                          flight.arrivalTime,
+                          flight.destination.timezone
+                        )}
+                      />
                     </p>
                   </div>
                 </div>

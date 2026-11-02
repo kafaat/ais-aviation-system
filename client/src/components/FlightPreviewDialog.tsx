@@ -29,8 +29,12 @@ import {
   Armchair,
   Info,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
+import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
+import {
+  dayOffset,
+  formatFlightDate,
+  formatFlightTime,
+} from "@/lib/flight-time";
 
 export interface FlightPreviewDialogProps {
   flight: FlightData | null;
@@ -45,17 +49,24 @@ export function FlightPreviewDialog({
 }: FlightPreviewDialogProps) {
   const { t, i18n } = useTranslation();
   const isRTL = i18n.language === "ar";
-  const dateLocale = isRTL ? ar : enUS;
 
   if (!flight) return null;
 
-  const formatTime = (date: Date) => {
-    return format(new Date(date), "HH:mm", { locale: dateLocale });
+  const formatDate = (date: Date) => {
+    return formatFlightDate(date, flight.origin.timezone, i18n.language, {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
   };
 
-  const formatDate = (date: Date) => {
-    return format(new Date(date), "EEEE, d MMMM yyyy", { locale: dateLocale });
-  };
+  const arrivalDayOffset = dayOffset(
+    flight.departureTime,
+    flight.origin.timezone,
+    flight.arrivalTime,
+    flight.destination.timezone
+  );
 
   const formatPrice = (price: number) => {
     return (price / 100).toLocaleString(isRTL ? "ar-SA" : "en-US");
@@ -114,7 +125,7 @@ export function FlightPreviewDialog({
             <div className="text-center flex-1">
               <PlaneTakeoff className="h-6 w-6 text-primary mx-auto mb-2" />
               <p className="text-3xl font-bold tracking-tight">
-                {formatTime(flight.departureTime)}
+                {formatFlightTime(flight.departureTime, flight.origin.timezone)}
               </p>
               <p className="text-lg font-semibold text-primary mt-1">
                 {flight.origin.code}
@@ -149,7 +160,11 @@ export function FlightPreviewDialog({
             <div className="text-center flex-1">
               <PlaneLanding className="h-6 w-6 text-primary mx-auto mb-2" />
               <p className="text-3xl font-bold tracking-tight">
-                {formatTime(flight.arrivalTime)}
+                {formatFlightTime(
+                  flight.arrivalTime,
+                  flight.destination.timezone
+                )}
+                <ArrivalDayOffset offset={arrivalDayOffset} />
               </p>
               <p className="text-lg font-semibold text-primary mt-1">
                 {flight.destination.code}

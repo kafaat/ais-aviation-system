@@ -39,8 +39,12 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
+import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
+import {
+  dayOffset,
+  formatFlightDate,
+  formatFlightTime,
+} from "@/lib/flight-time";
 import AncillarySelection, {
   type SelectedAncillary,
 } from "@/components/AncillarySelection";
@@ -134,7 +138,6 @@ export default function BookingPage() {
   const [createdBookingAmount, setCreatedBookingAmount] = useState<number>(0);
   const [smsNotification, setSmsNotification] = useState(false);
   const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
-  const currentLocale = i18n.language === "ar" ? ar : enUS;
 
   const { data: flight, isLoading } = trpc.flights.getById.useQuery({
     id: flightId,
@@ -707,9 +710,10 @@ export default function BookingPage() {
                 <div className="flex items-center justify-between">
                   <div className="text-center">
                     <p className="text-2xl sm:text-3xl font-bold">
-                      {format(new Date(flight.departureTime), "HH:mm", {
-                        locale: currentLocale,
-                      })}
+                      {formatFlightTime(
+                        flight.departureTime,
+                        flight.origin.timezone
+                      )}
                     </p>
                     <p className="font-semibold text-primary">
                       {flight.origin.code}
@@ -741,9 +745,18 @@ export default function BookingPage() {
 
                   <div className="text-center">
                     <p className="text-3xl font-bold">
-                      {format(new Date(flight.arrivalTime), "HH:mm", {
-                        locale: currentLocale,
-                      })}
+                      {formatFlightTime(
+                        flight.arrivalTime,
+                        flight.destination.timezone
+                      )}
+                      <ArrivalDayOffset
+                        offset={dayOffset(
+                          flight.departureTime,
+                          flight.origin.timezone,
+                          flight.arrivalTime,
+                          flight.destination.timezone
+                        )}
+                      />
                     </p>
                     <p className="font-semibold text-primary">
                       {flight.destination.code}
@@ -756,11 +769,15 @@ export default function BookingPage() {
 
                 <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">
-                    {format(
-                      new Date(flight.departureTime),
-                      "EEEE, d MMMM yyyy",
+                    {formatFlightDate(
+                      flight.departureTime,
+                      flight.origin.timezone,
+                      i18n.language,
                       {
-                        locale: currentLocale,
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
                       }
                     )}
                   </span>

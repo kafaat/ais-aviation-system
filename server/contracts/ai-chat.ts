@@ -45,6 +45,8 @@ export const responseContracts = {
             airline: z.string(),
             origin: z.string(),
             destination: z.string(),
+            originTimezone: z.union([z.null(), z.string()]),
+            destinationTimezone: z.union([z.null(), z.string()]),
             departureTime: z.string(),
             arrivalTime: z.string(),
             price: outputNumber,
