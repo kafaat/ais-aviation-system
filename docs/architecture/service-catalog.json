@@ -507,7 +507,8 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/access-control.service.ts",
-        "server/services/demo-capability.ts"
+        "server/services/demo-capability.ts",
+        "shared/const.ts"
       ],
       "tableExpressions": {
         "reads": ["bookings", "passengers"],
@@ -4930,7 +4931,7 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": ["server/routers/soft-delete.ts"],
-      "dependencies": ["drizzle/schema.ts", "server/db.ts"],
+      "dependencies": ["drizzle/schema.ts", "server/db.ts", "shared/const.ts"],
       "tableExpressions": {
         "reads": ["airports", "bookings", "flights"],
         "writes": ["bookings", "passengers"]
