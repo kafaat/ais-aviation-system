@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.33.4
+
+### Bug Fixes
+
+- fix(auth-service): call bcrypt directly instead of through passlib (#227) (80700b8)
+
+### Documentation
+
+- docs(ops): record the isolated worker deployment on the staging environment (#226) (7271a0b)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.3...v1.33.4
+
+---
+
 ## What's Changed in v1.33.3
 
 ### Bug Fixes
