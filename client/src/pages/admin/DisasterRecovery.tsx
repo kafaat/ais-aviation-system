@@ -1318,7 +1318,7 @@ function IncidentsTab() {
                   {t("dr.incidents.status", "Status")}
                 </th>
                 <th className="p-3 text-start">
-                  {t("dr.incidents.created", "Created")}
+                  {t("dr.incidents.createdAt", "Created")}
                 </th>
                 <th className="p-3 text-start">
                   {t("dr.incidents.actions", "Actions")}
@@ -1360,7 +1360,7 @@ function IncidentsTab() {
                         className="text-xs text-muted-foreground"
                         title={incident.resolution}
                       >
-                        {t("dr.incidents.resolved", "Resolved")}
+                        {t("dr.incidents.statusResolved", "Resolved")}
                       </span>
                     )}
                   </td>
