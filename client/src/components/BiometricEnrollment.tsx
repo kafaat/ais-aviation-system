@@ -284,10 +284,10 @@ export function BiometricEnrollment({
               <ScanFace className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-sm font-medium">
-                  {t("biometric.type.face")}
+                  {t("biometric.types.face")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {t("biometric.type.faceDesc")}
+                  {t("biometric.types.faceDesc")}
                 </p>
               </div>
             </label>
@@ -305,10 +305,10 @@ export function BiometricEnrollment({
               <Fingerprint className="h-5 w-5 text-primary" />
               <div>
                 <p className="text-sm font-medium">
-                  {t("biometric.type.fingerprint")}
+                  {t("biometric.types.fingerprint")}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {t("biometric.type.fingerprintDesc")}
+                  {t("biometric.types.fingerprintDesc")}
                 </p>
               </div>
             </label>
