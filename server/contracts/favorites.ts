@@ -43,6 +43,7 @@ export const responseContracts = {
         name: z.string(),
         city: z.string(),
         country: z.string(),
+        timezone: z.union([z.null(), z.string()]),
       }),
       destination: z.object({
         id: outputNumber,
@@ -50,6 +51,7 @@ export const responseContracts = {
         name: z.string(),
         city: z.string(),
         country: z.string(),
+        timezone: z.union([z.null(), z.string()]),
       }),
       airline: z.object({
         id: outputNumber,

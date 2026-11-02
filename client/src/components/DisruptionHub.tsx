@@ -12,6 +12,7 @@ import {
   ArrowRight,
   Loader2,
 } from "lucide-react";
+import { formatFlightDate, formatFlightTime } from "@/lib/flight-time";
 
 const severityColors = {
   minor: "bg-yellow-100 text-yellow-700 border-yellow-200",
@@ -142,7 +143,7 @@ export function DisruptionHub() {
 }
 
 function AlternativeFlightsButton({ flightId }: { flightId: number }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const { data, isLoading, refetch, isFetched } =
     trpc.disruptions.getAlternatives.useQuery(
@@ -189,13 +190,19 @@ function AlternativeFlightsButton({ flightId }: { flightId: number }) {
         >
           <div>
             <span className="font-medium">{alt.flightNumber}</span>
+            {/* Alternatives share the disrupted flight's route, so they
+                depart from the same airport and are shown in its zone. */}
             <span className="text-muted-foreground ml-2">
-              {new Date(alt.departureTime).toLocaleString([], {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+              {formatFlightDate(
+                alt.departureTime,
+                data.originalFlight.origin.timezone,
+                i18n.language,
+                { month: "short", day: "numeric" }
+              )}{" "}
+              {formatFlightTime(
+                alt.departureTime,
+                data.originalFlight.origin.timezone
+              )}
             </span>
           </div>
           <Badge variant="secondary">

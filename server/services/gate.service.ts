@@ -238,6 +238,9 @@ export async function getFlightGate(flightId: number) {
         gateNumber: airportGates.gateNumber,
         terminal: airportGates.terminal,
         gateType: airportGates.type,
+        // Boarding happens at this airport; the client shows the times in
+        // its zone rather than the browser's.
+        airportTimezone: airports.timezone,
         boardingStartTime: gateAssignments.boardingStartTime,
         boardingEndTime: gateAssignments.boardingEndTime,
         occupiedFrom: gateAssignments.occupiedFrom,
@@ -249,6 +252,7 @@ export async function getFlightGate(flightId: number) {
       })
       .from(gateAssignments)
       .innerJoin(airportGates, eq(gateAssignments.gateId, airportGates.id))
+      .innerJoin(airports, eq(airportGates.airportId, airports.id))
       .where(
         and(
           eq(gateAssignments.flightId, flightId),

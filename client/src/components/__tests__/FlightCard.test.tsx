@@ -131,6 +131,37 @@ describe("FlightCard", () => {
       expect(screen.getByTestId("flight-duration")).toHaveTextContent("2h 0m");
     });
 
+    it("shows departure and arrival in each airport's own zone with a +1 marker", () => {
+      // RUH 23:30 local (20:30Z) -> DXB 02:15 local the next day (22:15Z),
+      // whatever zone the browser or test runner is in.
+      const overnight: FlightData = {
+        ...mockFlight,
+        origin: { ...mockFlight.origin, timezone: "Asia/Riyadh" },
+        destination: {
+          ...mockFlight.destination,
+          code: "DXB",
+          city: "Dubai",
+          timezone: "Asia/Dubai",
+        },
+        departureTime: new Date("2026-11-15T20:30:00.000Z"),
+        arrivalTime: new Date("2026-11-15T22:15:00.000Z"),
+      };
+
+      renderWithProviders(<FlightCard flight={overnight} />);
+
+      expect(screen.getByTestId("departure-time")).toHaveTextContent("23:30");
+      expect(screen.getByTestId("arrival-time")).toHaveTextContent("02:15");
+      expect(screen.getByTestId("arrival-day-offset")).toHaveTextContent("+1");
+    });
+
+    it("shows no day marker for a same-day arrival", () => {
+      renderWithProviders(<FlightCard flight={mockFlight} />);
+
+      expect(
+        screen.queryByTestId("arrival-day-offset")
+      ).not.toBeInTheDocument();
+    });
+
     it("displays the flight status badge", () => {
       renderWithProviders(<FlightCard flight={mockFlight} />);
 

@@ -76,8 +76,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
+import { formatFlightDate } from "@/lib/flight-time";
 
 type BookingStatus = "pending" | "confirmed" | "cancelled" | "completed";
 type PaymentStatus = "pending" | "paid" | "refunded" | "failed";
@@ -85,8 +84,6 @@ type SortOption = "dateDesc" | "dateAsc" | "priceDesc" | "priceAsc";
 
 export default function MyBookings() {
   const { t, i18n } = useTranslation();
-  const isRTL = i18n.language === "ar";
-  const dateLocale = isRTL ? ar : enUS;
 
   const { user: _user, isAuthenticated, loading } = useAuth();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -629,10 +626,15 @@ export default function MyBookings() {
                                   {t("myBookings.departureDate")}
                                 </p>
                                 <p className="font-semibold text-slate-900 dark:text-white">
-                                  {format(
-                                    new Date(booking.flight.departureTime),
-                                    "PPP",
-                                    { locale: dateLocale }
+                                  {formatFlightDate(
+                                    booking.flight.departureTime,
+                                    booking.flight.originTimezone,
+                                    i18n.language,
+                                    {
+                                      day: "numeric",
+                                      month: "long",
+                                      year: "numeric",
+                                    }
                                   )}
                                 </p>
                               </div>

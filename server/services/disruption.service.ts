@@ -261,25 +261,31 @@ export async function getAlternativeFlights(flightId: number, _userId: number) {
     .limit(5);
 
   // Get airport names
+  const airportColumns = {
+    code: airports.code,
+    city: airports.city,
+    timezone: airports.timezone,
+  };
   const [origin] = await db
-    .select({ code: airports.code, city: airports.city })
+    .select(airportColumns)
     .from(airports)
     .where(eq(airports.id, originalFlight.originId))
     .limit(1);
 
   const [destination] = await db
-    .select({ code: airports.code, city: airports.city })
+    .select(airportColumns)
     .from(airports)
     .where(eq(airports.id, originalFlight.destinationId))
     .limit(1);
 
+  const unknownAirport = { code: "???", city: "Unknown", timezone: null };
   return {
     originalFlight: {
       id: originalFlight.id,
       flightNumber: originalFlight.flightNumber,
       departureTime: originalFlight.departureTime,
-      origin: origin || { code: "???", city: "Unknown" },
-      destination: destination || { code: "???", city: "Unknown" },
+      origin: origin || unknownAirport,
+      destination: destination || unknownAirport,
     },
     alternatives,
   };

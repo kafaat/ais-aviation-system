@@ -22,8 +22,18 @@ describe("Flights Router", () => {
           economyAvailable: 50,
           businessAvailable: 5,
           airline: { code: "ZX", name: "Test", logo: null },
-          origin: { code: "ZZZ", name: "Origin", city: "Test" },
-          destination: { code: "ZZY", name: "Destination", city: "Test" },
+          origin: {
+            code: "ZZZ",
+            name: "Origin",
+            city: "Test",
+            timezone: "Asia/Riyadh",
+          },
+          destination: {
+            code: "ZZY",
+            name: "Destination",
+            city: "Test",
+            timezone: null,
+          },
           flightNumber: "SV123",
           departureTime: new Date("2025-01-01T10:00:00Z"),
           arrivalTime: new Date("2025-01-01T12:00:00Z"),
@@ -72,6 +82,7 @@ describe("Flights Router", () => {
           name: "Origin",
           city: "Test",
           country: "Test",
+          timezone: "Asia/Riyadh",
         },
         destination: {
           id: 2,
@@ -79,6 +90,7 @@ describe("Flights Router", () => {
           name: "Destination",
           city: "Test",
           country: "Test",
+          timezone: null,
         },
       };
 

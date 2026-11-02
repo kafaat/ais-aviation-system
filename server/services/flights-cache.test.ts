@@ -44,13 +44,21 @@ const flight = {
   economyAvailable: 9,
   businessAvailable: 2,
   airline: { id: 1, code: "ZX", name: "Synthetic", logo: null },
-  origin: { id: 1, code: "RUH", name: "Origin", city: "Riyadh", country: "SA" },
+  origin: {
+    id: 1,
+    code: "RUH",
+    name: "Origin",
+    city: "Riyadh",
+    country: "SA",
+    timezone: "Asia/Riyadh",
+  },
   destination: {
     id: 2,
     code: "JED",
     name: "Destination",
     city: "Jeddah",
     country: "SA",
+    timezone: null,
   },
 };
 const searchRow = {
@@ -65,8 +73,18 @@ const searchRow = {
   economyAvailable: flight.economyAvailable,
   businessAvailable: flight.businessAvailable,
   airline: { code: "ZX", name: "Synthetic", logo: null },
-  origin: { code: "RUH", name: "Origin", city: "Riyadh" },
-  destination: { code: "JED", name: "Destination", city: "Jeddah" },
+  origin: {
+    code: "RUH",
+    name: "Origin",
+    city: "Riyadh",
+    timezone: "Asia/Riyadh",
+  },
+  destination: {
+    code: "JED",
+    name: "Destination",
+    city: "Jeddah",
+    timezone: null,
+  },
 };
 const input = { originId: 1, destinationId: 2, departureDate: departureTime };
 beforeEach(() => {
