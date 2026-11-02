@@ -184,7 +184,7 @@ cd ..
 - `fastapi` 0.115+ - إطار العمل
 - `uvicorn` 0.34+ - خادم ASGI
 - `sqlalchemy` 2.0+ - ORM لقاعدة البيانات
-- `passlib[bcrypt]` + `bcrypt` - تشفير كلمات المرور
+- `bcrypt` - تشفير كلمات المرور (يُستدعى مباشرة؛ أُزيلت passlib)
 - `python-jose` - التعامل مع JWT tokens
 
 ### 2.6 التحقق من التثبيت
