@@ -415,6 +415,7 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/baggage-entitlement.service.ts",
+        "server/services/boarding-pass.service.ts",
         "server/services/demo-capability.ts"
       ],
       "tableExpressions": {
@@ -549,6 +550,7 @@
         "server/routers/bag-drop.ts",
         "server/routers/boarding-pass.ts",
         "server/routers/eticket.ts",
+        "server/services/bag-drop.service.ts",
         "server/services/seat-map.service.ts"
       ],
       "dependencies": [
@@ -556,6 +558,7 @@
         "server/db.ts",
         "server/services/access-control.service.ts",
         "server/services/departure-control.service.ts",
+        "server/services/idempotency-v2.service.ts",
         "server/services/travel-clearance.service.ts"
       ],
       "tableExpressions": {
@@ -2140,6 +2143,7 @@
         "server/services/aircraft-rotation.service.ts",
         "server/services/ancillary-services.service.ts",
         "server/services/aviation-evidence.service.ts",
+        "server/services/boarding-pass.service.ts",
         "server/services/booking-checkout.service.ts",
         "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",

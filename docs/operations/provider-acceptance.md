@@ -24,7 +24,10 @@ authorization invalidates operational use of its stored evidence.
 Only mark a domain's ownership as assigned after its owner, on-call contact and
 acceptance evidence are present. `generate-service-catalog.ts --check` verifies
 that the catalog reflects the committed assignment file; it cannot certify a
-person's acceptance or a provider contract.
+person's acceptance or a provider contract. The configured production Kubernetes
+rollout runs `python3 scripts/deploy/verify_service_ownership.py` before its
+first cluster operation. It requires recorded assignments for every domain and
+a matching owner, on-call contact and evidence reference for every active service.
 
 ## Running the existing Stripe sandbox acceptance
 

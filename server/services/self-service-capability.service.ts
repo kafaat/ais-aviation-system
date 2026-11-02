@@ -13,6 +13,8 @@ export type SelfServiceCapability =
     }
   | {
       kind: "bag-drop-admission";
+      flightId: number;
+      passDigest: string;
       bookingId: number;
       passengerId: number;
     }
@@ -59,7 +61,10 @@ export function issueSelfServiceCapability(
     algorithm: ALGORITHM,
     issuer: ISSUER,
     audience: audience(capability.kind),
-    expiresIn: opts.expiresInSeconds ?? TTL_SECONDS[capability.kind],
+    expiresIn: Math.min(
+      opts.expiresInSeconds ?? TTL_SECONDS[capability.kind],
+      TTL_SECONDS[capability.kind]
+    ),
   });
 }
 
@@ -106,6 +111,13 @@ export function verifySelfServiceCapability<
       if (!Number.isInteger(bag.passengerId) || bag.passengerId <= 0) {
         throw new Error("Invalid passenger scope");
       }
+      if (
+        bag.kind === "bag-drop-admission" &&
+        (!Number.isSafeInteger(bag.flightId) ||
+          bag.flightId <= 0 ||
+          !/^[a-f0-9]{64}$/.test(bag.passDigest))
+      )
+        throw new Error("Missing boarding pass scope");
       if (
         expectedKind === "bag-drop-session" &&
         (!Number.isInteger((bag as { sessionId?: number }).sessionId) ||

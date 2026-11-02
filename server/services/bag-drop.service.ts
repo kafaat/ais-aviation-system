@@ -1,3 +1,5 @@
+import { assertCurrentPassDigest } from "./boarding-pass.service";
+import type { SelfServiceCapability } from "./self-service-capability.service";
 import { randomInt } from "node:crypto";
 import type { SettlementTx } from "./booking-settlement.service";
 import { requireDemoCapability } from "./demo-capability";
@@ -245,7 +247,8 @@ async function refreshSessionEntitlement(
 
 export async function initiateBagDrop(
   bookingId: number,
-  passengerId: number
+  passengerId: number,
+  admission?: Extract<SelfServiceCapability, { kind: "bag-drop-admission" }>
 ): Promise<BagDropSession> {
   if (
     !Number.isSafeInteger(bookingId) ||
@@ -270,6 +273,20 @@ export async function initiateBagDrop(
         code: "CONFLICT",
         message: "A confirmed booking is required",
       });
+    if (admission) {
+      // The bag-drop printer and fee endpoints currently operate on the booking's
+      // primary flight. Reject an onward pass rather than tagging the wrong leg.
+      if (
+        admission.bookingId !== bookingId ||
+        admission.passengerId !== passengerId ||
+        admission.flightId !== booking.flightId
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Bag drop is unavailable for this boarding-pass flight",
+        });
+      await assertCurrentPassDigest(tx, admission);
+    }
     const [passenger] = await tx
       .select()
       .from(passengers)
@@ -307,7 +324,14 @@ export async function initiateBagDrop(
       )
       .limit(1)
       .for("update");
-    if (existing) return existing; // Retrying admission never creates a second active session.
+    if (existing) {
+      if (existing.entitlementSegmentId !== segmentId)
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Existing bag-drop session belongs to a different segment",
+        });
+      return existing;
+    }
     const [created] = await tx.insert(sessionsTable).values({
       bookingId,
       passengerId,
