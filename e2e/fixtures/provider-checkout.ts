@@ -1,3 +1,4 @@
+import { expectAccessibleControls } from "./accessibility";
 import superjson from "superjson";
 import type { RowDataPacket } from "mysql2/promise";
 import { test, expect } from "./base-test";
@@ -75,6 +76,13 @@ export function registerProviderCheckoutTests() {
           exact: true,
         });
         await expect(submit).toBeEnabled();
+        if (outcome === "redirect") {
+          await expectAccessibleControls(page, [
+            "#pax-firstname-0",
+            "#pax-lastname-0",
+            "#pax-passport-0",
+          ]);
+        }
         await submit.click();
         if (outcome === "redirect") {
           await expect(page).toHaveURL(providerUrl);

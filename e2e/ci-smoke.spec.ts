@@ -1,3 +1,4 @@
+import { expectAccessibleControls } from "./fixtures/accessibility";
 import { selectDepartureDate } from "./fixtures/test-helpers";
 import { test, expect } from "@playwright/test";
 
@@ -38,6 +39,12 @@ test.describe("CI smoke coverage", () => {
 
     const departureDateTrigger = page.getByTestId("home-date-trigger");
     await expect(departureDateTrigger).toBeVisible();
+    await expectAccessibleControls(page, [
+      '[data-testid="home-origin-select"]',
+      '[data-testid="home-destination-select"]',
+      '[data-testid="home-date-trigger"]',
+      '[data-testid="home-search-button"]',
+    ]);
     await departureDateTrigger.click();
     await expect(page.locator('[data-slot="calendar"]')).toBeVisible();
 

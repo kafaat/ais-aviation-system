@@ -144,12 +144,12 @@ export default function BookingPage() {
   });
   const createBooking = trpc.bookings.create.useMutation();
   const createOffer = trpc.priceQuote.createOffer.useMutation();
-  const [selectedOffer, setSelectedOffer] = useState<{
-    offerId: string;
-    totalAmount: number;
-    expiresAt: Date;
-    fingerprint: string;
-  } | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<
+    | (Awaited<ReturnType<typeof createOffer.mutateAsync>> & {
+        fingerprint: string;
+      })
+    | null
+  >(null);
   const offerFingerprint = JSON.stringify({
     flightId,
     cabinClass,
@@ -1194,16 +1194,52 @@ export default function BookingPage() {
                 )}
 
                 <div className="border-t pt-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm">{t("booking.ticketPrice")}</span>
-                    <span>
-                      {(price / 100).toFixed(2)} {t("common.currency")}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm">{t("booking.passengers")}</span>
-                    <span>× {passengers.length}</span>
-                  </div>
+                  {activeOffer?.fareLines &&
+                  !activePriceLock &&
+                  !groupBookingId ? (
+                    <table className="w-full text-sm">
+                      <caption>
+                        {t("fareRules.fareBreakdown")} ({t("common.currency")})
+                      </caption>
+                      <thead>
+                        <tr>
+                          <th scope="col">{t("booking.passengers")}</th>
+                          <th scope="col">{t("fareRules.baseFare")}</th>
+                          <th scope="col">{t("fareRules.taxes")}</th>
+                          <th scope="col">{t("booking.bookingFee")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeOffer.fareLines.map((line, index) => (
+                          <tr key={index}>
+                            <th scope="row">
+                              {index + 1}. {t(`booking.${line.type}`)}
+                            </th>
+                            <td>{(line.baseFare / 100).toFixed(2)}</td>
+                            <td>{(line.tax / 100).toFixed(2)}</td>
+                            <td>{(line.bookingFee / 100).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm">
+                          {t("booking.ticketPrice")}
+                        </span>
+                        <span>
+                          {(price / 100).toFixed(2)} {t("common.currency")}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm">
+                          {t("booking.passengers")}
+                        </span>
+                        <span>× {passengers.length}</span>
+                      </div>
+                    </>
+                  )}
                   {ancillariesTotalCost > 0 && (
                     <>
                       <div className="flex justify-between items-center mb-2 pt-2 border-t">

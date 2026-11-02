@@ -46,8 +46,11 @@ export const reconciliationWorker = redisConnection
       async (job: Job<ReconciliationJobData>) => {
         console.info(`[ReconciliationWorker] Processing job ${job.id}...`);
 
-        const { limit = 200, dryRun = false, triggeredBy = "scheduler" } =
-          job.data;
+        const {
+          limit = 200,
+          dryRun = false,
+          triggeredBy = "scheduler",
+        } = job.data;
 
         try {
           // Update progress
@@ -129,7 +132,9 @@ export async function closeReconciliationWorker(): Promise<void> {
 /**
  * Manually trigger a reconciliation job
  */
-export async function triggerReconciliation(options?: ReconciliationJobData): Promise<string> {
+export async function triggerReconciliation(
+  options?: ReconciliationJobData
+): Promise<string> {
   const { reconciliationQueue } = await import("../queues");
 
   if (!reconciliationQueue) {

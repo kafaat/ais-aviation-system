@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Send,
   Square,
@@ -37,6 +37,35 @@ interface FlightSuggestion {
   price: number;
   cabinClass: string;
   reason?: string;
+}
+
+function ChatDisclosure() {
+  const { t } = useTranslation();
+  const configuredUrl = import.meta.env.VITE_AIRLINE_SUPPORT_URL;
+  let supportUrl: URL | undefined;
+  if (configuredUrl && URL.canParse(configuredUrl)) {
+    const url = new URL(configuredUrl);
+    if (url.protocol === "https:" && !url.username && !url.password) {
+      supportUrl = url;
+    }
+  }
+  return (
+    <div className="text-sm text-muted-foreground">
+      <p>{t("aiChat.disclaimer")}</p>
+      {supportUrl ? (
+        <a
+          href={supportUrl.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline"
+        >
+          {t("aiChat.contactSupport")}
+        </a>
+      ) : (
+        <p>{t("aiChat.supportFallback")}</p>
+      )}
+    </div>
+  );
 }
 
 export default function AiChat() {
@@ -111,7 +140,8 @@ export default function AiChat() {
     setSuggestions([]);
 
     // Create abort controller for stop generation
-    abortControllerRef.current = new AbortController();
+    const request = new AbortController();
+    abortControllerRef.current = request;
 
     try {
       const result = await sendMessageMut.mutateAsync({
@@ -120,7 +150,7 @@ export default function AiChat() {
       });
 
       // Check if generation was stopped
-      if (abortControllerRef.current?.signal.aborted) return;
+      if (request.signal.aborted) return;
 
       const aiMsg: ChatMessageDisplay = {
         id: Date.now() + 1,
@@ -134,7 +164,7 @@ export default function AiChat() {
         setSuggestions(result.suggestions);
       }
     } catch (err) {
-      if (!abortControllerRef.current?.signal.aborted) {
+      if (!request.signal.aborted) {
         const errorMsg: ChatMessageDisplay = {
           id: Date.now() + 1,
           role: "assistant",
@@ -146,8 +176,10 @@ export default function AiChat() {
         setMessages(prev => [...prev, errorMsg]);
       }
     } finally {
-      setIsGenerating(false);
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === request) {
+        setIsGenerating(false);
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -166,6 +198,7 @@ export default function AiChat() {
   };
 
   const handleNewConversation = () => {
+    handleStopGeneration();
     setConversationId(null);
     setMessages([]);
     setSuggestions([]);
@@ -203,7 +236,12 @@ export default function AiChat() {
         <div className="max-w-3xl mx-auto px-4 py-8">
           {/* Header */}
           <div className="flex items-center gap-3 mb-8">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("common.back")}
+              onClick={() => navigate("/")}
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
@@ -228,6 +266,9 @@ export default function AiChat() {
             <p className="text-muted-foreground max-w-md mx-auto mb-8">
               {t("aiChat.welcomeDescription")}
             </p>
+            <div className="mb-4">
+              <ChatDisclosure />
+            </div>
             <Button
               size="lg"
               onClick={handleStartConversation}
@@ -277,7 +318,12 @@ export default function AiChat() {
       <div className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("common.back")}
+              onClick={() => navigate("/")}
+            >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-2">
@@ -288,7 +334,7 @@ export default function AiChat() {
                 <h2 className="font-semibold text-sm">
                   {t("aiChat.assistantName")}
                 </h2>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground" role="status">
                   {isGenerating ? t("aiChat.typing") : t("aiChat.online")}
                 </p>
               </div>
@@ -307,7 +353,11 @@ export default function AiChat() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div
+        className="flex-1 overflow-y-auto"
+        role="log"
+        aria-label={t("aiChat.conversationLog")}
+      >
         <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
           {messages.map(msg => (
             <div
@@ -334,7 +384,14 @@ export default function AiChat() {
                     : "bg-card border shadow-sm"
                 }`}
               >
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                <span className="sr-only">
+                  {t(
+                    msg.role === "user" ? "aiChat.you" : "aiChat.assistantName"
+                  )}
+                </span>
+                <p className="text-sm whitespace-pre-wrap" dir="auto">
+                  {msg.content}
+                </p>
                 <div
                   className={`flex items-center gap-1 mt-1 ${
                     msg.role === "user"
@@ -372,10 +429,10 @@ export default function AiChat() {
                 {t("aiChat.flightSuggestions")}
               </p>
               {suggestions.map(s => (
-                <Card
+                <Link
                   key={s.id}
-                  className="p-4 hover:border-primary/50 transition-colors cursor-pointer"
-                  onClick={() => navigate(`/booking/${s.flightId}`)}
+                  href={`/booking/${s.flightId}`}
+                  className="block rounded-xl border bg-card p-4 hover:border-primary/50 focus-visible:outline-2 transition-colors"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-semibold text-sm">{s.airline}</span>
@@ -407,7 +464,7 @@ export default function AiChat() {
                   {s.reason && (
                     <p className="text-xs text-primary mt-1">{s.reason}</p>
                   )}
-                </Card>
+                </Link>
               ))}
             </div>
           )}
@@ -443,6 +500,7 @@ export default function AiChat() {
                 value={inputValue}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
+                aria-label={t("aiChat.messageLabel")}
                 placeholder={t("aiChat.placeholder")}
                 rows={1}
                 disabled={isGenerating}
@@ -463,6 +521,7 @@ export default function AiChat() {
             ) : (
               <Button
                 size="icon"
+                aria-label={t("aiChat.sendMessage")}
                 onClick={() => handleSendMessage()}
                 disabled={!inputValue.trim()}
                 className="h-11 w-11 rounded-xl flex-shrink-0"
@@ -471,9 +530,9 @@ export default function AiChat() {
               </Button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground text-center mt-2">
-            {t("aiChat.disclaimer")}
-          </p>
+          <div className="text-center mt-2">
+            <ChatDisclosure />
+          </div>
         </div>
       </div>
     </div>

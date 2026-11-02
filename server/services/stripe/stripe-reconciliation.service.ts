@@ -19,9 +19,9 @@ import { getDb } from "../../db";
 import { payments, bookings, financialLedger } from "../../../drizzle/schema";
 import {
   assertNoCollectionReview,
-  cancelBookingResources,
   confirmFundedBooking,
 } from "../booking-settlement.service";
+import { assertCollectedAmount } from "../payment-settlement.service";
 import { nanoid } from "nanoid";
 
 // ============================================================================
@@ -185,6 +185,7 @@ export async function runStripeReconciliation(
     .innerJoin(bookings, eq(payments.bookingId, bookings.id))
     .where(
       and(
+        eq(payments.provider, "stripe"),
         eq(payments.status, "pending"),
         isNotNull(payments.stripePaymentIntentId),
         sql`${payments.createdAt} >= ${cutoffDate}`,
@@ -255,6 +256,22 @@ export async function runStripeReconciliation(
 
       switch (pi.status) {
         case "succeeded":
+          if (
+            pi.id !== payment.stripePaymentIntentId ||
+            pi.currency.toUpperCase() !==
+              payment.paymentCurrency.toUpperCase() ||
+            (pi.metadata?.bookingId &&
+              pi.metadata.bookingId !== String(payment.bookingId)) ||
+            (pi.metadata?.userId &&
+              pi.metadata.userId !== String(payment.bookingUserId)) ||
+            (pi.metadata?.type && pi.metadata.type !== "booking")
+          )
+            throw new Error("Payment intent identity/currency mismatch");
+          assertCollectedAmount(
+            pi.amount_received,
+            Number(payment.paymentAmount),
+            pi.currency
+          );
           await handleSucceeded(
             db,
             payment,
@@ -272,7 +289,6 @@ export async function runStripeReconciliation(
           break;
 
         case "canceled":
-        case "requires_payment_method":
           await handleFailed(db, payment, pi, dryRun, correlationId, details);
           if (!dryRun) {
             failed++;
@@ -281,6 +297,7 @@ export async function runStripeReconciliation(
           }
           break;
 
+        case "requires_payment_method":
         case "processing":
         case "requires_action":
         case "requires_confirmation":
@@ -555,21 +572,15 @@ async function handleFailed(
         status: "failed",
         updatedAt: new Date(),
       })
-      .where(eq(payments.id, payment.paymentId));
-
-    // Release seats, holds and voucher quota the way every other cancel
-    // path does; a raw status write left them reserved.
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, payment.bookingId))
-      .for("update");
-    if (booking?.status === "pending")
-      await cancelBookingResources(
-        tx,
-        booking,
-        `Payment ${pi.status} at provider (reconciliation)`
+      .where(
+        and(
+          eq(payments.id, payment.paymentId),
+          eq(payments.status, "pending"),
+          eq(payments.stripePaymentIntentId, pi.id)
+        )
       );
+    // A cancelled intent ends this attempt. Booking expiry and inventory
+    // release belong to the booking lifecycle; another attempt may be open.
   });
 
   details.push({
@@ -614,6 +625,7 @@ export async function getReconciliationStats(): Promise<{
     .from(payments)
     .where(
       and(
+        eq(payments.provider, "stripe"),
         eq(payments.status, "pending"),
         isNotNull(payments.stripePaymentIntentId)
       )
