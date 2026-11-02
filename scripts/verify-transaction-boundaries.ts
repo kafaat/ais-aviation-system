@@ -73,9 +73,10 @@ const payment = (
 });
 try {
   await check("live services and empty database", async () => {
-    const [sessionRows] = await db.execute<{ sessionZone: string }>(
+    const [sessionRows] = await db.execute(
       sql`SELECT @@session.time_zone AS sessionZone`
     );
+    assert(Array.isArray(sessionRows) && sessionRows.length === 1);
     assert.equal(
       sessionRows[0].sessionZone,
       "+00:00",
