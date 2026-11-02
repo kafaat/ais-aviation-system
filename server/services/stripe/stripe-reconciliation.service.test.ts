@@ -24,6 +24,7 @@ const payment = {
   paymentStatus: "pending",
   paymentCurrency: "SAR",
   paymentAmount: 1400,
+  bookingTotal: 1400,
   stripePaymentIntentId: "pi_test",
 };
 const intent = {
@@ -79,6 +80,50 @@ describe("reconciliation provider observations", () => {
     const result = await runStripeReconciliation();
     expect(result).toMatchObject({ failed: 1, errors: 0 });
     expect(update).toHaveBeenCalledTimes(1);
+  });
+  it("rejects an invoice repriced while Stripe was being contacted", async () => {
+    const lockedBooking = {
+      ...payment,
+      userId: payment.bookingUserId,
+      totalAmount: 2000,
+    };
+    const query = {
+      from: () => query,
+      where: () => query,
+      for: () => [lockedBooking],
+    };
+    const update = vi.fn();
+    transaction.mockImplementationOnce(callback =>
+      callback({ select: () => query, update })
+    );
+    retrieve.mockResolvedValue(intent);
+    const result = await runStripeReconciliation();
+    expect(result).toMatchObject({ errors: 1, fixed: 0 });
+    expect(update).not.toHaveBeenCalled();
+  });
+  it("does not overwrite a payment already transitioned during provider retrieval", async () => {
+    const booking = {
+      id: payment.bookingId,
+      userId: payment.bookingUserId,
+      totalAmount: 1400,
+    };
+    const query = {
+      from: () => query,
+      where: () => query,
+      for: () => [booking],
+      limit: () => [],
+    };
+    const update = () => ({
+      set: () => ({ where: () => [{ affectedRows: 0 }] }),
+    });
+    const insert = vi.fn();
+    transaction.mockImplementationOnce(callback =>
+      callback({ select: () => query, update, insert })
+    );
+    retrieve.mockResolvedValue(intent);
+    const result = await runStripeReconciliation();
+    expect(result).toMatchObject({ errors: 1, fixed: 0 });
+    expect(insert).not.toHaveBeenCalled();
   });
   it("reports matching captures in dry-run without a write", async () => {
     retrieve.mockResolvedValue(intent);

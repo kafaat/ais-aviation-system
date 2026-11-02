@@ -1200,12 +1200,15 @@ export default function BookingPage() {
                     <table className="w-full text-sm">
                       <caption>
                         {t("fareRules.fareBreakdown")} ({t("common.currency")})
+                        <span className="block text-xs text-muted-foreground">
+                          {t("fareRules.quoteTaxBasis")}
+                        </span>
                       </caption>
                       <thead>
                         <tr>
                           <th scope="col">{t("booking.passengers")}</th>
                           <th scope="col">{t("fareRules.baseFare")}</th>
-                          <th scope="col">{t("fareRules.taxes")}</th>
+                          <th scope="col">{t("fareRules.estimatedTax")}</th>
                           <th scope="col">{t("booking.bookingFee")}</th>
                         </tr>
                       </thead>

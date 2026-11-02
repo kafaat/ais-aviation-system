@@ -570,6 +570,7 @@
     "tierBenefits": "Tier Benefits",
     "earnMultiplier": "Earn Multiplier: {{multiplier}}x",
     "exclusiveBenefits": "{{count}} Exclusive Benefits",
+    "authenticatorCode": "Authenticator code",
     "redeemMiles": "Redeem Miles",
     "redeemDesc": "Use your miles for discounts",
     "milesToRedeem": "Miles to Redeem",
@@ -969,7 +970,13 @@
     "userMenu": "User menu",
     "closeDialog": "Close dialog",
     "openMenu": "Open menu",
-    "closeMenu": "Close menu"
+    "closeMenu": "Close menu",
+    "statement": {
+      "title": "Accessibility statement",
+      "scope": "Our goal is WCAG 2.2 level AA for the booking website in English and Arabic. A full assessment, including screen reader testing through payment and ticket delivery, is pending.",
+      "helpTitle": "Get help with a booking",
+      "help": "If an accessibility barrier prevents you from booking or checking in, contact the operating airline through its official customer service channel. Include the page, the step you reached and, if relevant, your browser or assistive technology. Leave out payment card and passport details."
+    }
   },
   "reviews": {
     "title": "Reviews & Ratings",
@@ -2809,6 +2816,8 @@
     "conditions": "Conditions (JSON)",
     "priceAdjustment": "Price Adjustment",
     "calculateFare": "Calculate Fare",
+    "estimatedTax": "Estimated tax",
+    "quoteTaxBasis": "The fare engine applies one rate across routes. Tax invoicing requires an assessment of the itinerary and the service supplied.",
     "fareBreakdown": "Fare Breakdown",
     "baseFare": "Base Fare",
     "multiplier": "Multiplier",

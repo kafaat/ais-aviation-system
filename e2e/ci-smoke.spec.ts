@@ -51,6 +51,18 @@ test.describe("CI smoke coverage", () => {
     await expect(page.getByTestId("home-search-button")).toBeDisabled();
   });
 
+  test("public accessibility statement is reachable through the footer", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("link", { name: "Accessibility statement" }).click();
+    await expect(page).toHaveURL(/\/accessibility$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Accessibility statement" })
+    ).toBeVisible();
+    await expectAccessibleControls(page, ["#main-content"]);
+  });
+
   for (const reference of ["airports", "airlines"]) {
     test(`${reference} remains readable after its cache is populated`, async ({
       page,

@@ -1,3 +1,5 @@
+import type { TrpcContext } from "./_core/context";
+import { compensationRouter } from "./routers/compensation";
 import { transactionMemory } from "./__tests__/helpers/transaction-memory";
 import { processClaim } from "./services/compensation.service";
 
@@ -22,6 +24,9 @@ describe("GACA article 10 arrival-delay tariff in SDR", () => {
 
 const { getDb } = vi.hoisted(() => ({ getDb: vi.fn() }));
 vi.mock("./db", () => ({ getDb }));
+vi.mock("./_core/middleware/procedure-rate-limit", () => ({
+  enforceProcedureRateLimit: vi.fn(),
+}));
 
 const evidence = {
   scopeAndExceptionReview: "file:operator-route-review",
@@ -42,6 +47,19 @@ function setup(regulationType = "local") {
     compensation_claims: [
       {
         id: 1,
+        bookingId: 8,
+        passengerId: 20,
+        flightId: 19,
+        flightDistance: null,
+        delayMinutes: null,
+        calculatedAmount: null,
+        approvedAmount: null,
+        reason: null,
+        denialReason: null,
+        paidAt: null,
+        filedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
         claimType: "delay",
         status: "under_review",
         currency: "SAR",
@@ -105,5 +123,29 @@ describe("GACA assessed claim transaction", () => {
         },
       })
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  });
+});
+
+describe("Saudi compensation review API", () => {
+  function caller(role: "admin" | "user") {
+    return compensationRouter.createCaller({
+      user: { id: 2, role },
+    } as TrpcContext);
+  }
+  it("validates the input, enforces the reviewer role and returns the assessed SAR amount", async () => {
+    setup();
+    await expect(caller("user").processClaim(approval)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      caller("admin").processClaim({
+        ...approval,
+        gacaArrivalEvidence: { ...evidence, fxReference: "" },
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const result = await caller("admin").processClaim(approval);
+    expect(result.approvedAmount).toBe(76852);
+    expect(result.status).toBe("approved");
+    expect(result).not.toHaveProperty("reviewEvidence");
   });
 });

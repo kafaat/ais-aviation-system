@@ -163,11 +163,38 @@ describe("baggage: a bag tag is not a credential", () => {
       req: { headers: {} },
       res: {},
     } as any);
+    const tracking = [
+      {
+        id: 1,
+        baggageId: bag.id,
+        location: "RUH",
+        status: "lost",
+        scannedAt: new Date(),
+        createdAt: new Date(),
+        scannedBy: 44,
+        notes: "Lost baggage report: owner@example.com",
+      },
+    ];
+    boundary.track.mockResolvedValue({ baggage: bag, tracking });
     const tracked = await anonymous.track({ tagNumber: bag.tagNumber });
-    expect(tracked.baggage.lostDescription).toBeNull();
+    expect(tracked.baggage).not.toHaveProperty("lostDescription");
+    expect(tracked.baggage).not.toHaveProperty("bookingId");
+    expect(tracked.tracking[0]).not.toHaveProperty("notes");
+    expect(tracked.tracking[0]).not.toHaveProperty("scannedBy");
+    await expect(
+      anonymous.adminTrack({ tagNumber: bag.tagNumber })
+    ).rejects.toThrow();
+    expect(
+      (
+        await baggageRouter
+          .createCaller(admin())
+          .adminTrack({ tagNumber: bag.tagNumber })
+      ).tracking[0].notes
+    ).toBe(tracking[0].notes);
     expect(tracked.baggage.status).toBe("checked_in");
     const looked = await anonymous.getByTag({ tagNumber: bag.tagNumber });
-    expect(looked.lostDescription).toBeNull();
+    expect(looked).not.toHaveProperty("lostDescription");
+    expect(looked).not.toHaveProperty("specialHandling");
   });
 });
 

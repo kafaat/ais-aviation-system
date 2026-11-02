@@ -177,6 +177,7 @@ export async function runStripeReconciliation(
       paymentAmount: payments.amount,
       paymentCurrency: payments.currency,
       bookingStatus: bookings.status,
+      bookingTotal: bookings.totalAmount,
       bookingPaymentStatus: bookings.paymentStatus,
       bookingUserId: bookings.userId,
       createdAt: payments.createdAt,
@@ -270,6 +271,11 @@ export async function runStripeReconciliation(
           assertCollectedAmount(
             pi.amount_received,
             Number(payment.paymentAmount),
+            pi.currency
+          );
+          assertCollectedAmount(
+            pi.amount_received,
+            payment.bookingTotal,
             pi.currency
           );
           await handleSucceeded(
@@ -438,6 +444,16 @@ async function handleSucceeded(
   }
 
   await db.transaction(async tx => {
+    // Serialize with webhook settlement before checking the ledger or the
+    // payment snapshot. Both can change while Stripe is being contacted.
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, payment.bookingId))
+      .for("update");
+    if (!booking || booking.userId !== payment.bookingUserId)
+      throw new Error("Booking identity changed during reconciliation");
+    assertCollectedAmount(pi.amount_received, booking.totalAmount, pi.currency);
     // 1) Check for existing ledger entry (uniqueness protection)
     const existingLedger = await tx
       .select({ id: financialLedger.id })
@@ -459,23 +475,30 @@ async function handleSucceeded(
     }
 
     // 2) Update payment status
-    await tx
+    const [updated] = await tx
       .update(payments)
       .set({
         status: "completed",
         updatedAt: new Date(),
       })
-      .where(eq(payments.id, payment.paymentId));
+      .where(
+        and(
+          eq(payments.id, payment.paymentId),
+          eq(payments.bookingId, booking.id),
+          eq(payments.status, "pending"),
+          eq(payments.provider, "stripe"),
+          eq(payments.amount, pi.amount_received),
+          eq(payments.currency, pi.currency.toUpperCase()),
+          eq(payments.stripePaymentIntentId, pi.id)
+        )
+      );
+    if (updated.affectedRows !== 1)
+      throw new Error("Payment changed during reconciliation");
 
     // 3) Confirm the booking through the settlement service, which reserves
     //    the seats per segment and refuses a booking under collection
     //    review; a raw status write confirmed without inventory.
-    const [booking] = await tx
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, payment.bookingId))
-      .for("update");
-    if (booking?.status === "pending") {
+    if (booking.status === "pending") {
       await assertNoCollectionReview(tx, booking.id);
       await confirmFundedBooking(tx, booking, pi.id);
     }

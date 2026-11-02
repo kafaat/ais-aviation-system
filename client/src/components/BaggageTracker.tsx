@@ -201,11 +201,6 @@ export function BaggageTracker({
                 <Package className="h-5 w-5" />
                 {t("baggage.tagNumber")}: {trackingData.baggage.tagNumber}
               </h3>
-              {trackingData.baggage.description && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  {trackingData.baggage.description}
-                </p>
-              )}
               <p className="text-sm text-muted-foreground">
                 {t("baggage.weight")}: {trackingData.baggage.weight} kg
               </p>
@@ -281,11 +276,6 @@ export function BaggageTracker({
                           <MapPin className="h-3 w-3" />
                           {record.location}
                         </p>
-                        {record.notes && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {record.notes}
-                          </p>
-                        )}
                       </div>
                     </div>
                   ))}

@@ -13,14 +13,14 @@ Use the operator's restricted incident system. The incident owner records the fi
 
 ## Report fields for the controlled record
 
-| Section | Information to capture |
-|---|---|
-| Identification | Internal case, controller and DPO or other informed official, restricted contact, relevant provider and operator |
-| Chronology | Start or best estimate, circumstances, awareness, decision, deadline, submission, subsequent updates; timezone on each timestamp |
-| Scope | Categories and sensitivity, estimated/confirmed affected count, affected systems, data subjects and locations |
-| Impact and response | Actual/potential risks, containment, corrective measures already taken, recurrence prevention |
-| Data subjects | Notification decision, rationale, status, time, clear notice and evidence |
-| Follow-up | Unavailable information and justification, named owner, due time, authority reference, report copy and evidence location |
+| Section             | Information to capture                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Identification      | Internal case, controller and DPO or other informed official, restricted contact, relevant provider and operator                 |
+| Chronology          | Start or best estimate, circumstances, awareness, decision, deadline, submission, subsequent updates; timezone on each timestamp |
+| Scope               | Categories and sensitivity, estimated/confirmed affected count, affected systems, data subjects and locations                    |
+| Impact and response | Actual/potential risks, containment, corrective measures already taken, recurrence prevention                                    |
+| Data subjects       | Notification decision, rationale, status, time, clear notice and evidence                                                        |
+| Follow-up           | Unavailable information and justification, named owner, due time, authority reference, report copy and evidence location         |
 
 ## Transfer and retention review before enabling providers
 

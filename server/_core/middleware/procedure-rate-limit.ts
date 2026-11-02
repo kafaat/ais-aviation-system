@@ -18,6 +18,7 @@ export function sensitiveProcedureScope(
     return "auth";
   if (/^(payments|wallet|splitPayments|refunds)\./.test(path))
     return type === "query" ? "paymentRead" : "payment";
+  if (path === "loyalty.redeemMiles") return "accountStepUp";
   if (path === "bookings.create") return "booking";
   return null;
 }

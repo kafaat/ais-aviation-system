@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { airlineSupportUrl } from "@/lib/airline-support";
+import { formatFlightTime } from "@/lib/flight-time";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -32,6 +34,8 @@ interface FlightSuggestion {
   airline: string;
   origin: string;
   destination: string;
+  originTimezone: string | null;
+  destinationTimezone: string | null;
   departureTime: string;
   arrivalTime: string;
   price: number;
@@ -41,14 +45,7 @@ interface FlightSuggestion {
 
 function ChatDisclosure() {
   const { t } = useTranslation();
-  const configuredUrl = import.meta.env.VITE_AIRLINE_SUPPORT_URL;
-  let supportUrl: URL | undefined;
-  if (configuredUrl && URL.canParse(configuredUrl)) {
-    const url = new URL(configuredUrl);
-    if (url.protocol === "https:" && !url.username && !url.password) {
-      supportUrl = url;
-    }
-  }
+  const supportUrl = airlineSupportUrl();
   return (
     <div className="text-sm text-muted-foreground">
       <p>{t("aiChat.disclaimer")}</p>
@@ -446,20 +443,13 @@ export default function AiChat() {
                     <span className="text-sm">{s.destination}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>
-                      {new Date(s.departureTime).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}{" "}
-                      -{" "}
-                      {new Date(s.arrivalTime).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    <span className="font-bold text-base text-foreground">
-                      {(s.price / 100).toFixed(0)} SAR
-                    </span>
+                    <bdi dir="ltr">
+                      {formatFlightTime(s.departureTime, s.originTimezone)} –{" "}
+                      {formatFlightTime(s.arrivalTime, s.destinationTimezone)}
+                    </bdi>
+                    <bdi className="font-bold text-base text-foreground">
+                      {(s.price / 100).toFixed(2)} {t("common.currency")}
+                    </bdi>
                   </div>
                   {s.reason && (
                     <p className="text-xs text-primary mt-1">{s.reason}</p>

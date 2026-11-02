@@ -14,6 +14,7 @@
  */
 
 import crypto from "crypto";
+import type { SettlementTx } from "./booking-settlement.service";
 import type { RowDataPacket } from "mysql2";
 import { sql, eq, and, gt, isNull } from "drizzle-orm";
 import {
@@ -591,33 +592,42 @@ export async function consumeTotpStep(
       message: "Database not available",
     });
   }
-  return db.transaction(async tx => {
-    const [settings] = await tx
-      .select()
-      .from(mfaSettings)
-      .where(eq(mfaSettings.userId, userId))
-      .limit(1)
-      .for("update");
-    if (!settings) return false;
-    const plain = decryptSecret(settings.secret);
-    const step = matchingTotpStep(plain, token);
-    if (
-      step === null ||
-      (settings.lastUsedStep != null && step <= settings.lastUsedStep)
-    )
-      return false;
-    await tx
-      .update(mfaSettings)
-      .set({
-        lastUsedStep: step,
-        updatedAt: new Date(),
-        ...(secretNeedsReencryption(settings.secret)
-          ? { secret: encryptSecret(plain) }
-          : {}),
-      })
-      .where(eq(mfaSettings.userId, userId));
-    return true;
-  });
+  return db.transaction(tx => consumeActionTotp(tx, userId, token, "required"));
+}
+
+/** Lock and consume the factor in the same transaction as a protected action. */
+export async function consumeActionTotp(
+  tx: SettlementTx,
+  userId: number,
+  token: string | undefined,
+  mode: "required" | "if-enrolled"
+): Promise<boolean> {
+  const [settings] = await tx
+    .select()
+    .from(mfaSettings)
+    .where(eq(mfaSettings.userId, userId))
+    .limit(1)
+    .for("update");
+  if (mode === "if-enrolled" && !settings?.isEnabled) return true;
+  if (!settings || !token) return false;
+  const plain = decryptSecret(settings.secret);
+  const step = matchingTotpStep(plain, token);
+  if (
+    step === null ||
+    (settings.lastUsedStep != null && step <= settings.lastUsedStep)
+  )
+    return false;
+  await tx
+    .update(mfaSettings)
+    .set({
+      lastUsedStep: step,
+      updatedAt: new Date(),
+      ...(secretNeedsReencryption(settings.secret)
+        ? { secret: encryptSecret(plain) }
+        : {}),
+    })
+    .where(eq(mfaSettings.userId, userId));
+  return true;
 }
 
 /**

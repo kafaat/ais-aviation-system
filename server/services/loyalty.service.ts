@@ -7,6 +7,7 @@ import {
   requireMiles,
 } from "./loyalty-balance.service";
 import type { SettlementTx } from "./booking-settlement.service";
+import { consumeActionTotp } from "./mfa.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -286,7 +287,8 @@ export async function awardMilesForBooking(
 export async function redeemMiles(
   userId: number,
   milesToRedeem: number,
-  bookingId?: number
+  bookingId?: number,
+  mfaToken?: string
 ): Promise<{ discountAmount: number; newBalance: number }> {
   requireMiles(milesToRedeem);
   try {
@@ -295,6 +297,24 @@ export async function redeemMiles(
 
     // Use a transaction to prevent race conditions on balance updates
     return await database.transaction(async tx => {
+      if (!(await consumeActionTotp(tx, userId, mfaToken, "if-enrolled")))
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "A fresh authenticator code is required to redeem miles",
+        });
+      if (bookingId !== undefined) {
+        const [owned] = await tx
+          .select({ id: bookings.id })
+          .from(bookings)
+          .where(and(eq(bookings.id, bookingId), eq(bookings.userId, userId)))
+          .limit(1)
+          .for("update");
+        if (!owned)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Booking not found",
+          });
+      }
       const state = await lockMilesState(tx, userId);
       await expireMilesLots(tx, state);
       const newBalance = await spendMiles(tx, state, milesToRedeem, {

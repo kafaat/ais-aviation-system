@@ -114,6 +114,12 @@ export const STRICT_RATE_LIMITS: Record<string, RateLimitTier> = {
     windowMs: 15 * 60 * 1000, // 15 minutes
   },
 
+  accountStepUp: {
+    name: "accountStepUp",
+    requestsPerWindow: 5,
+    windowMs: 15 * 60 * 1000,
+  },
+
   // Password reset
   passwordReset: {
     name: "passwordReset",

@@ -45,7 +45,9 @@ vi.mock("@/lib/trpc", () => ({
                   airline: "Test airline",
                   origin: "RUH",
                   destination: "JED",
-                  price: 10000,
+                  price: 10049,
+                  originTimezone: "Asia/Riyadh",
+                  destinationTimezone: "Asia/Riyadh",
                   cabinClass: "economy",
                   departureTime: "2026-11-04T09:00:00Z",
                   arrivalTime: "2026-11-04T11:00:00Z",
@@ -87,6 +89,8 @@ it.each([
       await screen.findByRole("link", { name: /Test airline/ })
     ).toHaveAttribute("href", "/booking/99");
     expect(log).toHaveTextContent("Flight found");
+    expect(log).toHaveTextContent("12:00 – 14:00");
+    expect(log).toHaveTextContent("100.49");
   }
 );
 

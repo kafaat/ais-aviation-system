@@ -1,6 +1,12 @@
 import axe from "axe-core";
 import { expect, type Page } from "@playwright/test";
 
+declare global {
+  interface Window {
+    axe: typeof axe;
+  }
+}
+
 /** Scan the actual rendered controls without sending passenger data to any service. */
 export async function expectAccessibleControls(
   page: Page,
@@ -11,8 +17,7 @@ export async function expectAccessibleControls(
   }
   await page.evaluate(axe.source);
   const failures = await page.evaluate(async include => {
-    const engine = (window as Window & { axe: typeof axe }).axe;
-    const result = await engine.run(
+    const result = await window.axe.run(
       { include },
       {
         runOnly: {
