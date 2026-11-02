@@ -7,6 +7,7 @@ import {
   formatFlightTime,
   isValidTimeZone,
   resolveTimeZone,
+  withLatinDigits,
 } from "./flight-time";
 
 // 20:30Z is 23:30 in Riyadh (UTC+3) and 00:30 the next day in Dubai (UTC+4).
@@ -251,5 +252,16 @@ describe("process time zone independence", () => {
         "Asia/Dubai"
       )
     ).toBe(1);
+  });
+});
+
+describe("digits", () => {
+  it("keeps Latin digits for Arabic dates and times", () => {
+    const instant = new Date("2026-11-14T21:05:00.000Z");
+    expect(formatFlightTime(instant, "Asia/Riyadh", "ar")).toBe("00:05");
+    expect(formatFlightDate(instant, "Asia/Riyadh", "ar")).toMatch(/15/);
+    expect(formatFlightDate(instant, "Asia/Riyadh", "ar")).not.toMatch(/[٠-٩]/);
+    expect(withLatinDigits("ar")).toBe("ar-u-nu-latn");
+    expect(withLatinDigits("ar-u-nu-arab")).toBe("ar-u-nu-arab");
   });
 });

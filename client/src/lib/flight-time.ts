@@ -51,12 +51,19 @@ function toDate(value: DateInput): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/** Flight times and dates keep Latin digits in every language, as the
+ * date-fns output they replace did; Intl would otherwise pick Arabic-Indic
+ * digits for `ar`. A tag that already carries a Unicode extension is kept. */
+export function withLatinDigits(locale: string): string {
+  return locale.includes("-u-") ? locale : `${locale}-u-nu-latn`;
+}
+
 function safeFormat(
   locale: string,
   options: Intl.DateTimeFormatOptions
 ): Intl.DateTimeFormat {
   try {
-    return new Intl.DateTimeFormat(locale, options);
+    return new Intl.DateTimeFormat(withLatinDigits(locale), options);
   } catch {
     // An unknown locale tag must not take the page down.
     return new Intl.DateTimeFormat(DEFAULT_LOCALE, options);
