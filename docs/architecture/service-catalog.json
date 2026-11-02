@@ -2848,6 +2848,7 @@
           "encrypted",
           "mfaChallenges",
           "mfaSettings",
+          "process.env.MFA_ENCRYPTION_KEY",
           "refreshTokens",
           "secret",
           "token"
