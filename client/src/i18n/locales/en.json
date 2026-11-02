@@ -481,7 +481,8 @@
     "contactUs": "Contact Us",
     "email": "Email",
     "phone": "Phone",
-    "rights": "All rights reserved"
+    "rights": "All rights reserved",
+    "privacy": "Privacy Policy"
   },
   "profile": {
     "title": "User Profile",
@@ -4126,9 +4127,80 @@
       "low": "Low"
     }
   },
-  "flightTime": {
-    "localTime": "Local airport time",
-    "dayOffset": "Arrives {{offset}} calendar day(s) from the departure date"
+  "privacy": {
+    "title": "Privacy Policy",
+    "metaDescription": "How {{appName}} collects, uses, shares and protects your personal data.",
+    "lastUpdated": "Last updated: {{date}}",
+    "backHome": "Back to home",
+    "operatorPlaceholderNotice": "Items shown in square brackets, such as the operator's legal name and contact details, must be completed by the operator of this service before it is used in production.",
+    "intro": "This policy explains how {{appName}}, operated by {{operator}}, collects, uses, shares and protects personal data when you search for flights, make bookings, check in and use related services. It applies to the web application and to the e-mails, SMS messages and notifications we send in connection with your bookings.",
+    "sections": {
+      "account": {
+        "title": "1. Account and authentication data",
+        "body": "When you create an account we collect your name, e-mail address and a password. Passwords are stored only as a salted hash and are never stored or logged in clear text. We also record your account role and your sign-in sessions. If you enable multi-factor authentication, we store the secret needed to verify your one-time codes."
+      },
+      "booking": {
+        "title": "2. Booking and passenger data",
+        "body": "To issue a ticket we process, for each traveller, the name and title, passenger type (adult, child or infant), date of birth, travel document number, expiry date and nationality where the route requires them, together with seat, baggage, meal and special-assistance selections, the ticket number, and the booking contact e-mail address and phone number. You may save frequent travellers to your profile and edit or remove them at any time. Travel document data is used only to fulfil the booking and to meet airline, airport and border-control requirements."
+      },
+      "payment": {
+        "title": "3. Payments",
+        "body": "Payments are processed by Stripe, an independent payment processor. Your card number, expiry date and security code are entered directly on Stripe's secure checkout page and are never received or stored by this platform. We keep the payment status, amount, currency and Stripe's transaction references so that we can confirm, refund or reconcile your booking. Stripe processes your data under its own privacy policy."
+      },
+      "preferences": {
+        "title": "4. Loyalty, notifications and price alerts",
+        "body": "If you join the loyalty programme we record the miles and tier you earn and the activity that earned them. If you set up price alerts or favourite routes, we store the routes, dates and price thresholds you choose and the channels you want to be contacted on. Your notification preferences (e-mail, SMS, push and in-app) are stored so that we only contact you in the ways you have chosen. You can change these settings in your profile at any time."
+      },
+      "cookies": {
+        "title": "5. Cookies and similar technologies",
+        "intro": "We group cookies and browser storage into the following categories. Only essential cookies are set before you make a choice.",
+        "essential": "Essential: required for the site to work, including sign-in sessions, security protections, language direction and accessibility settings. These cannot be switched off.",
+        "analytics": "Analytics: help us understand how visitors use the site through aggregated usage data so that we can improve performance and usability.",
+        "marketing": "Marketing: used to measure campaigns and show relevant offers; these may share data with third-party advertising partners.",
+        "preferences": "Preferences: remember choices such as language, region and display settings.",
+        "consent": "Your choice is stored in your browser for twelve months. If you are signed in it is also recorded against your account together with the policy version, the time of your choice, your IP address and browser identifier, so that we can prove and honour it across your devices. You can change or withdraw your cookie consent at any time using the button below."
+      },
+      "biometric": {
+        "title": "6. Biometric boarding (optional)",
+        "body": "Where biometric boarding is offered, you may choose to enrol so that your identity can be verified at the gate without presenting documents. Enrolment is entirely optional and happens only after you give explicit, separate consent. We store a hashed template derived from the biometric capture rather than the image itself, linked to your passenger record for a specific flight. An enrolment expires automatically {{days}} days after it is created. You can revoke it at any time, which deletes the stored template immediately, and you may always board using your travel documents instead."
+      },
+      "sharing": {
+        "title": "7. Who we share data with",
+        "intro": "We share personal data only where it is needed to deliver the service or where the law requires it:",
+        "airlines": "Operating and marketing airlines, their ground handlers and airports, to issue tickets, assign seats and gates, handle baggage and manage disruptions.",
+        "payments": "Stripe, to process payments and refunds.",
+        "regulators": "Government border-control and aviation authorities through Advance Passenger Information (APIS) programmes, which require passenger name, date of birth, nationality and travel-document details before certain international flights, and other authorities where disclosure is legally required.",
+        "providers": "Service providers who send e-mail and SMS messages on our behalf, host our infrastructure or store backups, acting under our instructions.",
+        "corporate": "If you book through a corporate account or a travel agent, the booking and travel details are visible to that account's authorised administrators.",
+        "noSale": "We do not sell your personal data."
+      },
+      "retention": {
+        "title": "8. How long we keep data",
+        "body": "Account data is kept for as long as your account is active. Booking, ticketing and payment records are kept after travel for as long as accounting, tax and aviation-safety rules require. Bookings you delete are retained in a recoverable state for a limited period (currently {{deletedBookingDays}} days) before they are permanently purged. Biometric enrolments expire after {{days}} days or when revoked. Cookie consent records are kept while they remain valid and for as long as needed to demonstrate compliance. Where we must keep a record but no longer need to identify you, we anonymise it."
+      },
+      "rights": {
+        "title": "9. Your rights",
+        "intro": "Depending on where you live, you may have the right to:",
+        "access": "Access the personal data we hold about you and receive a copy in a portable format.",
+        "correction": "Correct inaccurate data. Most account and saved-traveller details can be edited directly in your profile.",
+        "deletion": "Request deletion of your account. Where the law or a live booking requires us to keep certain records, we will tell you what is retained and why.",
+        "withdraw": "Withdraw consent at any time for cookies, marketing communications and biometric enrolment, without affecting the lawfulness of processing carried out before withdrawal.",
+        "object": "Object to or restrict certain processing, and lodge a complaint with your data protection authority.",
+        "howTo": "Cookie, notification and saved-traveller settings can be changed directly in the application. For all other requests, contact us using the details below; we may ask you to verify your identity before acting on a request."
+      },
+      "security": {
+        "title": "10. Security",
+        "body": "Data is transmitted over encrypted connections, access is limited to staff who need it, administrative actions are logged, and passwords and biometric templates are stored only in hashed form. No system is completely secure; if a breach affects your data we will notify you and the relevant authorities as the law requires."
+      },
+      "changes": {
+        "title": "11. Changes to this policy",
+        "body": "We may update this policy as the service evolves. The date at the top of the page shows when it was last changed, and significant changes will be announced in the application or by e-mail."
+      },
+      "contact": {
+        "title": "12. Contact",
+        "body": "Questions or requests about your personal data can be sent to the operator of this service: {{contact}}."
+      }
+    }
   },
   "crew": {
     "tabs": {
@@ -4385,5 +4457,9 @@
     "tokens": "Tokens (in/out)",
     "costUsd": "Cost (USD)",
     "bookings": "{{count}} bookings"
+  },
+  "flightTime": {
+    "localTime": "Local airport time",
+    "dayOffset": "Arrives {{offset}} calendar day(s) from the departure date"
   }
 }

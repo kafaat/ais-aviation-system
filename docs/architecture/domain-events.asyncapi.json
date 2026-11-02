@@ -7,8 +7,8 @@
     "description": "At-least-once authenticated HTTP delivery. Deduplicate source/id, retain tenant scope and schema version. New writes require registered payload contracts; unlisted historical payloads remain readable for replay. Producer names are checked against this registry. No broker or production server is implied."
   },
   "x-ais-producer-coverage": {
-    "callSites": 72,
-    "eventTypes": 90,
+    "callSites": 70,
+    "eventTypes": 87,
     "unregistered": []
   },
   "defaultContentType": "application/cloudevents+json",
@@ -7200,7 +7200,7 @@
         "title": "PaymentConfirmed",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
-        "x-ais-producers": ["server/services/stripe-webhook.service.ts"],
+        "x-ais-producers": [],
         "payload": {
           "type": "object",
           "properties": {
@@ -7290,7 +7290,7 @@
         "title": "BookingRefunded",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
-        "x-ais-producers": ["server/services/stripe-webhook.service.ts"],
+        "x-ais-producers": [],
         "payload": {
           "type": "object",
           "properties": {
@@ -7380,7 +7380,7 @@
         "title": "BookingPartiallyRefunded",
         "contentType": "application/cloudevents+json",
         "summary": "Version 1 payload and CloudEvents envelope",
-        "x-ais-producers": ["server/services/stripe-webhook.service.ts"],
+        "x-ais-producers": [],
         "payload": {
           "type": "object",
           "properties": {

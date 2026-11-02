@@ -17,6 +17,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import crypto from "crypto";
 import { assertPassengerOwnership } from "./access-control.service";
+import { BIOMETRIC_ENROLLMENT_VALIDITY_DAYS } from "@shared/const";
 
 /** Trusted request context, never accepted from the client payload. */
 export interface BiometricActor {
@@ -100,8 +101,8 @@ export interface BiometricGate {
 // Constants
 // ============================================================================
 
-/** Default enrollment validity period: 1 year */
-const ENROLLMENT_VALIDITY_DAYS = 365;
+/** Default enrollment validity period: 1 year (quoted in the privacy policy) */
+const ENROLLMENT_VALIDITY_DAYS = BIOMETRIC_ENROLLMENT_VALIDITY_DAYS;
 
 /** Boarding token validity: 30 minutes */
 const BOARDING_TOKEN_VALIDITY_MINUTES = 30;
