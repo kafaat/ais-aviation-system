@@ -7,7 +7,11 @@ const cache = vi.hoisted(() => ({
   search: null as unknown,
   detail: null as unknown,
 }));
-vi.mock("../db", () => ({ searchFlights: vi.fn(), getFlightById: vi.fn() }));
+vi.mock("../db", () => ({
+  searchFlights: vi.fn(),
+  getFlightById: vi.fn(),
+  getFlightLiveState: vi.fn(),
+}));
 vi.mock("./pricing/dynamic-pricing.service", () => ({
   DynamicPricingService: {},
 }));
@@ -70,6 +74,14 @@ beforeEach(() => {
   cache.search = cache.detail = null;
   vi.mocked(db.searchFlights).mockResolvedValue([searchRow]);
   vi.mocked(db.getFlightById).mockResolvedValue(flight);
+  vi.mocked(db.getFlightLiveState).mockImplementation(async ids =>
+    ids.map(id => ({
+      id,
+      status: flight.status,
+      economyAvailable: flight.economyAvailable,
+      businessAvailable: flight.businessAvailable,
+    }))
+  );
 });
 describe("flight JSON cache boundary", () => {
   it("preserves nonempty search results, dates and the public contract after JSON serialization", async () => {

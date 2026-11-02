@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   priceAlerts,
@@ -286,7 +286,7 @@ async function getLowestPriceForRoute(
         and(
           eq(flights.originId, originId),
           eq(flights.destinationId, destinationId),
-          eq(flights.status, "scheduled"),
+          inArray(flights.status, ["scheduled", "delayed"]),
           gte(flights.departureTime, new Date())
         )
       );

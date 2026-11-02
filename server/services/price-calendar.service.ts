@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, gte, lte, sql, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { flights } from "../../drizzle/schema";
 import { redisCacheService, CacheTTL } from "./redis-cache.service";
@@ -122,7 +122,7 @@ export async function getMonthlyPrices(
           eq(flights.destinationId, input.destinationId),
           gte(flights.departureTime, startOfMonth),
           lte(flights.departureTime, endOfMonth),
-          eq(flights.status, "scheduled")
+          inArray(flights.status, ["scheduled", "delayed"])
         )
       )
       .groupBy(sql`DATE(${flights.departureTime})`)
@@ -281,7 +281,7 @@ export async function getFlexiblePrices(
           eq(flights.destinationId, input.destinationId),
           gte(flights.departureTime, startDate),
           lte(flights.departureTime, endDate),
-          eq(flights.status, "scheduled")
+          inArray(flights.status, ["scheduled", "delayed"])
         )
       )
       .groupBy(sql`DATE(${flights.departureTime})`)
@@ -420,7 +420,7 @@ export async function getAvailableMonths(
           eq(flights.destinationId, destinationId),
           gte(flights.departureTime, now),
           lte(flights.departureTime, endDate),
-          eq(flights.status, "scheduled")
+          inArray(flights.status, ["scheduled", "delayed"])
         )
       )
       .groupBy(

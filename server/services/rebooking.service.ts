@@ -9,7 +9,7 @@ import {
   bookingAncillaries,
   ancillaryServices,
 } from "../../drizzle/schema";
-import { eq, and, gte, sql } from "drizzle-orm";
+import { eq, and, gte, sql, inArray } from "drizzle-orm";
 
 /**
  * Rebooking Service
@@ -243,7 +243,7 @@ export async function searchFlightsForRebook(
       and(
         eq(flights.originId, originId),
         eq(flights.destinationId, destinationId),
-        eq(flights.status, "scheduled"),
+        inArray(flights.status, ["scheduled", "delayed"]),
         gte(flights.departureTime, now)
       )
     )
