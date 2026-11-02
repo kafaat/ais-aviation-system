@@ -85,27 +85,27 @@ function StatusBadge({ status }: { status: ClaimStatus }) {
   > = {
     pending: {
       variant: "secondary",
-      label: t("compensation.status.pending", "Pending"),
+      label: t("compensation.statuses.pending", "Pending"),
     },
     under_review: {
       variant: "outline",
-      label: t("compensation.status.underReview", "Under Review"),
+      label: t("compensation.statuses.underReview", "Under Review"),
     },
     approved: {
       variant: "default",
-      label: t("compensation.status.approved", "Approved"),
+      label: t("compensation.statuses.approved", "Approved"),
     },
     denied: {
       variant: "destructive",
-      label: t("compensation.status.denied", "Denied"),
+      label: t("compensation.statuses.denied", "Denied"),
     },
     paid: {
       variant: "default",
-      label: t("compensation.status.paid", "Paid"),
+      label: t("compensation.statuses.paid", "Paid"),
     },
     appealed: {
       variant: "outline",
-      label: t("compensation.status.appealed", "Appealed"),
+      label: t("compensation.statuses.appealed", "Appealed"),
     },
   };
 
@@ -333,22 +333,22 @@ function ClaimsQueue() {
                 {t("compensation.admin.allStatuses", "All Statuses")}
               </SelectItem>
               <SelectItem value="pending">
-                {t("compensation.status.pending", "Pending")}
+                {t("compensation.statuses.pending", "Pending")}
               </SelectItem>
               <SelectItem value="under_review">
-                {t("compensation.status.underReview", "Under Review")}
+                {t("compensation.statuses.underReview", "Under Review")}
               </SelectItem>
               <SelectItem value="approved">
-                {t("compensation.status.approved", "Approved")}
+                {t("compensation.statuses.approved", "Approved")}
               </SelectItem>
               <SelectItem value="denied">
-                {t("compensation.status.denied", "Denied")}
+                {t("compensation.statuses.denied", "Denied")}
               </SelectItem>
               <SelectItem value="paid">
-                {t("compensation.status.paid", "Paid")}
+                {t("compensation.statuses.paid", "Paid")}
               </SelectItem>
               <SelectItem value="appealed">
-                {t("compensation.status.appealed", "Appealed")}
+                {t("compensation.statuses.appealed", "Appealed")}
               </SelectItem>
             </SelectContent>
           </Select>

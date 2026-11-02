@@ -186,7 +186,7 @@ export function APISForm({
     onSuccess: () => {
       toast.success(
         t(
-          "apis.submitSuccess",
+          "apis.documentsSaved",
           "Travel document information saved successfully"
         )
       );
@@ -442,7 +442,7 @@ export function APISForm({
                       }
                     )
                   : t(
-                      "apis.description",
+                      "apis.formDescription",
                       "Advance Passenger Information required by destination authorities"
                     )}
               </CardDescription>
@@ -1036,7 +1036,7 @@ export function APISForm({
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400">
                   {t(
-                    "apis.submissionDeadline",
+                    "apis.submitBeforeDeparture",
                     "Submit at least {{minutes}} minutes before departure",
                     {
                       minutes: requirementsQuery.data.submissionDeadlineMinutes,
@@ -1044,7 +1044,7 @@ export function APISForm({
                   )}
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400">
-                  {t("apis.messageFormat", "Format: {{format}}", {
+                  {t("apis.formatLabel", "Format: {{format}}", {
                     format:
                       requirementsQuery.data.format === "paxlst"
                         ? "PAXLST (UN/EDIFACT)"

@@ -276,7 +276,7 @@ function RankingsTab() {
                       className={`h-2.5 w-2.5 rounded-full ${config.dot}`}
                     />
                     <span className="text-sm font-medium capitalize">
-                      {t(`passengerPriority.tier.${tier}`, config.label)}
+                      {t(`passengerPriority.tiers.${tier}`, config.label)}
                     </span>
                   </div>
                   <p className="text-2xl font-bold">{tierCounts[tier] ?? 0}</p>
