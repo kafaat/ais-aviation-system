@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.33.5
+
+### Bug Fixes
+
+- fix(i18n): translate 747 missing keys and split keys reused with conflicting meanings (#230) (64f5cbb)
+
+### Documentation
+
+- docs(runbook): parked pull_request runs on a release proposal must be approved (#229) (31e5761)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.4...v1.33.5
+
+---
+
 ## What's Changed in v1.33.4
 
 ### Bug Fixes
