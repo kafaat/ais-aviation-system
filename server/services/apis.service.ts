@@ -1,6 +1,6 @@
 import { generatePAXLST } from "./apis-paxlst";
 import { isValidTimeZone } from "./civil-day";
-import { flightBookingCondition } from "./flight-state.service";
+import { manifestBookingCondition } from "./flight-state.service";
 /**
  * Advance Passenger Information System (APIS) Service
  *
@@ -17,7 +17,7 @@ import {
   airports,
   airlines,
 } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -586,12 +586,7 @@ export async function getFlightAPISStatus(flightId: number) {
     })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        flightBookingCondition(flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
+    .where(manifestBookingCondition(flightId));
 
   if (flightPassengers.length === 0) {
     return {
@@ -829,12 +824,7 @@ export async function flagIncompletePassengers(flightId: number) {
     })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        flightBookingCondition(flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
+    .where(manifestBookingCondition(flightId));
 
   if (flightPassengers.length === 0) {
     return {
@@ -972,12 +962,7 @@ export async function generateAPISMessage(
     })
     .from(passengers)
     .innerJoin(bookings, eq(passengers.bookingId, bookings.id))
-    .where(
-      and(
-        flightBookingCondition(flightId),
-        sql`${bookings.status} IN ('confirmed', 'completed')`
-      )
-    );
+    .where(manifestBookingCondition(flightId));
 
   const passengerIds = passengerData.map(p => p.passengerId);
 

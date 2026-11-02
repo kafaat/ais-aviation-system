@@ -20,8 +20,22 @@ const transitions: Record<FlightStatus, FlightStatus[]> = {
   completed: [],
 };
 /** Current segment membership takes precedence over a historical primary flight. */
-export function flightBookingCondition(flightId: number | typeof flights.id) {
-  return sql`((NOT EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id}) AND ${bookings.flightId} = ${flightId}) OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.flightId = ${flightId} AND bs.status IN ('pending','confirmed'))) `;
+export function flightBookingCondition(
+  flightId: number | typeof flights.id,
+  purpose: "operational" | "manifest" = "operational"
+) {
+  const statuses =
+    purpose === "manifest"
+      ? sql`('confirmed','completed')`
+      : sql`('pending','confirmed')`;
+  return sql`((NOT EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id}) AND ${bookings.flightId} = ${flightId}) OR EXISTS (SELECT 1 FROM booking_segments bs WHERE bs.bookingId = ${bookings.id} AND bs.flightId = ${flightId} AND bs.status IN ${statuses})) `;
+}
+export function manifestBookingCondition(flightId: number) {
+  return and(
+    flightBookingCondition(flightId, "manifest"),
+    sql`${bookings.status} IN ('confirmed','completed')`,
+    isNull(bookings.deletedAt)
+  );
 }
 export async function transitionFlight(
   tx: SettlementTx,

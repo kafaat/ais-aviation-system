@@ -2327,7 +2327,9 @@
     "conversationLog": "Conversation messages",
     "you": "You",
     "contactSupport": "Contact the airline’s support team (opens in a new tab)",
-    "supportFallback": "For a decision about a fare, refund or change, contact the airline through its official customer service channel."
+    "supportFallback": "For a decision about a fare, refund or change, contact the airline through its official customer service channel.",
+    "policySource": "Source: Saudi Passenger Rights Protection Regulations, Article 5 (opens in a new tab)",
+    "policyHelp": "Passenger rights and refunds"
   },
   "cancelBooking": {
     "split": {

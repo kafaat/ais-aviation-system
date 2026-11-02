@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { passengerRightsSource } from "@shared/passenger-policy";
 import { airlineSupportUrl } from "@/lib/airline-support";
 import { formatFlightTime } from "@/lib/flight-time";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 
 interface ChatMessageDisplay {
+  policySourceLanguage?: keyof typeof passengerRightsSource;
   id: number;
   role: "user" | "assistant" | "system";
   content: string;
@@ -153,6 +155,7 @@ export default function AiChat() {
         id: Date.now() + 1,
         role: "assistant",
         content: result.message,
+        policySourceLanguage: result.policySourceLanguage,
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, aiMsg]);
@@ -389,6 +392,16 @@ export default function AiChat() {
                 <p className="text-sm whitespace-pre-wrap" dir="auto">
                   {msg.content}
                 </p>
+                {msg.policySourceLanguage && (
+                  <a
+                    href={passengerRightsSource[msg.policySourceLanguage]}
+                    className="underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {t("aiChat.policySource")}
+                  </a>
+                )}
                 <div
                   className={`flex items-center gap-1 mt-1 ${
                     msg.role === "user"
@@ -483,6 +496,16 @@ export default function AiChat() {
       {/* Input Area */}
       <div className="border-t bg-background/80 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          {!messages.some(message => message.policySourceLanguage) && (
+            <button
+              type="button"
+              disabled={isGenerating}
+              className="mb-2 text-sm underline"
+              onClick={() => handleSendMessage(t("aiChat.policyHelp"))}
+            >
+              {t("aiChat.policyHelp")}
+            </button>
+          )}
           <div className="flex items-end gap-2">
             <div className="flex-1 relative">
               <textarea

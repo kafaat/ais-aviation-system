@@ -321,6 +321,13 @@ try {
         ticket.legs.map(l => l.seatNumber),
         ["1A", "1B"]
       );
+      assert.deepEqual(
+        ticket.legs.map(l => l.localCoupon),
+        [
+          { number: 1, status: "C" },
+          { number: 2, status: "C" },
+        ]
+      );
       const calendar = await documents.generateCalendarEvent({
         bookingId: id + 2,
       });
@@ -337,6 +344,15 @@ try {
       assert.equal(p.seatNumber, "1A");
       assert.equal((await getCheckInStatus(id + 3)).totalPassengers, 1);
       await undoCheckIn(id + 3, id + 2, id + 40);
+      const reopened = await readTicketDocument(id + 2, id + 40, id);
+      assert.equal(reopened.data.ticketNumber, ticket.data.ticketNumber);
+      assert.deepEqual(
+        reopened.legs.map(l => l.localCoupon),
+        [
+          { number: 1, status: "C" },
+          { number: 2, status: "O" },
+        ]
+      );
       assert.equal((await verifyActiveBoardingPass(second.token)).valid, false);
       assert.equal((await verifyActiveBoardingPass(first.token)).valid, true);
       const [b] = await db

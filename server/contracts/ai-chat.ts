@@ -34,6 +34,7 @@ export const responseContracts = {
     greeting: z.string(),
   }),
   sendMessage: z.object({
+    policySourceLanguage: z.enum(["ar", "en"]).optional(),
     message: z.string(),
     suggestions: z
       .union([

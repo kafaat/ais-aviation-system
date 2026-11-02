@@ -112,8 +112,10 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/ai-guardrails.service.ts",
+        "server/services/chat-passenger-policy.ts",
         "server/services/flights.service.ts",
-        "server/services/intelligence/gateway.ts"
+        "server/services/intelligence/gateway.ts",
+        "shared/passenger-policy.ts"
       ],
       "tableExpressions": {
         "reads": ["bookingSuggestions", "chatConversations", "chatMessages"],
@@ -943,6 +945,23 @@
       "replacement": null
     },
     {
+      "file": "server/services/chat-passenger-policy.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/chat-passenger-policy.ts",
+      "domain": "platform",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/services/ai-chat-booking.service.ts"],
+      "dependencies": [],
+      "tableExpressions": {
+        "reads": [],
+        "writes": []
+      },
+      "replacement": null
+    },
+    {
       "file": "server/services/civil-day.ts",
       "lifecycle": "active",
       "technicalOwner": "server/services/civil-day.ts",
@@ -1360,7 +1379,8 @@
         "drizzle/schema.ts",
         "server/db.ts",
         "server/services/crew-rule.service.ts",
-        "server/services/demo-capability.ts"
+        "server/services/demo-capability.ts",
+        "server/services/flight-state.service.ts"
       ],
       "tableExpressions": {
         "reads": [
@@ -1841,6 +1861,7 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/services/apis.service.ts",
+        "server/services/dcs.service.ts",
         "server/services/disruption.service.ts",
         "server/services/event-inbox.service.ts",
         "server/services/flight-cancellation.service.ts",

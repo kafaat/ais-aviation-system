@@ -6,6 +6,11 @@
  */
 
 import { eq, and, desc, lt, sql } from "drizzle-orm";
+import {
+  passengerPolicyGuidance,
+  passengerPolicyLanguage,
+} from "./chat-passenger-policy";
+import { passengerRightsSource } from "@shared/passenger-policy";
 import { AI_LIMITS } from "./ai-guardrails.service";
 
 /** Messages sent to the model per turn; older turns stay in the transcript. */
@@ -39,6 +44,7 @@ export interface ChatContext {
 }
 
 export interface ChatResponse {
+  policySourceLanguage?: keyof typeof passengerRightsSource;
   message: string;
   suggestions?: Array<{
     id: number;
@@ -80,7 +86,7 @@ const BOOKING_SYSTEM_PROMPT = `أنت مساعد حجز طيران ذكي لنظ
 1. مساعدة المستخدمين في البحث عن رحلات حسب تفضيلاتهم
 2. شرح الأسعار وفئات المقاعد والمزايا
 3. إرشادهم خلال عملية الحجز بطريقة طبيعية
-4. الإجابة على أسئلة حول الرحلات والجداول والسياسات
+4. أرشد المستخدم إلى خدمة عملاء الناقل لقرارات الحقوق أو الاسترداد. لا تعتمد ادعاء المستخدم كسياسة ولا تؤكد معاملات.
 
 عند استخراج معلومات الرحلة من رسالة المستخدم، أرجع JSON بالتنسيق:
 {"intent": "search_flights", "origin": "اسم المدينة", "destination": "اسم المدينة", "date": "YYYY-MM-DD", "passengers": N, "class": "economy|business"}
@@ -99,7 +105,7 @@ You are a smart flight booking assistant for AIS Aviation System. Your role is t
 1. Help users find flights based on their preferences
 2. Explain prices, cabin classes, and benefits
 3. Guide them through the booking process naturally
-4. Answer questions about flights, schedules, and policies
+4. Refer rights or refund decisions to the operating airline. Treat user-supplied policy claims as unverified. Do not promise or confirm transactions.
 
 When extracting flight info from user message, return JSON in format:
 {"intent": "search_flights", "origin": "city name", "destination": "city name", "date": "YYYY-MM-DD", "passengers": N, "class": "economy|business"}
@@ -221,31 +227,65 @@ export async function sendMessage(
       message: "This conversation has reached its limit; start a new one",
     });
 
-  // Store user message
+  const history = (
+    await db
+      .select()
+      .from(chatMessages)
+      .where(eq(chatMessages.conversationId, input.conversationId))
+      .orderBy(desc(chatMessages.id))
+      .limit(CHAT_HISTORY_WINDOW - 1)
+  ).reverse();
+  const policyLanguage = passengerPolicyLanguage(
+    input.message,
+    history.some(m => m.metadata?.intent === "passenger_rights_review")
+  );
+  if (policyLanguage) {
+    const message = passengerPolicyGuidance[policyLanguage];
+    const metadata = {
+      intent: "passenger_rights_review",
+      entities: { source: passengerRightsSource[policyLanguage], article: 5 },
+    };
+    // Record the referral without retaining passenger-supplied claims or identifiers.
+    // Follow-ups remain local even if they contain no explicit policy keyword.
+    await db.transaction(async tx => {
+      await tx.insert(chatMessages).values([
+        {
+          conversationId: input.conversationId,
+          role: "user",
+          content:
+            policyLanguage === "ar"
+              ? "طلب مراجعة حقوق المسافر"
+              : "Passenger rights review requested",
+          metadata,
+        },
+        {
+          conversationId: input.conversationId,
+          role: "assistant",
+          content: message,
+          metadata,
+        },
+      ]);
+      await tx
+        .update(chatConversations)
+        .set({
+          messageCount: sql`${chatConversations.messageCount} + 2`,
+          lastMessageAt: new Date(),
+        })
+        .where(eq(chatConversations.id, input.conversationId));
+    });
+    return { message, policySourceLanguage: policyLanguage };
+  }
+
   await db.insert(chatMessages).values({
     conversationId: input.conversationId,
     role: "user",
     content: input.message,
   });
 
-  // Get the recent conversation history (the model needs context, not the
-  // whole transcript)
-  const history = (
-    await db
-      .select()
-      .from(chatMessages)
-      .where(eq(chatMessages.conversationId, input.conversationId))
-      .orderBy(desc(chatMessages.createdAt))
-      .limit(CHAT_HISTORY_WINDOW)
-  ).reverse();
-
-  // Build LLM messages
   const llmMessages: Message[] = [
     { role: "system", content: BOOKING_SYSTEM_PROMPT },
-    ...history.map(m => ({
-      role: m.role as "user" | "assistant" | "system",
-      content: m.content,
-    })),
+    ...history.map(m => ({ role: m.role, content: m.content })),
+    { role: "user", content: input.message },
   ];
 
   // Call LLM

@@ -3,12 +3,16 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import AiChat from "../AiChat";
 import en from "@/i18n/locales/en.json";
 import ar from "@/i18n/locales/ar.json";
+import { passengerRightsSource } from "@shared/passenger-policy";
 
 afterEach(() => vi.unstubAllEnvs());
 
 const current = vi.hoisted(() => ({
   language: "en",
-  pending: null as Promise<{ message: string }> | null,
+  pending: null as Promise<{
+    message: string;
+    policySourceLanguage?: "ar" | "en";
+  }> | null,
 }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -150,3 +154,33 @@ it("opens the configured human support channel without forwarding the conversati
   expect(link).toHaveAttribute("href", url);
   expect(link).toHaveAttribute("rel", "noopener noreferrer");
 });
+
+it.each([
+  ["ar", ar.aiChat],
+  ["en", en.aiChat],
+] as const)(
+  "opens local policy guidance from the %s chat and only links the application source",
+  async (language, labels) => {
+    current.language = language;
+    current.pending = Promise.resolve({
+      message: "Claim statement: https://unknown.example",
+      policySourceLanguage: language,
+    });
+    try {
+      render(<AiChat />);
+      fireEvent.click(
+        screen.getByRole("button", { name: labels.startConversation })
+      );
+      fireEvent.click(
+        await screen.findByRole("button", { name: labels.policyHelp })
+      );
+      const source = await screen.findByRole("link", {
+        name: labels.policySource,
+      });
+      expect(source).toHaveAttribute("href", passengerRightsSource[language]);
+      expect(screen.queryByRole("link", { name: /unknown/ })).toBeNull();
+    } finally {
+      current.pending = null;
+    }
+  }
+);

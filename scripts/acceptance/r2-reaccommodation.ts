@@ -1,3 +1,5 @@
+import { getFlightAPISStatus } from "../../server/services/apis.service";
+import { generateFlightManifest } from "../../server/services/dcs.service";
 import assert from "node:assert/strict";
 import { eq, sql } from "drizzle-orm";
 import {
@@ -8,6 +10,9 @@ import {
   flights,
   inventoryLocks,
   seatHolds,
+  seatInventory,
+  baggageItems,
+  baggageCustodyEvents,
   passengers as passengerRows,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
@@ -433,6 +438,79 @@ export async function verifyR2Reaccommodation(
         advisory.plan.assignments.filter(row => row.flightId === id + 40)
           .length,
         2
+      );
+    }
+  );
+  await check(
+    "DCS manifest: current sector membership, assigned seats and baggage evidence",
+    async () => {
+      await db
+        .update(passengerRows)
+        .set({ seatNumber: "1A" })
+        .where(eq(passengerRows.id, id + 3));
+      await db.insert(seatInventory).values({
+        flightId: id,
+        bookingId: id + 3,
+        passengerId: id + 3,
+        seatMapId: id,
+        seatNumber: "7B",
+        row: 7,
+        column: "B",
+        cabinClass: "economy",
+        seatType: "middle",
+        status: "occupied",
+      });
+      await db.insert(baggageItems).values(
+        [0, 3, 4].map(offset => ({
+          id: id + offset,
+          bookingId: id + (offset ? 3 : 0),
+          passengerId: id + (offset ? 3 : 0),
+          tagNumber: `R2MB${id + offset}`,
+          weight: "10.00",
+        }))
+      );
+      await db.insert(baggageCustodyEvents).values(
+        [0, 1].map(i => ({
+          baggageId: id + 3,
+          flightId: id,
+          stage: i ? ("loading" as const) : ("transfer" as const),
+          evidenceId: id + 1000 + i,
+          airportId: id,
+          deviceId: "fixture",
+          sourceId: "fixture",
+          observedAt: departure,
+        }))
+      );
+      await db.insert(bookingSegments).values({
+        bookingId: id + 4,
+        flightId: id,
+        segmentOrder: 2,
+        status: "pending",
+        departureDate: departure,
+      });
+      const apis = await getFlightAPISStatus(id);
+      assert.deepEqual(
+        apis.passengerStatuses.map(p => p.passengerId).sort((a, b) => a - b),
+        [id, id + 1, id + 3]
+      );
+      const { manifest } = await generateFlightManifest(id);
+      assert.deepEqual(
+        manifest.passengers.list.map(p => p.id).sort((a, b) => a - b),
+        [id, id + 1, id + 3]
+      );
+      assert.equal(
+        manifest.passengers.list.find(p => p.id === id + 3)?.seat,
+        "7B"
+      );
+      assert.deepEqual(manifest.baggage, { pieces: 2, totalWeight: 20 });
+      await db
+        .update(seatInventory)
+        .set({ status: "available" })
+        .where(eq(seatInventory.passengerId, id + 3));
+      const later = await generateFlightManifest(id);
+      assert.equal(
+        later.manifest.passengers.list.find(p => p.id === id + 3)?.seat,
+        null
       );
     }
   );
