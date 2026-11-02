@@ -21,8 +21,8 @@ import {
 } from "@/components/ui/tooltip";
 import { FlightStatusBadge } from "@/components/FlightStatusBadge";
 import { Plane, Clock, Heart, Loader2, Share2 } from "lucide-react";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
+import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
+import { dayOffset, formatFlightTime } from "@/lib/flight-time";
 import type { FlightStatusType } from "@/hooks/useFlightStatus";
 
 export interface FlightData {
@@ -39,12 +39,16 @@ export interface FlightData {
     code: string;
     city: string;
     name: string;
+    /** IANA zone of the airport; departure is shown in it. */
+    timezone?: string | null;
   };
   destination: {
     id: number;
     code: string;
     city: string;
     name: string;
+    /** IANA zone of the airport; arrival is shown in it. */
+    timezone?: string | null;
   };
   departureTime: Date;
   arrivalTime: Date;
@@ -78,11 +82,13 @@ export function FlightCard({
   isConnected = false,
 }: FlightCardProps) {
   const { t, i18n } = useTranslation();
-  const currentLocale = i18n.language === "ar" ? ar : enUS;
 
-  const formatTime = (date: Date) => {
-    return format(new Date(date), "HH:mm", { locale: currentLocale });
-  };
+  const arrivalDayOffset = dayOffset(
+    flight.departureTime,
+    flight.origin.timezone,
+    flight.arrivalTime,
+    flight.destination.timezone
+  );
 
   const formatPrice = (price: number) => {
     return (price / 100).toLocaleString(
@@ -151,7 +157,7 @@ export function FlightCard({
           <div className="flex items-center justify-between">
             <div className="text-center">
               <p className="text-3xl font-bold" data-testid="departure-time">
-                {formatTime(flight.departureTime)}
+                {formatFlightTime(flight.departureTime, flight.origin.timezone)}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 <span
@@ -188,7 +194,11 @@ export function FlightCard({
 
             <div className="text-center">
               <p className="text-3xl font-bold" data-testid="arrival-time">
-                {formatTime(flight.arrivalTime)}
+                {formatFlightTime(
+                  flight.arrivalTime,
+                  flight.destination.timezone
+                )}
+                <ArrivalDayOffset offset={arrivalDayOffset} />
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 <span

@@ -39,6 +39,8 @@ import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { toast } from "sonner";
 import type { FlightData } from "@/components/FlightCard";
+import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
+import { dayOffset, formatFlightTime } from "@/lib/flight-time";
 
 const CIVIL_DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The calendar day a search date means, as YYYY-MM-DD. An older link
@@ -262,10 +264,6 @@ export default function SearchResults() {
       departureTime: [],
       cabinClass: [],
     });
-  };
-
-  const formatTime = (date: Date) => {
-    return format(new Date(date), "HH:mm", { locale: currentLocale });
   };
 
   const formatPrice = (price: number) => {
@@ -530,7 +528,10 @@ export default function SearchResults() {
                                 className="text-2xl sm:text-3xl font-bold"
                                 data-testid="departure-time"
                               >
-                                {formatTime(flight.departureTime)}
+                                {formatFlightTime(
+                                  flight.departureTime,
+                                  flight.origin.timezone
+                                )}
                               </p>
                               <p className="text-sm text-muted-foreground mt-1">
                                 <span className="font-semibold text-foreground">
@@ -572,8 +573,22 @@ export default function SearchResults() {
                             </div>
 
                             <div className="text-center">
-                              <p className="text-2xl sm:text-3xl font-bold">
-                                {formatTime(flight.arrivalTime)}
+                              <p
+                                className="text-2xl sm:text-3xl font-bold"
+                                data-testid="arrival-time"
+                              >
+                                {formatFlightTime(
+                                  flight.arrivalTime,
+                                  flight.destination.timezone
+                                )}
+                                <ArrivalDayOffset
+                                  offset={dayOffset(
+                                    flight.departureTime,
+                                    flight.origin.timezone,
+                                    flight.arrivalTime,
+                                    flight.destination.timezone
+                                  )}
+                                />
                               </p>
                               <p className="text-sm text-muted-foreground mt-1">
                                 <span className="font-semibold text-foreground">

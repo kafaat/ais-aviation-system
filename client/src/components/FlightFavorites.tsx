@@ -11,12 +11,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plane, Trash2, Loader2, Calendar, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
+import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
+import {
+  dayOffset,
+  formatFlightDate,
+  formatFlightTime,
+} from "@/lib/flight-time";
 
 export function FlightFavorites() {
   const { t, i18n } = useTranslation();
-  const currentLocale = i18n.language === "ar" ? ar : enUS;
 
   const {
     data: favorites,
@@ -34,12 +37,8 @@ export function FlightFavorites() {
     },
   });
 
-  const formatTime = (date: Date | string) => {
-    return format(new Date(date), "HH:mm", { locale: currentLocale });
-  };
-
-  const formatDate = (date: Date | string) => {
-    return format(new Date(date), "d MMM yyyy", { locale: currentLocale });
+  const formatDate = (date: Date | string, timeZone: string | null) => {
+    return formatFlightDate(date, timeZone, i18n.language);
   };
 
   const formatPrice = (priceInCents: number) => {
@@ -131,7 +130,10 @@ export function FlightFavorites() {
                             {item.origin.city}
                           </div>
                           <div className="text-sm font-medium">
-                            {formatTime(item.flight.departureTime)}
+                            {formatFlightTime(
+                              item.flight.departureTime,
+                              item.origin.timezone
+                            )}
                           </div>
                         </div>
 
@@ -145,13 +147,27 @@ export function FlightFavorites() {
                             {item.destination.city}
                           </div>
                           <div className="text-sm font-medium">
-                            {formatTime(item.flight.arrivalTime)}
+                            {formatFlightTime(
+                              item.flight.arrivalTime,
+                              item.destination.timezone
+                            )}
+                            <ArrivalDayOffset
+                              offset={dayOffset(
+                                item.flight.departureTime,
+                                item.origin.timezone,
+                                item.flight.arrivalTime,
+                                item.destination.timezone
+                              )}
+                            />
                           </div>
                         </div>
 
                         <div className="ml-4 flex items-center gap-2 text-sm text-muted-foreground">
                           <Calendar className="h-4 w-4" />
-                          {formatDate(item.flight.departureTime)}
+                          {formatDate(
+                            item.flight.departureTime,
+                            item.origin.timezone
+                          )}
                         </div>
                       </div>
                     </div>

@@ -23,11 +23,13 @@ export const responseContracts = {
         code: z.string(),
         name: z.string(),
         city: z.string(),
+        timezone: z.union([z.null(), z.string()]),
       }),
       destination: z.object({
         code: z.string(),
         name: z.string(),
         city: z.string(),
+        timezone: z.union([z.null(), z.string()]),
       }),
     })
   ),
@@ -58,6 +60,7 @@ export const responseContracts = {
         name: z.string(),
         city: z.string(),
         country: z.string(),
+        timezone: z.union([z.null(), z.string()]),
       }),
       destination: z.object({
         id: outputNumber,
@@ -65,6 +68,7 @@ export const responseContracts = {
         name: z.string(),
         city: z.string(),
         country: z.string(),
+        timezone: z.union([z.null(), z.string()]),
       }),
     }),
   ]),

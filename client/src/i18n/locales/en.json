@@ -4457,5 +4457,9 @@
     "tokens": "Tokens (in/out)",
     "costUsd": "Cost (USD)",
     "bookings": "{{count}} bookings"
+  },
+  "flightTime": {
+    "localTime": "Local airport time",
+    "dayOffset": "Arrives {{offset}} calendar day(s) from the departure date"
   }
 }

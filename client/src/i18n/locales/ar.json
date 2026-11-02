@@ -4457,5 +4457,9 @@
     "tokens": "الرموز (إدخال/إخراج)",
     "costUsd": "التكلفة (USD)",
     "bookings": "{{count}} حجز"
+  },
+  "flightTime": {
+    "localTime": "التوقيت المحلي للمطار",
+    "dayOffset": "الوصول بفارق {{offset}} يوم عن تاريخ المغادرة"
   }
 }
