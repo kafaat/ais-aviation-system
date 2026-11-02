@@ -168,12 +168,12 @@ function encryptSecret(secret: string): string {
  */
 function decryptSecret(encryptedData: string): string {
   const keyed = encryptedData.startsWith(KEYED_PREFIX);
-  if (keyed && !DEDICATED_KEY)
+  const key = keyed ? DEDICATED_KEY : LEGACY_KEY;
+  if (!key)
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
       message: "MFA_ENCRYPTION_KEY is required to read this MFA secret",
     });
-  const key = keyed ? DEDICATED_KEY! : LEGACY_KEY;
   const parts = (
     keyed ? encryptedData.slice(KEYED_PREFIX.length) : encryptedData
   ).split(":");
