@@ -45,6 +45,30 @@ export type FlightSearchResult = Awaited<
   ReturnType<typeof import("../db").searchFlights>
 >;
 
+/** Overlay the live seat counts and status onto cached rows. With
+ * `sellable`, rows whose flight is no longer on sale (cancelled, completed,
+ * or gone) are dropped, as a fresh search would drop them. */
+async function overlayLiveState<
+  T extends {
+    id: number;
+    status: string;
+    economyAvailable: number;
+    businessAvailable: number;
+  },
+>(rows: T[], options: { sellable: boolean }): Promise<T[]> {
+  if (!rows.length) return rows;
+  const live = new Map(
+    (await db.getFlightLiveState(rows.map(r => r.id))).map(l => [l.id, l])
+  );
+  return rows.flatMap(row => {
+    const state = live.get(row.id);
+    if (!state) return options.sellable ? [] : [row];
+    if (options.sellable && !["scheduled", "delayed"].includes(state.status))
+      return [];
+    return [{ ...row, ...state }];
+  });
+}
+
 /**
  * Search for flights based on origin, destination, and date
  * Results are cached for 2 minutes to improve performance
@@ -62,10 +86,14 @@ export async function searchFlights(
       departureDate: civilDateOf(input.departureDate),
     };
 
-    // Try to get from cache
+    // Try to get from cache. Availability and status are overlaid from the
+    // database: nothing invalidates the cache when seats are sold or a
+    // flight is cancelled, and a stale row sent customers to sold-out or
+    // cancelled flights.
     const cached = await redisCacheService.getCachedFlightSearch(cacheParams);
     const parsed = cachedSearch.safeParse(cached);
-    if (parsed.success) return parsed.data;
+    if (parsed.success)
+      return overlayLiveState(parsed.data, { sellable: true });
 
     // Fetch from database
     const results = await db.searchFlights(input);
@@ -98,7 +126,12 @@ export async function getFlightById(
     // Try to get from cache
     const cached = await redisCacheService.getCachedFlightDetails(input.id);
     const parsed = cachedDetail.safeParse(cached);
-    if (parsed.success && parsed.data.id === input.id) return parsed.data;
+    if (parsed.success && parsed.data.id === input.id) {
+      const [fresh] = await overlayLiveState([parsed.data], {
+        sellable: false,
+      });
+      if (fresh) return fresh;
+    }
 
     // Fetch from database
     const flight = await db.getFlightById(input.id);

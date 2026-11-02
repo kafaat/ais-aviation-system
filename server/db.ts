@@ -576,7 +576,9 @@ export async function searchFlights(params: {
   departureDate: Date | string;
 }) {
   const db = await getDb();
-  if (!db) return [];
+  // Never an empty result: the caller would cache "no flights" for two
+  // minutes after the database comes back.
+  if (!db) throw new Error("Database unavailable for flight search");
 
   const { start: startOfDay, end: endOfDay } = await searchDayWindow(
     db,
@@ -630,6 +632,23 @@ export async function searchFlights(params: {
     .orderBy(asc(flights.departureTime), asc(flights.id));
 
   return result;
+}
+
+/** Seat counts and status change under bookings, refunds and operations;
+ * cached search and detail rows are overlaid with these before they are
+ * served so a sold-out or cancelled flight never shows as bookable. */
+export async function getFlightLiveState(ids: number[]) {
+  const db = await getDb();
+  if (!db || !ids.length) return [];
+  return db
+    .select({
+      id: flights.id,
+      status: flights.status,
+      economyAvailable: flights.economyAvailable,
+      businessAvailable: flights.businessAvailable,
+    })
+    .from(flights)
+    .where(inArray(flights.id, ids));
 }
 
 export async function getFlightById(id: number) {
