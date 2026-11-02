@@ -75,6 +75,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue(mockFlightData),
       };
@@ -108,6 +109,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue([]),
       };
@@ -140,6 +142,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue([]),
       };
@@ -176,6 +179,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue([]),
       };
@@ -234,6 +238,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue(mockFlightData),
       };
@@ -270,6 +275,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue([]),
       };
@@ -293,6 +299,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue([]),
       };
@@ -333,6 +340,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue([]),
       };
@@ -377,6 +385,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue(mockMonthData),
       };
@@ -407,6 +416,7 @@ describe("Price Calendar Service", () => {
         select: vi.fn().mockReturnThis(),
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([]),
         groupBy: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockResolvedValue([]),
       };

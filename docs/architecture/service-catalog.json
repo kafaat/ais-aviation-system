@@ -930,6 +930,7 @@
       "consumers": [
         "server/db.ts",
         "server/services/flights.service.ts",
+        "server/services/price-calendar.service.ts",
         "server/services/travel-agent.service.ts"
       ],
       "dependencies": [],
@@ -3897,10 +3898,11 @@
         "drizzle/schema.ts",
         "server/_core/logger.ts",
         "server/db.ts",
+        "server/services/civil-day.ts",
         "server/services/redis-cache.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["flights"],
+        "reads": ["airports", "flights"],
         "writes": []
       },
       "replacement": null

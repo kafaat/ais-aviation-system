@@ -89,6 +89,33 @@ export function civilDayWindowUtc(
   return { start: localMidnight(0), end: localMidnight(1) };
 }
 
+/** The civil date (YYYY-MM-DD) of an instant in `timeZone`. */
+export function civilDateInZone(instant: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const field = (type: string) =>
+    parts.find(p => p.type === type)?.value ?? "00";
+  return `${field("year")}-${field("month")}-${field("day")}`;
+}
+
+/** The zone's UTC offset at an instant as a MySQL offset literal, "+03:00". */
+export function zoneOffsetLiteral(instant: Date, timeZone: string): string {
+  const minutes = Math.round(zoneOffsetMs(instant, timeZone) / 60_000);
+  const sign = minutes < 0 ? "-" : "+";
+  const abs = Math.abs(minutes);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
+}
+
+/** Add whole days to a civil date. */
+export function addCivilDays(ymd: string, days: number): string {
+  const [y, m, d] = civilDateOf(ymd).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
 /** The zone a search day is interpreted in when the origin airport has no
  * usable `timezone` value. */
 export function fallbackAirportTimeZone(): string {
