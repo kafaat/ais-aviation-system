@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.33.3
+
+### Bug Fixes
+
+- fix(search): serve live seat counts and status from cached results, keep delayed flights everywhere (#221) (80f36f8)
+
+### Maintenance
+
+- chore(deps): pin follow-redirects 1.16.2 and qs 6.16.1 for new advisories (#223) (f760a79)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.2...v1.33.3
+
+---
+
 ## What's Changed in v1.33.2
 
 ### Bug Fixes
