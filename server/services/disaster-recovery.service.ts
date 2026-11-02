@@ -386,7 +386,7 @@ function ensureDefaultRunbooks(): void {
           order: 1,
           title: "Isolate affected systems",
           description:
-            "Immediately restrict network access to compromised components. Revoke all active JWT tokens and session cookies. Rotate JWT_SECRET.",
+            "Immediately restrict network access to compromised components. Revoke all active JWT tokens and session cookies. Rotate JWT_SECRET (set MFA_ENCRYPTION_KEY first, otherwise MFA secrets encrypted under the old JWT_SECRET become unreadable).",
           estimatedMinutes: 10,
           responsible: "Security Lead",
           automated: false,

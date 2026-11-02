@@ -42,8 +42,13 @@ const ISSUER = "AIS Aviation";
 // Base32 alphabet (RFC 4648)
 const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
-// Encryption key for storing secrets (derive from JWT_SECRET)
-const ENCRYPTION_KEY = crypto
+// Keys for stored TOTP secrets and backup-code hashes. The legacy key is
+// derived from JWT_SECRET, which the disaster-recovery runbook rotates on
+// compromise; with MFA_ENCRYPTION_KEY set, new material uses a dedicated
+// key (ciphertext prefixed "k2:") and legacy material is re-encrypted the
+// next time it is read successfully, so a JWT_SECRET rotation no longer
+// locks every MFA user out.
+const LEGACY_KEY = crypto
   .createHash("sha256")
   .update(
     process.env.JWT_SECRET ||
@@ -52,6 +57,17 @@ const ENCRYPTION_KEY = crypto
       })()
   )
   .digest();
+const DEDICATED_KEY = process.env.MFA_ENCRYPTION_KEY
+  ? crypto.createHash("sha256").update(process.env.MFA_ENCRYPTION_KEY).digest()
+  : null;
+const ENCRYPTION_KEY = DEDICATED_KEY ?? LEGACY_KEY;
+const KEYED_PREFIX = "k2:";
+
+/** True when a stored secret was written under the JWT-derived key and a
+ * dedicated key is now available to move it to. */
+export function secretNeedsReencryption(encryptedData: string): boolean {
+  return DEDICATED_KEY !== null && !encryptedData.startsWith(KEYED_PREFIX);
+}
 
 // ============================================================================
 // Types
@@ -143,15 +159,24 @@ function encryptSecret(secret: string): string {
 
   const authTag = cipher.getAuthTag();
 
-  // Format: iv:authTag:encrypted (all hex)
-  return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
+  // Format: [k2:]iv:authTag:encrypted (all hex); the prefix marks the key.
+  return `${DEDICATED_KEY ? KEYED_PREFIX : ""}${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
 }
 
 /**
  * Decrypt a stored TOTP secret
  */
 function decryptSecret(encryptedData: string): string {
-  const parts = encryptedData.split(":");
+  const keyed = encryptedData.startsWith(KEYED_PREFIX);
+  if (keyed && !DEDICATED_KEY)
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "MFA_ENCRYPTION_KEY is required to read this MFA secret",
+    });
+  const key = keyed ? DEDICATED_KEY! : LEGACY_KEY;
+  const parts = (
+    keyed ? encryptedData.slice(KEYED_PREFIX.length) : encryptedData
+  ).split(":");
   if (parts.length !== 3) {
     throw new TRPCError({
       code: "INTERNAL_SERVER_ERROR",
@@ -163,7 +188,7 @@ function decryptSecret(encryptedData: string): string {
   const authTag = Buffer.from(parts[1], "hex");
   const encrypted = parts[2];
 
-  const decipher = crypto.createDecipheriv("aes-256-gcm", ENCRYPTION_KEY, iv);
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
   decipher.setAuthTag(authTag);
 
   let decrypted = decipher.update(encrypted, "hex", "utf8");
@@ -350,9 +375,15 @@ export function verifyBackupCode(
   code: string,
   hashedCodes: string[]
 ): { valid: boolean; remainingCodes: string[] } {
-  const candidates = [hashBackupCode(code), legacyHashBackupCode(code)].map(h =>
-    Buffer.from(h, "hex")
-  );
+  const candidates = [
+    hashBackupCode(code),
+    // Codes keyed under the JWT-derived key before MFA_ENCRYPTION_KEY was set.
+    crypto
+      .createHmac("sha256", LEGACY_KEY)
+      .update(code.toLowerCase().trim())
+      .digest("hex"),
+    legacyHashBackupCode(code),
+  ].map(h => Buffer.from(h, "hex"));
   const index = hashedCodes.findIndex(stored => {
     const buffer = Buffer.from(stored, "hex");
     return candidates.some(
@@ -568,7 +599,8 @@ export async function consumeTotpStep(
       .limit(1)
       .for("update");
     if (!settings) return false;
-    const step = matchingTotpStep(decryptSecret(settings.secret), token);
+    const plain = decryptSecret(settings.secret);
+    const step = matchingTotpStep(plain, token);
     if (
       step === null ||
       (settings.lastUsedStep != null && step <= settings.lastUsedStep)
@@ -576,7 +608,13 @@ export async function consumeTotpStep(
       return false;
     await tx
       .update(mfaSettings)
-      .set({ lastUsedStep: step, updatedAt: new Date() })
+      .set({
+        lastUsedStep: step,
+        updatedAt: new Date(),
+        ...(secretNeedsReencryption(settings.secret)
+          ? { secret: encryptSecret(plain) }
+          : {}),
+      })
       .where(eq(mfaSettings.userId, userId));
     return true;
   });
@@ -669,16 +707,25 @@ export async function completeMfaChallenge(
       .where(eq(mfaSettings.userId, challenge.userId))
       .limit(1)
       .for("update");
-    let factorUpdate: { lastUsedStep?: number; backupCodes?: string } | null =
-      null;
+    let factorUpdate: {
+      lastUsedStep?: number;
+      backupCodes?: string;
+      secret?: string;
+    } | null = null;
     if (settings?.isEnabled) {
       if (/^\d{6}$/.test(code)) {
-        const step = matchingTotpStep(decryptSecret(settings.secret), code);
+        const plain = decryptSecret(settings.secret);
+        const step = matchingTotpStep(plain, code);
         if (
           step !== null &&
           (settings.lastUsedStep == null || step > settings.lastUsedStep)
         )
-          factorUpdate = { lastUsedStep: step };
+          factorUpdate = {
+            lastUsedStep: step,
+            ...(secretNeedsReencryption(settings.secret)
+              ? { secret: encryptSecret(plain) }
+              : {}),
+          };
       } else if (/^[a-z0-9]{8}$/i.test(code)) {
         const backup = verifyBackupCode(code, JSON.parse(settings.backupCodes));
         if (backup.valid)
