@@ -10,7 +10,7 @@ from fastapi import FastAPI, Depends, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
-from passlib.context import CryptContext
+import bcrypt
 
 from config import settings
 from models import Base, User
@@ -34,7 +34,32 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # ---------------------------------------------------------------------------
 # Password hashing
 # ---------------------------------------------------------------------------
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+class _BcryptContext:
+    """bcrypt called directly, with the two methods the routes use.
+
+    passlib 1.7.4 (unmaintained since 2020) reads ``bcrypt.__about__`` to
+    detect the backend version; bcrypt 4.1+ removed that attribute, so every
+    process start logged a trapped ``AttributeError`` traceback. Hashes are the
+    same ``$2b$12$`` format passlib produced, so stored passwords keep
+    verifying.
+    """
+
+    rounds = 12
+
+    def hash(self, password: str) -> str:
+        return bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt(rounds=self.rounds)
+        ).decode("ascii")
+
+    def verify(self, password: str, hashed: str) -> bool:
+        try:
+            return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("ascii"))
+        except ValueError:
+            # Malformed stored hash or an over-long password: never a match.
+            return False
+
+
+pwd_context = _BcryptContext()
 # Verified on the unknown-user branch so a missing account costs the same
 # time as a wrong password; otherwise response timing enumerates accounts.
 _DUMMY_HASH = pwd_context.hash(uuid.uuid4().hex)

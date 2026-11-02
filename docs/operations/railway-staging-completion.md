@@ -24,6 +24,31 @@ identity after logout and rejection of an incorrect password with HTTP 401.
 Web logs confirmed the internal auth URL. These are API probes, not browser
 rendering or full booking acceptance. No payment or provider operation was made.
 
+### Hardening variables set, 2 November 2026
+
+After the worker deployment the operator asked for the remaining hardening
+work to be done. The web service's start-up log had been printing two
+`[security]` warnings (`TRUSTED_PROXIES is not set`, `METRICS_TOKEN is not
+set`). Four variables were set on the environment, values generated at random
+and never written into this repository:
+
+| Variable                      | Where                               | Effect                                                                                                                             |
+| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SERVICE_TOKEN`          | `ais-auth`; `ais-web` references it | The auth service now rejects any caller without the `X-Auth-Service-Token` header; the Node client sends it                        |
+| `TRUSTED_PROXIES=uniquelocal` | `ais-web`                           | Rate limits key on the client address behind Railway's edge instead of one shared bucket                                           |
+| `METRICS_TOKEN`               | `ais-web`                           | `/api/metrics` answers 401 without the scraper's bearer token                                                                      |
+| `MFA_ENCRYPTION_KEY`          | `ais-web`                           | New TOTP material is encrypted under a key independent of `JWT_SECRET`; legacy material is re-encrypted on its next successful use |
+
+Both services redeployed (`ais-web` `8bebae3c-dcb2-47ad-8ccc-e534d456d946`,
+`ais-auth` `99497630-bfca-46a8-806c-84e04d399bf4`, SUCCESS) and the two
+`[security]` lines no longer appear in the web start-up log. The service-token
+handshake has not yet been exercised by a login after the change; a
+misconfiguration would show in the auth log as `401 Service credential
+required` on the next registration or login. The auth log also showed, on every
+start, a trapped `AttributeError: module 'bcrypt' has no attribute '__about__'`
+from passlib 1.7.4 probing bcrypt 4.2.1; the service now calls bcrypt directly
+and the traceback is gone with the next deployment.
+
 The web page and liveness endpoint returned HTTP 200; `health.ready` returned 503. The current readiness implementation includes Stripe key-format validation
 alongside DB and Redis. Staging has synthetic payment configuration: do not
 replace it with a plausible-looking fake key or weaken readiness to get green.
