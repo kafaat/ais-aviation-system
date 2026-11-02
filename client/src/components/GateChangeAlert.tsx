@@ -17,9 +17,8 @@ import {
   Clock,
   X,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { formatFlightTime } from "@/lib/flight-time";
 
 export interface GateChangeAlertProps {
   flightNumber: string;
@@ -29,6 +28,8 @@ export interface GateChangeAlertProps {
   newTerminal?: string | null;
   changeReason?: string | null;
   boardingTime?: Date | null;
+  /** IANA zone of the departure airport, which the boarding time is shown in. */
+  timeZone?: string | null;
   onDismiss?: () => void;
   className?: string;
   variant?: "default" | "compact" | "banner";
@@ -42,16 +43,12 @@ export function GateChangeAlert({
   newTerminal,
   changeReason,
   boardingTime,
+  timeZone,
   onDismiss,
   className = "",
   variant = "default",
 }: GateChangeAlertProps) {
-  const { t, i18n } = useTranslation();
-  const currentLocale = i18n.language === "ar" ? ar : enUS;
-
-  const formatTime = (date: Date) => {
-    return format(new Date(date), "HH:mm", { locale: currentLocale });
-  };
+  const { t } = useTranslation();
 
   // Compact version for inline display in flight cards
   if (variant === "compact") {
@@ -195,7 +192,9 @@ export function GateChangeAlert({
             <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-300">
               <Clock className="h-4 w-4" />
               <span>
-                {t("gates.boardingAt", { time: formatTime(boardingTime) })}
+                {t("gates.boardingAt", {
+                  time: formatFlightTime(boardingTime, timeZone),
+                })}
               </span>
             </div>
           )}

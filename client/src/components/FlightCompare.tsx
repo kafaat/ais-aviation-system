@@ -29,9 +29,13 @@ import {
   TrendingDown,
   Timer,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
 import type { FlightData } from "@/components/FlightCard";
+import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
+import {
+  dayOffset,
+  formatFlightDate,
+  formatFlightTime,
+} from "@/lib/flight-time";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -48,7 +52,10 @@ interface ComparisonRow {
   label: string;
   key: string;
   getValue: (flight: FlightData) => string | number | boolean | null;
-  format?: (value: string | number | boolean | null) => React.ReactNode;
+  format?: (
+    value: string | number | boolean | null,
+    flight: FlightData
+  ) => React.ReactNode;
   highlight?: "lowest" | "highest" | "shortest";
   icon?: React.ReactNode;
 }
@@ -80,14 +87,9 @@ export function FlightCompare({
 }: FlightCompareProps) {
   const { t, i18n } = useTranslation();
   const isArabic = i18n.language === "ar";
-  const currentLocale = isArabic ? ar : enUS;
 
-  const formatTime = (date: Date) => {
-    return format(new Date(date), "HH:mm", { locale: currentLocale });
-  };
-
-  const formatDate = (date: Date) => {
-    return format(new Date(date), "PP", { locale: currentLocale });
+  const formatDate = (date: Date, timeZone: string | null | undefined) => {
+    return formatFlightDate(date, timeZone, i18n.language);
   };
 
   const formatPrice = (price: number) => {
@@ -145,14 +147,16 @@ export function FlightCompare({
       key: "departure",
       icon: <Clock className="h-4 w-4" />,
       getValue: f => f.departureTime.toString(),
-      format: v => {
+      format: (v, f) => {
         if (!v) return "-";
         const date = new Date(v as string);
         return (
           <div>
-            <div className="font-semibold">{formatTime(date)}</div>
+            <div className="font-semibold">
+              {formatFlightTime(date, f.origin.timezone)}
+            </div>
             <div className="text-xs text-muted-foreground">
-              {formatDate(date)}
+              {formatDate(date, f.origin.timezone)}
             </div>
           </div>
         );
@@ -162,14 +166,24 @@ export function FlightCompare({
       label: t("compare.arrival"),
       key: "arrival",
       getValue: f => f.arrivalTime.toString(),
-      format: v => {
+      format: (v, f) => {
         if (!v) return "-";
         const date = new Date(v as string);
         return (
           <div>
-            <div className="font-semibold">{formatTime(date)}</div>
+            <div className="font-semibold">
+              {formatFlightTime(date, f.destination.timezone)}
+              <ArrivalDayOffset
+                offset={dayOffset(
+                  f.departureTime,
+                  f.origin.timezone,
+                  date,
+                  f.destination.timezone
+                )}
+              />
+            </div>
             <div className="text-xs text-muted-foreground">
-              {formatDate(date)}
+              {formatDate(date, f.destination.timezone)}
             </div>
           </div>
         );
@@ -301,7 +315,7 @@ export function FlightCompare({
                       )}
                       <div>
                         {row.format
-                          ? row.format(value)
+                          ? row.format(value, flight)
                           : (value as React.ReactNode)}
                       </div>
                     </div>

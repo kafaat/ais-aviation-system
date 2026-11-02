@@ -46,6 +46,8 @@ export interface ChatResponse {
     airline: string;
     origin: string;
     destination: string;
+    originTimezone: string | null;
+    destinationTimezone: string | null;
     departureTime: string;
     arrivalTime: string;
     price: number;
@@ -472,6 +474,8 @@ async function processResponse(
     airline: string;
     origin: string;
     destination: string;
+    originTimezone: string | null;
+    destinationTimezone: string | null;
     departureTime: string;
     arrivalTime: string;
     price: number;
@@ -486,6 +490,8 @@ async function processResponse(
     airline: string;
     origin: string;
     destination: string;
+    originTimezone: string | null;
+    destinationTimezone: string | null;
     departureTime: string;
     arrivalTime: string;
     price: number;
@@ -561,6 +567,8 @@ async function processResponse(
             airline: airlineName,
             origin: originCity,
             destination: destCity,
+            originTimezone: flight.origin?.timezone ?? null,
+            destinationTimezone: flight.destination?.timezone ?? null,
             departureTime: flight.departureTime.toISOString(),
             arrivalTime: flight.arrivalTime.toISOString(),
             price,

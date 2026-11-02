@@ -26,8 +26,16 @@ export const responseContracts = {
       id: outputNumber,
       flightNumber: z.string(),
       departureTime: z.date(),
-      origin: z.object({ code: z.string(), city: z.string() }),
-      destination: z.object({ code: z.string(), city: z.string() }),
+      origin: z.object({
+        code: z.string(),
+        city: z.string(),
+        timezone: z.union([z.null(), z.string()]),
+      }),
+      destination: z.object({
+        code: z.string(),
+        city: z.string(),
+        timezone: z.union([z.null(), z.string()]),
+      }),
     }),
     alternatives: z.array(
       z.object({

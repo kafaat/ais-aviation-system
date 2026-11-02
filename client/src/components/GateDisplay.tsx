@@ -17,9 +17,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DoorOpen, Clock, AlertCircle, Building2 } from "lucide-react";
-import { format } from "date-fns";
-import { ar, enUS } from "date-fns/locale";
 import { trpc } from "@/lib/trpc";
+import { formatFlightTime } from "@/lib/flight-time";
 
 export interface GateDisplayProps {
   flightId: number;
@@ -34,16 +33,16 @@ export function GateDisplay({
   showBoardingTimes = true,
   className = "",
 }: GateDisplayProps) {
-  const { t, i18n } = useTranslation();
-  const currentLocale = i18n.language === "ar" ? ar : enUS;
+  const { t } = useTranslation();
 
   const { data: gateInfo, isLoading } = trpc.gates.getFlightGate.useQuery({
     flightId,
   });
 
+  // Boarding happens at the gate's airport: show its clock, not the browser's.
   const formatTime = (date: Date | null) => {
     if (!date) return "-";
-    return format(new Date(date), "HH:mm", { locale: currentLocale });
+    return formatFlightTime(date, gateInfo?.airportTimezone);
   };
 
   if (isLoading) {
