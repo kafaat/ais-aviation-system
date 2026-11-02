@@ -406,7 +406,8 @@ it("preserves optional properties and dates in committed command responses", asy
 it("full refund closes every segment and releases physical seats without removing airline blocks", async () => {
   const { settleVerifiedPayment, settleVerifiedRefund } =
     await import("../services/payment-settlement.service");
-  const { seatInventory, ndcOrders } = await import("../../drizzle/schema");
+  const { seatInventory, ndcOrders, ticketCoupons } =
+    await import("../../drizzle/schema");
   const result = await createMultiCityBooking({
     ...input,
     segments: [11, 12].map(flightId => ({
@@ -443,6 +444,16 @@ it("full refund closes every segment and releases physical seats without removin
       boardingPassIssued: false,
     },
   ]);
+  await fixture.db.insert(ticketCoupons).values(
+    [11, 12].map((flightId, i) => ({
+      bookingId: result.bookingId,
+      passengerId: 1,
+      flightId,
+      couponNumber: i + 1,
+      ticketNumber: "0010000000001",
+      status: i ? "O" : "C",
+    }))
+  );
   const refund = {
     paymentIntentId: "pi_refund_legs",
     chargeId: "ch_refund_legs",
@@ -454,6 +465,7 @@ it("full refund closes every segment and releases physical seats without removin
   await fixture.db.transaction((tx: any) => settleVerifiedRefund(tx, refund));
   await fixture.db.transaction((tx: any) => settleVerifiedRefund(tx, refund));
   expect(fixture.rows("ndc_orders")[0].status).toBe("refunded");
+  expect(fixture.rows("ticket_coupons").map(c => c.status)).toEqual(["R", "R"]);
   expect(
     fixture.rows("flights").map(flight => flight.economyAvailable)
   ).toEqual([2, 2]);

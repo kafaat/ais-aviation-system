@@ -1,3 +1,4 @@
+import { setCouponCheckIn } from "./ticket-coupons.service";
 import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -310,6 +311,13 @@ export async function checkInPassengersTx(
       .update(seatInventory)
       .set(changed)
       .where(eq(seatInventory.id, seat.id));
+    await setCouponCheckIn(
+      tx,
+      input.bookingId,
+      a.passengerId,
+      c.flight.id,
+      true
+    );
     if (c.booking.flightId === c.flight.id)
       await tx
         .update(passengers)

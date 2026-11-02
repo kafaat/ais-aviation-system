@@ -6310,3 +6310,38 @@ export const compensationRules = mysqlTable("compensation_rules", {
   isActive: boolean("isActive").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
+
+/** Local document coupons. External carrier issuance and uplift require separate evidence. */
+export const ticketCoupons = mysqlTable(
+  "ticket_coupons",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    passengerId: int("passengerId").notNull(),
+    flightId: int("flightId").notNull(),
+    ticketNumber: varchar("ticketNumber", { length: 13 }).notNull(),
+    couponNumber: int("couponNumber").notNull(),
+    status: mysqlEnum("status", [
+      "O",
+      "C",
+      "F",
+      "R",
+      "E",
+      "V",
+      "unverified",
+    ]).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    documentIndex: uniqueIndex("ticket_coupon_document_idx").on(
+      table.ticketNumber,
+      table.couponNumber
+    ),
+    bookingIndex: index("ticket_coupon_booking_idx").on(
+      table.bookingId,
+      table.passengerId,
+      table.flightId
+    ),
+  })
+);

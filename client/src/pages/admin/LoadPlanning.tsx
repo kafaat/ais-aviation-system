@@ -53,8 +53,8 @@ export default function LoadPlanning() {
           </h1>
           <p className="text-muted-foreground text-sm">
             {t(
-              "loadPlanning.subtitle",
-              "Cargo compartment assignment, optimization, and finalization"
+              "dcs.loadTrainingNotice",
+              "Training simulation. This page cannot issue a load sheet for dispatch."
             )}
           </p>
         </div>

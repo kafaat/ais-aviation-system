@@ -1,3 +1,4 @@
+import { setCouponCheckIn } from "./ticket-coupons.service";
 import type { SettlementTx } from "./booking-settlement.service";
 import { randomUUID } from "node:crypto";
 import {
@@ -1304,6 +1305,7 @@ export async function undoCheckIn(
         boardingPassIssued: false,
       })
       .where(eq(seatInventory.id, seat.id));
+    await setCouponCheckIn(db, bookingId, passengerId, flightId, false);
     await refreshBookingCheckIn(db, bookingId);
     return { success: true as const, seatNumber: seat.seatNumber };
   });

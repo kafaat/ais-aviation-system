@@ -34,6 +34,7 @@ type Tab = "overview" | "manifest" | "crew" | "loadplan" | "aircraft";
 export default function DcsDashboard() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const { data: stats } = trpc.dcs.getStats.useQuery();
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -87,24 +88,26 @@ export default function DcsDashboard() {
               icon: Shield,
             },
           ] as const
-        ).map(tab => (
-          <Button
-            key={tab.id}
-            variant={activeTab === tab.id ? "default" : "outline"}
-            onClick={() => setActiveTab(tab.id)}
-            className="gap-2"
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.label}
-          </Button>
-        ))}
+        )
+          .filter(tab => tab.id !== "loadplan" || stats?.loadPlans)
+          .map(tab => (
+            <Button
+              key={tab.id}
+              variant={activeTab === tab.id ? "default" : "outline"}
+              onClick={() => setActiveTab(tab.id)}
+              className="gap-2"
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </Button>
+          ))}
       </div>
 
       {/* Content */}
       {activeTab === "overview" && <OverviewTab />}
       {activeTab === "manifest" && <ManifestTab />}
       {activeTab === "crew" && <CrewTab />}
-      {activeTab === "loadplan" && <LoadPlanTab />}
+      {activeTab === "loadplan" && stats?.loadPlans && <LoadPlanTab />}
       {activeTab === "aircraft" && <AircraftTab />}
     </div>
   );
@@ -165,25 +168,27 @@ function OverviewTab() {
           </p>
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <ClipboardList className="h-5 w-5 text-orange-500" />
-            <span className="text-sm text-muted-foreground">
-              {t("dcs.stats.loadPlans", "Load Plans")}
-            </span>
-          </div>
-          <p className="text-3xl font-bold">{stats?.loadPlans.total ?? 0}</p>
-          <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-            <span>
-              {t("dcs.stats.approved", "Approved")}:{" "}
-              {stats?.loadPlans.approved ?? 0}
-            </span>
-            <span>
-              {t("dcs.stats.finalized", "Finalized")}:{" "}
-              {stats?.loadPlans.finalized ?? 0}
-            </span>
-          </div>
-        </Card>
+        {stats?.loadPlans && (
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <ClipboardList className="h-5 w-5 text-orange-500" />
+              <span className="text-sm text-muted-foreground">
+                {t("dcs.stats.loadPlans", "Training load plans")}
+              </span>
+            </div>
+            <p className="text-3xl font-bold">{stats.loadPlans.total ?? 0}</p>
+            <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+              <span>
+                {t("dcs.stats.approved", "Approved")}:{" "}
+                {stats.loadPlans.approved ?? 0}
+              </span>
+              <span>
+                {t("dcs.stats.finalized", "Finalized")}:{" "}
+                {stats.loadPlans.finalized ?? 0}
+              </span>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-2">

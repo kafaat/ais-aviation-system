@@ -1,3 +1,4 @@
+import { exchangeLocalCoupons } from "./ticket-coupons.service";
 import { assertBaggageNotInCustody } from "./baggage-custody.service";
 import { calculateModificationFee } from "./modification-fee";
 import { allocateProportional } from "./seat-economics.service";
@@ -525,6 +526,11 @@ export async function applyPaidOrderModification(
           inArray(seatInventory.status, ["held", "occupied"])
         )
       );
+    await exchangeLocalCoupons(
+      tx,
+      booking.id,
+      old.map(l => l.flightId)
+    );
     await tx
       .update(passengers)
       .set({ seatNumber: null, ticketNumber: null })

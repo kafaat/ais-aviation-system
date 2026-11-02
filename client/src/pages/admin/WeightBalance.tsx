@@ -306,8 +306,8 @@ export default function WeightBalance() {
           </h1>
           <p className="text-muted-foreground text-sm">
             {t(
-              "wb.subtitle",
-              "Flight weight calculations, CG envelope, load sheets & trim settings"
+              "dcs.loadTrainingNotice",
+              "Training simulation. This page cannot issue a load sheet for dispatch."
             )}
           </p>
         </div>

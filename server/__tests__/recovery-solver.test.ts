@@ -98,6 +98,19 @@ describe("operator duty profiles", () => {
       compliant: true,
       totalDutyMinutes: 390,
     }));
+  it("rejects shortened reporting/release and profiles outside the complete duty", () => {
+    for (const bounds of [{ start: duty.departure }, { end: duty.arrival }])
+      expect(
+        validateDuty({ ...duty, ...bounds }, [], rule).violations
+      ).toContain("Duty bounds omit required reporting or release time");
+    for (const window of [
+      { effectiveFrom: duty.departure.toISOString() },
+      { effectiveTo: duty.arrival.toISOString() },
+    ])
+      expect(
+        validateDuty(duty, [], { ...rule, ...window }).violations
+      ).toContain("Operator profile does not cover the complete duty");
+  });
   it("rejects missing historical bounds and insufficient rest", () => {
     expect(
       validateDuty(duty, [{ ...duty, start: new Date(NaN) }], rule).compliant

@@ -6,7 +6,10 @@ import { assignCrewWithRules } from "./crew-rule.service";
  * load planning, and crew management.
  */
 
-import { requireDemoCapability } from "./demo-capability";
+import {
+  demoCapabilitiesEnabled,
+  requireDemoCapability,
+} from "./demo-capability";
 import { getDb } from "../db";
 import {
   flights,
@@ -818,14 +821,16 @@ export async function getDcsStats() {
     })
     .from(crewMembers);
 
-  const [loadPlanStats] = await db
-    .select({
-      totalPlans: sql<number>`COUNT(*)`,
-      draftPlans: sql<number>`SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END)`,
-      approvedPlans: sql<number>`SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END)`,
-      finalizedPlans: sql<number>`SUM(CASE WHEN status = 'finalized' THEN 1 ELSE 0 END)`,
-    })
-    .from(loadPlans);
+  const [loadPlanStats] = demoCapabilitiesEnabled()
+    ? await db
+        .select({
+          totalPlans: sql<number>`COUNT(*)`,
+          draftPlans: sql<number>`SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END)`,
+          approvedPlans: sql<number>`SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END)`,
+          finalizedPlans: sql<number>`SUM(CASE WHEN status = 'finalized' THEN 1 ELSE 0 END)`,
+        })
+        .from(loadPlans)
+    : [];
 
   const [aircraftStats] = await db
     .select({
@@ -845,12 +850,14 @@ export async function getDcsStats() {
       total: Number(crewStats?.totalCrew ?? 0),
       active: Number(crewStats?.activeCrew ?? 0),
     },
-    loadPlans: {
-      total: Number(loadPlanStats?.totalPlans ?? 0),
-      draft: Number(loadPlanStats?.draftPlans ?? 0),
-      approved: Number(loadPlanStats?.approvedPlans ?? 0),
-      finalized: Number(loadPlanStats?.finalizedPlans ?? 0),
-    },
+    loadPlans: loadPlanStats
+      ? {
+          total: Number(loadPlanStats.totalPlans ?? 0),
+          draft: Number(loadPlanStats.draftPlans ?? 0),
+          approved: Number(loadPlanStats.approvedPlans ?? 0),
+          finalized: Number(loadPlanStats.finalizedPlans ?? 0),
+        }
+      : null,
     aircraftTypes: Number(aircraftStats?.totalTypes ?? 0),
   };
 }

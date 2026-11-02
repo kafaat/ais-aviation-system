@@ -1,3 +1,4 @@
+import { closeLocalCoupons } from "./ticket-coupons.service";
 import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 import { countActiveHolds } from "./inventory-capacity.service";
 import { and, eq, asc, inArray, sql, isNotNull, isNull } from "drizzle-orm";
@@ -271,6 +272,13 @@ export async function releaseBookingSeats(
     .where(eq(bookingSegments.bookingId, booking.id))
     .orderBy(asc(bookingSegments.flightId))
     .for("update");
+  await closeLocalCoupons(
+    tx,
+    booking.id,
+    terminalState === "refunded" || booking.paymentStatus === "refunded"
+      ? "R"
+      : "V"
+  );
   const reserved = segments.filter(s => s.seatsReserved);
   // Pre-upgrade bookings only reserved their primary flight. Never invent
   // restoration of seats that those historical segments did not reserve.

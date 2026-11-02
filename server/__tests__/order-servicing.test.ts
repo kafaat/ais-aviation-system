@@ -347,6 +347,8 @@ describe("paid order servicing", () => {
     expect(fixture.rows("financial_ledger")).toHaveLength(0);
   });
   it("exchanges all legs only after verified payment and replays once", async () => {
+    // Existing paid local document predates durable coupons.
+    fixture.rows("passengers")[0].ticketNumber = "0010000000011";
     const offers = await Promise.all([offer(12), offer(13)]);
     const input = {
       bookingId: 7,
@@ -380,6 +382,14 @@ describe("paid order servicing", () => {
     );
     expect(fixture.rows("flights").map(f => f.economyAvailable)).toEqual([
       6, 4, 4,
+    ]);
+    expect(fixture.rows("ticket_coupons")).toMatchObject([
+      {
+        ticketNumber: "0010000000011",
+        couponNumber: 1,
+        flightId: 11,
+        status: "E",
+      },
     ]);
     expect(fixture.rows("bookings")[0].totalAmount).toBe(13000);
     expect(fixture.rows("ndc_orders")[0].totalAmount).toBe(13000);

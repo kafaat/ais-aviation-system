@@ -213,7 +213,10 @@ function assessCrewDuty(
   } catch {
     /* Invalid evidence remains unavailable. */
   }
-  if (proposed.aircraftType && !qualified.includes(proposed.aircraftType))
+  if (
+    (proposed.flightId && !proposed.aircraftType) ||
+    (proposed.aircraftType && !qualified.includes(proposed.aircraftType))
+  )
     violations.push("Aircraft qualification is missing");
   return {
     crewMemberId,

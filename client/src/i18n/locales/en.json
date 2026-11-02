@@ -2148,13 +2148,14 @@
     "infantDiscount": "Infant (10%)"
   },
   "dcs": {
+    "loadTrainingNotice": "Training simulation. This page cannot issue a load sheet for dispatch.",
     "title": "Departure Control System",
     "subtitle": "Flight operations, crew, weight & balance, manifests",
     "tabs": {
       "overview": "Overview",
       "manifest": "Flight Manifest",
       "crew": "Crew Management",
-      "loadPlan": "Weight & Balance",
+      "loadPlan": "Weight & Balance (training)",
       "aircraft": "Aircraft Types"
     },
     "stats": {
@@ -2163,7 +2164,7 @@
       "delayed": "Delayed",
       "crewMembers": "Crew Members",
       "active": "Active",
-      "loadPlans": "Load Plans",
+      "loadPlans": "Training load plans",
       "approved": "Approved",
       "finalized": "Finalized",
       "aircraftTypes": "Aircraft Types"

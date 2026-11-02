@@ -280,6 +280,22 @@ export async function verifyProjectHardening(
             assert.equal(reads, 2);
             assert.equal(batch.length, 20);
             assert.equal(batch.filter(c => c.compliant).length, 17);
+            const missingAircraft = await evaluateCrewCandidates(
+              db,
+              candidates,
+              {
+                ...proposed,
+                flightId: id,
+                aircraftType: null,
+              }
+            );
+            assert(
+              missingAircraft.every(
+                check =>
+                  !check.compliant &&
+                  check.violations.includes("Aircraft qualification is missing")
+              )
+            );
             assert.deepEqual(
               batch.find(c => c.crewMemberId === id)?.conflicts,
               ["HDCONFLICT"]

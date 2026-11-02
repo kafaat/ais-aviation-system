@@ -1,3 +1,4 @@
+import { exchangeLocalCoupons } from "./ticket-coupons.service";
 import { readRecoveryFeasibility } from "./recovery-feasibility.service";
 import { requireValue } from "./required-value";
 import { randomUUID } from "node:crypto";
@@ -411,6 +412,7 @@ export async function executeRecovery(
             eq(seatInventory.flightId, state.event.flightId)
           )
         );
+      await exchangeLocalCoupons(tx, r.booking.id, r.legs);
       await tx
         .update(passengers)
         .set({ seatNumber: null, ticketNumber: null })
