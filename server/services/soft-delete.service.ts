@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { bookings, flights, airports, passengers } from "../../drizzle/schema";
 import { eq, desc, and, isNotNull, sql, count } from "drizzle-orm";
+import { DELETED_BOOKING_RETENTION_DAYS } from "@shared/const";
 
 /**
  * Soft delete a booking (set deletedAt timestamp)
@@ -153,7 +154,9 @@ export async function getDeletedBookingsCount() {
  * Permanently delete old soft-deleted bookings (admin cleanup)
  * Only deletes bookings that have been soft-deleted for more than the retention period
  */
-export async function purgeDeletedBookings(retentionDays: number = 90) {
+export async function purgeDeletedBookings(
+  retentionDays: number = DELETED_BOOKING_RETENTION_DAYS
+) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
