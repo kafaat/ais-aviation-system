@@ -4,6 +4,9 @@
 
 ### Bug Fixes
 
+- fix(client): add the missing privacy policy page and remove the dead Stripe webhook service (#232) (3bb3ce2)
+- fix(client): show flight times in the airport's local zone with a next-day marker (#231) (f49b61a)
+- fix(e2e): pin the fixture flight to 12:00 UTC so its UTC date is its civil day (#234) (109aa69)
 - fix(i18n): translate 747 missing keys and split keys reused with conflicting meanings (#230) (64f5cbb)
 
 ### Documentation
