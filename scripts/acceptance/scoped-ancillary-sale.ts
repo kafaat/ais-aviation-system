@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import {
+  decodeBcbpM1,
+  normalizeBcbpSeat,
+} from "../../server/services/bcbp.service";
 import { eq } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
 import type { TrpcContext } from "../../server/_core/context";
@@ -21,7 +25,7 @@ export async function verifyScopedAncillarySale(
   const when = (days: number) => new Date(Date.now() + days * 86400000);
   const segments = flightIds.map((flightId, index) => ({
     flightId,
-    departureDate: when(index + 7),
+    departureDate: when(1 + index / 2),
   }));
   await db.insert(s.flights).values(
     segments.map(({ flightId, departureDate }, index) => ({
@@ -84,22 +88,26 @@ export async function verifyScopedAncillarySale(
   const expectedTotalMinor = fare.totalPrice + 6800;
   await db.insert(s.seatInventory).values(
     flightIds.flatMap(flightId =>
-      ["12A", "12B"].map((seatNumber, i) => ({
+      ["12A", "12B", "12C"].map(seatNumber => ({
         flightId,
         seatMapId: id,
         seatNumber,
         row: 12,
-        column: i ? "B" : "A",
+        column: seatNumber.slice(-1),
         cabinClass: "economy" as const,
         seatType: "window" as const,
-        priceTier: i ? ("preferred" as const) : ("free" as const),
-        seatPrice: i ? 500 : 0,
+        priceTier:
+          seatNumber === "12B" ? ("preferred" as const) : ("free" as const),
+        seatPrice: seatNumber === "12B" ? 500 : 0,
       }))
     )
   );
-  const namedSegments = segments.map((leg, passengerIndex) => ({
+  const namedSegments = segments.map((leg, segmentIndex) => ({
     ...leg,
-    seats: [{ passengerIndex, seatNumber: "12A" }],
+    seats: passengers.map((_, passengerIndex) => ({
+      passengerIndex,
+      seatNumber: passengerIndex === segmentIndex ? "12A" : "12C",
+    })),
   }));
   const command = {
     segments: namedSegments,
@@ -301,12 +309,46 @@ export async function verifyScopedAncillarySale(
     .where(eq(s.bookingAncillaries.bookingId, bookingId));
   assert.equal(issued.length, 2);
   for (const item of issued) assert(item.fundedAt && item.fundingReference);
+  let verifiedBoardingPasses = 0;
+  for (const [segmentIndex, flightId] of flightIds.entries()) {
+    for (const { passengerIndex, seatNumber } of namedSegments[segmentIndex]
+      .seats) {
+      const person = people.find(
+        p => p.firstName === passengers[passengerIndex].firstName
+      );
+      assert(person);
+      const scope = { bookingId, passengerId: person.id, flightId };
+      assert.equal(
+        (await seats.getPassengerSeat(scope))?.seatNumber,
+        seatNumber
+      );
+      await seats.checkIn(scope); // No override: use the customer's stored initial seat.
+      const pass = await seats.getBoardingPass({
+        passengerId: person.id,
+        flightId,
+      });
+      assert.equal(pass.flightNumber, "ZY" + (711 + segmentIndex));
+      assert.equal(pass.passenger.firstName, person.firstName);
+      assert.equal(pass.seat.seatNumber, seatNumber);
+      assert.equal(
+        normalizeBcbpSeat(decodeBcbpM1(pass.bcbp).seatNumber),
+        seatNumber
+      );
+      verifiedBoardingPasses++;
+    }
+    const map = await seats.getFlightSeatMap({ flightId });
+    const occupied = map.cabins
+      .flatMap(c => c.rows.flatMap(r => r.seats))
+      .filter(s => s.status === "checked_in");
+    assert.deepEqual(occupied.map(s => s.seatNumber).sort(), ["12A", "12C"]);
+  }
   return {
     bookingId,
     paidMinor: expectedTotalMinor,
     walletDebits: 1,
     scopesVerified: 4,
-    initialSectorSeatsVerified: 2,
+    initialSectorSeatsVerified: 4,
+    verifiedBoardingPasses,
     competingSeatOrderWinners: winners.length,
     failedSeatSelectionRolledBack: true,
     recoveryRefusedWithExtras: true,
