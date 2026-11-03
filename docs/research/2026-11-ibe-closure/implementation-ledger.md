@@ -126,6 +126,37 @@ reproduced before correction; afterward 67 cases passed across their two wiring
 contracts and three existing checkout/agency behavior suites. These runs overlap
 earlier evidence and are not added together as a single acceptance suite.
 
+### Browser acceptance findings and concurrent repair
+
+The integrated `0a525390db3c37f6b68695c27421cfbafe30613a` head passed all
+3304 unit/coverage cases, all type checks, build, security and both live MySQL
+gates. Its Chromium run passed 40 of 43 cases and exposed three issues:
+
+- A real transport defect: My Bookings combined 16 tRPC queries into one request,
+  exceeding the server's existing limit of 10. The HTTP 400 response prevented
+  all allowance regions in that batch from verifying their data.
+- The servicing test remained on invoice review before locating Manage Services,
+  which belongs to My Bookings.
+- A named-fare test required a literal href without the preserved search context.
+
+Concurrent commit `2301c336f5ce147853978dddfbb22d2db3bccbe8` supplied the shared
+`TRPC_BATCH_LIMIT = 10`, the client cap and navigation corrections. It is preserved
+as an ancestor. This branch reuses that constant and server setting and adds an
+executable configured-client transport regression; no parallel batch policy or
+relaxation of the server limit is introduced. The client factory retains the
+same URL, credentials, fetch options and SuperJSON transformation.
+
+Before correction the regression reproduced the HTTP 400. After correction all
+three cases pass: 16 concurrent allowance queries split into 10 + 6 with every
+result intact, mutation body/headers/dates/session credential mode are preserved,
+and a direct 11-call request still fails before any resolver executes. The
+servicing test follows the existing My bookings link; the fare test checks the
+flight path, cabin, fare code and original search parameters explicitly. The
+funded baggage and single-bag weight assertions remain unchanged.
+
+These changes require the complete CI/browser run on their new published head;
+the 40 passing cases on the earlier head do not close the three failures.
+
 ## Browser and database acceptance
 
 The existing CI browser job retains all PR #248 suites. It additionally
