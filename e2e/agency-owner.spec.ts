@@ -61,7 +61,7 @@ test("admin links an agency, its first sale belongs to the owner, and a foreign 
     const outsideApi = rpc(outsider);
     // Reuse the authenticated passenger from the other airline. The combined
     // suite reserves its fifth IP login for the guest-to-checkout browser flow.
-    await useBrowserSession(outsider, "departurePassenger");
+    await useBrowserSession(outsider, "reporting");
     const outsiderUser = await outsideApi.auth.me.query();
     if (!outsiderUser) throw new Error("Missing outsider session");
     expect(outsiderUser.role).toBe("user");

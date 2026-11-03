@@ -22,15 +22,15 @@ const TEST_USERS = [
     role: "user" as const,
   },
   {
+    ...testUsers.reporting,
+    name: "Reporting User",
+    role: "user" as const,
+  },
+  {
     name: "Admin User",
     email: "admin@ais-aviation.com",
     password: "AdminPassword123!",
     role: "admin" as const,
-  },
-  {
-    ...testUsers.departurePassenger,
-    name: "Departure Passenger",
-    role: "user" as const,
   },
   {
     name: "Operations User",
@@ -79,8 +79,8 @@ async function promoteAdminUsers() {
         [user.email]
       );
     }
-    // The departure passenger and operator belong to the same synthetic airline.
-    // Never change the shared regular/admin actors used by other parallel tests.
+    // The shared reporting/departure passenger and operator belong to one
+    // synthetic airline. The regular owner and admin remain separate accounts.
     await connection.execute(
       "INSERT IGNORE INTO tenants (slug, name, status) VALUES ('e2e-dcs-operations', 'Synthetic DCS E2E airline', 'active')"
     );
@@ -92,9 +92,11 @@ async function promoteAdminUsers() {
       "UPDATE users SET role = 'ops', tenantId = ? WHERE email = 'test.ops@example.com'",
       [tenants[0].id]
     );
+    // The reporting customer doubles as the other airline's passenger in the
+    // agency ownership test, using the same authenticated browser session.
     await connection.execute(
       "UPDATE users SET tenantId = ? WHERE email = ? AND role = 'user'",
-      [tenants[0].id, testUsers.departurePassenger.email]
+      [tenants[0].id, testUsers.reporting.email]
     );
     console.info("[e2e-setup] Admin and airline fixtures prepared");
   } finally {
@@ -109,7 +111,7 @@ export default async function globalSetup(config: FullConfig) {
   await promoteAdminUsers();
   const cleanup = await prepareBrowserSessions(config);
   console.info(
-    "[e2e-setup] Real user/admin/ops UI logins and consent complete"
+    "[e2e-setup] Four real regular/reporting/admin/ops UI logins and consent complete"
   );
   return cleanup;
 }
