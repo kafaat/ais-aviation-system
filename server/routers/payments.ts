@@ -281,16 +281,16 @@ export const paymentsRouter = router({
 
       const providerId = (input.provider || "stripe") as PaymentProviderType;
 
+      // Legacy (pre-servicing) modifications have no frozen checkout claim,
+      // so this call used to create a fresh payable session on every
+      // client retry. The operation is "collect this modification's
+      // authoritative amount once": key it by the modification and the
+      // amount it was quoted at, never by anything minted per attempt.
+      const checkoutKey = operationKey("modification.checkout", [
+        input.modificationId,
+        authoritativeAmount,
+      ]);
       if (providerId === "stripe") {
-        // Legacy (pre-servicing) modifications have no frozen checkout claim,
-        // so this call used to create a fresh payable session on every
-        // client retry. The operation is "collect this modification's
-        // authoritative amount once": key it by the modification and the
-        // amount it was quoted at, never by anything minted per attempt.
-        const checkoutKey = operationKey("modification.checkout", [
-          input.modificationId,
-          authoritativeAmount,
-        ]);
         const session = await stripe.checkout.sessions.create(
           {
             payment_method_types: ["card"],
@@ -340,6 +340,7 @@ export const paymentsRouter = router({
       }
 
       const result = await createCheckoutWithProvider(providerId, {
+        idempotencyKey: checkoutKey.value,
         bookingId: input.bookingId,
         userId: ctx.user.id,
         amount: authoritativeAmount,

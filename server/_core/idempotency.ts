@@ -74,7 +74,8 @@ function formatPart(part: NaturalKeyPart): string {
     throw new InvalidOperationKeyError(
       "Operation key parts must be non-empty [A-Za-z0-9._:-] strings"
     );
-  return part;
+  // Escape the separator inside a component so distinct tuples stay distinct.
+  return part.replace(/:/g, "%3A");
 }
 
 /**
@@ -125,8 +126,13 @@ export function providerRequestOptions(key: OperationKey | string): {
   timeout: number;
   maxNetworkRetries: 0;
 } {
-  const idempotencyKey = typeof key === "string" ? key : key.value;
-  if (!idempotencyKey || idempotencyKey.length > MAX_OPERATION_KEY_LENGTH)
+  const idempotencyKey = typeof key === "string" ? key : key?.value;
+  if (
+    typeof idempotencyKey !== "string" ||
+    !idempotencyKey.length ||
+    idempotencyKey.length > MAX_OPERATION_KEY_LENGTH ||
+    /[^\x21-\x7e]/.test(idempotencyKey)
+  )
     throw new InvalidOperationKeyError("Provider idempotency key is invalid");
   return { idempotencyKey, timeout: 15000, maxNetworkRetries: 0 };
 }

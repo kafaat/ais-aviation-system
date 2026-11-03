@@ -61,10 +61,22 @@ describe("StripeProvider idempotency pass-through", () => {
     );
   });
 
-  it("sends no provider key when the caller has none rather than minting one", async () => {
-    await new StripeProvider().createCheckoutSession(checkoutInput);
-    expect(mocks.create.mock.calls[0][1]).toBeUndefined();
-  });
+  it.each([undefined, "", " ", "key\r\n", "a".repeat(256)])(
+    "rejects an invalid key before either provider write (%j)",
+    async invalidKey => {
+      const provider = new StripeProvider();
+      // Untyped callers can bypass the required TypeScript field.
+      const idempotencyKey = invalidKey as string;
+      await expect(
+        provider.createCheckoutSession({ ...checkoutInput, idempotencyKey })
+      ).rejects.toThrow("Provider idempotency key is invalid");
+      await expect(
+        provider.refund({ transactionId: "pi_1", amount: 500, idempotencyKey })
+      ).rejects.toThrow("Provider idempotency key is invalid");
+      expect(mocks.create).not.toHaveBeenCalled();
+      expect(mocks.refund).not.toHaveBeenCalled();
+    }
+  );
 
   it("keys a refund by the caller's refund operation identity", async () => {
     await new StripeProvider().refund({

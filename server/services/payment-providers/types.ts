@@ -38,7 +38,7 @@ export interface CheckoutSessionInput {
   description: string;
   successUrl: string;
   cancelUrl: string;
-  idempotencyKey?: string;
+  idempotencyKey: string;
   metadata?: Record<string, string>;
 }
 
@@ -62,7 +62,7 @@ export interface RefundInput {
   reason?: string;
   /** Stable identity of the refund operation (e.g. `order-refund:<itemId>`).
    * Constant across retries; never a timestamp, trace id or attempt counter. */
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export interface RefundResult {

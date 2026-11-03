@@ -57,12 +57,10 @@ export class StripeProvider implements PaymentProvider {
   ): Promise<CheckoutSessionResult> {
     const stripe = this.getClient();
 
-    // The caller's operation key, when it has one, is the provider
+    // The caller's operation key is the provider
     // idempotency key. Nothing per-attempt (trace id, timestamp) may enter
     // the keyed body: Stripe refuses a replay whose parameters changed.
-    const options = input.idempotencyKey
-      ? providerRequestOptions(input.idempotencyKey)
-      : undefined;
+    const options = providerRequestOptions(input.idempotencyKey);
     const session = await stripe.checkout.sessions.create(
       {
         payment_method_types: ["card"],
@@ -138,9 +136,7 @@ export class StripeProvider implements PaymentProvider {
         amount: input.amount,
         reason: "requested_by_customer",
       },
-      input.idempotencyKey
-        ? providerRequestOptions(input.idempotencyKey)
-        : undefined
+      providerRequestOptions(input.idempotencyKey)
     );
 
     return {

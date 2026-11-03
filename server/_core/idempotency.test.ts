@@ -42,6 +42,14 @@ describe("operationKey", () => {
     expect(Object.isFrozen(first)).toBe(true);
   });
 
+  it("distinguishes field boundaries from literal colons in natural keys", () => {
+    const identities = [["a:b", "c"], ["a", "b:c"], ["a", "b", "c"], "a:b:c"];
+    const values = identities.map(
+      identity => operationKey("refund", identity).value
+    );
+    expect(new Set(values).size).toBe(identities.length);
+  });
+
   it("rejects material that cannot be a financial identity", () => {
     expect(() => operationKey("Refund", "x")).toThrow(InvalidOperationKeyError);
     expect(() => operationKey("refund", [])).toThrow(InvalidOperationKeyError);
