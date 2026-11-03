@@ -10,6 +10,17 @@ target are separate states. The PR records CI results against the published
 head; this ledger does not convert local component or memory-database tests
 into live database, provider or production acceptance.
 
+## What the booking-engine reference tells us about AIS
+
+We use Videcom's _Internet Booking Engine Integration_ (26 February 2018) to compare passenger and agent journeys. The inventory, booking record, sign-in and checkout in these journeys belong to AIS. An external booking host would be a separate product decision.
+
+| Reference feature                               | What exists in AIS                                                                                                                                                         | Candidate improvement or acceptance check                                                                                                                              |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Airline website entry (pp. 2–5)                 | An airline can embed `/embed/search`; submitting opens AIS `/search`. Home and its footer also link to public booking retrieval, and the footer links to the agent portal. | Exercise a search from a permitted corporate origin in a real browser through the target proxy. Verify that an unlisted origin cannot frame the search panel.          |
+| Public retrieval and travel agent access (p. 3) | `/manage-booking` retrieves a limited itinerary with a reference and surname. `/agent` requires an authenticated agency owner.                                             | Test whether mobile users can find both entry points. Keep account, agent and payment pages at top level.                                                              |
+| Airline identity and seat selection (pp. 6–8)   | Deployment settings supply the name and logo on Home, the public search panel and shared footer. AIS has its own seat map and passenger-seat assignments.                  | Check whether the same airline identity is visible through seat selection and checkout. A shared native header could address discontinuities.                          |
+| Country and currency (p. 4)                     | Public search validates display preferences; invoices use the canonical SAR amount. The native preference lists currently omit YE and YER.                                 | If Yemen is a target market, specify supported display rates and the missing-rate fallback. Any change to fares by point of sale requires an explicit commercial rule. |
+
 ## Existing owners checked before implementation and integration
 
 | Scope                                                                                                            | Existing work and inspected head                                                                     | Treatment here                                                                                        |

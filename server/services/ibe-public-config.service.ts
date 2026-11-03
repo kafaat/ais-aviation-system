@@ -48,18 +48,6 @@ export function parseEmbedOrigins(value: string | undefined): string[] {
   ];
 }
 
-/** The operator supplies the assigned host and optional airline prefix, never a panel URL. */
-export function videcomBaseUrl(raw: string | undefined): URL | null {
-  if (!raw?.trim()) return null;
-  const match = /^(https:\/\/[^/,\s]+)((?:\/[A-Za-z0-9_-]+)*\/?)$/.exec(raw);
-  if (!match || match[0] !== raw)
-    throw new Error(
-      "VIDECOM_IBE_BASE_URL requires an HTTPS origin and an optional airline prefix"
-    );
-  const [origin] = parseEmbedOrigins(match[1]);
-  return new URL(match[2].replace(/\/?$/, "/"), origin);
-}
-
 export function publicIbeConfiguration(environment = process.env) {
   const brandName = environment.IBE_BRAND_NAME?.trim() || "AIS";
   if (brandName.length > 80 || /[\u0000-\u001f\u007f-\u009f]/.test(brandName))
@@ -79,7 +67,6 @@ export function publicIbeConfiguration(environment = process.env) {
     );
   return {
     brandName,
-    videcomEnabled: videcomBaseUrl(environment.VIDECOM_IBE_BASE_URL) !== null,
     logoPath,
     embedSearchEnabled:
       parseEmbedOrigins(environment.IBE_EMBED_ALLOWED_ORIGINS).length > 0,

@@ -73,10 +73,6 @@ export default function Home() {
   const { user } = useAuth();
   const { reducedMotion } = useAccessibility();
 
-  const { data: ibeConfig } = trpc.ibePublic.config.useQuery(undefined, {
-    staleTime: 300_000,
-    retry: false,
-  });
   const initialSearch = new URLSearchParams(useRawSearch());
   const [preferences, setPreferences] = useState(() =>
     searchPreferences(initialSearch.toString())
@@ -339,14 +335,6 @@ export default function Home() {
               >
                 {t("home.hero.subtitle")}
               </motion.p>
-              {ibeConfig?.videcomEnabled && (
-                <a
-                  className="inline-block mt-4 underline text-primary"
-                  href={`/videcom?lang=${i18n.language.startsWith("ar") ? "ar" : "en"}`}
-                >
-                  {t("ibe.hostedBooking")}
-                </a>
-              )}
             </motion.div>
 
             {/* Search Card */}
