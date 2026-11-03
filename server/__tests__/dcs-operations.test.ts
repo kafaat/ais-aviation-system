@@ -131,7 +131,6 @@ beforeEach(() => {
         bookingId: 3,
         passengerId,
         flightId,
-        couponNumber: sectorIndex + 1,
         status: "O",
       }))
     ),

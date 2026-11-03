@@ -43,9 +43,9 @@ describe.skipIf(!dbAvailable)("Corporate Service", () => {
   let testBookingId: number;
   let testCorporateBookingId: number;
 
-  const testAirlineId = 999801;
-  const testOriginId = 999802;
-  const testDestinationId = 999803;
+  let testAirlineId: number;
+  let testOriginId: number;
+  let testDestinationId: number;
 
   // Short unique suffix for varchar(6) fields
   const shortId = String(Date.now()).slice(-3);
@@ -78,30 +78,28 @@ describe.skipIf(!dbAvailable)("Corporate Service", () => {
       (adminUserResult as any)[0]?.insertId;
 
     // Create test airline
-    await db.insert(airlines).values({
-      id: testAirlineId,
+    const [airlineResult] = await db.insert(airlines).values({
       code: "TC9",
       name: "Test Corporate Airline",
       active: true,
     });
+    testAirlineId = airlineResult.insertId;
 
-    // Create test airports
-    await db.insert(airports).values([
-      {
-        id: testOriginId,
-        code: "TC1",
-        name: "Test Corporate Origin",
-        city: "Test City 1",
-        country: "Saudi Arabia",
-      },
-      {
-        id: testDestinationId,
-        code: "TC2",
-        name: "Test Corporate Destination",
-        city: "Test City 2",
-        country: "Saudi Arabia",
-      },
-    ]);
+    // Allocate IDs through MySQL, as the other parallel suites do.
+    const [originResult] = await db.insert(airports).values({
+      code: "TC1",
+      name: "Test Corporate Origin",
+      city: "Test City 1",
+      country: "Saudi Arabia",
+    });
+    testOriginId = originResult.insertId;
+    const [destinationResult] = await db.insert(airports).values({
+      code: "TC2",
+      name: "Test Corporate Destination",
+      city: "Test City 2",
+      country: "Saudi Arabia",
+    });
+    testDestinationId = destinationResult.insertId;
 
     // Create test flight
     const flightResult = await db.insert(flights).values({
@@ -147,10 +145,14 @@ describe.skipIf(!dbAvailable)("Corporate Service", () => {
           .delete(corporateAccounts)
           .where(eq(corporateAccounts.id, testCorporateAccountId));
       }
-      await db.delete(flights).where(eq(flights.id, testFlightId));
-      await db.delete(airports).where(eq(airports.id, testOriginId));
-      await db.delete(airports).where(eq(airports.id, testDestinationId));
-      await db.delete(airlines).where(eq(airlines.id, testAirlineId));
+      if (testFlightId)
+        await db.delete(flights).where(eq(flights.id, testFlightId));
+      if (testOriginId)
+        await db.delete(airports).where(eq(airports.id, testOriginId));
+      if (testDestinationId)
+        await db.delete(airports).where(eq(airports.id, testDestinationId));
+      if (testAirlineId)
+        await db.delete(airlines).where(eq(airlines.id, testAirlineId));
       await db.delete(users).where(eq(users.id, testUserId));
       await db.delete(users).where(eq(users.id, testAdminUserId));
     }
