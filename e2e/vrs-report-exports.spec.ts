@@ -43,8 +43,11 @@ async function workbookAt(path: string) {
 test("booking downloads include the whole UTC creation day and only the selected status", async ({
   page,
 }, info) => {
+  await useBrowserSession(page, "reporting");
+  const customer = await rpc(page).auth.me.query();
+  if (!customer?.tenantId) throw new Error("Scoped report customer required");
   const db = await mysql.createConnection(disposableDatabaseUrl());
-  const flightId = await fixtureFlight();
+  const flightId = await fixtureFlight(customer.tenantId);
   const day =
     "2034-08-" + String(2 + (info.parallelIndex % 26)).padStart(2, "0");
   const ids: number[] = [];
@@ -61,7 +64,7 @@ test("booking downloads include the whole UTC creation day and only the selected
       ] as const
     ).entries()) {
       const [entry] = await db.execute<ResultSetHeader>(
-        "INSERT INTO bookings (userId, flightId, bookingReference, pnr, status, cabinClass, totalAmount, createdAt) SELECT id, ?, ?, ?, ?, 'economy', ?, DATE_ADD(CAST(? AS DATETIME), INTERVAL ? DAY) FROM users WHERE email=?",
+        "INSERT INTO bookings (userId, tenantId, flightId, bookingReference, pnr, status, cabinClass, totalAmount, createdAt) SELECT id, tenantId, ?, ?, ?, ?, 'economy', ?, DATE_ADD(CAST(? AS DATETIME), INTERVAL ? DAY) FROM users WHERE email=?",
         [
           flightId,
           reference(index),

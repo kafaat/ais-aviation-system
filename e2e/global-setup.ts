@@ -94,6 +94,12 @@ async function promoteAdminUsers() {
       "UPDATE users SET role = 'ops', tenantId = ? WHERE email = 'test.ops@example.com'",
       [tenants[0].id]
     );
+    // The reporting customer doubles as the other airline's passenger in the
+    // agency ownership test, using the same authenticated browser session.
+    await connection.execute(
+      "UPDATE users SET tenantId = ? WHERE email = ? AND role = 'user'",
+      [tenants[0].id, "test.reporting@example.com"]
+    );
     console.info("[e2e-setup] Admin roles promoted");
   } finally {
     await connection.end();
