@@ -149,8 +149,13 @@ function BoardingPass({
 export default function CheckIn() {
   const { t } = useTranslation();
   const { isAuthenticated } = useAuth();
-  const [pnr, setPnr] = useState("");
-  const [searched, setSearched] = useState("");
+  const [pnr, setPnr] = useState(() => {
+    const issuedPnr: unknown = window.history.state?.checkInPnr;
+    return typeof issuedPnr === "string" && /^[A-Z0-9]{6}$/.test(issuedPnr)
+      ? issuedPnr
+      : "";
+  });
+  const [searched, setSearched] = useState(pnr);
   const [flightId, setFlightId] = useState<number>();
   const [selection, setSelection] = useState<{
     key: string;

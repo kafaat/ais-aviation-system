@@ -370,7 +370,8 @@
     "passengers": "Passengers",
     "passengerCount": "{{count}} passenger(s)",
     "checkInNow": "Check-in",
-    "checkedIn": "Checked In",
+    "manageCheckIn": "Manage check-in",
+    "checkedIn": "Check-in recorded",
     "modify": "Modify",
     "cancelBooking": "Cancel",
     "manageServices": "Manage Services",
@@ -413,7 +414,7 @@
   "checkIn": {
     "title": "Check-in",
     "subtitle": "Enter your PNR to check-in",
-    "pnrLabel": "Booking Reference (PNR)",
+    "pnrLabel": "Passenger Name Record (PNR)",
     "pnrPlaceholder": "Enter PNR (6 characters)",
     "pnrHint": "You can find your PNR in the booking confirmation email",
     "search": "Search",
