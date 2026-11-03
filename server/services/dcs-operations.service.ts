@@ -85,7 +85,7 @@ function database() {
   if (!db) throw new Error("Database unavailable");
   return db;
 }
-async function scopedFlight(
+export async function scopedFlight(
   tx: SettlementTx,
   flightId: number,
   actor: DcsActor,
@@ -98,7 +98,7 @@ async function scopedFlight(
   assertFlightScope(actor, flight);
   return flight;
 }
-async function passengerContext(
+export async function passengerContext(
   tx: SettlementTx,
   key: DcsPassengerKey,
   actor: DcsActor
@@ -168,7 +168,7 @@ function assertDcsRecoveryAllowed(c: DepartureContext) {
     );
 }
 
-async function appendEvent(
+export async function appendEvent(
   tx: SettlementTx,
   value: typeof dcsOperationEvents.$inferInsert
 ) {
@@ -198,207 +198,207 @@ function assertDeskBound(count: number, limit = MAX_DESK_PASSENGERS) {
 /** No tenant, carrier or station ownership is inferred from client-provided IDs. */
 export async function getDcsDesk(
   flightId: number,
-  actor: DcsActor
+  actor: DcsActor,
+  snapshot?: SettlementTx
 ): Promise<DcsDesk> {
   z.number().int().positive().parse(flightId);
-  const db = await database();
-  return db.transaction(
-    async tx => {
-      const flight = await scopedFlight(tx, flightId, actor);
-      const tenant =
-        flight.tenantId == null
-          ? isNull(bookings.tenantId)
-          : eq(bookings.tenantId, flight.tenantId);
-      const activeLegs = await tx
-        .select()
-        .from(bookingSegments)
-        .where(
-          and(
-            eq(bookingSegments.flightId, flightId),
-            inArray(bookingSegments.status, ["confirmed", "pending"]),
-            eq(bookingSegments.seatsReserved, true)
-          )
+  const read = async (tx: SettlementTx): Promise<DcsDesk> => {
+    const flight = await scopedFlight(tx, flightId, actor);
+    const tenant =
+      flight.tenantId == null
+        ? isNull(bookings.tenantId)
+        : eq(bookings.tenantId, flight.tenantId);
+    const activeLegs = await tx
+      .select()
+      .from(bookingSegments)
+      .where(
+        and(
+          eq(bookingSegments.flightId, flightId),
+          inArray(bookingSegments.status, ["confirmed", "pending"]),
+          eq(bookingSegments.seatsReserved, true)
         )
-        .limit(MAX_DESK_PASSENGERS + 1);
-      assertDeskBound(activeLegs.length);
-      const direct = await tx
-        .select()
-        .from(bookings)
-        .where(
-          and(
-            eq(bookings.flightId, flightId),
-            tenant,
-            isNull(bookings.deletedAt),
-            eq(bookings.status, "confirmed"),
-            eq(bookings.paymentStatus, "paid")
-          )
+      )
+      .limit(MAX_DESK_PASSENGERS + 1);
+    assertDeskBound(activeLegs.length);
+    const direct = await tx
+      .select()
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.flightId, flightId),
+          tenant,
+          isNull(bookings.deletedAt),
+          eq(bookings.status, "confirmed"),
+          eq(bookings.paymentStatus, "paid")
         )
-        .limit(MAX_DESK_PASSENGERS + 1);
-      assertDeskBound(direct.length);
-      const legIds = [...new Set(activeLegs.map(l => l.bookingId))];
-      const connected = legIds.length
-        ? await tx
-            .select()
-            .from(bookings)
-            .where(
-              and(
-                inArray(bookings.id, legIds),
-                tenant,
-                isNull(bookings.deletedAt),
-                eq(bookings.status, "confirmed"),
-                eq(bookings.paymentStatus, "paid")
-              )
+      )
+      .limit(MAX_DESK_PASSENGERS + 1);
+    assertDeskBound(direct.length);
+    const legIds = [...new Set(activeLegs.map(l => l.bookingId))];
+    const connected = legIds.length
+      ? await tx
+          .select()
+          .from(bookings)
+          .where(
+            and(
+              inArray(bookings.id, legIds),
+              tenant,
+              isNull(bookings.deletedAt),
+              eq(bookings.status, "confirmed"),
+              eq(bookings.paymentStatus, "paid")
             )
-        : [];
-      const candidates = [
-        ...new Map([...direct, ...connected].map(b => [b.id, b])).values(),
-      ];
-      assertDeskBound(candidates.length);
-      const candidateIds = candidates.map(b => b.id);
-      const legs = candidateIds.length
-        ? await tx
-            .select()
-            .from(bookingSegments)
-            .where(inArray(bookingSegments.bookingId, candidateIds))
-            .limit(20001)
-        : [];
-      assertDeskBound(legs.length, 20000);
-      const eligible = candidates.flatMap(booking => {
-        const allLegs = legs.filter(l => l.bookingId === booking.id);
-        const matches = allLegs.filter(
-          l =>
-            l.flightId === flightId &&
-            ["confirmed", "pending"].includes(l.status)
+          )
+      : [];
+    const candidates = [
+      ...new Map([...direct, ...connected].map(b => [b.id, b])).values(),
+    ];
+    assertDeskBound(candidates.length);
+    const candidateIds = candidates.map(b => b.id);
+    const legs = candidateIds.length
+      ? await tx
+          .select()
+          .from(bookingSegments)
+          .where(inArray(bookingSegments.bookingId, candidateIds))
+          .limit(20001)
+      : [];
+    assertDeskBound(legs.length, 20000);
+    const eligible = candidates.flatMap(booking => {
+      const allLegs = legs.filter(l => l.bookingId === booking.id);
+      const matches = allLegs.filter(
+        l =>
+          l.flightId === flightId && ["confirmed", "pending"].includes(l.status)
+      );
+      if (matches.length > 1)
+        reject("Flight maps to more than one active booking segment");
+      if (allLegs.length ? !matches[0]?.seatsReserved : !booking.seatsReserved)
+        return [];
+      return [{ booking, segmentId: matches[0]?.id ?? null }];
+    });
+    const ids = eligible.map(e => e.booking.id);
+    const ps = ids.length
+      ? await tx
+          .select()
+          .from(passengers)
+          .where(inArray(passengers.bookingId, ids))
+          .orderBy(asc(passengers.id))
+          .limit(MAX_DESK_PASSENGERS + 1)
+      : [];
+    assertDeskBound(ps.length);
+    const seats = ids.length
+      ? await tx
+          .select()
+          .from(seatInventory)
+          .where(
+            and(
+              eq(seatInventory.flightId, flightId),
+              inArray(seatInventory.bookingId, ids)
+            )
+          )
+          .limit(MAX_DESK_PASSENGERS + 1)
+      : [];
+    assertDeskBound(seats.length);
+    const states = ids.length
+      ? await tx
+          .select()
+          .from(dcsPassengerStates)
+          .where(
+            and(
+              eq(dcsPassengerStates.flightId, flightId),
+              inArray(dcsPassengerStates.bookingId, ids)
+            )
+          )
+          .limit(MAX_DESK_PASSENGERS + 1)
+      : [];
+    assertDeskBound(states.length);
+    await readReconciledBoardings(tx, flight);
+    const [gate] = await tx
+      .select()
+      .from(dcsFlightOperations)
+      .where(eq(dcsFlightOperations.flightId, flightId));
+    const events = await tx
+      .select()
+      .from(dcsOperationEvents)
+      .where(
+        and(
+          eq(dcsOperationEvents.flightId, flightId),
+          flight.tenantId == null
+            ? isNull(dcsOperationEvents.tenantId)
+            : eq(dcsOperationEvents.tenantId, flight.tenantId)
+        )
+      )
+      .orderBy(desc(dcsOperationEvents.id))
+      .limit(HISTORY_LIMIT + 1);
+    const grant =
+      actor.tenantId != null
+        ? await stationGrant(tx, flight, actor.userId)
+        : null;
+    return {
+      canReturnBags: Boolean(grant?.enabled),
+      flight: {
+        id: flight.id,
+        flightNumber: flight.flightNumber,
+        tenantId: flight.tenantId,
+        airlineId: flight.airlineId,
+        originId: flight.originId,
+        destinationId: flight.destinationId,
+        departureTime: flight.departureTime,
+        dcsClosedAt: flight.dcsClosedAt ?? null,
+        stationOffBlocksAt: flight.stationOffBlocksAt ?? null,
+        status: flight.status,
+      },
+      checkInState: gate?.checkInState ?? "open",
+      stateConfigured: Boolean(gate),
+      checkInWindowOpen: checkInWindowOpen(flight),
+      passengers: ps.map(p => {
+        const entry = eligible.find(e => e.booking.id === p.bookingId);
+        if (!entry) reject("Passenger does not have an eligible reservation");
+        if (p.tenantId != null && p.tenantId !== flight.tenantId)
+          reject("Passenger is outside the booking tenant", "FORBIDDEN");
+        const assigned = seats.filter(
+          s => s.bookingId === p.bookingId && s.passengerId === p.id
         );
-        if (matches.length > 1)
-          reject("Flight maps to more than one active booking segment");
-        if (
-          allLegs.length ? !matches[0]?.seatsReserved : !booking.seatsReserved
-        )
-          return [];
-        return [{ booking, segmentId: matches[0]?.id ?? null }];
-      });
-      const ids = eligible.map(e => e.booking.id);
-      const ps = ids.length
-        ? await tx
-            .select()
-            .from(passengers)
-            .where(inArray(passengers.bookingId, ids))
-            .orderBy(asc(passengers.id))
-            .limit(MAX_DESK_PASSENGERS + 1)
-        : [];
-      assertDeskBound(ps.length);
-      const seats = ids.length
-        ? await tx
-            .select()
-            .from(seatInventory)
-            .where(
-              and(
-                eq(seatInventory.flightId, flightId),
-                inArray(seatInventory.bookingId, ids)
-              )
-            )
-            .limit(MAX_DESK_PASSENGERS + 1)
-        : [];
-      assertDeskBound(seats.length);
-      const states = ids.length
-        ? await tx
-            .select()
-            .from(dcsPassengerStates)
-            .where(
-              and(
-                eq(dcsPassengerStates.flightId, flightId),
-                inArray(dcsPassengerStates.bookingId, ids)
-              )
-            )
-            .limit(MAX_DESK_PASSENGERS + 1)
-        : [];
-      assertDeskBound(states.length);
-      await readReconciledBoardings(tx, flight);
-      const [gate] = await tx
-        .select()
-        .from(dcsFlightOperations)
-        .where(eq(dcsFlightOperations.flightId, flightId));
-      const events = await tx
-        .select()
-        .from(dcsOperationEvents)
-        .where(
-          and(
-            eq(dcsOperationEvents.flightId, flightId),
-            flight.tenantId == null
-              ? isNull(dcsOperationEvents.tenantId)
-              : eq(dcsOperationEvents.tenantId, flight.tenantId)
-          )
-        )
-        .orderBy(desc(dcsOperationEvents.id))
-        .limit(HISTORY_LIMIT + 1);
-      const grant =
-        actor.tenantId != null
-          ? await stationGrant(tx, flight, actor.userId)
-          : null;
-      return {
-        canReturnBags: Boolean(grant?.enabled),
-        flight: {
-          id: flight.id,
-          flightNumber: flight.flightNumber,
-          tenantId: flight.tenantId,
-          airlineId: flight.airlineId,
-          originId: flight.originId,
-          destinationId: flight.destinationId,
-          departureTime: flight.departureTime,
-          status: flight.status,
-        },
-        checkInState: gate?.checkInState ?? "open",
-        stateConfigured: Boolean(gate),
-        checkInWindowOpen: checkInWindowOpen(flight),
-        passengers: ps.map(p => {
-          const entry = eligible.find(e => e.booking.id === p.bookingId);
-          if (!entry) reject("Passenger does not have an eligible reservation");
-          if (p.tenantId != null && p.tenantId !== flight.tenantId)
-            reject("Passenger is outside the booking tenant", "FORBIDDEN");
-          const assigned = seats.filter(
-            s => s.bookingId === p.bookingId && s.passengerId === p.id
-          );
-          if (assigned.length > 1)
-            reject("Passenger has ambiguous seat assignments", "CONFLICT");
-          const seat = assigned[0];
-          const state = states.find(
-            s => s.bookingId === p.bookingId && s.passengerId === p.id
-          );
-          const checkedIn =
-            seat?.status === "checked_in" && Boolean(seat.checkInNonce);
-          return {
-            bookingId: p.bookingId,
-            passengerId: p.id,
-            segmentId: entry.segmentId,
-            name: `${p.firstName} ${p.lastName}`.trim(),
-            pnr: entry.booking.pnr,
-            bookingReference: entry.booking.bookingReference,
-            cabinClass: entry.booking.cabinClass,
-            seatNumber: seat?.seatNumber ?? null,
-            departureState: departureState(state, checkedIn),
-            attendanceState: currentAttendance(state ?? null, checkedIn),
-            boardingDenied: Boolean(state?.boardingDenied),
-            checkedIn,
-          };
-        }),
-        history: events.slice(0, HISTORY_LIMIT).map(e => ({
-          id: e.id,
-          bookingId: e.bookingId,
-          passengerId: e.passengerId,
-          action: e.action,
-          fromState: e.fromState,
-          toState: e.toState,
-          actorId: e.actorId,
-          actorRole: e.actorRole,
-          reason: e.reason,
-          createdAt: e.createdAt,
-        })),
-        historyHasMore: events.length > HISTORY_LIMIT,
-      };
-    },
-    { isolationLevel: "repeatable read" }
-  );
+        if (assigned.length > 1)
+          reject("Passenger has ambiguous seat assignments", "CONFLICT");
+        const seat = assigned[0];
+        const state = states.find(
+          s => s.bookingId === p.bookingId && s.passengerId === p.id
+        );
+        const checkedIn =
+          seat?.status === "checked_in" && Boolean(seat.checkInNonce);
+        return {
+          bookingId: p.bookingId,
+          passengerId: p.id,
+          segmentId: entry.segmentId,
+          name: `${p.firstName} ${p.lastName}`.trim(),
+          pnr: entry.booking.pnr,
+          bookingReference: entry.booking.bookingReference,
+          cabinClass: entry.booking.cabinClass,
+          seatNumber: seat?.seatNumber ?? null,
+          departureState: departureState(state, checkedIn),
+          attendanceState: currentAttendance(state ?? null, checkedIn),
+          boardingDenied: Boolean(state?.boardingDenied),
+          checkedIn,
+        };
+      }),
+      history: events.slice(0, HISTORY_LIMIT).map(e => ({
+        id: e.id,
+        bookingId: e.bookingId,
+        passengerId: e.passengerId,
+        action: e.action,
+        fromState: e.fromState,
+        toState: e.toState,
+        actorId: e.actorId,
+        actorRole: e.actorRole,
+        reason: e.reason,
+        createdAt: e.createdAt,
+      })),
+      historyHasMore: events.length > HISTORY_LIMIT,
+    };
+  };
+  if (snapshot) return read(snapshot);
+  return await database().transaction(read, {
+    isolationLevel: "repeatable read",
+  });
 }
 
 export async function changeDcsFlightState(
@@ -419,6 +419,7 @@ export async function changeDcsFlightState(
         request,
         run: async tx => {
           if (
+            flight.dcsClosedAt != null ||
             !["scheduled", "delayed"].includes(flight.status) ||
             flight.departureTime <= new Date()
           )
@@ -647,7 +648,7 @@ export async function returnDcsBag(
         )
         .for("update");
       if (!bag) reject("Bag does not belong to this passenger sector");
-      if (bag.returnEventId != null)
+      if (bag.returnEventId != null || bag.returnEvidenceId != null)
         reject("This bag was already returned", "CONFLICT");
       const state = await readDcsPassengerState(tx, input);
       const seat = await passengerSeat(tx, input);
@@ -672,7 +673,7 @@ export async function returnDcsBag(
         (latest &&
           (latest.flightId !== input.flightId ||
             latest.airportId !== c.flight.originId ||
-            !["acceptance", "transfer"].includes(latest.stage))) ||
+            !["acceptance", "transfer", "unloading"].includes(latest.stage))) ||
         !(
           bag.status === "checked_in" ||
           (bag.status === "loading" && latest?.stage === "transfer")

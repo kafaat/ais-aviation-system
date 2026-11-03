@@ -1210,18 +1210,19 @@ export async function applyPaidOrderModification(
 export async function confirmNoChargeService(
   modificationId: number,
   userId: number,
-  tenantId: number | null = null
+  tenantId: number | null = null,
+  transaction?: SettlementTx
 ) {
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
-  const [hint] = await db
+  const [hint] = await (transaction ?? db)
     .select()
     .from(bookingModifications)
     .where(eq(bookingModifications.id, modificationId))
     .limit(1);
   if (!hint || hint.userId !== userId)
     throw unavailable("Owned modification not found");
-  return db.transaction(async tx => {
+  const confirm = async (tx: SettlementTx) => {
     const [booking] = await tx
       .select()
       .from(bookings)
@@ -1251,5 +1252,6 @@ export async function confirmNoChargeService(
     return applyPaidOrderModification(tx, booking, change, {
       kind: "authorized_no_charge",
     });
-  });
+  };
+  return transaction ? confirm(transaction) : db.transaction(confirm);
 }

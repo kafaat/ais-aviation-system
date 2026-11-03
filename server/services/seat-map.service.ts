@@ -5,6 +5,7 @@ import {
   checkInPassengers,
   lockDepartureContext,
   assertSeatSelectionContext,
+  assertDcsOpen,
   refreshBookingCheckIn,
 } from "./departure-control.service";
 import { issueBoardingPass } from "./boarding-pass.service";
@@ -533,6 +534,48 @@ export async function listSeatMaps(airlineId?: number, aircraftType?: string) {
   }));
 }
 
+export function buildSeatRecords(
+  flightId: number,
+  seatMapId: number,
+  layout: CabinLayout
+) {
+  // Generate seat inventory records
+  const seatRecords: InsertSeatInventoryItem[] = [];
+
+  for (const cabinRow of layout.rows) {
+    for (const seatDef of cabinRow.seats) {
+      const seatNumber = `${cabinRow.row}${seatDef.column}`;
+      const record: InsertSeatInventoryItem = {
+        flightId,
+        seatMapId,
+        seatNumber,
+        row: cabinRow.row,
+        column: seatDef.column,
+        cabinClass: cabinRow.cabinClass,
+        seatType: seatDef.seatType,
+        hasExtraLegroom: seatDef.hasExtraLegroom ?? false,
+        hasPowerOutlet: seatDef.hasPowerOutlet ?? false,
+        isReclinable: seatDef.isReclinable ?? true,
+        nearLavatory: seatDef.nearLavatory ?? false,
+        nearGalley: seatDef.nearGalley ?? false,
+        seatPrice: seatDef.seatPrice ?? 0,
+        priceTier: seatDef.priceTier ?? "standard",
+        status: seatDef.blocked ? "blocked" : "available",
+      };
+      seatRecords.push(record);
+    }
+  }
+
+  if (seatRecords.length === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Cabin layout produced no seats",
+    });
+  }
+
+  return seatRecords;
+}
+
 /**
  * Initialize seat inventory for a flight from a seat map template.
  * Creates individual seatInventory records for every seat defined in the layout.
@@ -594,39 +637,7 @@ export async function initializeFlightSeats(
     });
   }
 
-  // Generate seat inventory records
-  const seatRecords: InsertSeatInventoryItem[] = [];
-
-  for (const cabinRow of layout.rows) {
-    for (const seatDef of cabinRow.seats) {
-      const seatNumber = `${cabinRow.row}${seatDef.column}`;
-      const record: InsertSeatInventoryItem = {
-        flightId,
-        seatMapId,
-        seatNumber,
-        row: cabinRow.row,
-        column: seatDef.column,
-        cabinClass: cabinRow.cabinClass,
-        seatType: seatDef.seatType,
-        hasExtraLegroom: seatDef.hasExtraLegroom ?? false,
-        hasPowerOutlet: seatDef.hasPowerOutlet ?? false,
-        isReclinable: seatDef.isReclinable ?? true,
-        nearLavatory: seatDef.nearLavatory ?? false,
-        nearGalley: seatDef.nearGalley ?? false,
-        seatPrice: seatDef.seatPrice ?? 0,
-        priceTier: seatDef.priceTier ?? "standard",
-        status: seatDef.blocked ? "blocked" : "available",
-      };
-      seatRecords.push(record);
-    }
-  }
-
-  if (seatRecords.length === 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cabin layout produced no seats",
-    });
-  }
+  const seatRecords = buildSeatRecords(flightId, seatMapId, layout);
 
   // Insert in batches to avoid query size limits
   const BATCH_SIZE = 100;
@@ -914,13 +925,14 @@ export async function releaseSeat(
 ): Promise<{ success: true; seatNumber: string }> {
   const database = await requireDb();
   return database.transaction(async db => {
-    await db
-      .select({ id: flights.id })
+    const [flight] = await db
+      .select({ id: flights.id, dcsClosedAt: flights.dcsClosedAt })
       .from(flights)
       .where(eq(flights.id, flightId))
       .limit(1)
       .for("update");
 
+    if (flight) assertDcsOpen(flight);
     const [seat] = await db
       .select()
       .from(seatInventory)
@@ -1322,6 +1334,7 @@ export async function undoCheckIn(
   const database = await requireDb();
   return database.transaction(async db => {
     const c = await lockDepartureContext(db, bookingId, flightId);
+    assertDcsOpen(c.flight);
     if (actor?.tenantId != null && c.flight.tenantId !== actor.tenantId)
       throw new TRPCError({
         code: "FORBIDDEN",

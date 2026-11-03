@@ -604,6 +604,7 @@
         "server/routers/aviation-integrations.ts",
         "server/routers/baggage.ts",
         "server/services/dcs-operations.service.ts",
+        "server/services/dcs-station.service.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/order-servicing.service.ts",
         "server/services/payment-settlement.service.ts",
@@ -615,6 +616,7 @@
         "server/services/aviation-evidence.service.ts",
         "server/services/baggage-reconciliation.service.ts",
         "server/services/baggage-sector-scope.ts",
+        "server/services/dcs-state.service.ts",
         "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
@@ -714,7 +716,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/services/baggage.service.ts"],
+      "consumers": [
+        "server/routers/baggage.ts",
+        "server/services/baggage.service.ts"
+      ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
@@ -727,8 +732,16 @@
         "server/services/tenant.service.ts"
       ],
       "tableExpressions": {
-        "reads": ["baggageItems", "bookings", "passengers", "seatInventory"],
-        "writes": ["baggageItems", "baggageTracking"]
+        "reads": [
+          "baggageCustodyEvents",
+          "baggageItems",
+          "bookings",
+          "dcsOperationEvents",
+          "flights",
+          "passengers",
+          "seatInventory"
+        ],
+        "writes": ["baggageItems", "baggageTracking", "dcsOperationEvents"]
       },
       "replacement": null
     },
@@ -1806,7 +1819,10 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/dcs-operations.ts"],
+      "consumers": [
+        "server/routers/dcs-operations.ts",
+        "server/services/dcs-station.service.ts"
+      ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/contracts/dcs-operations.ts",
@@ -1857,6 +1873,7 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/routers/bookings.ts",
+        "server/services/baggage-custody.service.ts",
         "server/services/baggage-registration.service.ts",
         "server/services/boarding-pass.service.ts",
         "server/services/dcs-operations.service.ts",
@@ -1875,6 +1892,43 @@
           "seatInventory"
         ],
         "writes": ["dcsPassengerStates"]
+      },
+      "replacement": null
+    },
+    {
+      "file": "server/services/dcs-station.service.ts",
+      "lifecycle": "active",
+      "technicalOwner": "server/services/dcs-station.service.ts",
+      "domain": "departure",
+      "accountableOwner": null,
+      "onCall": null,
+      "ownershipAcceptance": null,
+      "ownershipStatus": "unassigned",
+      "consumers": ["server/routers/dcs-operations.ts"],
+      "dependencies": [
+        "drizzle/schema.ts",
+        "server/contracts/seat-layout.ts",
+        "server/db.ts",
+        "server/services/baggage-custody.service.ts",
+        "server/services/dcs-operations.service.ts",
+        "server/services/departure-control.service.ts",
+        "server/services/idempotency-v2.service.ts",
+        "server/services/inventory-adjustment.service.ts",
+        "server/services/order-servicing.service.ts",
+        "server/services/retail-offer.service.ts",
+        "server/services/seat-map.service.ts",
+        "server/services/tenant.service.ts"
+      ],
+      "tableExpressions": {
+        "reads": [
+          "dcsOperationEvents",
+          "flights",
+          "passengers",
+          "seatInventory",
+          "seatMaps",
+          "specialServices"
+        ],
+        "writes": ["flights", "seat.seatNumber", "seatInventory"]
       },
       "replacement": null
     },
@@ -1962,6 +2016,7 @@
         "server/services/baggage-registration.service.ts",
         "server/services/boarding-pass.service.ts",
         "server/services/dcs-operations.service.ts",
+        "server/services/dcs-station.service.ts",
         "server/services/kiosk.service.ts",
         "server/services/seat-map.service.ts"
       ],
@@ -2731,7 +2786,8 @@
       "ownershipStatus": "unassigned",
       "consumers": [
         "server/_core/middleware/security-headers.ts",
-        "server/routers/ibe-public.ts"
+        "server/routers/ibe-public.ts",
+        "server/routes/videcom.tsx"
       ],
       "dependencies": [],
       "tableExpressions": {
@@ -2761,6 +2817,7 @@
         "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",
         "server/services/dcs-operations.service.ts",
+        "server/services/dcs-station.service.ts",
         "server/services/event-inbox.service.ts",
         "server/services/family-pool.service.ts",
         "server/services/internal-refund.service.ts",
@@ -3101,7 +3158,7 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/db.ts"],
+      "consumers": ["server/db.ts", "server/services/dcs-station.service.ts"],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
@@ -4270,6 +4327,7 @@
       "consumers": [
         "server/routers/ndc.ts",
         "server/services/booking-modification.service.ts",
+        "server/services/dcs-station.service.ts",
         "server/services/order-service-checkout.service.ts",
         "server/services/payment-settlement.service.ts"
       ],
@@ -5663,6 +5721,7 @@
         "server/routers/price-quote.ts",
         "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",
+        "server/services/dcs-station.service.ts",
         "server/services/fare-components.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/ndc-unpaid.service.ts",
@@ -5897,6 +5956,7 @@
       "consumers": [
         "server/routers/seat-map.ts",
         "server/services/bookings.service.ts",
+        "server/services/dcs-station.service.ts",
         "server/services/kiosk.service.ts",
         "server/services/multi-city.service.ts",
         "server/services/travel-scenarios.service.ts"
@@ -6320,6 +6380,7 @@
         "server/services/bookings.service.ts",
         "server/services/crew-rule.service.ts",
         "server/services/dcs-operations.service.ts",
+        "server/services/dcs-station.service.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/kiosk.service.ts",
         "server/services/multi-city.service.ts",

@@ -183,6 +183,8 @@ export const flights = mysqlTable(
     originId: int("originId").notNull(),
     destinationId: int("destinationId").notNull(),
     departureTime: timestamp("departureTime").notNull(),
+    dcsClosedAt: timestamp("dcsClosedAt", { fsp: 3 }),
+    stationOffBlocksAt: timestamp("stationOffBlocksAt", { fsp: 3 }),
     arrivalTime: timestamp("arrivalTime").notNull(),
     aircraftType: varchar("aircraftType", { length: 50 }), // e.g., "Boeing 777"
     aircraftRegistrationId: int("aircraftRegistrationId"),
@@ -2868,6 +2870,9 @@ export const baggageItems = mysqlTable(
     flightId: int("flightId"),
     segmentId: int("segmentId"),
     returnEventId: int("returnEventId"), // Append-only DCS handover receipt
+    // Verified handler evidence is distinct from a staff-attributed DCS receipt.
+    returnEvidenceId: int("returnEvidenceId"),
+    replacesBaggageId: int("replacesBaggageId").unique(),
     tagNumber: varchar("tagNumber", { length: 20 }).notNull().unique(), // Unique baggage tag (e.g., "AIS123456")
     weight: decimal("weight", { precision: 5, scale: 2 }).notNull(), // Weight in kg
     status: mysqlEnum("status", [
@@ -6351,6 +6356,8 @@ export const baggageCustodyEvents = mysqlTable(
       "loading",
       "transfer",
       "arrival",
+      "unloading",
+      "return",
     ]).notNull(),
     evidenceId: int("evidenceId").notNull().unique(),
     previousEvidenceId: int("previousEvidenceId"),
@@ -7007,12 +7014,19 @@ export const dcsOperationEvents = mysqlTable(
       deniedBefore?: boolean;
       deniedAfter?: boolean;
       scanFormat?: string;
-      baggageId?: number;
-      segmentId?: number;
       tagNumber?: string;
       stationId?: number;
       airlineId?: number;
       staffId?: number;
+      stationReference?: string;
+      caseId?: number;
+      modificationId?: number;
+      refundDue?: number;
+      segmentId?: number | null;
+      seatNumbers?: string[];
+      baggageId?: number;
+      previousWeightGrams?: number;
+      correctedWeightGrams?: number;
     }>(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },

@@ -19,6 +19,7 @@ import {
   useOperationalLabels,
 } from "@/components/OperationalReadState";
 import { DcsBaggageRegistration } from "@/components/DcsBaggageRegistration";
+import { DcsStationPanel } from "@/components/DcsStationPanel";
 import { BaggageCloseout } from "@/components/BaggageCloseout";
 import { useCommandIdempotencyKey } from "@/hooks/useCommandIdempotencyKey";
 import { Button } from "@/components/ui/button";
@@ -148,6 +149,7 @@ function isRecoveryAction(action: PassengerAction) {
 }
 
 function flightAllowsPassengerAction(data: Desk, action: PassengerAction) {
+  if (data.flight.dcsClosedAt) return false;
   const active = ["scheduled", "delayed"].includes(data.flight.status);
   if (isRecoveryAction(action))
     return active || data.flight.status === "cancelled";
@@ -171,6 +173,16 @@ function useFlightNavigationLock(flightId: number) {
     getMutationKey(trpc.dcsOperations.returnBag),
     getMutationKey(trpc.dcsOperations.changeFlightState),
     getMutationKey(trpc.baggage.register),
+    getMutationKey(trpc.baggage.correctWeight),
+    getMutationKey(trpc.dcsOperations.openCase),
+    getMutationKey(trpc.dcsOperations.resolveCase),
+    getMutationKey(trpc.dcsOperations.addOsi),
+    getMutationKey(trpc.dcsOperations.blockSeats),
+    getMutationKey(trpc.dcsOperations.remapSeats),
+    getMutationKey(trpc.dcsOperations.dismissCase),
+    getMutationKey(trpc.dcsOperations.finalize),
+    getMutationKey(trpc.dcsOperations.quoteDowngrade),
+    getMutationKey(trpc.dcsOperations.confirmDowngrade),
   ];
   const commands: MutationFilters = {
     predicate: mutation => {
@@ -189,6 +201,7 @@ function useFlightNavigationLock(flightId: number) {
   };
   const readKeys = [
     getQueryKey(trpc.dcsOperations.getDesk, { flightId }),
+    getQueryKey(trpc.dcsOperations.stationReport, { flightId }),
     getQueryKey(trpc.baggage.registrationSummary, { flightId }),
     getQueryKey(trpc.baggage.flightCloseout, { flightId }),
   ];
@@ -410,6 +423,10 @@ function FlightDesk({
   );
   const flightActive =
     data?.flight.status === "scheduled" || data?.flight.status === "delayed";
+  const canReopenCancelledFlight =
+    data?.flight.status === "cancelled" &&
+    !!data.flight.dcsClosedAt &&
+    !data.flight.stationOffBlocksAt;
   const readReady = !!data && !query.error && !query.isFetching;
   return (
     <OperationalReadState query={query}>
@@ -471,7 +488,9 @@ function FlightDesk({
             )}
             <FlightStateControl
               data={data}
-              disabled={!readReady || !flightActive}
+              disabled={
+                !readReady || !flightActive || !!data.flight.dcsClosedAt
+              }
               refresh={() => query.refetch()}
             />
           </section>
@@ -554,6 +573,14 @@ function FlightDesk({
             )}
           </section>
 
+          <DcsStationPanel
+            flightId={flightId}
+            passengers={data.passengers}
+            disabled={
+              !readReady || (!flightActive && !canReopenCancelledFlight)
+            }
+            reopenOnly={canReopenCancelledFlight}
+          />
           {selected && (
             <section
               className="grid gap-4 xl:grid-cols-2"
@@ -602,6 +629,7 @@ function FlightDesk({
                   disabled={
                     !readReady ||
                     !flightActive ||
+                    !!data.flight.dcsClosedAt ||
                     selected.departureState !== "checked_in" ||
                     data.checkInState !== "open" ||
                     !data.checkInWindowOpen

@@ -28,6 +28,9 @@ vi.mock("@/lib/trpc", () => ({
     baggage: {
       registrationSummary: { useQuery: api.query },
       register: { useMutation: api.mutation },
+      correctWeight: {
+        useMutation: () => ({ isPending: false, mutate: vi.fn() }),
+      },
     },
   },
 }));

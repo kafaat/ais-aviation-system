@@ -6,6 +6,7 @@ export const ibePublicRouter = router({
   config: publicProcedure
     .output(
       z.object({
+        videcomEnabled: z.boolean(),
         brandName: z.string(),
         logoPath: z.string().nullable(),
         embedSearchEnabled: z.boolean(),

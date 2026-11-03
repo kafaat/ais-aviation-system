@@ -14,6 +14,10 @@ different facts. The following prerequisites cannot be manufactured by a patch.
 | Resilience            | Observed backup restore, replication state, controlled failover and recovery-time measurements                                                      | Committed backup/restore gates retained; no claim of multi-region production acceptance                                    |
 | Accountability        | Accepted accountable owner, on-call contact and approval evidence for every domain                                                                  | Explicit nullable assignments in `service-ownership.json`; repository reviewer fallback is not domain ownership            |
 
+The [Honeywell station procedure](honeywell-station.md) covers Windows RAW routing,
+independent paper scans and disconnected-device reconciliation for boarding
+passes and baggage tags.
+
 Record provider, environment, tenant/operator/device scope, executed-at time,
 request identity, acknowledgement/rejection identity and redacted evidence location.
 Keep production secrets and passenger/payment data out of repository fixtures.

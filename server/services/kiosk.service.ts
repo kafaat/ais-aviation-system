@@ -36,7 +36,7 @@ import {
   ancillaryServices,
   bookingAncillaries,
 } from "../../drizzle/schema";
-import { eq, and, desc, inArray, sql, gte, lte } from "drizzle-orm";
+import { isNull, eq, and, desc, inArray, sql, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -748,6 +748,7 @@ export async function printBagTag(
         and(
           eq(baggageItems.bookingId, bookingId),
           eq(baggageItems.passengerId, passengerId),
+          isNull(baggageItems.returnEvidenceId),
           inArray(baggageItems.tagNumber, tagNumbers)
         )
       )

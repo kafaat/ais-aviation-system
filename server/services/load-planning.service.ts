@@ -20,7 +20,7 @@ import {
   loadPlans,
   loadPlanDetails,
 } from "../../drizzle/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { isNull, eq, and, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -244,6 +244,8 @@ async function getFlightLoadData(flightId: number) {
     .innerJoin(bookings, eq(baggageItems.bookingId, bookings.id))
     .where(
       and(
+        isNull(baggageItems.returnEventId),
+        isNull(baggageItems.returnEvidenceId),
         eq(bookings.flightId, flightId),
         sql`${bookings.status} IN ('confirmed', 'completed')`
       )

@@ -77,10 +77,19 @@ export async function lockDepartureContext(
   };
 }
 
+export function assertDcsOpen(flight: { dcsClosedAt?: Date | null }) {
+  if (flight.dcsClosedAt)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Final DCS closure prevents passenger or seat changes",
+    });
+}
+
 export async function assertSeatSelectionContext(
   tx: SettlementTx,
   c: Awaited<ReturnType<typeof lockDepartureContext>>
 ) {
+  assertDcsOpen(c.flight);
   if (
     !["scheduled", "delayed"].includes(c.flight.status) ||
     c.flight.departureTime <= new Date()
@@ -119,6 +128,7 @@ export async function assertSeatSelectionContext(
 export function assertFundedDepartureReservation(
   c: Awaited<ReturnType<typeof lockDepartureContext>>
 ) {
+  assertDcsOpen(c.flight);
   if (
     c.booking.status !== "confirmed" ||
     c.booking.paymentStatus !== "paid" ||
