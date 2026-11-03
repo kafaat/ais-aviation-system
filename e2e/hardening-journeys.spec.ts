@@ -119,7 +119,9 @@ test.describe("Funded journeys and truthful operational reads", () => {
       .locator("../..");
     await product.getByLabel("Flight sector").selectOption(String(second));
     await product.getByLabel("Passenger").selectOption(String(passenger.id));
-    await product.getByLabel("Seat", { exact: true }).selectOption("12A");
+    await product
+      .getByRole("combobox", { name: "Seat", exact: true })
+      .selectOption("12A");
     await product.getByRole("button", { name: "Add", exact: true }).click();
     await expect(
       page
@@ -472,6 +474,33 @@ test.describe("Funded journeys and truthful operational reads", () => {
     await loginAsAdmin(page);
     expect((await page.request.get(status.downloadUrl)).status()).toBe(404);
   });
+  test("demonstrates operational booking values alongside unverified earned revenue", async ({
+    page,
+  }) => {
+    const { booking } = await ownedBooking(page, true);
+    await useBrowserSession(page, "admin");
+    const client = rpc(page);
+    const summary = await client.revenueAccounting.getDashboard.query();
+    expect(summary.recognizedRevenue).toBeNull();
+    expect(summary.deferredRevenue).toBeNull();
+    expect(summary.ancillaryRevenue).toBeNull();
+    const detail = await client.revenueAccounting.getDeferredRevenue.query();
+    expect(detail.total).toBeNull();
+    expect(
+      detail.items.find(r => r.bookingId === booking.bookingId)?.amount
+    ).toBe(booking.totalAmount);
+    await page.goto("/admin/revenue-accounting");
+    await expect(page.getByText("Not verified", { exact: true })).toHaveCount(
+      3
+    );
+    await expect(
+      page.getByText("Upcoming paid bookings", { exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText(booking.bookingReference, { exact: true })
+    ).toBeVisible();
+  });
+
   test("revenue source failure stays visible instead of presenting zero cash", async ({
     page,
   }) => {

@@ -6345,3 +6345,53 @@ export const ticketCoupons = mysqlTable(
     ),
   })
 );
+
+// The profile row serializes changes for one external supplier within one airline.
+export const supplierBankProfiles = mysqlTable(
+  "supplier_bank_profiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull(),
+    supplierRef: varchar("supplierRef", { length: 36 }).notNull(),
+    bankVersion: int("bankVersion").notNull().default(0),
+  },
+  t => ({
+    scope: uniqueIndex("supplier_bank_scope").on(t.tenantId, t.supplierRef),
+  })
+);
+
+// Append-only local approvals. No bank account number or payment execution is retained.
+export const supplierFinanceEvents = mysqlTable(
+  "supplier_finance_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    profileId: int("profileId").notNull(),
+    bankVersion: int("bankVersion").notNull(),
+    action: mysqlEnum("action", [
+      "bank_change",
+      "bank_approved",
+      "payout_request",
+      "payout_approved",
+    ]).notNull(),
+    invoiceRef: varchar("invoiceRef", { length: 36 }).notNull().default(""),
+    supersedesBankVersion: int("supersedesBankVersion"),
+    vaultRef: varchar("vaultRef", { length: 36 }),
+    lastFour: varchar("lastFour", { length: 4 }),
+    amountMinor: int("amountMinor"),
+    actorId: int("actorId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    once: uniqueIndex("supplier_finance_once").on(
+      t.profileId,
+      t.bankVersion,
+      t.action,
+      t.invoiceRef
+    ),
+    invoice: index("supplier_finance_invoice").on(
+      t.profileId,
+      t.invoiceRef,
+      t.id
+    ),
+  })
+);

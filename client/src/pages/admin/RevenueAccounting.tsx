@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import type { inferRouterOutputs } from "@trpc/server";
@@ -91,14 +91,18 @@ export function RevenueAccounting() {
     new Date().getFullYear()
   );
 
-  // Compute date filters
-  const dateFilter =
-    dateRange === "all"
-      ? undefined
-      : {
-          startDate: daysAgo(parseInt(dateRange)),
-          endDate: new Date(),
-        };
+  // All queries for this selection share a fixed reporting instant. A new
+  // Date on each render would issue a new query before its result can render.
+  const dateFilter = useMemo(
+    () =>
+      dateRange === "all"
+        ? undefined
+        : {
+            startDate: daysAgo(Number(dateRange)),
+            endDate: new Date(),
+          },
+    [dateRange]
+  );
 
   // ============ Queries ============
 
@@ -355,7 +359,7 @@ export function RevenueAccounting() {
                 {t("revenueAccounting.netCash", "Net cash collected")}
               </span>
               <span className="text-lg font-semibold">
-                {formatSAR(dashboard?.netRevenue ?? 0)} SAR
+                {dashboard ? `${formatSAR(dashboard.netRevenue)} SAR` : "—"}
               </span>
             </div>
           </CardContent>
@@ -370,7 +374,9 @@ export function RevenueAccounting() {
                 )}
               </span>
               <span className="text-lg font-semibold">
-                {formatSAR(dashboard?.averageRevenuePerBooking ?? 0)} SAR
+                {dashboard
+                  ? `${formatSAR(dashboard.averageRevenuePerBooking)} SAR`
+                  : "—"}
               </span>
             </div>
           </CardContent>
@@ -382,7 +388,7 @@ export function RevenueAccounting() {
                 {t("revenueAccounting.refunds", "Refunds")}
               </span>
               <span className="text-lg font-semibold text-red-600">
-                -{formatSAR(dashboard?.refundTotal ?? 0)} SAR
+                {dashboard ? `-${formatSAR(dashboard.refundTotal)} SAR` : "—"}
               </span>
             </div>
           </CardContent>

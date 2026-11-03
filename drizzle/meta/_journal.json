@@ -407,6 +407,13 @@
       "when": 1793662502357,
       "tag": "0057_local_ticket_coupons",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "5",
+      "when": 1793665619856,
+      "tag": "0058_supplier_finance_control",
+      "breakpoints": true
     }
   ]
 }

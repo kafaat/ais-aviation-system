@@ -464,6 +464,12 @@ try {
   await verifyR2Trace(db, id, check);
   await verifyR2Lineage(db, id, check);
   await verifyR2Reaccommodation(db, id, check);
+  const { verifySupplierFinance } =
+    await import("./acceptance/supplier-finance");
+  await check(
+    "supplier bank versions, independent approvals and immutable evidence",
+    () => verifySupplierFinance(db)
+  );
   completed = true;
 } finally {
   const report = {

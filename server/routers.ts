@@ -1,3 +1,4 @@
+import { supplierFinanceRouter } from "./routers/supplier-finance";
 import { aviationIntegrationsRouter } from "./routers/aviation-integrations";
 import { operationsRouter } from "./routers/operations";
 import { tenantsRouter } from "./routers/tenants";
@@ -110,6 +111,7 @@ import { webhooksRouter } from "./routers/webhooks";
 export const appRouter = router({
   aviationIntegrations: aviationIntegrationsRouter,
   operations: operationsRouter,
+  supplierFinance: supplierFinanceRouter,
   tenants: tenantsRouter,
   // System router (AI, notifications, etc.)
   system: systemRouter,

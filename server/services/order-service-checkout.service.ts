@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import type Stripe from "stripe";
-import type { SettlementTx } from "./booking-settlement.service";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { stripe } from "../stripe";
@@ -16,7 +15,10 @@ import {
   planSchema,
   validatePaidServiceQuote,
 } from "./order-servicing.service";
-import { assertNoCollectionReview } from "./booking-settlement.service";
+import {
+  assertNoCollectionReview,
+  type SettlementTx,
+} from "./booking-settlement.service";
 import { releaseInventoryLock } from "./inventory-lock.service";
 import { recordEvent } from "./outbox.service";
 const requestSchema = z.object({
