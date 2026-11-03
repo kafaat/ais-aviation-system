@@ -1040,18 +1040,33 @@ try {
           .select()
           .from(s.outbox)
           .where(eq(s.outbox.tenantId, id));
-        const transitions = events.filter(
-          event =>
-            event.payload.bookingId === id + 13 &&
-            event.payload.localCouponTransitions
-        );
+        const transitions = events.flatMap(({ eventType, payload }) => {
+          if (
+            !payload ||
+            typeof payload !== "object" ||
+            !("bookingId" in payload) ||
+            payload.bookingId !== id + 13 ||
+            !("localCouponTransitions" in payload)
+          )
+            return [];
+          return [
+            {
+              eventType,
+              localCouponTransitions: payload.localCouponTransitions,
+              providerEventId:
+                "providerEventId" in payload
+                  ? payload.providerEventId
+                  : undefined,
+            },
+          ];
+        });
         assert.deepEqual(transitions.map(e => e.eventType).sort(), [
           "booking.cancelled",
           "payment.refunded",
         ]);
         for (const e of transitions) {
           const cancelled = e.eventType === "booking.cancelled";
-          assert.deepEqual(e.payload.localCouponTransitions, [
+          assert.deepEqual(e.localCouponTransitions, [
             {
               couponId: coupon.id,
               passengerId,
@@ -1061,8 +1076,7 @@ try {
               status: cancelled ? "V" : "R",
             },
           ]);
-          if (!cancelled)
-            assert.equal(typeof e.payload.providerEventId, "string");
+          if (!cancelled) assert.equal(typeof e.providerEventId, "string");
         }
         return {
           auditedCouponTransitions: [
