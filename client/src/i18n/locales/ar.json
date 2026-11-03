@@ -1028,6 +1028,10 @@
     "recentReviews": "المراجعات الأخيرة"
   },
   "specialServices": {
+    "flightSector": "قطاع الرحلة",
+    "chooseSector": "اختر قطاع الرحلة",
+    "unverifiedSector": "قطاع الرحلة غير موثق. راجع موظف الخدمة.",
+    "requestedFlight": "الرحلة المطلوبة {{flight}}",
     "title": "الخدمات الخاصة",
     "description": "اطلب المساعدة والخدمات الخاصة لرحلتك",
     "addService": "إضافة خدمة",

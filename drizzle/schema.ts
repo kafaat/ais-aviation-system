@@ -2597,6 +2597,11 @@ export const specialServices = mysqlTable(
     bookingId: int("bookingId").notNull(),
     passengerId: int("passengerId").notNull(),
 
+    // Original flight stays on the request if a sector is later exchanged.
+    // Pre-scope requests have neither identifier and require reconciliation.
+    flightId: int("flightId"),
+    bookingSegmentId: int("bookingSegmentId"),
+
     // Service identification
     serviceType: mysqlEnum("serviceType", [
       "meal",

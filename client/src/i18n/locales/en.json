@@ -1028,6 +1028,10 @@
     "recentReviews": "Recent Reviews"
   },
   "specialServices": {
+    "flightSector": "Flight sector",
+    "chooseSector": "Choose a flight sector",
+    "unverifiedSector": "Flight sector unverified — contact airline staff",
+    "requestedFlight": "Requested flight {{flight}}",
     "title": "Special Services",
     "description": "Request special assistance and services for your journey",
     "addService": "Add Service",
