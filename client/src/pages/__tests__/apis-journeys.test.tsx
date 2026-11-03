@@ -148,6 +148,7 @@ function passengerReplies() {
           passengerId: person.id,
           seatNumber: null,
           checkedIn: false,
+          departureState: "not_checked_in",
         })),
       })),
     "seatMap.getFlightSeatMap": () => ({ cabins: [] }),
@@ -416,6 +417,71 @@ function boardingPassFixture(passengerId: number, flightId: number) {
   };
 }
 
+it.each(["boarding_denied", "boarded", "checked_in"])(
+  "checks in only the eligible companion when another traveler is %s",
+  async state => {
+    const replies = passengerReplies();
+    replies["bookings.getDepartureState"] = () => [
+      {
+        flightId: 42,
+        flightNumber: "AIS42",
+        departureTime: new Date("2090-06-15T10:00:00Z"),
+        status: "scheduled",
+        open: true,
+        passengers: [
+          {
+            passengerId: 11,
+            seatNumber: "1A",
+            checkedIn: true,
+            departureState: state,
+          },
+          {
+            passengerId: 12,
+            seatNumber: null,
+            checkedIn: false,
+            departureState: "not_checked_in",
+          },
+        ],
+      },
+    ];
+    replies["bookings.checkIn"] = () => ({ success: true });
+    replies["bookings.baggageEntitlements"] = () => [];
+    replies["seatMap.getBoardingPass"] = ({ passengerId, flightId }) =>
+      boardingPassFixture(passengerId, flightId);
+    const calls = visit(<CheckIn />, replies);
+    fireEvent.change(screen.getByLabelText("Booking Reference (PNR)"), {
+      target: { value: "ABC123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    const companion = await screen.findByRole("checkbox", {
+      name: "Second Traveler",
+    });
+    expect(
+      screen.queryByRole("checkbox", { name: "First Traveler" })
+    ).toBeNull();
+    const submit = screen.getByRole("button", { name: "Check-in" });
+    fireEvent.click(companion);
+    expect(submit).toBeDisabled();
+    fireEvent.click(companion);
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(
+        calls.filter(c => c.method === "bookings.checkIn").map(c => c.input)
+      ).toEqual([
+        {
+          bookingId: 7,
+          flightId: 42,
+          seatAssignments: [{ passengerId: 12, seatNumber: undefined }],
+        },
+      ])
+    );
+    if (state !== "checked_in")
+      expect(calls.some(c => c.method === "seatMap.getBoardingPass")).toBe(
+        false
+      );
+  }
+);
+
 function PausePassRefresh() {
   const utils = trpc.useUtils();
   return (
@@ -439,7 +505,14 @@ it("does not display a cached printable pass when its verification is paused off
       departureTime: new Date("2090-06-15T10:00:00Z"),
       status: "scheduled",
       open: true,
-      passengers: [{ passengerId: 11, seatNumber: "1A", checkedIn: true }],
+      passengers: [
+        {
+          passengerId: 11,
+          seatNumber: "1A",
+          checkedIn: true,
+          departureState: "checked_in",
+        },
+      ],
     },
   ];
   replies["bookings.baggageEntitlements"] = () => [];
@@ -501,6 +574,7 @@ it.each(["acknowledged", "lost response"])(
           passengerId: person.id,
           seatNumber: person.id === 11 ? "1A" : "1B",
           checkedIn: true,
+          departureState: "checked_in",
         })),
       }));
     replies["bookings.baggageEntitlements"] = () => [];

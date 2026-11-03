@@ -179,7 +179,6 @@ export async function checkInPassengersTx(
     bookingId: number;
     flightId?: number;
     assignments: { passengerId: number; seatNumber?: string }[];
-    requireAllPassengers?: boolean;
     owner?: { userId: number; tenantId: number | null };
   }
 ) {
@@ -210,12 +209,12 @@ export async function checkInPassengersTx(
     !ids.length ||
     new Set(ids).size !== ids.length ||
     new Set(numbers).size !== numbers.length ||
-    ids.some(id => !ps.some(p => p.id === id)) ||
-    (input.requireAllPassengers && ps.length !== ids.length)
+    ids.some(id => !ps.some(p => p.id === id))
   )
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Supply each passenger exactly once with distinct seats",
+      message:
+        "Select passengers from this booking once each, with distinct seats",
     });
   const results = [];
   for (const a of input.assignments) {

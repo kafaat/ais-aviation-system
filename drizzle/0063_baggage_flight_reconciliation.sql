@@ -1,0 +1,1 @@
+CREATE INDEX `baggage_items_flight_id_row_idx` ON `baggage_items` (`flightId`,`id`);

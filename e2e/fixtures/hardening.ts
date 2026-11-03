@@ -79,7 +79,13 @@ export async function fixtureFlight() {
     await db.end();
   }
 }
-export async function ownedBooking(page: Page, funded = false) {
+export async function ownedBooking(
+  page: Page,
+  funded = false,
+  passengers = [
+    { firstName: "Synthetic", lastName: "Journey", type: "adult" as const },
+  ]
+) {
   await useBrowserSession(page, "regular");
   const client = rpc(page),
     flightId = await fixtureFlight();
@@ -90,9 +96,7 @@ export async function ownedBooking(page: Page, funded = false) {
     cabinClass: "economy" as const,
     sessionId: randomUUID(),
     idempotencyKey: randomUUID(),
-    passengers: [
-      { firstName: "Synthetic", lastName: "Journey", type: "adult" as const },
-    ],
+    passengers,
   };
   const booking = await client.bookings.create.mutate(command);
   const db = await mysql.createConnection(disposableDatabaseUrl());

@@ -1711,15 +1711,24 @@
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
       "consumers": [
+        "server/routers/bookings.ts",
         "server/services/baggage-registration.service.ts",
         "server/services/boarding-pass.service.ts",
         "server/services/dcs-operations.service.ts",
+        "server/services/dcs.service.ts",
         "server/services/departure-control.service.ts",
         "server/services/seat-map.service.ts"
       ],
       "dependencies": ["drizzle/schema.ts"],
       "tableExpressions": {
-        "reads": ["dcsFlightOperations", "dcsPassengerStates"],
+        "reads": [
+          "bookingSegments",
+          "bookings",
+          "dcsFlightOperations",
+          "dcsPassengerStates",
+          "passengers",
+          "seatInventory"
+        ],
         "writes": ["dcsPassengerStates"]
       },
       "replacement": null
@@ -1740,6 +1749,7 @@
         "server/services/baggage-reconciliation.service.ts",
         "server/services/baggage-sector-scope.ts",
         "server/services/crew-rule.service.ts",
+        "server/services/dcs-state.service.ts",
         "server/services/demo-capability.ts",
         "server/services/flight-state.service.ts",
         "server/services/load-sheet-lifecycle.service.ts"

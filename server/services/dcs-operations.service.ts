@@ -30,6 +30,7 @@ import {
 import {
   departureState,
   readDcsPassengerState,
+  readReconciledBoardings,
   writeDcsPassengerState,
   type DcsAttendanceState,
   type DcsPassengerKey,
@@ -307,49 +308,7 @@ export async function getDcsDesk(
             .limit(MAX_DESK_PASSENGERS + 1)
         : [];
       assertDeskBound(states.length);
-      // Financial settlement can retire the reservation and release its seat
-      // after local boarding was recorded. Do not hide that operational fact
-      // behind the paid-booking filter or invent a deplane/return decision.
-      const boarded = await tx
-        .select()
-        .from(dcsPassengerStates)
-        .where(
-          and(
-            eq(dcsPassengerStates.flightId, flightId),
-            eq(dcsPassengerStates.state, "boarded")
-          )
-        )
-        .limit(MAX_DESK_PASSENGERS + 1);
-      if (boarded.length > MAX_DESK_PASSENGERS)
-        reject(
-          "Departure reconciliation is required: too many boarded records to verify safely"
-        );
-      for (const state of boarded) {
-        const entry = eligible.find(e => e.booking.id === state.bookingId);
-        const person = ps.find(
-          p => p.id === state.passengerId && p.bookingId === state.bookingId
-        );
-        const assigned = seats.filter(
-          seat =>
-            seat.bookingId === state.bookingId &&
-            seat.passengerId === state.passengerId
-        );
-        const seat = assigned[0];
-        if (
-          !entry ||
-          !person ||
-          (person.tenantId != null && person.tenantId !== flight.tenantId) ||
-          assigned.length !== 1 ||
-          seat?.status !== "checked_in" ||
-          !seat.checkInNonce ||
-          !seat.checkedInAt ||
-          !seat.boardingSequence ||
-          seat.cabinClass !== entry.booking.cabinClass
-        )
-          reject(
-            "Departure reconciliation is required: a boarded passenger cannot be matched to an active paid reservation with a current checked-in seat"
-          );
-      }
+      await readReconciledBoardings(tx, flight);
       const [gate] = await tx
         .select()
         .from(dcsFlightOperations)

@@ -1171,7 +1171,7 @@ it.each<DeskCommand>(["passenger", "bag"])(
       await screen.findByText("Command response was lost");
       // The operator keeps this form open and retries the unchanged command.
       const retryButton = screen.getByRole("button", {
-        name: kind === "bag" ? "Register received bag" : "Board passenger",
+        name: kind === "bag" ? "Recover bag receipt" : "Board passenger",
       });
       expect(retryButton).toBeEnabled();
       await user.click(retryButton);
@@ -1256,7 +1256,7 @@ it("does not discard a pending bag form when refreshing the flight list fails", 
     );
     await screen.findByText("Bag command response was lost");
     await user.click(
-      screen.getByRole("button", { name: "Register received bag" })
+      screen.getByRole("button", { name: "Recover bag receipt" })
     );
     await waitFor(() =>
       expect(

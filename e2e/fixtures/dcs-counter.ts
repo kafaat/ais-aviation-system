@@ -93,7 +93,7 @@ export function registerDcsCounterTests() {
       const openPassenger = async () => {
         await page.goto("/airline/dcs");
         await page
-          .getByLabel("Flight", { exact: true })
+          .getByRole("combobox", { name: "Flight", exact: true })
           .selectOption(String(scope.flightId));
         await page
           .getByRole("button", { name: "Select Synthetic Journey" })
@@ -107,7 +107,7 @@ export function registerDcsCounterTests() {
         .getByRole("button", { name: "Check in passenger", exact: true })
         .click();
       await expect(
-        page.getByLabel("Passenger action", { exact: true })
+        page.getByRole("combobox", { name: "Passenger action", exact: true })
       ).toHaveValue("board");
       await page
         .getByLabel("Passenger action reason")
@@ -116,7 +116,7 @@ export function registerDcsCounterTests() {
         .getByRole("button", { name: "Board passenger", exact: true })
         .click();
       await expect(
-        page.getByLabel("Passenger action", { exact: true })
+        page.getByRole("combobox", { name: "Passenger action", exact: true })
       ).toHaveValue("deplane");
       // Only the disposable fixture's flight status and clock change in SQL.
       // Check-in, boarding and both corrections run through the real UI/API.
@@ -131,7 +131,7 @@ export function registerDcsCounterTests() {
       }
       await openPassenger();
       await expect(
-        page.getByLabel("Passenger action", { exact: true })
+        page.getByRole("combobox", { name: "Passenger action", exact: true })
       ).toHaveValue("deplane");
       await page
         .getByLabel("Passenger action reason")
@@ -140,11 +140,11 @@ export function registerDcsCounterTests() {
         .getByRole("button", { name: "Deplane passenger", exact: true })
         .click();
       await expect(
-        page.getByLabel("Passenger action", { exact: true })
+        page.getByRole("combobox", { name: "Passenger action", exact: true })
       ).toHaveValue("offload");
       await expect(
         page
-          .getByLabel("Passenger action", { exact: true })
+          .getByRole("combobox", { name: "Passenger action", exact: true })
           .locator('option[value="board"]')
       ).toBeDisabled();
       await expect(
@@ -199,7 +199,7 @@ export function registerDcsCounterTests() {
       expect(coupons[0].status).toBe("O");
       await openPassenger();
       await expect(
-        page.getByLabel("Passenger action", { exact: true })
+        page.getByRole("combobox", { name: "Passenger action", exact: true })
       ).toHaveValue("check_in");
       await expect(page.getByLabel("Passenger action reason")).toBeDisabled();
       await expect(
@@ -224,7 +224,7 @@ export function registerDcsCounterTests() {
     const client = rpc(page);
     await page.goto("/airline/dcs");
     await page
-      .getByLabel("Flight", { exact: true })
+      .getByRole("combobox", { name: "Flight", exact: true })
       .selectOption(String(scope.flightId));
     await page
       .getByRole("button", { name: "Select Synthetic Journey" })
@@ -236,7 +236,7 @@ export function registerDcsCounterTests() {
       .getByRole("button", { name: "Check in passenger", exact: true })
       .click();
     await expect(
-      page.getByLabel("Passenger action", { exact: true })
+      page.getByRole("combobox", { name: "Passenger action", exact: true })
     ).toHaveValue("board");
 
     // The server commits the real request; only its first response is lost.
@@ -267,11 +267,11 @@ export function registerDcsCounterTests() {
           ).length
       )
       .toBe(1);
-    await expect(baggage.getByRole("alert")).toBeVisible();
+    await expect(
+      baggage.getByRole("definition").filter({ hasText: /^10 kg$/ })
+    ).toBeVisible();
     await page.unroute(registerEndpoint);
-    await baggage
-      .getByRole("button", { name: "Register received bag" })
-      .click();
+    await baggage.getByRole("button", { name: "Recover bag receipt" }).click();
     await expect(baggage.getByRole("status")).toContainText(
       "Registered bag tag"
     );
@@ -304,7 +304,7 @@ export function registerDcsCounterTests() {
       .getByRole("button", { name: "Board passenger", exact: true })
       .click();
     await expect(
-      page.getByLabel("Passenger action", { exact: true })
+      page.getByRole("combobox", { name: "Passenger action", exact: true })
     ).toHaveValue("deplane");
     await expect(
       client.dcsOperations.transition.mutate({
@@ -316,13 +316,13 @@ export function registerDcsCounterTests() {
     ).rejects.toThrow(/deplane|boarded/i);
     await page.reload();
     await page
-      .getByLabel("Flight", { exact: true })
+      .getByRole("combobox", { name: "Flight", exact: true })
       .selectOption(String(scope.flightId));
     await page
       .getByRole("button", { name: "Select Synthetic Journey" })
       .click();
     await expect(
-      page.getByLabel("Passenger action", { exact: true })
+      page.getByRole("combobox", { name: "Passenger action", exact: true })
     ).toHaveValue("deplane");
     await page
       .getByLabel("Passenger action reason")
@@ -331,10 +331,10 @@ export function registerDcsCounterTests() {
       .getByRole("button", { name: "Deplane passenger", exact: true })
       .click();
     await expect(
-      page.getByLabel("Passenger action", { exact: true })
+      page.getByRole("combobox", { name: "Passenger action", exact: true })
     ).toHaveValue("board");
     await page
-      .getByLabel("Passenger action", { exact: true })
+      .getByRole("combobox", { name: "Passenger action", exact: true })
       .selectOption("offload");
     await page
       .getByLabel("Passenger action reason")

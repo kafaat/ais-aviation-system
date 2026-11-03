@@ -837,13 +837,43 @@ export async function verifyDcsCounterLifecycle(
   await check(
     "DCS: a late full refund cannot erase unresolved physical baggage or recorded boarding",
     async () => {
-      const j = await journey();
+      const j = await journey(1, 2);
       await staffCheckIn(j.key());
       const bag = await registerBaggage(j.bag(10), bagActor);
       await transitionDcsPassenger(
         { ...j.key(), action: "board", ...command() },
         actor
       );
+      const baglessSector = j.key(0, 1);
+      await staffCheckIn(baglessSector);
+      await transitionDcsPassenger(
+        { ...baglessSector, action: "board", ...command() },
+        actor
+      );
+      const before = (await generateFlightManifest(baglessSector.flightId))
+        .manifest;
+      assert.equal(before.baggage.pieces, 0);
+      assert.deepEqual(
+        before.passengers.list.map(p => p.id),
+        [baglessSector.passengerId]
+      );
+      const validSeat = await storedSeat(baglessSector);
+      await db
+        .update(s.seatInventory)
+        .set({ checkInNonce: null })
+        .where(eq(s.seatInventory.id, validSeat.id));
+      for (const read of [
+        () => generateFlightManifest(baglessSector.flightId),
+        () => getDcsDesk(baglessSector.flightId, actor),
+      ])
+        await assert.rejects(read(), {
+          code: "PRECONDITION_FAILED",
+          message: /reconciliation.*boarded passenger/i,
+        });
+      await db
+        .update(s.seatInventory)
+        .set({ checkInNonce: validSeat.checkInNonce })
+        .where(eq(s.seatInventory.id, validSeat.id));
       const [funded] = await db
         .select()
         .from(s.bookings)
@@ -886,6 +916,10 @@ export async function verifyDcsCounterLifecycle(
         code: "PRECONDITION_FAILED",
         message: /reconciliation/i,
       });
+      await assert.rejects(generateFlightManifest(baglessSector.flightId), {
+        code: "PRECONDITION_FAILED",
+        message: /reconciliation.*boarded passenger/i,
+      });
       const closeout = await getFlightBaggageCloseout(
         j.key().flightId,
         tenantId
@@ -913,7 +947,7 @@ export async function verifyDcsCounterLifecycle(
         .where(eq(s.dcsOperationEvents.bookingId, j.bookingId));
       assert.deepEqual(
         history.map(event => event.action).sort(),
-        ["board", "check_in"],
+        ["board", "board", "check_in", "check_in"],
         "Readers must not invent a deplane or offload event"
       );
       assert.equal((await bags(j.bookingId))[0].id, bag.id);
