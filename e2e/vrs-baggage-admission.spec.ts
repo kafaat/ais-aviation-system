@@ -30,7 +30,12 @@ test("AT-03 rejects new baggage across channels after offload, excess weight and
   const databaseUrl = disposableDatabaseUrl();
   const { settleVerifiedPayment, settleVerifiedRefund } =
     await import("../server/services/payment-settlement.service");
-  const { booking, flightId, userId } = await ownedBooking(page);
+  const { booking, flightId, userId } = await ownedBooking(
+    page,
+    false,
+    undefined,
+    "departurePassenger"
+  );
   const bookingId = booking.bookingId;
   const [operator] = await sqlRows<RowDataPacket>(
     "SELECT tenantId FROM users WHERE role='ops' AND email='test.ops@example.com'"
@@ -118,7 +123,7 @@ test("AT-03 rejects new baggage across channels after offload, excess weight and
 
   await useBrowserSession(page, "ops");
   await checkIn();
-  await useBrowserSession(page, "regular");
+  await useBrowserSession(page, "departurePassenger");
   const oldPass = await client.boardingPass.issue.mutate(passenger);
   const oldAdmission = await client.bagDrop.scanPass.mutate({
     boardingPassToken: oldPass.token,
@@ -150,7 +155,7 @@ test("AT-03 rejects new baggage across channels after offload, excess weight and
   });
 
   await checkIn();
-  await useBrowserSession(page, "regular");
+  await useBrowserSession(page, "departurePassenger");
   const currentPass = await client.boardingPass.issue.mutate(passenger);
   const admission = await client.bagDrop.scanPass.mutate({
     boardingPassToken: currentPass.token,

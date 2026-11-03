@@ -34,7 +34,7 @@ async function database() {
     });
   return db;
 }
-async function assertAccountAccessible(
+export async function assertAccountAccessible(
   db: SettlementTx | NonNullable<ReturnType<typeof getDb>>,
   userId: number
 ) {

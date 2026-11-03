@@ -59,34 +59,15 @@ test("admin links an agency, its first sale belongs to the owner, and a foreign 
   const outsider = await browser.newPage();
   try {
     const outsideApi = rpc(outsider);
-    const account = {
-      email: `agency-foreign-${suffix}@example.com`,
-      password: `T3st!${randomUUID()}`,
-    };
-    // Use the same disposable auth-service fixture as global setup. Each attempt
-    // then consumes only one of the application’s five real IP login attempts.
-    const registration = await outsider.request.post(
-      (process.env.AUTH_SERVICE_URL ?? "http://localhost:8000") +
-        "/auth/register",
-      { data: { ...account, name: "Other Account" } }
-    );
-    expect(registration.ok()).toBe(true);
-    await outsideApi.auth.login.mutate(account);
+    // Reuse the authenticated passenger from the other airline. The combined
+    // suite reserves its fifth IP login for the guest-to-checkout browser flow.
+    await useBrowserSession(outsider, "departurePassenger");
     const outsiderUser = await outsideApi.auth.me.query();
     if (!outsiderUser) throw new Error("Missing outsider session");
-
-    const tenant = await api.tenants.create.mutate({
-      slug: `foreign-${suffix}`,
-      name: "Other Airline",
-    });
-    await api.tenants.setStatus.mutate({
-      tenantId: tenant.id,
-      status: "active",
-    });
-    await api.tenants.assignUser.mutate({
-      userId: outsiderUser.id,
-      tenantId: tenant.id,
-    });
+    expect(outsiderUser.role).toBe("user");
+    expect(outsiderUser.id).not.toBe(owner.id);
+    expect(outsiderUser.tenantId).toEqual(expect.any(Number));
+    expect(outsiderUser.tenantId).not.toBe(owner.tenantId);
 
     await expect(
       api.travelAgent.assignOwner.mutate({

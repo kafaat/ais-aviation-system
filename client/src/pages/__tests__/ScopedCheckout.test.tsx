@@ -34,6 +34,10 @@ vi.mock("wouter", async importOriginal => ({
       }),
     }).toString(),
 }));
+vi.mock("@/lib/useRawSearch", async () => {
+  const { useSearch } = await import("wouter");
+  return { useRawSearch: useSearch };
+});
 vi.mock("@/lib/trpc", () => {
   const meal = {
     id: 5,
@@ -169,7 +173,7 @@ const submit = () =>
 it("replays identical per-passenger, per-sector extras and total after an ambiguous connection failure", async () => {
   calls.create
     .mockRejectedValueOnce(new Error("Connection lost"))
-    .mockResolvedValueOnce({});
+    .mockResolvedValueOnce({ bookingId: 73 });
   const view = prepare();
   submit();
   await screen.findByText("Connection lost");
@@ -199,7 +203,7 @@ it("allows removal and review at the refreshed catalog price after a definite co
     .mockRejectedValueOnce(
       Object.assign(new Error("Price changed"), { data: { code: "CONFLICT" } })
     )
-    .mockResolvedValueOnce({});
+    .mockResolvedValueOnce({ bookingId: 73 });
   const view = prepare();
   submit();
   await screen.findByText("Price changed");

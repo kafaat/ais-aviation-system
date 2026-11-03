@@ -107,6 +107,18 @@ export const RATE_LIMIT_TIERS: Record<string, RateLimitTier> = {
  * Strict rate limits for sensitive endpoints
  */
 export const STRICT_RATE_LIMITS: Record<string, RateLimitTier> = {
+  // Public reference/surname lookup: limit both IPs and references, regardless
+  // of account/loyalty tier. Successes count as well as failed attempts.
+  manageBookingLookup: {
+    name: "manageBookingLookup",
+    requestsPerWindow: 10,
+    windowMs: 15 * 60 * 1000,
+  },
+  manageBookingReference: {
+    name: "manageBookingReference",
+    requestsPerWindow: 5,
+    windowMs: 15 * 60 * 1000,
+  },
   // Login/authentication attempts
   auth: {
     name: "auth",

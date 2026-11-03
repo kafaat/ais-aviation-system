@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { initTRPC } from "@trpc/server";
+import { TRPC_BATCH_LIMIT } from "@shared/const";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import superjson from "superjson";
 import { afterEach, expect, it, vi } from "vitest";
@@ -31,8 +32,7 @@ it("splits 19 queued browser reads into accepted batches and returns every resul
         req: new Request(url, init),
         router,
         createContext: () => ({}),
-        // Production's existing server/_core/index.ts request limit.
-        maxBatchSize: 10,
+        maxBatchSize: TRPC_BATCH_LIMIT,
       });
       requests.push({
         size: url.pathname.split("/").at(-1)!.split(",").length,

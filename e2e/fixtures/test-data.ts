@@ -12,6 +12,10 @@ export const testUsers = {
     lastName: "User",
     phone: "+966501234567",
   },
+  departurePassenger: {
+    email: "test.departure@example.com",
+    password: "TestPassword123!",
+  },
   admin: {
     email: "admin@ais-aviation.com",
     password: "AdminPassword123!",

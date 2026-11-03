@@ -12,7 +12,12 @@ import { disposableDatabaseUrl } from "../disposable-database";
 async function prepareCounterBooking(page: Page) {
   // Creation and payment use the real customer commands. SQL only supplies
   // the synthetic airline, departure clock and aircraft-seat inventory.
-  const { booking, flightId } = await ownedBooking(page, true);
+  const { booking, flightId } = await ownedBooking(
+    page,
+    true,
+    undefined,
+    "departurePassenger"
+  );
   const db = await mysql.createConnection(disposableDatabaseUrl());
   try {
     await db.query("SET SESSION time_zone = '+00:00'");

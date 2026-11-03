@@ -1,5 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
+import { loginPath } from "@shared/return-to";
+import { useRawSearch } from "@/lib/useRawSearch";
 import { Loader2 } from "lucide-react";
 
 interface AdminRouteProps {
@@ -13,6 +15,8 @@ interface AdminRouteProps {
  */
 export function AdminRoute({ children }: AdminRouteProps) {
   const { user, loading, isAuthenticated } = useAuth();
+  const [pathname] = useLocation();
+  const search = useRawSearch();
 
   // Show loading state while checking authentication
   if (loading) {
@@ -25,7 +29,9 @@ export function AdminRoute({ children }: AdminRouteProps) {
 
   // Redirect to login if not authenticated
   if (!isAuthenticated || !user) {
-    return <Redirect to="/login" />;
+    return (
+      <Redirect to={loginPath(`${pathname}${search ? `?${search}` : ""}`)} />
+    );
   }
 
   // Redirect to home if not admin or super_admin

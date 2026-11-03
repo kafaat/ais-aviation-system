@@ -7,6 +7,7 @@
 import mysql, { type RowDataPacket } from "mysql2/promise";
 import { disposableDatabaseUrl } from "./disposable-database";
 import type { FullConfig } from "@playwright/test";
+import { testUsers } from "./fixtures/test-data";
 import { prepareBrowserSessions } from "./fixtures/browser-session";
 
 const AUTH_SERVICE_URL =
@@ -25,6 +26,11 @@ const TEST_USERS = [
     email: "admin@ais-aviation.com",
     password: "AdminPassword123!",
     role: "admin" as const,
+  },
+  {
+    ...testUsers.departurePassenger,
+    name: "Departure Passenger",
+    role: "user" as const,
   },
   {
     name: "Operations User",
@@ -73,7 +79,7 @@ async function promoteAdminUsers() {
         [user.email]
       );
     }
-    // One isolated, synthetic airline account exercises actual tenant guards.
+    // The departure passenger and operator belong to the same synthetic airline.
     // Never change the shared regular/admin actors used by other parallel tests.
     await connection.execute(
       "INSERT IGNORE INTO tenants (slug, name, status) VALUES ('e2e-dcs-operations', 'Synthetic DCS E2E airline', 'active')"
@@ -86,7 +92,11 @@ async function promoteAdminUsers() {
       "UPDATE users SET role = 'ops', tenantId = ? WHERE email = 'test.ops@example.com'",
       [tenants[0].id]
     );
-    console.info("[e2e-setup] Admin roles promoted");
+    await connection.execute(
+      "UPDATE users SET tenantId = ? WHERE email = ? AND role = 'user'",
+      [tenants[0].id, testUsers.departurePassenger.email]
+    );
+    console.info("[e2e-setup] Admin and airline fixtures prepared");
   } finally {
     await connection.end();
   }

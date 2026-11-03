@@ -22,7 +22,7 @@ export async function sqlRows<T extends RowDataPacket>(
     await db.end();
   }
 }
-export async function fixtureFlight() {
+export async function fixtureFlight(tenantId: number | null = null) {
   const db = await mysql.createConnection(disposableDatabaseUrl());
   try {
     await db.beginTransaction();
@@ -32,7 +32,8 @@ export async function fixtureFlight() {
       // date finds it whatever zone the seeded origin airport carries and
       // whatever hour the suite runs (it failed between 21:00 and 24:00 UTC,
       // when the Riyadh day had already turned).
-      "INSERT INTO flights (flightNumber, airlineId, originId, destinationId, departureTime, arrivalTime, aircraftType, economySeats, businessSeats, economyPrice, businessPrice, economyAvailable, businessAvailable) SELECT flightNumber, airlineId, originId, destinationId, TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '12:00:00'), TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '14:00:00'), 'B737', 10, 2, 10000, 20000, 10, 2 FROM flights ORDER BY id LIMIT 1"
+      "INSERT INTO flights (tenantId, flightNumber, airlineId, originId, destinationId, departureTime, arrivalTime, aircraftType, economySeats, businessSeats, economyPrice, businessPrice, economyAvailable, businessAvailable) SELECT ?, flightNumber, airlineId, originId, destinationId, TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '12:00:00'), TIMESTAMP(DATE(UTC_TIMESTAMP()) + INTERVAL 2 DAY, '14:00:00'), 'B737', 10, 2, 10000, 20000, 10, 2 FROM flights ORDER BY id LIMIT 1",
+      [tenantId]
     );
     if (!flight.affectedRows) throw new Error("Seed flight missing");
     // The disposable seed uses small auto-increment IDs. Keep each fixture
@@ -64,10 +65,10 @@ export async function ownedBooking(
   account: Parameters<typeof useBrowserSession>[1] = "regular"
 ) {
   await useBrowserSession(page, account);
-  const client = rpc(page),
-    flightId = await fixtureFlight();
+  const client = rpc(page);
   const user = await client.auth.me.query();
   if (!user) throw new Error("Authentication failed");
+  const flightId = await fixtureFlight(user.tenantId);
   const command = {
     flightId,
     cabinClass: "economy" as const,
