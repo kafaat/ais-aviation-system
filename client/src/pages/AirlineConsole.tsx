@@ -1,3 +1,5 @@
+import { BaggageCloseout } from "@/components/BaggageCloseout";
+import { CouponMonthReview } from "@/components/CouponMonthReview";
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Redirect } from "wouter";
@@ -38,6 +40,7 @@ export default function AirlineConsole() {
         ) && (
           <>
             <SettlementLedgerDraft />
+            <CouponMonthReview />
             <InternalFundingRefund />
             <SupplierFinanceControl />
           </>
@@ -113,6 +116,11 @@ function AirlineFlights() {
             ))}
           </select>
         </label>
+        {flightId > 0 &&
+          !query.error &&
+          query.data?.some(f => f.id === flightId) && (
+            <BaggageCloseout flightId={flightId} />
+          )}
         <label className="block">
           {l("الحالة الجديدة", "New status")}
           <select

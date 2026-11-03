@@ -1,6 +1,8 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { prepareValueIntent } from "@/lib/redemption-intent";
+import { useSearch } from "wouter";
 import { useState } from "react";
+import { useOperationalLabels } from "./OperationalReadState";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Card } from "./ui/card";
@@ -23,20 +25,35 @@ const QUICK_AMOUNTS = [5000, 10000, 25000, 50000]; // SAR cents
 
 export function WalletCard() {
   const { t } = useTranslation();
+  const l = useOperationalLabels();
   const { user } = useAuth();
   const [customAmount, setCustomAmount] = useState("");
-  const [showHistory, setShowHistory] = useState(false);
+  const search = useSearch();
+  const [showHistory, setShowHistory] = useState(
+    () => new URLSearchParams(search).get("wallet") === "history"
+  );
+  const pageSize = 10;
+  const [offset, setOffset] = useState(0);
 
-  const { data: balance, isLoading } = trpc.wallet.balance.useQuery(undefined, {
+  const balanceQuery = trpc.wallet.balance.useQuery(undefined, {
     retry: false,
   });
 
-  const { data: transactions } = trpc.wallet.transactions.useQuery(
-    { limit: 10 },
+  const balance = balanceQuery.data;
+  const transactionQuery = trpc.wallet.transactions.useQuery(
+    { limit: pageSize + 1, offset },
     { enabled: showHistory, retry: false }
   );
 
+  const transactions = transactionQuery.data;
+  const customMinor = /^\d+(\.\d{1,2})?$/.test(customAmount)
+    ? Math.round(Number(customAmount) * 100)
+    : 0;
   const topUp = trpc.wallet.topUp.useMutation();
+  const canTopUp =
+    balance?.status === "active" &&
+    balance.currency === "SAR" &&
+    !topUp.isPending;
   const handleTopUp = async (amountCents: number) => {
     if (!user || topUp.isPending) return;
     try {
@@ -59,7 +76,19 @@ export function WalletCard() {
     }
   };
 
-  if (isLoading) {
+  if (balanceQuery.isError)
+    return (
+      <Card role="alert" className="p-6">
+        <p>
+          {l("تعذّر تحميل رصيد المحفظة", "Wallet balance could not be loaded")}
+        </p>
+        <Button variant="outline" onClick={() => void balanceQuery.refetch()}>
+          {l("إعادة المحاولة", "Retry")}
+        </Button>
+      </Card>
+    );
+
+  if (!balance) {
     return (
       <Card className="p-6">
         <div className="animate-pulse space-y-4">
@@ -82,7 +111,7 @@ export function WalletCard() {
           variant={balance && balance.balance > 0 ? "default" : "secondary"}
           className="text-lg px-4 py-1"
         >
-          {((balance?.balance || 0) / 100).toFixed(2)} {t("common.sar")}
+          {(balance.balance / 100).toFixed(2)} {balance.currency}
         </Badge>
       </div>
 
@@ -97,7 +126,7 @@ export function WalletCard() {
             variant="outline"
             size="sm"
             onClick={() => handleTopUp(amount)}
-            disabled={topUp.isPending}
+            disabled={!canTopUp}
             className="text-xs"
           >
             {topUp.isPending ? (
@@ -117,13 +146,15 @@ export function WalletCard() {
           placeholder={t("wallet.customAmount")}
           type="number"
           min={10}
+          max={10000}
+          step="0.01"
+          aria-label={t("wallet.customAmount")}
           className="flex-1"
         />
         <Button
-          onClick={() => handleTopUp(parseInt(customAmount) * 100)}
-          disabled={
-            !customAmount || parseInt(customAmount) < 10 || topUp.isPending
-          }
+          aria-label={t("wallet.quickTopUp")}
+          onClick={() => handleTopUp(customMinor)}
+          disabled={!canTopUp || customMinor < 1000 || customMinor > 1_000_000}
           size="sm"
         >
           {topUp.isPending ? (
@@ -146,7 +177,24 @@ export function WalletCard() {
       </Button>
 
       {/* Transaction History */}
-      {showHistory && transactions && (
+      {showHistory && transactionQuery.isError && (
+        <div role="alert">
+          {l(
+            "تعذّر تحميل حركات المحفظة",
+            "Wallet transactions could not be loaded"
+          )}
+          <Button
+            variant="outline"
+            onClick={() => void transactionQuery.refetch()}
+          >
+            {l("إعادة المحاولة", "Retry")}
+          </Button>
+        </div>
+      )}
+      {showHistory && transactionQuery.isLoading && (
+        <p role="status">{t("common.loading")}</p>
+      )}
+      {showHistory && !transactionQuery.isError && transactions && (
         <>
           <Separator className="my-3" />
           <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -155,7 +203,7 @@ export function WalletCard() {
                 {t("wallet.noTransactions")}
               </p>
             ) : (
-              transactions.map(tx => (
+              transactions.slice(0, pageSize).map(tx => (
                 <div
                   key={tx.id}
                   className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-muted/50"
@@ -173,7 +221,8 @@ export function WalletCard() {
                     <div>
                       <p className="text-sm">{tx.description}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(tx.createdAt).toLocaleDateString()}
+                        {new Date(tx.createdAt).toLocaleDateString()} ·{" "}
+                        {t(`paymentHistory.${tx.status}`)}
                       </p>
                     </div>
                   </div>
@@ -189,6 +238,24 @@ export function WalletCard() {
               ))
             )}
           </div>
+          {(offset > 0 || transactions.length > pageSize) && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={offset === 0}
+                onClick={() => setOffset(offset - pageSize)}
+              >
+                {t("common.previous")}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={transactions.length <= pageSize}
+                onClick={() => setOffset(offset + pageSize)}
+              >
+                {t("common.next")}
+              </Button>
+            </div>
+          )}
         </>
       )}
     </Card>

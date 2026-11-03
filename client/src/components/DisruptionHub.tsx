@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
+import { OperationalReadState } from "./OperationalReadState";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -29,9 +30,13 @@ const typeIcons = {
 export function DisruptionHub() {
   const { t } = useTranslation();
 
-  const { data: disruptions, isLoading } =
-    trpc.disruptions.myDisruptions.useQuery(undefined, { retry: false });
+  const query = trpc.disruptions.myDisruptions.useQuery(undefined, {
+    retry: false,
+  });
 
+  const { data: disruptions, isLoading } = query;
+  if (query.error)
+    return <OperationalReadState query={query}>{null}</OperationalReadState>;
   if (isLoading) {
     return (
       <Card className="p-6">
@@ -72,7 +77,10 @@ export function DisruptionHub() {
 
       <div className="space-y-4">
         {disruptions.map(disruption => (
-          <div key={disruption.id} className="border rounded-lg p-4 space-y-3">
+          <div
+            key={`${disruption.id}-${disruption.bookingId}`}
+            className="border rounded-lg p-4 space-y-3"
+          >
             {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -145,12 +153,14 @@ export function DisruptionHub() {
 function AlternativeFlightsButton({ flightId }: { flightId: number }) {
   const { t, i18n } = useTranslation();
 
-  const { data, isLoading, refetch, isFetched } =
-    trpc.disruptions.getAlternatives.useQuery(
-      { flightId },
-      { enabled: false, retry: false }
-    );
+  const query = trpc.disruptions.getAlternatives.useQuery(
+    { flightId },
+    { enabled: false, retry: false }
+  );
 
+  const { data, isLoading, refetch, isFetched } = query;
+  if (query.error)
+    return <OperationalReadState query={query}>{null}</OperationalReadState>;
   if (!isFetched) {
     return (
       <Button

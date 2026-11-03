@@ -24,6 +24,47 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
   });
+  test("payment history shows an outage and recovers through the real reader", async ({
+    page,
+  }) => {
+    await useBrowserSession(page, "regular");
+    const historyEndpoint = "**/api/trpc/*payments.getHistory*";
+    await page.route(historyEndpoint, route => route.abort("failed"));
+    await page.goto("/payment-history");
+    const unavailable = page.getByRole("alert").filter({
+      hasText: "Payment history could not be loaded",
+    });
+    await expect(unavailable).toBeVisible({ timeout: 20000 });
+    await expect(
+      page.getByText("No payments found", { exact: true })
+    ).toHaveCount(0);
+
+    await page.unroute(historyEndpoint);
+    const recovered = page.waitForResponse(
+      response =>
+        new URL(response.url()).pathname.includes("payments.getHistory") &&
+        response.ok()
+    );
+    await unavailable.getByRole("button", { name: "Retry" }).click();
+    const reply = await recovered;
+    const paths = decodeURIComponent(
+      new URL(reply.url()).pathname.split("/").pop()!
+    ).split(",");
+    const result = (await reply.json())[paths.indexOf("payments.getHistory")];
+    const rows = result?.result?.data?.json;
+    expect(Array.isArray(rows)).toBe(true);
+    await expect(unavailable).toHaveCount(0);
+    if (rows.length) {
+      await expect(
+        page.getByText(rows[0].bookingReference, { exact: true }).first()
+      ).toBeVisible();
+    } else {
+      await expect(
+        page.getByText("No payments found", { exact: true })
+      ).toBeVisible();
+    }
+  });
+
   test("passenger-rights referral cites an official source and keeps follow-ups local", async ({
     page,
   }) => {

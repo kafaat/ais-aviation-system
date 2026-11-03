@@ -17,12 +17,16 @@ import {
   ArrowRight,
   Trash2,
 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
 interface SearchEntry {
   id: string;
+  originId?: number;
+  destinationId?: number;
   originCode: string;
   originCity: string;
   destinationCode: string;
@@ -101,6 +105,7 @@ export function SearchHistory({
   compact = false,
 }: SearchHistoryProps) {
   const { t, i18n } = useTranslation();
+  const utils = trpc.useUtils();
   const [, setLocation] = useLocation();
   const [history, setHistory] = useState<SearchEntry[]>([]);
 
@@ -119,14 +124,31 @@ export function SearchHistory({
     setHistory([]);
   };
 
-  const handleSearch = (entry: SearchEntry) => {
+  const handleSearch = async (entry: SearchEntry) => {
     if (onSelect) {
       onSelect(entry);
     } else {
-      // Navigate to search with params
+      let { originId, destinationId } = entry;
+      // Older entries kept only IATA codes. Resolve those to the IDs accepted by search.
+      if (!originId || !destinationId) {
+        try {
+          const airports = await utils.reference.airports.fetch();
+          originId = airports.find(a => a.code === entry.originCode)?.id;
+          destinationId = airports.find(
+            a => a.code === entry.destinationCode
+          )?.id;
+        } catch {
+          toast.error(t("common.error"));
+          return;
+        }
+      }
+      if (!originId || !destinationId) {
+        toast.error(t("common.error"));
+        return;
+      }
       const params = new URLSearchParams({
-        origin: entry.originCode,
-        destination: entry.destinationCode,
+        origin: String(originId),
+        destination: String(destinationId),
         date: entry.departureDate,
         cabin: entry.cabinClass,
         passengers: entry.passengers.toString(),

@@ -1870,6 +1870,7 @@
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
+        "server/services/idempotency-v2.service.ts",
         "server/services/loyalty-balance.service.ts",
         "server/services/outbox.service.ts"
       ],
@@ -2399,6 +2400,7 @@
         "server/services/booking-modification.service.ts",
         "server/services/bookings.service.ts",
         "server/services/event-inbox.service.ts",
+        "server/services/family-pool.service.ts",
         "server/services/internal-refund.service.ts",
         "server/services/irops-recovery.service.ts",
         "server/services/loyalty.service.ts",
@@ -5816,7 +5818,8 @@
         "server/services/split-checkout.service.ts",
         "server/services/split-payment.service.ts",
         "server/services/supplier-finance.service.ts",
-        "server/services/travel-agent.service.ts"
+        "server/services/travel-agent.service.ts",
+        "server/services/wallet.service.ts"
       ],
       "dependencies": [
         "drizzle/schema.ts",
@@ -6153,6 +6156,7 @@
         "server/services/booking-checkout.service.ts",
         "server/services/booking-settlement.service.ts",
         "server/services/idempotency-v2.service.ts",
+        "server/services/tenant.service.ts",
         "server/stripe.ts"
       ],
       "tableExpressions": {

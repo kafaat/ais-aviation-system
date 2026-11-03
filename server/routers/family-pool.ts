@@ -106,7 +106,8 @@ export const familyPoolRouter = router({
     .input(
       z.object({
         groupId: z.number(),
-        miles: z.number().min(100).max(100000),
+        miles: z.number().int().min(100).max(100000),
+        requestKey: z.string().uuid().optional(),
       })
     )
     .output(responseContracts["contributeMiles"])
@@ -115,7 +116,8 @@ export const familyPoolRouter = router({
         return await contributeMilesToPool(
           ctx.user.id,
           input.groupId,
-          input.miles
+          input.miles,
+          input.requestKey
         );
       } catch (error) {
         throw new TRPCError({

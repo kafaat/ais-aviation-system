@@ -1,3 +1,4 @@
+import { FamilyPoolCard } from "@/components/FamilyPoolCard";
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { prepareRedemption } from "@/lib/redemption-intent";
@@ -504,6 +505,7 @@ export default function LoyaltyDashboard() {
 
       {/* Content */}
       <div className="container py-8 space-y-8">
+        <FamilyPoolCard userId={user.id} />
         {/* Stats Cards */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

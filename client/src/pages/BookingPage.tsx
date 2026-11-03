@@ -61,6 +61,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { WalletBookingPayment } from "@/components/WalletBookingPayment";
+import { useOperationalLabels } from "@/components/OperationalReadState";
 import SplitPaymentForm from "@/components/SplitPaymentForm";
 import { CarbonOffset } from "@/components/CarbonOffset";
 import { TravelRequirements } from "@/components/TravelRequirements";
@@ -80,6 +82,7 @@ type Passenger = {
 
 export default function BookingPage() {
   const { t, i18n } = useTranslation();
+  const l = useOperationalLabels();
   const [, params] = useRoute("/booking/:id");
   const { user, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
@@ -130,7 +133,9 @@ export default function BookingPage() {
   const [selectedSeats, setSelectedSeats] = useState<
     { id: string; row: number; column: string }[]
   >([]);
-  const [showSplitPayment, setShowSplitPayment] = useState(false);
+  const [paymentDialog, setPaymentDialog] = useState<"split" | "wallet" | null>(
+    null
+  );
   const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
   const [createdBookingRef, setCreatedBookingRef] = useState<string | null>(
     null
@@ -436,7 +441,7 @@ export default function BookingPage() {
     }
   };
 
-  const handleSplitPayment = async () => {
+  const preparePayment = async (method: "split" | "wallet") => {
     if (!isAuthenticated) {
       window.location.href = "/login";
       return;
@@ -496,11 +501,11 @@ export default function BookingPage() {
         }
       }
 
-      // Store booking details for split payment form
+      // Review the server-issued booking amount before choosing the payment source.
       setCreatedBookingId(booking.bookingId);
       setCreatedBookingRef(booking.bookingReference);
       setCreatedBookingAmount(booking.totalAmount);
-      setShowSplitPayment(true);
+      setPaymentDialog(method);
     } catch (error: { message?: string } | unknown) {
       const errorMessage =
         error instanceof Error ? error.message : t("common.error");
@@ -509,7 +514,7 @@ export default function BookingPage() {
   };
 
   const handleSplitPaymentSuccess = () => {
-    setShowSplitPayment(false);
+    setPaymentDialog(null);
     toast.success(t("splitPayment.initiateSuccess"));
     navigate(`/my-bookings`);
   };
@@ -558,6 +563,12 @@ export default function BookingPage() {
       (activePriceLock
         ? price * passengers.length + activePriceLock.lockFee
         : (activeOffer?.totalAmount ?? price * passengers.length))) / 100;
+  const paymentUnavailable =
+    createBooking.isPending ||
+    createCheckout.isPending ||
+    (!groupBookingId && !activePriceLock && !activeOffer) ||
+    (Boolean(waitlistId || groupBookingId) &&
+      (!allocation.data || allocation.isError));
   const totalAmount = baseAmount + ancillariesTotalCost / 100;
 
   const handleAncillariesChange = (
@@ -1364,13 +1375,7 @@ export default function BookingPage() {
                   onClick={handleSubmit}
                   className="w-full shadow-lg"
                   size="lg"
-                  disabled={
-                    createBooking.isPending ||
-                    createCheckout.isPending ||
-                    (!groupBookingId && !activePriceLock && !activeOffer) ||
-                    (Boolean(waitlistId || groupBookingId) &&
-                      (!allocation.data || allocation.isError))
-                  }
+                  disabled={paymentUnavailable}
                 >
                   <CreditCard className="h-5 w-5 mr-2" aria-hidden="true" />
                   {createBooking.isPending || createCheckout.isPending
@@ -1379,17 +1384,20 @@ export default function BookingPage() {
                 </Button>
 
                 <Button
-                  onClick={handleSplitPayment}
+                  onClick={() => void preparePayment("wallet")}
                   variant="outline"
                   className="w-full"
                   size="lg"
-                  disabled={
-                    createBooking.isPending ||
-                    createCheckout.isPending ||
-                    (!groupBookingId && !activePriceLock && !activeOffer) ||
-                    (Boolean(waitlistId || groupBookingId) &&
-                      (!allocation.data || allocation.isError))
-                  }
+                  disabled={paymentUnavailable}
+                >
+                  {l("الدفع بالمحفظة", "Pay with wallet")}
+                </Button>
+                <Button
+                  onClick={() => void preparePayment("split")}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                  disabled={paymentUnavailable}
                 >
                   <Split className="h-5 w-5 mr-2" aria-hidden="true" />
                   {t("splitPayment.splitWithOthers")}
@@ -1404,24 +1412,46 @@ export default function BookingPage() {
         </div>
       </main>
 
-      {/* Split Payment Dialog */}
-      <Dialog open={showSplitPayment} onOpenChange={setShowSplitPayment}>
+      <Dialog
+        open={paymentDialog !== null}
+        onOpenChange={open => {
+          if (!open) setPaymentDialog(null);
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t("splitPayment.title")}</DialogTitle>
+            <DialogTitle>
+              {paymentDialog === "wallet"
+                ? l("الدفع بالمحفظة", "Wallet payment")
+                : t("splitPayment.title")}
+            </DialogTitle>
             <DialogDescription>
-              {t("splitPayment.description")}
+              {paymentDialog === "wallet"
+                ? l(
+                    "راجع المبلغ وأكّد الخصم من رصيدك",
+                    "Review the amount and confirm the wallet debit"
+                  )
+                : t("splitPayment.description")}
             </DialogDescription>
           </DialogHeader>
-          {createdBookingId && createdBookingRef && (
-            <SplitPaymentForm
+          {paymentDialog === "wallet" && createdBookingId && (
+            <WalletBookingPayment
               bookingId={createdBookingId}
               totalAmount={createdBookingAmount}
-              bookingReference={createdBookingRef}
-              onSuccess={handleSplitPaymentSuccess}
-              onCancel={() => setShowSplitPayment(false)}
+              initiallyReviewing
             />
           )}
+          {paymentDialog === "split" &&
+            createdBookingId &&
+            createdBookingRef && (
+              <SplitPaymentForm
+                bookingId={createdBookingId}
+                totalAmount={createdBookingAmount}
+                bookingReference={createdBookingRef}
+                onSuccess={handleSplitPaymentSuccess}
+                onCancel={() => setPaymentDialog(null)}
+              />
+            )}
         </DialogContent>
       </Dialog>
     </div>

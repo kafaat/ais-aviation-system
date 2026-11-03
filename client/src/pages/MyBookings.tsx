@@ -1,4 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
+import { CompensationClaim } from "@/components/CompensationClaim";
+import { DisruptionHub } from "@/components/DisruptionHub";
+import SpecialServicesRequest from "@/components/SpecialServicesRequest";
+import { WalletBookingPayment } from "@/components/WalletBookingPayment";
 import { BookingCreditPayment } from "@/components/BookingCreditPayment";
 import { OperationalReadState } from "@/components/OperationalReadState";
 import { useTranslation } from "react-i18next";
@@ -346,6 +350,16 @@ export default function MyBookings() {
       </header>
 
       <div className="container py-8">
+        {Boolean(bookings?.length) && (
+          <Collapsible className="mb-4">
+            <CollapsibleTrigger asChild>
+              <Button variant="outline">{t("disruptions.title")}</Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <DisruptionHub />
+            </CollapsibleContent>
+          </Collapsible>
+        )}
         {/* Filters and Sort Section */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 md:p-6 mb-6 shadow-sm border border-slate-100 dark:border-slate-800">
           <div className="flex flex-wrap items-center gap-4">
@@ -743,6 +757,37 @@ export default function MyBookings() {
                         </div>
 
                         <div className="flex flex-col gap-2">
+                          <Collapsible>
+                            <CollapsibleTrigger asChild>
+                              <Button variant="outline" className="w-full">
+                                {i18n.language.startsWith("ar")
+                                  ? "مطالبات التعويض"
+                                  : "Compensation claims"}
+                              </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <CompensationClaim
+                                bookingId={booking.id}
+                                bookingReference={booking.bookingReference}
+                              />
+                            </CollapsibleContent>
+                          </Collapsible>
+                          {(booking.status === "pending" ||
+                            booking.status === "confirmed") && (
+                            <Collapsible>
+                              <CollapsibleTrigger asChild>
+                                <Button variant="outline" className="w-full">
+                                  {t("specialServices.title")}
+                                </Button>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <SpecialServicesRequest
+                                  bookingId={booking.id}
+                                  passengers={booking.passengers}
+                                />
+                              </CollapsibleContent>
+                            </Collapsible>
+                          )}
                           {booking.status === "confirmed" &&
                             !booking.checkedIn && (
                               <Button
@@ -761,10 +806,16 @@ export default function MyBookings() {
                           )}
                           {booking.paymentStatus === "pending" &&
                             booking.status === "pending" && (
-                              <BookingCreditPayment
-                                bookingId={booking.id}
-                                amount={booking.totalAmount}
-                              />
+                              <>
+                                <BookingCreditPayment
+                                  bookingId={booking.id}
+                                  amount={booking.totalAmount}
+                                />
+                                <WalletBookingPayment
+                                  bookingId={booking.id}
+                                  totalAmount={booking.totalAmount}
+                                />
+                              </>
                             )}
                           {booking.paymentStatus === "paid" && (
                             <div className="space-y-3">
