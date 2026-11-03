@@ -113,13 +113,17 @@ function KioskConsole() {
                   <dd>{analytics.data.totals.completedSessions}</dd>
                   <dt>{l("الأخطاء", "Errors")}</dt>
                   <dd>{analytics.data.totals.errorSessions}</dd>
-                  <dt>
-                    {l("بطاقات الصعود المطبوعة", "Boarding passes printed")}
-                  </dt>
-                  <dd>{analytics.data.totals.boardingPassesPrinted}</dd>
-                  <dt>{l("بطاقات الأمتعة", "Bag tags printed")}</dt>
-                  <dd>{analytics.data.totals.bagTagsPrinted}</dd>
+                  <dt>{l("جلسات تسجيل الوصول", "Check-in sessions")}</dt>
+                  <dd>{analytics.data.totals.checkInSessions}</dd>
+                  <dt>{l("جلسات بطاقات الأمتعة", "Bag-tag sessions")}</dt>
+                  <dd>{analytics.data.totals.bagTagSessions}</dd>
                 </dl>
+                <p>
+                  {l(
+                    "تأكيد الطباعة من أجهزة المحطة غير متاح.",
+                    "Printer confirmation is unavailable."
+                  )}
+                </p>
                 <table className="w-full">
                   <thead>
                     <tr>
