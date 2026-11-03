@@ -22,15 +22,23 @@ export function registerFamilyCheckInTests() {
     if (!nora || !sami)
       throw new Error("Funded family booking is missing a passenger");
 
-    // Set a domestic departure inside the check-in window. Inventory, denial
-    // and customer check-in are all issued through their real procedures.
+    // TIMESTAMP assignments use the connection's local clock. Set the domestic
+    // departure well inside the 1–48 hour window even when MySQL runs outside UTC.
     await sqlRows<RowDataPacket>(
-      "UPDATE flights f JOIN airports o ON o.code='RUH' JOIN airports d ON d.code='JED' AND o.country=d.country SET f.originId=o.id, f.destinationId=d.id, f.departureTime=UTC_TIMESTAMP()+INTERVAL 3 HOUR, f.arrivalTime=UTC_TIMESTAMP()+INTERVAL 5 HOUR WHERE f.id=?",
+      "UPDATE flights f JOIN airports o ON o.code='RUH' JOIN airports d ON d.code='JED' AND o.country=d.country SET f.originId=o.id, f.destinationId=d.id, f.departureTime=CURRENT_TIMESTAMP + INTERVAL 12 HOUR, f.arrivalTime=CURRENT_TIMESTAMP + INTERVAL 14 HOUR WHERE f.id=?",
       [flightId]
     );
+    const legs = await client.bookings.getDepartureState.query({ bookingId });
+    const leg = legs.find(row => row.flightId === flightId);
+    expect(leg?.open).toBe(true);
+
     await useBrowserSession(page, "admin");
     const flight = await client.flights.getById.query({ id: flightId });
     if (!flight) throw new Error("Family fixture flight is missing");
+    expect([flight.origin.code, flight.destination.code]).toEqual([
+      "RUH",
+      "JED",
+    ]);
     const map = await client.seatMap.createSeatMap.mutate({
       airlineId: flight.airline.id,
       aircraftType: "B737",
@@ -65,9 +73,7 @@ export function registerFamilyCheckInTests() {
 
     await useBrowserSession(page, "regular");
     await page.goto("/check-in");
-    await page
-      .getByLabel("Booking Reference (PNR)")
-      .fill(booking.pnr);
+    await page.getByLabel("Booking Reference (PNR)").fill(booking.pnr);
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(
       page.getByText("Nora Family · Boarding denied", { exact: true })

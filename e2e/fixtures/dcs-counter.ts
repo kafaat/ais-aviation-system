@@ -15,6 +15,7 @@ async function prepareCounterBooking(page: Page) {
   const { booking, flightId } = await ownedBooking(page, true);
   const db = await mysql.createConnection(disposableDatabaseUrl());
   try {
+    await db.query("SET SESSION time_zone = '+00:00'");
     await db.beginTransaction();
     const [actors] = await db.execute<(RowDataPacket & { tenantId: number })[]>(
       "SELECT tenantId FROM users WHERE email = 'test.ops@example.com' AND role = 'ops'"
@@ -88,6 +89,18 @@ export function registerDcsCounterTests() {
       test.setTimeout(120000);
       await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
       const scope = await prepareCounterBooking(page);
+      // Payment funds the reservation. Issue its local document before DCS
+      // changes the coupon from open to checked in and back to open.
+      const { ticketNumber } = await rpc(page).eticket.generateETicket.mutate({
+        bookingId: scope.bookingId,
+        passengerId: scope.passengerId,
+      });
+      const couponStatus = () =>
+        sqlRows<RowDataPacket>(
+          "SELECT status FROM ticket_coupons WHERE flightId = ? AND bookingId = ? AND passengerId = ? AND ticketNumber = ?",
+          [scope.flightId, scope.bookingId, scope.passengerId, ticketNumber]
+        );
+      expect(await couponStatus()).toEqual([{ status: "O" }]);
       await useBrowserSession(page, "ops");
       const client = rpc(page);
       const openPassenger = async () => {
@@ -118,12 +131,13 @@ export function registerDcsCounterTests() {
       await expect(
         page.getByRole("combobox", { name: "Passenger action", exact: true })
       ).toHaveValue("deplane");
+      expect(await couponStatus()).toEqual([{ status: "C" }]);
       // Only the disposable fixture's flight status and clock change in SQL.
       // Check-in, boarding and both corrections run through the real UI/API.
       const db = await mysql.createConnection(disposableDatabaseUrl());
       try {
         await db.execute(
-          "UPDATE flights SET status = ?, departureTime = UTC_TIMESTAMP() - INTERVAL 1 MINUTE WHERE id = ?",
+          "UPDATE flights SET status = ?, departureTime = CURRENT_TIMESTAMP() - INTERVAL 1 MINUTE WHERE id = ?",
           [status, scope.flightId]
         );
       } finally {
@@ -191,12 +205,7 @@ export function registerDcsCounterTests() {
         status: "occupied",
         checkInNonce: null,
       });
-      const coupons = await sqlRows<RowDataPacket>(
-        "SELECT status FROM ticket_coupons WHERE flightId = ? AND bookingId = ? AND passengerId = ?",
-        [scope.flightId, scope.bookingId, scope.passengerId]
-      );
-      expect(coupons).toHaveLength(1);
-      expect(coupons[0].status).toBe("O");
+      expect(await couponStatus()).toEqual([{ status: "O" }]);
       await openPassenger();
       await expect(
         page.getByRole("combobox", { name: "Passenger action", exact: true })
