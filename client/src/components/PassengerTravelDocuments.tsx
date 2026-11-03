@@ -203,6 +203,8 @@ export function PassengerTravelDocuments({
                   utils.apis.getMyAPISStatus.invalidate({ passengerId }),
                   utils.apis.getMyJourneyStatus.invalidate(),
                   utils.bookings.getDepartureState.invalidate({ bookingId }),
+                  // Boarding passes bind this passenger's documents on every leg.
+                  utils.seatMap.getBoardingPass.invalidate({ passengerId }),
                 ]);
                 setSaving(false);
               }}
