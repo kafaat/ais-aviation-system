@@ -25,51 +25,52 @@ import {
 } from "../services/report-export.service";
 
 // Date-only exports include the complete UTC end day; ISO instants stay exact.
-const refundDate = z
+const dateOrInstant = z
   .string()
   .date()
   .or(z.string().datetime({ offset: true }));
-const refundPeriodInput = z
-  .object({ startDate: refundDate.optional(), endDate: refundDate.optional() })
-  .transform((input, ctx) => {
-    const startDate = input.startDate ? new Date(input.startDate) : undefined;
-    const endDate = input.endDate
-      ? new Date(
-          input.endDate.length === 10
-            ? `${input.endDate}T23:59:59.999Z`
-            : input.endDate
-        )
-      : undefined;
-    if (startDate && endDate && startDate > endDate) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Refund report start must precede end",
-      });
-      return z.NEVER;
-    }
-    return { startDate, endDate };
-  });
+const period = z.object({
+  startDate: dateOrInstant.transform(value => new Date(value)).optional(),
+  endDate: dateOrInstant
+    .transform(
+      value => new Date(value.length === 10 ? value + "T23:59:59.999Z" : value)
+    )
+    .optional(),
+});
+const ordered = ({
+  startDate,
+  endDate,
+}: {
+  startDate?: Date;
+  endDate?: Date;
+}) => !startDate || !endDate || startDate <= endDate;
+const orderMessage = "Report start must precede end";
+const periodInput = period.refine(ordered, orderMessage);
+const bookingInput = period
+  .extend({
+    status: z
+      .string()
+      .pipe(z.enum(["pending", "confirmed", "cancelled", "completed"]))
+      .optional(),
+  })
+  .refine(ordered, orderMessage);
+const flightInput = period
+  .extend({
+    status: z
+      .string()
+      .pipe(z.enum(["scheduled", "cancelled", "completed", "delayed"]))
+      .optional(),
+  })
+  .refine(ordered, orderMessage);
 
 export const reportsRouter = router({
   /**
    * Export bookings report to CSV
    */
   exportBookingsCSV: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-        status: z.string().optional(),
-      })
-    )
+    .input(bookingInput)
     .output(responseContracts["exportBookingsCSV"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-        status: input.status,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const csv = await exportBookingsToCSV(filters);
       const filename = getReportFilename("bookings", "csv");
 
@@ -84,19 +85,9 @@ export const reportsRouter = router({
    * Export revenue report to CSV
    */
   exportRevenueCSV: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(periodInput)
     .output(responseContracts["exportRevenueCSV"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const csv = await exportRevenueToCSV(filters);
       const filename = getReportFilename("revenue", "csv");
 
@@ -111,19 +102,9 @@ export const reportsRouter = router({
    * Export flight performance report to CSV
    */
   exportFlightPerformanceCSV: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(flightInput)
     .output(responseContracts["exportFlightPerformanceCSV"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const csv = await exportFlightPerformanceToCSV(filters);
       const filename = getReportFilename("flight-performance", "csv");
 
@@ -138,21 +119,9 @@ export const reportsRouter = router({
    * Generate bookings PDF report
    */
   generateBookingsPDF: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-        status: z.string().optional(),
-      })
-    )
+    .input(bookingInput)
     .output(responseContracts["generateBookingsPDF"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-        status: input.status,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const pdfBuffer = await generateBookingsPDF(filters);
       const filename = getReportFilename("bookings-report", "pdf");
 
@@ -168,19 +137,9 @@ export const reportsRouter = router({
    * Generate revenue PDF report
    */
   generateRevenuePDF: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(periodInput)
     .output(responseContracts["generateRevenuePDF"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const pdfBuffer = await generateRevenuePDF(filters);
       const filename = getReportFilename("revenue-report", "pdf");
 
@@ -200,21 +159,9 @@ export const reportsRouter = router({
    * Export bookings report to Excel
    */
   exportBookingsExcel: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-        status: z.string().optional(),
-      })
-    )
+    .input(bookingInput)
     .output(responseContracts["exportBookingsExcel"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-        status: input.status,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const excelBuffer = await exportBookingsToExcel(filters);
       const filename = getReportFilename("bookings", "xlsx");
 
@@ -231,19 +178,9 @@ export const reportsRouter = router({
    * Export revenue report to Excel
    */
   exportRevenueExcel: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(periodInput)
     .output(responseContracts["exportRevenueExcel"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const excelBuffer = await exportRevenueToExcel(filters);
       const filename = getReportFilename("revenue", "xlsx");
 
@@ -260,19 +197,9 @@ export const reportsRouter = router({
    * Export flight performance report to Excel
    */
   exportFlightPerformanceExcel: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(flightInput)
     .output(responseContracts["exportFlightPerformanceExcel"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const excelBuffer = await exportFlightPerformanceToExcel(filters);
       const filename = getReportFilename("flight-performance", "xlsx");
 
@@ -289,19 +216,9 @@ export const reportsRouter = router({
    * Generate flight performance PDF report
    */
   generateFlightPerformancePDF: adminProcedure
-    .input(
-      z.object({
-        startDate: z.string().optional(),
-        endDate: z.string().optional(),
-      })
-    )
+    .input(flightInput)
     .output(responseContracts["generateFlightPerformancePDF"])
-    .mutation(async ({ input }) => {
-      const filters = {
-        startDate: input.startDate ? new Date(input.startDate) : undefined,
-        endDate: input.endDate ? new Date(input.endDate) : undefined,
-      };
-
+    .mutation(async ({ input: filters }) => {
       const pdfBuffer = await generateFlightPerformancePDF(filters);
       const filename = getReportFilename("flight-performance-report", "pdf");
 
@@ -321,7 +238,7 @@ export const reportsRouter = router({
    * Export refunds report to CSV
    */
   exportRefundsCSV: adminProcedure
-    .input(refundPeriodInput)
+    .input(periodInput)
     .output(responseContracts["exportRefundsCSV"])
     .mutation(async ({ input: filters }) => {
       const csv = await exportRefundsToCSV(filters);
@@ -338,7 +255,7 @@ export const reportsRouter = router({
    * Export refunds report to Excel
    */
   exportRefundsExcel: adminProcedure
-    .input(refundPeriodInput)
+    .input(periodInput)
     .output(responseContracts["exportRefundsExcel"])
     .mutation(async ({ input: filters }) => {
       const excelBuffer = await exportRefundsToExcel(filters);
@@ -357,7 +274,7 @@ export const reportsRouter = router({
    * Generate refunds PDF report
    */
   generateRefundsPDF: adminProcedure
-    .input(refundPeriodInput)
+    .input(periodInput)
     .output(responseContracts["generateRefundsPDF"])
     .mutation(async ({ input: filters }) => {
       const pdfBuffer = await generateRefundsPDF(filters);

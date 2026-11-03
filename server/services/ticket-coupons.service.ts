@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   flights,
@@ -57,6 +58,29 @@ export async function localDocumentCoupons(
   return coupons;
 }
 
+/** A voluntary cancellation releases the entire itinerary. A used coupon
+ * requires review of the remaining sectors. The booking lock serializes this
+ * check with operator uplift and cancellation in local write transactions. */
+export async function assertNoFlownCouponForCancellation(
+  tx: SettlementTx,
+  bookingId: number
+) {
+  const [flown] = await tx
+    .select({ id: ticketCoupons.id })
+    .from(ticketCoupons)
+    .where(
+      and(eq(ticketCoupons.bookingId, bookingId), eq(ticketCoupons.status, "F"))
+    )
+    .limit(1)
+    .for("update");
+  if (flown)
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "A flown coupon prevents whole-itinerary cancellation; the remaining sectors require review",
+    });
+}
+
 /** Only local issued documents move; transactions never fabricate external ticket numbers. */
 export async function setCouponCheckIn(
   tx: SettlementTx,
@@ -81,19 +105,34 @@ export async function setCouponCheckIn(
 export async function closeLocalCoupons(
   tx: SettlementTx,
   bookingId: number,
-  status: "E" | "V" | "R"
+  status: "V" | "R"
 ) {
   // A verified full refund can follow cancellation. Preserve exchanged and flown coupons.
   const from: CouponStatus[] = status === "R" ? ["O", "C", "V"] : ["O", "C"];
-  await tx
+  const eligible = and(
+    eq(ticketCoupons.bookingId, bookingId),
+    inArray(ticketCoupons.status, from)
+  );
+  const rows = await tx
+    .select({
+      couponId: ticketCoupons.id,
+      passengerId: ticketCoupons.passengerId,
+      flightId: ticketCoupons.flightId,
+      couponNumber: ticketCoupons.couponNumber,
+      previousStatus: ticketCoupons.status,
+    })
+    .from(ticketCoupons)
+    .where(eligible)
+    .orderBy(ticketCoupons.id)
+    .for("update");
+  if (!rows.length) return [];
+  const [updated] = await tx
     .update(ticketCoupons)
     .set({ status })
-    .where(
-      and(
-        eq(ticketCoupons.bookingId, bookingId),
-        inArray(ticketCoupons.status, from)
-      )
-    );
+    .where(eligible);
+  if (updated.affectedRows !== rows.length)
+    throw new Error("Coupon closure requires reconciliation");
+  return rows.map(row => ({ ...row, status }));
 }
 
 /** A partial exchange retains the local document and its unchanged coupons.

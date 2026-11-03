@@ -23,6 +23,7 @@
 
 import { and, eq, gte, lte, isNull, or, sql, desc, asc } from "drizzle-orm";
 import { getDb } from "../db";
+import type { SettlementTx } from "./booking-settlement.service";
 import {
   fareClasses,
   fareRules,
@@ -1119,9 +1120,10 @@ export async function getApplicableRules(
   fareClassId: number,
   originId?: number,
   destinationId?: number,
-  date?: Date
+  date?: Date,
+  transaction?: SettlementTx
 ): Promise<FareRule[]> {
-  const db = await getDb();
+  const db = transaction ?? (await getDb());
   if (!db) throw new Error("Database not available");
 
   const referenceDate = date ?? new Date();

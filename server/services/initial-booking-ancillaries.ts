@@ -47,23 +47,22 @@ export async function priceInitialAncillaries(
           segmentIndex === undefined ||
           passengerIndex >= passengerCount ||
           segmentIndex >= airlineIds.length)) ||
-      (!scoped && airlineIds.length !== 1)
+      (!scoped && (airlineIds.length !== 1 || passengerCount !== 1))
     )
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: "Invalid ancillary selection or scope",
       });
-    if (scoped) {
-      const identity = [passengerIndex, segmentIndex, ancillaryServiceId].join(
-        ":"
-      );
-      if (identities.has(identity))
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Duplicate ancillary selection",
-        });
-      identities.add(identity);
-    }
+    // A legacy single-traveler, single-flight request has one possible owner.
+    const person = passengerIndex ?? 0;
+    const leg = segmentIndex ?? 0;
+    const identity = [person, leg, ancillaryServiceId].join(":");
+    if (identities.has(identity))
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Duplicate ancillary selection",
+      });
+    identities.add(identity);
     const [service] = await tx
       .select()
       .from(ancillaryServices)
@@ -78,10 +77,9 @@ export async function priceInitialAncillaries(
     if (
       !service ||
       service.currency !== "SAR" ||
-      (scoped &&
-        !["baggage", "meal", "priority_boarding"].includes(service.category)) ||
+      !["baggage", "meal", "priority_boarding"].includes(service.category) ||
       !allows(service.applicableCabinClasses, cabinClass) ||
-      !allows(service.applicableAirlines, airlineIds[segmentIndex ?? 0])
+      !allows(service.applicableAirlines, airlineIds[leg])
     )
       throw new TRPCError({
         code: "CONFLICT",
@@ -101,7 +99,6 @@ export async function priceInitialAncillaries(
       });
     const weight = (service.weightGrams ?? 0) * quantity;
     if (
-      scoped &&
       service.category === "baggage" &&
       (!Number.isSafeInteger(weight) || weight <= 0 || weight > 2147483647)
     )
@@ -110,14 +107,13 @@ export async function priceInitialAncillaries(
         message: "Baggage allowance unavailable",
       });
     selected.push({
-      passengerIndex,
-      segmentIndex,
+      passengerIndex: person,
+      segmentIndex: leg,
       ancillaryServiceId,
       quantity,
       unitPrice: service.price,
       totalPrice,
-      weightSnapshotGrams:
-        scoped && service.category === "baggage" ? weight : null,
+      weightSnapshotGrams: service.category === "baggage" ? weight : null,
     });
   }
   return selected;
@@ -141,14 +137,11 @@ export async function persistInitialAncillaries(
       bookingId,
       ...amounts,
       status: "active" as const,
-      ...(passengerIndex !== undefined &&
-        segmentIndex !== undefined && {
-          passengerId: passengerIds[passengerIndex],
-          segmentId: segmentIds[segmentIndex],
-          scopeState: "specific_segment" as const,
-          weightSnapshotGrams,
-          metadata: JSON.stringify({ source: "initial_booking" }),
-        }),
+      passengerId: passengerIds[passengerIndex],
+      segmentId: segmentIds[segmentIndex],
+      scopeState: "specific_segment" as const,
+      weightSnapshotGrams,
+      metadata: JSON.stringify({ source: "initial_booking" }),
     };
     const [created] = await tx.insert(bookingAncillaries).values(row);
     purchases.push({ ...row, sourceReference: String(created.insertId) });

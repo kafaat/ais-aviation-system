@@ -11,7 +11,24 @@ import {
   seatInventory,
 } from "../../drizzle/schema";
 import { generateTicketNumber, type TicketData } from "./eticket.service";
+import {
+  computeBaggageEntitlement,
+  type BaggageEntitlement,
+} from "./baggage-entitlement.service";
 import { recordEvent } from "./outbox.service";
+
+function describeBaggageAllowance(entitlement: BaggageEntitlement) {
+  const purchased = entitlement.sources.reduce(
+    (grams, source) =>
+      grams + (source.type === "ancillary" ? source.weightGrams : 0),
+    0
+  );
+  const extra = purchased ? ` (includes ${purchased / 1000} kg extra)` : "";
+  const review = entitlement.requiresOperationalReview
+    ? ". Contact staff before bag drop."
+    : "";
+  return `${entitlement.totalWeightGrams / 1000} kg total${extra}, max ${entitlement.maxBagWeightGrams / 1000} kg per bag${review}`;
+}
 
 /** A document snapshot covers the actual itinerary and locks its local identity. */
 export async function readTicketDocument(
@@ -88,7 +105,8 @@ export async function readTicketDocument(
     }
     const couponLegs = [];
     const legs: TicketData[] = [];
-    for (const id of ids) {
+    for (const [index, id] of ids.entries()) {
+      const segment = segments[index];
       const f = locked.find(f => f.id === id);
       if (!f) throw new Error("Itinerary flight missing");
       const [origin] = await tx
@@ -140,8 +158,15 @@ export async function readTicketDocument(
         arrivalTime: f.arrivalTime,
         cabinClass: booking.cabinClass,
         seatNumber: seat?.seatNumber,
-        baggageAllowance:
-          booking.cabinClass === "business" ? "2 x 32kg" : "1 x 23kg",
+        baggageAllowance: segment
+          ? describeBaggageAllowance(
+              await computeBaggageEntitlement(tx, {
+                bookingId,
+                passengerId,
+                segmentId: segment.id,
+              })
+            )
+          : "Unverified. Contact airline staff.",
         totalAmount: booking.totalAmount,
         currency: "SAR",
         issueDate: new Date(),

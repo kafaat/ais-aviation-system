@@ -23,13 +23,15 @@ export const kioskRouter = router({
       z.object({
         bookingRef: z.string().min(1).max(6),
         lastName: z.string().min(1).max(100),
+        flightId: z.number().int().positive().optional(),
       })
     )
     .output(responseContracts["authenticate"])
     .mutation(async ({ input }) => {
       const result = await kioskService.authenticatePassenger(
         input.bookingRef,
-        input.lastName
+        input.lastName,
+        input.flightId
       );
       const capabilityToken = issueSelfServiceCapability({
         kind: "kiosk-session",
@@ -119,7 +121,12 @@ export const kioskRouter = router({
         capabilityToken: capabilityInput,
         passengerId: z.number().int().positive(),
         flightId: z.number().int().positive().optional(),
-        bagCount: z.number().min(1).max(10),
+        bagCount: z.number().int().min(1).max(10),
+        tagNumbers: z
+          .array(z.string().regex(/^\d{10}$/))
+          .min(1)
+          .max(10)
+          .optional(),
       })
     )
     .output(responseContracts["printBagTag"])
@@ -129,7 +136,9 @@ export const kioskRouter = router({
       return await kioskService.printBagTag(
         capability.bookingId,
         input.passengerId,
-        input.bagCount
+        input.bagCount,
+        input.flightId,
+        input.tagNumbers
       );
     }),
 

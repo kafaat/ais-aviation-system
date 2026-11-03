@@ -836,6 +836,7 @@ export default function MyBookings() {
                                         </div>
                                         <div className="flex gap-1">
                                           <DownloadETicketButton
+                                            passengerName={`${passenger.firstName} ${passenger.lastName}`}
                                             bookingId={booking.id}
                                             passengerId={passenger.id}
                                           />

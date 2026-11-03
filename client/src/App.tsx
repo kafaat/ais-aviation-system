@@ -18,6 +18,7 @@ import i18next from "i18next";
 // User-facing pages
 const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
+const CodeshareFlights = lazy(() => import("./pages/CodeshareFlights"));
 const SearchResults = lazy(() => import("./pages/SearchResults"));
 const BookingPage = lazy(() => import("./pages/BookingPage"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
@@ -212,6 +213,7 @@ function Router() {
               <Login />
             </Suspense>
           </Route>
+          <Route path="/codeshare-flights" component={CodeshareFlights} />
           <Route path="/search">
             <Suspense fallback={<PageLoadingFallback variant="search" />}>
               <SearchResults />

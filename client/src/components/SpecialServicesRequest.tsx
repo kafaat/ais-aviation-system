@@ -203,6 +203,10 @@ export default function SpecialServicesRequest({
     return availableServices?.[type] || [];
   };
 
+  const requestableTypes = (
+    Object.keys(availableServices || {}) as ServiceType[]
+  ).filter(type => getServiceCodesForType(type).length > 0);
+
   if (bookingQuery.error)
     return (
       <OperationalReadState query={bookingQuery}>{null}</OperationalReadState>
@@ -296,9 +300,7 @@ export default function SpecialServicesRequest({
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {(
-                      Object.keys(availableServices || {}) as ServiceType[]
-                    ).map(type => {
+                    {requestableTypes.map(type => {
                       const Icon = serviceTypeIcons[type];
                       return (
                         <SelectItem key={type} value={type}>
@@ -387,90 +389,93 @@ export default function SpecialServicesRequest({
         {bookingServices && bookingServices.length > 0 ? (
           <div className="space-y-4">
             <Accordion type="single" collapsible className="w-full">
-              {(Object.keys(availableServices || {}) as ServiceType[]).map(
-                type => {
-                  const servicesOfType = bookingServices.filter(
-                    s => s.serviceType === type
-                  );
-                  if (servicesOfType.length === 0) return null;
+              {Array.from(
+                new Set(bookingServices.map(service => service.serviceType))
+              ).map(type => {
+                const servicesOfType = bookingServices.filter(
+                  s => s.serviceType === type
+                );
+                if (servicesOfType.length === 0) return null;
 
-                  const Icon = serviceTypeIcons[type];
+                const Icon = serviceTypeIcons[type];
 
-                  return (
-                    <AccordionItem key={type} value={type}>
-                      <AccordionTrigger className="hover:no-underline">
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-5 w-5 text-primary" />
-                          <span>{t(`specialServices.types.${type}`)}</span>
-                          <Badge variant="secondary" className="ml-2">
-                            {servicesOfType.length}
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-3 pt-2">
-                          {servicesOfType.map(service => {
-                            const StatusIcon = statusIcons[service.status];
-                            const serviceInfo = getServiceCodesForType(
-                              type as ServiceType
-                            ).find(s => s.code === service.serviceCode);
+                return (
+                  <AccordionItem key={type} value={type}>
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-5 w-5 text-primary" />
+                        <span>{t(`specialServices.types.${type}`)}</span>
+                        <Badge variant="secondary" className="ml-2">
+                          {servicesOfType.length}
+                        </Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-3 pt-2">
+                        {servicesOfType.map(service => {
+                          const StatusIcon = statusIcons[service.status];
+                          const serviceInfo = getServiceCodesForType(
+                            type as ServiceType
+                          ).find(s => s.code === service.serviceCode);
 
-                            return (
-                              <div
-                                key={service.id}
-                                className="flex items-center justify-between rounded-lg border p-3"
-                              >
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium">
-                                      {serviceInfo?.name || service.serviceCode}
-                                    </span>
-                                    <Badge
-                                      variant="outline"
-                                      className={statusColors[service.status]}
-                                    >
-                                      <StatusIcon className="mr-1 h-3 w-3" />
-                                      {t(
-                                        `specialServices.status.${service.status}`
-                                      )}
-                                    </Badge>
-                                  </div>
-                                  <p className="mt-1 text-sm text-muted-foreground">
-                                    {t("specialServices.for")}:{" "}
-                                    {service.passengerName}
-                                  </p>
-                                  {service.adminNotes && (
-                                    <p className="mt-1 text-sm text-muted-foreground">
-                                      {t("specialServices.notes")}:{" "}
-                                      {service.adminNotes}
-                                    </p>
-                                  )}
-                                </div>
-                                {(service.status === "pending" ||
-                                  service.status === "confirmed") && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    aria-label={
-                                      t("common.cancel") +
-                                      " " +
-                                      service.serviceCode
-                                    }
-                                    onClick={() => handleCancel(service.id)}
-                                    disabled={cancelServiceMutation.isPending}
+                          return (
+                            <div
+                              key={service.id}
+                              className="flex items-center justify-between rounded-lg border p-3"
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">
+                                    {service.serviceCode === "EXST"
+                                      ? t("specialServices.legacyExst")
+                                      : serviceInfo?.name ||
+                                        service.serviceCode}
+                                  </span>
+                                  <Badge
+                                    variant="outline"
+                                    className={statusColors[service.status]}
                                   >
-                                    <X className="h-4 w-4" />
-                                  </Button>
+                                    <StatusIcon className="mr-1 h-3 w-3" />
+                                    {t(
+                                      `specialServices.status.${service.status}`
+                                    )}
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  {t("specialServices.for")}:{" "}
+                                  {service.passengerName}
+                                </p>
+                                {service.adminNotes && (
+                                  <p className="mt-1 text-sm text-muted-foreground">
+                                    {t("specialServices.notes")}:{" "}
+                                    {service.adminNotes}
+                                  </p>
                                 )}
                               </div>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  );
-                }
-              )}
+                              {(service.status === "pending" ||
+                                service.status === "confirmed") && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  aria-label={
+                                    t("common.cancel") +
+                                    " " +
+                                    service.serviceCode
+                                  }
+                                  onClick={() => handleCancel(service.id)}
+                                  disabled={cancelServiceMutation.isPending}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
             </Accordion>
           </div>
         ) : (
@@ -493,8 +498,11 @@ export default function SpecialServicesRequest({
           <h4 className="text-sm font-medium">
             {t("specialServices.availableTypes")}
           </h4>
+          <p className="text-sm text-muted-foreground">
+            {t("specialServices.legroomGuidance")}
+          </p>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {(Object.keys(serviceTypeIcons) as ServiceType[]).map(type => {
+            {requestableTypes.map(type => {
               const Icon = serviceTypeIcons[type];
               return (
                 <div

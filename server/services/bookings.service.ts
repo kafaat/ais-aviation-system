@@ -1,3 +1,4 @@
+import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import {
   priceInitialAncillaries,
   persistInitialAncillaries,
@@ -466,26 +467,23 @@ export async function createBooking(
                 tx
               );
           }
-          let bookingSegmentId: number | undefined;
-          if (selected.some(item => item.segmentIndex !== undefined)) {
-            const [segment] = await tx.insert(bookingSegments).values({
-              bookingId,
-              segmentOrder: 1,
-              flightId: input.flightId,
-              fareClassId: selectedFareClass?.fareClass.id,
-              inventoryLockId: lockId,
-              departureDate: currentFlight.departureTime,
-              segmentAmount: totalAmount,
-              status: "pending",
-            });
-            bookingSegmentId = segment.insertId;
-          }
+          const [segment] = await tx.insert(bookingSegments).values({
+            bookingId,
+            segmentOrder: 1,
+            flightId: input.flightId,
+            fareClassId: selectedFareClass?.fareClass.id,
+            inventoryLockId: lockId,
+            departureDate: currentFlight.departureTime,
+            segmentAmount: totalAmount,
+            status: "pending",
+          });
+          const bookingSegmentId = segment.insertId;
           const purchases = await persistInitialAncillaries(
             tx,
             selected,
             bookingId,
             passengerIds,
-            bookingSegmentId ? [bookingSegmentId] : []
+            [bookingSegmentId]
           );
 
           await persistInitialFareComponents(tx, {
@@ -653,6 +651,7 @@ export async function cancelBooking(
       if (!current || current.status === "completed")
         throw new Error("Booking cannot be cancelled");
       if (current.status === "cancelled") return;
+      await assertNoFlownCouponForCancellation(tx, current.id);
       await cancelBookingResources(tx, current, "Owner cancellation", userId);
     });
 

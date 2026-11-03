@@ -19,6 +19,11 @@ export const priceQuoteRouter = router({
       z.object({
         flightId: z.number().int().positive(),
         cabinClass: z.enum(["economy", "business"]),
+        fareClassCode: z
+          .string()
+          .trim()
+          .regex(/^[a-z0-9]{1,2}$/i)
+          .optional(),
         passengerTypes: z
           .array(z.enum(["adult", "child", "infant"]))
           .min(1)

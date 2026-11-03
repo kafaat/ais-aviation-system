@@ -4,6 +4,9 @@ import MultiCityCheckout from "../MultiCityCheckout";
 
 const calls = vi.hoisted(() => ({
   create: vi.fn(),
+  quote: vi.fn(),
+  fareClasses: [] as string[],
+  quoteFailed: false,
   navigate: vi.fn(),
   refresh: vi.fn(),
   invalidate: vi.fn(),
@@ -23,7 +26,8 @@ vi.mock("wouter", async importOriginal => ({
         sessionId: "a77d7683-25d4-4698-923f-fb5a900d80a3",
         passengerCount: 2,
         cabinClass: "economy",
-        segments: [2, 4].map(flightId => ({
+        segments: [2, 4].map((flightId, index) => ({
+          fareClassCode: calls.fareClasses[index],
           flightId,
           departureDate: "2027-01-05T12:00:00.000Z",
         })),
@@ -45,6 +49,34 @@ vi.mock("@/lib/trpc", () => {
       useUtils: () => ({
         ancillary: { getAvailable: { invalidate: calls.invalidate } },
       }),
+      seatMap: {
+        getFlightSeatMap: {
+          useQuery: () => ({
+            data: {
+              aircraftType: "A320",
+              cabins: [
+                {
+                  cabinClass: "economy",
+                  rows: [
+                    {
+                      row: 12,
+                      seats: ["A", "B"].map((column, i) => ({
+                        id: i + 1,
+                        seatNumber: "12" + column,
+                        row: 12,
+                        column,
+                        seatType: "window",
+                        status: "available",
+                        seatPrice: i * 500,
+                      })),
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        },
+      },
       flights: {
         getById: {
           useQuery: ({ id }: { id: number }) => ({
@@ -84,10 +116,17 @@ vi.mock("@/lib/trpc", () => {
       },
       multiCity: {
         calculatePrice: {
-          useQuery: () => ({
-            data: { totalPrice: calls.fare },
-            refetch: calls.refresh,
-          }),
+          useQuery: (input: unknown) => {
+            calls.quote(input);
+            return {
+              data: { totalPrice: calls.fare },
+              isError: calls.quoteFailed,
+              error: calls.quoteFailed
+                ? new Error("Booking class unavailable")
+                : undefined,
+              refetch: calls.refresh,
+            };
+          },
         },
         create: { useMutation: () => ({ mutateAsync: calls.create }) },
       },
@@ -96,6 +135,8 @@ vi.mock("@/lib/trpc", () => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  calls.fareClasses = [];
+  calls.quoteFailed = false;
   calls.price = 550;
   calls.fare = 12000;
 });
@@ -174,4 +215,78 @@ it("allows removal and review at the refreshed catalog price after a definite co
     expectedTotalMinor: 12600,
     ancillaries: [{ quantity: 1, unitPrice: 600, totalPrice: 600 }],
   });
+});
+
+it("preserves a distinct seat assignment per sector and passenger through an ambiguous retry", async () => {
+  calls.create
+    .mockRejectedValueOnce(new Error("Seat reply lost"))
+    .mockResolvedValueOnce({});
+  prepare();
+  const scope = within(
+    screen.getByRole("region", { name: "checkIn.seatAssignments" })
+  );
+  fireEvent.click(scope.getByRole("button", { name: "checkIn.selectSeats" }));
+  const seat = () => scope.getByRole("button", { name: "12A available" });
+  expect(scope.getByRole("button", { name: "12B available" })).toBeDisabled();
+  fireEvent.click(seat());
+  change(scope.getByLabelText("manageAncillaries.passenger"), "1");
+  expect(seat()).toBeDisabled();
+  change(scope.getByLabelText("manageAncillaries.sector"), "1");
+  fireEvent.click(seat());
+  expect(scope.getAllByRole("listitem")).toHaveLength(2);
+  submit();
+  await screen.findByText("Seat reply lost");
+  const [command] = calls.create.mock.calls[0];
+  expect(command.segments.map((s: { seats: unknown }) => s.seats)).toEqual([
+    [{ passengerIndex: 0, seatNumber: "12A" }],
+    [{ passengerIndex: 1, seatNumber: "12A" }],
+  ]);
+  expect(seat()).toBeDisabled();
+  submit();
+  expect(calls.create.mock.calls[1][0]).toEqual(command);
+});
+
+it("quotes and submits the same normalized fare class on its selected sector", async () => {
+  calls.fareClasses = ["y", "M"];
+  calls.create.mockResolvedValue({});
+  prepare();
+  expect(calls.quote).toHaveBeenLastCalledWith({
+    segments: [
+      { flightId: 2, cabinClass: "economy", fareClassCode: "Y" },
+      { flightId: 4, cabinClass: "economy", fareClassCode: "M" },
+    ],
+    passengerCount: 2,
+    passengerTypes: ["adult", "adult"],
+  });
+  submit();
+  expect(calls.create.mock.calls[0][0].segments).toMatchObject([
+    { flightId: 2, fareClassCode: "Y" },
+    { flightId: 4, fareClassCode: "M" },
+  ]);
+});
+
+it("keeps legacy cabin-only links and blocks submission if a refreshed quote fails with cached data", () => {
+  const view = prepare();
+  expect(calls.quote.mock.lastCall?.[0].segments).toEqual([
+    { flightId: 2, cabinClass: "economy" },
+    { flightId: 4, cabinClass: "economy" },
+  ]);
+  calls.quoteFailed = true;
+  view.rerender(<MultiCityCheckout />);
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Booking class unavailable"
+  );
+  expect(screen.getByRole("button", { name: "search.bookNow" })).toBeDisabled();
+  submit();
+  expect(calls.create).not.toHaveBeenCalled();
+});
+
+it("rejects a malformed explicit class instead of silently replacing it with cabin-only inventory", () => {
+  calls.fareClasses = ["1invalid", "M"];
+  render(<MultiCityCheckout />);
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "multiCity.invalidItinerary"
+  );
+  expect(calls.quote).not.toHaveBeenCalled();
+  expect(calls.create).not.toHaveBeenCalled();
 });

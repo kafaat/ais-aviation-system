@@ -415,7 +415,7 @@ export const codeshareRouter = router({
         tags: ["Codeshare"],
         summary: "Get codeshare flights for an airline",
         description:
-          "Retrieve flights available through codeshare agreements for the specified marketing airline. Only returns flights from active agreements within their validity period.",
+          "List partner schedules covered by an active agreement at search and departure. Cabin counters describe the operating flight. Partner bookable seat availability is unknown.",
       },
     })
     .input(

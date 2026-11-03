@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRefund,
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   calculateFee: vi.fn(),
   settle: vi.fn(),
   cancel: vi.fn(),
+  assertUnused: vi.fn(),
   refundsState: [] as Array<{
     id: string;
     amount: number;
@@ -22,6 +24,9 @@ const mocks = vi.hoisted(() => ({
   }>,
 }));
 
+vi.mock("./ticket-coupons.service", () => ({
+  assertNoFlownCouponForCancellation: mocks.assertUnused,
+}));
 vi.mock("./payment-settlement.service", () => ({
   settleVerifiedRefund: mocks.settle,
 }));
@@ -140,6 +145,27 @@ beforeEach(() => {
   );
 });
 
+it("does not send a new cancellation refund to the provider for used carriage", async () => {
+  mocks.assertUnused.mockRejectedValueOnce(
+    new TRPCError({ code: "PRECONDITION_FAILED", message: "flown coupon" })
+  );
+  await expect(createRefund(input, owner)).rejects.toMatchObject({
+    code: "PRECONDITION_FAILED",
+    message: "flown coupon",
+  });
+  expect(mocks.assertUnused).toHaveBeenCalled();
+  expectNoFinancialWrites();
+});
+it("exposes the used-carriage refusal to the cancellation form before quoting a provider refund", async () => {
+  mocks.assertUnused.mockRejectedValueOnce(
+    new TRPCError({ code: "PRECONDITION_FAILED", message: "flown coupon" })
+  );
+  expect(await isBookingRefundable(booking.id)).toEqual({
+    refundable: false,
+    reason: "flown coupon",
+  });
+  expect(mocks.listRefunds).not.toHaveBeenCalled();
+});
 function expectNoFinancialWrites() {
   expect(mocks.refund).not.toHaveBeenCalled();
   expect(mocks.update).not.toHaveBeenCalled();

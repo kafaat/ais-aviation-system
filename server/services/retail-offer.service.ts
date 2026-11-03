@@ -1,4 +1,3 @@
-import { requireValue } from "./required-value";
 import {
   premiumAdjustment,
   recordPremiumConversion,
@@ -8,7 +7,9 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb, getFlightById } from "../db";
-import { retailOffers } from "../../drizzle/schema";
+import { flights, retailOffers } from "../../drizzle/schema";
+import { resolveFlightFareClass } from "./rbd-inventory.service";
+import { saleFareRuleDigest } from "./sale-fare-rules";
 import { calculateFlightPrice } from "./flights.service";
 import { recordEvent } from "./outbox.service";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -34,6 +35,10 @@ export const retailOfferPayloadSchema = z.object({
   amountUnit: z.literal("minor"),
   scope: z.literal("airfare"),
   fareClassId: z.number().int().positive().optional(),
+  fareRuleDigest: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .optional(),
   fareLines: z.array(offerFareLineSchema).min(1).max(100).optional(),
   passengerTypes: z.array(passengerType).min(1).max(100),
   policy: z.object({
@@ -129,6 +134,7 @@ export async function createRetailOffer(
       taxRate: number;
       fareClassId?: number;
     };
+    fareClassCode?: string;
     fareClass?: {
       fareClassId: number;
       fareMultiplier: number;
@@ -152,6 +158,40 @@ export async function createRetailOffer(
       code: "NOT_FOUND",
       message: "Flight is not available for an offer",
     });
+  const db = transaction ?? (await getDb());
+  if (!db) throw new Error("Offer storage unavailable");
+  let fareClass = input.fareClass;
+  if (input.fareClassCode) {
+    const selected = await resolveFlightFareClass(
+      db,
+      flight.id,
+      flight.airline.id,
+      input.cabinClass,
+      input.fareClassCode
+    );
+    if (!selected)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Requested booking class is unavailable",
+      });
+    fareClass = {
+      fareClassId: selected.fareClass.id,
+      fareMultiplier: Number(selected.fareClass.basePriceMultiplier),
+    };
+  }
+  const fareRuleDigest = fareClass
+    ? await saleFareRuleDigest(
+        db,
+        {
+          ...flight,
+          originId: flight.origin.id,
+          destinationId: flight.destination.id,
+        },
+        fareClass.fareClassId,
+        types,
+        1
+      )
+    : undefined;
   const price = await calculateFlightPrice(
     flight,
     input.cabinClass,
@@ -167,10 +207,10 @@ export async function createRetailOffer(
           fareMultiplier: input.ndcPolicy?.fareMultiplier ?? 1,
           taxRate: input.ndcPolicy?.taxRate ?? DEFAULT_TAX_RATE,
         }
-      : input.fareClass
+      : fareClass
         ? {
-            name: `direct:rbd:${input.fareClass.fareClassId}:v1`,
-            fareMultiplier: input.fareClass.fareMultiplier,
+            name: `direct:rbd:${fareClass.fareClassId}:v1`,
+            fareMultiplier: fareClass.fareMultiplier,
             taxRate: price.fareLines ? DEFAULT_TAX_RATE : 0,
           }
         : { name: "direct:v1", fareMultiplier: 1, taxRate: 0 };
@@ -180,7 +220,8 @@ export async function createRetailOffer(
     currency: "SAR",
     amountUnit: "minor",
     scope: "airfare",
-    ...(input.fareClass ? { fareClassId: input.fareClass.fareClassId } : {}),
+    ...(fareClass ? { fareClassId: fareClass.fareClassId } : {}),
+    ...(fareRuleDigest ? { fareRuleDigest } : {}),
     passengerTypes: types,
     policy,
     ...amounts,
@@ -209,8 +250,6 @@ export async function createRetailOffer(
     consumedBookingId: null,
     createdAt: now,
   };
-  const db = await getDb();
-  if (!db && !transaction) throw new Error("Offer storage unavailable");
   const persist = async (tx: SettlementTx) => {
     if (
       input.channel === "direct" &&
@@ -250,9 +289,7 @@ export async function createRetailOffer(
     await tx.insert(retailOffers).values(offer);
     return offer;
   };
-  return transaction
-    ? persist(transaction)
-    : requireValue(db).transaction(persist);
+  return transaction ? persist(transaction) : db.transaction(persist);
 }
 export function validateRetailOffer(
   offer: RetailOffer,
@@ -264,6 +301,7 @@ export function validateRetailOffer(
     cabinClass: string;
     passengerTypes: string[];
     fareClassId?: number;
+    ruleSegmentCount?: number;
   },
   now = new Date()
 ) {
@@ -323,7 +361,28 @@ export async function lockRetailOffer(
     .for("update");
   if (!offer)
     throw new TRPCError({ code: "NOT_FOUND", message: "Offer not found" });
-  validateRetailOffer(offer, input);
+  const payload = validateRetailOffer(offer, input);
+  if (input.fareClassId !== undefined) {
+    const [flight] = await tx
+      .select()
+      .from(flights)
+      .where(eq(flights.id, input.flightId))
+      .limit(1);
+    if (!flight)
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    const digest = await saleFareRuleDigest(
+      tx,
+      flight,
+      input.fareClassId,
+      input.passengerTypes,
+      input.ruleSegmentCount ?? 1
+    );
+    if (digest !== payload.fareRuleDigest)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Fare conditions changed; request a new offer",
+      });
+  }
   return offer;
 }
 export async function consumeRetailOffer(
