@@ -1,5 +1,44 @@
 # Changelog
 
+## What's Changed in v1.36.0
+
+### Features
+
+- Add scoped staff baggage handover grants and receipts, agency credit approval, marketing-carrier seat allotments and local ticket revalidation against issued coupons and funded reservations (#254).
+- Extend the departure desk with No Rec and Go Show cases, date-range seat blocks, compatible aircraft-layout reloads, passenger cabin-change quotes, APFAX and meal reports, supervised final closure and recorded off-blocks time (#258, integrated through #254).
+- Add a Windows Honeywell station client that routes boarding passes and registered bag tags to distinct local printer shares, keeps durable retry receipts and compares scanner input with the issued payload (#255).
+- Improve native mobile booking navigation and carry the operator's identity through passenger search, login, booking review, invoices and payment history. Add independent YE/YER preferences and direct, time-limited SAR exchange observations for secondary display estimates; booking, invoice, Stripe and wallet amounts remain in SAR (#259).
+
+### Bug Fixes
+
+- Separate kiosk sessions, document issuance and requested printing from verified physical output, and add a station pilot label and one documented printer acceptance command (#252, #253).
+- Preserve recorded passengers, bags, inventory and financial receipts when an externally confirmed refund conflicts with a closed departure. Block fresh check-in, boarding, seat selection and bag acceptance while that departure refund awaits reconciliation, including on an onward sector or after supervised reopening (#254).
+- Allow supervised reopening of a cancelled flight's final closure before recorded OUT; keep attendance and baggage recovery subject to the existing funded reservation and custody rules (#254).
+- Reject final closure with unresolved reservation or servicing holds, acquire seat-block locks in a stable order, and refresh station reports before export or printing (#254).
+- Await bag-return transaction and passenger-command boundaries while preserving asynchronous rejection behavior, fixing the zero-warning lint gate (#254).
+- Preserve native operator-name and logo configuration on all three Docker API replicas (#259).
+
+### Changed
+
+- Retire the optional external Videcom booking entry introduced during this development cycle. Retain the guide as a product reference and keep passenger, agency, ownership and payment journeys within native AIS (#256, #259).
+
+### Tests and Maintenance
+
+- Extend live MySQL/Redis acceptance for baggage handovers, closed-departure recovery, refund admission holds, agency credit, marketing inventory and ticket revalidation. Cover full and partial refund replay and retain the configured payment-settlement coverage thresholds (#254, #258).
+- Exercise both station roles through the Windows RAW spooler using disposable file-backed printer ports. These checks do not establish physical printer or airport-reader acceptance (#255).
+- Verify the mobile embedded journey through an HTTPS test proxy that forwards actual AIS responses and security headers. Require explicit browser refusal of an unlisted parent origin and successful native navigation from the allowed origin (#259).
+- Add bounded, sanitized privacy-worker phase and resource-type diagnostics to investigate intermittent browser-test timeouts. Keep production lifecycle behavior, timeouts, retries and assertions unchanged (#259).
+- Replace synthetic test idempotency literals with runtime-generated nonces and suppress only their three historical false-positive fingerprints; retain credential detection and its positive controls (#254).
+
+### Operations and Documentation
+
+- Apply migrations `0064_vrs_local_service_acceptance.sql` and `0065_station_departure_operations.sql` in journal order. Previous-release upgrade and restore checks preserve existing data; the migrations do not invent historical sector scope or physical movement evidence (#254, #258).
+- Document station grants, handovers, commercial servicing limits, Honeywell commissioning, operator branding and embedded-search policy. Carrier/provider acknowledgements, live exchange observations, physical devices and dispatch release retain their documented operator acceptance requirements (#254, #255, #258, #259).
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.35.0...v1.36.0
+
+---
+
 ## What's Changed in v1.35.0
 
 ### Features
