@@ -24,6 +24,7 @@ import {
   isValidTimeZone,
 } from "./civil-day";
 import { countActiveHolds } from "./inventory-capacity.service";
+import { agencyCreditBalance } from "./agency-credit.service";
 import { createAgentBooking } from "./travel-agent.service";
 
 function database() {
@@ -241,6 +242,7 @@ export function getSessionAgencyDashboard(
     });
     const pageSize = 20 as const;
     return {
+      credit: await agencyCreditBalance(tx, agencyId, actor),
       bookings: owned.slice((page - 1) * pageSize, page * pageSize),
       total: owned.length,
       page,

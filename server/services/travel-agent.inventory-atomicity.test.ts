@@ -15,7 +15,7 @@ describe("travel agent inventory atomicity", () => {
 
   it("shares the idempotency transaction with the canonical booking command and agency ledger", () => {
     expect(command).toMatch(
-      /const execute = \(transaction\?: SettlementTx\) =>\s*withTransactionalIdempotency\(/
+      /const execute = \(transaction: SettlementTx\) =>\s*withTransactionalIdempotency\(/
     );
     expect(command).toMatch(/\},\s*transaction\s*\);/);
     expect(command).toMatch(
@@ -26,15 +26,13 @@ describe("travel agent inventory atomicity", () => {
     expect(command).not.toContain(".update(flights)");
   });
 
-  it("checks session ownership before executing or replaying on that same transaction", () => {
-    // API-key callers retain the legacy path; session callers must use the
-    // owner-guarded transaction before the idempotency helper can return a replay.
-    expect(command).toContain("if (!expectedOwner) return execute();");
+  it("checks credential and session ownership before executing or replaying in the same transaction", () => {
+    expect(command).not.toContain("return execute();");
     expect(command).toMatch(
-      /return db\.transaction\(async tx => \{\s*await requireOwnedAgency\(tx, expectedOwner, agentId, true\);[\s\S]*?return execute\(tx\);\s*\}, inventoryTransactionConfig\)/
+      /return db\.transaction\(async tx => \{\s*await requireOwnedAgency\(tx, bookingOwner, agentId, true\);[\s\S]*?return execute\(tx\);\s*\}, inventoryTransactionConfig\)/
     );
     expect(command).toContain(
-      "ne(idempotencyRequests.userId, expectedOwner.userId)"
+      "ne(idempotencyRequests.userId, bookingOwner.userId)"
     );
     expect(command).toMatch(
       /if \(previousOwner\)\s*throw new TRPCError\(\{\s*code: "CONFLICT"/

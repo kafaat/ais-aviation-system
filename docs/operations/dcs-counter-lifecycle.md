@@ -120,9 +120,26 @@ preserve evidence; they do not invent deplaning, baggage retrieval or payment re
 The manifest also refuses a recorded boarded passenger omitted by reservation
 filtering, including a passenger who has no registered baggage.
 
-Counter registration and signed custody are separate records. This delivery does
-not synthesize airport/device signatures, loading scans, baggage return, rerouting,
-printer output, belt movement or dispatch release.
+### Passenger handover at the departure desk
+
+An airline administrator can call `dcsOperations.setBagReturnGrant` with a flight
+in their tenant, its operating airline ID and origin airport ID, the staff user
+ID, `enabled`, a reason and an idempotency key. A platform administrator may
+also provision a scoped staff account. The grant applies to this staff member
+at this carrier's origin station across its flights. Set `enabled: false` to
+revoke it. Both changes are recorded in the desk history.
+
+A granted operator deplanes a boarded passenger, verifies their identity and
+the physical tag, hands the bag to the passenger, then selects **Confirm bag
+handover** on that passenger's desk form. The receipt records the operator,
+airport, tag, passenger, booking segment, time and reason. Retrying the same
+command returns the receipt. Each other bag retains its own offload block.
+Historical device scans remain available. A loaded or onward bag requires
+independent unloading or rerouting evidence before this desk can release it.
+
+The handover records the operator's observation at the desk. Certified reader
+and printer output, belt movement and final dispatch release require their
+respective station integrations and operational acceptance.
 
 ## Passenger documents and APIS
 
@@ -174,9 +191,9 @@ delivery of the requested service. SSR/APFAX meal reports remain unimplemented.
 - Legacy bookings without a stored segment can use the existing supported check-in
   path, but the staff baggage form remains unavailable until an exact sector is
   established. More than one active segment matching a flight is an error.
-- Provision actual tenant-scoped operations accounts. This application has no
-  verified staff-to-airport grant model; the implementation does not claim station
-  authorization beyond its tenant and recorded flight origin.
+- Provision tenant-scoped operations accounts and assign the carrier and origin
+  station grant for manual bag handovers. The other desk commands retain
+  their tenant and flight authorization rules.
 - Set `BAGGAGE_AIRLINE_NUMERIC_CODE` to the carrier's configured three-digit numeric
   code. The synthetic `123` value exists only in disposable tests. Carrier allocation,
   station acceptance and hardware validation remain operator deployment work.

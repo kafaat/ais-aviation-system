@@ -6592,7 +6592,11 @@
                 },
                 "fulfillment": {
                   "type": "string",
-                  "enum": ["awaiting_ticket_reissue", "entitlement_created"]
+                  "enum": [
+                    "awaiting_ticket_reissue",
+                    "entitlement_created",
+                    "local_ticket_revalidated"
+                  ]
                 }
               },
               "required": [

@@ -1,21 +1,30 @@
 import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import { test, expect } from "./fixtures/base-test";
-import { fixtureFlight, ownedBooking, sqlRows } from "./fixtures/hardening";
+import {
+  fixtureFlight,
+  ownedBooking,
+  rpc,
+  sqlRows,
+} from "./fixtures/hardening";
 
-test("kiosk reprints a registered return-sector bag through the public HTTP API", async ({
+test("a kiosk passenger retries the same return-sector bag tag after a printer failure", async ({
   page,
 }) => {
   const { booking, flightId: outbound } = await ownedBooking(
     page,
     true,
-    undefined,
+    [
+      { firstName: "Synthetic", lastName: "Journey", type: "adult" },
+      { firstName: "Test", lastName: "Companion", type: "adult" },
+      { firstName: "Related", lastName: "Journey", type: "adult" },
+    ],
     "admin"
   );
   const inbound = await fixtureFlight();
   const bookingId = booking.bookingId;
   const [passenger] = await sqlRows<RowDataPacket>(
-    "SELECT id FROM passengers WHERE bookingId=?",
+    "SELECT id FROM passengers WHERE bookingId=? AND firstName='Synthetic' AND lastName='Journey'",
     [bookingId]
   );
   const edit = (query: string, params: (string | number)[]) =>
@@ -79,6 +88,51 @@ test("kiosk reprints a registered return-sector bag through the public HTTP API"
     flightId: inbound,
   });
   expect(auth.status).toBe(200);
+  // Both matched family members can review their own purchases. The
+  // differently named companion and unattributed legacy lines remain private.
+  const [companion] = await sqlRows<RowDataPacket>(
+    "SELECT id FROM passengers WHERE bookingId=? AND lastName='Companion'",
+    [bookingId]
+  );
+  const [relative] = await sqlRows<RowDataPacket>(
+    "SELECT id FROM passengers WHERE bookingId=? AND firstName='Related'",
+    [bookingId]
+  );
+  const [service] = await sqlRows<RowDataPacket>(
+    "SELECT id FROM ancillary_services ORDER BY id LIMIT 1"
+  );
+  await edit(
+    "INSERT INTO booking_ancillaries (bookingId,passengerId,ancillaryServiceId,unitPrice,totalPrice) VALUES (?,?,?,100,100),(?,?,?,200,200),(?,NULL,?,300,300),(?,?,?,400,400)",
+    [
+      bookingId,
+      passenger.id,
+      service.id,
+      bookingId,
+      companion.id,
+      service.id,
+      bookingId,
+      service.id,
+      bookingId,
+      relative.id,
+      service.id,
+    ]
+  );
+  const scoped = await rpc(page).kiosk.getCheckInData.query({
+    capabilityToken: auth.body.result.data.json.capabilityToken,
+  });
+  expect(scoped.passengers.map(person => person.id).sort()).toEqual(
+    [passenger.id, relative.id].sort()
+  );
+  expect(
+    scoped.ancillaries.purchased
+      .map(line => [line.passengerId, line.totalPrice])
+      .sort()
+  ).toEqual(
+    [
+      [passenger.id, 100],
+      [relative.id, 400],
+    ].sort()
+  );
   const input = {
     capabilityToken: auth.body.result.data.json.capabilityToken,
     passengerId: passenger.id,
@@ -104,9 +158,83 @@ test("kiosk reprints a registered return-sector bag through the public HTTP API"
   expect(
     (await call("printBagTag", { ...input, flightId: outbound })).status
   ).toBeGreaterThanOrEqual(400);
+  const receipt = {
+    bookingRef: booking.bookingReference,
+    lastName: "Journey",
+    tagNumber,
+  };
+  const prepared = await call("reprintRegisteredTag", receipt);
+  expect(prepared.status).toBe(200);
+  // The exact printable fields are the entire response. A bag receipt
+  // provides no reusable session or access to family/private itinerary data.
+  expect(prepared.body.result.data.json).toEqual({
+    ...first.body.result.data.json,
+    documentVersion: expect.stringMatching(/^[a-f0-9]{64}$/),
+  });
+  for (const invalid of [
+    { lastName: "Companion" },
+    { bookingRef: "XXXXXX" },
+    { tagNumber: "9999999999" },
+    { passengerId: passenger.id + 1 },
+    { expectedVersion: "0".repeat(64) },
+    { flightId: outbound },
+  ]) {
+    expect(
+      (await call("reprintRegisteredTag", { ...receipt, ...invalid })).status
+    ).toBeGreaterThanOrEqual(400);
+  }
+  // Simulate only the local print handoff. All tag lookups, eligibility
+  // checks and document generation continue to use the real services.
+  await page.addInitScript(() => {
+    localStorage.setItem("i18nextLng", "en");
+    let requests = 0;
+    window.print = () => {
+      if (++requests === 1) throw new Error("Print dialog unavailable");
+    };
+  });
+  await page.reload();
+  await page.getByRole("link", { name: "Kiosk bag tag reprint" }).click();
+  await page.locator("#kiosk-reference").fill(booking.bookingReference);
+  await page.locator("#kiosk-surname").fill("Journey");
+  await page.getByLabel("10-digit bag tag number").fill(tagNumber);
+  await page.getByRole("button", { name: "Find registered tag" }).click();
+  const copy = page.getByRole("region", { name: "Registered bag tag copy" });
+  await expect(copy).toContainText(tagNumber);
+  await expect(copy).toContainText("Journey");
+  await expect(copy).toContainText("JED → RUH");
+  await expect(
+    copy.getByRole("img", { name: "Bag tag barcode" })
+  ).toBeVisible();
+  const reprint = page.getByRole("button", { name: "Reprint this tag" });
+  await reprint.click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Could not open the print dialog" })
+  ).toBeVisible();
+  await reprint.click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Physical printing is unconfirmed" })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "No tag came out" }).click();
+  await expect(
+    page.getByRole("status").filter({ hasText: "You reported no printed copy" })
+  ).toBeVisible();
+  await reprint.click();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Physical printing is unconfirmed" })
+  ).toBeVisible();
+  await expect(copy).toContainText(tagNumber);
+  await page.getByRole("button", { name: "Finish and clear" }).click();
+  await expect(copy).toHaveCount(0);
+  await expect(page.locator("#kiosk-reference")).toHaveValue("");
   const [counts] = await sqlRows<RowDataPacket>(
-    "SELECT (SELECT count(*) FROM baggage_items WHERE bookingId=?) AS bags,(SELECT count(*) FROM baggage_custody_events WHERE baggageId=?) AS events,(SELECT count(*) FROM kiosk_sessions WHERE bookingId=? AND sessionType='bag_tag' AND status='completed') AS prints",
+    "SELECT (SELECT count(*) FROM baggage_items WHERE bookingId=?) AS bags,(SELECT count(*) FROM baggage_custody_events WHERE baggageId=?) AS events,(SELECT count(*) FROM kiosk_sessions WHERE bookingId=? AND sessionType='bag_tag') AS printSessions",
     [bookingId, bag.id, bookingId]
   );
-  expect(counts).toMatchObject({ bags: 1, events: 1, prints: 0 });
+  expect(counts).toMatchObject({ bags: 1, events: 1, printSessions: 0 });
 });

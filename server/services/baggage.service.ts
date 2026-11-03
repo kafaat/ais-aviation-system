@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   baggageItems,
@@ -76,8 +76,24 @@ export type {
 } from "./baggage-registration.service";
 
 /**
- * Update baggage status and location
+ * Preserve a completed handover when an older tracking request finishes late.
  */
+function heldBag(bag: BaggageItem) {
+  return and(
+    eq(baggageItems.id, bag.id),
+    eq(baggageItems.status, bag.status),
+    isNull(baggageItems.returnEventId)
+  );
+}
+function requireBaggageUpdate(affected: number) {
+  if (!affected)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "Baggage custody changed; refresh the current receipt",
+    });
+}
+
+/** Update baggage status and location. */
 export async function updateBaggageStatus(data: {
   tagNumber: string;
   location: string;
@@ -118,14 +134,15 @@ export async function updateBaggageStatus(data: {
   }
 
   // Update baggage item
-  await db
+  const [write] = await db
     .update(baggageItems)
     .set({
       status: data.status,
       lastLocation: data.location,
       updatedAt: new Date(),
     })
-    .where(eq(baggageItems.id, baggage.id));
+    .where(heldBag(baggage));
+  requireBaggageUpdate(write.affectedRows);
 
   // Create tracking record
   const trackingData: InsertBaggageTracking = {
@@ -322,7 +339,7 @@ export async function reportLostBaggage(data: {
   }
 
   // Update baggage status to lost
-  await db
+  const [write] = await db
     .update(baggageItems)
     .set({
       status: "lost",
@@ -330,7 +347,8 @@ export async function reportLostBaggage(data: {
       lostDescription,
       updatedAt: new Date(),
     })
-    .where(eq(baggageItems.id, baggage.id));
+    .where(heldBag(baggage));
+  requireBaggageUpdate(write.affectedRows);
 
   // Create tracking record
   await db.insert(baggageTracking).values({
@@ -525,14 +543,15 @@ export async function markBaggageFound(data: {
   }
 
   // Update baggage status
-  await db
+  const [write] = await db
     .update(baggageItems)
     .set({
       status: "found",
       lastLocation: data.foundLocation,
       updatedAt: new Date(),
     })
-    .where(eq(baggageItems.id, baggage.id));
+    .where(heldBag(baggage));
+  requireBaggageUpdate(write.affectedRows);
 
   // Create tracking record
   await db.insert(baggageTracking).values({

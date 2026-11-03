@@ -3,6 +3,7 @@ import mysql, { type RowDataPacket } from "mysql2/promise";
 import { drizzle } from "drizzle-orm/mysql2";
 import * as schema from "../drizzle/schema";
 import type { SettlementTx } from "../server/services/booking-settlement.service";
+import { issueSelfServiceCapability } from "../server/services/self-service-capability.service";
 import { disposableDatabaseUrl } from "./disposable-database";
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
@@ -23,7 +24,7 @@ async function settleFixtureEvent(
   }
 }
 
-test("AT-03 rejects new baggage across channels after offload, excess weight and cancellation", async ({
+test("AT-03 rejects new baggage across channels before check-in, after offload, above allowance and after cancellation", async ({
   page,
 }) => {
   test.setTimeout(120000);
@@ -116,12 +117,66 @@ test("AT-03 rejects new baggage across channels after offload, excess weight and
         `SELECT (SELECT COUNT(*) FROM baggage_items WHERE bookingId=?) AS bags,
      (SELECT COUNT(*) FROM baggage_tracking t JOIN baggage_items b ON b.id=t.baggageId WHERE b.bookingId=?) AS tracking,
      (SELECT COUNT(*) FROM baggage_custody_events e JOIN baggage_items b ON b.id=e.baggageId WHERE b.bookingId=?) AS custody,
+     (SELECT COUNT(*) FROM bag_drop_sessions WHERE bookingId=?) AS dropSessions,
      (SELECT COUNT(*) FROM bag_drop_tags t JOIN bag_drop_sessions s ON s.id=t.sessionId WHERE s.bookingId=?) AS dropTags`,
-        [bookingId, bookingId, bookingId, bookingId]
+        [bookingId, bookingId, bookingId, bookingId, bookingId]
       )
     )[0];
 
+  const notCheckedIn = /check(?:ed)?[ -]in/i;
+  await expect(client.boardingPass.issue.mutate(passenger)).rejects.toThrow(
+    notCheckedIn
+  );
+  await expect(reprint("0000000000")).rejects.toThrow(notCheckedIn);
+  // The kiosk lookup succeeds for the paid passenger, but its session cannot
+  // serve as a boarding pass for the scanner.
+  await expect(
+    client.bagDrop.scanPass.mutate({ boardingPassToken: kiosk.capabilityToken })
+  ).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
+  // Independently exercise the session's live seat check with a correctly
+  // signed test admission. No check-in or boarding pass has ever been issued.
+  const uncheckedAdmission = issueSelfServiceCapability({
+    kind: "bag-drop-admission",
+    ...passenger,
+    passDigest: "0".repeat(64),
+  });
+  await expect(
+    client.bagDrop.initiate.mutate({ capabilityToken: uncheckedAdmission })
+  ).rejects.toThrow(notCheckedIn);
+
   await useBrowserSession(page, "ops");
+  await expect(register(1)).rejects.toThrow(notCheckedIn);
+  await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
+  const openDesk = async () => {
+    await page.goto("/airline/dcs");
+    await page
+      .getByRole("combobox", { name: "Flight", exact: true })
+      .selectOption(String(flightId));
+    await page
+      .getByRole("button", { name: "Select Synthetic Journey" })
+      .click();
+  };
+  const desk = page.getByRole("region", {
+    name: "Passenger baggage registration",
+  });
+  await openDesk();
+  await expect(
+    page.getByRole("combobox", { name: "Passenger action", exact: true })
+  ).toHaveValue("check_in");
+  await expect(
+    desk.getByText(/available after passenger check-in/i)
+  ).toBeVisible();
+  await desk.getByLabel("Bag weight in kilograms").fill("1");
+  await expect(
+    desk.getByRole("button", { name: "Register received bag" })
+  ).toBeDisabled();
+  expect(await counts()).toMatchObject({
+    bags: 0,
+    tracking: 0,
+    custody: 0,
+    dropSessions: 0,
+    dropTags: 0,
+  });
   await checkIn();
   await useBrowserSession(page, "departurePassenger");
   const oldPass = await client.boardingPass.issue.mutate(passenger);
@@ -181,6 +236,12 @@ test("AT-03 rejects new baggage across channels after offload, excess weight and
     })
   ).rejects.toThrow(/no verified production adapter/i);
   await expect(
+    client.bagDrop.printTag.mutate({
+      sessionToken: session.sessionToken,
+      bagNumber: 1,
+    })
+  ).rejects.toThrow(/no verified production adapter/i);
+  await expect(
     client.bagDrop.confirm.mutate({ sessionToken: session.sessionToken })
   ).rejects.toThrow(/no verified production adapter/i);
   await expect(
@@ -190,15 +251,7 @@ test("AT-03 rejects new baggage across channels after offload, excess weight and
   await useBrowserSession(page, "ops");
   const { baggage } = await register(13);
   await expect(register(11)).rejects.toThrow(/exceeds funded allowance/i);
-  await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
-  await page.goto("/airline/dcs");
-  await page
-    .getByRole("combobox", { name: "Flight", exact: true })
-    .selectOption(String(flightId));
-  await page.getByRole("button", { name: "Select Synthetic Journey" }).click();
-  const desk = page.getByRole("region", {
-    name: "Passenger baggage registration",
-  });
+  await openDesk();
   await expect(
     desk.getByRole("definition").filter({ hasText: /^10 kg$/ })
   ).toBeVisible();

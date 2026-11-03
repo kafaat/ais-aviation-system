@@ -7,7 +7,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb, getFlightById } from "../db";
-import { flights, retailOffers } from "../../drizzle/schema";
+import { fareClasses, flights, retailOffers } from "../../drizzle/schema";
 import { resolveFlightFareClass } from "./rbd-inventory.service";
 import { saleFareRuleDigest } from "./sale-fare-rules";
 import { calculateFlightPrice } from "./flights.service";
@@ -21,6 +21,29 @@ export const offerFareLineSchema = z.object({
   bookingFee: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
 });
+const revalidationTerms = z.object({
+  code: z.string(),
+  family: z.string().nullable(),
+  changeable: z.boolean(),
+  changeFee: z.number().int().nonnegative().nullable(),
+});
+export async function readRevalidationTerms(
+  tx: SettlementTx,
+  fareClassId: number
+) {
+  const [row] = await tx
+    .select({
+      code: fareClasses.code,
+      family: fareClasses.fareFamily,
+      changeable: fareClasses.changeable,
+      changeFee: fareClasses.changeFee,
+      active: fareClasses.active,
+    })
+    .from(fareClasses)
+    .where(eq(fareClasses.id, fareClassId))
+    .limit(1);
+  return row?.active ? revalidationTerms.parse(row) : undefined;
+}
 export const retailOfferPayloadSchema = z.object({
   experiment: z
     .object({
@@ -35,6 +58,7 @@ export const retailOfferPayloadSchema = z.object({
   amountUnit: z.literal("minor"),
   scope: z.literal("airfare"),
   fareClassId: z.number().int().positive().optional(),
+  revalidationTerms: revalidationTerms.optional(),
   fareRuleDigest: z
     .string()
     .regex(/^[0-9a-f]{64}$/)
@@ -215,12 +239,17 @@ export async function createRetailOffer(
           }
         : { name: "direct:v1", fareMultiplier: 1, taxRate: 0 };
   const amounts = priceOfferLines(price, policy, input.channel);
+  const ticketTerms =
+    fareClass && input.channel === "direct"
+      ? await readRevalidationTerms(db, fareClass.fareClassId)
+      : undefined;
   const payload: OfferPayload = {
     version: 1,
     currency: "SAR",
     amountUnit: "minor",
     scope: "airfare",
     ...(fareClass ? { fareClassId: fareClass.fareClassId } : {}),
+    ...(ticketTerms ? { revalidationTerms: ticketTerms } : {}),
     ...(fareRuleDigest ? { fareRuleDigest } : {}),
     passengerTypes: types,
     policy,

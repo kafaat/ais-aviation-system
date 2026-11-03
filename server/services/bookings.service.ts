@@ -6,6 +6,7 @@ import {
 } from "./initial-booking-ancillaries";
 export type { SelectedAncillary } from "./initial-booking-ancillaries";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
+import { assertCodeshareSale } from "./codeshare-allotment.service";
 import { selectSeat } from "./seat-map.service";
 import { assertTenantOperational } from "./tenant.service";
 import { TRPCError } from "@trpc/server";
@@ -66,6 +67,7 @@ export interface CreateBookingInput {
   cabinClass: "economy" | "business";
   /** Optional reservation booking designator. Omitted for legacy cabin sales. */
   fareClassCode?: string;
+  codeshareAllotmentId?: number;
   passengers: Passenger[];
   sessionId: string;
   lockId?: number;
@@ -255,6 +257,15 @@ export async function createBooking(
           )
             throw new Error("Flight unavailable");
           await assertTenantOperational(tx, currentFlight.tenantId);
+          if (input.codeshareAllotmentId !== undefined) {
+            await assertCodeshareSale(
+              tx,
+              currentFlight,
+              input.cabinClass,
+              input.codeshareAllotmentId,
+              input.passengers.length
+            );
+          }
           const selectedFareClass = input.fareClassCode
             ? await resolveFlightFareClass(
                 tx,
@@ -422,6 +433,7 @@ export async function createBooking(
             userId: input.userId,
             flightId: input.flightId,
             fareClassId: selectedFareClass?.fareClass.id,
+            codeshareAllotmentId: input.codeshareAllotmentId,
             inventoryLockId: lockId,
             bookingReference,
             pnr,

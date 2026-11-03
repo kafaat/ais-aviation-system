@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { airlineOpsProcedure, router } from "../_core/trpc";
+import {
+  airlineAdminProcedure,
+  airlineOpsProcedure,
+  router,
+} from "../_core/trpc";
 import {
   changeDcsFlightInput,
   dcsCheckInInput,
@@ -7,11 +11,17 @@ import {
   dcsFlightResult,
   dcsPassengerResult,
   dcsTransitionInput,
+  dcsBagReturnGrantInput,
+  dcsBagReturnGrantResult,
+  dcsReturnBagInput,
+  dcsReturnBagResult,
 } from "../contracts/dcs-operations";
 import {
   changeDcsFlightState,
   checkInDcsPassenger,
   getDcsDesk,
+  returnDcsBag,
+  setBagReturnGrant,
   transitionDcsPassenger,
   type DcsActor,
 } from "../services/dcs-operations.service";
@@ -34,6 +44,14 @@ export const dcsOperationsRouter = router({
     .input(dcsCheckInInput)
     .output(dcsPassengerResult)
     .mutation(({ input, ctx }) => checkInDcsPassenger(input, actor(ctx))),
+  setBagReturnGrant: airlineAdminProcedure
+    .input(dcsBagReturnGrantInput)
+    .output(dcsBagReturnGrantResult)
+    .mutation(({ input, ctx }) => setBagReturnGrant(input, actor(ctx))),
+  returnBag: airlineOpsProcedure
+    .input(dcsReturnBagInput)
+    .output(dcsReturnBagResult)
+    .mutation(({ input, ctx }) => returnDcsBag(input, actor(ctx))),
   transition: airlineOpsProcedure
     .input(dcsTransitionInput)
     .output(dcsPassengerResult)

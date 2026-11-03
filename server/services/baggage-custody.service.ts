@@ -7,7 +7,7 @@ import {
   type UnresolvedBaggageRegistration,
 } from "./baggage-reconciliation.service";
 import { z } from "zod";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -200,6 +200,10 @@ export async function ingestBaggageCustody(
         throw new Error("Source event identity was reused");
       return { evidenceId: replay.id, duplicate: true };
     }
+    if (bag.returnEventId != null)
+      throw new BaggageCustodyConflict(
+        "This baggage tag was returned to the passenger"
+      );
     if (
       !["confirmed", "completed"].includes(booking.status) ||
       booking.paymentStatus !== "paid"
@@ -392,7 +396,16 @@ export async function getFlightBaggageCloseout(
           stage: baggageCustodyEvents.stage,
         })
         .from(baggageCustodyEvents)
-        .where(eq(baggageCustodyEvents.flightId, flightId));
+        .leftJoin(
+          baggageItems,
+          eq(baggageItems.id, baggageCustodyEvents.baggageId)
+        )
+        .where(
+          and(
+            eq(baggageCustodyEvents.flightId, flightId),
+            isNull(baggageItems.returnEventId)
+          )
+        );
       return reconcileBaggageCloseout(flightId, expected, events, unresolved);
     },
     { isolationLevel: "repeatable read" }
@@ -406,7 +419,12 @@ export async function assertBaggageNotInCustody(
   const bags = await tx
     .select({ id: baggageItems.id })
     .from(baggageItems)
-    .where(eq(baggageItems.bookingId, bookingId));
+    .where(
+      and(
+        eq(baggageItems.bookingId, bookingId),
+        isNull(baggageItems.returnEventId)
+      )
+    );
   if (!bags.length) return;
   const [custody] = await tx
     .select({ id: baggageCustodyEvents.id })
@@ -427,7 +445,7 @@ export async function assertBaggageNotInCustody(
 /**
  * Passenger offload must not abandon a trusted counter receipt while waiting for
  * a device scan. Called under canonical booking/flight locks. Mutable status
- * labels do not prove physical return or rerouting; no such adapter exists yet.
+ * labels do not prove physical return. Only a committed return receipt releases a bag.
  */
 export async function assertPassengerBaggageCanOffload(
   tx: import("./booking-settlement.service").SettlementTx,
@@ -451,7 +469,9 @@ export async function assertPassengerBaggageCanOffload(
     .where(eq(bookingSegments.bookingId, key.bookingId))
     .orderBy(asc(bookingSegments.segmentOrder))
     .for("update");
-  const unresolved = bags.some(bag => {
+  const outstanding = bags.filter(bag => bag.returnEventId == null);
+  if (!outstanding.length) return;
+  const unresolved = outstanding.some(bag => {
     if (bag.flightId == null || bag.segmentId == null) return true;
     const leg = legs.find(value => value.id === bag.segmentId);
     return (
@@ -465,7 +485,7 @@ export async function assertPassengerBaggageCanOffload(
       and(
         inArray(
           baggageCustodyEvents.baggageId,
-          bags.map(bag => bag.id)
+          outstanding.map(bag => bag.id)
         ),
         eq(baggageCustodyEvents.flightId, key.flightId)
       )

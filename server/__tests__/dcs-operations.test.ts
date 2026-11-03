@@ -17,6 +17,8 @@ import {
   checkInDcsPassenger,
   getDcsDesk,
   transitionDcsPassenger,
+  returnDcsBag,
+  setBagReturnGrant,
   type DcsActor,
 } from "../services/dcs-operations.service";
 import { checkInPassengers } from "../services/departure-control.service";
@@ -50,6 +52,7 @@ const seatRow = () =>
 beforeEach(() => {
   serial = 0;
   fixture = transactionMemory({
+    users: [{ id: actor.userId, tenantId: actor.tenantId, role: "ops" }],
     tenants: [
       { id: 1, status: "active" },
       { id: 2, status: "active" },
@@ -647,7 +650,119 @@ describe("passenger attendance, denial and scan binding", () => {
     );
   });
 
-  it("refuses offload and legacy undo when physical baggage custody has no verified return workflow", async () => {
+  it("returns only the identified bag once and preserves other bags and their offload block", async () => {
+    await checkIn();
+    const bag = {
+      id: 70,
+      bookingId: 3,
+      passengerId: 4,
+      flightId: 11,
+      segmentId: 30,
+      tagNumber: "0123000070",
+      status: "checked_in",
+    };
+    fixture
+      .rows("baggage_items")
+      .push(bag, { ...bag, id: 71, tagNumber: "0123000071" });
+    const admin = { ...actor, userId: 99, role: "airline_admin" };
+    const grant = (flightId: number, airportId: number, enabled: boolean) => ({
+      flightId,
+      airlineId: 1,
+      airportId,
+      enabled,
+      staffId: actor.userId,
+      ...command(),
+    });
+    const input = {
+      ...key,
+      segmentId: 30,
+      tagNumber: bag.tagNumber,
+      ...command(),
+    };
+    await expect(returnDcsBag(input, actor)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      setBagReturnGrant(grant(11, 1, true), actor)
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      setBagReturnGrant(grant(11, 1, true), { ...admin, tenantId: 2 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(setBagReturnGrant(grant(11, 2, true), admin)).rejects.toThrow(
+      /station/i
+    );
+    await setBagReturnGrant(grant(12, 2, true), admin);
+    // Same carrier and tenant, but the operator only has a grant at the other origin.
+    await expect(returnDcsBag(input, actor)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect((await getDcsDesk(11, actor)).canReturnBags).toBe(false);
+    const commandGrant = grant(11, 1, true);
+    const granted = await setBagReturnGrant(commandGrant, admin);
+    expect(await setBagReturnGrant(commandGrant, admin)).toEqual(granted);
+    expect((await getDcsDesk(11, actor)).canReturnBags).toBe(true);
+    await setBagReturnGrant(grant(11, 1, false), admin);
+    await expect(returnDcsBag(input, actor)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await setBagReturnGrant(grant(11, 1, true), admin);
+    await expect(
+      returnDcsBag({ ...input, flightId: 12, segmentId: 31 }, actor)
+    ).rejects.toThrow(/sector/i);
+    await expect(
+      returnDcsBag({ ...input, passengerId: 5 }, actor)
+    ).rejects.toThrow(/sector/i);
+    await expect(
+      returnDcsBag(input, { ...actor, tenantId: 2 })
+    ).rejects.toThrow(/scope/i);
+    await transition("board");
+    await expect(returnDcsBag(input, actor)).rejects.toThrow(/deplaned/i);
+    await transition("deplane");
+    const first = await returnDcsBag(input, actor);
+    expect(await returnDcsBag(input, actor)).toEqual(first);
+    await setBagReturnGrant(grant(11, 1, false), admin);
+    await expect(returnDcsBag(input, actor)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await setBagReturnGrant(grant(11, 1, true), admin);
+    await expect(
+      returnDcsBag({ ...input, ...command() }, actor)
+    ).rejects.toThrow(/already returned/i);
+    expect(
+      fixture
+        .rows("dcs_operation_events")
+        .filter(e => e.action === "return_bag")
+    ).toMatchObject([
+      {
+        id: first.eventId,
+        actorId: actor.userId,
+        flightId: 11,
+        reason: input.reason,
+        details: {
+          baggageId: 70,
+          segmentId: 30,
+          tagNumber: bag.tagNumber,
+          stationId: 1,
+        },
+      },
+    ]);
+    expect(fixture.rows("baggage_tracking")).toHaveLength(1);
+    expect(fixture.rows("baggage_custody_events")).toHaveLength(0);
+    await expect(transition("offload")).rejects.toThrow(/baggage/i);
+    const second = { ...input, ...command(), tagNumber: "0123000071" };
+    fixture.rows("baggage_custody_events").push({
+      id: 90,
+      baggageId: 71,
+      flightId: 11,
+      stage: "loading",
+      airportId: 1,
+    });
+    await expect(returnDcsBag(second, actor)).rejects.toThrow(/custody/i);
+    expect(
+      fixture.rows("baggage_items").find(b => b.id === 71)?.returnEventId
+    ).toBeUndefined();
+  });
+  it("refuses offload and legacy undo when a legacy bag has no scoped handover receipt", async () => {
     await checkIn();
     const nonce = seatRow().checkInNonce;
     fixture

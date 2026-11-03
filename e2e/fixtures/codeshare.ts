@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import mysql, {
   type ResultSetHeader,
   type RowDataPacket,
@@ -8,13 +9,17 @@ import { useBrowserSession } from "./browser-session";
 import { fixtureFlight, rpc } from "./hardening";
 
 export function registerCodeshareTests() {
-  test("codeshare search shows the applicable agreement's flight and operating carrier", async ({
+  test("codeshare checkout and concurrent sales respect the last configured seat", async ({
     page,
   }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
-    const flightId = await fixtureFlight();
+    await useBrowserSession(page, "reporting");
+    const client = rpc(page);
+    const customer = await client.auth.me.query();
+    if (!customer) throw new Error("Customer login required");
+    const flightId = await fixtureFlight(customer.tenantId);
     const db = await mysql.createConnection(disposableDatabaseUrl());
-    let operatingAirlineId: number | undefined;
+
     try {
       const [[flight]] = await db.execute<RowDataPacket[]>(
         "SELECT airlineId, originId, destinationId, flightNumber FROM flights WHERE id = ?",
@@ -26,14 +31,14 @@ export function registerCodeshareTests() {
         "INSERT INTO airlines (code, name) VALUES (?, ?)",
         [code, carrierName]
       );
-      operatingAirlineId = operator.insertId;
+      const operatingAirlineId = operator.insertId;
       await db.execute("UPDATE flights SET airlineId = ? WHERE id = ?", [
         operatingAirlineId,
         flightId,
       ]);
 
       await useBrowserSession(page, "admin");
-      const client = rpc(page);
+
       const market = { airlineId: Number(flight.airlineId) };
       const route = {
         originId: Number(flight.originId),
@@ -103,21 +108,119 @@ export function registerCodeshareTests() {
       });
       await expect(entry).toContainText(carrierName);
       await expect(entry.locator("time")).toBeVisible();
+
+      await useBrowserSession(page, "admin");
+      const marketingFlightNumber =
+        matched[0].marketingAirline.code + String(flightId);
+      const { allotmentId } = await client.codeshare.configureAllotment.mutate({
+        agreementId: valid.id,
+        flightId,
+        marketingFlightNumber,
+        cabinClass: "economy",
+        seatLimit: 2,
+      });
+      await useBrowserSession(page, "reporting");
+      await page.reload();
+      await page
+        .getByRole("combobox", { name: "Marketing Airline" })
+        .selectOption(String(market.airlineId));
+      await entry
+        .getByRole("link", { name: "Book " + marketingFlightNumber })
+        .click();
+      await expect(page).toHaveURL(
+        url =>
+          url.pathname === "/booking/" + flightId &&
+          url.searchParams.get("codeshareAllotmentId") === String(allotmentId)
+      );
+
+      await page.locator("#pax-firstname-0").fill("Codeshare");
+      await page.locator("#pax-lastname-0").fill("Shopper");
+      await page
+        .getByRole("button", {
+          name: "Complete Booking & Payment",
+          exact: true,
+        })
+        .click();
+      await expect(page).toHaveURL(/\/checkout\/\d+\?/);
+      const uiBookingId = Number(new URL(page.url()).pathname.split("/").pop());
+      const balance = async () =>
+        (await client.codeshare.getCodeshareFlights.query(market)).data.find(
+          row => row.flightId === flightId
+        )?.partnerSeatsAvailable;
+      expect(await balance()).toBe(1);
+
+      const commands = [randomUUID(), randomUUID()].map(key => ({
+        flightId,
+        cabinClass: "economy" as const,
+        codeshareAllotmentId: allotmentId,
+        sessionId: key,
+        idempotencyKey: key,
+        passengers: [
+          { type: "adult" as const, firstName: "Market", lastName: "Traveler" },
+        ],
+      }));
+      const results = await Promise.allSettled(
+        commands.map(command => client.bookings.create.mutate(command))
+      );
+      const index = results.findIndex(result => result.status === "fulfilled");
+      const winner = results[index];
+      if (!winner || winner.status !== "fulfilled")
+        throw new Error("Neither codeshare booking succeeded");
+      expect(results[1 - index]).toMatchObject({
+        status: "rejected",
+        reason: { message: "Insufficient codeshare allotment" },
+      });
+      const booking = winner.value;
+      expect(await client.bookings.create.mutate(commands[index])).toEqual(
+        booking
+      );
+      expect(
+        (await client.bookings.myBookings.query()).find(
+          row => row.id === booking.bookingId
+        )
+      ).toMatchObject({ marketingFlightNumber });
+      expect(await balance()).toBe(0);
+
+      await db.execute(
+        "INSERT INTO user_credits (userId, amount, source) VALUES (?, ?, 'promo')",
+        [customer.id, booking.totalAmount]
+      );
+      await client.vouchers.useCredits.mutate({
+        bookingId: booking.bookingId,
+        amount: booking.totalAmount,
+      });
+      expect(
+        (await client.bookings.myBookings.query()).find(
+          row => row.id === booking.bookingId
+        )
+      ).toMatchObject({
+        status: "confirmed",
+        paymentStatus: "paid",
+        canExchange: false,
+        marketingFlightNumber,
+      });
+      await expect(
+        client.ndc.quotePaidService.mutate({
+          bookingId: booking.bookingId,
+          replaceFlightId: flightId,
+          offerIds: [randomUUID()],
+          idempotencyKey: randomUUID(),
+        })
+      ).rejects.toThrow(/Issuing channel/);
+      expect(await balance()).toBe(0);
+      const [[sale]] = await db.execute<RowDataPacket[]>(
+        "SELECT count(*) AS invoices, sum(seatsReserved) AS funded FROM bookings WHERE codeshareAllotmentId = ?",
+        [allotmentId]
+      );
+      expect(Number(sale.invoices)).toBe(2);
+      expect(Number(sale.funded)).toBe(1);
+      await db.execute(
+        "UPDATE inventory_locks h JOIN bookings b ON b.inventoryLockId = h.id SET h.expiresAt = UTC_TIMESTAMP() - INTERVAL 1 MINUTE WHERE b.id = ?",
+        [uiBookingId]
+      );
+      expect(await balance()).toBe(1);
     } finally {
-      try {
-        if (operatingAirlineId) {
-          await db.execute(
-            "DELETE FROM codeshare_agreements WHERE operatingAirlineId = ?",
-            [operatingAirlineId]
-          );
-          await db.execute("DELETE FROM flights WHERE id = ?", [flightId]);
-          await db.execute("DELETE FROM airlines WHERE id = ?", [
-            operatingAirlineId,
-          ]);
-        }
-      } finally {
-        await db.end();
-      }
+      await db.end();
     }
   });
 }

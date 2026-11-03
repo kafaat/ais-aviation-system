@@ -2,6 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
+  dcsBagReturnGrants,
+  users,
+  baggageItems,
+  baggageCustodyEvents,
+  baggageTracking,
   bookings,
   bookingSegments,
   dcsFlightOperations,
@@ -14,9 +19,10 @@ import {
 import {
   changeDcsFlightInput,
   dcsCheckInInput,
+  dcsReturnBagInput,
+  dcsBagReturnGrantInput,
   dcsTransitionInput,
   type DcsDesk,
-  type DcsPassengerResult,
 } from "../contracts/dcs-operations";
 import { getDb } from "../db";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -326,7 +332,12 @@ export async function getDcsDesk(
         )
         .orderBy(desc(dcsOperationEvents.id))
         .limit(HISTORY_LIMIT + 1);
+      const grant =
+        actor.tenantId != null
+          ? await stationGrant(tx, flight, actor.userId)
+          : null;
       return {
+        canReturnBags: Boolean(grant?.enabled),
         flight: {
           id: flight.id,
           flightNumber: flight.flightNumber,
@@ -459,6 +470,7 @@ export async function changeDcsFlightState(
 }
 
 async function passengerCommand<
+  Result,
   T extends {
     flightId: number;
     bookingId: number;
@@ -473,11 +485,13 @@ async function passengerCommand<
     tx: SettlementTx,
     c: DepartureContext,
     requestHash: string
-  ) => Promise<DcsPassengerResult>
+  ) => Promise<Result>,
+  authorize?: (tx: SettlementTx, c: DepartureContext) => Promise<void>
 ) {
   const db = await database();
   return db.transaction(async tx => {
     const c = await passengerContext(tx, input, actor);
+    if (authorize) await authorize(tx, c);
     const request = scopedRequest(actor, input);
     return withTransactionalIdempotency(
       {
@@ -490,6 +504,229 @@ async function passengerCommand<
       tx
     );
   });
+}
+
+async function stationGrant(
+  tx: SettlementTx,
+  flight: Flight,
+  staffId: number,
+  lock = false
+) {
+  if (!flight.tenantId) return null;
+  const query = tx
+    .select()
+    .from(dcsBagReturnGrants)
+    .where(
+      and(
+        eq(dcsBagReturnGrants.tenantId, flight.tenantId),
+        eq(dcsBagReturnGrants.airlineId, flight.airlineId),
+        eq(dcsBagReturnGrants.airportId, flight.originId),
+        eq(dcsBagReturnGrants.staffId, staffId)
+      )
+    );
+  const [grant] = await (lock ? query.for("update") : query);
+  return grant ?? null;
+}
+
+/** Derive the authorized tenant, operating carrier and origin from the witness flight. */
+export async function setBagReturnGrant(
+  raw: z.infer<typeof dcsBagReturnGrantInput>,
+  actor: DcsActor
+) {
+  const input = dcsBagReturnGrantInput.parse(raw);
+  if (!isAdmin(actor.role) && actor.role !== "airline_admin")
+    reject("Airline administration is required", "FORBIDDEN");
+  return database().transaction(async tx => {
+    const flight = await scopedFlight(tx, input.flightId, actor, true);
+    const tenantId = flight.tenantId;
+    if (
+      !tenantId ||
+      flight.airlineId !== input.airlineId ||
+      flight.originId !== input.airportId
+    )
+      reject("Station and carrier must match the scoped flight", "FORBIDDEN");
+    await assertTenantOperational(tx, tenantId);
+    const request = scopedRequest(actor, input);
+    return withTransactionalIdempotency(
+      {
+        scope: "dcs.set_bag_return_grant",
+        key: input.idempotencyKey,
+        userId: actor.userId,
+        request,
+        run: async tx => {
+          const [staff] = await tx
+            .select()
+            .from(users)
+            .where(eq(users.id, input.staffId))
+            .for("update");
+          const existing = await stationGrant(tx, flight, input.staffId, true);
+          if (
+            input.enabled &&
+            (!staff ||
+              staff.tenantId !== tenantId ||
+              !["ops", "airline_admin", "admin", "super_admin"].includes(
+                staff.role
+              ))
+          )
+            reject(
+              "The target must be operations staff in the same airline tenant",
+              "FORBIDDEN"
+            );
+          if (!input.enabled && !existing)
+            reject("No bag handover grant exists for this station");
+          const scope = {
+            tenantId,
+            airlineId: flight.airlineId,
+            airportId: flight.originId,
+            staffId: input.staffId,
+          };
+          if (existing)
+            await tx
+              .update(dcsBagReturnGrants)
+              .set({ enabled: input.enabled })
+              .where(eq(dcsBagReturnGrants.id, existing.id));
+          else
+            await tx
+              .insert(dcsBagReturnGrants)
+              .values({ ...scope, enabled: input.enabled });
+          const eventId = await appendEvent(tx, {
+            tenantId,
+            flightId: flight.id,
+            action: "bag_return_grant",
+            fromState: existing?.enabled ? "enabled" : "disabled",
+            toState: input.enabled ? "enabled" : "disabled",
+            actorId: actor.userId,
+            actorRole: actor.role,
+            reason: input.reason,
+            idempotencyKey: input.idempotencyKey,
+            requestHash: calculateRequestHash(request),
+            details: {
+              staffId: input.staffId,
+              airlineId: flight.airlineId,
+              stationId: flight.originId,
+            },
+          });
+          return { ...scope, enabled: input.enabled, eventId };
+        },
+      },
+      tx
+    );
+  });
+}
+
+/** The operator attests a physical handover at the origin desk. Device scans stay unchanged. */
+export async function returnDcsBag(
+  raw: z.infer<typeof dcsReturnBagInput>,
+  actor: DcsActor
+) {
+  const input = dcsReturnBagInput.parse(raw);
+  if (!actor.tenantId)
+    reject("A scoped airline operator is required", "FORBIDDEN");
+  return passengerCommand(
+    input,
+    actor,
+    "dcs.return_bag",
+    async (tx, c, requestHash) => {
+      assertDcsRecoveryAllowed(c);
+      const leg = c.legs.find(
+        leg => leg.id === input.segmentId && leg.flightId === input.flightId
+      );
+      if (!leg || leg.status !== "confirmed")
+        reject("Bag does not belong to this passenger sector");
+      const [bag] = await tx
+        .select()
+        .from(baggageItems)
+        .where(
+          and(
+            eq(baggageItems.tagNumber, input.tagNumber),
+            eq(baggageItems.passengerId, input.passengerId),
+            eq(baggageItems.bookingId, input.bookingId),
+            eq(baggageItems.flightId, input.flightId),
+            eq(baggageItems.segmentId, input.segmentId)
+          )
+        )
+        .for("update");
+      if (!bag) reject("Bag does not belong to this passenger sector");
+      if (bag.returnEventId != null)
+        reject("This bag was already returned", "CONFLICT");
+      const state = await readDcsPassengerState(tx, input);
+      const seat = await passengerSeat(tx, input);
+      if (
+        state?.state === "boarded" ||
+        seat?.status !== "checked_in" ||
+        !seat.checkInNonce
+      )
+        reject(
+          "The passenger must be checked in and deplaned before returning the bag"
+        );
+      const [latest] = await tx
+        .select()
+        .from(baggageCustodyEvents)
+        .where(eq(baggageCustodyEvents.baggageId, bag.id))
+        .orderBy(
+          desc(baggageCustodyEvents.observedAt),
+          desc(baggageCustodyEvents.id)
+        )
+        .limit(1);
+      if (
+        (latest &&
+          (latest.flightId !== input.flightId ||
+            latest.airportId !== c.flight.originId ||
+            !["acceptance", "transfer"].includes(latest.stage))) ||
+        !(
+          bag.status === "checked_in" ||
+          (bag.status === "loading" && latest?.stage === "transfer")
+        )
+      )
+        reject(
+          "Custody does not place this bag at the departure desk for return"
+        );
+      const eventId = await appendEvent(tx, {
+        tenantId: actor.tenantId,
+        flightId: input.flightId,
+        bookingId: input.bookingId,
+        passengerId: input.passengerId,
+        action: "return_bag",
+        fromState: bag.status,
+        toState: "claimed",
+        actorId: actor.userId,
+        actorRole: actor.role,
+        reason: input.reason,
+        idempotencyKey: input.idempotencyKey,
+        requestHash,
+        details: {
+          baggageId: bag.id,
+          tagNumber: bag.tagNumber,
+          segmentId: leg.id,
+          stationId: c.flight.originId,
+        },
+      });
+      const location = `Airport ${c.flight.originId} departure desk`;
+      await tx
+        .update(baggageItems)
+        .set({
+          returnEventId: eventId,
+          status: "claimed",
+          lastLocation: location,
+        })
+        .where(eq(baggageItems.id, bag.id));
+      await tx.insert(baggageTracking).values({
+        baggageId: bag.id,
+        status: "claimed",
+        location,
+        scannedBy: actor.userId,
+        notes: `Operator-attested return to passenger, DCS event ${eventId}`,
+      });
+      return { eventId, tagNumber: bag.tagNumber };
+    },
+    async (tx, c) => {
+      if (!(await stationGrant(tx, c.flight, actor.userId, true))?.enabled)
+        reject(
+          "Bag handover requires an active staff grant for the departure station and carrier",
+          "FORBIDDEN"
+        );
+    }
+  );
 }
 
 export async function checkInDcsPassenger(
@@ -540,7 +777,7 @@ export async function checkInDcsPassenger(
         flightId: input.flightId,
         bookingId: input.bookingId,
         passengerId: input.passengerId,
-        state: "checked_in",
+        state: "checked_in" as const,
         seatNumber: result.seat.seatNumber,
         changed: !wasCheckedIn,
       };

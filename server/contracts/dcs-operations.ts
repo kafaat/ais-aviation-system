@@ -33,6 +33,19 @@ export const dcsTransitionInput = command.extend({
   action: z.enum(["board", "deplane", "deny", "allow", "offload"]),
   boardingPassToken: z.string().min(1).max(8192).optional(),
 });
+export const dcsReturnBagInput = command.extend({
+  bookingId: id,
+  passengerId: id,
+  segmentId: id,
+  tagNumber: z
+    .string()
+    .trim()
+    .regex(/^\d{10}$/),
+});
+export const dcsReturnBagResult = z.object({
+  eventId: id,
+  tagNumber: z.string(),
+});
 export const dcsPassengerResult = z.object({
   eventId: id,
   flightId: id,
@@ -42,6 +55,15 @@ export const dcsPassengerResult = z.object({
   seatNumber: z.string().nullable(),
   changed: z.boolean(),
 });
+export const dcsBagReturnGrantInput = command.extend({
+  staffId: id,
+  airlineId: id,
+  airportId: id,
+  enabled: z.boolean(),
+});
+export const dcsBagReturnGrantResult = dcsBagReturnGrantInput
+  .pick({ staffId: true, airlineId: true, airportId: true, enabled: true })
+  .extend({ eventId: id });
 export const dcsFlightResult = z.object({
   eventId: id,
   flightId: id,
@@ -61,6 +83,7 @@ export const dcsDesk = z.object({
   }),
   checkInState: z.enum(["open", "closed"]),
   stateConfigured: z.boolean(),
+  canReturnBags: z.boolean(),
   checkInWindowOpen: z.boolean(),
   passengers: z.array(
     z.object({

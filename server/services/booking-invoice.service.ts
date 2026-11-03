@@ -39,7 +39,16 @@ export function storedJson<T>(value: string | null, fallback: T): T {
     throw invoiceBlocked("Stored invoice data requires reconciliation");
   }
 }
-export async function hasPartnerBooking(tx: SettlementTx, bookingId: number) {
+export async function issuerMustService(
+  tx: SettlementTx,
+  booking: Booking,
+  action: NdcAction
+) {
+  // A marketing seat is assigned to one flight and cabin. Other local
+  // invoice changes (for example adding a meal) do not move that seat.
+  if (action === "exchange" && booking.codeshareAllotmentId != null)
+    return true;
+  const bookingId = booking.id;
   // Agency sales and corporate approval records exist independently of NDC orders.
   const [agency] = await tx
     .select({ id: agentBookings.id })
@@ -81,7 +90,7 @@ export async function lockEditableInvoice(
     });
   await assertTenantOperational(tx, booking.tenantId);
   await assertInvoiceEditable(tx, booking);
-  if (action && (await hasPartnerBooking(tx, booking.id)))
+  if (action && (await issuerMustService(tx, booking, action)))
     throw invoiceBlocked("Issuing channel must service this booking");
   const orders = await tx
     .select()

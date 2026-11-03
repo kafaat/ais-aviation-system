@@ -28,6 +28,103 @@ import { toast } from "sonner";
 
 type Desk = inferRouterOutputs<AppRouter>["dcsOperations"]["getDesk"];
 type Passenger = Desk["passengers"][number];
+function ReturnBag({
+  flightId,
+  passenger,
+  segmentId,
+  disabled,
+}: {
+  flightId: number;
+  passenger: Passenger;
+  segmentId: number;
+  disabled: boolean;
+}) {
+  const l = useOperationalLabels();
+  const cache = useQueryClient();
+  const [tagNumber, setTag] = useState("");
+  const [reason, setReason] = useState("");
+  const key = useCommandIdempotencyKey();
+  const mutation = trpc.dcsOperations.returnBag.useMutation({
+    onSuccess: () => {
+      key.clear();
+      setTag("");
+      setReason("");
+      void cache.invalidateQueries({
+        queryKey: getQueryKey(trpc.dcsOperations.getDesk, { flightId }),
+      });
+      void cache.invalidateQueries({
+        queryKey: getQueryKey(trpc.baggage.registrationSummary, { flightId }),
+      });
+      void cache.invalidateQueries({
+        queryKey: getQueryKey(trpc.baggage.flightCloseout, { flightId }),
+      });
+    },
+  });
+  const locked = disabled || mutation.isPending;
+  const eligible =
+    !locked && /^\d{10}$/.test(tagNumber) && reason.trim().length >= 5;
+  return (
+    <form
+      className="space-y-3 rounded-lg border p-4"
+      onSubmit={event => {
+        event.preventDefault();
+        if (!eligible) return;
+        const payload = {
+          bookingId: passenger.bookingId,
+          passengerId: passenger.passengerId,
+          flightId,
+          segmentId,
+          tagNumber,
+          reason: reason.trim(),
+        };
+        mutation.mutate({
+          ...payload,
+          idempotencyKey: key.forPayload(payload),
+        });
+      }}
+    >
+      <h3 className="font-semibold">
+        {l("تسليم حقيبة للراكب", "Return bag to passenger")}
+      </h3>
+      <p>
+        {l(
+          "تحقق من هوية الراكب ورقم الوسم، ثم سجّل التسليم بعد أن يستلم الراكب الحقيبة في مكتب المغادرة.",
+          "Verify the passenger and physical tag. Record the handover after the passenger receives the bag at the departure desk."
+        )}
+      </p>
+      <label>
+        {l("رقم وسم الحقيبة المستردة", "Returned bag tag number")}
+        <Input
+          disabled={locked}
+          value={tagNumber}
+          maxLength={10}
+          inputMode="numeric"
+          onChange={e => setTag(e.target.value)}
+        />
+      </label>
+      <label>
+        {l("سبب تسليم الحقيبة", "Bag handover reason")}
+        <Input
+          disabled={locked}
+          value={reason}
+          maxLength={500}
+          onChange={e => setReason(e.target.value)}
+        />
+      </label>
+      <Button disabled={!eligible}>
+        {l("تأكيد تسليم الحقيبة للراكب", "Confirm bag handover")}
+      </Button>
+      {mutation.data && (
+        <p role="status">
+          {l("إيصال تسليم الحقيبة", "Bag handover receipt")}{" "}
+          {mutation.data.eventId} · {mutation.data.tagNumber}
+        </p>
+      )}
+      {mutation.error && <p role="alert">{mutation.error.message}</p>}
+    </form>
+  );
+}
+
 type PassengerAction =
   | "check_in"
   | "board"
@@ -71,6 +168,7 @@ function useFlightNavigationLock(flightId: number) {
   const commandKeys = [
     getMutationKey(trpc.dcsOperations.checkIn),
     getMutationKey(trpc.dcsOperations.transition),
+    getMutationKey(trpc.dcsOperations.returnBag),
     getMutationKey(trpc.dcsOperations.changeFlightState),
     getMutationKey(trpc.baggage.register),
   ];
@@ -464,6 +562,19 @@ function FlightDesk({
                 "Selected passenger operations"
               )}
             >
+              {data.canReturnBags &&
+                selected.segmentId != null &&
+                selected.checkedIn &&
+                selected.attendanceState !== "boarded" &&
+                flightAllowsPassengerAction(data, "offload") && (
+                  <ReturnBag
+                    key={`${flightId}:${selected.passengerId}`}
+                    flightId={flightId}
+                    passenger={selected}
+                    segmentId={selected.segmentId}
+                    disabled={!readReady}
+                  />
+                )}
               <PassengerControl
                 key={`${selected.passengerId}:${selected.attendanceState}:${selected.boardingDenied}`}
                 passenger={selected}

@@ -34,6 +34,7 @@ function legacyBag() {
 function exactSector(flightId: number) {
   return and(
     eq(baggageItems.flightId, flightId),
+    isNull(baggageItems.returnEventId),
     sql`EXISTS (SELECT 1 FROM booking_segments scoped_bag_leg
       WHERE scoped_bag_leg.id = ${baggageItems.segmentId}
         AND scoped_bag_leg.bookingId = ${baggageItems.bookingId}
@@ -89,6 +90,7 @@ export function closeoutBaggageFlightCondition(flightId: number) {
 export function unresolvedCounterBaggageFlightCondition(flightId: number) {
   return and(
     eq(baggageItems.flightId, flightId),
+    isNull(baggageItems.returnEventId),
     sql`NOT EXISTS (
       SELECT 1 FROM bookings receipt_booking
       INNER JOIN passengers receipt_passenger

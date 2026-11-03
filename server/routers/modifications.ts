@@ -27,6 +27,7 @@ export const modificationsRouter = router({
       z.object({
         bookingId: z.number(),
         newFlightId: z.number(),
+        intent: z.literal("revalidate").optional(),
         replaceFlightId: z.number().int().positive().optional(),
         reason: z.string().max(1000).optional(),
         idempotencyKey: z.string().min(8).max(100).optional(),
@@ -39,6 +40,7 @@ export const modificationsRouter = router({
         userId: ctx.user.id,
         tenantId: ctx.tenantId,
         newFlightId: input.newFlightId,
+        ...(input.intent ? { intent: input.intent } : {}),
         replaceFlightId: input.replaceFlightId,
         reason: input.reason,
         idempotencyKey: input.idempotencyKey,

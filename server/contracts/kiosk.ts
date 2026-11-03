@@ -1,6 +1,25 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const bagTagDocument = z.object({
+  printStatus: z.literal("document_ready"),
+  bagTags: z.array(
+    z.object({
+      tagNumber: z.string(),
+      passengerName: z.string(),
+      flightNumber: z.string(),
+      origin: z.string(),
+      destination: z.string(),
+      bookingReference: z.string(),
+      sequence: z.string(),
+      barcodeData: z.string(),
+      printedAt: z.null(),
+    })
+  ),
+  totalBags: outputNumber,
+  passengerName: z.string(),
+});
+
 export const responseContracts = {
   authenticate: z.object({
     capabilityToken: z.string(),
@@ -161,23 +180,9 @@ export const responseContracts = {
       printedAt: z.string(),
     }),
   }),
-  printBagTag: z.object({
-    printStatus: z.literal("document_ready"),
-    bagTags: z.array(
-      z.object({
-        tagNumber: z.string(),
-        passengerName: z.string(),
-        flightNumber: z.string(),
-        origin: z.string(),
-        destination: z.string(),
-        bookingReference: z.string(),
-        sequence: z.string(),
-        barcodeData: z.string(),
-        printedAt: z.null(),
-      })
-    ),
-    totalBags: outputNumber,
-    passengerName: z.string(),
+  printBagTag: bagTagDocument,
+  reprintRegisteredTag: bagTagDocument.extend({
+    documentVersion: z.string().regex(/^[a-f0-9]{64}$/),
   }),
   addAncillary: z.object({
     success: z.boolean(),

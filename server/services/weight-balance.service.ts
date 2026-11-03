@@ -1,3 +1,4 @@
+import { manifestBaggageFlightCondition } from "./baggage-sector-scope";
 /**
  * Weight & Balance Service
  *
@@ -375,7 +376,7 @@ export async function calculateBaggageWeight(flightId: number): Promise<{
     .innerJoin(bookings, eq(baggageItems.bookingId, bookings.id))
     .where(
       and(
-        eq(bookings.flightId, flightId),
+        manifestBaggageFlightCondition(flightId),
         sql`${bookings.status} IN ('confirmed', 'completed')`
       )
     );

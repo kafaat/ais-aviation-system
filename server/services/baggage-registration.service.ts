@@ -189,6 +189,7 @@ async function registeredBagScope(
   }> = [];
   let weight = 0;
   for (const bag of all) {
+    if (bag.returnEventId != null) continue;
     const legacy = bag.flightId == null && bag.segmentId == null;
     if (legacy) {
       // A legacy bag might belong to any historical leg. Do not allocate it to

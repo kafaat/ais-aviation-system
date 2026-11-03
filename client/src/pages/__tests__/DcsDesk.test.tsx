@@ -75,6 +75,9 @@ vi.mock("@/lib/trpc", async importOriginal => {
         }),
       },
       dcsOperations: {
+        returnBag: override(original.dcsOperations.returnBag, {
+          useMutation: () => ({ isPending: false }),
+        }),
         getDesk: override(original.dcsOperations.getDesk, {
           useQuery: api.desk,
         }),

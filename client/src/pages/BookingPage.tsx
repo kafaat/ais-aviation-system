@@ -110,6 +110,9 @@ function BookingForm({
   const cabinClass = (searchParams.get("class") || "economy") as
     | "economy"
     | "business";
+  const codeshareAllotmentId = searchParams.has("codeshareAllotmentId")
+    ? Number(searchParams.get("codeshareAllotmentId"))
+    : undefined;
   const fareClassCode =
     searchParams.get("fareClassCode")?.trim().toUpperCase() || undefined;
   const rebookParam = searchParams.get("rebook");
@@ -204,6 +207,7 @@ function BookingForm({
       flightId,
       cabinClass,
       fareClassCode,
+      codeshareAllotmentId,
       passengers,
       ancillaries: ancillaryCommandLines(selectedAncillaries),
       selectedSeats,
@@ -222,6 +226,7 @@ function BookingForm({
       sessionId: command.current.key,
       idempotencyKey: command.current.key,
       fareClassCode,
+      codeshareAllotmentId,
       priceLockId: command.current.priceLockId,
       offerId: command.current.priceLockId ? undefined : activeOffer?.offerId,
     };

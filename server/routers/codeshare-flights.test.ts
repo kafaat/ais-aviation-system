@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   airlines,
   codeshareAgreements,
+  codeshareAllotments,
   flights,
   type CodeshareAgreement,
 } from "../../drizzle/schema";
@@ -47,7 +48,19 @@ function agreement(id: number, overrides: Partial<CodeshareAgreement> = {}) {
   };
 }
 
-async function search(rows: ReturnType<typeof agreement>[]) {
+type Allocation = {
+  allotmentId: number;
+  agreementId: number;
+  flightId: number;
+  marketingFlightNumber: string;
+  cabinClass: "economy" | "business";
+  seatLimit: number;
+  occupied: number;
+};
+async function search(
+  rows: ReturnType<typeof agreement>[],
+  allocations: Allocation[] = []
+) {
   const flightQuery = {
     innerJoin: () => flightQuery,
     where: () => ({ orderBy: () => [flight] }),
@@ -56,6 +69,7 @@ async function search(rows: ReturnType<typeof agreement>[]) {
     select: () => ({
       from: (table: unknown) => {
         if (table === codeshareAgreements) return { where: () => rows };
+        if (table === codeshareAllotments) return { where: () => allocations };
         if (table === flights) return flightQuery;
         if (table === airlines)
           return { where: () => ({ limit: () => [marketing] }) };
@@ -86,6 +100,44 @@ describe("public codeshare flight selection", () => {
         ])
       ).toEqual([[5, "4"]]);
     }
+  });
+  it("quotes only the matching agreement, capped by cabin inventory and local commitments", async () => {
+    const allocated = {
+      allotmentId: 7,
+      agreementId: 1,
+      flightId: flight.flightId,
+      marketingFlightNumber: "XM71",
+      cabinClass: "business" as const,
+      seatLimit: 6,
+      occupied: 2,
+    };
+    const contract = agreement(1, { blockSize: 8 });
+    const [result] = await search(
+      [contract],
+      [
+        allocated,
+        { ...allocated, agreementId: 99, allotmentId: 8 },
+        {
+          ...allocated,
+          allotmentId: 9,
+          cabinClass: "economy",
+          seatLimit: 2,
+          occupied: 1,
+        },
+      ]
+    );
+    expect(result.partnerSeatsAvailable).toBe(3);
+    expect(
+      result.saleOptions.map(row => [row.allotmentId, row.seatsAvailable])
+    ).toEqual([
+      [7, 2],
+      [9, 1],
+    ]);
+    const [reduced] = await search(
+      [agreement(1, { blockSize: 5 })],
+      [allocated]
+    );
+    expect(reduced.partnerSeatsAvailable).toBe(0);
   });
   it.each([null, "{", "null", "{}", "[null]", "[]"])(
     "denies a restricted agreement whose route list is %s",

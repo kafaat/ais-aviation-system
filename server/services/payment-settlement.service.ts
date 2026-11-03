@@ -312,6 +312,28 @@ export async function settleVerifiedPayment(
       throw new Error("Booking changed after modification quote");
     const nextFlight = change.newFlightId || booking.flightId;
     const nextCabin = change.newCabinClass || booking.cabinClass;
+    if (
+      booking.codeshareAllotmentId != null &&
+      (nextFlight !== booking.flightId || nextCabin !== booking.cabinClass)
+    ) {
+      // A legacy collection cannot transfer a marketing seat. Preserve the
+      // actual money movement for reconciliation and leave inventory intact.
+      await recordReceipt(
+        tx,
+        payment,
+        kind,
+        change.id,
+        booking.userId,
+        booking.id
+      );
+      await requireCollectionReview(
+        tx,
+        payment,
+        booking,
+        "Issuing channel must service this codeshare booking"
+      );
+      return;
+    }
     // Lock both flight rows in deterministic order before moving capacity.
     for (const id of [...new Set([booking.flightId, nextFlight])].sort(
       (a, b) => a - b
