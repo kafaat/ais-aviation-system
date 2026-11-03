@@ -29,54 +29,46 @@ rollout runs `python3 scripts/deploy/verify_service_ownership.py` before its
 first cluster operation. It requires recorded assignments for every domain and
 a matching owner, on-call contact and evidence reference for every active service.
 
-## Station pilot for one bag-tag reprint
+## Station printer and scanner field check
 
-Use an isolated station, a synthetic booking and one registered ten-digit bag tag.
-Record the station/airport, AIS revision, test request ID and UTC time. Record the
-printer and scanner asset IDs and printer model, firmware, stock and resolution.
-Use a registered device heartbeat when evaluating the AIS hardware integration.
+Use an isolated station, synthetic baggage, and 4 × 2 inch test stock. Record the
+station and printer asset IDs, model, firmware read directly from the device,
+driver, reader asset ID and UTC time. If station maintenance requires a firmware
+change, use the station-approved package for that exact model. With the PrintSet 5
+USB procedure, re-read the device version after reboot and compare it with the
+approved version. Follow the model-specific post-upgrade calibration procedure.
 
-1. Read the installed firmware from the actual printer. If a change is required,
-   use the vendor image for that model. Preserve the station settings, re-read the
-   installed version after reboot and calibrate for the test stock. The PrintSet 5
-   walkthrough switches from PC42t to PD43c; its PD43c screenshot shows the same
-   source and target version. Consult the [PD43/PD43c manual, p. 120](https://prod-edam.honeywell.com/content/dam/honeywell-edam/sps/ppr/en-us/public/products/printers/industrial/pd43/documents/sps-ppr-pd43-and-pd43c-commercial-printer-user-manual-pdf.pdf)
-   for the model-specific reset and calibration steps.
-2. Verify the synthetic passenger is checked in on the selected sector and the
-   registered bag has eligible current custody at its origin. Obtain a kiosk
-   capability with `kiosk.authenticate`. Use it to request `kiosk.printBagTag`
-   for that passenger, flight, one tag number and `bagCount: 1`. Save **only the
-   successful print response** as `response.json` in the station's private test
-   directory. Keep the token, HTTP headers and passenger data out of evidence.
-3. From a checkout of this revision with dependencies installed, run the command
-   below with private paths. It accepts an ordinary or single-item batched tRPC
-   response, checks `document_ready`, a null print time and a matching tag/barcode,
-   and creates a new 4 × 2 inch test PDF containing just the tag ID and barcode.
-   Existing output files are protected from overwrite.
+1. From the AIS test environment, request one eligible registered bag through
+   `kiosk.printBagTag` for the checked-in passenger and flight sector. Record
+   the flight, bag and request reference. Save the successful, decoded result
+   (or its ordinary or single-item batched tRPC HTTP response) locally as UTF-8
+   `response.json`. Keep request tokens out of captures.
+2. In the checked-out project with dependencies installed, run
+   `node --import tsx scripts/acceptance/kiosk-printer.ts label response.json test.pdf`.
+   Print the resulting diagnostic label on the selected station queue at actual
+   size. Record its print job ID and observe the label exit that printer.
+3. Run `node --import tsx scripts/acceptance/kiosk-printer.ts scan response.json`.
+   Scan the paper with an independent reader configured for Interleaved 2 of 5
+   and an Enter terminator. The comparison uses all ten digits including leading
+   zeros. A different test label must give a mismatch and a nonzero exit code.
+4. Retain the AIS revision and request reference, printer/reader IDs, observed
+   print job, expected and scanned test values, UTC times and operator in the
+   station evidence record. Capture the raw reader output independently. Record
+   blocked for missing equipment or unsupported stock, and failed for unreadable
+   or mismatched output. Only a witnessed print and matching independent scan
+   completes this station-specific check.
 
-   ```sh
-   node --import tsx scripts/acceptance/bag-tag-test-label.ts response.json new-label.pdf
-   ```
+For integrated acceptance, correlate an authenticated device acknowledgement with
+the AIS request, printer and registered bag. Disconnect the printer or exhaust its
+stock during a second job. Verify that AIS records no confirmed print. Reconcile
+any queued output before retrying. Verify the same tag and no extra baggage or
+custody record. Keep integrated acceptance blocked while that adapter or its
+acknowledgement is unavailable.
 
-4. Print one copy at actual size on compatible test stock through the station
-   driver. Independently scan the paper. Compare the entire scanned string,
-   including leading zeros, with the tag number on the original baggage record.
-   Retain the job reference, paper scan value, expected value, timestamp and
-   outcome. A manual PDF print and scan can establish workstation/driver
-   compatibility. It does not send a printer acknowledgement back to AIS.
-5. To test the integrated station adapter, correlate an authenticated device
-   acknowledgement to the same AIS request, bag and printer. On a second test
-   request disconnect the printer or exhaust its stock while a job is pending.
-   Verify that AIS records no confirmed print and that a retry retains the
-   registered tag and creates no extra bag or custody event. Before reconnecting,
-   reconcile or cancel any queued job to avoid an unintended duplicate.
-   Record both observations and evidence references. When the adapter or its
-   acknowledgement is unavailable, leave integrated acceptance **BLOCKED**.
-
-Kiosk analytics reports check-in and bag-tag **sessions** of all statuses.
-`printConfirmationAvailable` is false. The legacy numeric print fields contain
-zero confirmed receipts; the physical output count is unknown. Preserve test
-evidence in the station's restricted store, separately from production traffic.
+The PDF is a diagnostic label. A matching value verifies the supplied text.
+Keep the paper and reader observations with it. This tool does not update custody,
+printer telemetry or airport acceptance status. Production bag-tag stock, layout,
+device acknowledgement and airport sign-off have their own acceptance criteria.
 
 ## Running the existing Stripe sandbox acceptance
 

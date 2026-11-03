@@ -533,6 +533,7 @@ export async function printBoardingPass(
     .from(flights)
     .where(eq(flights.id, flightId ?? b.flightId));
   return {
+    printStatus: "document_ready" as const,
     boardingPass: {
       passengerName: `${p.firstName} ${p.lastName}`,
       ticketNumber: p.ticketNumber,
@@ -558,7 +559,8 @@ export async function printBoardingPass(
       gate: data.gate,
       barcodeData: data.barcodeData,
       bcbp: data.bcbp,
-      printedAt: data.issuedAt.toISOString(),
+      issuedAt: data.issuedAt.toISOString(),
+      printedAt: null,
     },
   };
 }

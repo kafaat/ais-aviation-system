@@ -1,8 +1,14 @@
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { TrpcContext } from "../_core/context";
 import { transactionMemory } from "../__tests__/helpers/transaction-memory";
 import { issueSelfServiceCapability } from "../services/self-service-capability.service";
+import * as seatMap from "../services/seat-map.service";
 import { kioskRouter } from "./kiosk";
+import { readStationTag } from "../../scripts/acceptance/kiosk-printer";
 
 const state = vi.hoisted(() => ({ db: null as any }));
 vi.mock("../db", () => ({ getDb: () => state.db }));
@@ -137,6 +143,39 @@ it("returns the same existing plate and return routing without a hardware acknow
   expect(fixture.rows("kiosk_sessions")).toEqual([]);
 });
 
+it(
+  "renders one diagnostic label from the returned tag and compares the exact scanner digits",
+  { timeout: 20000 },
+  async () => {
+    const document = await caller.printBagTag(input);
+    const directory = mkdtempSync(join(tmpdir(), "ais-kiosk-printer-"));
+    const response = join(directory, "response.json");
+    const pdf = join(directory, "test.pdf");
+    function run(args: string[], stdin = "") {
+      return spawnSync(
+        process.execPath,
+        ["--import", "tsx", "scripts/acceptance/kiosk-printer.ts", ...args],
+        { input: stdin, encoding: "utf8", timeout: 10000 }
+      );
+    }
+    try {
+      writeFileSync(
+        response,
+        JSON.stringify({ result: { data: { json: document } } })
+      );
+      const label = run(["label", response, pdf]);
+      expect(label.status, label.stderr).toBe(0);
+      expect(readFileSync(pdf).subarray(0, 5).toString()).toBe("%PDF-");
+      expect(run(["scan", response], tag + "\r\n").status).toBe(0);
+      const mismatch = run(["scan", response], tag.slice(1) + "\n");
+      expect(mismatch.status).toBe(1);
+      expect(mismatch.stderr).toContain("MISMATCH");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }
+);
+
 it("requires precise physical identities and passenger/sector check-in", async () => {
   for (const patch of [
     { tagNumbers: undefined },
@@ -190,35 +229,89 @@ it("refuses unpaid or cancelled bookings even with current custody and a checked
   });
 });
 
-it("renders one station test PDF from the kiosk response without confirming a print", async () => {
-  const { renderBagTagTestLabel } =
-    await import("../../scripts/acceptance/bag-tag-test-label");
+it("returns the boarding document issue time without acknowledging printer output", async () => {
+  const issuedAt = new Date("2026-01-02T03:04:05Z");
+  fixture.rows("bookings")[0].pnr = "TRAVEL";
+  fixture.rows("passengers")[0].ticketNumber = null;
+  fixture.rows("flights")[1].aircraftType = null;
+  const generator = vi
+    .spyOn(seatMap, "generateBoardingPass")
+    .mockResolvedValue({
+      flightNumber: "XX102",
+      airline: { name: "Test Airline", code: "XX" },
+      origin: { code: "BBB", city: "Origin", name: "Origin Airport" },
+      destination: {
+        code: "AAA",
+        city: "Destination",
+        name: "Destination Airport",
+      },
+      departureTime: issuedAt,
+      arrivalTime: issuedAt,
+      passenger: {
+        firstName: "P2",
+        lastName: "Journey",
+        ticketNumber: null,
+        title: null,
+      },
+      seat: {
+        seatNumber: "1A",
+        cabinClass: "economy",
+        boardingGroup: null,
+        boardingSequence: 1,
+      },
+      gate: null,
+      boardingTime: null,
+      barcodeData: "synthetic-qr",
+      bcbp: "synthetic-bcbp",
+      issuedAt,
+    });
+  try {
+    const document = await caller.printBoardingPass({
+      capabilityToken: input.capabilityToken,
+      flightId: 5,
+      passengerId: 2,
+    });
+    expect(document).toMatchObject({
+      printStatus: "document_ready",
+      boardingPass: {
+        issuedAt: issuedAt.toISOString(),
+        printedAt: null,
+        barcodeData: "synthetic-qr",
+        bcbp: "synthetic-bcbp",
+      },
+    });
+    expect(fixture.rows("kiosk_sessions")).toHaveLength(0);
+  } finally {
+    generator.mockRestore();
+  }
+});
+
+it("accepts a single registered document and rejects ambiguous captures", async () => {
   const document = await caller.printBagTag(input);
   const envelope = { result: { data: { json: document } } };
-  for (const body of [envelope, [envelope]]) {
-    const pdf = await renderBagTagTestLabel(body);
-    expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
-  }
+  for (const body of [document, envelope, [envelope]])
+    expect(readStationTag(body)).toBe(tag);
   for (const body of [
+    [],
     [envelope, envelope],
     { error: { message: "Not authorized" } },
-    ...[
-      { totalBags: 2 },
-      { printStatus: "printed" },
-      {
-        bagTags: [
-          { ...document.bagTags[0], printedAt: new Date().toISOString() },
-        ],
-      },
-      { bagTags: [{ ...document.bagTags[0], barcodeData: "0065999999" }] },
-      {
-        bagTags: [
-          { ...document.bagTags[0], tagNumber: "12", barcodeData: "12" },
-        ],
-      },
-    ].map(patch => ({ result: { data: { json: { ...document, ...patch } } } })),
-  ]) {
-    await expect(renderBagTagTestLabel(body)).rejects.toThrow();
-  }
+    { ...document, totalBags: 2 },
+    { ...document, printStatus: "printed" },
+    {
+      ...document,
+      bagTags: [
+        { ...document.bagTags[0], printedAt: new Date().toISOString() },
+      ],
+    },
+    {
+      ...document,
+      bagTags: [{ ...document.bagTags[0], barcodeData: "0065999999" }],
+    },
+    {
+      ...document,
+      bagTags: [{ ...document.bagTags[0], tagNumber: "12", barcodeData: "12" }],
+    },
+  ])
+    expect(() => readStationTag(body)).toThrow();
   expect(fixture.rows("kiosk_sessions")).toEqual([]);
 });
