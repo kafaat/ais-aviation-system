@@ -1,4 +1,6 @@
 import { useState } from "react";
+import type { inferRouterInputs } from "@trpc/server";
+import type { AppRouter } from "../../../server/routers";
 import { trpc } from "@/lib/trpc";
 import { useCommandIdempotencyKey } from "@/hooks/useCommandIdempotencyKey";
 import {
@@ -8,6 +10,8 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
+
+type BagCommand = inferRouterInputs<AppRouter>["baggage"]["register"];
 
 export function DcsBaggageRegistration({
   flightId,
@@ -31,10 +35,12 @@ export function DcsBaggageRegistration({
   const [description, setDescription] = useState("");
   const [specialHandling, setSpecialHandling] = useState("");
   const [lastTag, setLastTag] = useState<string | null>(null);
+  const [pendingReceipt, setPendingReceipt] = useState<BagCommand | null>(null);
   const key = useCommandIdempotencyKey();
   const mutation = trpc.baggage.register.useMutation({
     onSuccess: result => {
       key.clear();
+      setPendingReceipt(null);
       setLastTag(result.baggage.tagNumber);
       setWeight("");
       setDescription("");
@@ -42,7 +48,28 @@ export function DcsBaggageRegistration({
       toast.success(l("سُجلت الحقيبة", "Bag registered"));
       void query.refetch();
     },
-    onError: error => toast.error(error.message),
+    onError: (error, command) => {
+      const code = error.data?.code;
+      // A business rejection from the transaction means it did not commit.
+      // An unavailable response, or loss of authorization during recovery,
+      // does not establish what happened to the original command.
+      if (
+        code === "PRECONDITION_FAILED" ||
+        (!pendingReceipt &&
+          (code === "BAD_REQUEST" ||
+            code === "FORBIDDEN" ||
+            code === "UNAUTHORIZED" ||
+            code === "NOT_FOUND" ||
+            code === "TOO_MANY_REQUESTS"))
+      ) {
+        setPendingReceipt(null);
+        key.clear();
+      } else {
+        setPendingReceipt(command);
+      }
+      void query.refetch();
+      toast.error(error.message);
+    },
   });
   const summary = query.data;
   const weightKg = Number(weight);
@@ -56,9 +83,10 @@ export function DcsBaggageRegistration({
   const overAllowance =
     summary?.remainingWeightGrams != null &&
     weightGrams > summary.remainingWeightGrams;
+  const commandLocked = !!pendingReceipt || mutation.isPending;
   const unavailable =
+    commandLocked ||
     disabled ||
-    mutation.isPending ||
     query.isFetching ||
     !!query.error ||
     !summary ||
@@ -138,6 +166,7 @@ export function DcsBaggageRegistration({
             description: description.trim() || undefined,
             specialHandling: specialHandling.trim() || undefined,
           };
+          setLastTag(null);
           mutation.mutate({
             ...payload,
             idempotencyKey: key.forPayload(payload),
@@ -147,6 +176,7 @@ export function DcsBaggageRegistration({
         <label className="block space-y-1">
           <span>{l("وزن الحقيبة بالكيلوجرام", "Bag weight in kilograms")}</span>
           <Input
+            disabled={commandLocked}
             type="number"
             inputMode="decimal"
             required
@@ -162,6 +192,7 @@ export function DcsBaggageRegistration({
             {l("وصف الحقيبة (اختياري)", "Bag description (optional)")}
           </span>
           <Input
+            disabled={commandLocked}
             value={description}
             maxLength={500}
             onChange={e => setDescription(e.target.value)}
@@ -175,12 +206,13 @@ export function DcsBaggageRegistration({
             )}
           </span>
           <Input
+            disabled={commandLocked}
             value={specialHandling}
             maxLength={255}
             onChange={e => setSpecialHandling(e.target.value)}
           />
         </label>
-        {overAllowance && (
+        {!pendingReceipt && overAllowance && (
           <p role="alert">
             {l(
               "الوزن يتجاوز المتبقي لهذا الراكب على هذا القطاع",
@@ -199,6 +231,23 @@ export function DcsBaggageRegistration({
         <Button type="submit" disabled={unavailable}>
           {l("تسجيل الحقيبة المستلمة", "Register received bag")}
         </Button>
+        {pendingReceipt && (
+          <div className="space-y-2">
+            <p>
+              {l(
+                "لم يتأكد استلام إيصال هذه الحقيبة. أعد إرسال الطلب نفسه لاسترجاع رقمها.",
+                "The bag receipt is unconfirmed. Retry the same registration to recover its tag."
+              )}
+            </p>
+            <Button
+              type="button"
+              disabled={mutation.isPending}
+              onClick={() => mutation.mutate(pendingReceipt)}
+            >
+              {l("استرجاع إيصال الحقيبة", "Recover bag receipt")}
+            </Button>
+          </div>
+        )}
         {mutation.error && <p role="alert">{mutation.error.message}</p>}
         {lastTag && (
           <p role="status">

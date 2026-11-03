@@ -134,11 +134,11 @@ export function registerDcsCounterTests() {
           ).length
       )
       .toBe(1);
-    await expect(baggage.getByRole("alert")).toBeVisible();
+    await expect(
+      baggage.getByRole("definition").filter({ hasText: /^10 kg$/ })
+    ).toBeVisible();
     await page.unroute(registerEndpoint);
-    await baggage
-      .getByRole("button", { name: "Register received bag" })
-      .click();
+    await baggage.getByRole("button", { name: "Recover bag receipt" }).click();
     await expect(baggage.getByRole("status")).toContainText(
       "Registered bag tag"
     );
