@@ -64,7 +64,6 @@ export function renderBcbpPdf417(bcbp: string): Promise<Buffer> {
     bcid: "pdf417",
     text: bcbp,
     scale: 3,
-    height: 4,
     columns: 12,
     eclevel: 5,
     paddingwidth: 2,

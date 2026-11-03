@@ -5,9 +5,10 @@ export function renderBoardingPassPDF417(text: string): string {
     bcid: "pdf417",
     text,
     scale: 2,
-    height: 4,
     columns: 12,
     eclevel: 5,
+    paddingwidth: 2,
+    paddingheight: 2,
   };
   return pdf417(options, drawingSVG());
 }
