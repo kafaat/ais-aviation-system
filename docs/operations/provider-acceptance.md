@@ -29,6 +29,10 @@ rollout runs `python3 scripts/deploy/verify_service_ownership.py` before its
 first cluster operation. It requires recorded assignments for every domain and
 a matching owner, on-call contact and evidence reference for every active service.
 
+The [Honeywell station procedure](honeywell-station.md) covers Windows RAW routing,
+independent paper scans and disconnected-device reconciliation for boarding
+passes and baggage tags.
+
 ## Running the existing Stripe sandbox acceptance
 
 Use the **Stripe Sandbox Acceptance** workflow on `main` after PR #148. It is
