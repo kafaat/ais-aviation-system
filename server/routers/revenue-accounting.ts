@@ -5,7 +5,10 @@ import {
 } from "../services/coupon-month-review";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
-import { draftStoredBookingInvoice } from "../services/fare-components.service";
+import {
+  draftStoredBookingInvoice,
+  zatcaDraftAvailability,
+} from "../services/fare-components.service";
 import { responseContracts } from "../contracts/revenue-accounting";
 import { z } from "zod";
 import { adminProcedure, airlineFinanceProcedure, router } from "../_core/trpc";
@@ -24,6 +27,18 @@ export const revenueAccountingRouter = router({
       if (ctx.tenantId == null) throw new TRPCError({ code: "FORBIDDEN" });
       return reviewCouponMonth(input, ctx.tenantId);
     }),
+  zatcaDraftAvailability: airlineFinanceProcedure
+    .output(
+      z.enum([
+        "available",
+        "tenant_required",
+        "disabled",
+        "acceptance_required",
+      ])
+    )
+    .query(({ ctx }) =>
+      ctx.tenantId == null ? "tenant_required" : zatcaDraftAvailability()
+    ),
   prepareZatcaDraft: airlineFinanceProcedure
     .input(
       z.object({

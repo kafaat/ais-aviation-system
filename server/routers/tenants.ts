@@ -19,8 +19,8 @@ export const tenantsRouter = router({
   create: adminProcedure
     .input(
       z.object({
-        slug: z.string().regex(/^[a-z0-9-]{2,100}$/),
-        name: z.string().min(1).max(255),
+        slug: z.string().regex(/^[a-z0-9-]{2,64}$/),
+        name: z.string().trim().min(1).max(255),
         airlineCode: z.string().max(3).optional(),
         contactEmail: z.string().email().optional(),
       })

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -30,8 +30,11 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 
+const TenantManagement = lazy(() => import("@/components/TenantManagement"));
+
 export default function AdminDashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const [showTenants, setShowTenants] = useState(false);
   const { user, isAuthenticated } = useAuth();
   const [showAddFlight, setShowAddFlight] = useState(false);
 
@@ -164,6 +167,21 @@ export default function AdminDashboard() {
       </header>
 
       <div className="container py-8">
+        <Button
+          variant="outline"
+          className="mb-4"
+          aria-expanded={showTenants}
+          onClick={() => setShowTenants(open => !open)}
+        >
+          {i18n.language.startsWith("ar")
+            ? "إدارة شركات الطيران المستأجرة"
+            : "Manage airline tenants"}
+        </Button>
+        {showTenants && (
+          <Suspense fallback={<p role="status">{t("common.loading")}</p>}>
+            <TenantManagement />
+          </Suspense>
+        )}
         {/* Add Flight Form */}
         {showAddFlight && (
           <Card className="p-6 mb-8" data-testid="add-flight-form">

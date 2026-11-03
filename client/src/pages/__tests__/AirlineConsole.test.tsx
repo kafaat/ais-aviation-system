@@ -105,3 +105,40 @@ it("lets ops inspect the selected company flight without submitting a transition
   expect(screen.queryByText("SYNTHETIC-TAG")).not.toBeInTheDocument();
   expect(api.coupons).not.toHaveBeenCalled();
 });
+
+it("reaches a later flight, clears stale commands and can return to the first page", () => {
+  api.role = "ops";
+  const departureTime = new Date("2030-01-01T00:00:00Z");
+  const rows = Array.from({ length: 51 }, (_, n) => ({
+    id: n + 1,
+    flightNumber: "ZZ" + (n + 1),
+    status: "scheduled",
+    departureTime,
+  }));
+  api.flights.mockImplementation(({ after }) => ({
+    data: after ? rows.slice(50) : rows,
+  }));
+  render(<AirlineConsole />);
+  const selector = screen.getByLabelText("Flight", { selector: "select" });
+  fireEvent.change(selector, { target: { value: "1" } });
+  fireEvent.change(screen.getByLabelText("Transition reason"), {
+    target: { value: "Previous flight" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Next flights" }));
+  expect(api.flights).toHaveBeenLastCalledWith({
+    after: { id: 50, departureTime },
+    limit: 51,
+  });
+  expect(selector).toHaveValue("");
+  expect(screen.getByLabelText("Transition reason")).toHaveValue("");
+  expect(
+    screen.getByRole("button", { name: "Apply transition" })
+  ).toBeDisabled();
+  expect(screen.getByRole("option", { name: "ZZ51 (51)" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Next flights" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Previous flights" }));
+  expect(api.flights).toHaveBeenLastCalledWith({ after: undefined, limit: 51 });
+  expect(
+    screen.queryByRole("option", { name: "ZZ51 (51)" })
+  ).not.toBeInTheDocument();
+});

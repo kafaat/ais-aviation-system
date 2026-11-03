@@ -139,3 +139,30 @@ it("opens assistance for the chosen booking and keeps disruption outages distinc
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   expect(state.retry).toHaveBeenCalledOnce();
 });
+
+it("shows the recorded booking date without assigning it to a later cancellation", () => {
+  const createdAt = new Date("2001-06-01T00:00:00Z");
+  state.data = [
+    {
+      id: 92,
+      bookingReference: "CANCEL92",
+      status: "cancelled",
+      paymentStatus: "refunded",
+      passengers: [],
+      createdAt,
+      totalAmount: 10000,
+      numberOfPassengers: 1,
+      flight: {
+        flightNumber: "QA92",
+        departureTime: new Date("2001-07-01T08:00:00Z"),
+        originTimezone: "Asia/Aden",
+      },
+    },
+  ];
+  render(<MyBookings />);
+  fireEvent.click(
+    screen.getByRole("button", { name: "bookingTimeline.title" })
+  );
+  expect(screen.getByText("bookingTimeline.bookingCancelled")).toBeVisible();
+  expect(screen.getAllByText(/ago$/)).toHaveLength(1);
+});

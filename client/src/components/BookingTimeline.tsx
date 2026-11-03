@@ -56,6 +56,7 @@ export interface BookingTimelineProps {
   paymentStatus: PaymentStatus;
   createdAt: Date | string;
   paidAt?: Date | string | null;
+  checkedIn?: boolean;
   checkedInAt?: Date | string | null;
   boardedAt?: Date | string | null;
   completedAt?: Date | string | null;
@@ -80,6 +81,7 @@ export function BookingTimeline({
   paymentStatus,
   createdAt,
   paidAt,
+  checkedIn,
   checkedInAt,
   boardedAt,
   completedAt,
@@ -123,11 +125,12 @@ export function BookingTimeline({
         icon: UserCheck,
         labelKey: "bookingTimeline.checkedIn",
         timestamp: checkedInAt ? new Date(checkedInAt) : null,
-        status: checkedInAt
-          ? "completed"
-          : paymentStatus !== "paid"
-            ? "upcoming"
-            : "current",
+        status:
+          checkedIn || checkedInAt
+            ? "completed"
+            : paymentStatus !== "paid"
+              ? "upcoming"
+              : "current",
       },
       {
         id: "boarded",
@@ -156,7 +159,7 @@ export function BookingTimeline({
         id: "cancelled",
         icon: XCircle,
         labelKey: "bookingTimeline.cancelled",
-        timestamp: cancelledAt ? new Date(cancelledAt) : new Date(),
+        timestamp: cancelledAt ? new Date(cancelledAt) : null,
         status: "cancelled",
       };
 
@@ -178,6 +181,7 @@ export function BookingTimeline({
     paymentStatus,
     createdAt,
     paidAt,
+    checkedIn,
     checkedInAt,
     boardedAt,
     completedAt,

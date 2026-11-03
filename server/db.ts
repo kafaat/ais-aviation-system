@@ -737,7 +737,7 @@ export async function getBookingsByUserId(
   tenantId?: number | null
 ) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) throw new Error("Database unavailable for booking history");
 
   const bookingWhere =
     tenantId == null

@@ -13,6 +13,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
 
 registerProviderCheckoutTests();
 
@@ -552,29 +553,55 @@ test.describe("Funded journeys and truthful operational reads", () => {
       )
     ).toHaveLength(0);
   });
-  test("privacy request reaches an authenticated download and a different account receives 404", async ({
+  test("a profile export reaches an authenticated browser download and a different account receives 404", async ({
     page,
   }) => {
-    await ownedBooking(page);
-    const exported = await rpc(page).gdpr.exportData.mutate({ format: "json" });
+    const { booking } = await ownedBooking(page);
+    await page.goto("/profile");
+    await page.getByRole("tab", { name: "Security and privacy" }).click();
+    await page.getByLabel("File format").selectOption("json");
+    await page.getByRole("button", { name: "Request export" }).click();
+
+    // Track the request the passenger can see, not a pre-existing export.
+    const pending = page
+      .getByRole("listitem")
+      .filter({ hasText: /#\d+ · JSON · .*pending/i });
+    await expect(pending).toHaveCount(1);
+    const requestId = (await pending.innerText()).match(/#(\d+)/)?.[1];
+    expect(requestId).toBeTruthy();
+    await expect(pending.getByRole("link", { name: "Download" })).toHaveCount(
+      0
+    );
+
     await promisify(execFile)(
       process.execPath,
       ["--import", "tsx", "scripts/e2e/process-privacy.ts"],
       { timeout: 30000 }
     );
-    const status = await rpc(page).gdpr.getExportStatus.query({
-      requestId: exported.requestId,
-    });
-    expect(status.status).toBe("completed");
-    expect(status.downloadUrl).toBeTruthy();
-    if (!status.downloadUrl) throw new Error("Download URL missing");
-    const response = await page.request.get(status.downloadUrl);
-    expect(response.status()).toBe(200);
-    const document = await response.json();
+    await page.getByRole("button", { name: "Refresh exports" }).click();
+    const row = page
+      .getByRole("listitem")
+      .filter({
+        hasText: new RegExp("#" + requestId + " · JSON · .*completed", "i"),
+      });
+    const link = row.getByRole("link", { name: "Download" });
+    const downloadUrl = "/api/gdpr/download/" + requestId;
+    await expect(link).toHaveAttribute("href", downloadUrl);
+    const downloaded = page.waitForEvent("download");
+    await link.click();
+    const file = await downloaded;
+    expect(file.suggestedFilename()).toBe("privacy-" + requestId + ".json");
+    const filePath = await file.path();
+    if (!filePath) throw new Error("Export download missing");
+    const document = JSON.parse(await readFile(filePath, "utf8"));
     expect(document.profile.email).toBe("test.user@example.com");
-    expect(document.bookings.length).toBeGreaterThan(0);
+    expect(document.bookings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ bookingReference: booking.bookingReference }),
+      ])
+    );
     await loginAsAdmin(page);
-    expect((await page.request.get(status.downloadUrl)).status()).toBe(404);
+    expect((await page.request.get(downloadUrl)).status()).toBe(404);
   });
   test("demonstrates operational booking values alongside unverified earned revenue", async ({
     page,

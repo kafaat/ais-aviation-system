@@ -720,24 +720,7 @@ export default function MyBookings() {
                                   | "failed"
                               }
                               createdAt={booking.createdAt}
-                              paidAt={
-                                booking.paymentStatus === "paid"
-                                  ? booking.createdAt
-                                  : null
-                              }
-                              checkedInAt={
-                                booking.checkedIn ? booking.createdAt : null
-                              }
-                              completedAt={
-                                booking.status === "completed"
-                                  ? booking.createdAt
-                                  : null
-                              }
-                              cancelledAt={
-                                booking.status === "cancelled"
-                                  ? booking.createdAt
-                                  : null
-                              }
+                              checkedIn={booking.checkedIn}
                               showRelativeTime
                             />
                           </CollapsibleContent>
