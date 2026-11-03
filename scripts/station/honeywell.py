@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from win_spool import open_queue, send_raw
 
 
-SHARES = {"boarding-pass": r"\\localhost\HWBP", "bag-tag": r"\\localhost\HWBT"}
+SHARES = {"boarding-pass": "HWBP", "bag-tag": "HWBT"}
 
 
 def field(value, pattern):

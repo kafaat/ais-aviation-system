@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import honeywell as station
-from win_spool import DocInfo, send_raw
+from win_spool import DocInfo, resolve_queue, send_raw
 
 
 FIXTURES = Path(__file__).resolve().parents[2] / "server/__tests__/fixtures/bcbp-samples.json"
@@ -148,7 +148,7 @@ class Journal(unittest.TestCase):
         self.opener.side_effect = OSError("missing share")
         with self.assertRaises(OSError):
             self.submit()
-        self.opener.assert_called_once_with(r"\\localhost\HWBT")
+        self.opener.assert_called_once_with("HWBT")
         self.send.assert_not_called()
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM jobs").fetchone(), (0,))
 
@@ -168,6 +168,15 @@ class Journal(unittest.TestCase):
 
 
 class Transport(unittest.TestCase):
+    def test_local_share_names_resolve_to_distinct_actual_queues(self):
+        bp = ("hwbp", "Honeywell A", "USB001")
+        bag = ("hwbt", "Honeywell B", "USB002")
+        self.assertEqual(resolve_queue([bp, bag], "HWBT"), "Honeywell B")
+        for bad in ([bp], [bp, bag, bag], [bp, ("HWBT", "B", "usb001")],
+                    [bp, ("HWBT", "B", "USB002,USB003")]):
+            with self.assertRaises(ValueError):
+                resolve_queue(bad, "HWBP")
+
     def test_raw_spool_sequence_and_short_write(self):
         for short in (False, True):
             spooler = MagicMock()
@@ -201,7 +210,7 @@ class Transport(unittest.TestCase):
                 raw, symbol = station.render(kind, doc, auth, TAG if kind == "bag-tag" else None)
                 receipt = station.submit(db, kind, kind, raw, symbol)
                 self.assertIsNone(station.status(db, receipt)["operatorScanMatchedUtc"])
-                captured = port_dir / (station.SHARES[kind].split("\\")[-1] + ".prn")
+                captured = port_dir / (station.SHARES[kind] + ".prn")
                 until = time.monotonic() + 30
                 while time.monotonic() < until:
                     try:
