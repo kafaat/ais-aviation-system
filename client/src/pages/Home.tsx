@@ -223,7 +223,7 @@ export default function Home() {
       >
         <div className="container py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
+            <Link href="/" className="flex min-w-0 items-center gap-3">
               <h1 className="text-xl font-bold text-primary">
                 <BrandIdentity />
               </h1>
@@ -303,6 +303,23 @@ export default function Home() {
               )}
             </div>
           </div>
+          <nav
+            aria-label={t("accessibility.mainNavigation")}
+            className="mt-2 grid grid-cols-2 gap-2 md:hidden"
+          >
+            <Link
+              href="/manage-booking"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border px-2 text-center text-sm font-medium hover:bg-muted"
+            >
+              {t("ibe.manageBooking")}
+            </Link>
+            <Link
+              href="/agent"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border px-2 text-center text-sm font-medium hover:bg-muted"
+            >
+              {t("ibe.agentPortal")}
+            </Link>
+          </nav>
         </div>
       </motion.header>
 

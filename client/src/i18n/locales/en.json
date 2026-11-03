@@ -4774,7 +4774,7 @@
     "displayCurrency": "Display currency",
     "passengerLimit": "Choose at least one adult and at most nine passengers.",
     "currencyHelp": "Prices and payment are in SAR. Other currencies are estimates when a current exchange rate is available.",
-    "rateUnavailable": "Current {{currency}} estimate unavailable",
+    "rateUnavailable": "No current {{currency}} estimate. Your invoice and payment are in SAR.",
     "estimate": "Approximately {{amount}} · payment in SAR",
     "roundTrip": "Return",
     "returnDate": "Return date",

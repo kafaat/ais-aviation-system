@@ -10,7 +10,15 @@ export const DISPLAY_CURRENCIES = [
   "QAR",
   "OMR",
   "EGP",
+  "YER",
 ] as const;
+// Direct quotes entered by an operator or ingested from a named provider.
+export const DISPLAY_RATE_SOURCES = [
+  "manual",
+  "bank",
+  "openexchangerates",
+] as const;
+export const DISPLAY_RATE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export type DisplayCurrency = (typeof DISPLAY_CURRENCIES)[number];
 export const DISPLAY_COUNTRIES = [
   "SA",
@@ -20,6 +28,7 @@ export const DISPLAY_COUNTRIES = [
   "QA",
   "OM",
   "EG",
+  "YE",
   "US",
   "GB",
   "DE",

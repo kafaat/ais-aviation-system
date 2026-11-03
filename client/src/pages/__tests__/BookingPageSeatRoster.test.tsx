@@ -36,6 +36,9 @@ vi.mock("@/components/AncillarySelection", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    ibePublic: {
+      config: { useQuery: () => ({ data: { brandName: "Journey Air" } }) },
+    },
     useUtils: () => ({
       ancillary: { getAvailable: { invalidate: vi.fn() } },
     }),

@@ -2,6 +2,7 @@ import { Suspense, lazy, Component, ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Redirect, Route, Switch, useRoute, useSearch } from "wouter";
+import { BrandIdentity } from "./components/BrandIdentity";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { FlightCompareProvider } from "./contexts/FlightCompareContext";
@@ -223,6 +224,17 @@ function BookingEntry() {
 function Router() {
   return (
     <RouteErrorBoundary>
+      <Route
+        path={
+          /^\/(?:login|booking\/multi-city|checkout\/[^/]+|payment-history)\/?$/
+        }
+      >
+        <div className="sticky top-0 z-40 border-b bg-background">
+          <div className="container py-2">
+            <BrandIdentity className="max-w-full break-words text-primary" />
+          </div>
+        </div>
+      </Route>
       <Suspense fallback={<PageLoadingFallback variant="default" />}>
         <Switch>
           {/* User-facing pages */}

@@ -142,6 +142,11 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: process.env.CI ? "pnpm start" : "pnpm dev",
+    env: {
+      IBE_EMBED_ALLOWED_ORIGINS: "https://127.0.0.1:4173",
+      IBE_BRAND_NAME: "Fixture Airways",
+      IBE_BRAND_LOGO_PATH: "/icon-192.png",
+    },
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,

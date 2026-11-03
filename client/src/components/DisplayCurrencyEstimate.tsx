@@ -3,6 +3,7 @@ import {
   readSearchPreferences as searchPreferences,
   rememberDisplayPreferences,
 } from "@/lib/ibe-display-context";
+import type { DisplayCurrency } from "@shared/ibe-search";
 import { useRawSearch } from "@/lib/useRawSearch";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -31,18 +32,27 @@ function Estimate({
   country,
 }: {
   amountMinor: number;
-  currency: string;
+  currency: DisplayCurrency;
   country: string;
 }) {
   const { t, i18n } = useTranslation();
-  const rate = trpc.pricing.getExchangeRate.useQuery(
-    { fromCurrency: "SAR", toCurrency: currency },
+  const rate = trpc.ibePublic.displayRate.useQuery(
+    { currency },
     {
-      staleTime: 60_000,
+      // React Query marks the quote stale at its effective expiry, even on an idle page.
+      staleTime: ({ state }) =>
+        state.data
+          ? Math.max(0, state.data.expiresAt.getTime() - state.dataUpdatedAt)
+          : 60_000,
+      refetchInterval: 60_000,
       retry: false,
     }
   );
-  const estimate = displayEstimate(amountMinor, currency, rate.data?.data);
+  const estimate =
+    rate.isStale || rate.isError
+      ? null
+      : displayEstimate(amountMinor, currency, rate.data);
+  if (rate.isPending) return null;
   return (
     <span
       className="block text-xs font-normal text-muted-foreground"

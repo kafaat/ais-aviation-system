@@ -88,10 +88,25 @@ Also check an unlisted HTTPS parent is blocked, a listed parent can display the
 form, and a real click opens the normal search page with the chosen parameters.
 These checks are required after any CDN/proxy configuration change.
 
+## Display estimates
+
+Country and currency are independent display preferences. Selecting Yemen
+(`YE`) and the Yemeni rial (`YER`) carries those preferences through the
+native booking journey. Fares, invoices and wallet charges remain in SAR.
+
+`ibePublic.displayRate` reads the newest effective direct SAR quote for the
+selected currency from `exchange_rates`. The rate is target major units per
+one SAR. Operators may record a verified observation with source `manual`,
+`bank` or `openexchangerates`. Use the observation time for `validFrom` and
+the provider's earlier expiry, if any, for `validTo`. Quotes expire at the
+earlier of that expiry or 24 hours after observation. An edit to the row does
+not extend its validity. Without an eligible quote, AIS displays the SAR price
+and explains why no local estimate is shown. No YER quote is seeded.
+
 ## Verification limits
 
-Repository tests exercise actual Express/Helmet HTTP responses, invalid origin
-configuration, public config behavior, and the real React form's native GET/top
-navigation contract. They do not establish deployment-specific DNS, TLS, ingress
-controller behavior, browser sandbox acceptance, or provider acceptance. No
-infrastructure settings are mutated by enabling these source changes.
+The browser suite runs the built AIS application with an isolated MySQL database
+and two test corporate origins. It checks browser enforcement of the frame
+allowlist, a user-activated top-level search, mobile entry links, operator
+branding and display currency. DNS, TLS and the deployed proxy still require
+verification on each operator's own domain.

@@ -1,3 +1,4 @@
+import { registerMobileIbeTests } from "./fixtures/ibe-mobile";
 import { registerIbeJourneyTests } from "./fixtures/ibe-journeys";
 import { registerAgentPortalTests } from "./fixtures/agent-portal";
 import { registerBaggageConsistencyTest } from "./fixtures/baggage-consistency";
@@ -25,6 +26,7 @@ import { readFile } from "node:fs/promises";
 
 registerProviderCheckoutTests();
 registerIbeJourneyTests();
+registerMobileIbeTests();
 registerAgentPortalTests();
 registerBaggageConsistencyTest();
 registerCodeshareTests();

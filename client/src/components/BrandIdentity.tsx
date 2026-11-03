@@ -33,7 +33,9 @@ export function BrandIdentity({
       ) : (
         <Plane className={cn("h-7 w-7", logoClassName)} aria-hidden="true" />
       )}
-      <span>{data?.brandName ?? "AIS"}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">
+        {data?.brandName ?? "AIS"}
+      </span>
     </span>
   );
 }

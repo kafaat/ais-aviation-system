@@ -1,9 +1,24 @@
+import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import { test, expect } from "./base-test";
 import { useBrowserSession } from "./browser-session";
 import { fixtureFlight, ownedBooking, rpc, sqlRows } from "./hardening";
 import { testUsers } from "./test-data";
+
+async function expectAirline(page: Page) {
+  const brand = page.getByTestId("brand-identity").first();
+  await expect(brand).toBeInViewport();
+  await expect(brand).toHaveText("Fixture Airways");
+  await expect(brand.locator("img")).toHaveAttribute("src", "/icon-192.png");
+  await expect
+    .poll(() =>
+      brand
+        .locator("img")
+        .evaluate(img => (img as HTMLImageElement).naturalWidth)
+    )
+    .toBeGreaterThan(0);
+}
 
 /** Real browser + disposable database acceptance; no external provider charge. */
 export function registerIbeJourneyTests() {
@@ -44,7 +59,10 @@ export function registerIbeJourneyTests() {
         country: "KW",
       });
       await page.goto(`/?${search}`);
+      await expectAirline(page);
       await page.getByTestId("home-search-button").click();
+      await expect(page).toHaveURL(/\/search\?/);
+      await expectAirline(page);
       const card = page
         .getByTestId("flight-card")
         .filter({ hasText: flight.flightNumber });
@@ -53,10 +71,14 @@ export function registerIbeJourneyTests() {
         .first()
         .click();
       await expect(page).toHaveURL(/\/login\?returnTo=/);
+      await expectAirline(page);
       await page.locator("#email").fill(testUsers.regular.email);
       await page.locator("#password").fill(testUsers.regular.password);
       await page.getByTestId("login-submit").click();
       await expect(page).toHaveURL(new RegExp(`/booking/${flightId}\\?`));
+      await expectAirline(page);
+      await page.getByTestId("seat-selection").scrollIntoViewIfNeeded();
+      await expectAirline(page);
       const bookingQuery = new URL(page.url()).searchParams;
       expect(
         new URLSearchParams(bookingQuery.get("search") ?? "").get("currency")
@@ -75,6 +97,7 @@ export function registerIbeJourneyTests() {
         })
         .click();
       await expect(page).toHaveURL(/\/checkout\/\d+\?/);
+      await expectAirline(page);
       const bookingId = Number(new URL(page.url()).pathname.split("/").pop());
       expect(new URL(page.url()).searchParams.get("currency")).toBe("KWD");
       const before = await client.payments.getCheckoutState.query({
@@ -104,6 +127,7 @@ export function registerIbeJourneyTests() {
         "UPDATE wallets SET balance=balance+? WHERE userId=? AND status='active' AND currency='SAR'",
         [discounted.totalAmount, user.id]
       );
+      await expectAirline(page);
       await page.getByRole("button", { name: "Wallet", exact: true }).click();
       await page
         .getByRole("button", { name: "Confirm wallet payment", exact: true })

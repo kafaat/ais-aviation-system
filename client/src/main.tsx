@@ -12,7 +12,7 @@ initWebVitals({
 
 import { createBrowserTRPCClient, trpc } from "@/lib/trpc";
 import { redirectToLoginIfUnauthorized } from "@/lib/auth-navigation";
-import "./i18n/config";
+import i18n from "./i18n/config";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRoot } from "react-dom/client";
@@ -56,8 +56,8 @@ queryClient.getMutationCache().subscribe(event => {
 const trpcClient = createBrowserTRPCClient();
 
 // Set initial direction based on detected language
-const initialLang = localStorage.getItem("i18nextLng") || "ar";
-document.documentElement.dir = initialLang === "ar" ? "rtl" : "ltr";
+const initialLang = i18n.resolvedLanguage || "ar";
+document.documentElement.dir = i18n.dir(initialLang);
 document.documentElement.lang = initialLang;
 
 const rootElement = document.getElementById("root");

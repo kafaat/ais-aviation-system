@@ -1,3 +1,4 @@
+import { BrandIdentity } from "@/components/BrandIdentity";
 import { readSearchPreferences as searchPreferences } from "@/lib/ibe-display-context";
 import { useRawSearch } from "@/lib/useRawSearch";
 /**
@@ -215,6 +216,10 @@ function MultiCityResultsForm({ search }: { search: string }) {
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 shadow-sm">
         <div className="container py-4">
+          <BrandIdentity
+            className="mb-1 max-w-full text-primary"
+            logoClassName="h-6 w-6"
+          />
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href="/">

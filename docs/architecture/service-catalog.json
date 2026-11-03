@@ -1654,11 +1654,15 @@
       "onCall": null,
       "ownershipAcceptance": null,
       "ownershipStatus": "unassigned",
-      "consumers": ["server/routers/pricing.router.ts"],
+      "consumers": [
+        "server/routers/ibe-public.ts",
+        "server/routers/pricing.router.ts"
+      ],
       "dependencies": [
         "drizzle/schema.ts",
         "server/db.ts",
-        "server/services/cache.service.ts"
+        "server/services/cache.service.ts",
+        "shared/ibe-search.ts"
       ],
       "tableExpressions": {
         "reads": ["exchangeRates"],

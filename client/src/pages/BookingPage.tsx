@@ -1,3 +1,4 @@
+import { BrandIdentity } from "@/components/BrandIdentity";
 import { readSearchPreferences as searchPreferences } from "@/lib/ibe-display-context";
 import { preferenceParams, travelerTypes } from "@shared/ibe-search";
 import { DisplayCurrencyEstimate } from "@/components/DisplayCurrencyEstimate";
@@ -625,6 +626,10 @@ function BookingForm({
         role="banner"
       >
         <div className="container py-4">
+          <BrandIdentity
+            className="mb-1 max-w-full text-primary"
+            logoClassName="h-6 w-6"
+          />
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link href={backToSearch}>
