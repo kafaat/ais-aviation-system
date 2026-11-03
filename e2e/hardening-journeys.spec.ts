@@ -1070,8 +1070,9 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test("demonstrates operational booking values alongside unverified earned revenue", async ({
     page,
   }) => {
-    const { booking } = await ownedBooking(page, true);
-    await useBrowserSession(page, "admin");
+    // This reader journey funds the admin's own booking so unrelated customer
+    // journeys cannot exhaust its per-user booking-creation quota in parallel.
+    const { booking } = await ownedBooking(page, true, undefined, "admin");
     const client = rpc(page);
     const summary = await client.revenueAccounting.getDashboard.query();
     expect(summary.recognizedRevenue).toBeNull();

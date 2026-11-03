@@ -60,9 +60,10 @@ export async function ownedBooking(
   funded = false,
   passengers = [
     { firstName: "Synthetic", lastName: "Journey", type: "adult" as const },
-  ]
+  ],
+  account: Parameters<typeof useBrowserSession>[1] = "regular"
 ) {
-  await useBrowserSession(page, "regular");
+  await useBrowserSession(page, account);
   const client = rpc(page),
     flightId = await fixtureFlight();
   const user = await client.auth.me.query();
