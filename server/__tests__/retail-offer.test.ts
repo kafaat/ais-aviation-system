@@ -88,6 +88,23 @@ describe("retail offer authority", () => {
     ).rejects.toThrow();
     expect(fixture.rows("retail_offers")[0].consumedBookingId).toBeNull();
   });
+  it("prices each direct RBD fare line before tax, retaining its fixed booking fee", async () => {
+    const offer = await createRetailOffer({
+      ...input,
+      fareClass: { fareClassId: 41, fareMultiplier: 1.25 },
+    });
+    expect(
+      validateRetailOffer(offer, { ...input, fareClassId: 41 })
+    ).toMatchObject({
+      baseAmount: 17500,
+      taxesAndFees: 4025,
+      totalAmount: 21525,
+      fareLines: [
+        { baseFare: 10000, tax: 1500, bookingFee: 800, total: 12300 },
+        { baseFare: 7500, tax: 1125, bookingFee: 600, total: 9225 },
+      ],
+    });
+  });
   it("applies NDC policy to the fare without taxing the existing gross quote", async () => {
     const offer = await createRetailOffer({
       ...input,

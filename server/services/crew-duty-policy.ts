@@ -19,6 +19,20 @@ export const crewRuleSchema = z
     releaseAfterMinutes: z.number().int().min(0).max(240),
     maxDuty24Minutes: z.number().int().positive().max(1440),
     maxDuty7DayMinutes: z.number().int().positive().max(10080),
+    // These cumulative flight-time limits are operator data. The service does
+    // not ship a regulatory table or infer a value when either is omitted.
+    maxFlightTime28DayMinutes: z
+      .number()
+      .int()
+      .positive()
+      .max(40320)
+      .optional(),
+    maxFlightTime365DayMinutes: z
+      .number()
+      .int()
+      .positive()
+      .max(525600)
+      .optional(),
     minRestMinutes: z.number().int().positive().max(2880),
     minimumCrew: z.object({
       captain: z.number().int().min(0).max(10),
@@ -124,6 +138,28 @@ export function validateDuty(proposed: Duty, other: Duty[], rule: CrewRule) {
       bands[0].maxMinutes
     )
       violations.push("Flight duty period exceeds the configured band");
+  }
+  for (const [days, limit] of [
+    [28, rule.maxFlightTime28DayMinutes],
+    [365, rule.maxFlightTime365DayMinutes],
+  ] as const) {
+    if (limit === undefined) continue;
+    const windowStart = proposed.end.getTime() - days * 86400000;
+    const flightMinutes = [...other, proposed].reduce((sum, flight) => {
+      if (
+        flight.arrival.getTime() <= windowStart ||
+        flight.departure.getTime() >= proposed.end.getTime()
+      )
+        return sum;
+      return (
+        sum +
+        (Math.min(proposed.end.getTime(), flight.arrival.getTime()) -
+          Math.max(windowStart, flight.departure.getTime())) /
+          60000
+      );
+    }, 0);
+    if (flightMinutes > limit)
+      violations.push(`Rolling ${days}-day flight-time limit exceeded`);
   }
   let proposed24 = 0;
   for (const endpoint of duties.map(d => d.end.getTime()))

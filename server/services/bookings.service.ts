@@ -2,7 +2,7 @@ import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { selectSeat } from "./seat-map.service";
 import { assertTenantOperational } from "./tenant.service";
 import { TRPCError } from "@trpc/server";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import * as db from "../db";
 import { getDb } from "../db";
 import {
@@ -33,6 +33,8 @@ import {
   withTransactionalIdempotency,
 } from "./idempotency-v2.service";
 import { recordEvent } from "./outbox.service";
+import { persistInitialFareComponents } from "./fare-components.service";
+import { resolveFlightFareClass } from "./rbd-inventory.service";
 
 /**
  * Bookings Service
@@ -64,6 +66,8 @@ export interface CreateBookingInput {
   tenantId?: number | null;
   flightId: number;
   cabinClass: "economy" | "business";
+  /** Optional reservation booking designator. Omitted for legacy cabin sales. */
+  fareClassCode?: string;
   passengers: Passenger[];
   sessionId: string;
   lockId?: number;
@@ -106,16 +110,18 @@ export async function createBooking(
   try {
     const replay = await findCompletedCommand<Result>(command, transaction);
     if (replay) return replay.response;
+    const database = transaction ?? (await getDb());
+    if (!database) throw new Error("Database unavailable");
+    const [flightIdentity] = await database
+      .select({ tenantId: flights.tenantId, airlineId: flights.airlineId })
+      .from(flights)
+      .where(eq(flights.id, input.flightId))
+      .limit(1);
+    if (!flightIdentity) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+    }
     if (input.tenantId != null) {
-      const database = await getDb();
-      if (!database) throw new Error("Database not available");
-      const [flightTenant] = await database
-        .select({ tenantId: flights.tenantId })
-        .from(flights)
-        .where(eq(flights.id, input.flightId))
-        .limit(1);
-
-      if (!flightTenant || flightTenant.tenantId !== input.tenantId) {
+      if (flightIdentity.tenantId !== input.tenantId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
       }
     }
@@ -154,6 +160,28 @@ export async function createBooking(
         code: "BAD_REQUEST",
         message: "Choose an offer or a purchased price lock",
       });
+    if (
+      input.fareClassCode &&
+      (input.priceLockId || input.groupBookingId || input.waitlistId)
+    )
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "This allocation does not preserve a booking class",
+      });
+    const requestedFareClass = input.fareClassCode
+      ? await resolveFlightFareClass(
+          database,
+          flight.id,
+          flightIdentity.airlineId,
+          input.cabinClass,
+          input.fareClassCode
+        )
+      : null;
+    if (input.fareClassCode && !requestedFareClass)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Requested booking class is unavailable",
+      });
     const offerId =
       input.priceLockId || input.groupBookingId
         ? undefined
@@ -167,6 +195,14 @@ export async function createBooking(
                 userId: input.userId,
                 sessionId: input.sessionId,
                 channel: "direct",
+                fareClass: requestedFareClass
+                  ? {
+                      fareClassId: requestedFareClass.fareClass.id,
+                      fareMultiplier: Number(
+                        requestedFareClass.fareClass.basePriceMultiplier
+                      ),
+                    }
+                  : undefined,
               },
               transaction
             )
@@ -175,8 +211,6 @@ export async function createBooking(
     const bookingReference = db.generateBookingReference();
     const pnr = db.generateBookingReference();
 
-    const database = await getDb();
-    if (!database) throw new Error("Database unavailable");
     const result = await withTransactionalIdempotency(
       {
         transactionConfig: inventoryTransactionConfig,
@@ -223,6 +257,20 @@ export async function createBooking(
           )
             throw new Error("Flight unavailable");
           await assertTenantOperational(tx, currentFlight.tenantId);
+          const selectedFareClass = input.fareClassCode
+            ? await resolveFlightFareClass(
+                tx,
+                currentFlight.id,
+                currentFlight.airlineId,
+                input.cabinClass,
+                input.fareClassCode
+              )
+            : null;
+          if (input.fareClassCode && !selectedFareClass)
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Requested booking class is unavailable",
+            });
           const selectedOffer = offerId
             ? await lockRetailOffer(tx, offerId, {
                 flightId: currentFlight.id,
@@ -231,6 +279,7 @@ export async function createBooking(
                 channel: "direct",
                 cabinClass: input.cabinClass,
                 passengerTypes: input.passengers.map(p => p.type),
+                fareClassId: selectedFareClass?.fareClass.id,
               })
             : undefined;
           const [waiting] = input.waitlistId
@@ -269,6 +318,12 @@ export async function createBooking(
                   eq(inventoryLocks.userId, input.userId),
                   eq(inventoryLocks.flightId, input.flightId),
                   eq(inventoryLocks.cabinClass, input.cabinClass),
+                  selectedFareClass
+                    ? eq(
+                        inventoryLocks.fareClassId,
+                        selectedFareClass.fareClass.id
+                      )
+                    : isNull(inventoryLocks.fareClassId),
                   eq(inventoryLocks.numberOfSeats, input.passengers.length),
                   eq(inventoryLocks.status, "active"),
                   gt(inventoryLocks.expiresAt, new Date())
@@ -300,7 +355,9 @@ export async function createBooking(
                 input.cabinClass,
                 input.sessionId,
                 input.userId,
-                tx
+                tx,
+                undefined,
+                selectedFareClass?.fareClass.id
               )
             ).lockId;
           }
@@ -401,6 +458,7 @@ export async function createBooking(
             tenantId: currentFlight.tenantId,
             userId: input.userId,
             flightId: input.flightId,
+            fareClassId: selectedFareClass?.fareClass.id,
             inventoryLockId: lockId,
             bookingReference,
             pnr,
@@ -422,6 +480,7 @@ export async function createBooking(
               .where(eq(groupBookings.id, group.id));
           if (selectedOffer)
             await consumeRetailOffer(tx, selectedOffer, bookingId);
+          const passengerIds: number[] = [];
           for (const p of input.passengers) {
             const [row] = await tx.insert(passengers).values({
               tenantId: currentFlight.tenantId,
@@ -435,6 +494,7 @@ export async function createBooking(
               passportExpiry: p.passportExpiry,
               nationality: p.nationality,
             });
+            passengerIds.push(row.insertId);
             if (p.seatNumber)
               await selectSeat(
                 input.flightId,
@@ -448,6 +508,26 @@ export async function createBooking(
             await tx
               .insert(bookingAncillaries)
               .values(selected.map(item => ({ bookingId, ...item })));
+          await persistInitialFareComponents(tx, {
+            bookingId,
+            tenantId: currentFlight.tenantId,
+            flightId: currentFlight.id,
+            passengerIds,
+            totalAmount,
+            offer: selectedOffer,
+            source: selectedOffer
+              ? "retail_offer"
+              : group
+                ? "group_allocation"
+                : "price_lock",
+            sourceReference:
+              selectedOffer?.id ??
+              (group ? String(group.id) : String(input.priceLockId ?? "")),
+            ancillaries: selected.map(item => ({
+              amount: item.totalPrice,
+              code: `ANCILLARY_${item.ancillaryServiceId}`,
+            })),
+          });
           if (input.priceLockId)
             await tx
               .update(priceLocks)
@@ -468,6 +548,7 @@ export async function createBooking(
               userId: input.userId,
               channel: "direct",
               flightId: input.flightId,
+              fareClassCode: selectedFareClass?.fareClass.code,
             },
           });
           return { bookingId, bookingReference, pnr, totalAmount };

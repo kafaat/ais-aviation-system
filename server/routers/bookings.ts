@@ -57,6 +57,15 @@ export const bookingsRouter = router({
       z.object({
         flightId: z.number().describe("Flight ID to book"),
         cabinClass: z.enum(["economy", "business"]).describe("Cabin class"),
+        fareClassCode: z
+          .string()
+          .trim()
+          .min(1)
+          .max(2)
+          .regex(/^[A-Za-z0-9]+$/)
+          .transform(value => value.toUpperCase())
+          .optional()
+          .describe("Reservation booking designator (RBD)"),
         passengers: z
           .array(
             z.object({
@@ -123,6 +132,7 @@ export const bookingsRouter = router({
         tenantId: ctx.tenantId,
         flightId: input.flightId,
         cabinClass: input.cabinClass,
+        fareClassCode: input.fareClassCode,
         passengers: input.passengers,
         sessionId: input.sessionId,
         lockId: input.lockId,

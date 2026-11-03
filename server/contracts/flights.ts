@@ -14,6 +14,19 @@ export const responseContracts = {
       businessPrice: outputNumber,
       economyAvailable: outputNumber,
       businessAvailable: outputNumber,
+      fareClassAvailability: z
+        .array(
+          z.object({
+            fareClassId: outputNumber,
+            code: z.string(),
+            cabinClass: z.enum(["economy", "business"]),
+            fareFamily: z.union([z.null(), z.string()]),
+            priority: outputNumber,
+            totalAllocated: outputNumber,
+            availableSeats: outputNumber,
+          })
+        )
+        .optional(),
       airline: z.object({
         code: z.string(),
         name: z.string(),

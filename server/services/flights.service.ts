@@ -5,6 +5,12 @@ import * as db from "../db";
 import { DynamicPricingService } from "./pricing/dynamic-pricing.service";
 import { redisCacheService, CacheTTL } from "./redis-cache.service";
 import { civilDateOf } from "./civil-day";
+import {
+  getFlightRbdAvailability,
+  type RbdAvailability,
+} from "./rbd-inventory.service";
+import { getDb } from "../db";
+import { countActiveHolds } from "./inventory-capacity.service";
 
 // Only known cache date fields are restored. Public contracts remain strict.
 const cachedDate = z.union([
@@ -41,9 +47,69 @@ export interface GetFlightInput {
 }
 
 // Type for flight search results
-export type FlightSearchResult = Awaited<
-  ReturnType<typeof import("../db").searchFlights>
->;
+export type FlightSearchResult =
+  Awaited<ReturnType<typeof import("../db").searchFlights>> extends infer Rows
+    ? Rows extends Array<infer Row>
+      ? Array<Row & { fareClassAvailability?: RbdAvailability[] }>
+      : never
+    : never;
+
+async function attachRbdAvailability<
+  T extends { id: number; economyAvailable: number; businessAvailable: number },
+>(
+  rows: T[]
+): Promise<Array<T & { fareClassAvailability?: RbdAvailability[] }>> {
+  if (!rows.length) return [];
+  const database = await getDb();
+  // Database-less unit boundaries and legacy installations keep the existing
+  // cabin contract. Production search already requires the database, while an
+  // omitted field tells clients that no RBD inventory was supplied.
+  if (!database) return rows;
+  const availability = await getFlightRbdAvailability(
+    database,
+    rows.map(row => row.id)
+  );
+  return await Promise.all(
+    rows.map(async row => {
+      const physical = {
+        economy: Math.max(
+          0,
+          row.economyAvailable -
+            (await countActiveHolds(
+              database,
+              row.id,
+              "economy",
+              undefined,
+              false
+            ))
+        ),
+        business: Math.max(
+          0,
+          row.businessAvailable -
+            (await countActiveHolds(
+              database,
+              row.id,
+              "business",
+              undefined,
+              false
+            ))
+        ),
+      };
+      const classes = availability.get(row.id);
+      if (!classes?.length) return row;
+      return {
+        ...row,
+        fareClassAvailability: classes.map(item => ({
+          ...item,
+          availableSeats: Math.min(
+            item.availableSeats,
+            physical[item.cabinClass]
+          ),
+        })),
+      };
+    })
+  );
+}
 
 /** Overlay the live seat counts and status onto cached rows. With
  * `sellable`, rows whose flight is no longer on sale (cancelled, completed,
@@ -93,10 +159,13 @@ export async function searchFlights(
     const cached = await redisCacheService.getCachedFlightSearch(cacheParams);
     const parsed = cachedSearch.safeParse(cached);
     if (parsed.success)
-      return overlayLiveState(parsed.data, { sellable: true });
+      return attachRbdAvailability(
+        await overlayLiveState(parsed.data, { sellable: true })
+      );
 
     // Fetch from database
-    const results = await db.searchFlights(input);
+    const rows = await db.searchFlights(input);
+    const results = await attachRbdAvailability(rows);
 
     // Cache the results
     await redisCacheService.cacheFlightSearch(

@@ -363,6 +363,10 @@ export async function executeRecovery(
       const r = requireValue(
         state.records.find(r => r.booking.id === choice.bookingId)
       );
+      if (r.booking.fareClassId != null)
+        throw new Error(
+          "RBD-aware disruption recovery requires an operator-approved class mapping"
+        );
       const newId = Number(choice.key.split(":")[0]),
         target = requireValue(state.locked.find(f => f.id === newId));
       await reserveSeats(

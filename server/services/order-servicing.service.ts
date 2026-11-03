@@ -284,6 +284,10 @@ export async function quotePaidOrderService(
           let fareDifference = 0;
           const expiry = new Date(Date.now() + 10 * 60000);
           if (input.offerIds) {
+            if (booking.fareClassId != null)
+              throw unavailable(
+                "RBD-aware replacement offers are not configured for this booking"
+              );
             await assertDirectExchange(tx, booking.id);
             await assertBaggageNotInCustody(tx, booking.id);
             const offers = await tx

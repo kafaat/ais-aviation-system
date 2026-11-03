@@ -33,6 +33,7 @@ import {
   type FareRule,
 } from "../../drizzle/schema";
 import { createServiceLogger } from "../_core/logger";
+import { getFlightRbdAvailability } from "./rbd-inventory.service";
 
 const log = createServiceLogger("fare-rules");
 
@@ -792,6 +793,32 @@ export async function getFareClassAvailability(flightId: number): Promise<{
 
   if (classes.length === 0) {
     return { flightId, fareClasses: [] };
+  }
+
+  // Prefer flight-scoped RBD inventory when configured. Flights without rows
+  // keep the historical cabin-allocation calculation below.
+  const configured = await getFlightRbdAvailability(db, [flightId]);
+  const configuredRows = configured.get(flightId) ?? [];
+  if (configuredRows.length) {
+    const byId = new Map(configuredRows.map(row => [row.fareClassId, row]));
+    return {
+      flightId,
+      fareClasses: classes.flatMap(fareClass => {
+        const row = byId.get(fareClass.id);
+        return row
+          ? [
+              {
+                ...fareClass,
+                totalAllocated: row.totalAllocated,
+                availableSeats: Math.min(
+                  row.availableSeats,
+                  getFlightAvailableSeats(flight, fareClass.cabinClass)
+                ),
+              },
+            ]
+          : [];
+      }),
+    };
   }
 
   // Group fare classes by cabin class for nested availability

@@ -13,6 +13,7 @@ const spies = vi.hoisted(() => ({
   cachedDetail: null as unknown,
 }));
 vi.mock("../db", () => ({
+  getDb: vi.fn(async () => null),
   searchFlights: spies.search,
   getFlightById: spies.detail,
   getFlightLiveState: spies.live,

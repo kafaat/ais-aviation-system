@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -30,6 +30,52 @@ const scanSchema = z
 type Scan = z.infer<typeof scanSchema>;
 export class BaggageCustodyConflict extends Error {}
 type Custody = typeof baggageCustodyEvents.$inferSelect;
+
+export type BaggageCloseoutRow = {
+  baggageId: number;
+  tagNumber: string;
+  entryStage: "acceptance" | "transfer";
+};
+
+export function reconcileBaggageCloseout(
+  flightId: number,
+  expected: BaggageCloseoutRow[],
+  events: Array<{ baggageId: number; flightId: number; stage: string }>
+) {
+  const counts = new Map<string, number>();
+  for (const event of events) {
+    if (event.flightId !== flightId) continue;
+    const key = `${event.baggageId}:${event.stage}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const missingEntry = expected
+    .filter(row => !counts.has(`${row.baggageId}:${row.entryStage}`))
+    .map(row => row.tagNumber);
+  const missingLoading = expected
+    .filter(row => !counts.has(`${row.baggageId}:loading`))
+    .map(row => row.tagNumber);
+  const duplicates = expected.flatMap(row =>
+    [row.entryStage, "loading"].flatMap(stage => {
+      const count = counts.get(`${row.baggageId}:${stage}`) ?? 0;
+      return count > 1 ? [{ tagNumber: row.tagNumber, stage, count }] : [];
+    })
+  );
+  return {
+    flightId,
+    expectedBags: expected.length,
+    acceptedOrTransferred: expected.length - missingEntry.length,
+    loadedBags: expected.length - missingLoading.length,
+    readyToClose:
+      expected.length > 0 &&
+      missingEntry.length === 0 &&
+      missingLoading.length === 0 &&
+      duplicates.length === 0,
+    missingEntry,
+    missingLoading,
+    duplicates,
+    acceptanceState: "operator_station_acceptance_required" as const,
+  };
+}
 
 function custodyFlightIds(
   legs: Array<{ flightId: number; status: string }>,
@@ -269,6 +315,75 @@ export async function getBaggageCustody(
     required,
     events,
   };
+}
+
+/** Departure inventory evidence. This report does not close a real station. */
+export async function getFlightBaggageCloseout(
+  flightId: number,
+  tenantId: number
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Baggage storage unavailable");
+  const [flight] = await db
+    .select({ id: flights.id, tenantId: flights.tenantId })
+    .from(flights)
+    .where(and(eq(flights.id, flightId), eq(flights.tenantId, tenantId)))
+    .limit(1);
+  if (!flight)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+  const expectedRows = await db
+    .selectDistinct({
+      baggageId: baggageItems.id,
+      tagNumber: baggageItems.tagNumber,
+      segmentOrder: bookingSegments.segmentOrder,
+    })
+    .from(baggageItems)
+    .innerJoin(bookings, eq(bookings.id, baggageItems.bookingId))
+    .leftJoin(
+      bookingSegments,
+      and(
+        eq(bookingSegments.bookingId, bookings.id),
+        eq(bookingSegments.flightId, flightId)
+      )
+    )
+    .where(
+      and(
+        eq(bookings.tenantId, tenantId),
+        inArray(bookings.status, ["confirmed", "completed"]),
+        eq(bookings.paymentStatus, "paid"),
+        or(
+          eq(bookings.flightId, flightId),
+          eq(bookingSegments.flightId, flightId)
+        )
+      )
+    );
+  const expected = expectedRows.map(row => ({
+    baggageId: row.baggageId,
+    tagNumber: row.tagNumber,
+    entryStage:
+      row.segmentOrder === null || row.segmentOrder === 1
+        ? ("acceptance" as const)
+        : ("transfer" as const),
+  }));
+  const events = expected.length
+    ? await db
+        .select({
+          baggageId: baggageCustodyEvents.baggageId,
+          flightId: baggageCustodyEvents.flightId,
+          stage: baggageCustodyEvents.stage,
+        })
+        .from(baggageCustodyEvents)
+        .where(
+          and(
+            eq(baggageCustodyEvents.flightId, flightId),
+            inArray(
+              baggageCustodyEvents.baggageId,
+              expected.map(row => row.baggageId)
+            )
+          )
+        )
+    : [];
+  return reconcileBaggageCloseout(flightId, expected, events);
 }
 /** Called under the booking lock before changing an accepted bag's itinerary. */
 export async function assertBaggageNotInCustody(

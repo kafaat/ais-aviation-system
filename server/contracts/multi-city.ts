@@ -44,6 +44,7 @@ export const responseContracts = {
         basePrice: outputNumber,
         discountedPrice: outputNumber,
         cabinClass: z.enum(["economy", "business"]),
+        fareClassCode: z.string().optional(),
       })
     ),
     subtotal: outputNumber,

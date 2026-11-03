@@ -27,6 +27,7 @@ import {
 } from "../../drizzle/schema";
 import type { getDb } from "../db";
 import { recordEvent } from "./outbox.service";
+import { reserveRbdSeats, restoreRbdSeats } from "./rbd-inventory.service";
 
 export type SettlementTx = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -93,6 +94,7 @@ async function applyFundedBooking(
           flightId: booking.flightId,
           inventoryLockId: booking.inventoryLockId,
           seatsReserved: booking.seatsReserved,
+          fareClassId: booking.fareClassId,
         },
       ];
   const legacyPrimaryReserved =
@@ -110,7 +112,8 @@ async function applyFundedBooking(
       segment.flightId,
       booking.cabinClass,
       booking.numberOfPassengers,
-      segment.inventoryLockId
+      segment.inventoryLockId,
+      segment.fareClassId
     );
   }
   if (segments.length)
@@ -236,7 +239,8 @@ export async function reserveSeats(
   flightId: number,
   cabin: "economy" | "business",
   count: number,
-  ownLockId?: number | null
+  ownLockId?: number | null,
+  fareClassId?: number | null
 ) {
   const [flight] = await tx
     .select()
@@ -267,6 +271,16 @@ export async function reserveSeats(
     throw new InventoryUnavailableError(
       `Insufficient ${cabin} inventory for booking`
     );
+  if (fareClassId != null)
+    await reserveRbdSeats(tx, flightId, fareClassId, count, ownLockId).catch(
+      error => {
+        throw new InventoryUnavailableError(
+          error instanceof Error
+            ? error.message
+            : "Requested booking class is unavailable"
+        );
+      }
+    );
 }
 
 export async function releaseBookingSeats(
@@ -293,13 +307,14 @@ export async function releaseBookingSeats(
   for (const segment of reserved.length
     ? reserved
     : booking.seatsReserved
-      ? [{ flightId: booking.flightId }]
+      ? [{ flightId: booking.flightId, fareClassId: booking.fareClassId }]
       : []) {
     await restoreSeats(
       tx,
       segment.flightId,
       booking.cabinClass,
-      booking.numberOfPassengers
+      booking.numberOfPassengers,
+      segment.fareClassId
     );
   }
   if (segments.length)
@@ -355,7 +370,8 @@ export async function restoreSeats(
   tx: SettlementTx,
   flightId: number,
   cabin: "economy" | "business",
-  count: number
+  count: number,
+  fareClassId?: number | null
 ) {
   await tx
     .update(flights)
@@ -365,6 +381,8 @@ export async function restoreSeats(
         : { economyAvailable: sql`${flights.economyAvailable} + ${count}` }
     )
     .where(eq(flights.id, flightId));
+  if (fareClassId != null)
+    await restoreRbdSeats(tx, flightId, fareClassId, count);
 }
 
 /** Caller holds the booking lock. All cancellation paths share this command. */

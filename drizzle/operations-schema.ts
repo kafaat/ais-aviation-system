@@ -109,6 +109,96 @@ export const apisSubmissions = mysqlTable(
   t => ({ flightIdx: index("apis_submissions_flight_idx").on(t.flightId) })
 );
 
+/**
+ * Operator-approved addressing for legacy operational messages. Rows are
+ * inert until acceptedAt is populated and transport is enabled separately.
+ */
+export const operationalMessageRoutes = mysqlTable(
+  "operational_message_routes",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenant_id").notNull(),
+    stationCode: varchar("station_code", { length: 3 }).notNull(),
+    messageType: varchar("message_type", { length: 12 }).notNull(),
+    originAddress: varchar("origin_address", { length: 7 }).notNull(),
+    destinationAddress: varchar("destination_address", { length: 7 }).notNull(),
+    transportProfile: varchar("transport_profile", { length: 64 }).notNull(),
+    enabled: boolean("enabled").default(false).notNull(),
+    acceptedAt: timestamp("accepted_at"),
+    acceptedBy: int("accepted_by"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    routeUnique: uniqueIndex("operational_message_route_unique").on(
+      table.tenantId,
+      table.stationCode,
+      table.messageType
+    ),
+    enabledIdx: index("operational_message_route_enabled_idx").on(
+      table.tenantId,
+      table.enabled
+    ),
+  })
+);
+
+export const operationalMessageTransmissions = mysqlTable(
+  "operational_message_transmissions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenant_id").notNull(),
+    flightId: int("flight_id"),
+    routeId: int("route_id"),
+    messageType: varchar("message_type", { length: 12 }).notNull(),
+    direction: mysqlEnum("direction", ["outbound", "inbound"]).notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+    messageDigest: varchar("message_digest", { length: 64 }).notNull(),
+    messageContent: longtext("message_content").notNull(),
+    status: mysqlEnum("status", [
+      "draft",
+      "queued",
+      "sending",
+      "sent",
+      "received",
+      "acknowledged",
+      "rejected",
+      "retry_scheduled",
+      "failed",
+    ])
+      .default("draft")
+      .notNull(),
+    attemptCount: int("attempt_count").default(0).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { fsp: 3 }),
+    leaseKey: varchar("lease_key", { length: 36 }),
+    leaseUntil: timestamp("lease_until", { fsp: 3 }),
+    providerMessageId: varchar("provider_message_id", { length: 128 }),
+    acknowledgmentCode: varchar("acknowledgment_code", { length: 32 }),
+    responseDigest: varchar("response_digest", { length: 64 }),
+    errorMessage: varchar("error_message", { length: 500 }),
+    sentAt: timestamp("sent_at", { fsp: 3 }),
+    acknowledgedAt: timestamp("acknowledged_at", { fsp: 3 }),
+    // MySQL requires automatic CURRENT_TIMESTAMP clauses to use matching
+    // fractional precision. Drizzle's onUpdateNow() emits the unqualified
+    // CURRENT_TIMESTAMP form, so keep these audit columns at whole-second
+    // precision while event/lease timestamps above retain millisecond precision.
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    idempotencyUnique: uniqueIndex(
+      "operational_message_transmission_idempotency_unique"
+    ).on(table.tenantId, table.idempotencyKey),
+    dueIdx: index("operational_message_transmission_due_idx").on(
+      table.status,
+      table.nextAttemptAt
+    ),
+    flightIdx: index("operational_message_transmission_flight_idx").on(
+      table.flightId,
+      table.messageType
+    ),
+  })
+);
+
 export const consentRecords = mysqlTable(
   "consent_records",
   {

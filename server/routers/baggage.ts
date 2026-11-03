@@ -1,10 +1,14 @@
-import { getBaggageCustody } from "../services/baggage-custody.service";
+import {
+  getBaggageCustody,
+  getFlightBaggageCloseout,
+} from "../services/baggage-custody.service";
 import { responseContracts } from "../contracts/baggage";
 import { z } from "zod";
 import {
   publicProcedure,
   protectedProcedure,
   adminProcedure,
+  airlineOpsProcedure,
   router,
 } from "../_core/trpc";
 import * as baggageService from "../services/baggage.service";
@@ -35,6 +39,35 @@ const baggageStatusEnum = z.enum([
  */
 const custodyStage = z.enum(["acceptance", "loading", "transfer", "arrival"]);
 export const baggageRouter = router({
+  flightCloseout: airlineOpsProcedure
+    .input(z.object({ flightId: z.number().int().positive() }))
+    .output(
+      z.object({
+        flightId: z.number().int(),
+        expectedBags: z.number().int(),
+        acceptedOrTransferred: z.number().int(),
+        loadedBags: z.number().int(),
+        readyToClose: z.boolean(),
+        missingEntry: z.array(z.string()),
+        missingLoading: z.array(z.string()),
+        duplicates: z.array(
+          z.object({
+            tagNumber: z.string(),
+            stage: z.string(),
+            count: z.number().int(),
+          })
+        ),
+        acceptanceState: z.literal("operator_station_acceptance_required"),
+      })
+    )
+    .query(({ input, ctx }) => {
+      if (ctx.tenantId === null)
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Flight close-out requires an airline tenant",
+        });
+      return getFlightBaggageCloseout(input.flightId, ctx.tenantId);
+    }),
   custody: protectedProcedure
     .input(z.object({ tagNumber: z.string().min(1).max(20) }))
     .output(

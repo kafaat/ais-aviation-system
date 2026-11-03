@@ -237,6 +237,7 @@ async function saveState(tx: SettlementTx, state: MilesState) {
         spentMiles: lot.spentMiles,
         expiredMiles: lot.expiredMiles,
         reversedMiles: lot.reversedMiles,
+        expiresAt: lot.expiresAt,
       })
       .where(eq(loyaltyCreditLots.transactionId, lot.transactionId));
   await tx
@@ -283,7 +284,7 @@ export async function creditMiles(
     bookingId?: number;
     flightId?: number;
     reason: string;
-    expiresAt: Date;
+    expiresAt: Date | null;
   }
 ) {
   requireMiles(input.amount);
@@ -303,6 +304,14 @@ export async function creditMiles(
   await tx.insert(loyaltyCreditLots).values(lot);
   await saveState(tx, state);
   return state.account.currentMilesBalance;
+}
+
+/** Activity-based policies move every unspent lot to the same audited date. */
+export function rebaseMilesExpiry(state: MilesState, expiresAt: Date) {
+  if (Number.isNaN(expiresAt.getTime()))
+    throw new Error("Invalid miles expiry");
+  for (const lot of state.lots)
+    if (lot.remainingMiles > 0) lot.expiresAt = expiresAt;
 }
 export async function spendMiles(
   tx: SettlementTx,
