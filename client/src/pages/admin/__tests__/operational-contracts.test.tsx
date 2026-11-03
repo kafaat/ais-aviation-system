@@ -140,7 +140,10 @@ it("F14 kiosk analytics consumes the actual totals envelope", () => {
       abandonedSessions: 3,
       errorSessions: 5,
       avgCompletionRate: 0,
-      boardingPassesPrinted: 19,
+      checkInSessions: 19,
+      bagTagSessions: 7,
+      printConfirmationAvailable: false,
+      boardingPassesPrinted: 0,
       bagTagsPrinted: 0,
     },
   });
@@ -150,6 +153,14 @@ it("F14 kiosk analytics consumes the actual totals envelope", () => {
   expect(screen.queryByTestId("render-error")).toBeNull();
   expect(screen.getByText("37")).toBeTruthy();
   expect(screen.getByText("29")).toBeTruthy();
+  expect(
+    screen.getByText("Check-in sessions").nextElementSibling?.textContent
+  ).toBe("19");
+  expect(
+    screen.getByText("Bag-tag sessions").nextElementSibling?.textContent
+  ).toBe("7");
+  expect(screen.getByText("Printer confirmation is unavailable.")).toBeTruthy();
+  expect(screen.queryByText(/printed/i)).toBeNull();
 });
 it.each([false, true])(
   "F14 bag-drop units render (populated=%s)",
