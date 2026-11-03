@@ -146,7 +146,7 @@ export function registerDcsCounterTests() {
         page
           .getByRole("combobox", { name: "Passenger action", exact: true })
           .locator('option[value="board"]')
-      ).toBeDisabled();
+      ).toHaveJSProperty("disabled", true);
       await expect(
         client.dcsOperations.transition.mutate({
           ...scope,
