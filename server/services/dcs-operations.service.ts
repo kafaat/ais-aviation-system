@@ -536,7 +536,7 @@ export async function setBagReturnGrant(
   const input = dcsBagReturnGrantInput.parse(raw);
   if (!isAdmin(actor.role) && actor.role !== "airline_admin")
     reject("Airline administration is required", "FORBIDDEN");
-  return database().transaction(async tx => {
+  return await database().transaction(async tx => {
     const flight = await scopedFlight(tx, input.flightId, actor, true);
     const tenantId = flight.tenantId;
     if (
@@ -622,7 +622,7 @@ export async function returnDcsBag(
   const input = dcsReturnBagInput.parse(raw);
   if (!actor.tenantId)
     reject("A scoped airline operator is required", "FORBIDDEN");
-  return passengerCommand(
+  return await passengerCommand(
     input,
     actor,
     "dcs.return_bag",
