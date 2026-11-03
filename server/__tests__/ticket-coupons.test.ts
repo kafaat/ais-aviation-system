@@ -5,6 +5,7 @@ vi.mock("../db", () => ({ getDb: () => state.db }));
 vi.mock("../services/eticket.service", () => ({
   generateTicketNumber: () => "0010000000051",
 }));
+import { cancelBookingResources } from "../services/booking-settlement.service";
 import { readTicketDocument } from "../services/ticket-documents.service";
 import { checkInPassengers } from "../services/departure-control.service";
 import { undoCheckIn } from "../services/seat-map.service";
@@ -182,6 +183,42 @@ it("limits check-in and undo to the passenger and segment; void can progress to 
   await closeLocalCoupons(fixture.db, 2, "R");
   await setCouponCheckIn(fixture.db, 2, 5, 4, true);
   expect(fixture.rows("ticket_coupons").map(c => c.status)).toEqual(["R", "R"]);
+});
+
+it("rolls local coupon closure back with its audit event and emits exact identities only on a committed cancellation", async () => {
+  await readTicketDocument(2, 5, 3);
+  const cancel = () =>
+    fixture.db.transaction((tx: any) =>
+      cancelBookingResources(
+        tx,
+        fixture.rows("bookings")[0],
+        "Owner cancellation",
+        3
+      )
+    );
+  fixture.failInsert("outbox");
+  await expect(cancel()).rejects.toThrow("Injected insert failure");
+  expect(fixture.rows("ticket_coupons").map(c => c.status)).toEqual(["O", "C"]);
+  fixture.failInsert("");
+  await cancel();
+  await cancel();
+  const events = fixture
+    .rows("outbox")
+    .filter(e => e.eventType === "booking.cancelled");
+  expect(events).toHaveLength(1);
+  expect(events[0].payload).toEqual({
+    bookingId: 2,
+    reason: "Owner cancellation",
+    actorId: 3,
+    localCouponTransitions: fixture.rows("ticket_coupons").map((c, i) => ({
+      couponId: c.id,
+      passengerId: 5,
+      flightId: c.flightId,
+      couponNumber: c.couponNumber,
+      previousStatus: i === 0 ? "O" : "C",
+      status: "V",
+    })),
+  });
 });
 
 it("marks historical uplift unknown when no boarding evidence exists", async () => {

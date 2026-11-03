@@ -578,6 +578,9 @@ export async function printBagTag(
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
   if (
+    !Number.isInteger(bagCount) ||
+    bagCount < 1 ||
+    bagCount > 10 ||
     !tagNumbers ||
     tagNumbers.length !== bagCount ||
     new Set(tagNumbers).size !== bagCount

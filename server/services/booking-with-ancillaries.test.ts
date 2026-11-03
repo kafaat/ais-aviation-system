@@ -105,6 +105,7 @@ describe.skipIf(!dbAvailable)("Booking with Ancillaries Integration", () => {
       category: "baggage",
       name: "Test Integration Baggage",
       description: "Test baggage for integration",
+      weightGrams: 10000,
       price: 10000,
       currency: "SAR",
       available: true,
@@ -204,8 +205,22 @@ describe.skipIf(!dbAvailable)("Booking with Ancillaries Integration", () => {
     // Verify ancillaries were added
     const ancillaries = await getBookingAncillaries(result.bookingId);
     expect(ancillaries.length).toBe(1);
-    expect(ancillaries[0].quantity).toBe(2);
-    expect(ancillaries[0].totalPrice).toBe(20000);
+    expect(ancillaries[0]).toMatchObject({
+      quantity: 2,
+      totalPrice: 20000,
+      scopeState: "specific_segment",
+      passengerFirstName: "Test",
+      passengerLastName: "User",
+      segmentOrder: 1,
+      flightNumber: "BA999",
+    });
+    const db = await getDb();
+    if (!db) throw new Error("Database not available for tests");
+    const snapshots = await db
+      .select({ grams: bookingAncillaries.weightSnapshotGrams })
+      .from(bookingAncillaries)
+      .where(eq(bookingAncillaries.bookingId, result.bookingId));
+    expect(snapshots).toEqual([{ grams: 20000 }]);
     expect(ancillaries[0].service.code).toBe("TEST_INTEGRATION_BAG");
   });
 

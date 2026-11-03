@@ -881,6 +881,10 @@ try {
       const { stripe } = await import("../../server/stripe");
       await booking(13, 13, 1, true);
       await booking(14, 13, 1, false);
+      const { readTicketDocument } =
+        await import("../../server/services/ticket-documents.service");
+      const passengerId = id + 13 * 20;
+      await readTicketDocument(id + 13, passengerId, id);
       await db
         .update(s.flights)
         .set({ economyAvailable: 9 })
@@ -1027,7 +1031,44 @@ try {
           .where(eq(s.bookings.id, id + 13));
         assert.equal(cancelled.status, "cancelled");
         assert.equal(cancelled.paymentStatus, "refunded");
+        const [coupon] = await db
+          .select()
+          .from(s.ticketCoupons)
+          .where(eq(s.ticketCoupons.bookingId, id + 13));
+        assert.equal(coupon.status, "R");
+        const events = await db
+          .select()
+          .from(s.outbox)
+          .where(eq(s.outbox.tenantId, id));
+        const transitions = events.filter(
+          event =>
+            event.payload.bookingId === id + 13 &&
+            event.payload.localCouponTransitions
+        );
+        assert.deepEqual(transitions.map(e => e.eventType).sort(), [
+          "booking.cancelled",
+          "payment.refunded",
+        ]);
+        for (const e of transitions) {
+          const cancelled = e.eventType === "booking.cancelled";
+          assert.deepEqual(e.payload.localCouponTransitions, [
+            {
+              couponId: coupon.id,
+              passengerId,
+              flightId: id + 13,
+              couponNumber: 1,
+              previousStatus: cancelled ? "O" : "V",
+              status: cancelled ? "V" : "R",
+            },
+          ]);
+          if (!cancelled)
+            assert.equal(typeof e.payload.providerEventId, "string");
+        }
         return {
+          auditedCouponTransitions: [
+            "O→V on local cancellation",
+            "V→R after both payer refunds",
+          ],
           originalPayers: 2,
           providerCreates: keys.length,
           refundedMinorUnits: 10000,

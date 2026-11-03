@@ -156,14 +156,12 @@ it.each(["loading", "arrival"])(
   "refuses a tag whose most recent custody is %s",
   async stage => {
     const event = fixture.rows("baggage_custody_events")[0];
-    fixture
-      .rows("baggage_custody_events")
-      .push({
-        ...event,
-        id: 10,
-        stage,
-        observedAt: new Date(event.observedAt.getTime() + 1000),
-      });
+    fixture.rows("baggage_custody_events").push({
+      ...event,
+      id: 10,
+      stage,
+      observedAt: new Date(event.observedAt.getTime() + 1000),
+    });
     await expect(caller.printBagTag(input)).rejects.toMatchObject({
       code: "PRECONDITION_FAILED",
     });
