@@ -108,6 +108,8 @@ export function createVidecomRouter(env = process.env) {
             img { max-width: 9rem; max-height: 2.5rem; vertical-align: middle; }
             iframe { width: 100%; height: 20rem; border: 0; }
             a { color: #164e83; }
+            nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+            nav a { display: inline-block; padding: 0.65rem 0.35rem; }
             section { margin: 1.5rem 0; }
           `}</style>
         </head>
@@ -116,16 +118,23 @@ export function createVidecomRouter(env = process.env) {
             <main>
               {identity}
               <h1>{copy.title}</h1>
+              <nav aria-label={copy.title}>
+                {[
+                  [copy.booking, search.href],
+                  [copy.manage, manage],
+                  [copy.agent, agent],
+                ].map(([title, url]) => (
+                  <a key={url} href={url} target="_top" rel="noreferrer">
+                    {title}
+                  </a>
+                ))}
+              </nav>
               {[
                 [copy.booking, search.href],
                 [copy.manage, manage],
               ].map(([title, url]) => (
                 <section key={url}>
-                  <h2>
-                    <a href={url} rel="noreferrer">
-                      {title}
-                    </a>
-                  </h2>
+                  <h2>{title}</h2>
                   <iframe
                     title={title}
                     src={url}
@@ -134,9 +143,6 @@ export function createVidecomRouter(env = process.env) {
                   />
                 </section>
               ))}
-              <a href={agent} rel="noreferrer">
-                {copy.agent}
-              </a>
             </main>
           ) : header ? (
             <header>{identity}</header>
