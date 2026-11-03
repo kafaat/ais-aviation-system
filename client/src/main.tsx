@@ -11,30 +11,19 @@ initWebVitals({
 });
 
 import { trpc } from "@/lib/trpc";
+import { redirectToLoginIfUnauthorized } from "@/lib/auth-navigation";
 import "./i18n/config";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
+import EmbedSearch from "./pages/EmbedSearch";
+import { isEmbeddedSearchDocument } from "@/lib/embedded-entry";
 import "./index.css";
 
 const queryClient = new QueryClient();
-
-const redirectToLoginIfUnauthorized = (error: unknown) => {
-  if (!(error instanceof TRPCClientError)) return;
-  if (typeof window === "undefined") return;
-
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
-  if (!isUnauthorized) return;
-
-  // Don't redirect if already on the login page (prevents infinite loop)
-  if (window.location.pathname === "/login") return;
-
-  window.location.href = "/login";
-};
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
@@ -91,10 +80,16 @@ if (!rootElement) {
   throw new Error("Root element not found");
 }
 
+// Keep the allowed iframe document isolated from the account SPA router and
+// its navigation. Search submission opens the normal application at the top.
+const page = isEmbeddedSearchDocument(window.location.pathname) ? (
+  <EmbedSearch />
+) : (
+  <App />
+);
+
 createRoot(rootElement).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
+    <QueryClientProvider client={queryClient}>{page}</QueryClientProvider>
   </trpc.Provider>
 );

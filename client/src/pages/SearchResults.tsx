@@ -1,5 +1,9 @@
+import { readSearchPreferences as searchPreferences } from "@/lib/ibe-display-context";
 import { useEffect, useState, useMemo } from "react";
-import { useSearch, Link } from "wouter";
+import { adjacentSearch, travelerTypes } from "@shared/ibe-search";
+import { DisplayCurrencyEstimate } from "@/components/DisplayCurrencyEstimate";
+import { Link, Redirect } from "wouter";
+import { useRawSearch } from "@/lib/useRawSearch";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -42,6 +46,7 @@ import { toast } from "sonner";
 import type { FlightData } from "@/components/FlightCard";
 import { ArrivalDayOffset } from "@/components/ArrivalDayOffset";
 import { dayOffset, formatFlightTime } from "@/lib/flight-time";
+import { flightSearchPath } from "@/lib/search-context";
 
 const CIVIL_DAY = /^\d{4}-\d{2}-\d{2}$/;
 /** The calendar day a search date means, as YYYY-MM-DD. An older link
@@ -66,9 +71,16 @@ interface FilterOptions {
 }
 
 export default function SearchResults() {
+  const search = useRawSearch();
+  if (!flightSearchPath(search)) return <Redirect to="/" />;
+  return <SearchResultsContent search={search} />;
+}
+
+function SearchResultsContent({ search }: { search: string }) {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const search = useSearch();
+  const preferences = useMemo(() => searchPreferences(search), [search]);
+  const passengerCount = travelerTypes(preferences).length;
   const params = useMemo(() => {
     const query = new URLSearchParams(search);
     const originId = Number(query.get("origin"));
@@ -186,10 +198,10 @@ export default function SearchResults() {
         destinationCity: flight.destination.city,
         departureDate: civilDay(params.departureDate),
         cabinClass: "economy",
-        passengers: 1,
+        passengers: passengerCount,
       });
     }
-  }, [flights, params]);
+  }, [flights, params, passengerCount]);
 
   // Filter and sort flights based on selected filters
   const filteredFlights = useMemo(() => {
@@ -239,12 +251,12 @@ export default function SearchResults() {
       result = result.filter(flight => {
         if (
           filters.cabinClass.includes("economy") &&
-          flight.economyAvailable > 0
+          flight.economyAvailable >= passengerCount
         )
           return true;
         if (
           filters.cabinClass.includes("business") &&
-          flight.businessAvailable > 0
+          flight.businessAvailable >= passengerCount
         )
           return true;
         return false;
@@ -252,7 +264,7 @@ export default function SearchResults() {
     }
 
     return result;
-  }, [flights, filters]);
+  }, [flights, filters, passengerCount]);
 
   const handleApplyFilters = (newFilters: FilterOptions) => {
     setFilters(newFilters);
@@ -393,6 +405,32 @@ export default function SearchResults() {
 
       {/* Results */}
       <main className="container py-8">
+        {params && (
+          <nav
+            className="flex flex-wrap items-center gap-3 mb-6"
+            aria-label={t("search.title")}
+          >
+            {([-1, 1] as const).map(offset => {
+              const href = adjacentSearch(search, offset);
+              return (
+                href && (
+                  <Button key={offset} asChild variant="outline">
+                    <Link href={href}>
+                      {t(offset === -1 ? "ibe.previousDay" : "ibe.nextDay")}
+                    </Link>
+                  </Button>
+                )
+              );
+            })}
+            <span className="text-sm">
+              {t("ibe.passengerSummary", { count: passengerCount })}
+            </span>
+            <p className="w-full text-xs text-muted-foreground">
+              {t("ibe.perPassenger")}
+            </p>
+          </nav>
+        )}
+
         {searchError ? (
           <Card className="p-8" role="alert">
             <p>{searchError.message}</p>
@@ -477,6 +515,9 @@ export default function SearchResults() {
                     (flight.status as FlightStatusType) ||
                     "scheduled";
 
+                  const namedFares = flight.fareClassAvailability?.filter(
+                    fare => fare.availableSeats >= passengerCount
+                  );
                   const canLock =
                     user &&
                     ["scheduled", "delayed"].includes(displayStatus) &&
@@ -739,7 +780,7 @@ export default function SearchResults() {
                         {/* Pricing */}
                         <div className="lg:col-span-4">
                           <div className="flex flex-col sm:flex-row gap-3">
-                            {flight.economyAvailable > 0 ? (
+                            {flight.economyAvailable >= passengerCount ? (
                               <div className="flex-1">
                                 <div className="text-center p-4 border-2 rounded-xl hover:border-primary/50 transition-colors group">
                                   <p className="text-xs text-muted-foreground mb-1">
@@ -749,6 +790,9 @@ export default function SearchResults() {
                                     className="text-2xl font-bold text-primary"
                                     data-testid="flight-price"
                                   >
+                                    <DisplayCurrencyEstimate
+                                      amountMinor={flight.economyPrice}
+                                    />
                                     {formatPrice(flight.economyPrice)}{" "}
                                     <span className="text-sm font-normal">
                                       {t("common.currency")}
@@ -766,7 +810,7 @@ export default function SearchResults() {
                                     size="sm"
                                   >
                                     <Link
-                                      href={`/booking/${flight.id}?class=economy`}
+                                      href={`/booking/${flight.id}?class=economy&search=${encodeURIComponent(search)}`}
                                     >
                                       {t("search.bookNow")}
                                     </Link>
@@ -806,13 +850,16 @@ export default function SearchResults() {
                               </div>
                             )}
 
-                            {flight.businessAvailable > 0 ? (
+                            {flight.businessAvailable >= passengerCount ? (
                               <div className="flex-1">
                                 <div className="text-center p-4 border-2 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200 hover:border-amber-400 transition-colors group">
                                   <p className="text-xs text-amber-700 mb-1 font-medium">
                                     {t("search.business")}
                                   </p>
                                   <p className="text-2xl font-bold text-amber-700">
+                                    <DisplayCurrencyEstimate
+                                      amountMinor={flight.businessPrice}
+                                    />
                                     {formatPrice(flight.businessPrice)}{" "}
                                     <span className="text-sm font-normal">
                                       {t("common.currency")}
@@ -829,7 +876,7 @@ export default function SearchResults() {
                                     size="sm"
                                   >
                                     <Link
-                                      href={`/booking/${flight.id}?class=business`}
+                                      href={`/booking/${flight.id}?class=business&search=${encodeURIComponent(search)}`}
                                     >
                                       {t("search.bookNow")}
                                     </Link>
@@ -869,6 +916,31 @@ export default function SearchResults() {
                               </div>
                             )}
                           </div>
+                          {!!namedFares?.length && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <span className="text-xs text-muted-foreground">
+                                {t("fareRules.fareFamily")}
+                              </span>
+                              {namedFares.map(fare => (
+                                <Button
+                                  key={fare.fareClassId}
+                                  size="sm"
+                                  variant="outline"
+                                  asChild
+                                >
+                                  <Link
+                                    href={`/booking/${flight.id}?class=${fare.cabinClass}&fareClassCode=${encodeURIComponent(fare.code)}&search=${encodeURIComponent(search)}`}
+                                  >
+                                    {t(`search.${fare.cabinClass}`)} ·{" "}
+                                    {fare.fareFamily
+                                      ? fare.fareFamily + " · "
+                                      : ""}
+                                    {fare.code}
+                                  </Link>
+                                </Button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </Card>

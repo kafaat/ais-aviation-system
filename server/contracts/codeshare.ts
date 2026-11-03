@@ -138,7 +138,12 @@ export const responseContracts = {
           "hard_block",
           "soft_block",
         ]),
-        blockSize: z.union([z.null(), outputNumber]),
+        blockSize: z
+          .union([z.null(), outputNumber])
+          .describe("Configured agreement block size"),
+        partnerSeatsAvailable: z
+          .null()
+          .describe("No partner sale inventory is connected"),
         flightId: outputNumber,
         flightNumber: z.string(),
         departureTime: z.date(),
@@ -147,8 +152,12 @@ export const responseContracts = {
         status: z.enum(["scheduled", "delayed", "cancelled", "completed"]),
         economyPrice: outputNumber,
         businessPrice: outputNumber,
-        economyAvailable: outputNumber,
-        businessAvailable: outputNumber,
+        economyAvailable: outputNumber.describe(
+          "Operating carrier economy cabin counter"
+        ),
+        businessAvailable: outputNumber.describe(
+          "Operating carrier business cabin counter"
+        ),
         operatingAirline: z.object({
           id: outputNumber,
           code: z.string(),

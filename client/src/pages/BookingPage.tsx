@@ -1,8 +1,15 @@
+import { readSearchPreferences as searchPreferences } from "@/lib/ibe-display-context";
+import { preferenceParams, travelerTypes } from "@shared/ibe-search";
+import { DisplayCurrencyEstimate } from "@/components/DisplayCurrencyEstimate";
 import { hasValidOptionalPassport } from "@shared/passport";
 import { useState, useEffect, useRef } from "react";
-import { useLocation, useRoute, useSearch, Link } from "wouter";
+import { useLocation, useRoute, Link } from "wouter";
+import { useRawSearch } from "@/lib/useRawSearch";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { loginPath } from "@shared/return-to";
+import { flightSearchPath } from "@/lib/search-context";
 import { trpc } from "@/lib/trpc";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
@@ -55,16 +62,7 @@ import {
   type PassengerData,
 } from "@/components/SavedPassengerSelect";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { WalletBookingPayment } from "@/components/WalletBookingPayment";
 import { useOperationalLabels } from "@/components/OperationalReadState";
-import SplitPaymentForm from "@/components/SplitPaymentForm";
 import { CarbonOffset } from "@/components/CarbonOffset";
 import { TravelRequirements } from "@/components/TravelRequirements";
 
@@ -83,13 +81,15 @@ type Passenger = {
 
 export default function BookingPage() {
   const [, params] = useRoute("/booking/:id");
-  const search = useSearch();
+  const search = useRawSearch();
   return (
-    <BookingForm
-      key={JSON.stringify([params?.id, search])}
-      flightId={Number(params?.id) || 0}
-      search={search}
-    />
+    <ProtectedRoute>
+      <BookingForm
+        key={JSON.stringify([params?.id, search])}
+        flightId={Number(params?.id) || 0}
+        search={search}
+      />
+    </ProtectedRoute>
   );
 }
 
@@ -106,15 +106,22 @@ function BookingForm({
   const [, navigate] = useLocation();
 
   const searchParams = new URLSearchParams(search);
+  const backToSearch = flightSearchPath(searchParams.get("search")) ?? "/";
   const cabinClass = (searchParams.get("class") || "economy") as
     | "economy"
     | "business";
+  const fareClassCode =
+    searchParams.get("fareClassCode")?.trim().toUpperCase() || undefined;
   const rebookParam = searchParams.get("rebook");
   const rebookFromId = rebookParam ? parseInt(rebookParam) : null;
 
-  const [passengers, setPassengers] = useState<Passenger[]>([
-    { type: "adult", firstName: "", lastName: "" },
-  ]);
+  const [passengers, setPassengers] = useState<Passenger[]>(() =>
+    travelerTypes(searchPreferences(search)).map(type => ({
+      type,
+      firstName: "",
+      lastName: "",
+    }))
+  );
   const waitlistId = Number(searchParams.get("waitlistId")) || undefined;
   const groupBookingId =
     Number(searchParams.get("groupBookingId")) || undefined;
@@ -154,14 +161,6 @@ function BookingForm({
   const [selectedSeats, setSelectedSeats] = useState<
     { id: string; row: number; column: string }[]
   >([]);
-  const [paymentDialog, setPaymentDialog] = useState<"split" | "wallet" | null>(
-    null
-  );
-  const [createdBookingId, setCreatedBookingId] = useState<number | null>(null);
-  const [createdBookingRef, setCreatedBookingRef] = useState<string | null>(
-    null
-  );
-  const [createdBookingAmount, setCreatedBookingAmount] = useState<number>(0);
   const [smsNotification, setSmsNotification] = useState(false);
   const [smsPhoneNumber, setSmsPhoneNumber] = useState("");
 
@@ -186,6 +185,7 @@ function BookingForm({
   const offerFingerprint = JSON.stringify({
     flightId,
     cabinClass,
+    fareClassCode,
     types: passengers.map(p => p.type),
   });
   const activeOffer =
@@ -203,6 +203,7 @@ function BookingForm({
     const fingerprint = JSON.stringify({
       flightId,
       cabinClass,
+      fareClassCode,
       passengers,
       ancillaries: ancillaryCommandLines(selectedAncillaries),
       selectedSeats,
@@ -214,17 +215,17 @@ function BookingForm({
       command.current = {
         fingerprint,
         key: crypto.randomUUID(),
-        priceLockId: priceLockStatus?.lock?.id,
+        priceLockId: fareClassCode ? undefined : priceLockStatus?.lock?.id,
       };
     }
     return {
       sessionId: command.current.key,
       idempotencyKey: command.current.key,
+      fareClassCode,
       priceLockId: command.current.priceLockId,
       offerId: command.current.priceLockId ? undefined : activeOffer?.offerId,
     };
   };
-  const createCheckout = trpc.payments.createCheckoutSession.useMutation();
   const savePassengerMutation = trpc.savedPassengers.add.useMutation();
 
   // Get user preferences for SMS phone number
@@ -338,6 +339,9 @@ function BookingForm({
     if (waitlistId || groupBookingId) return;
     if (passengers.length > 1) {
       setPassengers(passengers.filter((_, i) => i !== index));
+      // Seat assignments use the same passenger order as the booking command.
+      // Remove both positions together so remaining passengers keep their seats.
+      setSelectedSeats(seats => seats.filter((_, i) => i !== index));
       setSelectedAncillaries(lines =>
         lines
           .filter(line => line.passengerIndex !== index)
@@ -403,7 +407,7 @@ function BookingForm({
 
   const handleSubmit = async () => {
     if (!isAuthenticated) {
-      window.location.href = "/login";
+      navigate(loginPath(`/booking/${flightId}${search ? `?${search}` : ""}`));
       return;
     }
 
@@ -445,15 +449,6 @@ function BookingForm({
           : undefined,
       });
 
-      // Redirect to the provider; creating a booking is not payment proof.
-      const checkout = await createCheckout.mutateAsync({
-        bookingId: booking.bookingId,
-        provider: "stripe",
-      });
-      if (!checkout.url) {
-        throw new Error(t("common.error"));
-      }
-
       // Save passengers that are marked for future use
       for (const p of passengers) {
         if (p.saveForFuture) {
@@ -471,8 +466,10 @@ function BookingForm({
         }
       }
 
-      // Confirmation is handled only after provider-verified settlement.
-      window.location.assign(checkout.url);
+      // Review and promotions precede the frozen checkout claim.
+      navigate(
+        `/checkout/${booking.bookingId}?${preferenceParams(searchPreferences(search))}`
+      );
     } catch (error: { message?: string } | unknown) {
       const errorMessage =
         error instanceof Error ? error.message : t("common.error");
@@ -482,7 +479,7 @@ function BookingForm({
 
   const preparePayment = async (method: "split" | "wallet") => {
     if (!isAuthenticated) {
-      window.location.href = "/login";
+      navigate(loginPath(`/booking/${flightId}${search ? `?${search}` : ""}`));
       return;
     }
 
@@ -542,21 +539,14 @@ function BookingForm({
       }
 
       // Review the server-issued booking amount before choosing the payment source.
-      setCreatedBookingId(booking.bookingId);
-      setCreatedBookingRef(booking.bookingReference);
-      setCreatedBookingAmount(booking.totalAmount);
-      setPaymentDialog(method);
+      const context = preferenceParams(searchPreferences(search));
+      context.set("method", method);
+      navigate(`/checkout/${booking.bookingId}?${context}`);
     } catch (error: { message?: string } | unknown) {
       const errorMessage =
         error instanceof Error ? error.message : t("common.error");
       toast.error(errorMessage);
     }
-  };
-
-  const handleSplitPaymentSuccess = () => {
-    setPaymentDialog(null);
-    toast.success(t("splitPayment.initiateSuccess"));
-    navigate(`/my-bookings`);
   };
 
   if (isLoading) {
@@ -594,7 +584,7 @@ function BookingForm({
     );
   }
 
-  const activePriceLock = priceLockStatus?.lock;
+  const activePriceLock = fareClassCode ? undefined : priceLockStatus?.lock;
   const price =
     activePriceLock?.lockedPrice ??
     (cabinClass === "economy" ? flight.economyPrice : flight.businessPrice);
@@ -605,7 +595,6 @@ function BookingForm({
         : (activeOffer?.totalAmount ?? price * passengers.length))) / 100;
   const paymentUnavailable =
     createBooking.isPending ||
-    createCheckout.isPending ||
     (!groupBookingId && !activePriceLock && !activeOffer) ||
     (Boolean(waitlistId || groupBookingId) &&
       (!allocation.data || allocation.isError));
@@ -638,7 +627,7 @@ function BookingForm({
         <div className="container py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/search">
+              <Link href={backToSearch}>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1146,6 +1135,7 @@ function BookingForm({
                 flightId={flight.id}
                 cabinClass={cabinClass}
                 maxSeats={passengers.length}
+                selectedSeatNumbers={selectedSeats.map(seat => seat.id)}
                 aircraftType={flight.aircraftType ?? undefined}
                 onSeatSelect={seats =>
                   setSelectedSeats(
@@ -1166,7 +1156,7 @@ function BookingForm({
               passengers={passengers}
               selected={selectedAncillaries}
               onChange={setSelectedAncillaries}
-              disabled={createBooking.isPending || createCheckout.isPending}
+              disabled={createBooking.isPending}
             />
 
             {/* Travel Requirements & Carbon Offset */}
@@ -1313,6 +1303,9 @@ function BookingForm({
                     <span>{t("booking.total")}</span>
                     <span className="text-primary">
                       {totalAmount.toFixed(2)} {t("common.currency")}
+                      <DisplayCurrencyEstimate
+                        amountMinor={Math.round(totalAmount * 100)}
+                      />
                     </span>
                   </div>
                 </div>
@@ -1355,6 +1348,11 @@ function BookingForm({
               </div>
 
               <div className="space-y-3">
+                {fareClassCode && (
+                  <p>
+                    {t("fareRules.fareFamily")} · {fareClassCode}
+                  </p>
+                )}
                 {!activePriceLock && !groupBookingId && (
                   <>
                     <Button
@@ -1367,10 +1365,12 @@ function BookingForm({
                           const offer = await createOffer.mutateAsync({
                             flightId,
                             cabinClass,
+                            fareClassCode,
                             passengerTypes: passengers.map(p => p.type),
                           });
                           setSelectedOffer({ ...offer, fingerprint });
                         } catch (error) {
+                          setSelectedOffer(null);
                           toast.error(
                             error instanceof Error
                               ? error.message
@@ -1413,7 +1413,7 @@ function BookingForm({
                   disabled={paymentUnavailable}
                 >
                   <CreditCard className="h-5 w-5 mr-2" aria-hidden="true" />
-                  {createBooking.isPending || createCheckout.isPending
+                  {createBooking.isPending
                     ? t("booking.processing")
                     : t("booking.completeBooking")}
                 </Button>
@@ -1446,49 +1446,6 @@ function BookingForm({
           </div>
         </div>
       </main>
-
-      <Dialog
-        open={paymentDialog !== null}
-        onOpenChange={open => {
-          if (!open) setPaymentDialog(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {paymentDialog === "wallet"
-                ? l("الدفع بالمحفظة", "Wallet payment")
-                : t("splitPayment.title")}
-            </DialogTitle>
-            <DialogDescription>
-              {paymentDialog === "wallet"
-                ? l(
-                    "راجع المبلغ وأكّد الخصم من رصيدك",
-                    "Review the amount and confirm the wallet debit"
-                  )
-                : t("splitPayment.description")}
-            </DialogDescription>
-          </DialogHeader>
-          {paymentDialog === "wallet" && createdBookingId && (
-            <WalletBookingPayment
-              bookingId={createdBookingId}
-              totalAmount={createdBookingAmount}
-              initiallyReviewing
-            />
-          )}
-          {paymentDialog === "split" &&
-            createdBookingId &&
-            createdBookingRef && (
-              <SplitPaymentForm
-                bookingId={createdBookingId}
-                totalAmount={createdBookingAmount}
-                bookingReference={createdBookingRef}
-                onSuccess={handleSplitPaymentSuccess}
-                onCancel={() => setPaymentDialog(null)}
-              />
-            )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

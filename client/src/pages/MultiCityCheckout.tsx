@@ -1,29 +1,48 @@
+import { readSearchPreferences as searchPreferences } from "@/lib/ibe-display-context";
+import { useRawSearch } from "@/lib/useRawSearch";
+import { preferenceParams } from "@shared/ibe-search";
+import { DisplayCurrencyEstimate } from "@/components/DisplayCurrencyEstimate";
+import {
+  InitialSectorSeats,
+  type SectorSeat,
+} from "@/components/InitialSectorSeats";
 import AncillarySelection, {
   ancillaryCommandLines,
   type SelectedAncillary,
 } from "@/components/AncillarySelection";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useLocation, useSearch } from "wouter";
+import { Link, useLocation } from "wouter";
 import { z } from "zod";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
-const itinerary = z.object({
-  version: z.literal(1),
-  sessionId: z.uuid(),
-  passengerCount: z.number().int().min(1).max(9),
-  cabinClass: z.enum(["economy", "business"]),
-  segments: z
-    .array(
-      z.object({
-        flightId: z.number().int().positive(),
-        departureDate: z.iso.datetime().transform(value => new Date(value)),
-      })
-    )
-    .min(2)
-    .max(5),
-});
+const itinerary = z
+  .object({
+    version: z.literal(1),
+    sessionId: z.uuid(),
+    passengerCount: z.number().int().min(1).max(9),
+    passengerTypes: z
+      .array(z.enum(["adult", "child", "infant"]))
+      .min(1)
+      .max(9)
+      .optional(),
+    cabinClass: z.enum(["economy", "business"]),
+    segments: z
+      .array(
+        z.object({
+          flightId: z.number().int().positive(),
+          departureDate: z.iso.datetime().transform(value => new Date(value)),
+        })
+      )
+      .min(2)
+      .max(5),
+  })
+  .refine(
+    value =>
+      !value.passengerTypes ||
+      value.passengerTypes.length === value.passengerCount
+  );
 type Passenger = {
   firstName: string;
   lastName: string;
@@ -32,7 +51,7 @@ type Passenger = {
 
 export default function MultiCityCheckout() {
   const { t } = useTranslation();
-  const search = useSearch();
+  const search = useRawSearch();
   const data = useMemo(() => {
     try {
       return itinerary.parse(
@@ -55,11 +74,12 @@ export default function MultiCityCheckout() {
 function Checkout({ data }: { data: z.output<typeof itinerary> }) {
   const { t, i18n } = useTranslation();
   const [, navigate] = useLocation();
+  const search = useRawSearch();
   const [passengers, setPassengers] = useState<Passenger[]>(() =>
-    Array.from({ length: data.passengerCount }, () => ({
+    Array.from({ length: data.passengerCount }, (_, index) => ({
       firstName: "",
       lastName: "",
-      type: "adult",
+      type: data.passengerTypes?.[index] ?? "adult",
     }))
   );
   const quote = trpc.multiCity.calculatePrice.useQuery({
@@ -74,6 +94,7 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
   const booking = trpc.multiCity.create.useMutation();
   const [submittedAmount, setSubmittedAmount] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [seats, setSeats] = useState<SectorSeat[]>([]);
   const [extras, setExtras] = useState<SelectedAncillary[]>([]);
   const extrasTotal = extras.reduce((sum, row) => sum + row.totalPrice, 0);
 
@@ -81,6 +102,8 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
     submittedAmount ??
     (quote.data ? quote.data.totalPrice + extrasTotal : undefined);
   function edit(index: number, patch: Partial<Passenger>) {
+    if (patch.type === "infant")
+      setSeats(current => current.filter(s => s.passengerIndex !== index));
     setPassengers(current =>
       current.map((p, i) => (i === index ? { ...p, ...patch } : p))
     );
@@ -98,8 +121,18 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
           setError("");
           setSubmittedAmount(total);
           try {
-            await booking.mutateAsync({
-              segments: data.segments,
+            const result = await booking.mutateAsync({
+              segments: data.segments.map((segment, index) => {
+                const choices = seats
+                  .filter(s => s.segmentIndex === index)
+                  .map(({ passengerIndex, seatNumber }) => ({
+                    passengerIndex,
+                    seatNumber,
+                  }));
+                return choices.length
+                  ? { ...segment, seats: choices }
+                  : segment;
+              }),
               cabinClass: data.cabinClass,
               passengers,
               sessionId: data.sessionId,
@@ -109,7 +142,9 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
                 ? { ancillaries: ancillaryCommandLines(extras) }
                 : {}),
             });
-            navigate("/my-bookings");
+            navigate(
+              `/checkout/${result.bookingId}?${preferenceParams(searchPreferences(search))}`
+            );
           } catch (failure) {
             setError(
               failure instanceof Error ? failure.message : t("common.error")
@@ -123,12 +158,16 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
             if (
               code === "CONFLICT" ||
               code === "BAD_REQUEST" ||
+              code === "NOT_FOUND" ||
               code === "PRECONDITION_FAILED"
             ) {
               setSubmittedAmount(null);
               await Promise.all([
                 quote.refetch(),
                 utils.ancillary.getAvailable.invalidate(),
+                ...(seats.length
+                  ? [utils.seatMap.getFlightSeatMap.invalidate()]
+                  : []),
               ]);
             }
           }
@@ -178,6 +217,14 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
             </label>
           </fieldset>
         ))}
+        <InitialSectorSeats
+          flightIds={data.segments.map(s => s.flightId)}
+          cabinClass={data.cabinClass}
+          passengers={passengers}
+          value={seats}
+          onChange={setSeats}
+          disabled={submittedAmount !== null}
+        />
         <AncillarySelection
           cabinClass={data.cabinClass}
           flightIds={data.segments.map(s => s.flightId)}
@@ -193,6 +240,7 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
               style: "currency",
               currency: "SAR",
             }).format(total / 100)}
+            <DisplayCurrencyEstimate amountMinor={total} />
           </p>
         )}
         {(error || quote.error) && (

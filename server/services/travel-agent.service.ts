@@ -3,6 +3,12 @@ import { recordEvent } from "./outbox.service";
 import { assertTenantOperational, isTenantActive } from "./tenant.service";
 import { createBooking } from "./bookings.service";
 import { withTransactionalIdempotency } from "./idempotency-v2.service";
+import {
+  requireOwnedAgency,
+  agencyUnavailable,
+  type AgencySessionOwner,
+} from "./agent-session-authorization";
+import type { SettlementTx } from "./booking-settlement.service";
 /**
  * Travel Agent Service
  *
@@ -19,6 +25,7 @@ import { TRPCError } from "@trpc/server";
 import {
   and,
   eq,
+  ne,
   gte,
   lt,
   lte,
@@ -44,6 +51,7 @@ import {
   airlines,
   type TravelAgent,
   users,
+  idempotencyRequests,
 } from "../../drizzle/schema";
 import { createServiceLogger } from "../_core/logger";
 
@@ -425,7 +433,8 @@ export async function searchFlightsForAgent(
  */
 export async function createAgentBooking(
   agentId: number,
-  input: AgentBookingInput
+  input: AgentBookingInput,
+  expectedOwner?: AgencySessionOwner
 ): Promise<{
   bookingId: number;
   bookingReference: string;
@@ -446,6 +455,12 @@ export async function createAgentBooking(
     .from(travelAgents)
     .where(eq(travelAgents.id, agentId));
 
+  if (
+    expectedOwner &&
+    (!agent?.isActive || agent.ownerUserId !== expectedOwner.userId)
+  )
+    agencyUnavailable();
+
   if (!agent) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Agent not found" });
   }
@@ -457,102 +472,152 @@ export async function createAgentBooking(
         "Agency must have an active, verified account owner before booking",
     });
   const owner = await validateAgentOwner(agent.ownerUserId);
+  if (
+    expectedOwner &&
+    (owner.id !== expectedOwner.userId ||
+      owner.tenantId !== expectedOwner.tenantId)
+  )
+    agencyUnavailable();
   const key = input.idempotencyKey ?? input.externalReference;
   if (!key)
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "An idempotency key or unique external reference is required",
     });
-  return withTransactionalIdempotency({
-    transactionConfig: inventoryTransactionConfig,
-    scope: `agent.booking.${agentId}`,
-    key,
-    userId: owner.id,
-    request: input,
-    run: async tx => {
-      const [current] = await tx
-        .select()
-        .from(travelAgents)
-        .where(eq(travelAgents.id, agentId))
-        .limit(1)
-        .for("update");
-      if (!current?.isActive || current.ownerUserId !== owner.id)
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Agency account changed",
-        });
-      const [currentOwner] = await tx
-        .select()
-        .from(users)
-        .where(eq(users.id, owner.id))
-        .limit(1)
-        .for("share");
-      if (!currentOwner || currentOwner.tenantId !== owner.tenantId)
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "Agency owner changed; retry with the current account",
-        });
-      for (const [period, limit] of [
-        ["day", current.dailyBookingLimit],
-        ["month", current.monthlyBookingLimit],
-      ] as const) {
-        const since = new Date();
-        since.setUTCHours(0, 0, 0, 0);
-        if (period === "month") since.setUTCDate(1);
-        const [usage] = await tx
-          .select({ count: sql<number>`count(*)` })
-          .from(agentBookings)
-          .where(
-            and(
-              eq(agentBookings.agentId, agentId),
-              gte(agentBookings.createdAt, since)
-            )
+  const execute = (transaction?: SettlementTx) =>
+    withTransactionalIdempotency(
+      {
+        transactionConfig: inventoryTransactionConfig,
+        scope: `agent.booking.${agentId}`,
+        key,
+        userId: owner.id,
+        request: input,
+        run: async tx => {
+          const [current] = await tx
+            .select()
+            .from(travelAgents)
+            .where(eq(travelAgents.id, agentId))
+            .limit(1)
+            .for("update");
+          if (!current?.isActive || current.ownerUserId !== owner.id)
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Agency account changed",
+            });
+          const [currentOwner] = await tx
+            .select()
+            .from(users)
+            .where(eq(users.id, owner.id))
+            .limit(1)
+            .for("share");
+          if (!currentOwner || currentOwner.tenantId !== owner.tenantId)
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Agency owner changed; retry with the current account",
+            });
+          if (expectedOwner) {
+            // Preserve strict NULL-tenant isolation for the session portal too.
+            // This runs only on a new command, so a replay is not blocked by
+            // inventory that its own original booking already consumed.
+            const [flight] = await tx
+              .select({ tenantId: flights.tenantId })
+              .from(flights)
+              .where(eq(flights.id, input.flightId))
+              .limit(1)
+              .for("update");
+            if (!flight || flight.tenantId !== expectedOwner.tenantId)
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: "Flight not found",
+              });
+          }
+          for (const [period, limit] of [
+            ["day", current.dailyBookingLimit],
+            ["month", current.monthlyBookingLimit],
+          ] as const) {
+            const since = new Date();
+            since.setUTCHours(0, 0, 0, 0);
+            if (period === "month") since.setUTCDate(1);
+            const [usage] = await tx
+              .select({ count: sql<number>`count(*)` })
+              .from(agentBookings)
+              .where(
+                and(
+                  eq(agentBookings.agentId, agentId),
+                  gte(agentBookings.createdAt, since)
+                )
+              );
+            if (Number(usage?.count ?? 0) >= limit)
+              throw new TRPCError({
+                code: "TOO_MANY_REQUESTS",
+                message: `${period} booking limit exceeded`,
+              });
+          }
+          const booking = await createBooking(
+            {
+              userId: owner.id,
+              tenantId: owner.tenantId,
+              flightId: input.flightId,
+              cabinClass: input.cabinClass,
+              passengers: input.passengers,
+              sessionId: `agent:${agentId}:${key}`,
+              idempotencyKey: `agent:${agentId}:${key}`,
+            },
+            tx
           );
-        if (Number(usage?.count ?? 0) >= limit)
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: `${period} booking limit exceeded`,
+          const commissionRate = Number(current.commissionRate);
+          const commission = Math.round(
+            (booking.totalAmount * commissionRate) / 100
+          );
+          await tx.insert(agentBookings).values({
+            agentId,
+            bookingId: booking.bookingId,
+            commissionRate: String(commissionRate),
+            commissionAmount: commission,
+            bookingAmount: booking.totalAmount,
+            externalReference: input.externalReference,
           });
-      }
-      const booking = await createBooking(
-        {
-          userId: owner.id,
-          tenantId: owner.tenantId,
-          flightId: input.flightId,
-          cabinClass: input.cabinClass,
-          passengers: input.passengers,
-          sessionId: `agent:${agentId}:${key}`,
-          idempotencyKey: `agent:${agentId}:${key}`,
+          await tx
+            .update(travelAgents)
+            .set({
+              totalBookings: sql`${travelAgents.totalBookings} + 1`,
+              totalRevenue: sql`${travelAgents.totalRevenue} + ${booking.totalAmount}`,
+              totalCommission: sql`${travelAgents.totalCommission} + ${commission}`,
+            })
+            .where(eq(travelAgents.id, agentId));
+          return {
+            bookingId: booking.bookingId,
+            bookingReference: booking.bookingReference,
+            commission,
+          };
         },
-        tx
-      );
-      const commissionRate = Number(current.commissionRate);
-      const commission = Math.round(
-        (booking.totalAmount * commissionRate) / 100
-      );
-      await tx.insert(agentBookings).values({
-        agentId,
-        bookingId: booking.bookingId,
-        commissionRate: String(commissionRate),
-        commissionAmount: commission,
-        bookingAmount: booking.totalAmount,
-        externalReference: input.externalReference,
+      },
+      transaction
+    );
+  if (!expectedOwner) return execute();
+  // The owner guard runs before BOTH execution and cached replay, on the
+  // same connection/transaction as the idempotency claim. A relink cannot
+  // turn a session command into a booking for the replacement owner.
+  return db.transaction(async tx => {
+    await requireOwnedAgency(tx, expectedOwner, agentId, true);
+    const [previousOwner] = await tx
+      .select({ userId: idempotencyRequests.userId })
+      .from(idempotencyRequests)
+      .where(
+        and(
+          eq(idempotencyRequests.scope, `agent.booking.${agentId}`),
+          eq(idempotencyRequests.idempotencyKey, key),
+          ne(idempotencyRequests.userId, expectedOwner.userId)
+        )
+      )
+      .limit(1);
+    if (previousOwner)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Reservation command cannot be reused by this account",
       });
-      await tx
-        .update(travelAgents)
-        .set({
-          totalBookings: sql`${travelAgents.totalBookings} + 1`,
-          totalRevenue: sql`${travelAgents.totalRevenue} + ${booking.totalAmount}`,
-          totalCommission: sql`${travelAgents.totalCommission} + ${commission}`,
-        })
-        .where(eq(travelAgents.id, agentId));
-      return {
-        bookingId: booking.bookingId,
-        bookingReference: booking.bookingReference,
-        commission,
-      };
-    },
-  });
+    return execute(tx);
+  }, inventoryTransactionConfig);
 }
 
 async function validateAgentOwner(ownerUserId: number) {
@@ -580,7 +645,8 @@ async function validateAgentOwner(ownerUserId: number) {
 export async function assignAgentOwner(
   agentId: number,
   ownerUserId: number,
-  actorId: number
+  actorId: number,
+  onlyIfUnlinked = false
 ) {
   const database = await getDb();
   if (!database) throw new Error("Database not available");
@@ -593,6 +659,15 @@ export async function assignAgentOwner(
       .for("update");
     if (!agency)
       throw new TRPCError({ code: "NOT_FOUND", message: "Agency not found" });
+    if (
+      onlyIfUnlinked &&
+      agency.ownerUserId != null &&
+      agency.ownerUserId !== ownerUserId
+    )
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Agency already has an owner",
+      });
     const [owner] = await tx
       .select()
       .from(users)
@@ -604,6 +679,38 @@ export async function assignAgentOwner(
         code: "NOT_FOUND",
         message: "Agency owner not found",
       });
+    if (agency.ownerUserId != null && agency.ownerUserId !== ownerUserId) {
+      const [previous] = await tx
+        .select({ tenantId: users.tenantId })
+        .from(users)
+        .where(eq(users.id, agency.ownerUserId))
+        .limit(1)
+        .for("share");
+      if (!previous || previous.tenantId !== owner.tenantId)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Cannot transfer agency ownership between tenants",
+        });
+    }
+    if (agency.ownerUserId == null) {
+      // An unlinked historical agency can already have sales. Preserve their tenant boundary.
+      const [foreignBooking] = await tx
+        .select({ id: bookings.id })
+        .from(agentBookings)
+        .innerJoin(bookings, eq(agentBookings.bookingId, bookings.id))
+        .where(
+          and(
+            eq(agentBookings.agentId, agentId),
+            sql`NOT (${bookings.tenantId} <=> ${owner.tenantId})`
+          )
+        )
+        .limit(1);
+      if (foreignBooking)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Agency bookings belong to another tenant",
+        });
+    }
     await assertTenantOperational(tx, owner.tenantId);
     await tx
       .update(travelAgents)

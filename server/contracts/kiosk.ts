@@ -162,6 +162,7 @@ export const responseContracts = {
     }),
   }),
   printBagTag: z.object({
+    printStatus: z.literal("document_ready"),
     bagTags: z.array(
       z.object({
         tagNumber: z.string(),
@@ -172,7 +173,7 @@ export const responseContracts = {
         bookingReference: z.string(),
         sequence: z.string(),
         barcodeData: z.string(),
-        printedAt: z.string(),
+        printedAt: z.null(),
       })
     ),
     totalBags: outputNumber,

@@ -790,6 +790,11 @@ export default function MyBookings() {
                           {booking.paymentStatus === "pending" &&
                             booking.status === "pending" && (
                               <>
+                                <Button asChild className="w-full">
+                                  <Link href={`/checkout/${booking.id}`}>
+                                    {t("checkoutResume.continue")}
+                                  </Link>
+                                </Button>
                                 <BookingCreditPayment
                                   bookingId={booking.id}
                                   amount={booking.totalAmount}
@@ -836,6 +841,7 @@ export default function MyBookings() {
                                         </div>
                                         <div className="flex gap-1">
                                           <DownloadETicketButton
+                                            passengerName={`${passenger.firstName} ${passenger.lastName}`}
                                             bookingId={booking.id}
                                             passengerId={passenger.id}
                                           />

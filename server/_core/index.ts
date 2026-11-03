@@ -20,7 +20,7 @@ import { initSentry, flushSentry } from "../services/sentry.service";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
-import helmet from "helmet";
+import { createSecurityHeaders } from "./middleware/security-headers";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import swaggerUi from "swagger-ui-express";
 import { registerOAuthRoutes } from "./oauth";
@@ -162,88 +162,8 @@ async function startServer() {
   // Request timeout middleware - 30s default for API requests
   app.use("/api", requestTimeoutMiddleware(30_000));
 
-  // Security headers with Helmet
-  const isDevelopment = process.env.NODE_ENV === "development";
-  app.use(
-    helmet({
-      // Content Security Policy - disabled in development for Vite HMR compatibility
-      contentSecurityPolicy: isDevelopment
-        ? false
-        : {
-            directives: {
-              defaultSrc: ["'self'"],
-              scriptSrc: [
-                "'self'",
-                "https://js.stripe.com",
-                // Allow inline scripts for React hydration if needed
-                "'unsafe-inline'",
-              ],
-              styleSrc: [
-                "'self'",
-                // Required for inline styles in React components and Tailwind
-                "'unsafe-inline'",
-              ],
-              imgSrc: [
-                "'self'",
-                "data:",
-                "blob:",
-                "https://*.stripe.com",
-                // Allow common CDNs for images
-                "https://*.amazonaws.com",
-              ],
-              fontSrc: ["'self'", "data:"],
-              connectSrc: [
-                "'self'",
-                "https://api.stripe.com",
-                // WebSocket connections
-                "wss:",
-                "ws:",
-              ],
-              frameSrc: [
-                "'self'",
-                "https://js.stripe.com",
-                "https://hooks.stripe.com",
-              ],
-              objectSrc: ["'none'"],
-              baseUri: ["'self'"],
-              formAction: ["'self'"],
-              frameAncestors: ["'self'"],
-              upgradeInsecureRequests: [],
-            },
-          },
-      // Cross-Origin-Embedder-Policy - set to false to allow Stripe iframe embedding
-      crossOriginEmbedderPolicy: false,
-      // Cross-Origin-Opener-Policy - allow popups for Stripe payment flows
-      crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
-      // Cross-Origin-Resource-Policy - allow cross-origin for API responses
-      crossOriginResourcePolicy: { policy: "cross-origin" },
-      // DNS Prefetch Control - allow DNS prefetching for performance
-      dnsPrefetchControl: { allow: true },
-      // Expect-CT header (deprecated but still useful for some browsers)
-      // Frameguard - X-Frame-Options: SAMEORIGIN (prevents clickjacking)
-      frameguard: { action: "sameorigin" },
-      // Hide X-Powered-By header
-      hidePoweredBy: true,
-      // HTTP Strict Transport Security (HSTS)
-      hsts: {
-        maxAge: 31536000, // 1 year in seconds
-        includeSubDomains: true,
-        preload: true,
-      },
-      // IE No Open - X-Download-Options for IE8+
-      ieNoOpen: true,
-      // No Sniff - X-Content-Type-Options: nosniff
-      noSniff: true,
-      // Origin Agent Cluster header
-      originAgentCluster: true,
-      // Permitted Cross-Domain Policies - X-Permitted-Cross-Domain-Policies
-      permittedCrossDomainPolicies: { permittedPolicies: "none" },
-      // Referrer Policy
-      referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-      // X-XSS-Protection (legacy but still useful)
-      xssFilter: true,
-    })
-  );
+  // Public search has an explicit, optional frame-ancestor policy.
+  app.use(createSecurityHeaders());
 
   // No route accepts uploads through these parsers (documents are returned
   // base64, never received), and they run before any rate limiter, so a

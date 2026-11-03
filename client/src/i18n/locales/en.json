@@ -1,4 +1,65 @@
 {
+  "checkoutResume": {
+    "title": "Booking payment",
+    "chooseMethod": "Payment method",
+    "methods": { "card": "Card", "wallet": "Wallet", "split": "Split payment" },
+    "splitReadError": "The existing split payment plan could not be loaded. Refresh its status before taking further action.",
+    "refreshSplit": "Refresh payer status",
+    "splitStatuses": {
+      "pending": "Pending",
+      "email_sent": "Request sent",
+      "paid": "Paid",
+      "failed": "Payment needs attention",
+      "cancelled": "Cancelled",
+      "refunded": "Refunded",
+      "expired": "Expired",
+      "unknown": "Check payment status"
+    },
+    "continue": "Continue payment",
+    "refresh": "Refresh payment status",
+    "myBookings": "My bookings",
+    "bookingStatus": "Booking status",
+    "returned": "You returned from checkout. The current payment status is shown here; you can continue using this booking.",
+    "noCheckoutUrl": "The payment page is not available yet. Refresh the status and try again.",
+    "notFound": "Booking unavailable",
+    "notFoundDescription": "This booking could not be found for your account. Open My bookings to select one you own.",
+    "readError": "Payment status could not be loaded",
+    "readErrorDescription": "Refresh to check the booking before continuing payment.",
+    "retryHint": "Refresh the payment status. If payment is still pending, retry from this page using the same booking. Contact support if the status needs attention.",
+    "voucherHint": "Apply your code before continuing to payment. The booking total updates after the server accepts the discount.",
+    "appliedVoucher": "Promotion {{code}}",
+    "frozenInvoice": "Payment has already started for this invoice. Its amount is fixed while the payment session is active or its result is being checked.",
+    "states": {
+      "split": {
+        "title": "Split payment in progress",
+        "description": "This booking already has a split payment plan. Each payer should use their existing payment request. The booking is confirmed after all payments are verified."
+      },
+      "pending": {
+        "title": "Payment pending",
+        "description": "Review the booking total and continue to secure payment. Payment is confirmed only after it has been verified."
+      },
+      "expired": {
+        "title": "Checkout session expired",
+        "description": "The previous payment session has expired. You can open a new session to pay for this existing booking."
+      },
+      "paid": {
+        "title": "Payment received",
+        "description": "A completed payment is recorded for this booking. View My bookings for its current travel status."
+      },
+      "refunded": {
+        "title": "Payment refunded",
+        "description": "This booking's payment has been refunded. Review its details in My bookings."
+      },
+      "cancelled": {
+        "title": "Booking closed",
+        "description": "This booking was cancelled or has expired. It is no longer available for payment."
+      },
+      "unavailable": {
+        "title": "Payment needs attention",
+        "description": "This invoice cannot be paid online right now. Review My bookings or contact support before trying another payment."
+      }
+    }
+  },
   "filters": {
     "advancedFilters": "Advanced Filters",
     "priceRange": "Price Range",
@@ -411,6 +472,7 @@
     "noResultsHint": "Try adjusting your filters to see more results"
   },
   "checkIn": {
+    "removeSeat": "Remove seat",
     "title": "Check-in",
     "subtitle": "Enter your PNR to check-in",
     "pnrLabel": "Booking Reference (PNR)",
@@ -703,9 +765,11 @@
     "bookingsReport": "Bookings Report",
     "bookingsReportDesc": "Export booking data with passenger and payment details",
     "revenueReport": "Revenue Report",
-    "revenueReportDesc": "Daily revenue report with confirmed payments",
+    "revenueReportDesc": "Daily billing and posted cash and credit movements (SAR, UTC)",
+    "dailyBilling": "Daily billed amount",
+    "settlements": "Posted cash and non-cash settlements",
     "flightsReport": "Flights Report",
-    "flightsReportDesc": "Occupancy rates and estimated revenue per flight",
+    "flightsReportDesc": "Occupancy rates and estimated revenue per flight. Select up to 1,000 flights using departure dates (UTC) and status.",
     "flightPerformanceReport": "Flight Performance Report",
     "flightPerformanceReportDesc": "Occupancy rates and estimated revenue per flight",
     "refundsReport": "Refunds Report",
@@ -925,6 +989,7 @@
     "loginButton": "Login with Manus"
   },
   "eticket": {
+    "downloadForPassenger": "Download e-ticket for {{name}}",
     "noPassenger": "No passenger associated with this booking",
     "downloadSuccess": "E-ticket downloaded successfully",
     "downloadError": "Failed to download e-ticket",
@@ -1049,6 +1114,8 @@
     "fillAllFields": "Please fill in all required fields",
     "noServices": "No Special Services Requested",
     "noServicesHint": "Click 'Add Service' to request special assistance",
+    "legacyExst": "Historical request recorded as EXST. Seat allocation unverified.",
+    "legroomGuidance": "For extra legroom, choose an available seat in Manage Services. Booking a second seat is unavailable online.",
     "availableTypes": "Available Service Types",
     "for": "For",
     "notes": "Notes",
@@ -1078,7 +1145,7 @@
       "WCHS": "Wheelchair - Steps",
       "WCHC": "Wheelchair - Cabin",
       "UMNR": "Unaccompanied Minor",
-      "EXST": "Extra Legroom Seat",
+      "EXST": "Extra Seat",
       "PETC": "Pet in Cabin",
       "MEDA": "Medical Assistance"
     }
@@ -1635,6 +1702,9 @@
       "title": "Travel Agent Management",
       "subtitle": "Manage travel agents and their API access",
       "registerAgent": "Register Agent",
+      "ownerUserId": "Owner user ID",
+      "bookingBlocked": "Booking blocked until an owner is linked",
+      "linkOwner": "Link owner",
       "registerDescription": "Register a new travel agency with API access",
       "registerSuccess": "Travel agent registered successfully",
       "totalAgents": "Total Agents",
@@ -2668,6 +2738,12 @@
     "noMessages": "No GDS messages found"
   },
   "codeshare": {
+    "browseDescription": "Select a marketing carrier to see its partners’ flight schedules. Contact the marketing carrier for seat availability and booking.",
+    "selectCarrier": "Select a carrier",
+    "noFlights": "No codeshare flights for this carrier.",
+    "carrierReadError": "The carrier list could not be loaded.",
+    "flightReadError": "Flights could not be loaded.",
+    "departureUtc": "Departure (UTC)",
     "title": "Codeshare Agreements",
     "subtitle": "Manage codeshare partnerships between airlines",
     "createAgreement": "Create Agreement",
@@ -4551,8 +4627,112 @@
     "costUsd": "Cost (USD)",
     "bookings": "{{count}} bookings"
   },
+  "agentPortal": {
+    "title": "Travel agent portal",
+    "description": "Search and book through an active agency linked to your signed-in account.",
+    "agency": "Agency",
+    "agencyError": "Your agencies could not be loaded. Please try again.",
+    "noAgency": "No active agency is linked to this account. Ask your administrator to link your account to the agency.",
+    "searchTitle": "Find a flight",
+    "origin": "From (airport code)",
+    "destination": "To (airport code)",
+    "departureDate": "Departure date",
+    "cabin": "Cabin",
+    "economy": "Economy",
+    "business": "Business",
+    "passengerCount": "Passengers",
+    "search": "Search flights",
+    "searching": "Searching…",
+    "searchError": "Flight search is unavailable. Check the route, date and agency access, then try again.",
+    "noFlights": "No flights with enough available seats were found for this agency and journey.",
+    "baseFareHelp": "Prices shown are base fares per adult in SAR. The booking total is calculated by the server for the passenger types and is shown before payment.",
+    "baseFare": "Adult base fare",
+    "availableSeats": "{{count}} seats available",
+    "selectFlight": "Select flight",
+    "selected": "Selected",
+    "passengerDetails": "Passenger details",
+    "passenger": "Passenger {{number}}",
+    "firstName": "First name",
+    "lastName": "Surname",
+    "passengerType": "Passenger type",
+    "adult": "Adult",
+    "child": "Child",
+    "infant": "Infant",
+    "externalReference": "Agency reference (optional)",
+    "checkoutHelp": "Create a pending reservation, then review the total and pay through the booking owner's account.",
+    "create": "Create reservation and continue",
+    "creating": "Creating reservation…",
+    "createError": "The reservation was rejected. Check the details and your agency access before trying again.",
+    "createUncertain": "The reservation may already exist. The submitted details are locked. Retry this reservation, or check your agency bookings before starting another.",
+    "retryReservation": "Retry this reservation",
+    "bookingsTitle": "Agency bookings in your account",
+    "dashboardError": "Your agency bookings could not be loaded. Please try again.",
+    "retry": "Retry",
+    "totalBookings": "Bookings",
+    "recordedAmount": "Recorded booking value",
+    "recordedCommission": "Recorded commission",
+    "statsHelp": "These totals describe the agency bookings owned by this account. They are booking records, not a payment settlement statement.",
+    "noBookings": "There are no agency bookings in this account yet.",
+    "continueCheckout": "Continue to payment",
+    "openBooking": "Open booking",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {{page}}"
+  },
+  "manageBooking": {
+    "title": "Manage your booking",
+    "description": "Find your itinerary and booking status using the details on your confirmation.",
+    "backHome": "Back to home",
+    "reference": "Booking reference",
+    "referenceHelp": "Enter the six letters or numbers labelled Booking reference on your AIS confirmation. This may differ from your PNR.",
+    "surname": "Passenger surname",
+    "surnameHelp": "Enter the surname of one passenger exactly as recorded on the booking.",
+    "find": "Find booking",
+    "searching": "Finding booking…",
+    "failure": "We could not retrieve a booking with those details. Check the booking reference and surname, or try again later.",
+    "tooManyAttempts": "Too many attempts. Please wait 15 minutes before trying again.",
+    "itinerary": "Itinerary",
+    "bookingStatus": "Booking status",
+    "localTimes": "Times are shown in each airport's time zone; UTC is used when the airport zone is unavailable.",
+    "departure": "Departure",
+    "arrival": "Arrival",
+    "segmentStatus": "Sector status",
+    "flightStatus": "Flight status",
+    "clear": "Clear booking details",
+    "accountTitle": "Changes and payments",
+    "accountHelp": "To change a booking, make a payment or view private passenger details, sign in to the account that owns the booking.",
+    "accountAction": "Open my bookings",
+    "status": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "cancelled": "Cancelled",
+      "completed": "Completed",
+      "scheduled": "Scheduled",
+      "delayed": "Delayed"
+    }
+  },
   "flightTime": {
     "localTime": "Local airport time",
     "dayOffset": "Arrives {{offset}} calendar day(s) from the departure date"
+  },
+  "ibe": {
+    "searchPreferences": "Passengers and display preferences",
+    "adults": "Adults",
+    "children": "Children",
+    "infants": "Infants",
+    "country": "Display region",
+    "displayCurrency": "Display currency",
+    "passengerLimit": "Choose at least one adult and at most nine passengers.",
+    "currencyHelp": "Prices and payment are in SAR. Other currencies are estimates when a current exchange rate is available.",
+    "rateUnavailable": "Current {{currency}} estimate unavailable",
+    "estimate": "Approximately {{amount}} · payment in SAR",
+    "roundTrip": "Return",
+    "returnDate": "Return date",
+    "previousDay": "Previous day",
+    "nextDay": "Next day",
+    "manageBooking": "Manage booking",
+    "agentPortal": "Travel agent portal",
+    "passengerSummary": "{{count}} passengers",
+    "perPassenger": "Price per adult; passenger fares are confirmed before booking."
   }
 }

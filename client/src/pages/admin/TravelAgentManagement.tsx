@@ -50,6 +50,14 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 
+function validOwnerId(value: string) {
+  return (
+    /^\d+$/.test(value) &&
+    Number.isSafeInteger(Number(value)) &&
+    Number(value) > 0
+  );
+}
+
 export default function TravelAgentManagement() {
   const { t, i18n } = useTranslation();
   const currentLocale = i18n.language === "ar" ? ar : enUS;
@@ -63,6 +71,8 @@ export default function TravelAgentManagement() {
   const [credentialsDialogOpen, setCredentialsDialogOpen] = useState(false);
   const [commissionDialogOpen, setCommissionDialogOpen] = useState(false);
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
+  const [unlinkedAgent, setUnlinkedAgent] = useState<Agent | null>(null);
+  const [ownerId, setOwnerId] = useState("");
   const [showSecret, setShowSecret] = useState(false);
   const [newCredentials, setNewCredentials] = useState<{
     apiKey: string;
@@ -71,6 +81,7 @@ export default function TravelAgentManagement() {
 
   // Form state for registration
   const [registerForm, setRegisterForm] = useState({
+    ownerUserId: "",
     agencyName: "",
     iataNumber: "",
     contactName: "",
@@ -115,6 +126,14 @@ export default function TravelAgentManagement() {
     onError: error => {
       toast.error(error.message);
     },
+  });
+
+  const assignOwnerMutation = trpc.travelAgent.assignOwner.useMutation({
+    onSuccess: () => {
+      setUnlinkedAgent(null);
+      refetchAgents();
+    },
+    onError: error => toast.error(error.message),
   });
 
   const regenerateCredentialsMutation =
@@ -165,6 +184,7 @@ export default function TravelAgentManagement() {
   // Handlers
   const resetRegisterForm = () => {
     setRegisterForm({
+      ownerUserId: "",
       agencyName: "",
       iataNumber: "",
       contactName: "",
@@ -189,7 +209,10 @@ export default function TravelAgentManagement() {
       );
       return;
     }
-    registerMutation.mutate(registerForm);
+    registerMutation.mutate({
+      ...registerForm,
+      ownerUserId: Number(registerForm.ownerUserId),
+    });
   };
 
   const handleToggleStatus = (agent: Agent) => {
@@ -441,6 +464,28 @@ export default function TravelAgentManagement() {
                           <div className="text-xs text-muted-foreground">
                             ID: {agent.id}
                           </div>
+                          {agent.ownerUserId != null ? (
+                            <span className="text-xs">
+                              {t("travelAgent.admin.ownerUserId")}:{" "}
+                              {agent.ownerUserId}
+                            </span>
+                          ) : (
+                            <div>
+                              <p className="text-xs">
+                                {t("travelAgent.admin.bookingBlocked")}
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setOwnerId("");
+                                  setUnlinkedAgent(agent);
+                                }}
+                              >
+                                {t("travelAgent.admin.linkOwner")}
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{agent.iataNumber}</Badge>
@@ -646,7 +691,7 @@ export default function TravelAgentManagement() {
 
       {/* Register Dialog */}
       <Dialog open={registerDialogOpen} onOpenChange={setRegisterDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {t("travelAgent.admin.registerAgent") || "Register Travel Agent"}
@@ -670,6 +715,24 @@ export default function TravelAgentManagement() {
                   })
                 }
                 placeholder="Travel Agency Name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="agency-owner-register">
+                {t("travelAgent.admin.ownerUserId")} *
+              </Label>
+              <Input
+                id="agency-owner-register"
+                type="number"
+                min={1}
+                required
+                value={registerForm.ownerUserId}
+                onChange={e =>
+                  setRegisterForm({
+                    ...registerForm,
+                    ownerUserId: e.target.value,
+                  })
+                }
               />
             </div>
             <div>
@@ -751,7 +814,10 @@ export default function TravelAgentManagement() {
             </Button>
             <Button
               onClick={handleRegister}
-              disabled={registerMutation.isPending}
+              disabled={
+                registerMutation.isPending ||
+                !validOwnerId(registerForm.ownerUserId)
+              }
             >
               {registerMutation.isPending ? (
                 <>
@@ -761,6 +827,45 @@ export default function TravelAgentManagement() {
               ) : (
                 t("travelAgent.admin.register") || "Register"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!unlinkedAgent}
+        onOpenChange={open => {
+          if (!open) setUnlinkedAgent(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("travelAgent.admin.linkOwner")}</DialogTitle>
+            <DialogDescription>{unlinkedAgent?.agencyName}</DialogDescription>
+          </DialogHeader>
+          <Label htmlFor="agency-owner-link">
+            {t("travelAgent.admin.ownerUserId")}
+          </Label>
+          <Input
+            id="agency-owner-link"
+            type="number"
+            min={1}
+            value={ownerId}
+            onChange={e => setOwnerId(e.target.value)}
+          />
+          <DialogFooter>
+            <Button
+              disabled={!validOwnerId(ownerId) || assignOwnerMutation.isPending}
+              onClick={() =>
+                unlinkedAgent &&
+                assignOwnerMutation.mutate({
+                  agentId: unlinkedAgent.id,
+                  ownerUserId: Number(ownerId),
+                  onlyIfUnlinked: true,
+                })
+              }
+            >
+              {t("travelAgent.admin.linkOwner")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -790,9 +895,15 @@ export default function TravelAgentManagement() {
                 </p>
               </div>
               <div>
-                <Label>{t("travelAgent.admin.apiKey") || "API Key"}</Label>
+                <Label htmlFor="agency-api-key">
+                  {t("travelAgent.admin.apiKey") || "API Key"}
+                </Label>
                 <div className="flex gap-2">
-                  <Input value={newCredentials.apiKey} readOnly />
+                  <Input
+                    id="agency-api-key"
+                    value={newCredentials.apiKey}
+                    readOnly
+                  />
                   <Button
                     size="icon"
                     variant="outline"
@@ -803,11 +914,12 @@ export default function TravelAgentManagement() {
                 </div>
               </div>
               <div>
-                <Label>
+                <Label htmlFor="agency-api-secret">
                   {t("travelAgent.admin.apiSecret") || "API Secret"}
                 </Label>
                 <div className="flex gap-2">
                   <Input
+                    id="agency-api-secret"
                     type={showSecret ? "text" : "password"}
                     value={newCredentials.apiSecret}
                     readOnly

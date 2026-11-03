@@ -31,11 +31,13 @@ function downloadFileFromBase64(
 interface DownloadETicketButtonProps {
   bookingId: number;
   passengerId?: number;
+  passengerName: string;
 }
 
 export function DownloadETicketButton({
   bookingId,
   passengerId,
+  passengerName,
 }: DownloadETicketButtonProps) {
   const { t } = useTranslation();
   const [isDownloading, setIsDownloading] = useState(false);
@@ -70,6 +72,7 @@ export function DownloadETicketButton({
     <Button
       variant="default"
       size="sm"
+      aria-label={t("eticket.downloadForPassenger", { name: passengerName })}
       onClick={handleDownload}
       disabled={isDownloading || !passengerId}
     >

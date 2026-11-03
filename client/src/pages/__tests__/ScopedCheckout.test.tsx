@@ -30,6 +30,10 @@ vi.mock("wouter", async importOriginal => ({
       }),
     }).toString(),
 }));
+vi.mock("@/lib/useRawSearch", async () => {
+  const { useSearch } = await import("wouter");
+  return { useRawSearch: useSearch };
+});
 vi.mock("@/lib/trpc", () => {
   const meal = {
     id: 5,
@@ -45,6 +49,34 @@ vi.mock("@/lib/trpc", () => {
       useUtils: () => ({
         ancillary: { getAvailable: { invalidate: calls.invalidate } },
       }),
+      seatMap: {
+        getFlightSeatMap: {
+          useQuery: () => ({
+            data: {
+              aircraftType: "A320",
+              cabins: [
+                {
+                  cabinClass: "economy",
+                  rows: [
+                    {
+                      row: 12,
+                      seats: ["A", "B"].map((column, i) => ({
+                        id: i + 1,
+                        seatNumber: "12" + column,
+                        row: 12,
+                        column,
+                        seatType: "window",
+                        status: "available",
+                        seatPrice: i * 500,
+                      })),
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+        },
+      },
       flights: {
         getById: {
           useQuery: ({ id }: { id: number }) => ({
@@ -128,7 +160,7 @@ const submit = () =>
 it("replays identical per-passenger, per-sector extras and total after an ambiguous connection failure", async () => {
   calls.create
     .mockRejectedValueOnce(new Error("Connection lost"))
-    .mockResolvedValueOnce({});
+    .mockResolvedValueOnce({ bookingId: 73 });
   const view = prepare();
   submit();
   await screen.findByText("Connection lost");
@@ -158,7 +190,7 @@ it("allows removal and review at the refreshed catalog price after a definite co
     .mockRejectedValueOnce(
       Object.assign(new Error("Price changed"), { data: { code: "CONFLICT" } })
     )
-    .mockResolvedValueOnce({});
+    .mockResolvedValueOnce({ bookingId: 73 });
   const view = prepare();
   submit();
   await screen.findByText("Price changed");
@@ -174,4 +206,33 @@ it("allows removal and review at the refreshed catalog price after a definite co
     expectedTotalMinor: 12600,
     ancillaries: [{ quantity: 1, unitPrice: 600, totalPrice: 600 }],
   });
+});
+
+it("preserves a distinct seat assignment per sector and passenger through an ambiguous retry", async () => {
+  calls.create
+    .mockRejectedValueOnce(new Error("Seat reply lost"))
+    .mockResolvedValueOnce({});
+  prepare();
+  const scope = within(
+    screen.getByRole("region", { name: "checkIn.seatAssignments" })
+  );
+  fireEvent.click(scope.getByRole("button", { name: "checkIn.selectSeats" }));
+  const seat = () => scope.getByRole("button", { name: "12A available" });
+  expect(scope.getByRole("button", { name: "12B available" })).toBeDisabled();
+  fireEvent.click(seat());
+  change(scope.getByLabelText("manageAncillaries.passenger"), "1");
+  expect(seat()).toBeDisabled();
+  change(scope.getByLabelText("manageAncillaries.sector"), "1");
+  fireEvent.click(seat());
+  expect(scope.getAllByRole("listitem")).toHaveLength(2);
+  submit();
+  await screen.findByText("Seat reply lost");
+  const [command] = calls.create.mock.calls[0];
+  expect(command.segments.map((s: { seats: unknown }) => s.seats)).toEqual([
+    [{ passengerIndex: 0, seatNumber: "12A" }],
+    [{ passengerIndex: 1, seatNumber: "12A" }],
+  ]);
+  expect(seat()).toBeDisabled();
+  submit();
+  expect(calls.create.mock.calls[1][0]).toEqual(command);
 });
