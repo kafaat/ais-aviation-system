@@ -262,6 +262,15 @@ function ClaimsQueue() {
     selectedClaim?.regulationType === "local" &&
     selectedClaim.claimType === "delay";
   const gacaMode = allowsGaca && useGaca;
+  // datetime-local values are read as UTC, which is what the label asks for.
+  const utcIso = (value: string) =>
+    value && Number.isFinite(Date.parse(`${value}:00Z`))
+      ? new Date(`${value}:00Z`).toISOString()
+      : "";
+  const validArrivals =
+    !!utcIso(scheduledArrival) &&
+    !!utcIso(actualArrival) &&
+    Date.parse(utcIso(actualArrival)) > Date.parse(utcIso(scheduledArrival));
   const validFx =
     /^\d{1,5}(\.\d{1,6})?$/.test(sarPerSdr) && Number(sarPerSdr) > 0;
 
@@ -310,8 +319,8 @@ function ClaimsQueue() {
         ? {
             scopeAndExceptionReview: policyReference,
             arrivalReference: arrivalSource,
-            scheduledArrivalUtc: scheduledArrival,
-            actualArrivalUtc: actualArrival,
+            scheduledArrivalUtc: utcIso(scheduledArrival),
+            actualArrivalUtc: utcIso(actualArrival),
             fxReference,
             sarPerXdrMillionths: Math.round(Number(sarPerSdr) * 1_000_000),
           }
@@ -622,16 +631,18 @@ function ClaimsQueue() {
                     set: setArrivalSource,
                   },
                   {
-                    label: "Booked arrival UTC / الوصول المحجوز",
+                    label:
+                      "Booked arrival (UTC) / الوصول المحجوز بالتوقيت العالمي",
                     value: scheduledArrival,
                     set: setScheduledArrival,
-                    hint: "2026-01-10T08:00:00Z",
+                    type: "datetime-local",
                   },
                   {
-                    label: "Actual arrival UTC / الوصول الفعلي",
+                    label:
+                      "Actual arrival (UTC) / الوصول الفعلي بالتوقيت العالمي",
                     value: actualArrival,
                     set: setActualArrival,
-                    hint: "2026-01-10T11:00:00Z",
+                    type: "datetime-local",
                   },
                   {
                     label:
@@ -643,17 +654,29 @@ function ClaimsQueue() {
                     label: "SAR per SDR / ريال لكل وحدة حقوق سحب خاصة",
                     value: sarPerSdr,
                     set: setSarPerSdr,
+                    type: "number",
+                    hint: "5.123456",
                   },
                 ].map(field => (
                   <label className="block" key={field.label}>
                     {field.label}
                     <Input
+                      type={field.type ?? "text"}
+                      step={field.type === "number" ? "0.000001" : undefined}
+                      min={field.type === "number" ? "0" : undefined}
+                      dir={field.type ? "ltr" : undefined}
                       value={field.value}
                       placeholder={field.hint}
                       onChange={e => field.set(e.target.value)}
                     />
                   </label>
                 ))}
+                {scheduledArrival && actualArrival && !validArrivals && (
+                  <p className="text-sm text-red-600">
+                    Actual arrival must be a valid time after the booked arrival
+                    / يجب أن يكون الوصول الفعلي وقتاً صحيحاً بعد الوصول المحجوز
+                  </p>
+                )}
               </div>
             )}
             {decision !== "denied" && !gacaMode && (
@@ -750,8 +773,7 @@ function ClaimsQueue() {
                 (decision === "denied" && !denialReason.trim()) ||
                 (gacaMode &&
                   (!validFx ||
-                    !scheduledArrival ||
-                    !actualArrival ||
+                    !validArrivals ||
                     !arrivalSource.trim() ||
                     !policyReference.trim() ||
                     !fxReference.trim())) ||

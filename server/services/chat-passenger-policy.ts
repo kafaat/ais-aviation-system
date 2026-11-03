@@ -1,10 +1,16 @@
 type Language = "ar" | "en";
 
+// Only wording about money back, compensation or passenger rights routes to
+// the local referral. Words such as "cancel", "fare rules" or a bare "rights"
+// also describe ordinary shopping and servicing questions, so they do not.
 const english =
-  /\b(refund\w*|reimburs\w*|compensat\w*|entitl\w*|my rights|our rights|passengers?[’']? rights|file a claim|submit a claim|money back|cash back|cancel(?:lation|lations|ed|led|ling)?|denied boarding|fare rules?|gaca|eu261|uk261)\b/i;
+  /\b(refund\w*|reimburs\w*|compensat\w*|entitl\w*|my rights|our rights|passengers?[’']? rights|file a claim|submit a claim|money back|cash back|denied boarding|gaca|eu261|uk261)\b/i;
 const arabic =
-  /استرداد|استرجاع|استعيد|استرجع|ارجع فلوس|ترجع فلوس|تعويض|حقوق|حقي(?!\p{L})|يحق لي|استحق|اعادة المبلغ|الغاء|الغيت|الغي|الغت|رفض الاركاب|رفض الصعود|لوائح|سياسة الناقل/u;
+  /استرداد|استرجاع|استعيد|استرجع|ارجع فلوس|ترجع فلوس|تعويض|حقوق(?:ي| المسافر| الركاب| العملاء)|حقي(?!\p{L})|يحق لي|استحق|اعادة المبلغ|رفض الاركاب|رفض الصعود|سياسة الناقل/u;
 
+/** `continuing` is true only for the single message that follows a referral
+ * triggered by a keyword, so a follow-up carrying identifiers stays local
+ * while the conversation is not captured for good. */
 export function passengerPolicyLanguage(
   message: string,
   continuing: boolean

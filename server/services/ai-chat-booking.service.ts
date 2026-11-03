@@ -235,18 +235,27 @@ export async function sendMessage(
       .orderBy(desc(chatMessages.id))
       .limit(CHAT_HISTORY_WINDOW - 1)
   ).reverse();
-  const policyLanguage = passengerPolicyLanguage(
-    input.message,
-    history.some(m => m.metadata?.intent === "passenger_rights_review")
-  );
+  // A referral captures exactly one follow-up (which often carries the
+  // identifiers the first message did), then ordinary chat resumes. Keeping
+  // every later message local hijacked conversations after one mention of
+  // a refund.
+  const lastReply = history.at(-1);
+  const continuing =
+    lastReply?.role === "assistant" &&
+    lastReply.metadata?.intent === "passenger_rights_review" &&
+    lastReply.metadata?.trigger === "keyword";
+  const keyed = passengerPolicyLanguage(input.message, false);
+  const policyLanguage =
+    keyed ??
+    (continuing ? passengerPolicyLanguage(input.message, true) : undefined);
   if (policyLanguage) {
     const message = passengerPolicyGuidance[policyLanguage];
     const metadata = {
       intent: "passenger_rights_review",
+      trigger: (keyed ? "keyword" : "follow_up") as "keyword" | "follow_up",
       entities: { source: passengerRightsSource[policyLanguage], article: 5 },
     };
     // Record the referral without retaining passenger-supplied claims or identifiers.
-    // Follow-ups remain local even if they contain no explicit policy keyword.
     await db.transaction(async tx => {
       await tx.insert(chatMessages).values([
         {

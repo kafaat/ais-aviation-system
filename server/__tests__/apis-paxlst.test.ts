@@ -56,11 +56,18 @@ describe("PAXLST local draft", () => {
     expect(lines).toContain(`UNT+${lines.length - 2}+1'`);
   });
   it.each(["ABC\nCNT", "ABC\r", "Aß", "علي"])(
-    "rejects unsupported text without exposing it",
+    "rejects unsupported text without exposing it, naming the record and field",
     value => {
-      expect(() => draft(value)).toThrow(
-        "PAXLST field contains unsupported UNOA characters"
-      );
+      let caught: unknown;
+      try {
+        draft(value);
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toMatchObject({ code: "BAD_REQUEST" });
+      const message = (caught as Error).message;
+      expect(message).toMatch(/passenger \d+ \(/);
+      expect(message).not.toContain(value.trim());
     }
   );
 });
