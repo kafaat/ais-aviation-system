@@ -70,7 +70,8 @@
 | gdsSynchronization | demo | Contracted GDS connection and round-trip order synchronization |
 | biometricIdentity | demo | Approved biometric processor, measured verification and privacy controls |
 | multiRegionFailover | demo | Infrastructure adapter, replication evidence and controlled failover drill |
-| apisSubmission | blocked | Authority transport, credentials, acknowledgement and rejection fixtures |
+| apisSubmission | blocked | Transmission-ready: PNRGOV 21.1-layout EDIFACT drafts, PAXLST, per-country push schedules, queued transmissions with retry/dead-letter, file-drop bridge and CUSRES/CONTRL acknowledgement matching exist. Awaiting the NPSC technical specification (accepted version, fields, timings, connection), an authority adapter and credentials; no transmission is claimed accepted without a matched acknowledgement. |
+| documentVerification | implemented | Entry/transit rules evaluated at check-in with recorded verdicts and role-bound overrides; rules must be imported from an official or contracted source (Timatic-type) and confirmed before they can yield go. No real-country rule is seeded; fixtures are fictional. |
 | alternatePayments | blocked | Invoice/session binding, amount/currency verification, settlement and refund acceptance for each provider |
 | bagDropHardware | demo | Certified scale, printer, conveyor and device heartbeat adapter |
 | weightBalance | demo | Approved aircraft data, calculation validation and operational sign-off |

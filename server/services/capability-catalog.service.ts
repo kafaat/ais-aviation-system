@@ -75,10 +75,20 @@ export const capabilityCatalog = [
   {
     id: "apisSubmission",
     implementation: "blocked",
-    owner: "apis.service",
-    consumer: "apis.submit",
+    owner: "apis-transmission.service",
+    consumer:
+      "apis.queueTransmissions, apis.submitToAuthorities and the apisTransmissions scheduled task",
     requirement:
-      "Authority transport, credentials, acknowledgement and rejection fixtures",
+      "Transmission-ready: PNRGOV 21.1-layout EDIFACT drafts, PAXLST, per-country push schedules, queued transmissions with retry/dead-letter, file-drop bridge and CUSRES/CONTRL acknowledgement matching exist. Awaiting the NPSC technical specification (accepted version, fields, timings, connection), an authority adapter and credentials; no transmission is claimed accepted without a matched acknowledgement.",
+  },
+  {
+    id: "documentVerification",
+    implementation: "implemented",
+    owner: "travel-documents/document-verification.service",
+    consumer:
+      "departure-control check-in hook, apis.getDocumentVerification and apis.overrideDocumentVerification",
+    requirement:
+      "Entry/transit rules evaluated at check-in with recorded verdicts and role-bound overrides; rules must be imported from an official or contracted source (Timatic-type) and confirmed before they can yield go. No real-country rule is seeded; fixtures are fictional.",
   },
   {
     id: "alternatePayments",

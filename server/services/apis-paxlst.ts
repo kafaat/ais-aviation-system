@@ -1,32 +1,34 @@
 import { TRPCError } from "@trpc/server";
-import { zoneOffsetMs } from "./civil-day";
+import {
+  EdifactFieldError,
+  UNOA_UNSUPPORTED,
+  edifactDate8,
+  localCivil,
+  releaseUnoa,
+} from "./edifact";
 
 export const PAXLST_UNOA_MESSAGE =
   "PAXLST field contains unsupported UNOA characters";
 
-class PaxlstFieldError extends Error {
-  constructor(readonly field: string) {
-    super(PAXLST_UNOA_MESSAGE);
+class PaxlstFieldError extends EdifactFieldError {
+  constructor(field: string) {
+    super(field, PAXLST_UNOA_MESSAGE);
   }
 }
 
 // The local draft uses UNOA syntax 4. Reject unsupported characters instead
 // of silently changing names or letting input create additional segments.
 function element(value: string, field = "field"): string {
-  if (/[^A-Za-z0-9 .,()=/+'?:*-]/.test(value)) {
-    throw new PaxlstFieldError(field);
-  }
-  return value.toUpperCase().replace(/[?+:'*]/g, "?$&");
+  if (UNOA_UNSUPPORTED.test(value)) throw new PaxlstFieldError(field);
+  return releaseUnoa(value);
 }
 
-function formatEdifactDate(date: Date): string {
-  return date.toISOString().slice(0, 10).replaceAll("-", "");
-}
+const formatEdifactDate = edifactDate8;
 
 // PAXLST 05B DTM qualifier 201: YYMMDDHHMM at the respective airport.
 function localFlightTime(instant: Date, zone: string): string {
-  const local = new Date(instant.getTime() + zoneOffsetMs(instant, zone));
-  return local.toISOString().slice(2, 16).replace(/[-T:]/g, "");
+  const civil = localCivil(instant, zone);
+  return `${civil.yymmdd}${civil.hhmm}`;
 }
 
 export function generatePAXLST(data: {

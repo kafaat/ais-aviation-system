@@ -1,6 +1,92 @@
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
 import { outputNumber } from "./primitives";
+const transmissionContract = z.object({
+  id: outputNumber,
+  flightId: outputNumber,
+  messageType: z.enum(["PNRGOV", "PAXLST"]),
+  destinationCountry: z.string(),
+  authorityCode: z.string(),
+  messageVersion: z.string(),
+  scheduleOffsetMinutes: z.union([z.null(), outputNumber]),
+  scheduledFor: z.string(),
+  correlationId: z.string(),
+  status: z.enum([
+    "queued",
+    "sending",
+    "sent",
+    "acked",
+    "rejected",
+    "failed",
+    "dead_letter",
+  ]),
+  attempts: outputNumber,
+  nextAttemptAt: z.union([z.null(), z.string()]),
+  bodyHash: z.union([z.null(), z.string()]),
+  bodyLength: z.union([z.null(), outputNumber]),
+  pnrCount: z.union([z.null(), outputNumber]),
+  passengerCount: z.union([z.null(), outputNumber]),
+  transportName: z.union([z.null(), z.string()]),
+  transportReference: z.union([z.null(), z.string()]),
+  sentAt: z.union([z.null(), z.string()]),
+  acknowledgedAt: z.union([z.null(), z.string()]),
+  acknowledgementCode: z.union([z.null(), z.string()]),
+  acknowledgementBody: z.union([z.null(), z.string()]),
+  lastError: z.union([z.null(), z.string()]),
+  createdAt: z.string(),
+});
+const entryRuleContract = z.object({
+  id: outputNumber,
+  isActive: z.boolean(),
+  destinationCountry: z.string(),
+  nationality: z.string(),
+  documentType: z.string(),
+  visaRequirement: z.enum([
+    "none",
+    "visa_required",
+    "evisa",
+    "visa_on_arrival",
+    "transit_without_visa",
+  ]),
+  transitWithoutVisaHours: z.union([z.null(), outputNumber]),
+  passportValidityMonths: outputNumber,
+  blankPagesRequired: outputNumber,
+  sourceName: z.string(),
+  sourceUrl: z.string(),
+  effectiveFrom: z.string(),
+  effectiveTo: z.union([z.null(), z.string()]),
+  confirmationStatus: z.enum(["confirmed", "unconfirmed", "fictional_fixture"]),
+  notes: z.union([z.null(), z.string()]),
+});
+const verificationContract = z.object({
+  resultId: outputNumber,
+  verdict: z.enum(["go", "no_go", "manual_review"]),
+  reasons: z.array(
+    z.object({
+      code: z.string(),
+      message: z.string(),
+      severity: z.enum(["block", "review", "info"]),
+      country: z.union([z.null(), z.string()]),
+      ruleId: z.union([z.null(), outputNumber]),
+    })
+  ),
+  rulesApplied: z.array(outputNumber),
+  rulesSource: z.string(),
+  countriesEvaluated: z.array(z.string()),
+  evaluatedAt: z.string(),
+  mode: z.enum(["enforce", "advisory", "off"]),
+  boardingAllowed: z.boolean(),
+  override: z.union([
+    z.null(),
+    z.object({
+      resultId: outputNumber,
+      overrideBy: z.union([z.null(), outputNumber]),
+      overrideRole: z.union([z.null(), z.string()]),
+      overrideReason: z.union([z.null(), z.string()]),
+      overriddenAt: z.union([z.null(), z.string()]),
+    }),
+  ]),
+});
 export const responseContracts = {
   submitInfo: z.object({
     id: outputNumber,
@@ -122,6 +208,20 @@ export const responseContracts = {
     validatedCount: outputNumber,
     missingCount: outputNumber,
     generatedAt: z.string(),
+    /** PNRGOV only: which message groups the data model can populate. */
+    groups: z.union([
+      z.null(),
+      z.array(
+        z.object({
+          group: z.string(),
+          segments: z.array(z.string()),
+          status: z.enum(["populated", "partial", "unavailable"]),
+          note: z.string(),
+        })
+      ),
+    ]),
+    /** Segment details not re-checked against the cited guide version. */
+    unverified: z.array(z.string()),
   }),
   submitToAuthorities: z.object({
     submissionId: outputNumber,
@@ -190,6 +290,94 @@ export const responseContracts = {
       ]),
       responseMessage: z.union([z.null(), z.string()]),
       createdAt: z.string(),
+    })
+  ),
+  // Transmission layer (apis_transmissions) and PNRGOV schedules
+  transmission: transmissionContract,
+  listTransmissions: z.array(transmissionContract),
+  getTransmissionBody: z.object({
+    id: outputNumber,
+    body: z.union([z.null(), z.string()]),
+    bodyHash: z.union([z.null(), z.string()]),
+  }),
+  queueTransmissions: z.object({
+    flightId: outputNumber,
+    destinationCountry: z.string(),
+    authorityCode: z.string(),
+    created: z.array(outputNumber),
+    skipped: outputNumber,
+    missedOffsets: z.array(outputNumber),
+  }),
+  retryTransmission: z.object({
+    transmissionId: outputNumber,
+    correlationId: z.string(),
+    status: z.literal("queued"),
+  }),
+  ingestAcknowledgement: z.object({
+    matched: z.boolean(),
+    transmissionId: z.union([z.null(), outputNumber]),
+    disposition: z.enum(["ack", "nak", "unknown"]),
+    applied: z.boolean(),
+    messageType: z.enum(["CUSRES", "CONTRL", "unknown"]),
+    errors: z.array(
+      z.object({
+        code: z.string(),
+        point: z.union([z.null(), z.string()]),
+        text: z.union([z.null(), z.string()]),
+      })
+    ),
+  }),
+  listPnrgovSchedules: z.array(
+    z.object({
+      id: outputNumber,
+      destinationCountry: z.string(),
+      authorityCode: z.string(),
+      messageVersion: z.string(),
+      offsetsMinutes: z.array(outputNumber),
+      timingSource: z.string(),
+      isActive: z.boolean(),
+      updatedAt: z.string(),
+    })
+  ),
+  upsertPnrgovSchedule: z.object({ id: outputNumber, created: z.boolean() }),
+  // Pre-boarding document verification
+  entryRule: entryRuleContract,
+  listEntryRules: z.array(entryRuleContract),
+  importEntryRules: z.object({
+    imported: outputNumber,
+    ids: z.array(outputNumber),
+  }),
+  getDocumentVerification: verificationContract,
+  overrideDocumentVerification: z.object({
+    resultId: outputNumber,
+    passengerId: outputNumber,
+    flightId: outputNumber,
+    overrideBy: outputNumber,
+    overrideRole: z.string(),
+    overrideReason: z.string(),
+    overriddenAt: z.string(),
+  }),
+  listDocumentVerifications: z.array(
+    z.object({
+      resultId: outputNumber,
+      bookingId: outputNumber,
+      passengerId: outputNumber,
+      flightId: outputNumber,
+      verdict: z.enum(["go", "no_go", "manual_review"]),
+      reasons: z.array(
+        z.object({
+          code: z.string(),
+          message: z.string(),
+          severity: z.enum(["block", "review", "info"]),
+        })
+      ),
+      rulesSource: z.string(),
+      trigger: z.string(),
+      evaluatedAt: z.string(),
+      overrideBy: z.union([z.null(), outputNumber]),
+      overrideRole: z.union([z.null(), z.string()]),
+      overrideReason: z.union([z.null(), z.string()]),
+      overriddenAt: z.union([z.null(), z.string()]),
     })
   ),
 };

@@ -13,6 +13,7 @@ import {
 import { getDb } from "../db";
 import type { SettlementTx } from "./booking-settlement.service";
 import { assertTravelClearance } from "./travel-clearance.service";
+import { assertBoardingDocuments } from "./travel-documents/document-verification.service";
 import { recordEvent } from "./outbox.service";
 
 /** Booking -> itinerary flights (ascending) -> passenger -> seat is the lock order. */
@@ -201,6 +202,17 @@ export async function checkInPassengersTx(
   const results = [];
   for (const a of input.assignments) {
     await assertTravelClearance(tx, input.bookingId, a.passengerId);
+    // Pre-boarding document verification (GACA circular, August 2026):
+    // entry/transit rules are evaluated and recorded here; a no_go or
+    // manual_review verdict refuses check-in and therefore boarding-pass
+    // issuance unless an authorised role recorded an override for the same
+    // documents and itinerary. See travel-documents/document-verification.service.ts.
+    await assertBoardingDocuments(tx, {
+      bookingId: input.bookingId,
+      passengerId: a.passengerId,
+      flightId: c.flight.id,
+      actorId: input.owner?.userId ?? null,
+    });
     const previous = await tx
       .select()
       .from(seatInventory)

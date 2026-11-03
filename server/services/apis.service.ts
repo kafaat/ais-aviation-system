@@ -1,4 +1,9 @@
 import { generatePAXLST } from "./apis-paxlst";
+import { generatePNRGOV } from "./apis-pnrgov";
+import {
+  loadPnrgovInput,
+  queueFlightTransmissions,
+} from "./apis-transmission.service";
 import { isValidTimeZone } from "./civil-day";
 import { manifestBookingCondition } from "./flight-state.service";
 /**
@@ -6,7 +11,8 @@ import { manifestBookingCondition } from "./flight-state.service";
  *
  * Handles collection, validation, and submission of passenger travel
  * document information to destination country authorities. Supports
- * UN/EDIFACT PAXLST and APIS PNR/GOV message formats.
+ * UN/EDIFACT PAXLST and PNRGOV message formats; transmission state lives in
+ * apis-transmission.service.ts.
  */
 
 import { getDb } from "../db";
@@ -16,6 +22,7 @@ import {
   passengers,
   airports,
   airlines,
+  pnrgovSchedules,
 } from "../../drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -991,8 +998,6 @@ export async function generateAPISMessage(
     apisMap.set(row["passenger_id"] as number, row);
   }
 
-  let messageContent: string;
-
   if (format === "paxlst") {
     if (
       !origin ||
@@ -1007,7 +1012,7 @@ export async function generateAPISMessage(
           "PAXLST requires carrier and route airports with valid time zones.",
       });
     }
-    messageContent = generatePAXLST({
+    const messageContent = generatePAXLST({
       flight,
       origin: {
         code: origin.code,
@@ -1023,111 +1028,59 @@ export async function generateAPISMessage(
       passengers: passengerData,
       apisMap,
     });
-  } else {
-    messageContent = generatePNRGOV({
-      flight,
-      origin: origin ?? { code: "???", country: "??" },
-      destination: destination ?? { code: "???", country: "??" },
-      airline: airline ?? { code: "??", name: "Unknown" },
-      passengers: passengerData,
-      apisMap,
+    return {
+      flightId,
+      flightNumber: flight.flightNumber,
+      format,
+      messageContent,
+      passengerCount: passengerData.length,
+      validatedCount: apisResults.length,
+      missingCount: passengerData.length - apisResults.length,
+      generatedAt: new Date().toISOString(),
+      groups: null,
+      unverified: [],
+    };
+  }
+  {
+    // PNRGOV EDIFACT draft (guide 21.1 layout, unverified details listed in
+    // the result). The authority code is the configured schedule's when one
+    // exists; a draft without a schedule uses a placeholder recipient.
+    const draft = await db.transaction(async tx => {
+      const data = await loadPnrgovInput(tx, flightId);
+      const schedule = await tx
+        .select()
+        .from(pnrgovSchedules)
+        .where(
+          eq(pnrgovSchedules.destinationCountry, data.leg.destination.country)
+        )
+        .limit(1);
+      return generatePNRGOV({
+        sender: {
+          carrierCode: data.leg.airline.code,
+          locationCode: data.leg.origin.code,
+        },
+        recipient: schedule[0]?.authorityCode ?? "AUTHORITYTBD",
+        interchangeControlReference: "DRAFT",
+        messageReference: "1",
+        messageVersion: schedule[0]?.messageVersion,
+        flight: data.pushFlight,
+        bookings: data.bookings,
+        generatedAt: new Date(),
+      });
     });
+    return {
+      flightId,
+      flightNumber: flight.flightNumber,
+      format,
+      messageContent: draft.message,
+      passengerCount: draft.passengerCount,
+      validatedCount: draft.documentedPassengerCount,
+      missingCount: draft.passengerCount - draft.documentedPassengerCount,
+      generatedAt: new Date().toISOString(),
+      groups: draft.groups,
+      unverified: [...draft.unverified],
+    };
   }
-
-  return {
-    flightId,
-    flightNumber: flight.flightNumber,
-    format,
-    messageContent,
-    passengerCount: passengerData.length,
-    validatedCount: apisResults.length,
-    missingCount: passengerData.length - apisResults.length,
-    generatedAt: new Date().toISOString(),
-  };
-}
-
-// ============================================================================
-// PNR/GOV Message Builder
-// ============================================================================
-
-function generatePNRGOV(data: {
-  flight: {
-    id: number;
-    flightNumber: string;
-    departureTime: Date;
-    arrivalTime: Date;
-  };
-  origin: { code: string; country: string };
-  destination: { code: string; country: string };
-  airline: { code: string; name: string };
-  passengers: Array<{
-    passengerId: number;
-    firstName: string;
-    lastName: string;
-    bookingReference: string;
-  }>;
-  apisMap: Map<number, Record<string, unknown>>;
-}): string {
-  const { flight, origin, destination, airline, passengers, apisMap } = data;
-
-  const now = new Date();
-  const lines: string[] = [];
-
-  // Header
-  lines.push(`--- PNRGOV MESSAGE ---`);
-  lines.push(`AIRLINE: ${airline.code} / ${airline.name}`);
-  lines.push(`FLIGHT: ${flight.flightNumber}`);
-  lines.push(`ROUTE: ${origin.code} -> ${destination.code}`);
-  lines.push(`DEPARTURE: ${flight.departureTime.toISOString()}`);
-  lines.push(`GENERATED: ${now.toISOString()}`);
-  lines.push(`---`);
-
-  for (const pax of passengers) {
-    const apis = apisMap.get(pax.passengerId);
-
-    lines.push(``);
-    lines.push(`PNR: ${pax.bookingReference}`);
-    lines.push(`PASSENGER: ${pax.lastName}/${pax.firstName}`);
-
-    if (apis) {
-      const docType = ((apis["document_type"] as string) ?? "").toUpperCase();
-      const docNumber = (apis["document_number"] as string) ?? "";
-      const nationality = (apis["nationality"] as string) ?? "";
-      const issuingCountry = (apis["issuing_country"] as string) ?? "";
-      const dob = apis["date_of_birth"]
-        ? new Date(apis["date_of_birth"] as string).toISOString().split("T")[0]
-        : "N/A";
-      const gender = (apis["gender"] as string) ?? "U";
-      const expiryDate = apis["expiry_date"]
-        ? new Date(apis["expiry_date"] as string).toISOString().split("T")[0]
-        : "N/A";
-      const resAddress = (apis["residence_address"] as string) ?? "";
-      const destAddress = (apis["destination_address"] as string) ?? "";
-      const redress = (apis["redress_number"] as string) ?? "";
-      const ktn = (apis["known_traveler_number"] as string) ?? "";
-
-      lines.push(`  DOC TYPE: ${docType}`);
-      lines.push(`  DOC NUMBER: ${docNumber}`);
-      lines.push(`  NATIONALITY: ${nationality}`);
-      lines.push(`  ISSUING COUNTRY: ${issuingCountry}`);
-      lines.push(`  DOB: ${dob}`);
-      lines.push(`  GENDER: ${gender}`);
-      lines.push(`  EXPIRY: ${expiryDate}`);
-      if (resAddress) lines.push(`  RESIDENCE: ${resAddress}`);
-      if (destAddress) lines.push(`  DEST ADDRESS: ${destAddress}`);
-      if (redress) lines.push(`  REDRESS: ${redress}`);
-      if (ktn) lines.push(`  KTN: ${ktn}`);
-    } else {
-      lines.push(`  ** NO APIS DATA **`);
-    }
-  }
-
-  lines.push(``);
-  lines.push(`--- END PNRGOV ---`);
-  lines.push(`TOTAL PASSENGERS: ${passengers.length}`);
-  lines.push(`APIS RECORDS: ${apisMap.size}/${passengers.length}`);
-
-  return lines.join("\n");
 }
 
 // ============================================================================
@@ -1138,12 +1091,13 @@ function generatePNRGOV(data: {
  * Submit APIS data to destination country authorities.
  * Generates the appropriate message and records the submission.
  */
-// Stays async with nothing to await: the synchronous validation throw below
-// must reach callers as a rejection, not as a synchronous throw.
-// eslint-disable-next-line require-await
 export async function submitToAuthorities(
   flightId: number,
-  destination: string
+  destination: string,
+  actor: { userId: number | null; tenantId: number | null } = {
+    userId: null,
+    tenantId: null,
+  }
 ): Promise<{
   submissionId: number;
   flightId: number;
@@ -1155,16 +1109,42 @@ export async function submitToAuthorities(
   passengerCount: number;
   validatedCount: number;
 }> {
-  // Message generation is available separately. A stored draft is not evidence
-  // of transmission or acceptance by a border authority. No certified transport
-  // adapter is installed in this deployment.
-  void flightId;
-  void destination;
-  throw new TRPCError({
-    code: "PRECONDITION_FAILED",
-    message:
-      "APIS authority submission is unavailable: configure and validate the destination authority transport and acknowledgment contract. Generate a draft for review instead.",
+  // Queues one immediate PNRGOV push through the transmission layer. The
+  // row is evidence of a queued transmission only: `sent` requires a
+  // configured transport and `acked` an authority acknowledgement that
+  // matched the interchange reference (see apis-transmission.service.ts).
+  const db = await requireDb();
+  const [flight] = await db
+    .select({ id: flights.id, flightNumber: flights.flightNumber })
+    .from(flights)
+    .where(eq(flights.id, flightId))
+    .limit(1);
+  if (!flight)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+  const status = await getFlightAPISStatus(flightId);
+  const queued = await queueFlightTransmissions({
+    flightId,
+    messageType: "PNRGOV",
+    immediate: true,
+    requestedBy: actor.userId,
+    tenantId: actor.tenantId,
   });
+  if (destination && destination.toUpperCase() !== queued.destinationCountry)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Flight arrives in ${queued.destinationCountry}, not ${destination.toUpperCase()}`,
+    });
+  return {
+    submissionId: queued.created[0],
+    flightId,
+    flightNumber: flight.flightNumber,
+    destinationCountry: queued.destinationCountry,
+    format: "pnrgov",
+    status: "pending",
+    submittedAt: new Date().toISOString(),
+    passengerCount: status.totalPassengers,
+    validatedCount: status.summary.validated + status.summary.submitted,
+  };
 }
 
 // ============================================================================

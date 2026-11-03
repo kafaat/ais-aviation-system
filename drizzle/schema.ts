@@ -6345,3 +6345,199 @@ export const ticketCoupons = mysqlTable(
     ),
   })
 );
+
+/**
+ * Government passenger-data transmissions (PNRGOV/PAXLST). One row per
+ * scheduled push; the body is generated at dispatch so the authority receives
+ * the PNR state at push time. Status, attempts and acknowledgement bodies are
+ * the inspection evidence of what was sent, when, and how the authority
+ * answered. `queued` rows without a configured transport simply wait.
+ */
+export const apisTransmissions = mysqlTable(
+  "apis_transmissions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    flightId: int("flightId").notNull(),
+    messageType: mysqlEnum("messageType", ["PNRGOV", "PAXLST"]).notNull(),
+    destinationCountry: varchar("destinationCountry", { length: 3 }).notNull(),
+    authorityCode: varchar("authorityCode", { length: 35 }).notNull(),
+    messageVersion: varchar("messageVersion", { length: 10 }).notNull(),
+    /** Minutes relative to scheduled departure; NULL for an operator-requested push. */
+    scheduleOffsetMinutes: int("scheduleOffsetMinutes"),
+    scheduledFor: timestamp("scheduledFor").notNull(),
+    /** Interchange control reference carried in UNB/UNZ; echoed by acknowledgements. */
+    correlationId: varchar("correlationId", { length: 14 }).notNull(),
+    status: mysqlEnum("status", [
+      "queued",
+      "sending",
+      "sent",
+      "acked",
+      "rejected",
+      "failed",
+      "dead_letter",
+    ])
+      .default("queued")
+      .notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    nextAttemptAt: timestamp("nextAttemptAt"),
+    body: longtext("body"),
+    bodyHash: varchar("bodyHash", { length: 64 }),
+    pnrCount: int("pnrCount"),
+    passengerCount: int("passengerCount"),
+    transportName: varchar("transportName", { length: 40 }),
+    transportReference: varchar("transportReference", { length: 255 }),
+    sentAt: timestamp("sentAt"),
+    acknowledgedAt: timestamp("acknowledgedAt"),
+    acknowledgementBody: text("acknowledgementBody"),
+    acknowledgementCode: varchar("acknowledgementCode", { length: 40 }),
+    lastError: text("lastError"),
+    requestedBy: int("requestedBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    correlationIdx: uniqueIndex("apis_transmissions_correlation_idx").on(
+      table.correlationId
+    ),
+    flightIdx: index("apis_transmissions_flight_idx").on(
+      table.flightId,
+      table.messageType
+    ),
+    dueIdx: index("apis_transmissions_due_idx").on(
+      table.status,
+      table.scheduledFor,
+      table.nextAttemptAt
+    ),
+  })
+);
+export type ApisTransmission = typeof apisTransmissions.$inferSelect;
+
+/** Push regime per destination country; timings are a configuration to be
+ * replaced by the authority's specification, never a legal claim. */
+export const pnrgovSchedules = mysqlTable(
+  "pnrgov_schedules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    destinationCountry: varchar("destinationCountry", { length: 3 }).notNull(),
+    authorityCode: varchar("authorityCode", { length: 35 }).notNull(),
+    messageVersion: varchar("messageVersion", { length: 10 })
+      .default("21:1")
+      .notNull(),
+    /** Minutes relative to departure, e.g. [-1440,-720,-60,0]. */
+    offsetsMinutes: json("offsetsMinutes").$type<number[]>().notNull(),
+    timingSource: varchar("timingSource", { length: 255 }).notNull(),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdBy: int("createdBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    destinationIdx: uniqueIndex("pnrgov_schedules_destination_idx").on(
+      table.tenantId,
+      table.destinationCountry
+    ),
+  })
+);
+export type PnrgovSchedule = typeof pnrgovSchedules.$inferSelect;
+
+/**
+ * Entry/transit requirement rules evaluated before boarding (GACA circular,
+ * August 2026). Rows are imported from a named source with its URL and
+ * effective dates; nothing here is seeded as truth. `confirmationStatus`
+ * distinguishes operator-confirmed rules from unconfirmed imports and from
+ * fictional test fixtures, and only confirmed rules can yield a "go".
+ */
+export const entryRequirementRules = mysqlTable(
+  "entry_requirement_rules",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    destinationCountry: varchar("destinationCountry", { length: 3 }).notNull(),
+    /** ISO country code or "*" for any nationality. */
+    nationality: varchar("nationality", { length: 3 }).notNull(),
+    /** passport | national_id | visa | * */
+    documentType: varchar("documentType", { length: 12 }).notNull(),
+    visaRequirement: mysqlEnum("visaRequirement", [
+      "none",
+      "visa_required",
+      "evisa",
+      "visa_on_arrival",
+      "transit_without_visa",
+    ]).notNull(),
+    transitWithoutVisaHours: int("transitWithoutVisaHours"),
+    passportValidityMonths: int("passportValidityMonths").default(0).notNull(),
+    blankPagesRequired: int("blankPagesRequired").default(0).notNull(),
+    sourceName: varchar("sourceName", { length: 120 }).notNull(),
+    sourceUrl: varchar("sourceUrl", { length: 500 }).notNull(),
+    effectiveFrom: datetime("effectiveFrom").notNull(),
+    effectiveTo: datetime("effectiveTo"),
+    confirmationStatus: mysqlEnum("confirmationStatus", [
+      "confirmed",
+      "unconfirmed",
+      "fictional_fixture",
+    ]).notNull(),
+    notes: text("notes"),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdBy: int("createdBy"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    lookupIdx: index("entry_rules_lookup_idx").on(
+      table.destinationCountry,
+      table.nationality,
+      table.documentType
+    ),
+  })
+);
+export type EntryRequirementRule = typeof entryRequirementRules.$inferSelect;
+
+/** Evidence of each pre-boarding document verification and of agent overrides. */
+export const documentVerificationResults = mysqlTable(
+  "document_verification_results",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    bookingId: int("bookingId").notNull(),
+    passengerId: int("passengerId").notNull(),
+    flightId: int("flightId").notNull(),
+    verdict: mysqlEnum("verdict", ["go", "no_go", "manual_review"]).notNull(),
+    reasons: json("reasons")
+      .$type<
+        Array<{
+          code: string;
+          message: string;
+          severity: "block" | "review" | "info";
+          ruleId?: number;
+        }>
+      >()
+      .notNull(),
+    rulesApplied: json("rulesApplied").$type<number[]>().notNull(),
+    rulesSource: varchar("rulesSource", { length: 40 }).notNull(),
+    documentDigest: varchar("documentDigest", { length: 64 }).notNull(),
+    itineraryDigest: varchar("itineraryDigest", { length: 64 }).notNull(),
+    /** check_in | preview | override */
+    trigger: varchar("trigger", { length: 20 }).notNull(),
+    evaluatedBy: int("evaluatedBy"),
+    evaluatedAt: timestamp("evaluatedAt").notNull(),
+    /** Override: who authorised boarding despite the verdict, in which role, why and when. */
+    overrideVerdict: mysqlEnum("overrideVerdict", ["go"]),
+    overrideBy: int("overrideBy"),
+    overrideRole: varchar("overrideRole", { length: 20 }),
+    overrideReason: text("overrideReason"),
+    overriddenAt: timestamp("overriddenAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    passengerFlightIdx: index("document_verification_passenger_idx").on(
+      table.passengerId,
+      table.flightId,
+      table.evaluatedAt
+    ),
+    bookingIdx: index("document_verification_booking_idx").on(table.bookingId),
+  })
+);
+export type DocumentVerificationResult =
+  typeof documentVerificationResults.$inferSelect;

@@ -431,7 +431,7 @@ function SubmissionsTab({ flightId }: { flightId: string }) {
                 ) : (
                   <FileCheck className="me-2 h-4 w-4" />
                 )}
-                {t("apis.generatePNRGOV", "Preview PNR data (text)")}
+                {t("apis.generatePNRGOV", "Generate PNRGOV (EDIFACT draft)")}
               </Button>
               <Button
                 size="sm"
@@ -1100,6 +1100,315 @@ function RouteRequirementsTab() {
 // Main Page Component
 // ============================================================================
 
+// ============================================================================
+// Transmissions Tab (transmission log, retry, acknowledgement ingestion)
+// ============================================================================
+
+type TransmissionStatus =
+  | "queued"
+  | "sending"
+  | "sent"
+  | "acked"
+  | "rejected"
+  | "failed"
+  | "dead_letter";
+
+function TransmissionStatusBadge({ status }: { status: TransmissionStatus }) {
+  const { t } = useTranslation();
+  const variants: Record<
+    TransmissionStatus,
+    "default" | "secondary" | "destructive" | "outline"
+  > = {
+    queued: "secondary",
+    sending: "secondary",
+    sent: "outline",
+    acked: "default",
+    rejected: "destructive",
+    failed: "destructive",
+    dead_letter: "destructive",
+  };
+  return (
+    <Badge variant={variants[status]}>
+      {t(`apis.transmissions.statuses.${status}`, status)}
+    </Badge>
+  );
+}
+
+function TransmissionsTab({ flightId }: { flightId: string }) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === "ar" ? ar : enUS;
+  const utils = trpc.useUtils();
+  const [ackBody, setAckBody] = useState("");
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const parsedFlightId = flightId ? parseInt(flightId, 10) : undefined;
+  const { data: rows, isLoading } = trpc.apis.listTransmissions.useQuery(
+    { flightId: parsedFlightId, limit: 100 },
+    { refetchInterval: 30000 }
+  );
+  const { data: schedules } = trpc.apis.listPnrgovSchedules.useQuery();
+  const { data: body } = trpc.apis.getTransmissionBody.useQuery(
+    { transmissionId: expanded ?? 0 },
+    { enabled: expanded !== null }
+  );
+  const refresh = () => utils.apis.listTransmissions.invalidate();
+  const queue = trpc.apis.queueTransmissions.useMutation({
+    onSuccess: result => {
+      toast.success(
+        t("apis.transmissions.queued", {
+          count: result.created.length,
+          skipped: result.skipped,
+          authority: result.authorityCode,
+        })
+      );
+      void refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const retry = trpc.apis.retryTransmission.useMutation({
+    onSuccess: () => {
+      toast.success(t("apis.transmissions.retryQueued"));
+      void refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const ingest = trpc.apis.ingestAcknowledgement.useMutation({
+    onSuccess: result => {
+      toast[result.matched ? "success" : "warning"](
+        result.matched
+          ? t("apis.transmissions.ackApplied", {
+              id: result.transmissionId,
+              disposition: result.disposition,
+            })
+          : t("apis.transmissions.ackUnmatched")
+      );
+      setAckBody("");
+      void refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const formatDate = (value: string | null) =>
+    value
+      ? format(new Date(value), "yyyy-MM-dd HH:mm", { locale: dateLocale })
+      : "—";
+
+  return (
+    <div className="space-y-4">
+      <Card className="shadow-sm rounded-xl">
+        <CardHeader>
+          <CardTitle className="text-lg">
+            {t("apis.transmissions.title")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {t("apis.transmissions.description")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={!parsedFlightId || queue.isPending}
+              onClick={() =>
+                parsedFlightId &&
+                queue.mutate({
+                  flightId: parsedFlightId,
+                  messageType: "PNRGOV",
+                  immediate: false,
+                })
+              }
+            >
+              <Clock className="me-2 h-4 w-4" />
+              {t("apis.transmissions.queueSchedule")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!parsedFlightId || queue.isPending}
+              onClick={() =>
+                parsedFlightId &&
+                queue.mutate({
+                  flightId: parsedFlightId,
+                  messageType: "PNRGOV",
+                  immediate: true,
+                })
+              }
+            >
+              <Send className="me-2 h-4 w-4" />
+              {t("apis.transmissions.queueNow")}
+            </Button>
+          </div>
+          {schedules && (
+            <p className="text-xs text-muted-foreground">
+              {schedules.length
+                ? t("apis.transmissions.schedules", {
+                    list: schedules
+                      .map(
+                        s =>
+                          `${s.destinationCountry} → ${s.authorityCode} [${s.offsetsMinutes.join(", ")} min]`
+                      )
+                      .join("; "),
+                  })
+                : t("apis.transmissions.noSchedules")}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm rounded-xl">
+        <CardHeader>
+          <CardTitle className="text-lg">
+            {t("apis.transmissions.log")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : !rows?.length ? (
+            <p className="text-sm text-muted-foreground">
+              {t("apis.transmissions.empty")}
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">{t("apis.id", "ID")}</TableHead>
+                  <TableHead>{t("apis.flight", "Flight")}</TableHead>
+                  <TableHead>{t("apis.transmissions.type")}</TableHead>
+                  <TableHead>{t("apis.transmissions.authority")}</TableHead>
+                  <TableHead>{t("apis.transmissions.scheduledFor")}</TableHead>
+                  <TableHead>{t("apis.status", "Status")}</TableHead>
+                  <TableHead>{t("apis.transmissions.attempts")}</TableHead>
+                  <TableHead>{t("apis.transmissions.nextAttempt")}</TableHead>
+                  <TableHead>{t("apis.transmissions.correlation")}</TableHead>
+                  <TableHead>
+                    {t("apis.transmissions.acknowledgement")}
+                  </TableHead>
+                  <TableHead>{t("apis.actions", "Actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map(row => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.id}</TableCell>
+                    <TableCell>{row.flightId}</TableCell>
+                    <TableCell>
+                      {row.messageType} {row.messageVersion}
+                      {row.scheduleOffsetMinutes !== null && (
+                        <span className="block text-xs text-muted-foreground">
+                          {t("apis.transmissions.offset", {
+                            minutes: row.scheduleOffsetMinutes,
+                          })}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {row.authorityCode}
+                      <span className="block text-xs text-muted-foreground">
+                        {row.destinationCountry}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatDate(row.scheduledFor)}
+                    </TableCell>
+                    <TableCell>
+                      <TransmissionStatusBadge status={row.status} />
+                      {row.lastError && (
+                        <span className="block max-w-xs truncate text-xs text-destructive">
+                          {row.lastError}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>{row.attempts}</TableCell>
+                    <TableCell className="text-sm">
+                      {formatDate(row.nextAttemptAt)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {row.correlationId}
+                      {row.bodyHash && (
+                        <span className="block truncate max-w-[8rem]">
+                          {row.bodyHash.slice(0, 12)}…
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {row.acknowledgementCode ?? "—"}
+                      {row.acknowledgedAt && (
+                        <span className="block text-xs text-muted-foreground">
+                          {formatDate(row.acknowledgedAt)}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="space-x-1 whitespace-nowrap">
+                      {["failed", "dead_letter", "rejected"].includes(
+                        row.status
+                      ) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={retry.isPending}
+                          onClick={() =>
+                            retry.mutate({ transmissionId: row.id })
+                          }
+                        >
+                          {t("apis.transmissions.retry")}
+                        </Button>
+                      )}
+                      {row.bodyLength !== null && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setExpanded(expanded === row.id ? null : row.id)
+                          }
+                        >
+                          {expanded === row.id
+                            ? t("apis.transmissions.hideBody")
+                            : t("apis.transmissions.showBody")}
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {expanded !== null && body?.body && (
+            <pre className="mt-4 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs">
+              {body.body}
+            </pre>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm rounded-xl">
+        <CardHeader>
+          <CardTitle className="text-lg">
+            {t("apis.transmissions.ingestTitle")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {t("apis.transmissions.ingestDescription")}
+          </p>
+          <textarea
+            className="min-h-32 w-full rounded-md border bg-background p-2 font-mono text-xs"
+            value={ackBody}
+            onChange={e => setAckBody(e.target.value)}
+            placeholder="UNH+1+CUSRES:D:05B:UN:IATA'BGM+962'RFF+ACW:...'UNT+3+1'"
+          />
+          <Button
+            size="sm"
+            disabled={ackBody.trim().length < 10 || ingest.isPending}
+            onClick={() => ingest.mutate({ body: ackBody.trim() })}
+          >
+            <FileCheck className="me-2 h-4 w-4" />
+            {t("apis.transmissions.ingest")}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function APISManagement() {
   const { t } = useTranslation();
   const { user, loading: authLoading } = useAuth();
@@ -1192,6 +1501,10 @@ export default function APISManagement() {
             <Globe className="h-4 w-4" />
             {t("apis.routeRequirements", "Route Requirements")}
           </TabsTrigger>
+          <TabsTrigger value="transmissions" className="gap-2">
+            <Clock className="h-4 w-4" />
+            {t("apis.transmissions.tab")}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="submissions" className="mt-4">
@@ -1204,6 +1517,10 @@ export default function APISManagement() {
 
         <TabsContent value="requirements" className="mt-4">
           <RouteRequirementsTab />
+        </TabsContent>
+
+        <TabsContent value="transmissions" className="mt-4">
+          <TransmissionsTab flightId={flightId} />
         </TabsContent>
       </Tabs>
     </div>

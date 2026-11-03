@@ -140,6 +140,19 @@ export const PERIODIC_JOB_CATALOG = [
     },
   },
   {
+    // Government passenger-data pushes (PNRGOV/PAXLST): queue scheduled
+    // pushes, dispatch due ones through the configured transport with
+    // backoff, and collect acknowledgements. Waits when no transport is set.
+    name: "apisTransmissions",
+    cron: "* * * * *",
+    periodMs: 60_000,
+    run: async () => {
+      const { processApisTransmissions } =
+        await import("./apis-transmission.service");
+      await processApisTransmissions();
+    },
+  },
+  {
     name: "bagDropExpiry",
     cron: "* * * * *",
     periodMs: 60_000,

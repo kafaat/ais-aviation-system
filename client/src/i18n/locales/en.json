@@ -450,7 +450,29 @@
     "inventoryUnavailable": "Seat inventory is unavailable. Contact the airline or try again later.",
     "passUnavailable": "A valid boarding pass could not be loaded.",
     "onlineVerification": "This signed AIS pass requires online verification of current eligibility.",
-    "windowClosed": "Check-in requires a paid active reservation and is open from 48 hours until 1 hour before departure."
+    "windowClosed": "Check-in requires a paid active reservation and is open from 48 hours until 1 hour before departure.",
+    "documents": {
+      "title": "Travel document verification",
+      "unavailable": "Document verification is unavailable for this passenger.",
+      "verdicts": {
+        "go": "Go",
+        "no_go": "No go",
+        "manual_review": "Manual review"
+      },
+      "modes": {
+        "enforce": "enforced",
+        "advisory": "advisory only",
+        "off": "off"
+      },
+      "overridden": "overridden by {{role}}",
+      "blocked": "Check-in and boarding pass issuance are refused until an authorised agent reviews the documents and records an override.",
+      "override": "Record override",
+      "overrideTitle": "Override document verification",
+      "overrideDescription": "You are authorising boarding despite the verdict. Your user, role, reason and time are recorded as evidence and the override lapses if the passenger's documents or itinerary change.",
+      "overrideReason": "Reason (what was sighted, at least 10 characters)",
+      "confirmOverride": "Authorise boarding",
+      "overrideRecorded": "Override recorded"
+    }
   },
   "analytics": {
     "title": "Analytics Dashboard",
@@ -3701,11 +3723,11 @@
       "passengerRejections": "passenger rejections"
     },
     "submitSuccess": "APIS data submitted successfully for {{flight}}",
-    "generateSuccess": "{{format}} local draft. Validated travel records: {{validated}} of {{total}} passengers. No transmission.",
+    "generateSuccess": "{{format}} local draft. Documented travel records: {{validated}} of {{total}} passengers. No transmission.",
     "enterFlightIdPrompt": "Enter a Flight ID above to view APIS submissions and passenger status.",
     "flightStatus": "Flight {{number}} - APIS Status",
     "generatePAXLST": "Generate PAXLST",
-    "generatePNRGOV": "Preview PNR data (text)",
+    "generatePNRGOV": "Generate PNRGOV (EDIFACT draft)",
     "submitToAuthorities": "Submit to Authorities",
     "notReadyWarning": "All passengers must have validated APIS data before submission.",
     "passengerStatuses": "Passenger APIS Status",
@@ -3805,6 +3827,44 @@
       "acknowledged": "Acknowledged",
       "rejected": "Rejected",
       "error": "Error"
+    },
+    "transmissions": {
+      "tab": "Transmissions",
+      "title": "Government transmissions (PNRGOV / PAXLST)",
+      "description": "Pushes are queued per destination schedule, generated at push time, sent through the configured transport and matched to the authority's acknowledgement. A row is evidence of what was sent; only an acknowledgement moves it to acknowledged. Without a configured transport queued rows wait.",
+      "queueSchedule": "Queue scheduled pushes",
+      "queueNow": "Queue immediate push",
+      "queued": "Queued {{count}} transmission(s) for {{authority}} ({{skipped}} already queued)",
+      "schedules": "Configured schedules: {{list}}",
+      "noSchedules": "No PNRGOV schedule configured. Add the destination country, authority code and push offsets before queueing.",
+      "log": "Transmission log",
+      "empty": "No transmissions recorded for this selection.",
+      "type": "Message",
+      "authority": "Authority",
+      "scheduledFor": "Scheduled",
+      "attempts": "Attempts",
+      "nextAttempt": "Next attempt",
+      "correlation": "Interchange ref / hash",
+      "acknowledgement": "Acknowledgement",
+      "offset": "{{minutes}} min to departure",
+      "retry": "Retry",
+      "retryQueued": "Transmission re-queued",
+      "showBody": "Show body",
+      "hideBody": "Hide body",
+      "ingestTitle": "Record an acknowledgement",
+      "ingestDescription": "Paste a CUSRES or CONTRL acknowledgement received out of band. It is matched to a transmission by the interchange reference it echoes.",
+      "ingest": "Apply acknowledgement",
+      "ackApplied": "Acknowledgement {{disposition}} applied to transmission {{id}}",
+      "ackUnmatched": "No transmission matched the references in this acknowledgement",
+      "statuses": {
+        "queued": "Queued",
+        "sending": "Sending",
+        "sent": "Sent",
+        "acked": "Acknowledged",
+        "rejected": "Rejected",
+        "failed": "Failed (retrying)",
+        "dead_letter": "Dead letter"
+      }
     }
   },
   "biometric": {

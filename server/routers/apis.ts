@@ -13,9 +13,14 @@ import {
   publicProcedure,
   protectedProcedure,
   adminProcedure,
+  airlineOpsProcedure,
   router,
 } from "../_core/trpc";
 import * as apisService from "../services/apis.service";
+import * as transmissions from "../services/apis-transmission.service";
+import * as documentVerification from "../services/travel-documents/document-verification.service";
+import { entryRuleInputSchema } from "../services/travel-documents/entry-rules";
+import { pnrgovScheduleInputSchema } from "../services/apis-pnrgov-schedule";
 import { assertPassengerOwnership } from "../services/access-control.service";
 
 export const apisRouter = router({
@@ -155,10 +160,11 @@ export const apisRouter = router({
       })
     )
     .output(responseContracts["submitToAuthorities"])
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       return await apisService.submitToAuthorities(
         input.flightId,
-        input.destination ?? ""
+        input.destination ?? "",
+        { userId: ctx.user.id, tenantId: ctx.tenantId ?? null }
       );
     }),
 
@@ -224,4 +230,206 @@ export const apisRouter = router({
     .query(async ({ input }) => {
       return await apisService.getFlightSubmissions(input.flightId);
     }),
+
+  // ========================================================================
+  // Transmission layer: queue, dispatch log, acknowledgements, schedules
+  // ========================================================================
+
+  /** Transmission log for a flight (or the latest overall): the inspection evidence. */
+  listTransmissions: adminProcedure
+    .input(
+      z.object({
+        flightId: z.number().int().positive().optional(),
+        limit: z.number().int().min(1).max(500).optional(),
+      })
+    )
+    .output(responseContracts["listTransmissions"])
+    .query(({ input, ctx }) =>
+      transmissions.listTransmissions({
+        flightId: input.flightId,
+        limit: input.limit,
+        tenantId: ctx.tenantId ?? null,
+      })
+    ),
+
+  /** The exact body that was sent (passenger data: admin only). */
+  getTransmissionBody: adminProcedure
+    .input(z.object({ transmissionId: z.number().int().positive() }))
+    .output(responseContracts["getTransmissionBody"])
+    .query(({ input, ctx }) =>
+      transmissions.getTransmissionBody({
+        transmissionId: input.transmissionId,
+        tenantId: ctx.tenantId ?? null,
+      })
+    ),
+
+  /** Queue the configured pushes for a flight, or one immediate push. */
+  queueTransmissions: adminProcedure
+    .input(
+      z.object({
+        flightId: z.number().int().positive(),
+        messageType: z.enum(["PNRGOV", "PAXLST"]).default("PNRGOV"),
+        immediate: z.boolean().default(false),
+      })
+    )
+    .output(responseContracts["queueTransmissions"])
+    .mutation(({ input, ctx }) =>
+      transmissions.queueFlightTransmissions({
+        flightId: input.flightId,
+        messageType: input.messageType,
+        immediate: input.immediate,
+        requestedBy: ctx.user.id,
+        tenantId: ctx.tenantId ?? null,
+      })
+    ),
+
+  /** Re-queue a failed, dead-letter or rejected transmission. */
+  retryTransmission: adminProcedure
+    .input(z.object({ transmissionId: z.number().int().positive() }))
+    .output(responseContracts["retryTransmission"])
+    .mutation(({ input, ctx }) =>
+      transmissions.retryTransmission({
+        transmissionId: input.transmissionId,
+        tenantId: ctx.tenantId ?? null,
+        requestedBy: ctx.user.id,
+      })
+    ),
+
+  /** Record a CUSRES/CONTRL acknowledgement received out of band (bridge, e-mail, portal). */
+  ingestAcknowledgement: adminProcedure
+    .input(
+      z.object({
+        body: z.string().min(10).max(60000),
+        correlationId: z
+          .string()
+          .regex(/^[A-Za-z0-9]{1,14}$/)
+          .optional(),
+      })
+    )
+    .output(responseContracts["ingestAcknowledgement"])
+    .mutation(async ({ input, ctx }) => {
+      const result = await transmissions.applyAcknowledgement({
+        body: input.body,
+        correlationId: input.correlationId,
+        source: `operator:${ctx.user.id}`,
+      });
+      return {
+        matched: result.matched,
+        transmissionId: result.matched ? result.transmissionId : null,
+        disposition: result.disposition,
+        applied: result.matched ? result.applied : false,
+        messageType: result.parsed.messageType,
+        errors: result.parsed.errors,
+      };
+    }),
+
+  listPnrgovSchedules: adminProcedure
+    .output(responseContracts["listPnrgovSchedules"])
+    .query(({ ctx }) =>
+      transmissions.listPnrgovSchedules(ctx.tenantId ?? null)
+    ),
+
+  upsertPnrgovSchedule: adminProcedure
+    .input(pnrgovScheduleInputSchema)
+    .output(responseContracts["upsertPnrgovSchedule"])
+    .mutation(({ input, ctx }) =>
+      transmissions.upsertPnrgovSchedule(input, {
+        userId: ctx.user.id,
+        tenantId: ctx.tenantId ?? null,
+      })
+    ),
+
+  // ========================================================================
+  // Pre-boarding document verification (GACA circular, August 2026)
+  // ========================================================================
+
+  listEntryRules: adminProcedure
+    .input(
+      z.object({
+        destinationCountry: z
+          .string()
+          .regex(/^[A-Za-z]{2,3}$/)
+          .transform(v => v.toUpperCase())
+          .optional(),
+      })
+    )
+    .output(responseContracts["listEntryRules"])
+    .query(({ input, ctx }) =>
+      documentVerification.listEntryRules(
+        ctx.tenantId ?? null,
+        input.destinationCountry
+      )
+    ),
+
+  /** Validated import from a named source; nothing is seeded as truth. */
+  importEntryRules: adminProcedure
+    .input(z.object({ rules: z.array(entryRuleInputSchema).min(1).max(500) }))
+    .output(responseContracts["importEntryRules"])
+    .mutation(({ input, ctx }) =>
+      documentVerification.importEntryRules(input.rules, {
+        userId: ctx.user.id,
+        tenantId: ctx.tenantId ?? null,
+      })
+    ),
+
+  /** Evaluate and record a passenger's verdict for a flight (preview; the
+   * check-in hook records the enforcing evaluation). */
+  getDocumentVerification: protectedProcedure
+    .input(
+      z.object({
+        bookingId: z.number().int().positive(),
+        passengerId: z.number().int().positive(),
+        flightId: z.number().int().positive(),
+      })
+    )
+    .output(responseContracts["getDocumentVerification"])
+    .query(async ({ input, ctx }) => {
+      await assertPassengerOwnership(
+        input.passengerId,
+        ctx.user.id,
+        ctx.user.role
+      );
+      return documentVerification.previewVerification({
+        ...input,
+        evaluatedBy: ctx.user.id,
+        tenantId: ctx.tenantId ?? null,
+      });
+    }),
+
+  /** Authorised override with a recorded reason (admin, airline_admin, ops). */
+  overrideDocumentVerification: airlineOpsProcedure
+    .input(
+      z.object({
+        resultId: z.number().int().positive(),
+        reason: z.string().min(10).max(1000),
+      })
+    )
+    .output(responseContracts["overrideDocumentVerification"])
+    .mutation(({ input, ctx }) =>
+      documentVerification.overrideVerification({
+        resultId: input.resultId,
+        reason: input.reason,
+        actor: {
+          userId: ctx.user.id,
+          role: ctx.user.role,
+          tenantId: ctx.tenantId ?? null,
+        },
+      })
+    ),
+
+  listDocumentVerifications: adminProcedure
+    .input(
+      z.object({
+        flightId: z.number().int().positive().optional(),
+        bookingId: z.number().int().positive().optional(),
+        limit: z.number().int().min(1).max(500).optional(),
+      })
+    )
+    .output(responseContracts["listDocumentVerifications"])
+    .query(({ input, ctx }) =>
+      documentVerification.listVerificationResults({
+        ...input,
+        tenantId: ctx.tenantId ?? null,
+      })
+    ),
 });
