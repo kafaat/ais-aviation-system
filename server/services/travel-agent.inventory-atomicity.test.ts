@@ -7,8 +7,10 @@ describe("travel agent inventory atomicity", () => {
     new URL("./travel-agent.service.ts", import.meta.url),
     "utf8"
   );
-  it("delegates to the canonical booking command in its own transaction", () => {
-    expect(source).toContain("return withTransactionalIdempotency(");
+  it("delegates to the canonical booking command inside the idempotent transaction", () => {
+    expect(source).toMatch(/=>\s*withTransactionalIdempotency\(/);
+    expect(source).toContain("if (!expectedOwner) return execute()");
+    expect(source).toContain("return execute(tx)");
     expect(source).toContain("const booking = await createBooking(");
     expect(source).toMatch(/await tx\s*\.insert\(agentBookings\)/);
     expect(source).not.toContain("userId: 0");
