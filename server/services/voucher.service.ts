@@ -783,8 +783,7 @@ export async function useCredit(
       remaining -= used;
     }
     // Inventory failure rolls back the debit and every usage row.
-    await confirmFundedBooking(tx, booking);
-    await tx.insert(financialLedger).values({
+    const [posted] = await tx.insert(financialLedger).values({
       bookingId,
       userId,
       type: "charge",
@@ -793,6 +792,13 @@ export async function useCredit(
       stripeEventId: `internal-credit:${bookingId}`,
       description: "Internal credit invoice settlement",
       metadata: JSON.stringify({ tender: "user_credit", usages }),
+    });
+    await confirmFundedBooking(tx, booking, undefined, {
+      kind: "internal_booking",
+      bookingId,
+      ledgerId: posted.insertId,
+      tender: "user_credit",
+      amountMinor: amount,
     });
     return { success: true, amountUsed: amount, usages };
   });

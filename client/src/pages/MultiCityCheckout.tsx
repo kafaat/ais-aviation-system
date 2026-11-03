@@ -1,3 +1,7 @@
+import AncillarySelection, {
+  ancillaryCommandLines,
+  type SelectedAncillary,
+} from "@/components/AncillarySelection";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useSearch } from "wouter";
@@ -66,10 +70,16 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
     passengerCount: passengers.length,
     passengerTypes: passengers.map(p => p.type),
   });
+  const utils = trpc.useUtils();
   const booking = trpc.multiCity.create.useMutation();
   const [submittedAmount, setSubmittedAmount] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const total = submittedAmount ?? quote.data?.totalPrice;
+  const [extras, setExtras] = useState<SelectedAncillary[]>([]);
+  const extrasTotal = extras.reduce((sum, row) => sum + row.totalPrice, 0);
+
+  const total =
+    submittedAmount ??
+    (quote.data ? quote.data.totalPrice + extrasTotal : undefined);
   function edit(index: number, patch: Partial<Passenger>) {
     setPassengers(current =>
       current.map((p, i) => (i === index ? { ...p, ...patch } : p))
@@ -95,6 +105,9 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
               sessionId: data.sessionId,
               checkoutContractVersion: 1,
               expectedTotalMinor: total,
+              ...(extras.length
+                ? { ancillaries: ancillaryCommandLines(extras) }
+                : {}),
             });
             navigate("/my-bookings");
           } catch (failure) {
@@ -113,7 +126,10 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
               code === "PRECONDITION_FAILED"
             ) {
               setSubmittedAmount(null);
-              await quote.refetch();
+              await Promise.all([
+                quote.refetch(),
+                utils.ancillary.getAvailable.invalidate(),
+              ]);
             }
           }
         }}
@@ -162,6 +178,14 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
             </label>
           </fieldset>
         ))}
+        <AncillarySelection
+          cabinClass={data.cabinClass}
+          flightIds={data.segments.map(s => s.flightId)}
+          passengers={passengers}
+          selected={extras}
+          onChange={setExtras}
+          disabled={submittedAmount !== null}
+        />
         {total !== undefined && (
           <p>
             {t("booking.total")}{" "}

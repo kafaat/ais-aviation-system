@@ -1,4 +1,7 @@
-import { removeInvoiceSeat } from "./seat-exchange.service";
+import {
+  removeInvoiceSeat,
+  allocatedAncillarySegmentId,
+} from "./seat-exchange.service";
 import {
   lockEditableInvoice,
   insertInvoiceAncillary,
@@ -14,6 +17,9 @@ import {
   ancillaryServices,
   bookingAncillaries,
   bookingFareComponents,
+  passengers,
+  bookingSegments,
+  flights,
   type InsertAncillaryService,
 } from "../../drizzle/schema";
 
@@ -171,7 +177,12 @@ export async function getBookingAncillaries(bookingId: number) {
     .select({
       id: bookingAncillaries.id,
       bookingId: bookingAncillaries.bookingId,
-      passengerId: bookingAncillaries.passengerId,
+      passengerId: passengers.id,
+      passengerFirstName: passengers.firstName,
+      passengerLastName: passengers.lastName,
+      scopeState: bookingAncillaries.scopeState,
+      segmentOrder: bookingSegments.segmentOrder,
+      flightNumber: flights.flightNumber,
       quantity: bookingAncillaries.quantity,
       unitPrice: bookingAncillaries.unitPrice,
       totalPrice: bookingAncillaries.totalPrice,
@@ -188,6 +199,21 @@ export async function getBookingAncillaries(bookingId: number) {
       },
     })
     .from(bookingAncillaries)
+    .leftJoin(
+      passengers,
+      and(
+        eq(passengers.id, bookingAncillaries.passengerId),
+        eq(passengers.bookingId, bookingAncillaries.bookingId)
+      )
+    )
+    .leftJoin(
+      bookingSegments,
+      and(
+        eq(bookingSegments.id, bookingAncillaries.segmentId),
+        eq(bookingSegments.bookingId, bookingAncillaries.bookingId)
+      )
+    )
+    .leftJoin(flights, eq(flights.id, bookingSegments.flightId))
     .leftJoin(
       ancillaryServices,
       eq(bookingAncillaries.ancillaryServiceId, ancillaryServices.id)
@@ -251,7 +277,7 @@ export async function removeAncillaryFromBooking(
       ancillary.totalPrice < 0
     )
       throw invoiceBlocked("Ancillary charge requires reconciliation");
-    const seatSegmentId = await removeInvoiceSeat(tx, ancillary);
+    await removeInvoiceSeat(tx, ancillary);
     await tx
       .update(bookingFareComponents)
       .set({ reversedAt: sql`CURRENT_TIMESTAMP(0)` })
@@ -273,7 +299,7 @@ export async function removeAncillaryFromBooking(
       booking,
       booking.totalAmount - ancillary.totalPrice,
       "editable_invoice",
-      seatSegmentId
+      allocatedAncillarySegmentId(ancillary)
     );
     return true;
   });

@@ -9,7 +9,7 @@ bag drop. It adds purchased weight only when all of these are true:
 - the item has an explicit `specific_segment` scope;
 - the immutable purchase snapshot is a positive gram value;
 - `fundedAt` and `fundingReference` agree with the completed financial source;
-- the referenced booking or modification receipt is still `applied`.
+- provider-funded items have applied receipts with no refunded amount. Internal funding must match the original SAR charge, amount and tender. Unallocated refunds require review.
 
 Any legacy or ambiguous baggage item grants no automatic weight. It produces a
 named warning and causes self-service bag drop to require operator review. This
@@ -25,9 +25,7 @@ Two completed paths may create an entitlement:
 1. Order servicing records an exact passenger, flight/segment, structured
    weight snapshot and either a collected modification receipt or an explicit
    no-charge execution event.
-2. Initial provider collection may resolve a checkout item only when the paid
-   booking has exactly one passenger and one stored segment. Multi-person or
-   multi-segment items remain unresolved.
+2. Initial checkout and editable-invoice items with explicit passenger and segment identities are funded on successful settlement. A direct provider payment references its applied receipt, a split plan requires every funded share, and wallet, user credit and corporate credit reference the original ledger posting. Replaying settlement preserves the original evidence. Direct provider collection may also resolve a historical unscoped baggage item with a purchase weight when the booking has exactly one passenger and one stored segment.
 
 Kiosk insertion, an active status, a catalog name and a payment receipt recorded
 before application are not funding evidence.

@@ -1230,6 +1230,48 @@ try {
           cabinClass: "economy",
         })
         .$returningId();
+      const [returnFlight] = await db
+        .insert(s.flights)
+        .values({
+          tenantId: id,
+          airlineId: id,
+          flightNumber: "ZYR15",
+          originId: id + 1,
+          destinationId: id,
+          departureTime: hour(36),
+          arrivalTime: hour(38),
+          aircraftType: "A320",
+          status: "scheduled",
+          economySeats: 10,
+          economyAvailable: 9,
+          businessSeats: 2,
+          businessAvailable: 2,
+          economyPrice: 10000,
+          businessPrice: 20000,
+        })
+        .$returningId();
+      const [outboundLeg, returnLeg] = await db
+        .insert(s.bookingSegments)
+        .values([
+          {
+            bookingId: id + 30,
+            flightId: id + 14,
+            segmentOrder: 1,
+            seatsReserved: true,
+            status: "confirmed",
+            departureDate: hour(12 + 14 / 6),
+            fareClassId: recoveryFare.id,
+          },
+          {
+            bookingId: id + 30,
+            flightId: returnFlight.id,
+            segmentOrder: 2,
+            seatsReserved: true,
+            status: "confirmed",
+            departureDate: hour(36),
+          },
+        ])
+        .$returningId();
       await db
         .update(s.bookings)
         .set({ fareClassId: recoveryFare.id })
@@ -1402,6 +1444,127 @@ try {
             updatedAt: captain.updatedAt,
           })
           .where(eq(s.crewMembers.id, id));
+        // Apply an extra after approval: recheck using the durable execution path.
+        const [product] = await db
+          .insert(s.ancillaryServices)
+          .values({
+            code: "R15_BAG",
+            category: "baggage",
+            name: "R15 baggage",
+            price: 5000,
+          })
+          .$returningId();
+        const [extra] = await db
+          .insert(s.bookingAncillaries)
+          .values({
+            bookingId: id + 30,
+            ancillaryServiceId: product.id,
+            unitPrice: 5000,
+            totalPrice: 5000,
+            fundedAt: new Date(),
+            status: "active",
+          })
+          .$returningId();
+        const { getUserDisruptions } =
+          await import("../../server/services/disruption.service");
+        const needsServiceReview = async () =>
+          (await getUserDisruptions(id)).find(
+            d => d.bookingId === id + 30 && d.id === disruption.id
+          )?.extrasReviewRequired;
+        assert.equal(await needsServiceReview(), true);
+        await assert.rejects(
+          executeRecovery(proposal.id, proposal.digest, id, id),
+          /active extras/
+        );
+        await db
+          .update(s.bookingAncillaries)
+          .set({ scopeState: "specific_segment", segmentId: outboundLeg.id })
+          .where(eq(s.bookingAncillaries.id, extra.id));
+        assert.equal(await needsServiceReview(), true);
+        await assert.rejects(
+          executeRecovery(proposal.id, proposal.digest, id, id),
+          /active extras/
+        );
+        const [retainedExtra] = await db
+          .select()
+          .from(s.bookingAncillaries)
+          .where(eq(s.bookingAncillaries.id, extra.id));
+        assert.equal(retainedExtra.status, "active");
+        assert.equal(retainedExtra.totalPrice, 5000);
+        // Scope the funded baggage to the unchanged return. No transfer or refund is needed.
+        await db
+          .update(s.bookingAncillaries)
+          .set({
+            scopeState: "specific_segment",
+            segmentId: returnLeg.id,
+            passengerId: id + 30 * 20,
+            weightSnapshotGrams: 20000,
+            fundingReference: {
+              kind: "collected_booking",
+              bookingId: id + 30,
+              paymentIntentId: "pi_R15_baggage",
+            },
+          })
+          .where(eq(s.bookingAncillaries.id, extra.id));
+        const [extraBeforeRecovery] = await db
+          .select()
+          .from(s.bookingAncillaries)
+          .where(eq(s.bookingAncillaries.id, extra.id));
+        const [returnSeat] = await db
+          .insert(s.seatInventory)
+          .values({
+            flightId: returnFlight.id,
+            seatMapId: id,
+            seatNumber: "3A",
+            row: 3,
+            column: "A",
+            cabinClass: "economy",
+            seatType: "window",
+            seatPrice: 3000,
+            status: "occupied",
+            bookingId: id + 30,
+            passengerId: id + 30 * 20,
+          })
+          .$returningId();
+        assert.equal(await needsServiceReview(), false);
+        const [priced] = await db
+          .insert(s.seatInventory)
+          .values({
+            flightId: id + 14,
+            seatMapId: id,
+            seatNumber: "3A",
+            row: 3,
+            column: "A",
+            cabinClass: "economy",
+            seatType: "window",
+            seatPrice: 3000,
+            status: "occupied",
+            bookingId: id + 30,
+            passengerId: id + 30 * 20,
+          })
+          .$returningId();
+        assert.equal(await needsServiceReview(), true);
+        await assert.rejects(proposeRecovery(input, id), /priced seat/);
+        await assert.rejects(
+          executeRecovery(proposal.id, proposal.digest, id, id),
+          /priced seat/
+        );
+        const [retainedSeat] = await db
+          .select()
+          .from(s.seatInventory)
+          .where(eq(s.seatInventory.id, priced.id));
+        assert.equal(retainedSeat.bookingId, id + 30);
+        assert.equal(retainedSeat.passengerId, id + 30 * 20);
+        assert.equal(retainedSeat.status, "occupied");
+        const [unchanged] = await db
+          .select()
+          .from(s.bookings)
+          .where(eq(s.bookings.id, id + 30));
+        assert.equal(unchanged.flightId, id + 14);
+        await db
+          .delete(s.seatInventory)
+          .where(eq(s.seatInventory.id, priced.id));
+        assert.equal(await needsServiceReview(), false);
         const result = await executeRecovery(
           proposal.id,
           proposal.digest,
@@ -1420,6 +1583,27 @@ try {
           .where(eq(s.bookings.id, id + 30));
         assert.equal(moved.flightId, id + 15);
         assert.equal(moved.fareClassId, recoveryFare.id);
+        const [keptExtra] = await db
+          .select()
+          .from(s.bookingAncillaries)
+          .where(eq(s.bookingAncillaries.id, extra.id));
+        assert.equal(keptExtra.segmentId, returnLeg.id);
+        assert.equal(keptExtra.status, "active");
+        assert.equal(keptExtra.totalPrice, 5000);
+        assert.deepEqual(keptExtra, extraBeforeRecovery);
+        const [keptLeg] = await db
+          .select()
+          .from(s.bookingSegments)
+          .where(eq(s.bookingSegments.id, returnLeg.id));
+        assert.equal(keptLeg.flightId, returnFlight.id);
+        const [keptSeat] = await db
+          .select()
+          .from(s.seatInventory)
+          .where(eq(s.seatInventory.id, returnSeat.id));
+        assert.equal(keptSeat.flightId, returnFlight.id);
+        assert.equal(keptSeat.passengerId, id + 30 * 20);
+        assert.equal(keptSeat.bookingId, id + 30);
+        assert.equal(keptSeat.status, "occupied");
         const buckets = await db
           .select()
           .from(s.flightFareClassInventory)
@@ -1438,6 +1622,7 @@ try {
           revokedSourceRejected: true,
           expiredMedicalRejected: true,
           verifiedPlanExecutedOnce: true,
+          preservedActiveExtraAndPricedSeat: true,
         };
       } finally {
         delete process.env.AVIATION_SOURCE_REGISTRY;
@@ -2130,6 +2315,12 @@ try {
     "BSP-LOCAL-01",
     "Daily agency moves are compared with immutable RET, HOT and bank evidence",
     () => verifyBspLocalEvidence(db, ctx, id)
+  );
+  const { verifyScopedAncillarySale } = await import("./scoped-ancillary-sale");
+  await record(
+    "ANCILLARY-SCOPE-01",
+    "Recovery review preserves the funded outbound baggage and meal for the assigned passenger",
+    () => verifyScopedAncillarySale(db, ctx, id)
   );
   await writeFile(
     reportPath,

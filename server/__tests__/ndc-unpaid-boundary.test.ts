@@ -193,7 +193,7 @@ describe("unpaid NDC invoice commands", () => {
     expect(fixture.rows("passengers")[0].firstName).toBe("Synthetic");
     expect(fixture.rows("outbox")).toHaveLength(0);
   });
-  it("adds server-priced services once to booking, NDC and all segment allocations without EMD issuance", async () => {
+  it("adds the server-priced service once to its booked segment and the NDC invoice without EMD issuance", async () => {
     const result = await add();
     expect(await add()).toEqual(result);
     expect(result.totalAmount).toBe(11000);
@@ -201,7 +201,7 @@ describe("unpaid NDC invoice commands", () => {
     expect(result.status).toBe("pending");
     expect(fixture.rows("bookings")[0].totalAmount).toBe(11000);
     expect(fixture.rows("booking_segments").map(l => l.segmentAmount)).toEqual([
-      6600, 4400,
+      7000, 4000,
     ]);
     expect(fixture.rows("booking_ancillaries")).toHaveLength(1);
     expect(fixture.rows("booking_ancillaries")[0]).toMatchObject({

@@ -1,5 +1,8 @@
 import { canServiceOrder, type NdcAction } from "./ndc-capabilities";
-import { holdInvoiceSeat, seatFeesBySegment } from "./seat-exchange.service";
+import {
+  holdInvoiceSeat,
+  allocatedAncillaryFeesBySegment,
+} from "./seat-exchange.service";
 import { TRPCError } from "@trpc/server";
 import { and, eq, asc } from "drizzle-orm";
 import {
@@ -146,17 +149,19 @@ export async function setInvoiceTotal(
     allocatedSegmentId !== undefined &&
     !legs.some(l => l.id === allocatedSegmentId)
   )
-    throw invoiceBlocked("Seat segment is no longer on the invoice");
+    throw invoiceBlocked("Ancillary segment is no longer on the invoice");
   let allocation: number[];
   if (allocatedSegmentId === undefined && legs.length) {
-    const fees = await seatFeesBySegment(tx, booking.id);
+    const fees = await allocatedAncillaryFeesBySegment(tx, booking.id);
+    if ([...fees.keys()].some(id => !legs.some(leg => leg.id === id)))
+      throw invoiceBlocked("Ancillary segment is no longer on the invoice");
     const fareWeights = legs.map(
       (leg, i) => segmentAmounts[i] - (fees.get(leg.id) ?? 0)
     );
     const fareTotal =
       totalAmount - [...fees.values()].reduce((sum, n) => sum + n, 0);
     if (fareTotal < 0 || fareWeights.some(n => n < 0))
-      throw invoiceBlocked("Seat fee exceeds invoice allocation");
+      throw invoiceBlocked("Ancillary fees exceed invoice allocation");
     allocation = allocateProportional(fareTotal, fareWeights).map(
       (n, i) => n + (fees.get(legs[i].id) ?? 0)
     );
@@ -168,7 +173,7 @@ export async function setInvoiceTotal(
     );
   }
   if (allocation.some(n => n < 0))
-    throw invoiceBlocked("Invalid seat segment allocation");
+    throw invoiceBlocked("Invalid ancillary segment allocation");
   for (const [i, leg] of legs.entries())
     await tx
       .update(bookingSegments)
@@ -348,7 +353,8 @@ export async function insertInvoiceAncillary(
     throw invoiceBlocked(
       "Seat assignment requires a unique booked flight segment"
     );
-  const scopedSegment = matchingSegments[0];
+  const scopedSegment =
+    matchingSegments.length === 1 ? matchingSegments[0] : undefined;
   const weightSnapshotGrams =
     service.category === "baggage" &&
     service.weightGrams != null &&
@@ -389,6 +395,8 @@ export async function insertInvoiceAncillary(
     scopeState: scopedSegment ? "specific_segment" : "unresolved",
     status: "active",
     metadata: JSON.stringify({
+      ...(mode === "editable_invoice" && { source: "editable_invoice" }),
+      ...(scopedSegment && { segmentAllocated: true }),
       ...(paidSeat && { paidSeat }),
       preferences: data.metadata ?? null,
       flightId: data.flightId ?? null,
@@ -415,7 +423,7 @@ export async function insertInvoiceAncillary(
     booking,
     booking.totalAmount + totalPrice,
     mode,
-    paidSeat ? scopedSegment?.id : undefined
+    scopedSegment?.id
   );
   return { id: Number(result.insertId), totalPrice, service };
 }

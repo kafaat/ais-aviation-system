@@ -1,3 +1,8 @@
+import {
+  priceInitialAncillaries,
+  persistInitialAncillaries,
+  type SelectedAncillary,
+} from "./initial-booking-ancillaries";
 import { persistInitialFareComponents } from "./fare-components.service";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { assertTenantOperational } from "./tenant.service";
@@ -74,6 +79,7 @@ export interface MultiCityBookingInput {
   tenantId?: number | null;
   idempotencyKey?: string;
   expectedTotalMinor?: number;
+  ancillaries?: SelectedAncillary[];
   segments: Array<{
     flightId: number;
     departureDate: Date;
@@ -153,6 +159,7 @@ function requireHold(
     number,
     {
       lockId: number;
+      airlineId: number;
       tenantId: number | null;
       departureTime: Date;
       fareClassId: number | null;
@@ -420,6 +427,7 @@ export async function createMultiCityBooking(
     );
 
     if (
+      !input.ancillaries?.length &&
       input.expectedTotalMinor !== undefined &&
       priceResult.totalPrice !== input.expectedTotalMinor
     ) {
@@ -456,6 +464,7 @@ export async function createMultiCityBooking(
           number,
           {
             lockId: number;
+            airlineId: number;
             tenantId: number | null;
             departureTime: Date;
             fareClassId: number | null;
@@ -512,12 +521,37 @@ export async function createMultiCityBooking(
           );
           held.set(flight.id, {
             lockId: hold.lockId,
+            airlineId: flight.airlineId,
             tenantId: flight.tenantId,
             departureTime: flight.departureTime,
             fareClassId: selectedFareClass?.fareClass.id ?? null,
           });
         }
         const first = requireHold(held, input.segments[0].flightId);
+        const selected = await priceInitialAncillaries(
+          tx,
+          input.ancillaries ?? [],
+          input.cabinClass,
+          input.segments.map(s => requireHold(held, s.flightId).airlineId),
+          input.passengers.length
+        );
+        const extrasBySector = input.segments.map((_, i) =>
+          selected.reduce(
+            (sum, item) =>
+              sum + (item.segmentIndex === i ? item.totalPrice : 0),
+            0
+          )
+        );
+        const totalAmount = extrasBySector.reduce(
+          (sum, amount) => sum + amount,
+          priceResult.totalPrice
+        );
+        if (selected.length && input.expectedTotalMinor !== totalAmount)
+          throw new TRPCError({
+            code: "CONFLICT",
+            message:
+              "The itinerary price has changed. Review the new total before booking.",
+          });
         // Create the main booking record
         // For multi-city, we use the first segment's flight as the primary flightId
         const bookingResult = await tx.insert(bookings).values({
@@ -529,7 +563,7 @@ export async function createMultiCityBooking(
           bookingReference,
           pnr,
           status: "pending",
-          totalAmount: priceResult.totalPrice,
+          totalAmount,
           cabinClass: input.cabinClass,
           numberOfPassengers: input.passengers.length,
         });
@@ -559,7 +593,7 @@ export async function createMultiCityBooking(
           const segmentResult = await tx.insert(bookingSegments).values({
             bookingId,
             segmentOrder: i + 1,
-            segmentAmount: segmentAmounts[i],
+            segmentAmount: segmentAmounts[i] + extrasBySector[i],
             flightId: segment.flightId,
             fareClassId: requireHold(held, segment.flightId).fareClassId,
             departureDate: requireHold(held, segment.flightId).departureTime,
@@ -597,6 +631,15 @@ export async function createMultiCityBooking(
           .from(passengers)
           .where(eq(passengers.bookingId, bookingId))
           .orderBy(asc(passengers.id));
+        const passengerIds = insertedPassengers.map(p => p.id);
+        const purchases = await persistInitialAncillaries(
+          tx,
+          selected,
+          bookingId,
+          passengerIds,
+          segmentResults.map(s => s.segmentId)
+        );
+
         for (const [index, sector] of segmentResults.entries()) {
           const quoted = priceResult.segments[index];
           // The itinerary policy allocates its discount to sectors, not to fare or tax.
@@ -607,8 +650,16 @@ export async function createMultiCityBooking(
             tenantId: first.tenantId,
             bookingSegmentId: sector.segmentId,
             flightId: sector.flightId,
-            totalAmount: quoted.basePrice,
-            passengerIds: insertedPassengers.map(p => p.id),
+            totalAmount: quoted.basePrice + extrasBySector[index],
+            passengerIds,
+            ancillaries: purchases
+              .filter(item => item.segmentId === sector.segmentId)
+              .map(item => ({
+                amount: item.totalPrice,
+                sourceReference: item.sourceReference,
+                passengerId: item.passengerId,
+                code: `ANCILLARY_${item.ancillaryServiceId}`,
+              })),
             source: "retail_offer",
             sourceReference: `multi-city:${bookingId}:${sector.segmentId}`,
             sectorQuote: {
@@ -644,7 +695,7 @@ export async function createMultiCityBooking(
           bookingId,
           bookingReference,
           pnr,
-          totalAmount: priceResult.totalPrice,
+          totalAmount,
           segments: segmentResults,
         };
       },
@@ -658,7 +709,7 @@ export async function createMultiCityBooking(
       flightId: input.segments[0].flightId,
       cabinClass: input.cabinClass,
       passengerCount: input.passengers.length,
-      totalAmount: priceResult.totalPrice,
+      totalAmount: result.totalAmount,
     });
 
     return result;

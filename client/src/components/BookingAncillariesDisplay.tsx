@@ -29,13 +29,28 @@ const categoryIcons: Record<string, LucideIcon> = {
 export function BookingAncillariesDisplay({
   bookingId,
 }: BookingAncillariesDisplayProps) {
-  const { t } = useTranslation();
-  const { data: ancillaries, isLoading } =
-    trpc.ancillary.getBookingAncillaries.useQuery({ bookingId });
+  const { t, i18n } = useTranslation();
+  const ar = i18n.language.startsWith("ar");
+  const {
+    data: ancillaries,
+    isLoading,
+    isError,
+    refetch,
+  } = trpc.ancillary.getBookingAncillaries.useQuery({ bookingId });
 
   if (isLoading) {
     return <Skeleton className="h-20 w-full" />;
   }
+
+  if (isError)
+    return (
+      <p role="alert">
+        {ar ? "تعذر تحميل الخدمات الإضافية" : "Extras could not be loaded"}{" "}
+        <button type="button" onClick={() => void refetch()}>
+          {ar ? "إعادة المحاولة" : "Retry"}
+        </button>
+      </p>
+    );
 
   if (!ancillaries || ancillaries.length === 0) {
     return null;
@@ -61,6 +76,7 @@ export function BookingAncillariesDisplay({
           return (
             <div
               key={ancillary.id}
+              data-testid="booked-extra"
               className="flex items-center justify-between text-sm"
             >
               <div className="flex items-center gap-2">
@@ -72,6 +88,30 @@ export function BookingAncillariesDisplay({
                       {" "}
                       × {ancillary.quantity}
                     </span>
+                  )}
+                  {["meal", "baggage"].includes(ancillary.service.category) && (
+                    <small className="block">
+                      {[
+                        ancillary.passengerFirstName,
+                        ancillary.passengerLastName,
+                      ]
+                        .filter(Boolean)
+                        .join(" ") ||
+                        (ar ? "الراكب غير محدد" : "Passenger not assigned")}
+                      {" · "}
+                      {ancillary.scopeState === "all_segments"
+                        ? ar
+                          ? "كل المقاطع"
+                          : "All sectors"
+                        : ancillary.scopeState === "specific_segment" &&
+                            ancillary.segmentOrder != null
+                          ? `${ar ? "المقطع" : "Sector"} ${ancillary.segmentOrder}${ancillary.flightNumber ? " · " + ancillary.flightNumber : ""}`
+                          : ar
+                            ? "المقطع غير محدد"
+                            : "Sector not assigned"}
+                      {ancillary.status !== "active" &&
+                        " · " + ancillary.status}
+                    </small>
                   )}
                 </span>
               </div>

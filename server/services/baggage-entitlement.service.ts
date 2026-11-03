@@ -7,6 +7,8 @@ import {
   bookingSegments,
   bookings,
   passengers,
+  financialLedger,
+  paymentSplits,
   paymentReceipts,
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
@@ -110,6 +112,91 @@ async function hasValidFundingEvidence(
   bookingId: number,
   reference: FundingReference
 ) {
+  if (
+    reference.kind === "internal_booking" ||
+    reference.kind === "split_booking"
+  ) {
+    if (
+      reference.bookingId !== bookingId ||
+      !Number.isSafeInteger(reference.amountMinor) ||
+      reference.amountMinor <= 0
+    )
+      return false;
+    const [booking] = await tx
+      .select()
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
+    if (booking?.paymentStatus !== "paid") return false;
+    if (reference.kind === "internal_booking") {
+      const entries = await tx
+        .select()
+        .from(financialLedger)
+        .where(eq(financialLedger.bookingId, bookingId));
+      const charge = entries.find(row => row.id === reference.ledgerId);
+      let tender;
+      try {
+        tender = JSON.parse(charge?.metadata ?? "{}")?.tender;
+      } catch {
+        return false;
+      }
+      const prefixes = {
+        wallet: "wallet-credit",
+        user_credit: "internal-credit",
+        corporate_credit: "corporate-credit",
+      };
+      return Boolean(
+        charge &&
+        charge.type === "charge" &&
+        tender === reference.tender &&
+        !charge.stripePaymentIntentId &&
+        charge.userId === booking.userId &&
+        charge.currency === "SAR" &&
+        charge.stripeEventId === prefixes[reference.tender] + ":" + bookingId &&
+        Number(charge.amount) === reference.amountMinor / 100 &&
+        !entries.some(
+          row => row.type === "refund" || row.type === "partial_refund"
+        )
+      );
+    }
+    if (booking.stripePaymentIntentId !== reference.paymentIntentId)
+      return false;
+    const shares = (
+      await tx
+        .select()
+        .from(paymentSplits)
+        .where(eq(paymentSplits.bookingId, bookingId))
+    ).filter(row =>
+      ["paid", "pending", "email_sent", "failed"].includes(row.status)
+    );
+    const receipts = await tx
+      .select()
+      .from(paymentReceipts)
+      .where(eq(paymentReceipts.bookingId, bookingId));
+    return (
+      shares.length >= 2 &&
+      shares.some(
+        row => row.stripePaymentIntentId === reference.paymentIntentId
+      ) &&
+      shares.reduce((sum, row) => sum + row.amount, 0) ===
+        reference.amountMinor &&
+      shares.every(
+        share =>
+          share.status === "paid" &&
+          receipts.some(
+            receipt =>
+              receipt.kind === "split_payment" &&
+              receipt.targetId === share.id &&
+              receipt.userId === booking.userId &&
+              receipt.currency === "SAR" &&
+              receipt.paymentIntentId === share.stripePaymentIntentId &&
+              receipt.amount === share.amount &&
+              receipt.refundedAmount === 0 &&
+              receipt.settlementStatus === "applied"
+          )
+      )
+    );
+  }
   if (reference.kind === "collected_booking") {
     if (reference.bookingId !== bookingId) return false;
     const [receipt] = await tx
@@ -128,10 +215,16 @@ async function hasValidFundingEvidence(
       receipt.bookingId === bookingId &&
       receipt.targetId === bookingId &&
       receipt.settlementStatus === "applied" &&
+      receipt.refundedAmount === 0 &&
       fundedBooking?.paymentStatus === "paid" &&
       fundedBooking.stripePaymentIntentId === reference.paymentIntentId
     );
   }
+  if (
+    reference.kind !== "collected_modification" &&
+    reference.kind !== "authorized_no_charge"
+  )
+    return false;
   const [modification] = await tx
     .select()
     .from(bookingModifications)
@@ -163,7 +256,8 @@ async function hasValidFundingEvidence(
     receipt.kind === "modification" &&
     receipt.bookingId === bookingId &&
     receipt.targetId === reference.modificationId &&
-    receipt.settlementStatus === "applied"
+    receipt.settlementStatus === "applied" &&
+    receipt.refundedAmount === 0
   );
 }
 
@@ -284,7 +378,7 @@ export async function computeBaggageEntitlement(
     }
     let metadata: Record<string, unknown> = {};
     try {
-      metadata = ancillary.metadata ? JSON.parse(ancillary.metadata) : {};
+      metadata = JSON.parse(ancillary.metadata ?? "{}") ?? {};
     } catch {
       metadata = {};
     }
@@ -299,7 +393,8 @@ export async function computeBaggageEntitlement(
               .modificationId as number)
           : null;
     if (
-      (ancillary.fundingReference.kind !== "collected_booking" &&
+      typeof ancillary.fundingReference !== "object" ||
+      ("modificationId" in ancillary.fundingReference &&
         storedModification !== ancillary.fundingReference.modificationId) ||
       !(await hasValidFundingEvidence(
         tx,

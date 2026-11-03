@@ -54,6 +54,7 @@ function baseSeed() {
         bookingId: 7,
         targetId: 51,
         settlementStatus: "applied",
+        refundedAmount: 0,
       },
     ],
     booking_ancillaries: [] as Record<string, unknown>[],
@@ -234,6 +235,7 @@ describe("baggage entitlement authority", () => {
       bookingId: 7,
       targetId: 7,
       settlementStatus: "applied",
+      refundedAmount: 0,
     });
     seed.booking_ancillaries.push(
       paidBaggage({
@@ -248,6 +250,108 @@ describe("baggage entitlement authority", () => {
     expect(await entitlement()).toMatchObject({
       totalWeightGrams: 33000,
       requiresOperationalReview: false,
+    });
+  });
+
+  it("sends partially refunded modification baggage for review", async () => {
+    seed.booking_ancillaries.push(paidBaggage());
+    seed.payment_receipts[0].refundedAmount = 1;
+    expect(await entitlement()).toMatchObject({
+      totalWeightGrams: 23000,
+      requiresOperationalReview: true,
+    });
+  });
+
+  it.each([
+    ["wallet", "wallet-credit"],
+    ["user_credit", "internal-credit"],
+    ["corporate_credit", "corporate-credit"],
+  ])(
+    "verifies %s settlement against the original posting and revokes automatic allowance on refund",
+    async (tender, prefix) => {
+      Object.assign(seed.bookings[0], { paymentStatus: "paid" });
+      const entries = [
+        {
+          id: 88,
+          bookingId: 7,
+          userId: 1,
+          type: "charge",
+          amount: "50.00",
+          currency: "SAR",
+          stripeEventId: prefix + ":7",
+          metadata: JSON.stringify({ tender }),
+        },
+      ];
+      Object.assign(seed, { financial_ledger: entries });
+      seed.booking_ancillaries.push(
+        paidBaggage({
+          fundingReference: {
+            kind: "internal_booking",
+            bookingId: 7,
+            ledgerId: 88,
+            tender,
+            amountMinor: 5000,
+          },
+        })
+      );
+      expect((await entitlement()).totalWeightGrams).toBe(33000);
+      entries.push({ ...entries[0], id: 89, type: "partial_refund" });
+      expect(await entitlement()).toMatchObject({
+        totalWeightGrams: 23000,
+        requiresOperationalReview: true,
+      });
+    }
+  );
+
+  it("requires every split receipt to remain fully collected", async () => {
+    Object.assign(seed.bookings[0], {
+      paymentStatus: "paid",
+      stripePaymentIntentId: "pi_two",
+    });
+    const shares = ["pi_one", "pi_two"].map((intent, index) => ({
+      id: index + 1,
+      bookingId: 7,
+      status: "paid",
+      amount: 2500,
+      stripePaymentIntentId: intent,
+    }));
+    const receipts = shares.map(share => ({
+      paymentIntentId: share.stripePaymentIntentId,
+      targetId: share.id,
+      bookingId: 7,
+      kind: "split_payment",
+      userId: 1,
+      currency: "SAR",
+      amount: share.amount,
+      refundedAmount: 0,
+      settlementStatus: "applied",
+    }));
+    Object.assign(seed, { payment_splits: shares, payment_receipts: receipts });
+    seed.booking_ancillaries.push(
+      paidBaggage({
+        fundingReference: {
+          kind: "split_booking",
+          bookingId: 7,
+          paymentIntentId: "pi_two",
+          amountMinor: 5000,
+        },
+      })
+    );
+    expect((await entitlement()).totalWeightGrams).toBe(33000);
+    receipts[0].refundedAmount = 100;
+    expect(await entitlement()).toMatchObject({
+      totalWeightGrams: 23000,
+      requiresOperationalReview: true,
+    });
+  });
+
+  it("returns an operator warning for malformed historical JSON evidence", async () => {
+    seed.booking_ancillaries.push(
+      paidBaggage({ metadata: "null", fundingReference: "invalid" })
+    );
+    expect(await entitlement()).toMatchObject({
+      totalWeightGrams: 23000,
+      requiresOperationalReview: true,
     });
   });
 

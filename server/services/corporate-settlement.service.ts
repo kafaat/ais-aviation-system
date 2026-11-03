@@ -114,7 +114,6 @@ export async function payCorporateInvoice(bookingId: number, actorId: number) {
       });
     const { confirmFundedBooking } =
       await import("./booking-settlement.service");
-    await confirmFundedBooking(tx, invoice);
     const [posted] = await tx.insert(financialLedger).values({
       bookingId,
       userId: booking.userId,
@@ -128,6 +127,13 @@ export async function payCorporateInvoice(bookingId: number, actorId: number) {
         corporateAccountId: account.id,
         actorId,
       }),
+    });
+    await confirmFundedBooking(tx, invoice, undefined, {
+      kind: "internal_booking",
+      bookingId,
+      ledgerId: posted.insertId,
+      tender: "corporate_credit",
+      amountMinor: invoice.totalAmount,
     });
     return { settled: true as const, receiptId: posted.insertId };
   });
