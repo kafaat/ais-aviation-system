@@ -270,7 +270,17 @@ export async function issueBoardingPass(
         secondsToDeparture
       ),
     });
-    const base = encodeBcbpM1(await bcbpFields(tx, active, opts.source ?? "W"));
+    const fields = await bcbpFields(tx, active, opts.source ?? "W");
+    let base: string;
+    try {
+      base = encodeBcbpM1(fields);
+    } catch (error) {
+      if (!(error instanceof BcbpFormatError)) throw error;
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: error.message,
+      });
+    }
     const bcbp = appendBcbpSecurityData(
       base,
       bcbpSecurityData(base, boardingPassDigest(payload))

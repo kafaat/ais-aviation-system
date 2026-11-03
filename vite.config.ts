@@ -26,6 +26,11 @@ function manualChunks(id: string): string | undefined {
     return undefined;
   }
 
+  // Load the PDF417 encoder only when a passenger opens a boarding pass.
+  if (id.includes("/bwip-js/")) {
+    return undefined;
+  }
+
   // Charts library - large, often lazy loaded
   // Keep d3 and recharts together (they have internal dependencies)
   if (id.includes("recharts") || id.includes("d3-")) {

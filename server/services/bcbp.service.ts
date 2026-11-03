@@ -34,7 +34,7 @@ export interface BcbpM1Fields {
   /** Airline flight number as stored, with or without the carrier prefix. */
   flightNumber: string;
   departureTime: Date;
-  /** IANA zone of the departure airport; null falls back to the UTC civil day. */
+  /** IANA zone of the departure airport, required for issuance and scanning. */
   departureTimeZone: string | null;
   cabinClass: string;
   seatNumber: string;
@@ -73,20 +73,26 @@ export class BcbpFormatError extends Error {
   }
 }
 
-const upperAscii = (value: string) =>
-  value
+function latinName(value: string, field: "surname" | "given name"): string {
+  if (field === "given name" && value === "") return "";
+  const name = value
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toUpperCase()
+    .replace(/([A-Za-z])[\u0300-\u036f]+/g, "$1")
     .replace(/['’.\-]/g, "")
-    .replace(/[^A-Z ]+/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/ +/g, " ")
     .trim();
+  if (!/^[A-Za-z ]+$/.test(name)) {
+    throw new BcbpFormatError(
+      `A document-matching Latin ${field} is required for the boarding pass`
+    );
+  }
+  return name.toUpperCase();
+}
 
 /** SURNAME/GIVEN, Latin capitals only, given names truncated first, max 20. */
 export function formatBcbpName(lastName: string, firstName: string): string {
-  const surname = upperAscii(lastName) || "PASSENGER";
-  const given = upperAscii(firstName);
+  const surname = latinName(lastName, "surname");
+  const given = latinName(firstName, "given name");
   if (!given) return surname.slice(0, 20);
   const head = surname.slice(0, 18);
   return `${head}/${given}`.slice(0, 20);
@@ -162,41 +168,29 @@ function requireCode(value: string, pattern: RegExp, label: string): string {
 
 /**
  * Civil date of `instant` in the airport's zone, as a UTC-midnight Date (the
- * representation the bcbp library turns into a day-of-year). Invalid or missing
- * zones fall back to the UTC civil day.
+ * representation the bcbp library turns into a day-of-year).
  */
 export function civilFlightDate(
   instant: Date,
   timeZone: string | null | undefined
-): { date: Date; timeZoneApplied: boolean } {
-  if (timeZone) {
-    try {
-      const parts = new Intl.DateTimeFormat("en-US", {
-        timeZone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).formatToParts(instant);
-      const get = (type: string) =>
-        Number(parts.find(p => p.type === type)?.value);
-      const date = new Date(
-        Date.UTC(get("year"), get("month") - 1, get("day"))
-      );
-      if (!Number.isNaN(date.getTime())) return { date, timeZoneApplied: true };
-    } catch (error) {
-      if (!(error instanceof RangeError)) throw error;
-    }
+): Date {
+  if (!timeZone || /^[+-]/.test(timeZone)) {
+    throw new BcbpFormatError("A departure airport time zone is required");
   }
-  return {
-    date: new Date(
-      Date.UTC(
-        instant.getUTCFullYear(),
-        instant.getUTCMonth(),
-        instant.getUTCDate()
-      )
-    ),
-    timeZoneApplied: false,
-  };
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(instant);
+    const get = (type: string) =>
+      Number(parts.find(p => p.type === type)?.value);
+    return new Date(Date.UTC(get("year"), get("month") - 1, get("day")));
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    throw new BcbpFormatError("Invalid airport time zone or flight date");
+  }
 }
 
 /** Three digit day of year (001..366) of a UTC-midnight civil date. */
@@ -210,7 +204,7 @@ export function bcbpJulianDate(
   departureTime: Date,
   timeZone: string | null | undefined
 ): string {
-  return julianDay(civilFlightDate(departureTime, timeZone).date);
+  return julianDay(civilFlightDate(departureTime, timeZone));
 }
 
 function legFor(fields: BcbpM1Fields) {
@@ -234,7 +228,7 @@ function legFor(fields: BcbpM1Fields) {
       flightDate: civilFlightDate(
         fields.departureTime,
         fields.departureTimeZone
-      ).date,
+      ),
       compartmentCode: compartmentCode(fields.cabinClass),
       seatNumber: formatBcbpSeat(fields.seatNumber),
       checkInSequenceNumber: formatBcbpSequence(fields.sequence),
@@ -262,7 +256,7 @@ export function bcbpMandatoryItems(fields: BcbpM1Fields): string {
 export function encodeBcbpM1(fields: BcbpM1Fields): string {
   const { passengerName, leg, carrier } = legFor(fields);
   const ticket = fields.ticketNumber?.trim();
-  const issued = civilFlightDate(fields.issuedAt ?? new Date(), "UTC").date;
+  const issued = civilFlightDate(fields.issuedAt ?? new Date(), "UTC");
   const bcbp = encode({
     meta: { versionNumber: BCBP_VERSION },
     data: {

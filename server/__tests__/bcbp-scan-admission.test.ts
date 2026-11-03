@@ -114,6 +114,25 @@ describe("BCBP scan verification", () => {
     expect(pass.bcbp).toContain("0D0651234567890");
   });
 
+  it.each([
+    ["passengers", "lastName", "Travelerع", /Latin surname/],
+    ["airports", "timezone", null, /time zone/],
+  ] as const)(
+    "requires encodable %s data for issuance and verification",
+    async (table, field, value, reason) => {
+      const fixture = itinerary();
+      const pass = await issued(11);
+      fixture.rows(table)[0][field] = value;
+      expect((await verifyActiveBoardingPass(pass.bcbp)).valid).toBe(false);
+      fixture.rows("seat_inventory")[0].boardingPassIssued = false;
+      await expect(issued(11)).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED",
+        message: expect.stringMatching(reason),
+      });
+      expect(fixture.rows("seat_inventory")[0].boardingPassIssued).toBe(false);
+    }
+  );
+
   it("admits a scanned BCBP at bag drop and still accepts the signed QR layer", async () => {
     itinerary();
     const pass = await issued(11);

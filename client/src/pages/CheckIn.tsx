@@ -51,16 +51,9 @@ function BoardingPass({
   useEffect(() => {
     let active = true;
     if (data)
-      import("bwip-js/browser")
-        .then(({ toSVG }) => {
-          const svg = toSVG({
-            bcid: "pdf417",
-            text: data.bcbp,
-            scale: 2,
-            height: 4,
-            columns: 12,
-            eclevel: 5,
-          } as Parameters<typeof toSVG>[0]);
+      import("@/lib/boarding-pass-pdf417")
+        .then(({ renderBoardingPassPDF417 }) => {
+          const svg = renderBoardingPassPDF417(data.bcbp);
           if (active)
             setPdf417({
               bcbp: data.bcbp,

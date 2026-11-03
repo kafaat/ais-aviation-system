@@ -7,7 +7,6 @@ import {
   bcbpJulianDate,
   bcbpMandatoryItems,
   BcbpFormatError,
-  civilFlightDate,
   decodeBcbpM1,
   encodeBcbpM1,
   formatBcbpFlightNumber,
@@ -116,11 +115,23 @@ describe("BCBP M1 encoding", () => {
     expect(v.base[22]).toBe("E");
   });
 
+  it.each([
+    ["محمد", "Ali"],
+    ["Alقحطاني", "Ali"],
+    ["Smith", "Aعلي"],
+    ["Smith", "-"],
+    ["", "Sample"],
+  ])("rejects fields that cannot preserve the name", (surname, given) => {
+    expect(() => formatBcbpName(surname, given)).toThrow(BcbpFormatError);
+  });
+
   it("uses the departure airport's civil day for the Julian date, across year boundaries", () => {
     const newYear = new Date("2026-12-31T22:30:00.000Z");
     expect(bcbpJulianDate(newYear, "Asia/Riyadh")).toBe("001");
     expect(bcbpJulianDate(newYear, "UTC")).toBe("365");
-    expect(bcbpJulianDate(newYear, null)).toBe("365");
+    for (const zone of [null, undefined, "", "Not/AZone", "+03:00"]) {
+      expect(() => bcbpJulianDate(newYear, zone)).toThrow(BcbpFormatError);
+    }
     expect(
       bcbpJulianDate(
         new Date("2026-01-01T06:30:00.000Z"),
@@ -141,7 +152,6 @@ describe("BCBP M1 encoding", () => {
     expect(bcbpJulianDate(new Date("2028-12-31T12:00:00.000Z"), "UTC")).toBe(
       "366"
     );
-    expect(civilFlightDate(newYear, "Not/AZone").timeZoneApplied).toBe(false);
     expect(sample("riyadh_new_year").base.slice(44, 47)).toBe("001");
     expect(sample("la_previous_day_child").base.slice(44, 47)).toBe("365");
   });
