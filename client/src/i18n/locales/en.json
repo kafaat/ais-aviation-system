@@ -4619,6 +4619,9 @@
       "refund": "Refund",
       "reissue": "Reissue",
       "name_correction": "Name correction"
-    }
+    },
+    "idempotencyKeyHeader": "Idempotency key location",
+    "traceIdHeader": "Trace / transaction id location",
+    "idempotencyHint": "The idempotency key is replayed unchanged on every retry of one command; the trace or transaction id changes on every call. Never send one as the other."
   }
 }

@@ -49,6 +49,8 @@ interface Form {
   confirmation: (typeof CONFIRMATIONS)[number];
   evidenceUrl: string;
   evidenceNote: string;
+  idempotencyKeyHeader: string;
+  traceIdHeader: string;
   effectiveFrom: string;
   effectiveTo: string;
 }
@@ -62,6 +64,8 @@ const emptyForm: Form = {
   confirmation: "unconfirmed",
   evidenceUrl: "",
   evidenceNote: "",
+  idempotencyKeyHeader: "",
+  traceIdHeader: "",
   effectiveFrom: "",
   effectiveTo: "",
 };
@@ -155,6 +159,8 @@ export default function NdcCapabilityMatrix() {
       confirmation: form.confirmation,
       evidenceUrl: form.evidenceUrl.trim() || null,
       evidenceNote: form.evidenceNote.trim() || null,
+      idempotencyKeyHeader: form.idempotencyKeyHeader.trim() || null,
+      traceIdHeader: form.traceIdHeader.trim() || null,
       effectiveFrom: form.effectiveFrom ? new Date(form.effectiveFrom) : null,
       effectiveTo: form.effectiveTo ? new Date(form.effectiveTo) : null,
     });
@@ -285,6 +291,9 @@ export default function NdcCapabilityMatrix() {
           <p className="text-xs text-muted-foreground">
             {t("ndcCapabilities.wildcardHint")}
           </p>
+          <p className="text-xs text-muted-foreground">
+            {t("ndcCapabilities.idempotencyHint")}
+          </p>
           <div className="grid gap-3 md:grid-cols-3">
             {field("carrierCode", t("ndcCapabilities.carrier"))}
             {field("sellerId", t("ndcCapabilities.seller"))}
@@ -337,6 +346,11 @@ export default function NdcCapabilityMatrix() {
             </div>
             {field("evidenceUrl", t("ndcCapabilities.evidenceUrl"), "url")}
             {field("evidenceNote", t("ndcCapabilities.evidenceNote"))}
+            {field(
+              "idempotencyKeyHeader",
+              t("ndcCapabilities.idempotencyKeyHeader")
+            )}
+            {field("traceIdHeader", t("ndcCapabilities.traceIdHeader"))}
             {field("effectiveFrom", t("ndcCapabilities.effectiveFrom"), "date")}
             {field("effectiveTo", t("ndcCapabilities.effectiveTo"), "date")}
           </div>
@@ -390,6 +404,10 @@ export default function NdcCapabilityMatrix() {
                   <TableHead>{t("ndcCapabilities.support")}</TableHead>
                   <TableHead>{t("ndcCapabilities.confirmation")}</TableHead>
                   <TableHead>{t("ndcCapabilities.effective")}</TableHead>
+                  <TableHead>
+                    {t("ndcCapabilities.idempotencyKeyHeader")}
+                  </TableHead>
+                  <TableHead>{t("ndcCapabilities.traceIdHeader")}</TableHead>
                   <TableHead>{t("ndcCapabilities.evidence")}</TableHead>
                   <TableHead>{t("ndcCapabilities.source")}</TableHead>
                   <TableHead />
@@ -423,6 +441,12 @@ export default function NdcCapabilityMatrix() {
                         .join(" → ") || t("ndcCapabilities.open")}
                     </TableCell>
                     <TableCell className="max-w-xs text-xs">
+                      {row.idempotencyKeyHeader ?? "—"}
+                    </TableCell>
+                    <TableCell className="max-w-xs text-xs">
+                      {row.traceIdHeader ?? "—"}
+                    </TableCell>
+                    <TableCell className="max-w-xs text-xs">
                       {row.evidenceUrl ? (
                         <a
                           className="underline"
@@ -453,6 +477,9 @@ export default function NdcCapabilityMatrix() {
                             confirmation: row.confirmation,
                             evidenceUrl: row.evidenceUrl ?? "",
                             evidenceNote: row.evidenceNote ?? "",
+                            idempotencyKeyHeader:
+                              row.idempotencyKeyHeader ?? "",
+                            traceIdHeader: row.traceIdHeader ?? "",
                             effectiveFrom: day(row.effectiveFrom),
                             effectiveTo: day(row.effectiveTo),
                           })

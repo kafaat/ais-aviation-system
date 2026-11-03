@@ -64,6 +64,13 @@ export interface CapabilityRow {
   confirmation: CapabilityConfirmation;
   evidenceUrl: string | null;
   evidenceNote: string | null;
+  /**
+   * Where this partner/channel carries the stable idempotency key: the same
+   * value on every retry of one command. Never the per-attempt trace id.
+   */
+  idempotencyKeyHeader: string | null;
+  /** Where the per-attempt trace or transaction id travels (new on each call). */
+  traceIdHeader: string | null;
   effectiveFrom: Date | null;
   effectiveTo: Date | null;
 }
@@ -273,11 +280,21 @@ function seed(input: SeedInput): CapabilityRow {
     confirmation: "unconfirmed",
     evidenceUrl: null,
     evidenceNote: null,
+    idempotencyKeyHeader: null,
+    traceIdHeader: null,
     effectiveFrom: null,
     effectiveTo: null,
     ...input,
   };
 }
+
+/** Direct channel: the key is a request-body field, the trace id a header. */
+const directIdempotency = {
+  idempotencyKeyHeader:
+    "request body `idempotencyKey` (stable per command, replayed on retry)",
+  traceIdHeader:
+    "`X-Request-ID` header (new per attempt; echoed in the response)",
+};
 
 const repo = (path: string) =>
   `https://github.com/kafaat/ais-aviation-system/blob/main/${path}`;
@@ -373,6 +390,7 @@ const directRows: CapabilityRow[] = (
     confirmation: "confirmed",
     evidenceUrl: repo(path),
     evidenceNote: note,
+    ...directIdempotency,
   })
 );
 
@@ -442,6 +460,26 @@ const researchRows: CapabilityRow[] = [
         "Iberia developer documentation: 24.1 API based on the IATA 24.1 standard with Branded Fares",
     })
   ),
+  // Turkish Airlines: the developer portal requires a transactionId on every
+  // call. That is a per-attempt trace id, not an idempotency key; integrators
+  // must not replay it as one (idempotency audit finding, workstream 13).
+  ...(["shop", "price"] as const).map(action =>
+    seed({
+      carrierCode: "TK",
+      channel: "ndc",
+      schemaVersion: "24.1",
+      action,
+      support: "supported",
+      evidenceUrl:
+        "https://tragento.com/en/latest-news-and-trends-2024-2025-in-ndc-distribution/",
+      evidenceNote:
+        "Third-party 2026 analysis reports Turkish Airlines' IATA-verified capabilities grew to 49, many under schema 24.1 (secondary)",
+      idempotencyKeyHeader:
+        "not documented; confirm with the carrier before relying on replay safety",
+      traceIdHeader:
+        "`transactionId` per call (Turkish Airlines developer portal); per attempt, never reused as an idempotency key",
+    })
+  ),
 ];
 
 /** Channel defaults: no contracted seller exists, so every action fails closed. */
@@ -500,6 +538,8 @@ export function renderCapabilityMatrixMarkdown(rows: readonly CapabilityRow[]) {
       [formatDate(row.effectiveFrom), formatDate(row.effectiveTo)]
         .filter(Boolean)
         .join(" → ") || "open",
+      escapeCell(row.idempotencyKeyHeader ?? "—"),
+      escapeCell(row.traceIdHeader ?? "—"),
       row.evidenceUrl
         ? `[${escapeCell(row.evidenceNote ?? "source")}](${row.evidenceUrl})`
         : escapeCell(row.evidenceNote ?? ""),
@@ -518,12 +558,13 @@ export function renderCapabilityMatrixMarkdown(rows: readonly CapabilityRow[]) {
     "- Only a **confirmed** row with support `supported` or `partial` authorizes an action. Unconfirmed rows and unknown combinations fail closed and the error names the combination.",
     "- Rows stored in `distribution_capabilities` (admin CRUD under `ndc.capabilities`) replace the seeded row with the same combination key. This document lists the seeded baseline only.",
     `- Internal vocabulary version: ${INTERNAL_NDC_VERSION} message names over tRPC/OpenAPI JSON; no schema-conformant 17.2, 21.3 or 24.1 XML/JSON endpoint, seller authentication or IATA ARM registration exists.`,
+    "- Idempotency key versus trace id: the **Idempotency key** column names where a partner carries the stable key that is replayed unchanged on every retry of one command; the **Trace id** column names the per-attempt transaction/trace id that changes on every call (for example Turkish Airlines' `transactionId`). Never send a trace id as an idempotency key or vice versa. `—` means the carrier has not documented it and the operator must confirm.",
     "",
     "## Seeded rows",
     "",
     "<!-- prettier-ignore -->",
-    "| Carrier | Seller | Channel | Schema | Action | Support | Confirmation | Effective | Evidence |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| Carrier | Seller | Channel | Schema | Action | Support | Confirmation | Effective | Idempotency key | Trace id | Evidence |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ...table.map(row => `| ${row} |`),
     "",
   ].join("\n");

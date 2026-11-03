@@ -6440,6 +6440,10 @@ export const distributionCapabilities = mysqlTable(
       .default("unconfirmed"),
     evidenceUrl: varchar("evidenceUrl", { length: 512 }),
     evidenceNote: text("evidenceNote"),
+    // Where the partner carries the stable idempotency key (same value on
+    // every retry of one command) versus the per-attempt trace/transaction id.
+    idempotencyKeyHeader: varchar("idempotencyKeyHeader", { length: 120 }),
+    traceIdHeader: varchar("traceIdHeader", { length: 120 }),
     effectiveFrom: timestamp("effectiveFrom"),
     effectiveTo: timestamp("effectiveTo"),
     updatedBy: int("updatedBy"),

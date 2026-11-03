@@ -89,6 +89,8 @@ export const capabilityRowInput = distributionCombinationInput.extend({
   confirmation: capabilityConfirmationEnum,
   evidenceUrl: z.string().trim().url().max(512).nullable().optional(),
   evidenceNote: z.string().trim().max(2000).nullable().optional(),
+  idempotencyKeyHeader: z.string().trim().max(120).nullable().optional(),
+  traceIdHeader: z.string().trim().max(120).nullable().optional(),
   effectiveFrom: z.coerce.date().nullable().optional(),
   effectiveTo: z.coerce.date().nullable().optional(),
 });
@@ -105,6 +107,8 @@ export const capabilityRowOutput = z.object({
   confirmation: capabilityConfirmationEnum,
   evidenceUrl: z.string().nullable(),
   evidenceNote: z.string().nullable(),
+  idempotencyKeyHeader: z.string().nullable(),
+  traceIdHeader: z.string().nullable(),
   effectiveFrom: z.date().nullable(),
   effectiveTo: z.date().nullable(),
 });
@@ -181,6 +185,8 @@ function fromStored(row: DistributionCapability): CapabilityRow {
     confirmation: row.confirmation,
     evidenceUrl: row.evidenceUrl,
     evidenceNote: row.evidenceNote,
+    idempotencyKeyHeader: row.idempotencyKeyHeader,
+    traceIdHeader: row.traceIdHeader,
     effectiveFrom: row.effectiveFrom,
     effectiveTo: row.effectiveTo,
   };
@@ -426,6 +432,8 @@ export async function upsertDistributionCapability(
     confirmation: input.confirmation,
     evidenceUrl: input.evidenceUrl ?? null,
     evidenceNote: input.evidenceNote ?? null,
+    idempotencyKeyHeader: input.idempotencyKeyHeader || null,
+    traceIdHeader: input.traceIdHeader || null,
     effectiveFrom: input.effectiveFrom ?? null,
     effectiveTo: input.effectiveTo ?? null,
     updatedBy: actorId,

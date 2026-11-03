@@ -234,6 +234,15 @@ describe("generated documentation", () => {
     expect(file).toContain(
       "| LH | * | ndc | 17.2 | passenger_split | unsupported"
     );
+    // Idempotency key and per-attempt trace id are separate columns so
+    // integrators do not replay a transactionId as an idempotency key.
+    expect(file).toContain("| Idempotency key | Trace id |");
+    expect(file).toMatch(
+      /\| TK \| \* \| ndc \| 24\.1 \| shop \|.*not documented.*\| `transactionId` per call/
+    );
+    expect(file).toMatch(
+      /\| \* \| \* \| direct \| 21\.3 \| order_create \|.*request body `idempotencyKey`.*\| `X-Request-ID` header/
+    );
   });
 });
 
@@ -503,9 +512,13 @@ describe("servicing gates", () => {
         support: "supported",
         confirmation: "confirmed",
         evidenceNote: "Counterparty test 2026-11",
+        idempotencyKeyHeader: "Idempotency-Key header",
+        traceIdHeader: "transactionId per call",
       },
       1
     );
+    expect(stored.idempotencyKeyHeader).toBe("Idempotency-Key header");
+    expect(stored.traceIdHeader).toBe("transactionId per call");
     expect(stored.source).toBe("database");
     const listed = await listDistributionCapabilities({
       channel: "ndc",
