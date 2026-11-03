@@ -25,7 +25,7 @@ const command: BagRegistrationCommand = {
   weight: 5,
   description: "Blue cabin bag",
   specialHandling: "Fragile",
-  idempotencyKey: "8d3f0638-8a4d-46b0-98f7-c7e7faf69154",
+  idempotencyKey: crypto.randomUUID(),
   expectedActorId: scope.actorId,
   expectedTenantId: scope.tenantId,
 };
