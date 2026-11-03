@@ -95,6 +95,7 @@ export const ancillaryRouter = router({
           .optional(),
         ancillaryServiceId: z.number(),
         quantity: z.number().int().min(1).max(10).optional(),
+        expectedUnitPrice: z.number().int().nonnegative().optional(),
         idempotencyKey: z.string().min(1).max(255),
         metadata: z
           .record(z.string().max(64), z.string().max(500))

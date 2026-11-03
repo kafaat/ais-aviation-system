@@ -1,3 +1,11 @@
+import {
+  InitialSectorSeats,
+  type SectorSeat,
+} from "@/components/InitialSectorSeats";
+import AncillarySelection, {
+  ancillaryCommandLines,
+  type SelectedAncillary,
+} from "@/components/AncillarySelection";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useSearch } from "wouter";
@@ -5,21 +13,37 @@ import { z } from "zod";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 
-const itinerary = z.object({
-  version: z.literal(1),
-  sessionId: z.uuid(),
-  passengerCount: z.number().int().min(1).max(9),
-  cabinClass: z.enum(["economy", "business"]),
-  segments: z
-    .array(
-      z.object({
-        flightId: z.number().int().positive(),
-        departureDate: z.iso.datetime().transform(value => new Date(value)),
-      })
-    )
-    .min(2)
-    .max(5),
-});
+const itinerary = z
+  .object({
+    version: z.literal(1),
+    sessionId: z.uuid(),
+    passengerCount: z.number().int().min(1).max(9),
+    passengerTypes: z
+      .array(z.enum(["adult", "child", "infant"]))
+      .min(1)
+      .max(9)
+      .optional(),
+    cabinClass: z.enum(["economy", "business"]),
+    segments: z
+      .array(
+        z.object({
+          flightId: z.number().int().positive(),
+          fareClassCode: z
+            .string()
+            .trim()
+            .regex(/^[a-z0-9]{1,2}$/i)
+            .toUpperCase()
+            .optional(),
+          departureDate: z.iso.datetime().transform(value => new Date(value)),
+        })
+      )
+      .min(2)
+      .max(5),
+  })
+  .refine(
+    data =>
+      !data.passengerTypes || data.passengerTypes.length === data.passengerCount
+  );
 type Passenger = {
   firstName: string;
   lastName: string;
@@ -52,25 +76,40 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
   const { t, i18n } = useTranslation();
   const [, navigate] = useLocation();
   const [passengers, setPassengers] = useState<Passenger[]>(() =>
-    Array.from({ length: data.passengerCount }, () => ({
+    Array.from({ length: data.passengerCount }, (_, index) => ({
       firstName: "",
       lastName: "",
-      type: "adult",
+      type: data.passengerTypes?.[index] ?? "adult",
     }))
   );
-  const quote = trpc.multiCity.calculatePrice.useQuery({
-    segments: data.segments.map(({ flightId }) => ({
-      flightId,
-      cabinClass: data.cabinClass,
-    })),
-    passengerCount: passengers.length,
-    passengerTypes: passengers.map(p => p.type),
-  });
+  const quote = trpc.multiCity.calculatePrice.useQuery(
+    {
+      segments: data.segments.map(({ flightId, fareClassCode }) => ({
+        flightId,
+        cabinClass: data.cabinClass,
+        ...(fareClassCode ? { fareClassCode } : {}),
+      })),
+      passengerCount: passengers.length,
+      passengerTypes: passengers.map(p => p.type),
+    },
+    { retry: false }
+  );
+  const utils = trpc.useUtils();
   const booking = trpc.multiCity.create.useMutation();
   const [submittedAmount, setSubmittedAmount] = useState<number | null>(null);
   const [error, setError] = useState("");
-  const total = submittedAmount ?? quote.data?.totalPrice;
+  const [seats, setSeats] = useState<SectorSeat[]>([]);
+  const [extras, setExtras] = useState<SelectedAncillary[]>([]);
+  const extrasTotal = extras.reduce((sum, row) => sum + row.totalPrice, 0);
+
+  const total =
+    submittedAmount ??
+    (quote.data && !quote.isError && !quote.isFetching
+      ? quote.data.totalPrice + extrasTotal
+      : undefined);
   function edit(index: number, patch: Partial<Passenger>) {
+    if (patch.type === "infant")
+      setSeats(current => current.filter(s => s.passengerIndex !== index));
     setPassengers(current =>
       current.map((p, i) => (i === index ? { ...p, ...patch } : p))
     );
@@ -80,6 +119,15 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
       <h1 className="text-2xl font-semibold">
         {t("multiCity.proceedToBooking")}
       </h1>
+      {data.segments.map(
+        (segment, index) =>
+          segment.fareClassCode && (
+            <p key={segment.flightId}>
+              {t("multiCity.segment")} {index + 1} · {t("fareRules.fareFamily")}{" "}
+              · {segment.fareClassCode}
+            </p>
+          )
+      )}
       <form
         className="space-y-5"
         onSubmit={async event => {
@@ -89,12 +137,25 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
           setSubmittedAmount(total);
           try {
             await booking.mutateAsync({
-              segments: data.segments,
+              segments: data.segments.map((segment, index) => {
+                const choices = seats
+                  .filter(s => s.segmentIndex === index)
+                  .map(({ passengerIndex, seatNumber }) => ({
+                    passengerIndex,
+                    seatNumber,
+                  }));
+                return choices.length
+                  ? { ...segment, seats: choices }
+                  : segment;
+              }),
               cabinClass: data.cabinClass,
               passengers,
               sessionId: data.sessionId,
               checkoutContractVersion: 1,
               expectedTotalMinor: total,
+              ...(extras.length
+                ? { ancillaries: ancillaryCommandLines(extras) }
+                : {}),
             });
             navigate("/my-bookings");
           } catch (failure) {
@@ -110,10 +171,17 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
             if (
               code === "CONFLICT" ||
               code === "BAD_REQUEST" ||
+              code === "NOT_FOUND" ||
               code === "PRECONDITION_FAILED"
             ) {
               setSubmittedAmount(null);
-              await quote.refetch();
+              await Promise.all([
+                quote.refetch(),
+                utils.ancillary.getAvailable.invalidate(),
+                ...(seats.length
+                  ? [utils.seatMap.getFlightSeatMap.invalidate()]
+                  : []),
+              ]);
             }
           }
         }}
@@ -162,6 +230,22 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
             </label>
           </fieldset>
         ))}
+        <InitialSectorSeats
+          flightIds={data.segments.map(s => s.flightId)}
+          cabinClass={data.cabinClass}
+          passengers={passengers}
+          value={seats}
+          onChange={setSeats}
+          disabled={submittedAmount !== null}
+        />
+        <AncillarySelection
+          cabinClass={data.cabinClass}
+          flightIds={data.segments.map(s => s.flightId)}
+          passengers={passengers}
+          selected={extras}
+          onChange={setExtras}
+          disabled={submittedAmount !== null}
+        />
         {total !== undefined && (
           <p>
             {t("booking.total")}{" "}

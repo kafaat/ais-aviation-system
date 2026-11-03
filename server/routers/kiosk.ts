@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { responseContracts } from "../contracts/kiosk";
 /** Self-Service Kiosk Router */
 
@@ -22,13 +23,15 @@ export const kioskRouter = router({
       z.object({
         bookingRef: z.string().min(1).max(6),
         lastName: z.string().min(1).max(100),
+        flightId: z.number().int().positive().optional(),
       })
     )
     .output(responseContracts["authenticate"])
     .mutation(async ({ input }) => {
       const result = await kioskService.authenticatePassenger(
         input.bookingRef,
-        input.lastName
+        input.lastName,
+        input.flightId
       );
       const capabilityToken = issueSelfServiceCapability({
         kind: "kiosk-session",
@@ -118,7 +121,12 @@ export const kioskRouter = router({
         capabilityToken: capabilityInput,
         passengerId: z.number().int().positive(),
         flightId: z.number().int().positive().optional(),
-        bagCount: z.number().min(1).max(10),
+        bagCount: z.number().int().min(1).max(10),
+        tagNumbers: z
+          .array(z.string().regex(/^\d{10}$/))
+          .min(1)
+          .max(10)
+          .optional(),
       })
     )
     .output(responseContracts["printBagTag"])
@@ -128,7 +136,9 @@ export const kioskRouter = router({
       return await kioskService.printBagTag(
         capability.bookingId,
         input.passengerId,
-        input.bagCount
+        input.bagCount,
+        input.flightId,
+        input.tagNumbers
       );
     }),
 
@@ -142,14 +152,14 @@ export const kioskRouter = router({
       })
     )
     .output(responseContracts["addAncillary"])
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       const capability = kioskCapability(input.capabilityToken);
       assertPassengerInKioskCapability(capability, input.passengerId);
-      return await kioskService.addAncillary(
-        capability.bookingId,
-        input.serviceType,
-        input.passengerId
-      );
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Ancillary services cannot be issued at this kiosk. Contact the airline service desk.",
+      });
     }),
 
   getDevices: adminProcedure

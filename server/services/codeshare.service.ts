@@ -746,8 +746,8 @@ export async function terminateCodeshareAgreement(id: number, reason: string) {
 
 /**
  * Get flights available through codeshare agreements for a marketing airline.
- * Returns flights operated by partner airlines that the marketing airline
- * can sell under codeshare. Includes both marketing and operating carrier details.
+ * Matches partner flight schedules against local agreements. Cabin counters
+ * belong to the operator. Partner bookable inventory has no local authority.
  */
 export async function getCodeshareFlights(marketingAirlineId: number) {
   try {
@@ -780,7 +780,26 @@ export async function getCodeshareFlights(marketingAirlineId: number) {
       return [];
     }
 
-    // Get operating airline IDs from agreements
+    // Prefer a route-specific contract over a network-wide fallback. Within
+    // the same scope use the latest effective contract and a stable ID tie-break.
+    activeAgreements.sort(
+      (left, right) =>
+        Number(right.routeScope === "specific_routes") -
+          Number(left.routeScope === "specific_routes") ||
+        right.validFrom.getTime() - left.validFrom.getTime() ||
+        left.id - right.id
+    );
+    const candidates = activeAgreements.map(agreement => {
+      let routes: unknown;
+      if (agreement.routeScope === "specific_routes" && agreement.routes) {
+        try {
+          routes = JSON.parse(agreement.routes);
+        } catch {
+          // A malformed route list grants no routes.
+        }
+      }
+      return { agreement, routes };
+    });
     const operatingAirlineIds = [
       ...new Set(activeAgreements.map(a => a.operatingAirlineId)),
     ];
@@ -845,38 +864,32 @@ export async function getCodeshareFlights(marketingAirlineId: number) {
     // Filter flights based on route scope of each agreement and annotate
     const result = codeshareFlights
       .map(flight => {
-        // Find the applicable agreement for this flight's operating airline
-        const agreement = activeAgreements.find(
-          a => a.operatingAirlineId === flight.operatingAirline.id
-        );
-
-        if (!agreement) return null;
-
-        // Check route scope
-        if (agreement.routeScope === "specific_routes" && agreement.routes) {
-          let allowedRoutes: Array<{
-            originId: number;
-            destinationId: number;
-          }> = [];
-          try {
-            allowedRoutes = JSON.parse(agreement.routes) as Array<{
-              originId: number;
-              destinationId: number;
-            }>;
-          } catch {
-            /* malformed JSON, treat as empty */
-          }
-          const routeAllowed = allowedRoutes.some(
-            r =>
-              r.originId === flight.origin.id &&
-              r.destinationId === flight.destination.id
+        const match = candidates.find(({ agreement, routes }) => {
+          if (
+            agreement.operatingAirlineId !== flight.operatingAirline.id ||
+            (agreement.validUntil &&
+              flight.departureTime > agreement.validUntil) ||
+            (agreement.agreementType !== "free_sale" &&
+              !(Number(agreement.blockSize) > 0))
+          )
+            return false;
+          if (agreement.routeScope === "all_routes") return true;
+          return (
+            Array.isArray(routes) &&
+            routes.some(
+              route =>
+                route?.originId === flight.origin.id &&
+                route?.destinationId === flight.destination.id
+            )
           );
-          if (!routeAllowed) return null;
-        }
+        });
+        if (!match) return null;
+        const { agreement } = match;
 
         return {
           ...flight,
           marketingAirline: marketingAirline ?? null,
+          partnerSeatsAvailable: null,
           agreementReference: agreement.agreementReference,
           agreementType: agreement.agreementType,
           blockSize: agreement.blockSize,

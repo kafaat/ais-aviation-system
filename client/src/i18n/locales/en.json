@@ -340,6 +340,8 @@
   "disruptions": {
     "title": "Flight Disruptions",
     "noDisruptions": "No disruptions affecting your flights",
+    "extrasReview": "This booking has extras or a priced seat. Contact the airline with your booking reference before changing flights so it can review these services.",
+    "alternativesAdvisory": "These flights are suggestions. Viewing them does not change your booking or transfer extras.",
     "findAlternatives": "Find Alternative Flights",
     "noAlternatives": "No alternative flights available",
     "alternativeFlights": "Alternative Flights",
@@ -409,6 +411,7 @@
     "noResultsHint": "Try adjusting your filters to see more results"
   },
   "checkIn": {
+    "removeSeat": "Remove seat",
     "title": "Check-in",
     "subtitle": "Enter your PNR to check-in",
     "pnrLabel": "Booking Reference (PNR)",
@@ -701,9 +704,11 @@
     "bookingsReport": "Bookings Report",
     "bookingsReportDesc": "Export booking data with passenger and payment details",
     "revenueReport": "Revenue Report",
-    "revenueReportDesc": "Daily revenue report with confirmed payments",
+    "revenueReportDesc": "Daily billing and posted cash and credit movements (SAR, UTC)",
+    "dailyBilling": "Daily billed amount",
+    "settlements": "Posted cash and non-cash settlements",
     "flightsReport": "Flights Report",
-    "flightsReportDesc": "Occupancy rates and estimated revenue per flight",
+    "flightsReportDesc": "Occupancy rates and estimated revenue per flight. Select up to 1,000 flights using departure dates (UTC) and status.",
     "flightPerformanceReport": "Flight Performance Report",
     "flightPerformanceReportDesc": "Occupancy rates and estimated revenue per flight",
     "refundsReport": "Refunds Report",
@@ -923,6 +928,7 @@
     "loginButton": "Login with Manus"
   },
   "eticket": {
+    "downloadForPassenger": "Download e-ticket for {{name}}",
     "noPassenger": "No passenger associated with this booking",
     "downloadSuccess": "E-ticket downloaded successfully",
     "downloadError": "Failed to download e-ticket",
@@ -1047,6 +1053,8 @@
     "fillAllFields": "Please fill in all required fields",
     "noServices": "No Special Services Requested",
     "noServicesHint": "Click 'Add Service' to request special assistance",
+    "legacyExst": "Historical request recorded as EXST. Seat allocation unverified.",
+    "legroomGuidance": "For extra legroom, choose an available seat in Manage Services. Booking a second seat is unavailable online.",
     "availableTypes": "Available Service Types",
     "for": "For",
     "notes": "Notes",
@@ -1076,7 +1084,7 @@
       "WCHS": "Wheelchair - Steps",
       "WCHC": "Wheelchair - Cabin",
       "UMNR": "Unaccompanied Minor",
-      "EXST": "Extra Legroom Seat",
+      "EXST": "Extra Seat",
       "PETC": "Pet in Cabin",
       "MEDA": "Medical Assistance"
     }
@@ -1633,12 +1641,18 @@
       "title": "Travel Agent Management",
       "subtitle": "Manage travel agents and their API access",
       "registerAgent": "Register Agent",
+      "ownerUserId": "Owner user ID",
+      "bookingBlocked": "Booking blocked until an owner is linked",
+      "linkOwner": "Link owner",
       "registerDescription": "Register a new travel agency with API access",
       "registerSuccess": "Travel agent registered successfully",
       "totalAgents": "Total Agents",
       "totalBookings": "Total Bookings",
       "totalRevenue": "Total Revenue",
       "totalCommission": "Total Commission",
+      "reviewCommissions": "Commission review",
+      "noCommissionsToReview": "No pending or approved commissions",
+      "awaitingSettlement": "Approved — awaiting payout evidence",
       "pendingCommissions": "Pending Commissions",
       "active": "Active",
       "inactive": "Inactive",
@@ -2666,6 +2680,12 @@
     "noMessages": "No GDS messages found"
   },
   "codeshare": {
+    "browseDescription": "Select a marketing carrier to see its partners’ flight schedules. Contact the marketing carrier for seat availability and booking.",
+    "selectCarrier": "Select a carrier",
+    "noFlights": "No codeshare flights for this carrier.",
+    "carrierReadError": "The carrier list could not be loaded.",
+    "flightReadError": "Flights could not be loaded.",
+    "departureUtc": "Departure (UTC)",
     "title": "Codeshare Agreements",
     "subtitle": "Manage codeshare partnerships between airlines",
     "createAgreement": "Create Agreement",

@@ -504,6 +504,7 @@ async function seedData() {
       // Baggage
       {
         code: "BAG_20KG",
+        weightGrams: 20000,
         category: "baggage",
         name: "20kg Checked Baggage",
         description: "Additional 20kg checked baggage allowance",
@@ -515,6 +516,7 @@ async function seedData() {
       },
       {
         code: "BAG_30KG",
+        weightGrams: 30000,
         category: "baggage",
         name: "30kg Checked Baggage",
         description: "Additional 30kg checked baggage allowance",

@@ -1,6 +1,19 @@
 import { z } from "zod";
 
 const id = z.number().int().positive();
+const localCouponTransitions = z
+  .array(
+    z.strictObject({
+      couponId: id,
+      passengerId: id,
+      flightId: id,
+      couponNumber: id,
+      previousStatus: z.enum(["O", "C", "V"]),
+      status: z.enum(["R", "V"]),
+    })
+  )
+  .min(1)
+  .optional();
 const tenantStatus = z.enum(["active", "suspended", "pending"]);
 const jsonObject = z.record(z.string(), z.json());
 /** Existing ingestion capabilities; adding one requires a payload contract. */
@@ -213,6 +226,7 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     flightId: id.optional(),
   }),
   "booking.cancelled": z.looseObject({
+    localCouponTransitions,
     bookingId: id,
     reason: z.string(),
     actorId: id.nullable(),
@@ -280,6 +294,8 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     status: z.string().min(1),
   }),
   "payment.refunded": z.looseObject({
+    localCouponTransitions,
+    providerEventId: z.string().min(1).optional(),
     userId: id,
     bookingId: id.nullable(),
     amount: z.number().int().positive(),

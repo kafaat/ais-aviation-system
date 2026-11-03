@@ -398,6 +398,7 @@ export async function quotePaidOrderService(
                     userId,
                     channel: "direct",
                     fareClassId,
+                    ruleSegmentCount: targets.length,
                     passengerTypes: pax.map(p => p.type),
                   })
                 : null;

@@ -4468,6 +4468,49 @@
             "data": {
               "type": "object",
               "properties": {
+                "localCouponTransitions": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "couponId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "passengerId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "flightId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "couponNumber": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "previousStatus": {
+                        "type": "string",
+                        "enum": ["O", "C", "V"]
+                      },
+                      "status": { "type": "string", "enum": ["R", "V"] }
+                    },
+                    "required": [
+                      "couponId",
+                      "passengerId",
+                      "flightId",
+                      "couponNumber",
+                      "previousStatus",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
                 "bookingId": {
                   "type": "integer",
                   "exclusiveMinimum": 0,
@@ -5865,6 +5908,50 @@
             "data": {
               "type": "object",
               "properties": {
+                "localCouponTransitions": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "couponId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "passengerId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "flightId": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "couponNumber": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      "previousStatus": {
+                        "type": "string",
+                        "enum": ["O", "C", "V"]
+                      },
+                      "status": { "type": "string", "enum": ["R", "V"] }
+                    },
+                    "required": [
+                      "couponId",
+                      "passengerId",
+                      "flightId",
+                      "couponNumber",
+                      "previousStatus",
+                      "status"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "providerEventId": { "type": "string", "minLength": 1 },
                 "userId": {
                   "type": "integer",
                   "exclusiveMinimum": 0,

@@ -1,0 +1,105 @@
+import { randomUUID } from "node:crypto";
+import type { RowDataPacket } from "mysql2/promise";
+import { test, expect } from "./fixtures/base-test";
+import { fixtureFlight, ownedBooking, sqlRows } from "./fixtures/hardening";
+
+test("kiosk reprints a registered return-sector bag through the public HTTP API", async ({
+  page,
+}) => {
+  const { booking, flightId: outbound } = await ownedBooking(page, true);
+  const inbound = await fixtureFlight();
+  const bookingId = booking.bookingId;
+  const [passenger] = await sqlRows<RowDataPacket>(
+    "SELECT id FROM passengers WHERE bookingId=?",
+    [bookingId]
+  );
+  const edit = (query: string, params: (string | number)[]) =>
+    sqlRows<RowDataPacket>(query, params);
+  // The disposable fixture represents an already checked-in return passenger
+  // with one physical bag transferred at JED. No station hardware is involved.
+  await edit(
+    "UPDATE flights SET departureTime=DATE_SUB(UTC_TIMESTAMP(), INTERVAL 1 DAY), arrivalTime=DATE_SUB(UTC_TIMESTAMP(), INTERVAL 22 HOUR), status='completed' WHERE id=?",
+    [outbound]
+  );
+  await edit(
+    "UPDATE flights SET originId=(SELECT id FROM airports WHERE code='JED'), destinationId=(SELECT id FROM airports WHERE code='RUH'), departureTime=DATE_ADD(UTC_TIMESTAMP(), INTERVAL 4 HOUR), arrivalTime=DATE_ADD(UTC_TIMESTAMP(), INTERVAL 6 HOUR) WHERE id=?",
+    [inbound]
+  );
+  await edit("DELETE FROM booking_segments WHERE bookingId=?", [bookingId]);
+  await edit(
+    "INSERT INTO booking_segments (bookingId, segmentOrder, flightId, departureDate, status, seatsReserved) SELECT ?, IF(id=?,1,2), id, departureTime, IF(id=?,'completed','confirmed'), 1 FROM flights WHERE id IN (?,?)",
+    [bookingId, outbound, outbound, outbound, inbound]
+  );
+  await edit(
+    "INSERT INTO seat_inventory (flightId,seatMapId,seatNumber,`row`,`column`,cabinClass,seatType,status,bookingId,passengerId,checkedInAt,checkInNonce,boardingSequence) VALUES (?,1,'1A',1,'A','economy','window','checked_in',?,?,UTC_TIMESTAMP(),?,1)",
+    [inbound, bookingId, passenger.id, randomUUID()]
+  );
+  const tagNumber = "0000" + String(inbound).padStart(6, "0");
+  await edit(
+    "INSERT INTO baggage_items (bookingId,passengerId,tagNumber,weight,status) VALUES (?,?,?,10,'loading')",
+    [bookingId, passenger.id, tagNumber]
+  );
+  const [bag] = await sqlRows<RowDataPacket>(
+    "SELECT id FROM baggage_items WHERE tagNumber=?",
+    [tagNumber]
+  );
+  const eventKey = randomUUID();
+  await edit(
+    "INSERT INTO aviation_evidence(sourceId,sourceEventId,flightId,kind,payload,digest,observedAt) VALUES ('test-station',?,?,'baggage_custody',JSON_OBJECT('stage','transfer','tagNumber',?),SHA2(?,256),UTC_TIMESTAMP())",
+    [eventKey, inbound, tagNumber, eventKey]
+  );
+  await edit(
+    "INSERT INTO baggage_custody_events(baggageId,flightId,stage,evidenceId,airportId,deviceId,sourceId,observedAt) SELECT ?,?,'transfer',e.id,f.originId,'test-reader',e.sourceId,e.observedAt FROM aviation_evidence e JOIN flights f ON f.id=e.flightId WHERE e.sourceEventId=?",
+    [bag.id, inbound, eventKey]
+  );
+
+  await page.goto("/");
+  const call = (op: string, input: Record<string, unknown>) =>
+    page.evaluate(
+      async ({ op, input }) => {
+        const response = await fetch("/api/trpc/kiosk." + op, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ json: input }),
+        });
+        return { status: response.status, body: await response.json() };
+      },
+      { op, input }
+    );
+  const auth = await call("authenticate", {
+    bookingRef: booking.bookingReference,
+    lastName: "Journey",
+    flightId: inbound,
+  });
+  expect(auth.status).toBe(200);
+  const input = {
+    capabilityToken: auth.body.result.data.json.capabilityToken,
+    passengerId: passenger.id,
+    flightId: inbound,
+    tagNumbers: [tagNumber],
+    bagCount: 1,
+  };
+  const first = await call("printBagTag", input);
+  expect(first.status).toBe(200);
+  expect(first.body.result.data.json).toMatchObject({
+    printStatus: "document_ready",
+    bagTags: [
+      {
+        tagNumber,
+        barcodeData: tagNumber,
+        origin: "JED",
+        destination: "RUH",
+        printedAt: null,
+      },
+    ],
+  });
+  expect(await call("printBagTag", input)).toEqual(first);
+  expect(
+    (await call("printBagTag", { ...input, flightId: outbound })).status
+  ).toBeGreaterThanOrEqual(400);
+  const [counts] = await sqlRows<RowDataPacket>(
+    "SELECT (SELECT count(*) FROM baggage_items WHERE bookingId=?) AS bags,(SELECT count(*) FROM baggage_custody_events WHERE baggageId=?) AS events,(SELECT count(*) FROM kiosk_sessions WHERE bookingId=? AND sessionType='bag_tag' AND status='completed') AS prints",
+    [bookingId, bag.id, bookingId]
+  );
+  expect(counts).toMatchObject({ bags: 1, events: 1, prints: 0 });
+});

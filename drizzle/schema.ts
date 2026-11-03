@@ -1192,6 +1192,19 @@ export const bookingAncillaries = mysqlTable(
           executionEventId: string;
         }
       | {
+          kind: "internal_booking";
+          bookingId: number;
+          ledgerId: number;
+          tender: "wallet" | "user_credit" | "corporate_credit";
+          amountMinor: number;
+        }
+      | {
+          kind: "split_booking";
+          bookingId: number;
+          paymentIntentId: string;
+          amountMinor: number;
+        }
+      | {
           kind: "collected_booking";
           bookingId: number;
           paymentIntentId: string;
@@ -2602,7 +2615,7 @@ export const specialServices = mysqlTable(
     // UMNR: UMNR (unaccompanied minor)
     // Pet: PETC (pet in cabin)
     // Medical: MEDA (medical assistance)
-    // Extra legroom: EXST (extra seat)
+    // Historical extra_legroom/EXST records do not prove an additional seat reservation.
 
     // Additional details (JSON for flexibility)
     details: text("details"), // JSON: additional information like age for UMNR, pet type, medical equipment, etc.

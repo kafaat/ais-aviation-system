@@ -1,3 +1,5 @@
+import { getCheckedInPassengerContext } from "./boarding-pass.service";
+import { assertTenantOperational } from "./tenant.service";
 import { checkInPassengersTx } from "./departure-control.service";
 import {
   selectSeat as assignPhysicalSeat,
@@ -14,7 +16,7 @@ export {
  *
  * Handles kiosk device management, passenger authentication at kiosks,
  * check-in processing, seat selection, boarding pass / bag tag generation,
- * ancillary service purchases, and kiosk usage analytics.
+ * existing ancillary details, and kiosk usage analytics.
  */
 
 import { getDb } from "../db";
@@ -22,6 +24,9 @@ import {
   kioskDevices,
   kioskSessions,
   kioskAnalytics,
+  baggageItems,
+  baggageCustodyEvents,
+  bookingSegments,
   bookings,
   passengers,
   flights,
@@ -30,7 +35,7 @@ import {
   ancillaryServices,
   bookingAncillaries,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -56,7 +61,8 @@ export type InsertKioskAnalytic = typeof kioskAnalytics.$inferInsert;
  */
 export async function authenticatePassenger(
   bookingRef: string,
-  lastName: string
+  lastName: string,
+  flightId?: number
 ) {
   const db = await getDb();
   if (!db)
@@ -118,7 +124,27 @@ export async function authenticatePassenger(
     });
   }
 
-  // Verify flight is within check-in window (24 hours before departure)
+  const selectedFlightId = flightId ?? booking.flightId;
+  if (flightId !== undefined) {
+    const legs = await db
+      .select()
+      .from(bookingSegments)
+      .where(eq(bookingSegments.bookingId, booking.bookingId));
+    if (
+      legs.length
+        ? legs.filter(
+            leg => leg.flightId === flightId && leg.status === "confirmed"
+          ).length !== 1
+        : flightId !== booking.flightId
+    ) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Active booked sector not found",
+      });
+    }
+  }
+
+  // Verify the selected sector is within the kiosk window.
   const [flight] = await db
     .select({
       id: flights.id,
@@ -127,7 +153,7 @@ export async function authenticatePassenger(
       status: flights.status,
     })
     .from(flights)
-    .where(eq(flights.id, booking.flightId))
+    .where(eq(flights.id, selectedFlightId))
     .limit(1);
 
   if (!flight) {
@@ -296,12 +322,6 @@ export async function getCheckInData(bookingId: number) {
     .map(s => s.seatNumber)
     .filter((s): s is string => s !== null);
 
-  // Get available ancillary services
-  const availableAncillaries = await db
-    .select()
-    .from(ancillaryServices)
-    .where(eq(ancillaryServices.available, true));
-
   // Get already purchased ancillaries for this booking
   const purchasedAncillaries = await db
     .select({
@@ -374,15 +394,8 @@ export async function getCheckInData(bookingId: number) {
       takenSeats: takenSeatNumbers,
     },
     ancillaries: {
-      available: availableAncillaries.map(a => ({
-        id: a.id,
-        code: a.code,
-        category: a.category,
-        name: a.name,
-        description: a.description,
-        price: a.price,
-        currency: a.currency,
-      })),
+      // A kiosk session has no collection or no-charge authorization for a sale.
+      available: [],
       purchased: purchasedAncillaries,
     },
   };
@@ -554,264 +567,130 @@ export async function printBoardingPass(
 // Bag Tag Generation
 // ============================================================================
 
-/**
- * Generate bag tag data for kiosk printing.
- */
+/** Prepare copies of identified physical tags. Only the printer can confirm output. */
 export async function printBagTag(
   bookingId: number,
   passengerId: number,
-  bagCount: number
+  bagCount: number,
+  flightId?: number,
+  tagNumbers?: string[]
 ) {
-  const db = await getDb();
-  if (!db)
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  if (
+    !Number.isInteger(bagCount) ||
+    bagCount < 1 ||
+    bagCount > 10 ||
+    !tagNumbers ||
+    tagNumbers.length !== bagCount ||
+    new Set(tagNumbers).size !== bagCount
+  ) {
     throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  if (bagCount < 1 || bagCount > 10) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Bag count must be between 1 and 10",
+      code: "PRECONDITION_FAILED",
+      message:
+        "Provide the distinct registered tag number for each bag to reprint.",
     });
   }
 
-  // Get booking
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-
-  if (!booking.checkedIn) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Passenger must be checked in before printing bag tags",
+  return await db.transaction(async tx => {
+    const {
+      context: { booking, flight, legs },
+      passenger,
+    } = await getCheckedInPassengerContext(tx, {
+      bookingId,
+      passengerId,
+      flightId,
     });
-  }
-
-  // Get passenger
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
-
-  if (!passenger)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found for this booking",
-    });
-
-  // Get flight info for routing
-  const [flight] = await db
-    .select({
-      flightNumber: flights.flightNumber,
-      originId: flights.originId,
-      destinationId: flights.destinationId,
-    })
-    .from(flights)
-    .where(eq(flights.id, booking.flightId))
-    .limit(1);
-
-  if (!flight)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
-
-  const [origin] = await db
-    .select({ code: airports.code })
-    .from(airports)
-    .where(eq(airports.id, flight.originId))
-    .limit(1);
-
-  const [destination] = await db
-    .select({ code: airports.code })
-    .from(airports)
-    .where(eq(airports.id, flight.destinationId))
-    .limit(1);
-
-  // Generate bag tags (IATA 10-digit license plate format)
-  const bagTags = [];
-  for (let i = 0; i < bagCount; i++) {
-    const tagNumber = `0${Math.floor(1000000000 + Math.random() * 9000000000)
-      .toString()
-      .slice(0, 9)}`;
-
-    bagTags.push({
-      tagNumber,
-      passengerName: `${passenger.lastName}/${passenger.firstName.charAt(0)}`,
-      flightNumber: flight.flightNumber,
-      origin: origin?.code ?? "???",
-      destination: destination?.code ?? "???",
-      bookingReference: booking.bookingReference,
-      sequence: `${i + 1}/${bagCount}`,
-      barcodeData: tagNumber,
-      printedAt: new Date().toISOString(),
-    });
-  }
-
-  // Track bag tag session
-  await db.insert(kioskSessions).values({
-    bookingId,
-    passengerId,
-    sessionType: "bag_tag",
-    status: "completed",
-    completedAt: new Date(),
-  });
-
-  return {
-    bagTags,
-    totalBags: bagCount,
-    passengerName: `${passenger.firstName} ${passenger.lastName}`,
-  };
-}
-
-// ============================================================================
-// Ancillary Service Purchase at Kiosk
-// ============================================================================
-
-/**
- * Add an ancillary service at the kiosk (e.g., extra baggage, meal, lounge).
- */
-export async function addAncillary(
-  bookingId: number,
-  serviceType: string,
-  passengerId: number
-) {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Verify booking
-  const [booking] = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
-
-  if (!booking)
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-
-  if (booking.status !== "confirmed" && booking.status !== "completed") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Cannot add ancillary: booking is not confirmed",
-    });
-  }
-
-  // Verify passenger belongs to booking
-  const [passenger] = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(eq(passengers.id, passengerId), eq(passengers.bookingId, bookingId))
-    )
-    .limit(1);
-
-  if (!passenger)
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found for this booking",
-    });
-
-  // Find the ancillary service by code
-  const [service] = await db
-    .select()
-    .from(ancillaryServices)
-    .where(
-      and(
-        eq(ancillaryServices.code, serviceType),
-        eq(ancillaryServices.available, true)
-      )
-    )
-    .limit(1);
-
-  if (!service) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `Ancillary service '${serviceType}' not found or unavailable`,
-    });
-  }
-
-  // Check cabin class restrictions
-  if (service.applicableCabinClasses) {
-    let allowedClasses: string[] = [];
-    try {
-      allowedClasses = JSON.parse(service.applicableCabinClasses);
-    } catch (_parseError) {
-      // If the stored JSON is malformed, skip cabin class restriction check
-      console.warn(
-        `Failed to parse applicableCabinClasses for service '${service.code}': ${service.applicableCabinClasses}`
-      );
-    }
     if (
-      allowedClasses.length > 0 &&
-      !allowedClasses.includes(booking.cabinClass)
+      (legs.length &&
+        legs.filter(
+          leg => leg.flightId === flight.id && leg.status === "confirmed"
+        ).length !== 1) ||
+      flight.tenantId !== booking.tenantId ||
+      passenger.tenantId !== booking.tenantId
     ) {
       throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: `Service '${service.name}' is not available for ${booking.cabinClass} class`,
+        code: "PRECONDITION_FAILED",
+        message: "Passenger sector requires airline review",
       });
     }
-  }
+    await assertTenantOperational(tx, booking.tenantId);
 
-  // Check for duplicate purchase (same service for same passenger on same booking)
-  const [existing] = await db
-    .select({ id: bookingAncillaries.id })
-    .from(bookingAncillaries)
-    .where(
-      and(
-        eq(bookingAncillaries.bookingId, bookingId),
-        eq(bookingAncillaries.passengerId, passengerId),
-        eq(bookingAncillaries.ancillaryServiceId, service.id),
-        eq(bookingAncillaries.status, "active")
+    const route = await tx
+      .select()
+      .from(airports)
+      .where(inArray(airports.id, [flight.originId, flight.destinationId]));
+    const origin = route.find(airport => airport.id === flight.originId)?.code;
+    const destination = route.find(
+      airport => airport.id === flight.destinationId
+    )?.code;
+    if (!origin || !destination)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Airport routing unavailable",
+      });
+
+    // Custody ingestion takes the same booking lock. A later load or arrival
+    // invalidates earlier acceptance even if that earlier event matches the flight.
+    const bags = await tx
+      .select()
+      .from(baggageItems)
+      .where(
+        and(
+          eq(baggageItems.bookingId, bookingId),
+          eq(baggageItems.passengerId, passengerId),
+          inArray(baggageItems.tagNumber, tagNumbers)
+        )
       )
-    )
-    .limit(1);
-
-  if (existing) {
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: `Service '${service.name}' is already added for this passenger`,
-    });
-  }
-
-  // Add the ancillary
-  const [result] = await db.insert(bookingAncillaries).values({
-    bookingId,
-    passengerId,
-    ancillaryServiceId: service.id,
-    quantity: 1,
-    unitPrice: service.price,
-    totalPrice: service.price,
+      .for("update");
+    const bagTags = [];
+    const unavailable = () =>
+      new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Registered baggage is unavailable for reprint on this sector. Contact the airline desk.",
+      });
+    for (const tagNumber of tagNumbers) {
+      const bag = bags.find(item => item.tagNumber === tagNumber);
+      if (!bag) throw unavailable();
+      const [latest] = await tx
+        .select()
+        .from(baggageCustodyEvents)
+        .where(eq(baggageCustodyEvents.baggageId, bag.id))
+        .orderBy(
+          desc(baggageCustodyEvents.observedAt),
+          desc(baggageCustodyEvents.id)
+        )
+        .limit(1);
+      const eligible =
+        latest?.stage === "transfer"
+          ? bag.status === "loading"
+          : latest?.stage === "acceptance" && bag.status === "checked_in";
+      if (
+        !eligible ||
+        latest.flightId !== flight.id ||
+        latest.airportId !== flight.originId
+      )
+        throw unavailable();
+      bagTags.push({
+        tagNumber: bag.tagNumber,
+        passengerName: `${passenger.lastName}/${passenger.firstName.charAt(0)}`,
+        flightNumber: flight.flightNumber,
+        origin,
+        destination,
+        bookingReference: booking.bookingReference,
+        sequence: `${bagTags.length + 1}/${bagCount}`,
+        barcodeData: bag.tagNumber,
+        printedAt: null,
+      });
+    }
+    return {
+      bagTags,
+      totalBags: bagTags.length,
+      passengerName: `${passenger.firstName} ${passenger.lastName}`,
+      printStatus: "document_ready" as const,
+    };
   });
-
-  // Track session
-  await db.insert(kioskSessions).values({
-    bookingId,
-    passengerId,
-    sessionType: "ancillary",
-    status: "completed",
-    completedAt: new Date(),
-  });
-
-  return {
-    success: true,
-    ancillaryId: Number(result.insertId),
-    serviceName: service.name,
-    serviceCode: service.code,
-    category: service.category,
-    price: service.price,
-    currency: service.currency,
-    passengerName: `${passenger.firstName} ${passenger.lastName}`,
-  };
 }
 
 // ============================================================================
