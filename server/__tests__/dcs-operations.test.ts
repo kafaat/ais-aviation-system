@@ -123,9 +123,11 @@ beforeEach(() => {
     ),
     baggage_items: [],
     baggage_custody_events: [],
-    ticket_coupons: [11, 12].flatMap(flightId =>
+    ticket_coupons: [11, 12].flatMap((flightId, sectorIndex) =>
       [4, 5].map((passengerId, i) => ({
         id: flightId * 10 + i,
+        couponNumber: sectorIndex + 1,
+        ticketNumber: String(passengerId).padStart(13, "0"),
         bookingId: 3,
         passengerId,
         flightId,

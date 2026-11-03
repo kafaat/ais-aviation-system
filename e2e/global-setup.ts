@@ -6,8 +6,6 @@
  */
 import mysql, { type RowDataPacket } from "mysql2/promise";
 import { disposableDatabaseUrl } from "./disposable-database";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type { FullConfig } from "@playwright/test";
 import { prepareBrowserSessions } from "./fixtures/browser-session";
 
@@ -99,31 +97,9 @@ export default async function globalSetup(config: FullConfig) {
   console.info("[e2e-setup] Starting E2E test user setup...");
   await registerWithAuthService();
   await promoteAdminUsers();
-  // Authenticated consent is server-authoritative; localStorage only dismisses
-  // the anonymous banner. Use the real writer for the synthetic accounts.
-  // The child compiles the server graph through tsx from a cold cache, which
-  // on a busy runner has exceeded 30 seconds; a timeout kills it silently,
-  // so the failure names the exit code, the signal and the child's stderr.
-  try {
-    await promisify(execFile)(
-      process.execPath,
-      ["--import", "tsx", "scripts/e2e/prepare-consent.ts"],
-      { timeout: 120000 }
-    );
-  } catch (error) {
-    const child = error as NodeJS.ErrnoException & {
-      code?: number | string;
-      signal?: NodeJS.Signals | null;
-      stderr?: string;
-    };
-    throw new Error(
-      `[e2e-setup] prepare-consent failed (code=${String(child.code)}, signal=${String(child.signal)})` +
-        (child.stderr?.trim() ? `\n${child.stderr.trim()}` : ""),
-      { cause: error }
-    );
-  }
-  console.info("[e2e-setup] Consent recorded for all accounts");
   const cleanup = await prepareBrowserSessions(config);
-  console.info("[e2e-setup] Real user/admin/ops UI logins complete");
+  console.info(
+    "[e2e-setup] Real user/admin/ops UI logins and consent complete"
+  );
   return cleanup;
 }

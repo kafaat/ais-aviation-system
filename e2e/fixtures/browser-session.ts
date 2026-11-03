@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { disposableDatabaseUrl } from "../disposable-database";
 import { prepareAnonymousConsent } from "./consent";
 import { login } from "./test-helpers";
+import { rpc } from "./rpc";
 import { testUsers } from "./test-data";
 
 type Account = "regular" | "admin" | "ops";
@@ -42,6 +43,19 @@ export async function prepareBrowserSessions(config: FullConfig) {
           testUsers[account].email,
           testUsers[account].password
         );
+        // Use the signed-in account and the same revision guard as the app.
+        const consent = rpc(page).consent;
+        const current = await consent.getMyConsent.query();
+        if (current.needsReconsent) {
+          await consent.updateConsent.mutate({
+            expectedRevision: current.consent?.id ?? null,
+            consentVersion: current.currentVersion,
+            essential: true,
+            analytics: false,
+            marketing: false,
+            preferences: false,
+          });
+        }
         await writeFile(
           join(directory, `${account}.json`),
           JSON.stringify(await context.storageState()),
