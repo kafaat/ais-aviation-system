@@ -5,7 +5,10 @@ import {
   spendMiles,
   reverseBookingMilesCredit,
   requireMiles,
+  rebaseMilesExpiry,
 } from "./loyalty-balance.service";
+import { resolveMilesExpiry } from "./loyalty-accounting-policy";
+import { findApprovedLoyaltyPolicy } from "./loyalty-policy-repository";
 import type { SettlementTx } from "./booking-settlement.service";
 import { consumeActionTotp } from "./mfa.service";
 import { TRPCError } from "@trpc/server";
@@ -18,6 +21,7 @@ import {
   walletTransactions,
   bookingLoyaltyAccruals,
   userCredits,
+  users,
 } from "../../drizzle/schema";
 import { and, eq, desc, sql } from "drizzle-orm";
 
@@ -227,8 +231,11 @@ export async function syncBookingMiles(
   const delta = target - accrual.awardedMiles;
   const tierDelta = baseMiles - accrual.awardedTierPoints;
   if (delta > 0) {
-    const expiry = new Date();
-    expiry.setFullYear(expiry.getFullYear() + 2);
+    const now = new Date();
+    const policy = await findApprovedLoyaltyPolicy(tx, booking.tenantId, now);
+    const expiry = resolveMilesExpiry(policy, now, now);
+    if (policy?.expiryMode === "activity" && expiry)
+      rebaseMilesExpiry(state, expiry);
     await creditMiles(tx, state, {
       amount: delta,
       type: "earn",
@@ -503,11 +510,25 @@ export async function awardBonusMiles(
       const state = await lockMilesState(tx, userId);
       await expireMilesLots(tx, state);
       const account = state.account;
+      const [owner] = await tx
+        .select({ tenantId: users.tenantId })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const now = new Date();
+      const policy = await findApprovedLoyaltyPolicy(
+        tx,
+        owner?.tenantId ?? null,
+        now
+      );
+      const expiry = resolveMilesExpiry(policy, now, now);
+      if (policy?.expiryMode === "activity" && expiry)
+        rebaseMilesExpiry(state, expiry);
       const newBalance = await creditMiles(tx, state, {
         amount: miles,
         type: "bonus",
         reason,
-        expiresAt: new Date(Date.now() + 2 * 365 * 86400000),
+        expiresAt: expiry,
       });
 
       // Update account

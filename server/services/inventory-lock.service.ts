@@ -13,6 +13,10 @@ import {
 } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
 import { eq, and, lt, gt, sql, inArray } from "drizzle-orm";
+import {
+  assertRbdHoldCapacity,
+  RbdInventoryUnavailableError,
+} from "./rbd-inventory.service";
 
 /**
  * Inventory Lock Service
@@ -31,7 +35,8 @@ export async function createInventoryLock(
   sessionId: string,
   userId?: number,
   transaction?: SettlementTx,
-  durationMinutes = LOCK_DURATION_MINUTES
+  durationMinutes = LOCK_DURATION_MINUTES,
+  fareClassId?: number | null
 ): Promise<{ lockId: number; expiresAt: Date }> {
   try {
     const database = transaction || (await getDb());
@@ -94,8 +99,22 @@ export async function createInventoryLock(
         });
       }
 
+      if (fareClassId != null) {
+        try {
+          await assertRbdHoldCapacity(tx, flightId, fareClassId, numberOfSeats);
+        } catch (error) {
+          if (error instanceof RbdInventoryUnavailableError)
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: error.message,
+            });
+          throw error;
+        }
+      }
+
       const [insertResult] = await tx.insert(inventoryLocks).values({
         flightId,
+        fareClassId,
         numberOfSeats,
         cabinClass,
         sessionId,

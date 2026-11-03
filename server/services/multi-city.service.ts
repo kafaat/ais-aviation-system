@@ -23,6 +23,10 @@ import {
   calculateFlightPrice,
 } from "./flights.service";
 import { trackBookingStarted } from "./metrics.service";
+import {
+  getFlightRbdAvailability,
+  resolveFlightFareClass,
+} from "./rbd-inventory.service";
 
 /**
  * Multi-City Flights Service
@@ -49,6 +53,7 @@ export interface MultiCityPriceResult {
     basePrice: number;
     discountedPrice: number;
     cabinClass: "economy" | "business";
+    fareClassCode?: string;
   }>;
   subtotal: number;
   discount: number;
@@ -63,6 +68,7 @@ export interface MultiCityBookingInput {
   segments: Array<{
     flightId: number;
     departureDate: Date;
+    fareClassCode?: string;
   }>;
   cabinClass: "economy" | "business";
   passengers: Array<{
@@ -136,7 +142,12 @@ const MIN_SEGMENTS = 2;
 function requireHold(
   held: Map<
     number,
-    { lockId: number; tenantId: number | null; departureTime: Date }
+    {
+      lockId: number;
+      tenantId: number | null;
+      departureTime: Date;
+      fareClassId: number | null;
+    }
   >,
   flightId: number
 ) {
@@ -210,7 +221,11 @@ export async function searchMultiCityFlights(
  * Calculate total price for multi-city booking with applicable discounts
  */
 export async function calculateMultiCityPrice(
-  segments: Array<{ flightId: number; cabinClass: "economy" | "business" }>,
+  segments: Array<{
+    flightId: number;
+    cabinClass: "economy" | "business";
+    fareClassCode?: string;
+  }>,
   passengerCount: number
 ): Promise<MultiCityPriceResult> {
   if (segments.length < MIN_SEGMENTS) {
@@ -244,6 +259,29 @@ export async function calculateMultiCityPrice(
           });
         }
 
+        if (segment.fareClassCode) {
+          const database = await db.getDb();
+          if (!database)
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database not available",
+            });
+          const rbd = (
+            await getFlightRbdAvailability(database, [segment.flightId])
+          )
+            .get(segment.flightId)
+            ?.find(
+              item =>
+                item.code === segment.fareClassCode?.toUpperCase() &&
+                item.cabinClass === segment.cabinClass
+            );
+          if (!rbd || rbd.availableSeats < passengerCount)
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Booking class unavailable for segment ${index + 1}`,
+            });
+        }
+
         const pricingResult = await calculateFlightPrice(
           flight,
           segment.cabinClass,
@@ -255,6 +293,7 @@ export async function calculateMultiCityPrice(
           flightId: segment.flightId,
           basePrice: pricingResult.price,
           cabinClass: segment.cabinClass,
+          fareClassCode: segment.fareClassCode?.toUpperCase(),
         };
       })
     );
@@ -335,6 +374,7 @@ export async function createMultiCityBooking(
       input.segments.map(s => ({
         flightId: s.flightId,
         cabinClass: input.cabinClass,
+        fareClassCode: s.fareClassCode,
       })),
       input.passengers.length
     );
@@ -363,7 +403,12 @@ export async function createMultiCityBooking(
       run: async tx => {
         const held = new Map<
           number,
-          { lockId: number; tenantId: number | null; departureTime: Date }
+          {
+            lockId: number;
+            tenantId: number | null;
+            departureTime: Date;
+            fareClassId: number | null;
+          }
         >();
         for (const segment of [...input.segments].sort(
           (a, b) => a.flightId - b.flightId
@@ -390,18 +435,35 @@ export async function createMultiCityBooking(
                 "Cross-tenant itineraries require an interline agreement",
             });
           await assertTenantOperational(tx, flight.tenantId);
+          const selectedFareClass = segment.fareClassCode
+            ? await resolveFlightFareClass(
+                tx,
+                flight.id,
+                flight.airlineId,
+                input.cabinClass,
+                segment.fareClassCode
+              )
+            : null;
+          if (segment.fareClassCode && !selectedFareClass)
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Requested booking class is unavailable",
+            });
           const hold = await createInventoryLock(
             flight.id,
             input.passengers.length,
             input.cabinClass,
             input.sessionId,
             input.userId,
-            tx
+            tx,
+            undefined,
+            selectedFareClass?.fareClass.id
           );
           held.set(flight.id, {
             lockId: hold.lockId,
             tenantId: flight.tenantId,
             departureTime: flight.departureTime,
+            fareClassId: selectedFareClass?.fareClass.id ?? null,
           });
         }
         const first = requireHold(held, input.segments[0].flightId);
@@ -412,6 +474,7 @@ export async function createMultiCityBooking(
           tenantId: first.tenantId,
           inventoryLockId: first.lockId,
           flightId: input.segments[0].flightId, // Primary flight (first segment)
+          fareClassId: first.fareClassId,
           bookingReference,
           pnr,
           status: "pending",
@@ -447,6 +510,7 @@ export async function createMultiCityBooking(
             segmentOrder: i + 1,
             segmentAmount: segmentAmounts[i],
             flightId: segment.flightId,
+            fareClassId: requireHold(held, segment.flightId).fareClassId,
             departureDate: requireHold(held, segment.flightId).departureTime,
             inventoryLockId: requireHold(held, segment.flightId).lockId,
             status: "pending",

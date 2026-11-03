@@ -414,6 +414,13 @@
       "when": 1793665619856,
       "tag": "0058_supplier_finance_control",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "5",
+      "when": 1793671010754,
+      "tag": "0059_airline_standards_readiness",
+      "breakpoints": true
     }
   ]
 }

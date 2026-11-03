@@ -110,6 +110,15 @@ describe("atomic booking commands", () => {
     expect(fixture.rows("retail_offers")[0].consumedBookingId).toBe(
       first.bookingId
     );
+    expect(fixture.rows("booking_fare_components")).toMatchObject([
+      {
+        bookingId: first.bookingId,
+        flightId: 11,
+        componentType: "unclassified",
+        code: "GROSS_RECONCILIATION_REQUIRED",
+        amount: 10000,
+      },
+    ]);
     expect(fixture.rows("idempotency_requests")[0].expiresAt).toBeNull();
   });
   it("detects nested payload changes while ignoring object key ordering", async () => {
@@ -134,6 +143,7 @@ describe("atomic booking commands", () => {
     for (const table of [
       "bookings",
       "passengers",
+      "booking_fare_components",
       "inventory_locks",
       "idempotency_requests",
     ])

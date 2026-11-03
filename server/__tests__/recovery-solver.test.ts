@@ -139,4 +139,37 @@ describe("operator duty profiles", () => {
       }).compliant
     ).toBe(false);
   });
+  it("enforces operator-supplied 28 and 365 day flight-time limits", () => {
+    const proposed = d(
+      "2026-09-15T06:00Z",
+      "2026-09-15T08:10Z",
+      "2026-09-15T07:00Z",
+      "2026-09-15T07:40Z"
+    );
+    const history = [
+      d(
+        "2026-09-08T06:00Z",
+        "2026-09-08T08:10Z",
+        "2026-09-08T07:00Z",
+        "2026-09-08T07:40Z"
+      ),
+      d(
+        "2026-09-01T06:00Z",
+        "2026-09-01T08:10Z",
+        "2026-09-01T07:00Z",
+        "2026-09-01T07:40Z"
+      ),
+    ];
+    const assessed = validateDuty(proposed, history, {
+      ...rule,
+      maxFlightTime28DayMinutes: 100,
+      maxFlightTime365DayMinutes: 100,
+    });
+    expect(assessed.violations).toEqual(
+      expect.arrayContaining([
+        "Rolling 28-day flight-time limit exceeded",
+        "Rolling 365-day flight-time limit exceeded",
+      ])
+    );
+  });
 });

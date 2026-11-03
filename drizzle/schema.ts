@@ -257,6 +257,8 @@ export const bookings = mysqlTable(
     tenantId: int("tenantId"),
     userId: int("userId").notNull(),
     flightId: int("flightId").notNull(),
+    // Null for pre-RBD and cabin-only bookings.
+    fareClassId: int("fareClassId"),
     bookingReference: varchar("bookingReference", { length: 6 })
       .notNull()
       .unique(), // e.g., "ABC123"
@@ -300,6 +302,7 @@ export const bookings = mysqlTable(
     tenantIdx: index("bookings_tenant_idx").on(table.tenantId),
     // Index for flight-based queries (flight manifest, seat availability)
     flightIdIdx: index("bookings_flight_id_idx").on(table.flightId),
+    fareClassIdx: index("bookings_fare_class_idx").on(table.fareClassId),
     // Index for status filtering (admin panels, reports)
     statusIdx: index("bookings_status_idx").on(table.status),
     // Index for payment status queries
@@ -389,6 +392,119 @@ export const passengers = mysqlTable(
 
 export type Passenger = typeof passengers.$inferSelect;
 export type InsertPassenger = typeof passengers.$inferInsert;
+
+/** Immutable monetary lines captured from the priced offer used to create an
+ * invoice.  `flightId` is the stable sector key for legacy direct bookings;
+ * `bookingSegmentId` is populated by multi-sector/order flows when available.
+ * These rows describe the commercial calculation.  They are not, by
+ * themselves, a tax determination or a ZATCA-issued document. */
+export const bookingFareComponents = mysqlTable(
+  "booking_fare_components",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    tenantId: int("tenantId"),
+    passengerId: int("passengerId"),
+    bookingSegmentId: int("bookingSegmentId"),
+    flightId: int("flightId").notNull(),
+    componentType: mysqlEnum("componentType", [
+      "base_fare",
+      "tax",
+      "carrier_surcharge",
+      "booking_fee",
+      "ancillary",
+      "discount",
+      "unclassified",
+    ]).notNull(),
+    code: varchar("code", { length: 32 }),
+    amount: int("amount").notNull(),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    source: mysqlEnum("source", [
+      "retail_offer",
+      "group_allocation",
+      "price_lock",
+      "ancillary_catalog",
+      "servicing",
+    ]).notNull(),
+    sourceReference: varchar("sourceReference", { length: 64 }),
+    policyVersion: varchar("policyVersion", { length: 128 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    reversedAt: timestamp("reversedAt"),
+  },
+  table => ({
+    bookingIdx: index("fare_components_booking_idx").on(table.bookingId),
+    passengerSectorIdx: index("fare_components_passenger_sector_idx").on(
+      table.passengerId,
+      table.flightId
+    ),
+    segmentIdx: index("fare_components_segment_idx").on(table.bookingSegmentId),
+    tenantCreatedIdx: index("fare_components_tenant_created_idx").on(
+      table.tenantId,
+      table.createdAt
+    ),
+  })
+);
+
+export type BookingFareComponent = typeof bookingFareComponents.$inferSelect;
+export type InsertBookingFareComponent =
+  typeof bookingFareComponents.$inferInsert;
+
+/** Internal source record for an eventual ZATCA e-invoice.  AIS deliberately
+ * stores only a draft until an onboarded EGS has applied its CSID stamp and a
+ * FATOORA acknowledgement has been verified. */
+export const zatcaInvoiceDrafts = mysqlTable(
+  "zatca_invoice_drafts",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    tenantId: int("tenantId"),
+    invoiceNumber: varchar("invoiceNumber", { length: 64 }).notNull().unique(),
+    documentType: mysqlEnum("documentType", ["simplified", "standard"])
+      .default("simplified")
+      .notNull(),
+    status: mysqlEnum("status", [
+      "draft",
+      "ready_for_egs",
+      "reported",
+      "cleared",
+      "rejected",
+    ])
+      .default("draft")
+      .notNull(),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    issueTimestamp: datetime("issueTimestamp").notNull(),
+    supplyTimestamp: datetime("supplyTimestamp").notNull(),
+    sellerName: varchar("sellerName", { length: 255 }).notNull(),
+    sellerVatNumber: varchar("sellerVatNumber", { length: 32 }).notNull(),
+    taxableAmount: int("taxableAmount").notNull(),
+    taxAmount: int("taxAmount").notNull(),
+    totalAmount: int("totalAmount").notNull(),
+    // Five-tag TLV is a preview only. Phase 2 replaces it with the signed
+    // nine-tag payload produced by the accepted EGS.
+    previewQrPayload: text("previewQrPayload").notNull(),
+    previewQrSha256: varchar("previewQrSha256", { length: 64 }).notNull(),
+    componentDigest: varchar("componentDigest", { length: 64 }).notNull(),
+    egsAcceptanceEvidenceId: varchar("egsAcceptanceEvidenceId", {
+      length: 128,
+    }),
+    authorityUuid: varchar("authorityUuid", { length: 36 }),
+    authorityResponse:
+      json("authorityResponse").$type<Record<string, unknown>>(),
+    reportedAt: timestamp("reportedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    bookingIdx: index("zatca_drafts_booking_idx").on(table.bookingId),
+    tenantStatusIdx: index("zatca_drafts_tenant_status_idx").on(
+      table.tenantId,
+      table.status
+    ),
+  })
+);
+
+export type ZatcaInvoiceDraft = typeof zatcaInvoiceDrafts.$inferSelect;
+export type InsertZatcaInvoiceDraft = typeof zatcaInvoiceDrafts.$inferInsert;
 
 /**
  * Flight Status History table
@@ -771,6 +887,124 @@ export const loyaltyCreditLots = mysqlTable(
 );
 
 /**
+ * Operator-approved loyalty accounting and expiry policy. Draft policies are
+ * inert. The finance owner must approve a version before it can influence
+ * expiry or IFRS 15 allocation evidence.
+ */
+export const loyaltyPolicyProfiles = mysqlTable(
+  "loyalty_policy_profiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull(),
+    version: varchar("version", { length: 64 }).notNull(),
+    status: mysqlEnum("status", ["draft", "approved", "retired"])
+      .default("draft")
+      .notNull(),
+    expiryMode: mysqlEnum("expiryMode", ["none", "fixed", "activity"])
+      .default("none")
+      .notNull(),
+    expiryMonths: int("expiryMonths"),
+    mileStandaloneValueMinor: int("mileStandaloneValueMinor").notNull(),
+    expectedBreakageBasisPoints: int("expectedBreakageBasisPoints")
+      .default(0)
+      .notNull(),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    sourceReferences: json("sourceReferences").notNull(),
+    effectiveAt: timestamp("effectiveAt").notNull(),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    version: uniqueIndex("loyalty_policy_tenant_version_unique").on(
+      table.tenantId,
+      table.version
+    ),
+    active: index("loyalty_policy_active_idx").on(
+      table.tenantId,
+      table.status,
+      table.effectiveAt
+    ),
+  })
+);
+
+/** IFRS 15 evidence subledger. Cash remains authoritative in financial_ledger. */
+export const loyaltyContractLiabilityEvents = mysqlTable(
+  "loyalty_contract_liability_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull(),
+    policyProfileId: int("policyProfileId").notNull(),
+    bookingId: int("bookingId"),
+    userId: int("userId").notNull(),
+    idempotencyKey: varchar("idempotencyKey", { length: 191 }).notNull(),
+    eventType: mysqlEnum("eventType", [
+      "allocate",
+      "redeem",
+      "expire",
+      "reverse",
+      "breakage_reestimate",
+    ]).notNull(),
+    miles: int("miles").notNull(),
+    allocatedAmountMinor: int("allocatedAmountMinor").notNull(),
+    expectedBreakageMinor: int("expectedBreakageMinor").notNull(),
+    recognizedAmountMinor: int("recognizedAmountMinor").notNull(),
+    deferredAmountAfterMinor: int("deferredAmountAfterMinor").notNull(),
+    currency: varchar("currency", { length: 3 }).notNull(),
+    evidence: json("evidence").notNull(),
+    occurredAt: timestamp("occurredAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    idempotency: uniqueIndex("loyalty_liability_event_idempotency_unique").on(
+      table.tenantId,
+      table.idempotencyKey
+    ),
+    booking: index("loyalty_liability_event_booking_idx").on(table.bookingId),
+    policy: index("loyalty_liability_event_policy_idx").on(
+      table.policyProfileId,
+      table.occurredAt
+    ),
+  })
+);
+
+/** Versioned legal profile. Approval records evidence, not regulator acceptance. */
+export const passengerRightsPolicyProfiles = mysqlTable(
+  "passenger_rights_policy_profiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull(),
+    jurisdiction: varchar("jurisdiction", { length: 32 }).notNull(),
+    version: varchar("version", { length: 64 }).notNull(),
+    status: mysqlEnum("status", ["draft", "approved", "retired"])
+      .default("draft")
+      .notNull(),
+    sourceUri: varchar("sourceUri", { length: 1000 }).notNull(),
+    sourcePublishedAt: timestamp("sourcePublishedAt"),
+    effectiveAt: timestamp("effectiveAt").notNull(),
+    rules: json("rules").notNull(),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    version: uniqueIndex("passenger_rights_policy_version_unique").on(
+      table.tenantId,
+      table.jurisdiction,
+      table.version
+    ),
+    active: index("passenger_rights_policy_active_idx").on(
+      table.tenantId,
+      table.jurisdiction,
+      table.status,
+      table.effectiveAt
+    ),
+  })
+);
+
+/**
  * Inventory Locks table
  * Prevents double booking by temporarily locking seats during checkout
  */
@@ -781,6 +1015,8 @@ export const inventoryLocks = mysqlTable(
 
     // Flight and seat info
     flightId: int("flightId").notNull(),
+    // Optional RBD bucket. Null preserves legacy cabin-only holds.
+    fareClassId: int("fareClassId"),
     numberOfSeats: int("numberOfSeats").notNull(),
     cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
 
@@ -804,6 +1040,10 @@ export const inventoryLocks = mysqlTable(
   },
   table => ({
     flightIdIdx: index("flight_id_idx").on(table.flightId),
+    fareClassIdx: index("inventory_locks_fare_class_idx").on(
+      table.flightId,
+      table.fareClassId
+    ),
     sessionIdIdx: index("session_id_idx").on(table.sessionId),
     statusIdx: index("status_idx").on(table.status),
     expiresAtIdx: index("expires_at_idx").on(table.expiresAt),
@@ -2548,6 +2788,8 @@ export const bookingSegments = mysqlTable(
     bookingId: int("bookingId").notNull(),
     segmentOrder: int("segmentOrder").notNull(), // Order of segment in the trip (1, 2, 3, etc.)
     flightId: int("flightId").notNull(),
+    // Each segment can use a different booking designator.
+    fareClassId: int("fareClassId"),
     inventoryLockId: int("inventoryLockId"),
     seatsReserved: boolean("seatsReserved").default(false).notNull(),
     segmentAmount: int("segmentAmount"), // Allocated share of the quoted itinerary total; NULL for historical unknowns.
@@ -2568,6 +2810,9 @@ export const bookingSegments = mysqlTable(
     bookingIdIdx: index("booking_segments_booking_id_idx").on(table.bookingId),
     // Index for flight-based queries
     flightIdIdx: index("booking_segments_flight_id_idx").on(table.flightId),
+    fareClassIdx: index("booking_segments_fare_class_idx").on(
+      table.fareClassId
+    ),
     // Composite index for booking + order
     bookingOrderIdx: index("booking_segments_booking_order_idx").on(
       table.bookingId,
@@ -3838,6 +4083,164 @@ export type AircraftType = typeof aircraftTypes.$inferSelect;
 export type InsertAircraftType = typeof aircraftTypes.$inferInsert;
 
 /**
+ * Operator-controlled aircraft registry data used by the operational W&B
+ * kernel. A row cannot be used for dispatch until its status is accepted and
+ * the referenced evidence remains current. Values use kilograms and index
+ * units exactly as supplied by the operator's controlled fleet data.
+ */
+export const aircraftRegistrations = mysqlTable(
+  "aircraft_registrations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    aircraftTypeId: int("aircraftTypeId").notNull(),
+    registration: varchar("registration", { length: 20 }).notNull(),
+    dataVersion: varchar("dataVersion", { length: 50 }).notNull(),
+    dryOperatingWeightKg: decimal("dryOperatingWeightKg", {
+      precision: 12,
+      scale: 3,
+    }).notNull(),
+    dryOperatingIndex: decimal("dryOperatingIndex", {
+      precision: 12,
+      scale: 4,
+    }).notNull(),
+    effectiveFrom: datetime("effectiveFrom").notNull(),
+    effectiveTo: datetime("effectiveTo"),
+    status: mysqlEnum("status", ["draft", "accepted", "suspended"])
+      .default("draft")
+      .notNull(),
+    evidenceId: int("evidenceId"),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    registrationIdx: uniqueIndex("aircraft_registration_idx").on(
+      table.airlineId,
+      table.registration,
+      table.dataVersion
+    ),
+    activeIdx: index("aircraft_registration_active_idx").on(
+      table.airlineId,
+      table.registration,
+      table.status,
+      table.effectiveFrom
+    ),
+  })
+);
+
+export type AircraftRegistration = typeof aircraftRegistrations.$inferSelect;
+export type InsertAircraftRegistration =
+  typeof aircraftRegistrations.$inferInsert;
+
+/** Versioned, operator-approved AHM data and envelope points for one type. */
+export const aircraftBalanceProfiles = mysqlTable(
+  "aircraft_balance_profiles",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    airlineId: int("airlineId").notNull(),
+    aircraftTypeId: int("aircraftTypeId").notNull(),
+    version: varchar("version", { length: 50 }).notNull(),
+    referenceStationMm: decimal("referenceStationMm", {
+      precision: 12,
+      scale: 3,
+    }).notNull(),
+    lemacMm: decimal("lemacMm", { precision: 12, scale: 3 }).notNull(),
+    macLengthMm: decimal("macLengthMm", {
+      precision: 12,
+      scale: 3,
+    }).notNull(),
+    indexConstant: decimal("indexConstant", {
+      precision: 12,
+      scale: 4,
+    }).notNull(),
+    indexCoefficient: decimal("indexCoefficient", {
+      precision: 16,
+      scale: 8,
+    }).notNull(),
+    maxLmcWeightKg: decimal("maxLmcWeightKg", {
+      precision: 12,
+      scale: 3,
+    }).notNull(),
+    maxLmcIndex: decimal("maxLmcIndex", {
+      precision: 12,
+      scale: 4,
+    }).notNull(),
+    envelope: json("envelope")
+      .$type<
+        Array<{
+          phase: "zfw" | "tow" | "law";
+          weightKg: number;
+          forwardMacPercent: number;
+          aftMacPercent: number;
+        }>
+      >()
+      .notNull(),
+    status: mysqlEnum("status", ["draft", "accepted", "suspended"])
+      .default("draft")
+      .notNull(),
+    evidenceId: int("evidenceId"),
+    approvedBy: int("approvedBy"),
+    approvedAt: timestamp("approvedAt"),
+    effectiveFrom: datetime("effectiveFrom").notNull(),
+    effectiveTo: datetime("effectiveTo"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    versionIdx: uniqueIndex("aircraft_balance_profile_version_idx").on(
+      table.airlineId,
+      table.aircraftTypeId,
+      table.version
+    ),
+    activeIdx: index("aircraft_balance_profile_active_idx").on(
+      table.airlineId,
+      table.aircraftTypeId,
+      table.status,
+      table.effectiveFrom
+    ),
+  })
+);
+
+export type AircraftBalanceProfile =
+  typeof aircraftBalanceProfiles.$inferSelect;
+export type InsertAircraftBalanceProfile =
+  typeof aircraftBalanceProfiles.$inferInsert;
+
+/** Immutable versioned draft. External dispatch acceptance remains separate. */
+export const loadSheetDocuments = mysqlTable(
+  "load_sheet_documents",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    aircraftRegistrationId: int("aircraftRegistrationId").notNull(),
+    balanceProfileId: int("balanceProfileId").notNull(),
+    edition: int("edition").notNull(),
+    status: mysqlEnum("status", ["draft", "signed_draft", "superseded"])
+      .default("draft")
+      .notNull(),
+    inputs: json("inputs").$type<Record<string, unknown>>().notNull(),
+    result: json("result").$type<Record<string, unknown>>().notNull(),
+    digestSha256: varchar("digestSha256", { length: 64 }).notNull(),
+    signature: varchar("signature", { length: 128 }),
+    signedBy: int("signedBy"),
+    signedAt: timestamp("signedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    flightEditionIdx: uniqueIndex("load_sheet_flight_edition_idx").on(
+      table.flightId,
+      table.edition
+    ),
+    digestIdx: uniqueIndex("load_sheet_digest_idx").on(table.digestSha256),
+  })
+);
+
+export type LoadSheetDocument = typeof loadSheetDocuments.$inferSelect;
+export type InsertLoadSheetDocument = typeof loadSheetDocuments.$inferInsert;
+
+/**
  * Crew members
  * Airline crew profiles (pilots, cabin crew)
  */
@@ -4776,6 +5179,38 @@ export const fareClasses = mysqlTable(
 
 export type FareClass = typeof fareClasses.$inferSelect;
 export type InsertFareClass = typeof fareClasses.$inferInsert;
+
+/**
+ * Per-flight RBD buckets. The cabin counters on `flights` remain the physical
+ * inventory ceiling. A row here narrows sale to a configured booking class;
+ * flights without rows retain the legacy cabin-only path.
+ */
+export const flightFareClassInventory = mysqlTable(
+  "flight_fare_class_inventory",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    fareClassId: int("fareClassId").notNull(),
+    capacity: int("capacity").notNull(),
+    availableSeats: int("availableSeats").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    flightFareClassIdx: uniqueIndex("flight_fare_class_inventory_unique").on(
+      table.flightId,
+      table.fareClassId
+    ),
+    flightIdx: index("flight_fare_class_inventory_flight_idx").on(
+      table.flightId
+    ),
+  })
+);
+
+export type FlightFareClassInventory =
+  typeof flightFareClassInventory.$inferSelect;
+export type InsertFlightFareClassInventory =
+  typeof flightFareClassInventory.$inferInsert;
 
 /**
  * Fare Rules - Complex fare restrictions and conditions

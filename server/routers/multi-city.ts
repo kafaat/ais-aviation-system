@@ -68,6 +68,14 @@ export const multiCityRouter = router({
               cabinClass: z
                 .enum(["economy", "business"])
                 .describe("Cabin class"),
+              fareClassCode: z
+                .string()
+                .trim()
+                .min(1)
+                .max(2)
+                .regex(/^[A-Za-z0-9]+$/)
+                .transform(value => value.toUpperCase())
+                .optional(),
             })
           )
           .min(2, "At least 2 segments required")
@@ -111,6 +119,14 @@ export const multiCityRouter = router({
             z.object({
               flightId: z.number().describe("Flight ID for this segment"),
               departureDate: z.date().describe("Departure date"),
+              fareClassCode: z
+                .string()
+                .trim()
+                .min(1)
+                .max(2)
+                .regex(/^[A-Za-z0-9]+$/)
+                .transform(value => value.toUpperCase())
+                .optional(),
             })
           )
           .min(2, "At least 2 segments required")

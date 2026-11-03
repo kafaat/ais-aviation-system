@@ -8,6 +8,7 @@ const cache = vi.hoisted(() => ({
   detail: null as unknown,
 }));
 vi.mock("../db", () => ({
+  getDb: vi.fn(async () => null),
   searchFlights: vi.fn(),
   getFlightById: vi.fn(),
   getFlightLiveState: vi.fn(),

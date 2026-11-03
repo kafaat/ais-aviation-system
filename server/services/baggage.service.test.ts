@@ -132,17 +132,18 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
   });
 
   describe("generateBaggageTag", () => {
-    it("should generate a tag starting with AIS", () => {
-      const tag = baggageService.generateBaggageTag();
-      expect(tag).toMatch(/^AIS[A-Z0-9]{7}$/);
+    it("generates a ten-digit license plate with the configured issuer", () => {
+      const tag = baggageService.generateBaggageTag("065");
+      expect(tag).toMatch(/^0065\d{6}$/);
+      expect(baggageService.isBaggageLicensePlate(tag)).toBe(true);
     });
 
     it("should generate unique tags", () => {
       const tags = new Set<string>();
       for (let i = 0; i < 100; i++) {
-        tags.add(baggageService.generateBaggageTag());
+        tags.add(baggageService.generateBaggageTag("065"));
       }
-      // With 7 alphanumeric chars, collisions should be extremely rare
+      // The six-digit serial is cryptographically generated.
       expect(tags.size).toBeGreaterThanOrEqual(95);
     });
   });
@@ -164,7 +165,7 @@ describe.skipIf(!dbAvailable)("Baggage Service", () => {
       expect(baggage.id).toBeGreaterThan(0);
       expect(baggage.bookingId).toBe(testBookingId);
       expect(baggage.passengerId).toBe(testPassengerId);
-      expect(baggage.tagNumber).toMatch(/^AIS[A-Z0-9]{7}$/);
+      expect(baggage.tagNumber).toMatch(/^\d{10}$/);
       expect(parseFloat(baggage.weight)).toBe(23);
       expect(baggage.status).toBe("checked_in");
       expect(baggage.description).toBe("Black suitcase with red ribbon");

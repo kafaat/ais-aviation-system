@@ -17,6 +17,12 @@ import {
 import { assertTenantOperational } from "./tenant.service";
 import { recordEvent } from "./outbox.service";
 import type { SettlementTx } from "./booking-settlement.service";
+
+function crewHistoryDays(rule: ReturnType<typeof crewRuleSchema.parse>) {
+  if (rule.maxFlightTime365DayMinutes !== undefined) return 365;
+  if (rule.maxFlightTime28DayMinutes !== undefined) return 28;
+  return 7;
+}
 export async function ingestCrewRules(
   e: EvidenceEnvelope,
   signature: string,
@@ -166,8 +172,10 @@ export async function evaluateCrewDuty(
         proposed.flightId
           ? ne(crewAssignments.flightId, proposed.flightId)
           : undefined,
-        sql`${flights.arrivalTime} > ${new Date(duty.start.getTime() - 7 * 86400000)}`,
-        sql`${flights.departureTime} < ${new Date(duty.end.getTime() + 7 * 86400000)}`
+        sql`${flights.arrivalTime} > ${new Date(
+          duty.start.getTime() - crewHistoryDays(profile.rule) * 86400000
+        )}`,
+        sql`${flights.departureTime} < ${duty.end}`
       )
     )
     .limit(1001);
@@ -294,8 +302,10 @@ export async function evaluateCrewCandidates(
         proposed.flightId
           ? ne(crewAssignments.flightId, proposed.flightId)
           : undefined,
-        sql`${flights.arrivalTime} > ${new Date(duty.start.getTime() - 7 * 86400000)}`,
-        sql`${flights.departureTime} < ${new Date(duty.end.getTime() + 7 * 86400000)}`
+        sql`${flights.arrivalTime} > ${new Date(
+          duty.start.getTime() - crewHistoryDays(profile.rule) * 86400000
+        )}`,
+        sql`${flights.departureTime} < ${duty.end}`
       )
     )
     .limit(10001);

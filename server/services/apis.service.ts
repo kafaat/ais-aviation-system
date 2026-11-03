@@ -1,4 +1,5 @@
 import { generatePAXLST } from "./apis-paxlst";
+import { generatePNRGOV } from "./apis-pnrgov";
 import { isValidTimeZone } from "./civil-day";
 import { manifestBookingCondition } from "./flight-state.service";
 /**
@@ -1024,11 +1025,37 @@ export async function generateAPISMessage(
       apisMap,
     });
   } else {
+    const authorityRecipient = process.env.AIS_PNRGOV_DRAFT_RECIPIENT?.trim();
+    if (
+      !origin ||
+      !destination ||
+      !airline ||
+      !authorityRecipient ||
+      !isValidTimeZone(origin.timezone) ||
+      !isValidTimeZone(destination.timezone)
+    ) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "PNRGOV requires carrier, route time zones and an operator-approved AIS_PNRGOV_DRAFT_RECIPIENT. A country code is not an authority address.",
+      });
+    }
+    const pnrgovOrigin = {
+      code: origin.code,
+      country: origin.country,
+      timezone: origin.timezone,
+    };
+    const pnrgovDestination = {
+      code: destination.code,
+      country: destination.country,
+      timezone: destination.timezone,
+    };
     messageContent = generatePNRGOV({
       flight,
-      origin: origin ?? { code: "???", country: "??" },
-      destination: destination ?? { code: "???", country: "??" },
-      airline: airline ?? { code: "??", name: "Unknown" },
+      origin: pnrgovOrigin,
+      destination: pnrgovDestination,
+      airline,
+      authorityRecipient,
       passengers: passengerData,
       apisMap,
     });
@@ -1044,90 +1071,6 @@ export async function generateAPISMessage(
     missingCount: passengerData.length - apisResults.length,
     generatedAt: new Date().toISOString(),
   };
-}
-
-// ============================================================================
-// PNR/GOV Message Builder
-// ============================================================================
-
-function generatePNRGOV(data: {
-  flight: {
-    id: number;
-    flightNumber: string;
-    departureTime: Date;
-    arrivalTime: Date;
-  };
-  origin: { code: string; country: string };
-  destination: { code: string; country: string };
-  airline: { code: string; name: string };
-  passengers: Array<{
-    passengerId: number;
-    firstName: string;
-    lastName: string;
-    bookingReference: string;
-  }>;
-  apisMap: Map<number, Record<string, unknown>>;
-}): string {
-  const { flight, origin, destination, airline, passengers, apisMap } = data;
-
-  const now = new Date();
-  const lines: string[] = [];
-
-  // Header
-  lines.push(`--- PNRGOV MESSAGE ---`);
-  lines.push(`AIRLINE: ${airline.code} / ${airline.name}`);
-  lines.push(`FLIGHT: ${flight.flightNumber}`);
-  lines.push(`ROUTE: ${origin.code} -> ${destination.code}`);
-  lines.push(`DEPARTURE: ${flight.departureTime.toISOString()}`);
-  lines.push(`GENERATED: ${now.toISOString()}`);
-  lines.push(`---`);
-
-  for (const pax of passengers) {
-    const apis = apisMap.get(pax.passengerId);
-
-    lines.push(``);
-    lines.push(`PNR: ${pax.bookingReference}`);
-    lines.push(`PASSENGER: ${pax.lastName}/${pax.firstName}`);
-
-    if (apis) {
-      const docType = ((apis["document_type"] as string) ?? "").toUpperCase();
-      const docNumber = (apis["document_number"] as string) ?? "";
-      const nationality = (apis["nationality"] as string) ?? "";
-      const issuingCountry = (apis["issuing_country"] as string) ?? "";
-      const dob = apis["date_of_birth"]
-        ? new Date(apis["date_of_birth"] as string).toISOString().split("T")[0]
-        : "N/A";
-      const gender = (apis["gender"] as string) ?? "U";
-      const expiryDate = apis["expiry_date"]
-        ? new Date(apis["expiry_date"] as string).toISOString().split("T")[0]
-        : "N/A";
-      const resAddress = (apis["residence_address"] as string) ?? "";
-      const destAddress = (apis["destination_address"] as string) ?? "";
-      const redress = (apis["redress_number"] as string) ?? "";
-      const ktn = (apis["known_traveler_number"] as string) ?? "";
-
-      lines.push(`  DOC TYPE: ${docType}`);
-      lines.push(`  DOC NUMBER: ${docNumber}`);
-      lines.push(`  NATIONALITY: ${nationality}`);
-      lines.push(`  ISSUING COUNTRY: ${issuingCountry}`);
-      lines.push(`  DOB: ${dob}`);
-      lines.push(`  GENDER: ${gender}`);
-      lines.push(`  EXPIRY: ${expiryDate}`);
-      if (resAddress) lines.push(`  RESIDENCE: ${resAddress}`);
-      if (destAddress) lines.push(`  DEST ADDRESS: ${destAddress}`);
-      if (redress) lines.push(`  REDRESS: ${redress}`);
-      if (ktn) lines.push(`  KTN: ${ktn}`);
-    } else {
-      lines.push(`  ** NO APIS DATA **`);
-    }
-  }
-
-  lines.push(``);
-  lines.push(`--- END PNRGOV ---`);
-  lines.push(`TOTAL PASSENGERS: ${passengers.length}`);
-  lines.push(`APIS RECORDS: ${apisMap.size}/${passengers.length}`);
-
-  return lines.join("\n");
 }
 
 // ============================================================================
