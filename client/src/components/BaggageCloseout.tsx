@@ -46,6 +46,12 @@ export function BaggageCloseout({
                 unexpected: closeout.data.unexpectedBags,
               })}
             </p>
+            {!!closeout.data.unresolvedRegistrations?.length && (
+              <p role="alert">
+                {t("dcs.manifest.unresolvedRegistrations")}{" "}
+                <bdi>{closeout.data.unresolvedRegistrations.join(", ")}</bdi>
+              </p>
+            )}
             {closeout.data.missingEntry.length > 0 && (
               <p>
                 {t("dcs.manifest.missingEntry")}{" "}

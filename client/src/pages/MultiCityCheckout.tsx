@@ -1,3 +1,7 @@
+import { readSearchPreferences as searchPreferences } from "@/lib/ibe-display-context";
+import { useRawSearch } from "@/lib/useRawSearch";
+import { preferenceParams } from "@shared/ibe-search";
+import { DisplayCurrencyEstimate } from "@/components/DisplayCurrencyEstimate";
 import {
   InitialSectorSeats,
   type SectorSeat,
@@ -8,7 +12,7 @@ import AncillarySelection, {
 } from "@/components/AncillarySelection";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useLocation, useSearch } from "wouter";
+import { Link, useLocation } from "wouter";
 import { z } from "zod";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -52,7 +56,7 @@ type Passenger = {
 
 export default function MultiCityCheckout() {
   const { t } = useTranslation();
-  const search = useSearch();
+  const search = useRawSearch();
   const data = useMemo(() => {
     try {
       return itinerary.parse(
@@ -75,6 +79,7 @@ export default function MultiCityCheckout() {
 function Checkout({ data }: { data: z.output<typeof itinerary> }) {
   const { t, i18n } = useTranslation();
   const [, navigate] = useLocation();
+  const search = useRawSearch();
   const [passengers, setPassengers] = useState<Passenger[]>(() =>
     Array.from({ length: data.passengerCount }, (_, index) => ({
       firstName: "",
@@ -136,7 +141,7 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
           setError("");
           setSubmittedAmount(total);
           try {
-            await booking.mutateAsync({
+            const result = await booking.mutateAsync({
               segments: data.segments.map((segment, index) => {
                 const choices = seats
                   .filter(s => s.segmentIndex === index)
@@ -157,7 +162,9 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
                 ? { ancillaries: ancillaryCommandLines(extras) }
                 : {}),
             });
-            navigate("/my-bookings");
+            navigate(
+              `/checkout/${result.bookingId}?${preferenceParams(searchPreferences(search))}`
+            );
           } catch (failure) {
             setError(
               failure instanceof Error ? failure.message : t("common.error")
@@ -253,6 +260,7 @@ function Checkout({ data }: { data: z.output<typeof itinerary> }) {
               style: "currency",
               currency: "SAR",
             }).format(total / 100)}
+            <DisplayCurrencyEstimate amountMinor={total} />
           </p>
         )}
         {(error || quote.error) && (

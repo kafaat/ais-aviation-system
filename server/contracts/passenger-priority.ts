@@ -63,6 +63,8 @@ export const responseContracts = {
     ]),
     specialServices: z.array(
       z.object({
+        flightId: outputNumber.nullable(),
+        bookingSegmentId: outputNumber.nullable(),
         serviceType: z.string(),
         serviceCode: z.string(),
         status: z.string(),

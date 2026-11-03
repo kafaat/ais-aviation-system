@@ -31,6 +31,8 @@ export const responseContracts = {
       updatedAt: z.date(),
       bookingId: outputNumber,
       passengerId: outputNumber,
+      flightId: outputNumber.nullable(),
+      bookingSegmentId: outputNumber.nullable(),
       adminNotes: z.union([z.null(), z.string()]),
       serviceType: z.enum([
         "meal",
@@ -52,6 +54,8 @@ export const responseContracts = {
       updatedAt: z.date(),
       bookingId: outputNumber,
       passengerId: outputNumber,
+      flightId: outputNumber.nullable(),
+      bookingSegmentId: outputNumber.nullable(),
       adminNotes: z.union([z.null(), z.string()]),
       serviceType: z.enum([
         "meal",
@@ -74,6 +78,8 @@ export const responseContracts = {
     updatedAt: z.date(),
     bookingId: outputNumber,
     passengerId: outputNumber,
+    flightId: outputNumber.nullable(),
+    bookingSegmentId: outputNumber.nullable(),
     adminNotes: z.union([z.null(), z.string()]),
     serviceType: z.enum([
       "meal",
@@ -94,6 +100,8 @@ export const responseContracts = {
       updatedAt: z.date(),
       bookingId: outputNumber,
       passengerId: outputNumber,
+      flightId: outputNumber.nullable(),
+      bookingSegmentId: outputNumber.nullable(),
       adminNotes: z.union([z.null(), z.string()]),
       serviceType: z.enum([
         "meal",
@@ -115,6 +123,8 @@ export const responseContracts = {
       updatedAt: z.date(),
       bookingId: outputNumber,
       passengerId: outputNumber,
+      flightId: outputNumber.nullable(),
+      bookingSegmentId: outputNumber.nullable(),
       adminNotes: z.union([z.null(), z.string()]),
       serviceType: z.enum([
         "meal",

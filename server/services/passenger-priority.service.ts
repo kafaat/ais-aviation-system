@@ -8,7 +8,7 @@ import {
   specialServices,
   bookingSegments,
 } from "../../drizzle/schema";
-import { eq, and, asc, desc, ne, inArray } from "drizzle-orm";
+import { eq, and, asc, desc, ne, inArray, isNull, sql } from "drizzle-orm";
 import { flightBookingCondition } from "./flight-state.service";
 import type { SettlementTx } from "./booking-settlement.service";
 
@@ -365,9 +365,36 @@ async function calculateConnectionScore(
 async function calculateSpecialNeedsScore(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   passengerId: number,
-  bookingId: number
+  bookingId: number,
+  flightId: number
 ): Promise<number> {
   try {
+    // Historical requests have no verified sector. Do not silently discard
+    // active assistance from a complete ranking or guess which flight needs it.
+    const [unresolvedAssistance] = await db
+      .select({ id: specialServices.id })
+      .from(specialServices)
+      .where(
+        and(
+          eq(specialServices.passengerId, passengerId),
+          eq(specialServices.bookingId, bookingId),
+          inArray(specialServices.serviceType, [
+            "wheelchair",
+            "medical_assistance",
+            "unaccompanied_minor",
+          ]),
+          inArray(specialServices.status, ["pending", "confirmed"]),
+          isNull(specialServices.flightId)
+        )
+      )
+      .limit(1);
+    if (unresolvedAssistance)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Active assistance request has no verified flight sector; reconcile passenger service requests before calculating priority",
+      });
+
     // Check special services for this passenger
     const services = await db
       .select({
@@ -378,7 +405,13 @@ async function calculateSpecialNeedsScore(
         and(
           eq(specialServices.passengerId, passengerId),
           eq(specialServices.bookingId, bookingId),
-          ne(specialServices.status, "cancelled")
+          eq(specialServices.flightId, flightId),
+          inArray(specialServices.status, ["pending", "confirmed"]),
+          sql`(${specialServices.bookingSegmentId} IS NULL OR EXISTS (
+            SELECT 1 FROM booking_segments bs WHERE bs.id = ${specialServices.bookingSegmentId}
+            AND bs.bookingId = ${bookingId} AND bs.flightId = ${flightId}
+            AND bs.status IN ('pending', 'confirmed')
+          ))`
         )
       );
 
@@ -591,7 +624,7 @@ export async function calculatePriorityScore(
     calculateLoyaltyScore(db, booking.userId),
     calculateFareClassScore(db, bookingId, flightId),
     calculateConnectionScore(db, bookingId, flightId),
-    calculateSpecialNeedsScore(db, passengerId, bookingId),
+    calculateSpecialNeedsScore(db, passengerId, bookingId, flightId),
     calculateTimeSensitivityScore(db, flightId),
     calculateBookingValueScore(db, bookingId, flightId),
   ]);
@@ -728,6 +761,8 @@ export async function getPassengerProfile(passengerId: number): Promise<{
     currentMilesBalance: number;
   } | null;
   specialServices: {
+    flightId: number | null;
+    bookingSegmentId: number | null;
     serviceType: string;
     serviceCode: string;
     status: string;
@@ -801,6 +836,8 @@ export async function getPassengerProfile(passengerId: number): Promise<{
     .select({
       serviceType: specialServices.serviceType,
       serviceCode: specialServices.serviceCode,
+      flightId: specialServices.flightId,
+      bookingSegmentId: specialServices.bookingSegmentId,
       status: specialServices.status,
     })
     .from(specialServices)

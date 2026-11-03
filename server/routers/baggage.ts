@@ -46,6 +46,7 @@ export const baggageRouter = router({
         flightId: z.number().int(),
         expectedBags: z.number().int(),
         unexpectedBags: z.number().int(),
+        unresolvedRegistrations: z.array(z.string()),
         acceptedOrTransferred: z.number().int(),
         loadedBags: z.number().int(),
         readyToClose: z.boolean(),
@@ -152,59 +153,29 @@ export const baggageRouter = router({
       return baggage;
     }),
 
-  /**
-   * Register new baggage for a booking
-   * Protected - requires authenticated user
-   */
-  register: protectedProcedure
-    .input(
-      z.object({
-        bookingId: z.number(),
-        passengerId: z.number(),
-        weight: z.number().positive().max(32),
-        description: z.string().max(500).optional(),
-        specialHandling: z.string().max(255).optional(),
-      })
-    )
+  /** Physical baggage receipt belongs to scoped airline counter staff. */
+  register: airlineOpsProcedure
+    .input(baggageService.baggageRegistrationInput)
     .output(responseContracts["register"])
-    .mutation(async ({ input, ctx }) => {
-      // Ownership check: only register baggage on your own booking (IDOR)
-      await assertBookingOwnership(input.bookingId, ctx.user.id, ctx.user.role);
-      // Ensure the passenger actually belongs to this booking
-      const passengerBookingId = await assertPassengerOwnership(
-        input.passengerId,
-        ctx.user.id,
-        ctx.user.role
-      );
-      if (passengerBookingId !== input.bookingId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Passenger does not belong to the specified booking",
-        });
-      }
-      try {
-        const baggage = await baggageService.registerBaggage({
-          bookingId: input.bookingId,
-          passengerId: input.passengerId,
-          weight: input.weight,
-          description: input.description,
-          specialHandling: input.specialHandling,
-        });
+    .mutation(async ({ input, ctx }) => ({
+      success: true,
+      baggage: await baggageService.registerBaggage(input, {
+        id: ctx.user.id,
+        role: ctx.user.role,
+        tenantId: ctx.tenantId,
+      }),
+    })),
 
-        return {
-          success: true,
-          baggage,
-        };
-      } catch (error) {
-        if (error instanceof TRPCError) throw error;
-        const message =
-          error instanceof Error ? error.message : "Failed to register baggage";
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message,
-        });
-      }
-    }),
+  registrationSummary: airlineOpsProcedure
+    .input(baggageService.baggageRegistrationScopeInput)
+    .output(responseContracts["registrationSummary"])
+    .query(({ input, ctx }) =>
+      baggageService.getBaggageRegistrationSummary(input, {
+        id: ctx.user.id,
+        role: ctx.user.role,
+        tenantId: ctx.tenantId,
+      })
+    ),
 
   /**
    * Get all baggage for a booking

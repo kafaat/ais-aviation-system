@@ -771,17 +771,23 @@ export default function MyBookings() {
                               </CollapsibleContent>
                             </Collapsible>
                           )}
-                          {booking.status === "confirmed" &&
-                            !booking.checkedIn && (
-                              <Button
-                                asChild
-                                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md"
+                          {booking.status === "confirmed" && (
+                            <Button
+                              asChild
+                              className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md"
+                            >
+                              <Link
+                                href="/check-in"
+                                state={{ checkInPnr: booking.pnr }}
                               >
-                                <Link href="/check-in">
-                                  {t("myBookings.checkInNow")}
-                                </Link>
-                              </Button>
-                            )}
+                                {t(
+                                  booking.checkedIn
+                                    ? "myBookings.manageCheckIn"
+                                    : "myBookings.checkInNow"
+                                )}
+                              </Link>
+                            </Button>
+                          )}
                           {booking.checkedIn && (
                             <Badge className="w-full justify-center py-2.5 bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800">
                               {t("myBookings.checkedIn")}
@@ -790,6 +796,11 @@ export default function MyBookings() {
                           {booking.paymentStatus === "pending" &&
                             booking.status === "pending" && (
                               <>
+                                <Button asChild className="w-full">
+                                  <Link href={`/checkout/${booking.id}`}>
+                                    {t("checkoutResume.continue")}
+                                  </Link>
+                                </Button>
                                 <BookingCreditPayment
                                   bookingId={booking.id}
                                   amount={booking.totalAmount}

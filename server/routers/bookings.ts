@@ -1,5 +1,7 @@
 import { initialAncillarySchema } from "../services/initial-booking-ancillaries";
 import { checkInPassengers } from "../services/departure-control.service";
+import { departureState } from "../services/dcs-state.service";
+import { dcsDepartureState } from "../contracts/dcs-operations";
 import { responseContracts } from "../contracts/bookings";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -355,6 +357,7 @@ export const bookingsRouter = router({
               passengerId: z.number(),
               seatNumber: z.string().nullable(),
               checkedIn: z.boolean(),
+              departureState: dcsDepartureState,
             })
           ),
         })
@@ -375,8 +378,14 @@ export const bookingsRouter = router({
         });
       const database = db.getDb();
       if (!database) throw new Error("Database unavailable");
-      const { bookingSegments, flights, seatInventory, passengers } =
-        await import("../../drizzle/schema");
+      const {
+        bookingSegments,
+        flights,
+        seatInventory,
+        passengers,
+        dcsFlightOperations,
+        dcsPassengerStates,
+      } = await import("../../drizzle/schema");
       const { eq, inArray, asc } = await import("drizzle-orm");
       const segments = await database
         .select()
@@ -393,6 +402,10 @@ export const bookingsRouter = router({
         .select()
         .from(flights)
         .where(inArray(flights.id, ids));
+      const gates = await database
+        .select()
+        .from(dcsFlightOperations)
+        .where(inArray(dcsFlightOperations.flightId, ids));
       const ps = await database
         .select()
         .from(passengers)
@@ -401,6 +414,10 @@ export const bookingsRouter = router({
         .select()
         .from(seatInventory)
         .where(eq(seatInventory.bookingId, booking.id));
+      const operationalStates = await database
+        .select()
+        .from(dcsPassengerStates)
+        .where(eq(dcsPassengerStates.bookingId, booking.id));
       return ids.flatMap(id => {
         const f = fs.find(f => f.id === id);
         if (!f) return [];
@@ -412,8 +429,18 @@ export const bookingsRouter = router({
             departureTime: f.departureTime,
             status: f.status,
             open:
+              gates.find(g => g.flightId === f.id)?.checkInState !== "closed" &&
               booking.status === "confirmed" &&
               booking.paymentStatus === "paid" &&
+              (segments.length
+                ? Boolean(
+                    segments.find(
+                      l =>
+                        l.flightId === f.id &&
+                        ["confirmed", "pending"].includes(l.status)
+                    )?.seatsReserved
+                  )
+                : booking.seatsReserved) &&
               ["scheduled", "delayed"].includes(f.status) &&
               remaining > 3600000 &&
               remaining <= 48 * 3600000,
@@ -421,11 +448,16 @@ export const bookingsRouter = router({
               const seat = seats.find(
                 s => s.flightId === f.id && s.passengerId === p.id
               );
+              const checkedIn =
+                seat?.status === "checked_in" && Boolean(seat.checkInNonce);
+              const state = operationalStates.find(
+                s => s.flightId === f.id && s.passengerId === p.id
+              );
               return {
                 passengerId: p.id,
                 seatNumber: seat?.seatNumber ?? null,
-                checkedIn:
-                  seat?.status === "checked_in" && Boolean(seat.checkInNonce),
+                checkedIn,
+                departureState: departureState(state, checkedIn),
               };
             }),
           },
@@ -441,7 +473,7 @@ export const bookingsRouter = router({
         tags: ["Bookings"],
         summary: "Check-in for a flight",
         description:
-          "Perform online check-in for a booking. Allows seat selection for all passengers. Check-in is typically available 24-48 hours before departure. Booking must be paid to check-in.",
+          "Check in selected passengers on a paid booking from 48 hours until 1 hour before departure.",
         protect: true,
       },
     })
@@ -461,7 +493,7 @@ export const bookingsRouter = router({
           )
           .min(1)
           .max(600)
-          .describe("Seat assignments for each passenger"),
+          .describe("Seat assignments for the selected passengers"),
       })
     )
     .output(z.object({ success: z.boolean() }))
@@ -491,7 +523,6 @@ export const bookingsRouter = router({
         bookingId: input.bookingId,
         flightId: input.flightId,
         assignments: input.seatAssignments,
-        requireAllPassengers: true,
         owner: { userId: ctx.user.id, tenantId: ctx.tenantId ?? null },
       });
 

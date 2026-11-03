@@ -38,4 +38,44 @@ describe("Resolution 753 departure inventory", () => {
       { tagNumber: "0065000001", stage: "loading", count: 2 },
     ]);
   });
+
+  it("keeps a refunded physical registration unexpected even without a device scan", () => {
+    const result = reconcileBaggageCloseout(
+      9,
+      [expected[0]],
+      [
+        { baggageId: 1, flightId: 9, stage: "acceptance" },
+        { baggageId: 1, flightId: 9, stage: "loading" },
+      ],
+      [{ baggageId: 2, tagNumber: "0065000002" }]
+    );
+    expect(result).toMatchObject({
+      expectedBags: 1,
+      loadedBags: 1,
+      unexpectedBags: 1,
+      readyToClose: false,
+      unresolvedRegistrations: ["0065000002"],
+    });
+  });
+
+  it("does not double-count an unresolved registration that also has custody evidence", () => {
+    const result = reconcileBaggageCloseout(
+      9,
+      expected,
+      [
+        { baggageId: 1, flightId: 9, stage: "acceptance" },
+        { baggageId: 1, flightId: 9, stage: "loading" },
+        { baggageId: 2, flightId: 9, stage: "transfer" },
+        { baggageId: 2, flightId: 9, stage: "loading" },
+      ],
+      [{ baggageId: 2, tagNumber: "0065000002" }]
+    );
+    expect(result).toMatchObject({
+      expectedBags: 1,
+      loadedBags: 1,
+      unexpectedBags: 1,
+      readyToClose: false,
+      unresolvedRegistrations: ["0065000002"],
+    });
+  });
 });

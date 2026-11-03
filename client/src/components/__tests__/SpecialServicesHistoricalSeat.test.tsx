@@ -11,6 +11,7 @@ vi.mock("react-i18next", () => ({
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    bookings: { getDepartureState: { useQuery: () => ({ data: [] }) } },
     specialServices: {
       getAvailableServices: {
         useQuery: () => ({
@@ -43,6 +44,7 @@ it("keeps the historical record visible without offering EXST or promising a sea
   const history = screen.getByRole("button", { name: /Extra Legroom/ });
   fireEvent.click(history);
   expect(screen.getByText(en.specialServices.legacyExst)).toBeVisible();
+  expect(screen.getByText(en.specialServices.unverifiedSector)).toBeVisible();
   const catalog = screen.getByText(
     en.specialServices.availableTypes
   ).parentElement!;

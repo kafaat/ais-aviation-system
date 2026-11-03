@@ -84,6 +84,11 @@ export function registerProviderCheckoutTests() {
           ]);
         }
         await submit.click();
+        await expect(page).toHaveURL(/\/checkout\/\d+/);
+        const reviewUrl = new URL(page.url()).pathname;
+        await page
+          .getByRole("button", { name: "Continue payment", exact: true })
+          .click();
         if (outcome === "redirect") {
           await expect(page).toHaveURL(providerUrl);
           await expect(
@@ -91,16 +96,14 @@ export function registerProviderCheckoutTests() {
           ).toBeVisible();
         } else {
           await expect(
-            page.locator("[data-sonner-toast]").filter({
+            page.getByRole("alert").filter({
               hasText:
                 outcome === "failure"
                   ? "Synthetic provider unavailable"
-                  : "An error occurred",
+                  : "The payment page is not available yet",
             })
           ).toBeVisible();
-          await expect(page).toHaveURL(
-            new RegExp(`/booking/${flightId}(?:\\?|$)`)
-          );
+          await expect(page).toHaveURL(url => url.pathname === reviewUrl);
         }
         expect(received).toEqual({
           bookingId: expect.any(Number),

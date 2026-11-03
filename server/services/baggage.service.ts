@@ -1,15 +1,12 @@
 import { TRPCError } from "@trpc/server";
-import { randomInt } from "node:crypto";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   baggageItems,
   baggageTracking,
-  bookings,
   passengers,
   type BaggageItem,
   type BaggageTracking,
-  type InsertBaggageItem,
   type InsertBaggageTracking,
 } from "../../drizzle/schema";
 
@@ -63,142 +60,20 @@ export const VALID_STATUS_TRANSITIONS: Record<BaggageStatus, BaggageStatus[]> =
     damaged: ["claimed"],
   };
 
-/**
- * Generate a ten-digit baggage license plate shaped for Resolution 740/RP1745.
- * The three-digit airline numeric code is an externally assigned value, so
- * production fails closed until the operator supplies it.
- */
-export function generateBaggageTag(airlineNumericCode?: string): string {
-  const code =
-    airlineNumericCode ??
-    process.env.BAGGAGE_AIRLINE_NUMERIC_CODE ??
-    (process.env.NODE_ENV === "production" ? undefined : "000");
-  if (!code || !/^\d{3}$/.test(code))
-    throw new Error(
-      "BAGGAGE_AIRLINE_NUMERIC_CODE must be the operator's assigned three-digit code"
-    );
-  return `0${code}${String(randomInt(0, 1_000_000)).padStart(6, "0")}`;
-}
-
-export const isBaggageLicensePlate = (value: string) => /^\d{10}$/.test(value);
-
-/**
- * Register new baggage for a passenger
- */
-export async function registerBaggage(data: {
-  bookingId: number;
-  passengerId: number;
-  weight: number;
-  description?: string;
-  specialHandling?: string;
-}): Promise<BaggageItem> {
-  const db = await getDb();
-  if (!db)
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Database not available",
-    });
-
-  // Validate booking exists
-  const booking = await db
-    .select()
-    .from(bookings)
-    .where(eq(bookings.id, data.bookingId))
-    .limit(1);
-
-  if (booking.length === 0) {
-    throw new TRPCError({ code: "NOT_FOUND", message: "Booking not found" });
-  }
-
-  // Validate passenger belongs to booking
-  const passenger = await db
-    .select()
-    .from(passengers)
-    .where(
-      and(
-        eq(passengers.id, data.passengerId),
-        eq(passengers.bookingId, data.bookingId)
-      )
-    )
-    .limit(1);
-
-  if (passenger.length === 0) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Passenger not found or does not belong to this booking",
-    });
-  }
-
-  // Validate weight (max 32kg for regular, warn if over 23kg)
-  if (data.weight <= 0) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Weight must be greater than 0",
-    });
-  }
-
-  if (data.weight > 32) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Baggage weight exceeds maximum limit of 32kg",
-    });
-  }
-
-  // Generate unique tag number
-  let tagNumber = generateBaggageTag();
-  let attempts = 0;
-  const maxAttempts = 10;
-
-  // Ensure tag is unique
-  while (attempts < maxAttempts) {
-    const existing = await db
-      .select()
-      .from(baggageItems)
-      .where(eq(baggageItems.tagNumber, tagNumber))
-      .limit(1);
-
-    if (existing.length === 0) break;
-    tagNumber = generateBaggageTag();
-    attempts++;
-  }
-
-  if (attempts >= maxAttempts) {
-    throw new TRPCError({
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Failed to generate unique baggage tag",
-    });
-  }
-
-  // Create baggage item
-  const baggageData: InsertBaggageItem = {
-    bookingId: data.bookingId,
-    passengerId: data.passengerId,
-    tagNumber,
-    weight: String(data.weight),
-    status: "checked_in",
-    description: data.description || null,
-    specialHandling: data.specialHandling || null,
-  };
-
-  const [result] = await db.insert(baggageItems).values(baggageData);
-  const insertId = Number((result as { insertId: number }).insertId);
-
-  // Create initial tracking record
-  await db.insert(baggageTracking).values({
-    baggageId: insertId,
-    location: "Check-in Counter",
-    status: "checked_in",
-  });
-
-  // Return the created baggage item
-  const [created] = await db
-    .select()
-    .from(baggageItems)
-    .where(eq(baggageItems.id, insertId))
-    .limit(1);
-
-  return created;
-}
+export {
+  generateBaggageTag,
+  isBaggageLicensePlate,
+} from "./baggage-license-plate";
+export {
+  registerBaggage,
+  getBaggageRegistrationSummary,
+  baggageRegistrationInput,
+  baggageRegistrationScopeInput,
+} from "./baggage-registration.service";
+export type {
+  BaggageRegistrationActor,
+  BaggageRegistrationInput,
+} from "./baggage-registration.service";
 
 /**
  * Update baggage status and location
@@ -348,6 +223,8 @@ export async function getBookingBaggage(
       id: baggageItems.id,
       bookingId: baggageItems.bookingId,
       passengerId: baggageItems.passengerId,
+      flightId: baggageItems.flightId,
+      segmentId: baggageItems.segmentId,
       tagNumber: baggageItems.tagNumber,
       weight: baggageItems.weight,
       status: baggageItems.status,
@@ -370,6 +247,8 @@ export async function getBookingBaggage(
     id: item.id,
     bookingId: item.bookingId,
     passengerId: item.passengerId,
+    flightId: item.flightId,
+    segmentId: item.segmentId,
     tagNumber: item.tagNumber,
     weight: item.weight,
     status: item.status,
@@ -693,6 +572,8 @@ export async function getAllBaggage(filters?: {
       id: baggageItems.id,
       bookingId: baggageItems.bookingId,
       passengerId: baggageItems.passengerId,
+      flightId: baggageItems.flightId,
+      segmentId: baggageItems.segmentId,
       tagNumber: baggageItems.tagNumber,
       weight: baggageItems.weight,
       status: baggageItems.status,
@@ -727,6 +608,8 @@ export async function getAllBaggage(filters?: {
     id: item.id,
     bookingId: item.bookingId,
     passengerId: item.passengerId,
+    flightId: item.flightId,
+    segmentId: item.segmentId,
     tagNumber: item.tagNumber,
     weight: item.weight,
     status: item.status,

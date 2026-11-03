@@ -2597,6 +2597,11 @@ export const specialServices = mysqlTable(
     bookingId: int("bookingId").notNull(),
     passengerId: int("passengerId").notNull(),
 
+    // Original flight stays on the request if a sector is later exchanged.
+    // Pre-scope requests have neither identifier and require reconciliation.
+    flightId: int("flightId"),
+    bookingSegmentId: int("bookingSegmentId"),
+
     // Service identification
     serviceType: mysqlEnum("serviceType", [
       "meal",
@@ -2854,6 +2859,10 @@ export const baggageItems = mysqlTable(
     id: int("id").autoincrement().primaryKey(),
     bookingId: int("bookingId").notNull(),
     passengerId: int("passengerId").notNull(),
+    // New physical registrations carry an exact sector. Legacy rows remain
+    // nullable and require conservative attribution or operator review.
+    flightId: int("flightId"),
+    segmentId: int("segmentId"),
     tagNumber: varchar("tagNumber", { length: 20 }).notNull().unique(), // Unique baggage tag (e.g., "AIS123456")
     weight: decimal("weight", { precision: 5, scale: 2 }).notNull(), // Weight in kg
     status: mysqlEnum("status", [
@@ -2880,6 +2889,10 @@ export const baggageItems = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   table => ({
+    flightHistoryIdx: index("baggage_items_flight_id_row_idx").on(
+      table.flightId,
+      table.id
+    ),
     bookingIdIdx: index("baggage_items_booking_id_idx").on(table.bookingId),
     passengerIdIdx: index("baggage_items_passenger_id_idx").on(
       table.passengerId
@@ -2890,6 +2903,11 @@ export const baggageItems = mysqlTable(
     bookingPassengerIdx: index("baggage_items_booking_passenger_idx").on(
       table.bookingId,
       table.passengerId
+    ),
+    passengerSegmentIdx: index("baggage_items_passenger_segment_idx").on(
+      table.bookingId,
+      table.passengerId,
+      table.segmentId
     ),
     // Index for lost baggage queries
     lostStatusIdx: index("baggage_items_lost_status_idx").on(
@@ -6840,6 +6858,84 @@ export const supplierFinanceEvents = mysqlTable(
     invoice: index("supplier_finance_invoice").on(
       t.profileId,
       t.invoiceRef,
+      t.id
+    ),
+  })
+);
+
+/** Local departure-control decisions; no airline/airport clearance is implied. */
+export const dcsFlightOperations = mysqlTable(
+  "dcs_flight_operations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    flightId: int("flightId").notNull(),
+    tenantId: int("tenantId"),
+    checkInState: mysqlEnum("checkInState", ["open", "closed"]).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({ flight: uniqueIndex("dcs_flight_operations_flight").on(t.flightId) })
+);
+
+/** Boarding denial is independent of attendance, so offload cannot erase it. */
+export const dcsPassengerStates = mysqlTable(
+  "dcs_passenger_states",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    passengerId: int("passengerId").notNull(),
+    flightId: int("flightId").notNull(),
+    state: mysqlEnum("state", [
+      "not_checked_in",
+      "checked_in",
+      "boarded",
+      "offloaded",
+    ]).notNull(),
+    boardingDenied: boolean("boardingDenied").default(false).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => ({
+    passengerFlight: uniqueIndex("dcs_passenger_flight").on(
+      t.bookingId,
+      t.passengerId,
+      t.flightId
+    ),
+    flight: index("dcs_passenger_states_flight").on(t.flightId),
+  })
+);
+
+/** Append-only command history, committed atomically with state and receipt. */
+export const dcsOperationEvents = mysqlTable(
+  "dcs_operation_events",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    flightId: int("flightId").notNull(),
+    bookingId: int("bookingId"),
+    passengerId: int("passengerId"),
+    action: varchar("action", { length: 32 }).notNull(),
+    fromState: varchar("fromState", { length: 32 }).notNull(),
+    toState: varchar("toState", { length: 32 }).notNull(),
+    actorId: int("actorId"),
+    actorRole: varchar("actorRole", { length: 32 }).notNull(),
+    reason: varchar("reason", { length: 500 }).notNull(),
+    idempotencyKey: varchar("idempotencyKey", { length: 255 }),
+    requestHash: varchar("requestHash", { length: 64 }).notNull(),
+    details: json("details").$type<{
+      seatNumber?: string | null;
+      attendanceBefore?: string;
+      attendanceAfter?: string;
+      deniedBefore?: boolean;
+      deniedAfter?: boolean;
+      scanFormat?: string;
+    }>(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  t => ({
+    flightHistory: index("dcs_operation_events_flight").on(t.flightId, t.id),
+    passengerHistory: index("dcs_operation_events_passenger").on(
+      t.bookingId,
+      t.passengerId,
+      t.flightId,
       t.id
     ),
   })

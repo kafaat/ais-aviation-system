@@ -1,4 +1,10 @@
-import { useState, useCallback } from "react";
+import { BrandIdentity } from "@/components/BrandIdentity";
+import {
+  readSearchPreferences as searchPreferences,
+  rememberDisplayPreferences,
+} from "@/lib/ibe-display-context";
+import { useRawSearch } from "@/lib/useRawSearch";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -26,6 +32,12 @@ import { SearchHistory } from "@/components/SearchHistory";
 import { SmartSuggestions } from "@/components/SmartSuggestions";
 import { MultiCitySearch, Segment } from "@/components/MultiCitySearch";
 import { Link, useLocation } from "wouter";
+import { SearchPreferences } from "@/components/SearchPreferences";
+import {
+  isCivilDay,
+  preferenceParams,
+  validTravelerCounts,
+} from "@shared/ibe-search";
 import {
   Plane,
   MapPin,
@@ -61,12 +73,27 @@ export default function Home() {
   const { user } = useAuth();
   const { reducedMotion } = useAccessibility();
 
-  const [originId, setOriginId] = useState<string>("");
-  const [destinationId, setDestinationId] = useState<string>("");
-  const [departureDate, setDepartureDate] = useState<Date>();
-  const [searchType, setSearchType] = useState<"oneWay" | "multiCity">(
-    "oneWay"
+  const initialSearch = new URLSearchParams(useRawSearch());
+  const [preferences, setPreferences] = useState(() =>
+    searchPreferences(initialSearch.toString())
   );
+  useEffect(() => {
+    rememberDisplayPreferences(preferences);
+  }, [preferences]);
+  const [originId, setOriginId] = useState<string>(
+    initialSearch.get("origin") ?? ""
+  );
+  const [destinationId, setDestinationId] = useState<string>(
+    initialSearch.get("destination") ?? ""
+  );
+  const [departureDate, setDepartureDate] = useState<Date | undefined>(() => {
+    const value = initialSearch.get("date") ?? "";
+    return isCivilDay(value) ? new Date(value + "T00:00:00") : undefined;
+  });
+  const [returnDate, setReturnDate] = useState<Date>();
+  const [searchType, setSearchType] = useState<
+    "oneWay" | "roundTrip" | "multiCity"
+  >("oneWay");
   const [multiCitySegments, setMultiCitySegments] = useState<Segment[]>([
     { originId: "", destinationId: "", departureDate: undefined },
     { originId: "", destinationId: "", departureDate: undefined },
@@ -75,32 +102,66 @@ export default function Home() {
   const { data: airports } = trpc.reference.airports.useQuery();
 
   const handleSearch = () => {
-    if (originId && destinationId && departureDate) {
-      const params = new URLSearchParams({
-        origin: originId,
-        destination: destinationId,
-        // The calendar day the user chose, not its local-midnight instant.
-        date: format(departureDate, "yyyy-MM-dd"),
-      });
+    if (
+      !originId ||
+      !destinationId ||
+      originId === destinationId ||
+      !departureDate ||
+      !validTravelerCounts(preferences)
+    )
+      return;
+    const params = preferenceParams(preferences);
+    if (searchType === "roundTrip") {
+      if (!returnDate || returnDate < departureDate) return;
+      params.set("trip", "roundTrip");
+      params.set(
+        "segments",
+        JSON.stringify([
+          {
+            originId,
+            destinationId,
+            departureDate: format(departureDate, "yyyy-MM-dd"),
+          },
+          {
+            originId: destinationId,
+            destinationId: originId,
+            departureDate: format(returnDate, "yyyy-MM-dd"),
+          },
+        ])
+      );
+      setLocation(`/multi-city?${params.toString()}`);
+    } else {
+      params.set("origin", originId);
+      params.set("destination", destinationId);
+      params.set("date", format(departureDate, "yyyy-MM-dd"));
       setLocation(`/search?${params.toString()}`);
     }
   };
 
   const handleMultiCitySearch = () => {
-    const validSegments = multiCitySegments.filter(
-      s => s.originId && s.destinationId && s.departureDate
+    if (
+      !validTravelerCounts(preferences) ||
+      multiCitySegments.length < 2 ||
+      multiCitySegments.some(
+        s =>
+          !s.originId ||
+          !s.destinationId ||
+          s.originId === s.destinationId ||
+          !s.departureDate
+      )
+    )
+      return;
+    const params = preferenceParams(preferences);
+    params.set(
+      "segments",
+      JSON.stringify(
+        multiCitySegments.map(s => ({
+          originId: s.originId,
+          destinationId: s.destinationId,
+          departureDate: format(s.departureDate as Date, "yyyy-MM-dd"),
+        }))
+      )
     );
-    if (validSegments.length < 2) return;
-
-    const segmentsData = validSegments.map(s => ({
-      originId: s.originId,
-      destinationId: s.destinationId,
-      departureDate: format(s.departureDate as Date, "yyyy-MM-dd"),
-    }));
-
-    const params = new URLSearchParams({
-      segments: encodeURIComponent(JSON.stringify(segmentsData)),
-    });
     setLocation(`/multi-city?${params.toString()}`);
   };
 
@@ -123,7 +184,15 @@ export default function Home() {
       if (destAirport) {
         setDestinationId(destAirport.id.toString());
       }
-      setDepartureDate(new Date(search.departureDate));
+      // Search stores a civil day; parsing it as UTC shifts it backwards west of UTC.
+      // Keep the older ISO timestamp entries readable as well.
+      setDepartureDate(
+        new Date(
+          isCivilDay(search.departureDate)
+            ? search.departureDate + "T00:00:00"
+            : search.departureDate
+        )
+      );
     },
     [airports]
   );
@@ -154,21 +223,10 @@ export default function Home() {
       >
         <div className="container py-4">
           <div className="flex items-center justify-between">
-            <Link href="/">
-              <div className="flex items-center gap-3 cursor-pointer group">
-                <motion.div
-                  whileHover={{ rotate: 360 }}
-                  transition={{ duration: 0.6 }}
-                >
-                  <Plane className="h-8 w-8 text-primary" />
-                </motion.div>
-                <div>
-                  <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-                    {t("common.appName")}
-                  </h1>
-                  <p className="text-xs text-muted-foreground">AIS</p>
-                </div>
-              </div>
+            <Link href="/" className="flex items-center gap-3">
+              <h1 className="text-xl font-bold text-primary">
+                <BrandIdentity />
+              </h1>
             </Link>
 
             <nav
@@ -179,6 +237,11 @@ export default function Home() {
               <Link href="/">
                 <a className="text-sm font-medium hover:text-primary transition-colors">
                   {t("nav.home")}
+                </a>
+              </Link>
+              <Link href="/manage-booking">
+                <a className="text-sm font-medium hover:text-primary">
+                  {t("ibe.manageBooking")}
                 </a>
               </Link>
               <Link href="/my-bookings">
@@ -281,20 +344,27 @@ export default function Home() {
               transition={{ delay: 0.4, duration: 0.8 }}
             >
               <Card className="p-8 max-w-4xl mx-auto shadow-2xl border-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl">
+                <SearchPreferences
+                  value={preferences}
+                  onChange={setPreferences}
+                />
                 <Tabs
                   value={searchType}
                   onValueChange={v =>
-                    setSearchType(v as "oneWay" | "multiCity")
+                    setSearchType(v as "oneWay" | "roundTrip" | "multiCity")
                   }
                   className="w-full"
                 >
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsList className="grid w-full grid-cols-3 mb-6">
                     <TabsTrigger
                       value="oneWay"
                       className="flex items-center gap-2"
                     >
                       <Plane className="h-4 w-4" />
                       {t("multiCity.oneWay")}
+                    </TabsTrigger>
+                    <TabsTrigger value="roundTrip">
+                      {t("ibe.roundTrip")}
                     </TabsTrigger>
                     <TabsTrigger
                       value="multiCity"
@@ -306,7 +376,9 @@ export default function Home() {
                   </TabsList>
 
                   {/* One-Way Search */}
-                  <TabsContent value="oneWay">
+                  <TabsContent
+                    value={searchType === "roundTrip" ? "roundTrip" : "oneWay"}
+                  >
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div className="space-y-2">
                         <label
@@ -414,12 +486,56 @@ export default function Home() {
                               mode="single"
                               selected={departureDate}
                               onSelect={setDepartureDate}
-                              disabled={date => date < new Date()}
+                              disabled={date =>
+                                format(date, "yyyy-MM-dd") <
+                                format(new Date(), "yyyy-MM-dd")
+                              }
                               initialFocus
                             />
                           </PopoverContent>
                         </Popover>
                       </div>
+                      {searchType === "roundTrip" && (
+                        <div className="space-y-2">
+                          <label
+                            id="return-date-label"
+                            className="text-sm font-medium"
+                          >
+                            {t("ibe.returnDate")}
+                          </label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className="w-full h-12 justify-start font-normal"
+                                aria-labelledby="return-date-label"
+                                data-testid="home-return-date-trigger"
+                              >
+                                {returnDate
+                                  ? format(returnDate, "PPP", {
+                                      locale: currentLocale,
+                                    })
+                                  : t("home.search.selectDate")}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={returnDate}
+                                onSelect={setReturnDate}
+                                disabled={date =>
+                                  format(date, "yyyy-MM-dd") <
+                                  format(
+                                    departureDate ?? new Date(),
+                                    "yyyy-MM-dd"
+                                  )
+                                }
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      )}
                     </div>
 
                     <motion.div
@@ -431,7 +547,15 @@ export default function Home() {
                         onClick={handleSearch}
                         size="lg"
                         className="flex-1 h-14 text-lg font-semibold shadow-lg"
-                        disabled={!originId || !destinationId || !departureDate}
+                        disabled={
+                          !originId ||
+                          !destinationId ||
+                          originId === destinationId ||
+                          !departureDate ||
+                          !validTravelerCounts(preferences) ||
+                          (searchType === "roundTrip" &&
+                            (!returnDate || returnDate < departureDate))
+                        }
                         data-testid="home-search-button"
                       >
                         {t("home.search.searchFlights")}

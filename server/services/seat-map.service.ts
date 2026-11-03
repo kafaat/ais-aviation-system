@@ -8,6 +8,12 @@ import {
   refreshBookingCheckIn,
 } from "./departure-control.service";
 import { issueBoardingPass } from "./boarding-pass.service";
+import {
+  assertDcsPassengerMutable,
+  writeDcsPassengerState,
+} from "./dcs-state.service";
+import { assertPassengerBaggageCanOffload } from "./baggage-custody.service";
+import { calculateRequestHash } from "./idempotency-v2.service";
 /**
  * Seat Map & Check-in Service
  *
@@ -27,6 +33,7 @@ import {
   airports,
   gateAssignments,
   airportGates,
+  dcsOperationEvents,
   type SeatMap,
   type InsertSeatMap,
   type SeatInventoryItem,
@@ -785,6 +792,7 @@ export async function selectSeat(
     const c = await lockDepartureContext(db, bookingId, flightId);
     const { booking } = c;
     await assertSeatSelectionContext(db, c);
+    await assertDcsPassengerMutable(db, { bookingId, passengerId, flightId });
     // One flight lock serializes assignments and exchanges without target/old-seat deadlocks.
     await db
       .select({ id: flights.id })
@@ -1001,6 +1009,7 @@ export async function changeSeat(
     const c = await lockDepartureContext(db, bookingId, flightId);
     const { booking } = c;
     await assertSeatSelectionContext(db, c);
+    await assertDcsPassengerMutable(db, { bookingId, passengerId, flightId });
     await db
       .select({ id: flights.id })
       .from(flights)
@@ -1307,11 +1316,23 @@ export async function checkIn(
 export async function undoCheckIn(
   flightId: number,
   bookingId: number,
-  passengerId: number
+  passengerId: number,
+  actor?: { userId: number; role: string; tenantId: number | null }
 ): Promise<{ success: true; seatNumber: string }> {
   const database = await requireDb();
   return database.transaction(async db => {
-    await lockDepartureContext(db, bookingId, flightId);
+    const c = await lockDepartureContext(db, bookingId, flightId);
+    if (actor?.tenantId != null && c.flight.tenantId !== actor.tenantId)
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Flight is outside the operator's tenant",
+      });
+    await assertDcsPassengerMutable(db, { bookingId, passengerId, flightId });
+    await assertPassengerBaggageCanOffload(db, {
+      bookingId,
+      passengerId,
+      flightId,
+    });
     const [seat] = await db
       .select()
       .from(seatInventory)
@@ -1342,6 +1363,38 @@ export async function undoCheckIn(
       .where(eq(seatInventory.id, seat.id));
     await setCouponCheckIn(db, bookingId, passengerId, flightId, false);
     await refreshBookingCheckIn(db, bookingId);
+    await writeDcsPassengerState(
+      db,
+      { bookingId, passengerId, flightId },
+      "offloaded"
+    );
+    await db.insert(dcsOperationEvents).values({
+      tenantId: c.flight.tenantId,
+      flightId,
+      bookingId,
+      passengerId,
+      action: "undo_check_in",
+      fromState: "checked_in",
+      toState: "offloaded",
+      actorId: actor?.userId ?? null,
+      actorRole: actor?.role ?? "system",
+      reason: "Legacy undo check-in command",
+      idempotencyKey: null,
+      requestHash: calculateRequestHash({
+        flightId,
+        bookingId,
+        passengerId,
+        actorId: actor?.userId ?? null,
+      }),
+      details: {
+        seatNumber: seat.seatNumber,
+        attendanceBefore: "checked_in",
+        attendanceAfter: "offloaded",
+        deniedBefore: false,
+        deniedAfter: false,
+      },
+      createdAt: new Date(),
+    });
     return { success: true as const, seatNumber: seat.seatNumber };
   });
 }

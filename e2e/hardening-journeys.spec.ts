@@ -1,16 +1,22 @@
+import { registerIbeJourneyTests } from "./fixtures/ibe-journeys";
+import { registerAgentPortalTests } from "./fixtures/agent-portal";
 import { registerBaggageConsistencyTest } from "./fixtures/baggage-consistency";
 import { registerCodeshareTests } from "./fixtures/codeshare";
 import { passengerRightsSource } from "../shared/passenger-policy";
 import { registerProviderCheckoutTests } from "./fixtures/provider-checkout";
+import { registerFamilyCheckInTests } from "./fixtures/family-check-in";
+import { registerDcsCounterTests } from "./fixtures/dcs-counter";
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
 import type { Page } from "@playwright/test";
 import {
   fixtureFlight,
   ownedBooking,
+  reportBooking,
   rpc,
   sqlRows,
 } from "./fixtures/hardening";
+import { testUsers } from "./fixtures/test-data";
 import type { RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -18,8 +24,12 @@ import { promisify } from "node:util";
 import { readFile } from "node:fs/promises";
 
 registerProviderCheckoutTests();
+registerIbeJourneyTests();
+registerAgentPortalTests();
 registerBaggageConsistencyTest();
 registerCodeshareTests();
+registerDcsCounterTests();
+registerFamilyCheckInTests();
 
 async function loginAsAdmin(page: Page) {
   await useBrowserSession(page, "admin");
@@ -29,6 +39,116 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
   });
+  test("wheelchair assistance selected in My Bookings stays on its requested sector", async ({
+    page,
+  }) => {
+    await useBrowserSession(page, "regular");
+    const client = rpc(page);
+    const outboundId = await fixtureFlight();
+    const returnId = await fixtureFlight();
+    const outbound = await client.flights.getById.query({ id: outboundId });
+    if (!outbound) throw new Error("Missing outbound flight");
+    await sqlRows<RowDataPacket>(
+      "UPDATE flights SET originId=?,destinationId=?,departureTime=DATE_ADD(departureTime,INTERVAL 1 DAY), arrivalTime=DATE_ADD(arrivalTime,INTERVAL 1 DAY) WHERE id=?",
+      [outbound.destination.id, outbound.origin.id, returnId]
+    );
+    const inbound = await client.flights.getById.query({ id: returnId });
+    if (!inbound) throw new Error("Missing return flight");
+    const journey = await client.multiCity.create.mutate({
+      segments: [outbound, inbound].map(f => ({
+        flightId: f.id,
+        departureDate: f.departureTime,
+      })),
+      cabinClass: "economy",
+      passengers: [{ firstName: "Mona", lastName: "Sector", type: "adult" }],
+      sessionId: randomUUID(),
+    });
+    const [pax] = await client.bookings.getPassengers.query({
+      bookingId: journey.bookingId,
+    });
+    const input = {
+      bookingId: journey.bookingId,
+      passengerId: pax.id,
+      serviceType: "wheelchair" as const,
+      serviceCode: "WCHR",
+    };
+    await expect(
+      client.specialServices.requestService.mutate(input)
+    ).rejects.toThrow(/unique active flight sector/);
+    await page.goto("/my-bookings");
+    const card = page
+      .locator('[data-slot="card"]')
+      .filter({ hasText: journey.bookingReference });
+    await card
+      .getByRole("button", { name: "Special Services", exact: true })
+      .click();
+    await card
+      .getByRole("button", { name: "Add Service", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByRole("combobox", { name: "Flight sector" })
+      .selectOption(String(returnId));
+    await dialog
+      .getByRole("combobox", { name: "Passenger", exact: true })
+      .click();
+    await page.getByRole("option", { name: /Mona Sector/ }).click();
+    await dialog
+      .getByRole("combobox", { name: "Service Type", exact: true })
+      .click();
+    await page.getByRole("option", { name: "Wheelchair Assistance" }).click();
+    await dialog
+      .getByRole("combobox", { name: "Service", exact: true })
+      .click();
+    await page.getByRole("option", { name: /Wheelchair - Ramp/ }).click();
+    await dialog.getByRole("button", { name: "Submit Request" }).click();
+    await expect(dialog).toHaveCount(0);
+    await card.getByRole("button", { name: /Wheelchair Assistance/ }).click();
+    await expect(card).toContainText(
+      "Requested flight " + inbound.flightNumber
+    );
+    const services = await client.specialServices.getBookingServices.query({
+      bookingId: journey.bookingId,
+    });
+    expect(services).toHaveLength(1);
+    const [record] = await sqlRows<RowDataPacket>(
+      "SELECT s.flightId,s.passengerId,bs.flightId AS segmentFlight FROM special_services s JOIN booking_segments bs ON bs.id=s.bookingSegmentId AND bs.bookingId=s.bookingId WHERE s.id=?",
+      [services[0].id]
+    );
+    expect(record).toMatchObject({
+      flightId: returnId,
+      segmentFlight: returnId,
+      passengerId: pax.id,
+    });
+    await expect(
+      client.specialServices.requestService.mutate({
+        ...input,
+        flightId: returnId,
+      })
+    ).rejects.toThrow(/already exists/);
+    const separate = await client.specialServices.requestService.mutate({
+      ...input,
+      flightId: outboundId,
+    });
+    expect(separate.service.flightId).toBe(outboundId);
+    expect(separate.service.bookingSegmentId).not.toBe(
+      services[0].bookingSegmentId
+    );
+    await client.specialServices.cancelService.mutate({
+      serviceId: separate.service.id,
+    });
+    await loginAsAdmin(page);
+    const operator = rpc(page);
+    const sectorNeedsScore = async (flightId: number) => {
+      const rank = await operator.passengerPriority.rankPassengers.query({
+        flightId,
+      });
+      return rank.find(row => row.passengerId === pax.id)?.specialNeedsScore;
+    };
+    expect(await sectorNeedsScore(returnId)).toBeGreaterThan(0);
+    expect(await sectorNeedsScore(outboundId)).toBe(0);
+  });
+
   test("payment history shows an outage and recovers through the real reader", async ({
     page,
   }) => {
@@ -212,7 +332,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
       );
     }
     await page.getByRole("button", { name: "Book Now", exact: true }).click();
-    await expect(page).toHaveURL(/\/my-bookings/);
+    await expect(page).toHaveURL(/\/checkout\/\d+/);
     const user = await client.auth.me.query();
     if (!user) throw new Error("Authenticated passenger missing");
     const [booking] = await sqlRows<RowDataPacket>(
@@ -255,6 +375,12 @@ test.describe("Funded journeys and truthful operational reads", () => {
         }),
       ])
     );
+    // Creation stops at invoice review; servicing belongs to the owned booking card.
+    await page
+      .getByRole("main")
+      .getByRole("link", { name: "My bookings", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/my-bookings$/);
     const card = page.locator('[data-slot="card"]').filter({
       hasText: booking.bookingReference,
     });
@@ -447,7 +573,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
     await submit.click();
     await expect(page.getByRole("alert")).toBeVisible();
     await submit.click();
-    await expect(page).toHaveURL(/\/my-bookings/);
+    await expect(page).toHaveURL(/\/checkout\/\d+/);
     expect(bookingAttempts).toBe(2);
     const bookingsAfterRetry = await sqlRows<RowDataPacket>(
       "SELECT id AS bookingId, bookingReference, totalAmount FROM bookings WHERE userId=? AND flightId=?",
@@ -688,13 +814,29 @@ test.describe("Funded journeys and truthful operational reads", () => {
     );
     const flight = await rpc(page).flights.getById.query({ id: flightId });
     if (!flight) throw new Error("Fixture flight missing");
-    await page.goto(
-      `/search?origin=${flight.origin.id}&destination=${flight.destination.id}&date=${flight.departureTime.toISOString().slice(0, 10)}`
-    );
-    const familyLink = page.locator(
-      `a[href="/booking/${flightId}?class=economy&fareClassCode=Q"]`
-    );
+    const originalSearch = new URLSearchParams({
+      origin: String(flight.origin.id),
+      destination: String(flight.destination.id),
+      date: flight.departureTime.toISOString().slice(0, 10),
+    });
+    await page.goto(`/search?${originalSearch}`);
+    const familyLink = page
+      .getByTestId("flight-card")
+      .filter({ hasText: flight.flightNumber })
+      .getByRole("link", { name: /Evidence Flex/ });
     await expect(familyLink).toHaveAccessibleName(/Evidence Flex/);
+    const target = new URL(
+      (await familyLink.getAttribute("href")) ?? "",
+      page.url()
+    );
+    expect(target.pathname).toBe(`/booking/${flightId}`);
+    expect(target.searchParams.get("class")).toBe("economy");
+    expect(target.searchParams.get("fareClassCode")).toBe("Q");
+    expect(
+      Object.fromEntries(
+        new URLSearchParams(target.searchParams.get("search") ?? "")
+      )
+    ).toEqual(Object.fromEntries(originalSearch));
     await familyLink.click();
     await expect(page).toHaveURL(
       new RegExp(`/booking/${flightId}.*fareClassCode=Q`)
@@ -885,14 +1027,14 @@ test.describe("Funded journeys and truthful operational reads", () => {
         reason: "Attempt",
         cancelItinerary: true,
       })
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ data: { code: "FORBIDDEN" } });
     await loginAsAdmin(page);
     await expect(
       rpc(page).vouchers.useCredits.mutate({
         bookingId: booking.bookingId,
         amount: booking.totalAmount,
       })
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ data: { code: "NOT_FOUND" } });
     const [row] = await sqlRows<RowDataPacket>(
       "SELECT paymentStatus FROM bookings WHERE id=?",
       [booking.bookingId]
@@ -908,7 +1050,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test("a profile export reaches an authenticated browser download and a different account receives 404", async ({
     page,
   }) => {
-    const { booking } = await ownedBooking(page);
+    const { booking, userId } = await reportBooking(page);
     await page.goto("/profile");
     await page.getByRole("tab", { name: "Security and privacy" }).click();
     await page.getByLabel("File format").selectOption("json");
@@ -944,21 +1086,27 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const filePath = await file.path();
     if (!filePath) throw new Error("Export download missing");
     const document = JSON.parse(await readFile(filePath, "utf8"));
-    expect(document.profile.email).toBe("test.user@example.com");
+    expect(document.profile.email).toBe(testUsers.reporting.email);
     expect(document.bookings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ bookingReference: booking.bookingReference }),
       ])
     );
     await loginAsAdmin(page);
+    const otherAccount = await rpc(page).auth.me.query();
+    expect(otherAccount).toMatchObject({ role: "admin" });
+    expect(otherAccount?.id).not.toBe(userId);
     expect((await page.request.get(downloadUrl)).status()).toBe(404);
   });
   test("demonstrates operational booking values alongside unverified earned revenue", async ({
     page,
   }) => {
-    const { booking } = await ownedBooking(page, true);
+    const { booking, userId } = await reportBooking(page, true);
     await useBrowserSession(page, "admin");
     const client = rpc(page);
+    const administrator = await client.auth.me.query();
+    expect(administrator).toMatchObject({ role: "admin" });
+    expect(administrator?.id).not.toBe(userId);
     const summary = await client.revenueAccounting.getDashboard.query();
     expect(summary.recognizedRevenue).toBeNull();
     expect(summary.deferredRevenue).toBeNull();
@@ -988,12 +1136,15 @@ test.describe("Funded journeys and truthful operational reads", () => {
       route.abort("failed")
     );
     await page.goto("/admin/revenue-accounting");
+    // The error is displayed after the client has exhausted its retry backoff.
     await expect(page.getByRole("alert")).toContainText("unavailable", {
       ignoreCase: true,
+      timeout: 25000,
     });
     await expect(
       page.getByRole("button", { name: "Retry", exact: true })
     ).toBeVisible();
+    await expect(page.getByText(/^0(?:[.,]00)? SAR$/)).toHaveCount(0);
   });
   test("biometric without an accepted adapter reports unavailable, not empty", async ({
     page,
@@ -1007,7 +1158,8 @@ test.describe("Funded journeys and truthful operational reads", () => {
     await page.goto("/admin/biometric");
     await page.getByRole("tab", { name: "Events Log" }).click();
     await expect(page.getByRole("alert")).toContainText(
-      "no verified production adapter configured"
+      "no verified production adapter configured",
+      { timeout: 25000 }
     );
     await expect(
       page.getByRole("button", { name: "Retry", exact: true })

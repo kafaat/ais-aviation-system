@@ -1,7 +1,7 @@
 import { Suspense, lazy, Component, ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch, useRoute, useSearch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { FlightCompareProvider } from "./contexts/FlightCompareContext";
@@ -20,8 +20,12 @@ const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
 const CodeshareFlights = lazy(() => import("./pages/CodeshareFlights"));
 const SearchResults = lazy(() => import("./pages/SearchResults"));
+const EmbedSearch = lazy(() => import("./pages/EmbedSearch"));
 const BookingPage = lazy(() => import("./pages/BookingPage"));
+const CheckoutResume = lazy(() => import("./pages/CheckoutResume"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
+const ManageBooking = lazy(() => import("./pages/ManageBooking"));
+const AgentPortal = lazy(() => import("./pages/AgentPortal"));
 const CheckIn = lazy(() => import("./pages/CheckIn"));
 const Profile = lazy(() => import("./pages/Profile"));
 const LoyaltyDashboard = lazy(() => import("./pages/LoyaltyDashboard"));
@@ -109,6 +113,7 @@ const EmergencyHotelManagement = lazy(
 const PassengerPriority = lazy(() => import("./pages/admin/PassengerPriority"));
 
 const AirlineConsole = lazy(() => import("./pages/AirlineConsole"));
+const DcsDesk = lazy(() => import("./pages/DcsDesk"));
 
 // Corporate pages
 const CorporateDashboard = lazy(
@@ -201,6 +206,20 @@ class RouteErrorBoundary extends Component<
   }
 }
 
+function BookingEntry() {
+  const [, params] = useRoute("/booking/:id");
+  const search = useSearch();
+  // Existing checkout claims retain their original provider request for safe
+  // idempotent replay. Their legacy return URL carries a booking ID, not a flight.
+  if (new URLSearchParams(search).get("canceled") === "true")
+    return (
+      <Redirect
+        to={`/checkout/${encodeURIComponent(params?.id ?? "")}?canceled=true`}
+      />
+    );
+  return <BookingPage />;
+}
+
 function Router() {
   return (
     <RouteErrorBoundary>
@@ -208,6 +227,7 @@ function Router() {
         <Switch>
           {/* User-facing pages */}
           <Route path="/" component={Home} />
+          <Route path="/embed/search" component={EmbedSearch} />
           <Route path="/login">
             <Suspense fallback={<PageLoadingFallback variant="default" />}>
               <Login />
@@ -226,8 +246,21 @@ function Router() {
           </Route>
           <Route path="/booking/:id">
             <Suspense fallback={<PageLoadingFallback variant="form" />}>
-              <BookingPage />
+              <BookingEntry />
             </Suspense>
+          </Route>
+          <Route path="/manage-booking" component={ManageBooking} />
+          <Route path="/checkout/:bookingId">
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="form" />}>
+                <CheckoutResume />
+              </Suspense>
+            </ProtectedRoute>
+          </Route>
+          <Route path="/agent">
+            <ProtectedRoute>
+              <AgentPortal />
+            </ProtectedRoute>
           </Route>
           <Route path="/my-bookings">
             <ProtectedRoute>
@@ -240,6 +273,13 @@ function Router() {
             <Suspense fallback={<PageLoadingFallback variant="form" />}>
               <CheckIn />
             </Suspense>
+          </Route>
+          <Route path="/airline/dcs">
+            <ProtectedRoute>
+              <Suspense fallback={<PageLoadingFallback variant="dashboard" />}>
+                <DcsDesk />
+              </Suspense>
+            </ProtectedRoute>
           </Route>
           <Route path="/airline">
             <ProtectedRoute>

@@ -14,6 +14,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getDb } from "../../db";
 import {
+  airlines,
+  airports,
   bookings,
   payments,
   financialLedger,
@@ -50,10 +52,9 @@ let db: Awaited<ReturnType<typeof getDb>>;
 let testUserId: number;
 let testFlightId: number;
 
-// Test airline and airport IDs for cleanup
-const TEST_AIRLINE_ID = 999901;
-const TEST_ORIGIN_ID = 999902;
-const TEST_DEST_ID = 999903;
+let testAirlineId: number;
+let testOriginId: number;
+let testDestinationId: number;
 
 beforeAll(async () => {
   if (!dbAvailable) return;
@@ -73,27 +74,36 @@ beforeAll(async () => {
   });
   testUserId = Number(userResult.insertId);
 
-  // Create test airline
-  await db.execute(
-    sql`INSERT IGNORE INTO airlines (id, code, name, active) VALUES (${TEST_AIRLINE_ID}, 'CP9', 'Critical Path Airline', 1)`
-  );
+  const [airline] = await db.insert(airlines).values({
+    code: "CP9",
+    name: "Critical Path Airline",
+    active: true,
+  });
+  testAirlineId = airline.insertId;
 
-  // Create test airports
-  await db.execute(
-    sql`INSERT IGNORE INTO airports (id, code, name, city, country) VALUES (${TEST_ORIGIN_ID}, 'CP1', 'Critical Origin', 'City1', 'Saudi Arabia')`
-  );
-  await db.execute(
-    sql`INSERT IGNORE INTO airports (id, code, name, city, country) VALUES (${TEST_DEST_ID}, 'CP2', 'Critical Dest', 'City2', 'Saudi Arabia')`
-  );
+  const [origin] = await db.insert(airports).values({
+    code: "CP1",
+    name: "Critical Origin",
+    city: "City1",
+    country: "Saudi Arabia",
+  });
+  testOriginId = origin.insertId;
+  const [destination] = await db.insert(airports).values({
+    code: "CP2",
+    name: "Critical Dest",
+    city: "City2",
+    country: "Saudi Arabia",
+  });
+  testDestinationId = destination.insertId;
 
   // Create test flight with correct schema
   const tomorrow = new Date(Date.now() + 86400000);
   const arrival = new Date(Date.now() + 90000000);
   const [flightResult] = await db.insert(flights).values({
     flightNumber: `CP${nanoid(4)}`,
-    airlineId: TEST_AIRLINE_ID,
-    originId: TEST_ORIGIN_ID,
-    destinationId: TEST_DEST_ID,
+    airlineId: testAirlineId,
+    originId: testOriginId,
+    destinationId: testDestinationId,
     departureTime: tomorrow,
     arrivalTime: arrival,
     economyPrice: 50000,
@@ -130,11 +140,12 @@ afterAll(async () => {
     if (testUserId) await db.delete(users).where(eq(users.id, testUserId));
     if (testFlightId)
       await db.delete(flights).where(eq(flights.id, testFlightId));
-    // Cleanup test airlines and airports
-    await db.execute(
-      sql`DELETE FROM airports WHERE id IN (${TEST_ORIGIN_ID}, ${TEST_DEST_ID})`
-    );
-    await db.execute(sql`DELETE FROM airlines WHERE id = ${TEST_AIRLINE_ID}`);
+    if (testOriginId)
+      await db.delete(airports).where(eq(airports.id, testOriginId));
+    if (testDestinationId)
+      await db.delete(airports).where(eq(airports.id, testDestinationId));
+    if (testAirlineId)
+      await db.delete(airlines).where(eq(airlines.id, testAirlineId));
   } catch (error) {
     console.error("Cleanup error:", error);
   }

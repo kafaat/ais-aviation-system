@@ -138,7 +138,10 @@ test("multi-city selects named fares per sector and rejects a stale class withou
   await page.reload();
   await enterNames();
   await submit.click();
-  await expect(page).toHaveURL(/\/my-bookings/);
+  await expect(page).toHaveURL(/\/checkout\/\d+(?:\?|$)/);
+  await expect(
+    page.getByRole("heading", { name: "Payment pending", exact: true })
+  ).toBeVisible();
   const sold = await sqlRows<RowDataPacket>(
     "SELECT s.flightId, c.code, l.fareClassId=s.fareClassId AS matchedHold, l.numberOfSeats, b.totalAmount FROM bookings b JOIN booking_segments s ON s.bookingId=b.id JOIN fare_classes c ON c.id=s.fareClassId JOIN inventory_locks l ON l.id=s.inventoryLockId WHERE b.flightId=? ORDER BY s.segmentOrder",
     [outboundId]

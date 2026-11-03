@@ -11,12 +11,16 @@ import { join } from "node:path";
 import { disposableDatabaseUrl } from "../disposable-database";
 import { prepareAnonymousConsent } from "./consent";
 import { login } from "./test-helpers";
+import { rpc } from "./rpc";
 import { testUsers } from "./test-data";
 
-type Account = "regular" | "admin";
+// Four real logins leave the fifth IP attempt for the guest-to-checkout journey.
+// Departure and reporting names select the same scoped customer and session.
+const accounts = ["regular", "reporting", "admin", "ops"] as const;
+type Account = (typeof accounts)[number] | "departurePassenger";
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
-/** Two real UI logins, then isolated contexts reuse their authenticated cookies.
+/** Real UI logins, then isolated contexts reuse their authenticated cookies.
  * This keeps retries within the real IP login quota without disabling it. */
 export async function prepareBrowserSessions(config: FullConfig) {
   disposableDatabaseUrl();
@@ -27,7 +31,7 @@ export async function prepareBrowserSessions(config: FullConfig) {
       config.projects.find(project => project.name === "chromium")?.use
         .launchOptions
     );
-    for (const account of ["regular", "admin"] as const) {
+    for (const account of accounts) {
       const context = await browser.newContext({
         baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
       });
@@ -42,6 +46,19 @@ export async function prepareBrowserSessions(config: FullConfig) {
           testUsers[account].email,
           testUsers[account].password
         );
+        // Use the signed-in account and the same revision guard as the app.
+        const consent = rpc(page).consent;
+        const current = await consent.getMyConsent.query();
+        if (current.needsReconsent) {
+          await consent.updateConsent.mutate({
+            expectedRevision: current.consent?.id ?? null,
+            consentVersion: current.currentVersion,
+            essential: true,
+            analytics: false,
+            marketing: false,
+            preferences: false,
+          });
+        }
         await writeFile(
           join(directory, `${account}.json`),
           JSON.stringify(await context.storageState()),
@@ -66,8 +83,10 @@ export async function useBrowserSession(page: Page, account: Account) {
   disposableDatabaseUrl();
   const directory = process.env.AIS_E2E_SESSION_DIRECTORY;
   if (!directory) throw new Error("Authenticated E2E setup is missing");
+  const sessionAccount =
+    account === "departurePassenger" ? "reporting" : account;
   const state: StorageState = JSON.parse(
-    await readFile(join(directory, `${account}.json`), "utf8")
+    await readFile(join(directory, `${sessionAccount}.json`), "utf8")
   );
   await page.context().clearCookies();
   await page.context().addCookies(state.cookies);

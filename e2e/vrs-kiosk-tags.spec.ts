@@ -6,7 +6,12 @@ import { fixtureFlight, ownedBooking, sqlRows } from "./fixtures/hardening";
 test("kiosk reprints a registered return-sector bag through the public HTTP API", async ({
   page,
 }) => {
-  const { booking, flightId: outbound } = await ownedBooking(page, true);
+  const { booking, flightId: outbound } = await ownedBooking(
+    page,
+    true,
+    undefined,
+    "admin"
+  );
   const inbound = await fixtureFlight();
   const bookingId = booking.bookingId;
   const [passenger] = await sqlRows<RowDataPacket>(
@@ -53,6 +58,8 @@ test("kiosk reprints a registered return-sector bag through the public HTTP API"
     [bag.id, inbound, eventKey]
   );
 
+  // The kiosk uses the passenger's capability and has no account session.
+  await page.context().clearCookies();
   await page.goto("/");
   const call = (op: string, input: Record<string, unknown>) =>
     page.evaluate(

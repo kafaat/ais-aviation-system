@@ -2,6 +2,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
+import { currentReturnTo } from "@/lib/auth-navigation";
+import {
+  isAuthenticationPath,
+  loginPath,
+  safeReturnTo,
+} from "@shared/return-to";
 
 type UseAuthOptions = {
   redirectOnUnauthenticated?: boolean;
@@ -10,7 +16,6 @@ type UseAuthOptions = {
 
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath } = options ?? {};
-  const resolvedRedirectPath = redirectPath ?? "/login";
   const utils = trpc.useUtils();
   const queryClient = useQueryClient();
 
@@ -76,12 +81,16 @@ export function useAuth(options?: UseAuthOptions) {
     if (meQuery.isLoading || logoutMutation.isPending) return;
     if (state.user) return;
     if (typeof window === "undefined") return;
-    if (window.location.pathname === resolvedRedirectPath) return;
-
-    window.location.href = resolvedRedirectPath;
+    if (isAuthenticationPath(window.location.pathname)) return;
+    const target =
+      !redirectPath || redirectPath === "/login"
+        ? loginPath(currentReturnTo())
+        : safeReturnTo(redirectPath);
+    if (currentReturnTo() === target) return;
+    window.location.assign(target);
   }, [
     redirectOnUnauthenticated,
-    resolvedRedirectPath,
+    redirectPath,
     logoutMutation.isPending,
     meQuery.isLoading,
     state.user,
