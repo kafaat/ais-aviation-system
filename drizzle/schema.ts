@@ -6345,3 +6345,119 @@ export const ticketCoupons = mysqlTable(
     ),
   })
 );
+
+/** Per-passenger, per-segment decomposition of a booking's price. The sale rows
+ * sum to `bookings.totalAmount`; servicing writes signed adjustment/reversal rows
+ * so the running sum follows the invoice. Jurisdiction and rate come from
+ * tax-rules.ts, which is operator-confirmable configuration, not certified law. */
+export const bookingFareComponents = mysqlTable(
+  "booking_fare_components",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    bookingId: int("bookingId").notNull(),
+    tenantId: int("tenantId"),
+    passengerId: int("passengerId"), // NULL for booking-level fees and ancillaries
+    flightId: int("flightId"), // NULL for booking-level fees
+    segmentId: int("segmentId"),
+    componentType: mysqlEnum("componentType", [
+      "base",
+      "tax",
+      "surcharge",
+      "fee",
+    ]).notNull(),
+    // Component code: FARE, VAT, YQ, YR, BKF (booking fee), ANC (ancillary), LCK (price lock fee), MOD (modification fee)
+    code: varchar("code", { length: 8 }).notNull(),
+    jurisdiction: varchar("jurisdiction", { length: 2 }), // ISO 3166-1 alpha-2 of the taxing authority
+    rateBasisPoints: int("rateBasisPoints"), // 1500 = 15.00%; NULL when no rate applies
+    amount: int("amount").notNull(), // Signed minor units; negative rows reverse earlier rows
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    fxRateMillionths: int("fxRateMillionths"), // Units of SAR per 1 unit of `currency` x 1e6; NULL for SAR
+    fxSource: varchar("fxSource", { length: 32 }),
+    fxAsOf: timestamp("fxAsOf"),
+    entryKind: mysqlEnum("entryKind", ["sale", "adjustment", "reversal"])
+      .default("sale")
+      .notNull(),
+    basis: mysqlEnum("basis", ["fare_line", "derived", "unresolved"]).notNull(),
+    reference: varchar("reference", { length: 96 }).notNull(), // e.g. booking.create, modification:12, refund:pi_x
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    bookingIdx: index("fare_components_booking_idx").on(table.bookingId),
+    bookingPassengerIdx: index("fare_components_booking_passenger_idx").on(
+      table.bookingId,
+      table.passengerId
+    ),
+    flightIdx: index("fare_components_flight_idx").on(table.flightId),
+    referenceIdx: index("fare_components_reference_idx").on(
+      table.bookingId,
+      table.reference
+    ),
+  })
+);
+
+export type BookingFareComponent = typeof bookingFareComponents.$inferSelect;
+export type InsertBookingFareComponent =
+  typeof bookingFareComponents.$inferInsert;
+
+/** ZATCA phase 2 simplified (B2C) tax documents generated locally. Reporting to
+ * Fatoora requires operator CSID onboarding; `status` never advances past
+ * `generated` through the mock adapter. */
+export const taxInvoices = mysqlTable(
+  "tax_invoices",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    uuid: varchar("uuid", { length: 36 }).notNull().unique(),
+    issuingUnit: varchar("issuingUnit", { length: 64 }).notNull(), // EGS unit label (ZATCA_ISSUING_UNIT)
+    sequence: int("sequence").notNull(), // Invoice counter value (ICV) per issuing unit
+    invoiceNumber: varchar("invoiceNumber", { length: 96 }).notNull().unique(),
+    bookingId: int("bookingId").notNull(),
+    tenantId: int("tenantId"),
+    documentType: mysqlEnum("documentType", [
+      "simplified_invoice", // UBL 388, subtype 02
+      "simplified_credit_note", // UBL 381, subtype 02
+    ]).notNull(),
+    referencedInvoiceId: int("referencedInvoiceId"), // Credit note -> original invoice
+    sellerName: varchar("sellerName", { length: 255 }).notNull(),
+    sellerVatNumber: varchar("sellerVatNumber", { length: 15 }).notNull(),
+    issuedAt: timestamp("issuedAt").notNull(),
+    currency: varchar("currency", { length: 3 }).default("SAR").notNull(),
+    totalExcludingVat: int("totalExcludingVat").notNull(), // minor units
+    vatAmount: int("vatAmount").notNull(),
+    totalIncludingVat: int("totalIncludingVat").notNull(),
+    qrPayload: text("qrPayload").notNull(), // base64 TLV, tags 1-5
+    invoiceHash: varchar("invoiceHash", { length: 64 }).notNull(), // base64 SHA-256 of the canonical document
+    previousInvoiceHash: varchar("previousInvoiceHash", {
+      length: 64,
+    }).notNull(),
+    document: json("document").$type<Record<string, unknown>>().notNull(),
+    status: mysqlEnum("status", ["generated", "reported", "cleared", "failed"])
+      .default("generated")
+      .notNull(),
+    submissionReference: varchar("submissionReference", { length: 128 }),
+    submissionError: text("submissionError"),
+    // Natural identity of the settlement event this document records
+    // (payment:<intent>, funding:<bookingId>, refund:<intent>:<refundId>,
+    // internal-refund:<requestId>, modification:<id>:sale|reversal).
+    reference: varchar("reference", { length: 96 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    // One ICV per unit; a replayed settlement never allocates a second number.
+    unitSequenceIdx: uniqueIndex("tax_invoices_unit_sequence_idx").on(
+      table.issuingUnit,
+      table.sequence
+    ),
+    bookingIdx: index("tax_invoices_booking_idx").on(table.bookingId),
+    statusIdx: index("tax_invoices_status_idx").on(table.status),
+    // Idempotency key: one document per (booking, type, settlement reference).
+    referenceIdx: uniqueIndex("tax_invoices_reference_idx").on(
+      table.bookingId,
+      table.documentType,
+      table.reference
+    ),
+  })
+);
+
+export type TaxInvoice = typeof taxInvoices.$inferSelect;
+export type InsertTaxInvoice = typeof taxInvoices.$inferInsert;

@@ -28,6 +28,9 @@ import {
 } from "./booking-settlement.service";
 import { recordEvent } from "./outbox.service";
 import { isActiveSplitPayment } from "./booking-checkout.service";
+import { FareComponentsUnbalancedError } from "./fare-components.service";
+import { TaxInvoiceConfigurationError } from "./tax-invoice.service";
+import { issueRefundCreditNote } from "./tax-credit-note.service";
 
 export interface VerifiedPayment {
   paymentIntentId: string;
@@ -447,12 +450,15 @@ async function confirmCollectedBooking(
   try {
     await confirmFundedBooking(tx, booking, payment.paymentIntentId);
   } catch (error) {
-    // These errors occur before inventory is changed. Other failures must roll
+    // These errors occur before inventory is changed (confirmFundedBooking's
+    // inner transaction undoes any leg it reserved). Other failures must roll
     // back the whole transaction and remain retryable (never acknowledge them).
     if (
       !(
         error instanceof InventoryUnavailableError ||
-        error instanceof BookingNotPendingError
+        error instanceof BookingNotPendingError ||
+        error instanceof FareComponentsUnbalancedError ||
+        error instanceof TaxInvoiceConfigurationError
       )
     )
       throw error;
@@ -661,6 +667,43 @@ export async function settleVerifiedRefund(
     stripeEventId: input.eventId,
     description: "Verified refund delta",
   });
+  // Servicing refunds were already reversed and credited when the exchange
+  // applied, and a collection that never funded the booking (review_required)
+  // has nothing to reverse; every other booking refund reverses its fare
+  // components here.
+  if (
+    ownerBooking &&
+    receipt.settlementStatus === "applied" &&
+    (receipt.kind === "booking" || receipt.kind === "split_payment") &&
+    !servicePlans.some(
+      p => p.status === "succeeded" && p.refundId === input.refundId
+    )
+  ) {
+    try {
+      await issueRefundCreditNote(
+        tx,
+        ownerBooking,
+        delta,
+        `refund:${input.paymentIntentId}:${input.refundId ?? input.eventId}`
+      );
+    } catch (error) {
+      // A ledger that cannot absorb the refund is an operator review item, not
+      // a reason to leave the provider's refund unacknowledged forever.
+      if (!(error instanceof FareComponentsUnbalancedError)) throw error;
+      await recordEvent(tx, {
+        aggregateType: "booking",
+        aggregateId: ownerBooking.id,
+        eventType: "fare_components.review_required",
+        tenantId: ownerBooking.tenantId,
+        payload: {
+          bookingId: ownerBooking.id,
+          paymentIntentId: input.paymentIntentId,
+          amount: delta,
+          reason: error.message,
+        },
+      });
+    }
+  }
   if (receipt.kind === "wallet_topup") {
     const wallet = ownerWallet;
     if (!wallet) throw new Error("Refund wallet missing");

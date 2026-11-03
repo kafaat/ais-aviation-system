@@ -411,6 +411,23 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     acceptance: z.literal("local_document_external_ticket_acceptance_required"),
   }),
   "booking.confirmed": z.looseObject({ bookingId: id }),
+  /** Local ZATCA document record; reporting to Fatoora is a separate, credentialed step. */
+  "tax_invoice.issued": z.looseObject({
+    invoiceId: id,
+    invoiceNumber: z.string().min(1),
+    documentType: z.enum(["simplified_invoice", "simplified_credit_note"]),
+    bookingId: id,
+    totalIncludingVat: z.number().int().positive(),
+    vatAmount: z.number().int().nonnegative(),
+    currency: z.literal("SAR"),
+    reporting: z.literal("pending_operator_csid"),
+  }),
+  "fare_components.review_required": z.looseObject({
+    bookingId: id,
+    paymentIntentId: z.string().min(1),
+    amount: z.number().int().positive(),
+    reason: z.string(),
+  }),
   "gate.assigned": gateAssignment,
   "gate.changed": gateAssignment,
   "gate.released": z.looseObject({

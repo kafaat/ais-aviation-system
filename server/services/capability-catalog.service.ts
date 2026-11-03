@@ -151,6 +151,30 @@ export const capabilityCatalog = [
     requirement:
       "Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA",
   },
+  {
+    id: "fareComponents",
+    implementation: "implemented",
+    owner: "fare-components.service and tax-rules",
+    consumer: "bookings.create, booking settlement, order servicing, refunds",
+    requirement:
+      "Per-passenger base/VAT/fee rows equal bookings.totalAmount; domestic KSA 15% and international zero-rating from a rate table the operator's tax adviser must confirm; YQ/YR codes and FX fields exist but no surcharge or non-SAR source feeds them yet",
+  },
+  {
+    id: "zatcaSimplifiedInvoices",
+    implementation: "implemented",
+    owner: "tax-invoice.service",
+    consumer: "booking settlement, refunds, taxInvoices router, e-ticket PDF",
+    requirement:
+      "Local simplified invoice and credit note records with ICV sequence, QR tags 1-5 and PIH chain; seller name/VAT number from ZATCA_* configuration with production failing closed when absent",
+  },
+  {
+    id: "fatooraReporting",
+    implementation: "blocked",
+    owner: "ZATCA onboarding (operator)",
+    consumer: "taxInvoices.submit",
+    requirement:
+      "Compliance and production CSIDs for the issuing unit, UBL 2.1 XML rendering, QR tags 6-9 and reporting API acceptance; the shipped adapter records that no submission was attempted",
+  },
 ] as const;
 
 export function listCapabilities() {

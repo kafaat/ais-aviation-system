@@ -1,5 +1,11 @@
 import { closeLocalCoupons } from "./ticket-coupons.service";
 import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
+import {
+  assertFareComponentsBalanced,
+  ensureSaleFareComponents,
+  vatOfComponents,
+} from "./fare-components.service";
+import { issueTaxDocument } from "./tax-invoice.service";
 import { countActiveHolds } from "./inventory-capacity.service";
 import { and, eq, asc, inArray, sql, isNotNull, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -137,6 +143,32 @@ async function applyFundedBooking(
       updatedAt: new Date(),
     })
     .where(eq(bookings.id, booking.id));
+  // Fare decomposition must equal the collected total before the simplified
+  // tax invoice is generated for it. Both roll back with the settlement.
+  await ensureSaleFareComponents(tx, booking);
+  const components = await assertFareComponentsBalanced(
+    tx,
+    booking.id,
+    booking.totalAmount
+  );
+  await issueTaxDocument(tx, {
+    booking,
+    documentType: "simplified_invoice",
+    totalIncludingVat: booking.totalAmount,
+    vatAmount: vatOfComponents(components),
+    reference: paymentIntentId
+      ? `payment:${paymentIntentId}`
+      : `funding:${booking.id}`,
+    lines: components.map(c => ({
+      passengerId: c.passengerId,
+      flightId: c.flightId,
+      componentType: c.componentType,
+      code: c.code,
+      jurisdiction: c.jurisdiction,
+      rateBasisPoints: c.rateBasisPoints,
+      amount: c.amount,
+    })),
+  });
   if (paymentIntentId && segments.length === 1) {
     const bookingPassengers = await tx
       .select({ id: passengers.id })

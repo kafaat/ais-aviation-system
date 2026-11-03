@@ -22,6 +22,10 @@ import {
   consumeRetailOffer,
 } from "./retail-offer.service";
 import { createInventoryLock } from "./inventory-lock.service";
+import {
+  recordSaleFareComponents,
+  type FareLine,
+} from "./fare-components.service";
 import { trackBookingStarted, trackBookingCancelled } from "./metrics.service";
 import {
   cancelBookingResources,
@@ -345,6 +349,7 @@ export async function createBooking(
             });
           }
           let fareAmount = group?.totalPrice ?? selectedOffer?.totalAmount ?? 0;
+          let lockFee = 0;
           if (input.priceLockId) {
             const [priceLock] = await tx
               .select()
@@ -367,9 +372,9 @@ export async function createBooking(
                 message:
                   "Price lock is unavailable or does not belong to this booking",
               });
+            lockFee = priceLock.lockFee;
             fareAmount =
-              priceLock.lockedPrice * input.passengers.length +
-              priceLock.lockFee;
+              priceLock.lockedPrice * input.passengers.length + lockFee;
           }
           const requestedSeats = input.passengers.flatMap(p =>
             p.seatNumber ? [p.seatNumber] : []
@@ -420,6 +425,7 @@ export async function createBooking(
               .where(eq(groupBookings.id, group.id));
           if (selectedOffer)
             await consumeRetailOffer(tx, selectedOffer, bookingId);
+          const createdPassengers: Array<{ id: number; type: string }> = [];
           for (const p of input.passengers) {
             const [row] = await tx.insert(passengers).values({
               tenantId: currentFlight.tenantId,
@@ -433,6 +439,7 @@ export async function createBooking(
               passportExpiry: p.passportExpiry,
               nationality: p.nationality,
             });
+            createdPassengers.push({ id: row.insertId, type: p.type });
             if (p.seatNumber)
               await selectSeat(
                 input.flightId,
@@ -446,6 +453,27 @@ export async function createBooking(
             await tx
               .insert(bookingAncillaries)
               .values(selected.map(item => ({ bookingId, ...item })));
+          // Fare component hook: persist base/tax/fee per passenger so the
+          // ledger equals totalAmount from the first write (fare-components.service).
+          await recordSaleFareComponents(tx, {
+            booking: { id: bookingId, tenantId: currentFlight.tenantId },
+            passengers: createdPassengers,
+            legs: [
+              {
+                flightId: input.flightId,
+                amount: fareAmount - lockFee,
+                fareLines:
+                  (
+                    selectedOffer?.payload as
+                      | { fareLines?: FareLine[] }
+                      | undefined
+                  )?.fareLines ?? null,
+              },
+            ],
+            fees: lockFee ? [{ code: "LCK", amount: lockFee }] : [],
+            ancillaries: selected.map(item => ({ amount: item.totalPrice })),
+            reference: "booking.create",
+          });
           if (input.priceLockId)
             await tx
               .update(priceLocks)

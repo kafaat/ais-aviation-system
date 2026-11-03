@@ -62,6 +62,7 @@ import { apisRouter } from "./routers/apis";
 import { bagDropRouter } from "./routers/bag-drop";
 import { biometricRouter } from "./routers/biometric";
 import { bspReportingRouter } from "./routers/bsp-reporting";
+import { taxInvoicesRouter } from "./routers/tax-invoices";
 import { compensationRouter } from "./routers/compensation";
 import { consentRouter } from "./routers/consent";
 import { crewRouter } from "./routers/crew";
@@ -184,6 +185,7 @@ export const appRouter = router({
   bagDrop: bagDropRouter,
   biometric: biometricRouter,
   bspReporting: bspReportingRouter,
+  taxInvoices: taxInvoicesRouter,
   compensation: compensationRouter,
   consent: consentRouter,
   crew: crewRouter,

@@ -12,6 +12,7 @@ import {
 } from "../../drizzle/schema";
 import { generateTicketNumber, type TicketData } from "./eticket.service";
 import { recordEvent } from "./outbox.service";
+import { latestTaxInvoice } from "./tax-invoice.service";
 
 /** A document snapshot covers the actual itinerary and locks its local identity. */
 export async function readTicketDocument(
@@ -162,11 +163,28 @@ export async function readTicketDocument(
     }
     const first = legs[0];
     if (!first) throw new Error("Empty ticket itinerary");
+    const invoice = await latestTaxInvoice(tx, bookingId);
     return {
       booking,
       passenger,
       legs,
-      data: { ...first, additionalLegs: legs.slice(1) },
+      data: {
+        ...first,
+        additionalLegs: legs.slice(1),
+        ...(invoice
+          ? {
+              taxInvoice: {
+                invoiceNumber: invoice.invoiceNumber,
+                issuedAt: invoice.issuedAt,
+                sellerName: invoice.sellerName,
+                sellerVatNumber: invoice.sellerVatNumber,
+                totalIncludingVat: invoice.totalIncludingVat,
+                vatAmount: invoice.vatAmount,
+                qrPayload: invoice.qrPayload,
+              },
+            }
+          : {}),
+      },
     };
   });
 }

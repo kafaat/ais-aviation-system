@@ -38,6 +38,12 @@ import {
 import { assertTenantOperational } from "./tenant.service";
 import { recordEvent } from "./outbox.service";
 import { planOrderRefund } from "./order-refunds.service";
+import {
+  recordExchangeComponents,
+  recordServiceComponents,
+  type FareLine,
+} from "./fare-components.service";
+import { issueServicingTaxDocuments } from "./tax-credit-note.service";
 
 const ancillaryInput = z.object({
   ancillaryServiceId: z.number().int().positive(),
@@ -601,6 +607,47 @@ export async function applyPaidOrderModification(
     if (current.totalAmount !== change.newAmount)
       throw unavailable("Servicing invoice mismatch");
   }
+  // Fare ledger and ZATCA documents follow the servicing outcome: exchange is
+  // cancel-and-reissue, added services are an additional simplified invoice.
+  const servicingReference = `modification:${change.id}`;
+  const ledger = plan.segments.length
+    ? await recordExchangeComponents(tx, booking, {
+        passengers: await tx
+          .select({ id: passengers.id, type: passengers.type })
+          .from(passengers)
+          .where(eq(passengers.bookingId, booking.id))
+          .orderBy(asc(passengers.id)),
+        legs: await Promise.all(
+          plan.segments.map(async s => {
+            const [offer] = await tx
+              .select()
+              .from(retailOffers)
+              .where(eq(retailOffers.id, s.offerId))
+              .limit(1);
+            if (!offer || offer.consumedBookingId !== booking.id)
+              throw unavailable("Exchange offer is not bound to this booking");
+            return {
+              flightId: s.flightId,
+              amount: offer.totalAmount,
+              fareLines:
+                (offer.payload as { fareLines?: FareLine[] }).fareLines ?? null,
+            };
+          })
+        ),
+        modificationFee: change.modificationFee,
+        newAmount: change.newAmount,
+        reference: servicingReference,
+      })
+    : await recordServiceComponents(tx, booking, {
+        ancillaries: plan.ancillaries.map(a => ({
+          amount: a.unitTotal,
+          passengerId: a.passengerId ?? null,
+        })),
+        createdAncillaryIds,
+        newAmount: change.newAmount,
+        reference: servicingReference,
+      });
+  await issueServicingTaxDocuments(tx, booking, ledger, servicingReference);
   if (change.totalCost < 0)
     await planOrderRefund(tx, booking, change.id, -change.totalCost);
   const receipt = await recordEvent(tx, {

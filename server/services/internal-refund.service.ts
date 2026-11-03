@@ -25,6 +25,7 @@ import {
 } from "./booking-settlement.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
 import { recordEvent } from "./outbox.service";
+import { issueRefundCreditNote } from "./tax-credit-note.service";
 import { flightBookingCondition } from "./flight-state.service";
 
 export const internalRefundInput = z.object({
@@ -347,6 +348,13 @@ export async function refundInternalFunding(
           requestId: input.requestId,
         }),
       });
+      // Reverse fare components at the charged rates and record the credit note.
+      await issueRefundCreditNote(
+        tx,
+        booking,
+        input.amount,
+        `internal-refund:${input.requestId}`
+      );
       if (input.cancelItinerary) {
         await tx
           .update(bookings)

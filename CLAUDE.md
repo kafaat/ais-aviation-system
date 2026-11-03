@@ -582,6 +582,9 @@ Deployment receipts are tracked separately in [provider acceptance](docs/operati
 | eventInbox | implemented | Migration applied; local transaction or authenticated receiver acknowledgement |
 | scheduledTasks | implemented | Shared database lease and observed lastSuccessAt |
 | slaObservations | implemented | Persisted API samples and worker dependency observations; independent external availability measurements are required for contractual SLA |
+| fareComponents | implemented | Per-passenger base/VAT/fee rows equal bookings.totalAmount; domestic KSA 15% and international zero-rating from a rate table the operator's tax adviser must confirm; YQ/YR codes and FX fields exist but no surcharge or non-SAR source feeds them yet |
+| zatcaSimplifiedInvoices | implemented | Local simplified invoice and credit note records with ICV sequence, QR tags 1-5 and PIH chain; seller name/VAT number from ZATCA_* configuration with production failing closed when absent |
+| fatooraReporting | blocked | Compliance and production CSIDs for the issuing unit, UBL 2.1 XML rendering, QR tags 6-9 and reporting API acceptance; the shipped adapter records that no submission was attempted |
 
 <!-- capability-catalog:end -->
 

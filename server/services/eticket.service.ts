@@ -45,6 +45,17 @@ export interface TicketData {
 
   // Dates
   issueDate: Date;
+
+  /** Locally generated ZATCA simplified tax invoice for the booking, when one exists. */
+  taxInvoice?: {
+    invoiceNumber: string;
+    issuedAt: Date;
+    sellerName: string;
+    sellerVatNumber: string;
+    totalIncludingVat: number;
+    vatAmount: number;
+    qrPayload: string; // base64 TLV; encoded verbatim as the QR content
+  };
 }
 
 export interface BoardingPassData extends TicketData {
@@ -80,8 +91,11 @@ export async function generateETicketPDF(
   // Generate QR code first (async operation)
   const qrData = `${ticketData.pnr}|${ticketData.ticketNumber}|${ticketData.passengerName}`;
   let qrCodeDataURL: string;
+  let taxQrDataURL: string | null = null;
   try {
     qrCodeDataURL = await QRCode.toDataURL(qrData);
+    if (ticketData.taxInvoice)
+      taxQrDataURL = await QRCode.toDataURL(ticketData.taxInvoice.qrPayload);
   } catch (error) {
     console.error("Error generating QR code:", error);
     throw new TRPCError({
@@ -233,6 +247,40 @@ export async function generateETicketPDF(
       // QR Code
       doc.image(qrCodeDataURL, 220, doc.y, { width: 150, height: 150 });
       doc.moveDown(10);
+
+      if (ticketData.taxInvoice && taxQrDataURL) {
+        const invoice = ticketData.taxInvoice;
+        doc
+          .addPage()
+          .fillColor("#1e40af")
+          .fontSize(16)
+          .text("SIMPLIFIED TAX INVOICE", 50, 50)
+          .moveDown(0.5)
+          .fillColor("#000")
+          .fontSize(10)
+          .text(`Invoice: ${invoice.invoiceNumber}`)
+          .text(`Issued (UTC): ${invoice.issuedAt.toISOString()}`)
+          .text(`Seller: ${invoice.sellerName}`)
+          .text(`VAT Number: ${invoice.sellerVatNumber}`)
+          .text(
+            `Total incl. VAT: ${(invoice.totalIncludingVat / 100).toFixed(2)} ${ticketData.currency}`
+          )
+          .text(
+            `VAT: ${(invoice.vatAmount / 100).toFixed(2)} ${ticketData.currency}`
+          )
+          .moveDown();
+        doc.image(taxQrDataURL, 220, doc.y, { width: 150, height: 150 });
+        doc
+          .moveDown(10)
+          .fontSize(8)
+          .fillColor("#9ca3af")
+          .text(
+            "ZATCA QR (tags 1-5). Reporting to Fatoora requires the operator's CSID; this document is the local record.",
+            50,
+            doc.y,
+            { align: "center", width: 495 }
+          );
+      }
 
       // Footer
       doc

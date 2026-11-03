@@ -13,14 +13,26 @@
 
 import { getDb } from "../../db";
 import {
+  airports,
   flights,
   bookings,
   pricingRules,
   seasonalPricing,
 } from "../../../drizzle/schema";
-import { eq, and, gte, lte, count, desc, or, isNull } from "drizzle-orm";
+import {
+  eq,
+  and,
+  gte,
+  lte,
+  count,
+  desc,
+  or,
+  isNull,
+  inArray,
+} from "drizzle-orm";
 import { cacheService } from "../cache.service";
 import { AIPricingService } from "./ai-pricing.service";
+import { resolveSegmentVat, vatFraction, type VatRule } from "../tax-rules";
 
 // Cache TTL for pricing rules (5 minutes)
 const RULES_CACHE_TTL = 5 * 60;
@@ -95,8 +107,27 @@ export interface DemandMetrics {
 const PRICE_VALIDITY_MINUTES = 15;
 const MIN_MULTIPLIER = 0.7; // Maximum 30% discount
 const MAX_MULTIPLIER = 2.5; // Maximum 150% increase
-const TAX_RATE = 0.15; // 15% VAT
 const BOOKING_FEE = 5000; // 50 SAR booking fee (in cents, 100 = 1 SAR)
+
+/** VAT by itinerary (tax-rules.ts). Missing airport reference data falls back
+ * to the domestic standard rate, the pre-existing flat behaviour, so a data gap
+ * never under-collects; the fare ledger records that basis as unresolved. */
+async function segmentVatRule(
+  database: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  flight: { originId: number; destinationId: number }
+): Promise<VatRule> {
+  const rows = await database
+    .select({ id: airports.id, country: airports.country })
+    .from(airports)
+    .where(inArray(airports.id, [flight.originId, flight.destinationId]));
+  const rule = resolveSegmentVat({
+    originCountry: rows.find(r => r.id === flight.originId)?.country,
+    destinationCountry: rows.find(r => r.id === flight.destinationId)?.country,
+  });
+  return rule.applicability === "unresolved"
+    ? resolveSegmentVat({ originCountry: "SA", destinationCountry: "SA" })
+    : rule;
+}
 
 // Default multipliers when no rules match
 const DEFAULT_MULTIPLIERS = {
@@ -193,7 +224,9 @@ export async function calculateDynamicPrice(
 
   // 8. Calculate taxes and fees
   const priceAfterDiscount = adjustedPrice - promoDiscount;
-  const taxes = Math.round(priceAfterDiscount * TAX_RATE);
+  const taxes = Math.round(
+    priceAfterDiscount * vatFraction(await segmentVatRule(database, flight))
+  );
   const fees = BOOKING_FEE * requestedSeats;
   const totalPrice = (priceAfterDiscount + taxes) * requestedSeats + fees;
 
