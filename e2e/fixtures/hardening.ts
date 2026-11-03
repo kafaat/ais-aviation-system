@@ -6,6 +6,7 @@ import mysql, {
   type RowDataPacket,
 } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
+import Redis from "ioredis";
 import type { AppRouter } from "../../server/routers";
 import { disposableDatabaseUrl } from "../disposable-database";
 import { useBrowserSession } from "./browser-session";
@@ -58,6 +59,12 @@ export async function fixtureFlight() {
       ["H" + randomUUID().replaceAll("-", "").slice(0, 8)]
     );
     if (!flight.affectedRows) throw new Error("Seed flight missing");
+    // Search results for this route and day may already be cached by another
+    // test in the run (the same route and 12:00 UTC day are shared by every
+    // fixture flight). A cached result does not learn about new flights until
+    // its TTL expires, so bump the search namespace version the way the admin
+    // cache.invalidateFlightSearch procedure does. Harmless without Redis.
+    await invalidateFlightSearchCache();
     return flight.insertId;
   } finally {
     await db.end();
@@ -94,4 +101,17 @@ export async function ownedBooking(page: Page, funded = false) {
       amount: booking.totalAmount,
     });
   return { booking, flightId, userId: user.id, command };
+}
+
+async function invalidateFlightSearchCache(): Promise<void> {
+  const url = process.env.REDIS_URL;
+  if (!url) return;
+  const redis = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 1 });
+  try {
+    await redis.connect();
+    const prefix = process.env.CACHE_PREFIX || "ais";
+    await redis.incr(`${prefix}:version:search`);
+  } finally {
+    redis.disconnect();
+  }
 }
