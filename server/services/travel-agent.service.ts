@@ -18,6 +18,7 @@ import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import { TRPCError } from "@trpc/server";
 import {
   and,
+  or,
   eq,
   gte,
   lt,
@@ -38,6 +39,7 @@ import { getDb } from "../db";
 import {
   travelAgents,
   agentBookings,
+  financialLedger,
   flights,
   bookings,
   airports,
@@ -986,19 +988,87 @@ export async function updateCommissionStatus(
       message: "Database not available",
     });
 
-  const updateData: Partial<typeof agentBookings.$inferInsert> = {
-    commissionStatus: status,
-    updatedAt: new Date(),
-  };
+  if (status === "paid")
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Agency payout settlement evidence is required; no accepted payout source is configured",
+    });
+  await db.transaction(async tx => {
+    const [row] = await tx
+      .select()
+      .from(agentBookings)
+      .where(eq(agentBookings.id, agentBookingId))
+      .limit(1)
+      .for("update");
+    if (!row)
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Agency commission not found",
+      });
+    if (row.commissionStatus === status) return;
+    if (
+      row.commissionStatus === "paid" ||
+      row.commissionStatus === "cancelled" ||
+      status === "pending"
+    )
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Commission status transition is not allowed",
+      });
 
-  if (status === "paid") {
-    updateData.commissionPaidAt = new Date();
-  }
+    if (status === "approved") {
+      const [invoice] = await tx
+        .select()
+        .from(bookings)
+        .where(eq(bookings.id, row.bookingId))
+        .limit(1)
+        .for("update");
+      if (
+        !invoice ||
+        invoice.deletedAt ||
+        !["confirmed", "completed"].includes(invoice.status) ||
+        invoice.paymentStatus !== "paid" ||
+        invoice.totalAmount !== row.bookingAmount
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Commission requires the original funded invoice",
+        });
 
-  await db
-    .update(agentBookings)
-    .set(updateData)
-    .where(eq(agentBookings.id, agentBookingId));
+      // A paymentStatus flag can outlive a partial refund. Do not approve the
+      // original commission for a changed or unreconciled invoice.
+      const entries = await tx
+        .select({
+          type: financialLedger.type,
+          amount: financialLedger.amount,
+          currency: financialLedger.currency,
+        })
+        .from(financialLedger)
+        .where(eq(financialLedger.bookingId, row.bookingId))
+        .for("share");
+      const charged = entries
+        .filter(e => e.type === "charge")
+        .reduce((sum, e) => sum + Math.round(Number(e.amount) * 100), 0);
+      if (
+        charged <= 0 ||
+        charged !== row.bookingAmount ||
+        entries.some(
+          e =>
+            e.currency !== "SAR" || e.type !== "charge" || Number(e.amount) <= 0
+        )
+      )
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Commission requires review of the posted funding and adjustments",
+        });
+    }
+    await tx
+      .update(agentBookings)
+      .set({ commissionStatus: status })
+      .where(eq(agentBookings.id, agentBookingId));
+  });
 
   log.info({ agentBookingId, status }, "Commission status updated");
 }
@@ -1006,7 +1076,7 @@ export async function updateCommissionStatus(
 /**
  * Get all pending commissions (admin)
  */
-export async function getPendingCommissions() {
+export async function getPendingCommissions(includeApproved = false) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -1024,9 +1094,14 @@ export async function getPendingCommissions() {
     .innerJoin(travelAgents, eq(agentBookings.agentId, travelAgents.id))
     .innerJoin(bookings, eq(agentBookings.bookingId, bookings.id))
     .where(
-      and(
-        eq(agentBookings.commissionStatus, "pending"),
-        eq(bookings.paymentStatus, "paid")
+      or(
+        and(
+          eq(agentBookings.commissionStatus, "pending"),
+          eq(bookings.paymentStatus, "paid")
+        ),
+        includeApproved
+          ? eq(agentBookings.commissionStatus, "approved")
+          : undefined
       )
     )
     .orderBy(agentBookings.createdAt);
@@ -1038,6 +1113,7 @@ export async function getPendingCommissions() {
     bookingReference: r.booking.bookingReference,
     bookingAmount: r.agentBooking.bookingAmount,
     commissionRate: r.agentBooking.commissionRate,
+    commissionStatus: r.agentBooking.commissionStatus,
     commissionAmount: r.agentBooking.commissionAmount,
     createdAt: r.agentBooking.createdAt,
   }));

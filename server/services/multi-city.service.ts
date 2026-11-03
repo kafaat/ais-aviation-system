@@ -35,6 +35,8 @@ import {
 import {
   checkFlightAvailability,
   calculateFlightPrice,
+  attachRbdAvailability,
+  type FlightSearchResult,
 } from "./flights.service";
 import { trackBookingStarted } from "./metrics.service";
 import {
@@ -57,7 +59,7 @@ export interface MultiCitySegment {
 
 export interface MultiCitySearchResult {
   segmentIndex: number;
-  flights: Awaited<ReturnType<typeof db.searchFlights>>;
+  flights: FlightSearchResult;
 }
 
 export interface MultiCityPriceResult {
@@ -211,7 +213,7 @@ export async function searchMultiCityFlights(
   try {
     // Search for flights for each segment in parallel
     const searchPromises = segments.map(async (segment, index) => {
-      const flights = await db.searchFlights({
+      const rows = await db.searchFlights({
         originId: segment.originId,
         destinationId: segment.destinationId,
         departureDate: segment.departureDate,
@@ -219,7 +221,7 @@ export async function searchMultiCityFlights(
 
       return {
         segmentIndex: index,
-        flights,
+        flights: await attachRbdAvailability(rows),
       };
     });
 

@@ -273,13 +273,17 @@ export const travelAgentRouter = router({
         path: "/admin/travel-agents/commissions/pending",
         tags: ["Travel Agents - Admin"],
         summary: "Get pending commissions",
-        description: "Get all pending commission payments awaiting approval.",
+        description:
+          "Get pending commissions and optionally include approved commissions awaiting settlement.",
         protect: true,
       },
     })
+    .input(z.object({ includeApproved: z.boolean().optional() }).optional())
     .output(responseContracts["getPendingCommissions"])
-    .query(async () => {
-      return await travelAgentService.getPendingCommissions();
+    .query(async ({ input }) => {
+      return await travelAgentService.getPendingCommissions(
+        input?.includeApproved
+      );
     }),
 
   /**
@@ -292,7 +296,8 @@ export const travelAgentRouter = router({
         path: "/admin/travel-agents/commissions/{id}/status",
         tags: ["Travel Agents - Admin"],
         summary: "Update commission status",
-        description: "Approve or mark commission as paid.",
+        description:
+          "Approve a funded commission or cancel an unsettled one. Marking paid requires accepted payout evidence.",
         protect: true,
       },
     })

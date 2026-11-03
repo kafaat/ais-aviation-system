@@ -1,8 +1,12 @@
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
 import { fixtureFlight, ownedBooking, rpc } from "./fixtures/hardening";
+import { testUsers } from "./fixtures/test-data";
 import { disposableDatabaseUrl } from "./disposable-database";
-import mysql, { type RowDataPacket } from "mysql2/promise";
+import mysql, {
+  type RowDataPacket,
+  type ResultSetHeader,
+} from "mysql2/promise";
 import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -35,6 +39,107 @@ async function workbookAt(path: string) {
   await book.xlsx.readFile(path);
   return book;
 }
+
+test("booking downloads include the whole UTC creation day and only the selected status", async ({
+  page,
+}, info) => {
+  const db = await mysql.createConnection(disposableDatabaseUrl());
+  const flightId = await fixtureFlight();
+  const day =
+    "2034-08-" + String(2 + (info.parallelIndex % 26)).padStart(2, "0");
+  const ids: number[] = [];
+  // Fixture references are unique per generated flight and identify the downloaded rows.
+  const reference = (i: number) => "R" + String(flightId).padStart(4, "0") + i;
+  try {
+    await db.query("SET SESSION time_zone = '+00:00'");
+    for (const [index, [status, offset, time, amount]] of (
+      [
+        ["confirmed", 0, "00:00:00", 10000],
+        ["cancelled", 0, "23:59:59", 20000],
+        ["confirmed", -1, "23:59:59", 40000],
+        ["cancelled", 1, "00:00:00", 80000],
+      ] as const
+    ).entries()) {
+      const [entry] = await db.execute<ResultSetHeader>(
+        "INSERT INTO bookings (userId, flightId, bookingReference, pnr, status, cabinClass, totalAmount, createdAt) SELECT id, ?, ?, ?, ?, 'economy', ?, DATE_ADD(CAST(? AS DATETIME), INTERVAL ? DAY) FROM users WHERE email=?",
+        [
+          flightId,
+          reference(index),
+          reference(index),
+          status,
+          amount,
+          day + " " + time,
+          offset,
+          testUsers.regular.email,
+        ]
+      );
+      expect(entry.affectedRows).toBe(1);
+      ids.push(entry.insertId);
+    }
+    await openReport(page, "Bookings", day, day);
+    for (const [status, expected, total] of [
+      ["All", [1, 0], "300.00"],
+      ["Confirmed", [0], "100.00"],
+      ["Cancelled", [1], "200.00"],
+    ] as const) {
+      if (status !== "All") {
+        await page.getByLabel("Status", { exact: true }).click();
+        await page.getByRole("option", { name: status, exact: true }).click();
+      }
+      const csv = await readFile(await download(page, "CSV"), "utf8");
+      const data = csv.trimEnd().split("\n").slice(1);
+      expect(data.map(line => line.split(",")[0])).toEqual(
+        expected.map(reference)
+      );
+      const book = await workbookAt(await download(page, "Excel"));
+      const detail = book.getWorksheet("Bookings")!;
+      expect(detail.actualRowCount).toBe(expected.length + 1);
+      for (const [position, index] of expected.entries()) {
+        const record =
+          index === 0
+            ? ["confirmed", "100.00", "00:00:00"]
+            : ["cancelled", "200.00", "23:59:59"];
+        const [state, amount, time] = record;
+        const created = day + "T" + time + ".000Z";
+        expect(data[position]).toContain(
+          "," + state + ",pending," + amount + ","
+        );
+        expect(data[position].endsWith("," + created)).toBe(true);
+        const row = detail.getRow(position + 2);
+        expect([1, 8, 10, 13].map(column => row.getCell(column).value)).toEqual(
+          [reference(index), state, amount, created]
+        );
+      }
+      const summary = book.getWorksheet("Summary")!;
+      const summaryCell = (label: string) =>
+        summary
+          .getRows(1, summary.rowCount)
+          ?.find(row => row.getCell(1).value === label)
+          ?.getCell(2).value;
+      expect(summaryCell("Total Bookings:")).toBe(expected.length);
+      expect(summaryCell("Total Booking Amount (SAR):")).toBe(total);
+      const pdf = (
+        await promisify(execFile)("pdftotext", [
+          await download(page, "PDF"),
+          "-",
+        ])
+      ).stdout.replace(/\s+/g, " ");
+      expect(pdf).toContain("Total Bookings: " + expected.length + " ");
+      expect(pdf).toContain("Total Booking Amount (SAR): " + total + " ");
+      expect(pdf).toContain(
+        "Confirmed Bookings: " + (status === "Cancelled" ? 0 : 1) + " "
+      );
+      expect(pdf).toContain(
+        "Cancelled Bookings: " + (status === "Confirmed" ? 0 : 1) + " "
+      );
+    }
+  } finally {
+    for (const id of ids)
+      await db.execute("DELETE FROM bookings WHERE id=?", [id]);
+    await db.execute("DELETE FROM flights WHERE id=?", [flightId]);
+    await db.end();
+  }
+});
 
 test("flight exports use the same flight IDs, departure day, status and seat totals", async ({
   page,

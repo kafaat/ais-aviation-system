@@ -584,7 +584,7 @@ export async function calculateAgentCommissions(periodId: number): Promise<{
       totalBookings: sql<number>`COUNT(${agentBookings.id})`,
       totalBookingAmount: sql<number>`SUM(${agentBookings.bookingAmount})`,
       totalCommission: sql<number>`SUM(${agentBookings.commissionAmount})`,
-      pendingCommission: sql<number>`SUM(CASE WHEN ${agentBookings.commissionStatus} = 'pending' THEN ${agentBookings.commissionAmount} ELSE 0 END)`,
+      pendingCommission: sql<number>`SUM(CASE WHEN ${agentBookings.commissionStatus} IN ('pending','approved') THEN ${agentBookings.commissionAmount} ELSE 0 END)`,
       paidCommission: sql<number>`SUM(CASE WHEN ${agentBookings.commissionStatus} = 'paid' THEN ${agentBookings.commissionAmount} ELSE 0 END)`,
     })
     .from(agentBookings)
