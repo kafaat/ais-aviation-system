@@ -5831,7 +5831,13 @@
       "consumers": ["server/routers/special-services.ts"],
       "dependencies": ["drizzle/schema.ts", "server/db.ts"],
       "tableExpressions": {
-        "reads": ["bookings", "passengers", "specialServices"],
+        "reads": [
+          "bookingSegments",
+          "bookings",
+          "flights",
+          "passengers",
+          "specialServices"
+        ],
         "writes": ["specialServices"]
       },
       "replacement": null
