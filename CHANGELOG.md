@@ -9,11 +9,13 @@
 - feat(aviation): complete local airline servicing and evidence workflows (#243) (3a706dc)
 - feat: connect passenger and airline self-service workflows (1db45df)
 - feat: complete operational and passenger service journeys (9a76876)
+- feat: assign funded passenger extras to their booked sector (#246) (d0710a9)
 
 ### Bug Fixes
 
 - fix(e2e): invalidate the flight-search cache after inserting a fixture flight (#241) (35d0328)
 - fix(payments): separate idempotency keys from trace ids and key every money-moving operation (#239) (4d76c94)
+- fix: reconcile scoped extras across invoice edits and refunds (#246) (04e73ce)
 
 ### Other Changes
 
