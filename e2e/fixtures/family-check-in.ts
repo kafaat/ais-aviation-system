@@ -67,7 +67,7 @@ export function registerFamilyCheckInTests() {
     await page.goto("/check-in");
     await page
       .getByLabel("Booking Reference (PNR)")
-      .fill(booking.bookingReference);
+      .fill(booking.pnr);
     await page.getByRole("button", { name: "Search", exact: true }).click();
     await expect(
       page.getByText("Nora Family · Boarding denied", { exact: true })
