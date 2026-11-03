@@ -136,6 +136,9 @@ export function registerCodeshareTests() {
       await page.locator("#pax-firstname-0").fill("Codeshare");
       await page.locator("#pax-lastname-0").fill("Shopper");
       await page
+        .getByRole("button", { name: "Refresh fare offer", exact: true })
+        .click();
+      await page
         .getByRole("button", {
           name: "Complete Booking & Payment",
           exact: true,

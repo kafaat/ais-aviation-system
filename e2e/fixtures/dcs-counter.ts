@@ -86,6 +86,23 @@ async function prepareCounterBooking(page: Page) {
   }
 }
 
+// Funding a booking does not issue its e-ticket. Follow the passenger's
+// authenticated issuance path and track the coupon on that specific document.
+async function issueCounterTicket(
+  page: Page,
+  scope: Awaited<ReturnType<typeof prepareCounterBooking>>
+) {
+  const { ticketNumber } = await rpc(page).eticket.generateETicket.mutate({
+    bookingId: scope.bookingId,
+    passengerId: scope.passengerId,
+  });
+  return () =>
+    sqlRows<RowDataPacket>(
+      "SELECT status FROM ticket_coupons WHERE flightId = ? AND bookingId = ? AND passengerId = ? AND ticketNumber = ?",
+      [scope.flightId, scope.bookingId, scope.passengerId, ticketNumber]
+    );
+}
+
 export function registerDcsCounterTests() {
   for (const status of ["delayed", "cancelled"] as const) {
     test(`scoped desk recovers a boarded passenger after departure on a ${status} flight`, async ({
@@ -94,17 +111,7 @@ export function registerDcsCounterTests() {
       test.setTimeout(120000);
       await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
       const scope = await prepareCounterBooking(page);
-      // Payment funds the reservation. Issue its local document before DCS
-      // changes the coupon from open to checked in and back to open.
-      const { ticketNumber } = await rpc(page).eticket.generateETicket.mutate({
-        bookingId: scope.bookingId,
-        passengerId: scope.passengerId,
-      });
-      const couponStatus = () =>
-        sqlRows<RowDataPacket>(
-          "SELECT status FROM ticket_coupons WHERE flightId = ? AND bookingId = ? AND passengerId = ? AND ticketNumber = ?",
-          [scope.flightId, scope.bookingId, scope.passengerId, ticketNumber]
-        );
+      const couponStatus = await issueCounterTicket(page, scope);
       expect(await couponStatus()).toEqual([{ status: "O" }]);
       await useBrowserSession(page, "ops");
       const client = rpc(page);
@@ -234,6 +241,8 @@ export function registerDcsCounterTests() {
     test.setTimeout(120000);
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
     const scope = await prepareCounterBooking(page);
+    const couponStatus = await issueCounterTicket(page, scope);
+    expect(await couponStatus()).toEqual([{ status: "O" }]);
     await useBrowserSession(page, "ops");
     const client = rpc(page);
     const staff = await client.auth.me.query();
@@ -268,6 +277,8 @@ export function registerDcsCounterTests() {
     await expect(
       page.getByRole("combobox", { name: "Passenger action", exact: true })
     ).toHaveValue("board");
+
+    expect(await couponStatus()).toEqual([{ status: "C" }]);
 
     // The server commits the real request; only its first response is lost.
     const registerEndpoint = "**/api/trpc/*baggage.register*";
@@ -453,12 +464,7 @@ export function registerDcsCounterTests() {
         flightId: scope.flightId,
       },
     ]);
-    expect(
-      await sqlRows<RowDataPacket>(
-        "SELECT status FROM ticket_coupons WHERE bookingId=? AND passengerId=? AND flightId=?",
-        [scope.bookingId, scope.passengerId, scope.flightId]
-      )
-    ).toEqual([{ status: "O" }]);
+    expect(await couponStatus()).toEqual([{ status: "O" }]);
     expect(
       await client.baggage.flightCloseout.query({ flightId: scope.flightId })
     ).toMatchObject({
