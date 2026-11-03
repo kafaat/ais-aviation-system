@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Link } from "wouter";
+import { WalletCard } from "@/components/WalletCard";
+import { useOperationalLabels } from "@/components/OperationalReadState";
+import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
   CreditCard,
@@ -49,15 +52,17 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function PaymentHistory() {
   const { t } = useTranslation();
+  const l = useOperationalLabels();
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [methodFilter, setMethodFilter] = useState<string>("");
 
-  const { data: payments, isLoading } = trpc.payments.getHistory.useQuery({
+  const history = trpc.payments.getHistory.useQuery({
     status: statusFilter || undefined,
     method: methodFilter || undefined,
     limit: 50,
   });
 
+  const payments = history.data;
   const { data: stats } = trpc.payments.getStats.useQuery();
 
   return (
@@ -85,6 +90,14 @@ export default function PaymentHistory() {
             </p>
           </div>
         </div>
+
+        <WalletCard />
+        <p className="mb-6 text-sm text-muted-foreground">
+          {l(
+            "تظهر مدفوعات رصيد المحفظة في سجل حركات المحفظة أعلاه.",
+            "Wallet-balance payments appear in the wallet transaction history above."
+          )}
+        </p>
 
         {/* Stats Cards */}
         {stats && (
@@ -188,7 +201,23 @@ export default function PaymentHistory() {
 
         {/* Payment List */}
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border overflow-hidden">
-          {isLoading ? (
+          {history.isError ? (
+            <div role="alert" className="space-y-2 p-8 text-center">
+              <p>
+                {l(
+                  "تعذّر تحميل سجل المدفوعات",
+                  "Payment history could not be loaded"
+                )}
+              </p>
+              <Button
+                variant="outline"
+                disabled={history.isFetching}
+                onClick={() => void history.refetch()}
+              >
+                {l("إعادة المحاولة", "Retry")}
+              </Button>
+            </div>
+          ) : history.isLoading ? (
             <div className="p-8 text-center text-muted-foreground">
               {t("common.loading", "Loading...")}
             </div>

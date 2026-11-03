@@ -50,3 +50,38 @@ it("rejects pending tenant assignment and rolls back when the audit event fails"
   await expect(setTenantStatus(1, "suspended", 99)).rejects.toThrow("Injected");
   expect(fixture.rows("tenants")[0].status).toBe("active");
 });
+
+it.each(["airline_admin", "ops", "finance", "user"] as const)(
+  "rejects %s at every global tenant administration endpoint",
+  async role => {
+    const { tenantsRouter } = await import("../routers/tenants");
+    fixture.rows("users")[0].role = role;
+    const ctx = await createContext({ req: { headers: {} }, res: {} } as any);
+    const caller = tenantsRouter.createCaller(ctx);
+    for (const action of [
+      () => caller.list(),
+      () => caller.create({ slug: "test-air", name: "Test Air" }),
+      () => caller.setStatus({ tenantId: 2, status: "active" }),
+      () => caller.assignUser({ tenantId: 2, userId: 3 }),
+    ])
+      await expect(action()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(fixture.rows("tenants")[1].status).toBe("pending");
+    expect(fixture.rows("users")[0].tenantId).toBe(1);
+  }
+);
+
+it.each([
+  { slug: "a".repeat(65), name: "Test Air" },
+  { slug: "test-air", name: "   " },
+])("rejects invalid tenant identity before storage", async input => {
+  const { tenantsRouter } = await import("../routers/tenants");
+  fixture.rows("users")[0].role = "admin";
+  const ctx = await createContext({ req: { headers: {} }, res: {} } as any);
+  const select = vi.spyOn(fixture.db, "select");
+  const insert = vi.spyOn(fixture.db, "insert");
+  await expect(
+    tenantsRouter.createCaller(ctx).create(input)
+  ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  expect(select).not.toHaveBeenCalled();
+  expect(insert).not.toHaveBeenCalled();
+});

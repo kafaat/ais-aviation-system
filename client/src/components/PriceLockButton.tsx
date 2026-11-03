@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { Button } from "./ui/button";
@@ -9,25 +8,22 @@ import { toast } from "sonner";
 interface PriceLockButtonProps {
   flightId: number;
   cabinClass: "economy" | "business";
-  currentPrice: number; // SAR cents
 }
 
 export function PriceLockButton({
   flightId,
   cabinClass,
-  currentPrice: _currentPrice,
 }: PriceLockButtonProps) {
   const { t } = useTranslation();
-  const [isLocked, setIsLocked] = useState(false);
-
-  const { data: lockStatus } = trpc.priceLock.checkLock.useQuery(
-    { flightId, cabinClass },
-    { retry: false }
-  );
-
+  const utils = trpc.useUtils();
+  // Creating a lock is idempotent per user, flight and cabin. Request it only
+  // on a click so search does not issue two extra reads for every flight.
   const lockMutation = trpc.priceLock.create.useMutation({
     onSuccess: data => {
-      setIsLocked(true);
+      utils.priceLock.checkLock.setData(
+        { flightId, cabinClass },
+        { lock: data.lock }
+      );
       if (data.isNew) {
         toast.success(t("priceLock.success"));
       } else {
@@ -39,10 +35,9 @@ export function PriceLockButton({
     },
   });
 
-  const hasActiveLock = lockStatus?.lock || isLocked;
-
-  if (hasActiveLock && lockStatus?.lock) {
-    const expiresAt = new Date(lockStatus.lock.expiresAt);
+  const lock = lockMutation.data?.lock;
+  if (lock && lock.expiresAt.getTime() > Date.now()) {
+    const expiresAt = lock.expiresAt;
     const hoursLeft = Math.max(
       0,
       Math.round((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60))
@@ -56,7 +51,7 @@ export function PriceLockButton({
         </span>
         <Badge variant="secondary" className="text-xs">
           <Clock className="h-3 w-3 me-1" />
-          {hoursLeft}h
+          {t("priceLock.expiresIn", { hours: hoursLeft })}
         </Badge>
       </div>
     );
@@ -77,7 +72,7 @@ export function PriceLockButton({
       )}
       {t("priceLock.lockPrice")}
       <Badge variant="secondary" className="ms-2 text-xs">
-        {(25).toFixed(0)} {t("common.sar")}
+        25 {t("common.currency")}
       </Badge>
     </Button>
   );

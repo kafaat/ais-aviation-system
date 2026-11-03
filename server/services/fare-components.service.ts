@@ -191,20 +191,26 @@ export function buildZatcaPreviewQr(input: {
   ]).toString("base64");
 }
 
-function draftGate() {
-  if (process.env.AIS_ZATCA_DRAFT_MODE !== "true")
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "ZATCA draft generation is disabled",
-    });
+export function zatcaDraftAvailability() {
+  if (process.env.AIS_ZATCA_DRAFT_MODE !== "true") return "disabled" as const;
   if (
     process.env.NODE_ENV === "production" &&
     (!process.env.AIS_ZATCA_EGS_ACCEPTANCE_EVIDENCE_ID ||
       process.env.AIS_ZATCA_PRODUCTION_ACCEPTED !== "true")
   )
+    return "acceptance_required" as const;
+  return "available" as const;
+}
+
+function draftGate() {
+  const status = zatcaDraftAvailability();
+  if (status !== "available")
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Accepted EGS evidence is required in production",
+      message:
+        status === "disabled"
+          ? "ZATCA draft generation is disabled"
+          : "Accepted EGS evidence is required in production",
     });
 }
 

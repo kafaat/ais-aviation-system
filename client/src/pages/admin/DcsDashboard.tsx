@@ -1,3 +1,4 @@
+import { BaggageCloseout } from "@/components/BaggageCloseout";
 import { useState } from "react";
 import { downloadFile } from "@/lib/downloadFile";
 import { escapeCSV } from "@shared/csv";
@@ -223,10 +224,6 @@ function ManifestTab() {
   );
 
   const manifest = manifestData?.manifest;
-  const closeout = trpc.baggage.flightCloseout.useQuery(
-    { flightId: parsedFlightId },
-    { enabled: false, retry: false }
-  );
 
   return (
     <div className="space-y-6">
@@ -483,61 +480,10 @@ function ManifestTab() {
                   </p>
                 </div>
               </div>
-              <Button
-                variant="outline"
-                className="mt-4"
-                disabled={
-                  closeout.isFetching || manifest.flight.id !== parsedFlightId
-                }
-                onClick={() => void closeout.refetch()}
-              >
-                {t("dcs.manifest.checkBaggage")}
-              </Button>
-              {closeout.isError && (
-                <p role="alert">{t("dcs.manifest.closeoutUnavailable")}</p>
-              )}
-              {!closeout.isError &&
-                closeout.data?.flightId === manifest.flight.id &&
-                manifest.flight.id === parsedFlightId && (
-                  <div role="status" className="mt-2 space-y-1">
-                    <p>
-                      {t(
-                        closeout.data.readyToClose
-                          ? "dcs.manifest.closeoutMatched"
-                          : "dcs.manifest.closeoutIncomplete"
-                      )}
-                    </p>
-                    <p>
-                      {t("dcs.manifest.closeoutCounts", {
-                        loaded: closeout.data.loadedBags,
-                        expected: closeout.data.expectedBags,
-                        unexpected: closeout.data.unexpectedBags,
-                      })}
-                    </p>
-                    {closeout.data.missingEntry.length > 0 && (
-                      <p>
-                        {t("dcs.manifest.missingEntry")}{" "}
-                        <bdi>{closeout.data.missingEntry.join(", ")}</bdi>
-                      </p>
-                    )}
-                    {closeout.data.missingLoading.length > 0 && (
-                      <p>
-                        {t("dcs.manifest.missingLoading")}{" "}
-                        <bdi>{closeout.data.missingLoading.join(", ")}</bdi>
-                      </p>
-                    )}
-                    {closeout.data.duplicates.length > 0 && (
-                      <p>
-                        {t("dcs.manifest.duplicateScans")}{" "}
-                        <bdi>
-                          {closeout.data.duplicates
-                            .map(row => row.tagNumber)
-                            .join(", ")}
-                        </bdi>
-                      </p>
-                    )}
-                  </div>
-                )}
+              <BaggageCloseout
+                flightId={parsedFlightId}
+                disabled={manifest.flight.id !== parsedFlightId}
+              />
             </Card>
           </div>
         </div>

@@ -1,3 +1,5 @@
+import { BaggageCloseout } from "@/components/BaggageCloseout";
+import { CouponMonthReview } from "@/components/CouponMonthReview";
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Redirect } from "wouter";
@@ -38,6 +40,7 @@ export default function AirlineConsole() {
         ) && (
           <>
             <SettlementLedgerDraft />
+            <CouponMonthReview />
             <InternalFundingRefund />
             <SupplierFinanceControl />
           </>
@@ -46,9 +49,17 @@ export default function AirlineConsole() {
     </DashboardLayout>
   );
 }
+const FLIGHTS_PER_PAGE = 50;
+type FlightCursor = { departureTime: Date; id: number };
 function AirlineFlights() {
   const l = useOperationalLabels();
-  const query = trpc.operations.airlineFlights.useQuery();
+  const [cursors, setCursors] = useState<FlightCursor[]>([]);
+  const query = trpc.operations.airlineFlights.useQuery({
+    after: cursors.at(-1),
+    limit: FLIGHTS_PER_PAGE + 1,
+  });
+  const pageFlights = query.data?.slice(0, FLIGHTS_PER_PAGE);
+
   const [flightId, setFlightId] = useState(0);
   const [status, setStatus] = useState<
     "scheduled" | "delayed" | "cancelled" | "completed"
@@ -61,13 +72,20 @@ function AirlineFlights() {
     },
     onError: error => toast.error(error.message),
   });
+  const selected = pageFlights?.find(f => f.id === flightId);
+  function changePage(next: FlightCursor[]) {
+    setFlightId(0);
+    setReason("");
+    setStatus("delayed");
+    setCursors(next);
+  }
   return (
     <section className="space-y-4">
       <h2>{l("رحلات الشركة", "Company flights")}</h2>
       <p>
         {l(
-          "تُعرض أول 200 رحلة مرتبة حسب المغادرة. الإلغاء يطلق مسار معالجة الحجوزات والاسترداد.",
-          "Showing up to 200 flights ordered by departure. Cancellation starts booking recovery and refund processing."
+          "الرحلات مرتبة حسب المغادرة. الإلغاء يطلق مسار معالجة الحجوزات والاسترداد.",
+          "Flights are ordered by departure. Cancellation starts booking recovery and refund processing."
         )}
       </p>
       <OperationalReadState query={query}>
@@ -80,7 +98,7 @@ function AirlineFlights() {
             </tr>
           </thead>
           <tbody>
-            {query.data?.map(flight => (
+            {pageFlights?.map(flight => (
               <tr key={flight.id}>
                 <td>{flight.flightNumber}</td>
                 <td>{flight.departureTime.toLocaleString()}</td>
@@ -91,10 +109,40 @@ function AirlineFlights() {
         </table>
         {query.data?.length === 0 && <p>{l("لا توجد رحلات", "No flights")}</p>}
       </OperationalReadState>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={cursors.length === 0}
+          onClick={() => changePage(cursors.slice(0, -1))}
+        >
+          {l("الرحلات السابقة", "Previous flights")}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={
+            !query.data ||
+            query.data.length <= FLIGHTS_PER_PAGE ||
+            !!query.error
+          }
+          onClick={() => {
+            const last = pageFlights?.at(-1);
+            if (last)
+              changePage([
+                ...cursors,
+                { departureTime: last.departureTime, id: last.id },
+              ]);
+          }}
+        >
+          {l("الرحلات التالية", "Next flights")}
+        </Button>
+      </div>
       <form
         onSubmit={e => {
           e.preventDefault();
-          update.mutate({ flightId, status, reason });
+          if (selected && !query.error)
+            update.mutate({ flightId, status, reason });
         }}
         className="space-y-3"
       >
@@ -106,13 +154,14 @@ function AirlineFlights() {
             onChange={e => setFlightId(Number(e.target.value))}
           >
             <option value="">{l("اختر رحلة", "Select flight")}</option>
-            {query.data?.map(f => (
+            {pageFlights?.map(f => (
               <option key={f.id} value={f.id}>
                 {f.flightNumber} ({f.id})
               </option>
             ))}
           </select>
         </label>
+        {selected && !query.error && <BaggageCloseout flightId={flightId} />}
         <label className="block">
           {l("الحالة الجديدة", "New status")}
           <select
@@ -137,7 +186,7 @@ function AirlineFlights() {
             onChange={e => setReason(e.target.value)}
           />
         </label>
-        <Button disabled={!flightId || update.isPending || !!query.error}>
+        <Button disabled={!selected || update.isPending || !!query.error}>
           {l("تنفيذ الانتقال", "Apply transition")}
         </Button>
       </form>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { OperationalReadState } from "./OperationalReadState";
 import { trpc } from "@/lib/trpc";
 import {
   Card,
@@ -118,15 +119,19 @@ export default function SpecialServicesRequest({
   const [additionalDetails, setAdditionalDetails] = useState<string>("");
 
   // Fetch available services
-  const { data: availableServices } =
-    trpc.specialServices.getAvailableServices.useQuery();
+  const catalogQuery = trpc.specialServices.getAvailableServices.useQuery();
+
+  const { data: availableServices } = catalogQuery;
 
   // Fetch existing services for this booking
+  const bookingQuery = trpc.specialServices.getBookingServices.useQuery({
+    bookingId,
+  });
   const {
     data: bookingServices,
     isLoading: isLoadingServices,
     refetch: refetchServices,
-  } = trpc.specialServices.getBookingServices.useQuery({ bookingId });
+  } = bookingQuery;
 
   // Request service mutation
   const requestServiceMutation =
@@ -198,7 +203,15 @@ export default function SpecialServicesRequest({
     return availableServices?.[type] || [];
   };
 
-  if (isLoadingServices) {
+  if (bookingQuery.error)
+    return (
+      <OperationalReadState query={bookingQuery}>{null}</OperationalReadState>
+    );
+  if (catalogQuery.error)
+    return (
+      <OperationalReadState query={catalogQuery}>{null}</OperationalReadState>
+    );
+  if (isLoadingServices || catalogQuery.isLoading) {
     return (
       <Card>
         <CardHeader>
@@ -235,14 +248,14 @@ export default function SpecialServicesRequest({
             <div className="space-y-4 py-4">
               {/* Passenger Selection */}
               <div className="space-y-2">
-                <Label htmlFor="passenger">
+                <Label htmlFor={`passenger-${bookingId}`}>
                   {t("specialServices.selectPassenger")}
                 </Label>
                 <Select
                   value={selectedPassenger}
                   onValueChange={setSelectedPassenger}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id={`passenger-${bookingId}`}>
                     <SelectValue
                       placeholder={t(
                         "specialServices.selectPassengerPlaceholder"
@@ -265,7 +278,7 @@ export default function SpecialServicesRequest({
 
               {/* Service Type Selection */}
               <div className="space-y-2">
-                <Label htmlFor="serviceType">
+                <Label htmlFor={`serviceType-${bookingId}`}>
                   {t("specialServices.selectServiceType")}
                 </Label>
                 <Select
@@ -275,7 +288,7 @@ export default function SpecialServicesRequest({
                     setSelectedServiceCode("");
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id={`serviceType-${bookingId}`}>
                     <SelectValue
                       placeholder={t(
                         "specialServices.selectServiceTypePlaceholder"
@@ -303,14 +316,14 @@ export default function SpecialServicesRequest({
               {/* Service Code Selection */}
               {selectedServiceType && (
                 <div className="space-y-2">
-                  <Label htmlFor="serviceCode">
+                  <Label htmlFor={`serviceCode-${bookingId}`}>
                     {t("specialServices.selectService")}
                   </Label>
                   <Select
                     value={selectedServiceCode}
                     onValueChange={setSelectedServiceCode}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id={`serviceCode-${bookingId}`}>
                       <SelectValue
                         placeholder={t(
                           "specialServices.selectServicePlaceholder"
@@ -438,6 +451,11 @@ export default function SpecialServicesRequest({
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    aria-label={
+                                      t("common.cancel") +
+                                      " " +
+                                      service.serviceCode
+                                    }
                                     onClick={() => handleCancel(service.id)}
                                     disabled={cancelServiceMutation.isPending}
                                   >

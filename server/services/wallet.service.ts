@@ -1,3 +1,4 @@
+import { assertTenantOperational } from "./tenant.service";
 import { withTransactionalIdempotency } from "./idempotency-v2.service";
 import {
   providerRequestOptions,
@@ -165,7 +166,11 @@ export async function topUpWallet(
 }
 
 /** Amount and ownership come from the locked booking, never the client. */
-export async function payFromWallet(userId: number, bookingId: number) {
+export async function payFromWallet(
+  userId: number,
+  bookingId: number,
+  expectedAmount?: number
+) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
   return db.transaction(async tx => {
@@ -189,6 +194,12 @@ export async function payFromWallet(userId: number, bookingId: number) {
         )
       )
       .limit(1);
+    const quotedAmount = existing ? -existing.amount : booking.totalAmount;
+    if (expectedAmount !== undefined && expectedAmount !== quotedAmount)
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Wallet payment amount changed. Review the booking total.",
+      });
     if (existing)
       return { balance: existing.balanceAfter, amountPaid: -existing.amount };
     if (
@@ -197,6 +208,7 @@ export async function payFromWallet(userId: number, bookingId: number) {
       booking.seatsReserved
     )
       throw new Error("Booking is not payable");
+    await assertTenantOperational(tx, booking.tenantId);
     await assertNoCollectionReview(tx, bookingId);
     await assertNoActiveCheckout(tx, booking);
     await assertNoActiveSplitPayment(tx, bookingId);
@@ -295,7 +307,10 @@ export async function getWalletTransactions(
     .select()
     .from(walletTransactions)
     .where(eq(walletTransactions.walletId, wallet.id))
-    .orderBy(sql`${walletTransactions.createdAt} DESC`)
+    .orderBy(
+      sql`${walletTransactions.createdAt} DESC`,
+      sql`${walletTransactions.id} DESC`
+    )
     .limit(limit)
     .offset(offset);
 

@@ -12,11 +12,24 @@ import { readLineageRuns } from "../services/lineage.service";
 import { z } from "zod";
 import { adminProcedure, airlineOpsProcedure, router } from "../_core/trpc";
 import { isAdmin } from "../services/rbac.service";
-import { eq, asc } from "drizzle-orm";
+import { and, eq, asc, gt, or } from "drizzle-orm";
 import { scheduledTasks, flights } from "../../drizzle/schema";
 import { getDb } from "../db";
 export const operationsRouter = router({
   airlineFlights: airlineOpsProcedure
+    .input(
+      z
+        .object({
+          after: z
+            .object({
+              departureTime: z.date(),
+              id: z.number().int().positive(),
+            })
+            .optional(),
+          limit: z.number().int().min(1).max(200).optional(),
+        })
+        .optional()
+    )
     .output(
       z.array(
         z.object({
@@ -29,7 +42,7 @@ export const operationsRouter = router({
         })
       )
     )
-    .query(async ({ ctx }) => {
+    .query(async ({ ctx, input }) => {
       const db = getDb();
       if (!db) throw new Error("Flight source unavailable");
       return await db
@@ -43,12 +56,22 @@ export const operationsRouter = router({
         })
         .from(flights)
         .where(
-          isAdmin(ctx.user.role)
-            ? undefined
-            : eq(flights.tenantId, requireValue(ctx.tenantId))
+          and(
+            isAdmin(ctx.user.role)
+              ? undefined
+              : eq(flights.tenantId, requireValue(ctx.tenantId)),
+            input?.after &&
+              or(
+                gt(flights.departureTime, input.after.departureTime),
+                and(
+                  eq(flights.departureTime, input.after.departureTime),
+                  gt(flights.id, input.after.id)
+                )
+              )
+          )
         )
-        .orderBy(asc(flights.departureTime))
-        .limit(200);
+        .orderBy(asc(flights.departureTime), asc(flights.id))
+        .limit(input?.limit ?? 200);
     }),
   integrationConfiguration: adminProcedure
     .output(

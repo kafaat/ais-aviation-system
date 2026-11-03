@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo } from "react";
-import { useLocation, Link } from "wouter";
+import { useSearch, Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PriceLockButton } from "@/components/PriceLockButton";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -67,14 +68,23 @@ interface FilterOptions {
 export default function SearchResults() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const [location] = useLocation();
-  const [params, setParams] = useState<{
-    originId: number;
-    destinationId: number;
-    /** YYYY-MM-DD; older links carry an ISO instant, handled by the server. */
-    departureDate: string;
-  } | null>(null);
-
+  const search = useSearch();
+  const params = useMemo(() => {
+    const query = new URLSearchParams(search);
+    const originId = Number(query.get("origin"));
+    const destinationId = Number(query.get("destination"));
+    const departureDate = query.get("date");
+    if (
+      !Number.isSafeInteger(originId) ||
+      originId < 1 ||
+      !Number.isSafeInteger(destinationId) ||
+      destinationId < 1 ||
+      !departureDate ||
+      !Number.isFinite(Date.parse(departureDate))
+    )
+      return null;
+    return { originId, destinationId, departureDate };
+  }, [search]);
   // Flight comparison state
   const {
     selectedFlights,
@@ -98,22 +108,12 @@ export default function SearchResults() {
 
   const currentLocale = i18n.language === "ar" ? ar : enUS;
 
-  useEffect(() => {
-    const searchParams = new URLSearchParams(location.split("?")[1]);
-    const origin = searchParams.get("origin");
-    const destination = searchParams.get("destination");
-    const date = searchParams.get("date");
-
-    if (origin && destination && date) {
-      setParams({
-        originId: parseInt(origin),
-        destinationId: parseInt(destination),
-        departureDate: date,
-      });
-    }
-  }, [location]);
-
-  const { data: flights, isLoading } = trpc.flights.search.useQuery(
+  const {
+    data: flights,
+    isLoading,
+    error: searchError,
+    refetch: retrySearch,
+  } = trpc.flights.search.useQuery(
     params ?? { originId: 0, destinationId: 0, departureDate: "1970-01-01" },
     {
       enabled: !!params,
@@ -178,6 +178,8 @@ export default function SearchResults() {
     if (flights && flights.length > 0 && params) {
       const flight = flights[0];
       saveSearchToHistory({
+        originId: params.originId,
+        destinationId: params.destinationId,
         originCode: flight.origin.code,
         originCity: flight.origin.city,
         destinationCode: flight.destination.code,
@@ -391,7 +393,14 @@ export default function SearchResults() {
 
       {/* Results */}
       <main className="container py-8">
-        {!flights || flights.length === 0 ? (
+        {searchError ? (
+          <Card className="p-8" role="alert">
+            <p>{searchError.message}</p>
+            <Button onClick={() => void retrySearch()}>
+              {t("common.retry")}
+            </Button>
+          </Card>
+        ) : !flights || flights.length === 0 ? (
           <div className="space-y-6" data-testid="no-results">
             <Card className="p-12 text-center border-dashed">
               <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
@@ -467,6 +476,12 @@ export default function SearchResults() {
                     liveStatus?.status ||
                     (flight.status as FlightStatusType) ||
                     "scheduled";
+
+                  const canLock =
+                    user &&
+                    ["scheduled", "delayed"].includes(displayStatus) &&
+                    new Date(flight.departureTime).getTime() - Date.now() >=
+                      24 * 3600_000;
 
                   return (
                     <Card
@@ -756,6 +771,12 @@ export default function SearchResults() {
                                       {t("search.bookNow")}
                                     </Link>
                                   </Button>
+                                  {canLock && (
+                                    <PriceLockButton
+                                      flightId={flight.id}
+                                      cabinClass="economy"
+                                    />
+                                  )}
                                 </div>
                               </div>
                             ) : (
@@ -813,6 +834,12 @@ export default function SearchResults() {
                                       {t("search.bookNow")}
                                     </Link>
                                   </Button>
+                                  {canLock && (
+                                    <PriceLockButton
+                                      flightId={flight.id}
+                                      cabinClass="business"
+                                    />
+                                  )}
                                 </div>
                               </div>
                             ) : (

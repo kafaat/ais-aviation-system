@@ -1,3 +1,4 @@
+import { prepareValueIntent } from "@/lib/redemption-intent";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
@@ -10,7 +11,7 @@ import { Separator } from "./ui/separator";
 import { Users, Plus, Trash2, Plane, Crown, User, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-export function FamilyPoolCard() {
+export function FamilyPoolCard({ userId }: { userId: number }) {
   const { t } = useTranslation();
   const [groupName, setGroupName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
@@ -18,10 +19,12 @@ export function FamilyPoolCard() {
 
   const utils = trpc.useUtils();
 
-  const { data: group, isLoading } = trpc.familyPool.myGroup.useQuery(
-    undefined,
-    { retry: false }
-  );
+  const {
+    data: group,
+    isLoading,
+    error,
+    refetch,
+  } = trpc.familyPool.myGroup.useQuery(undefined, { retry: false });
 
   const createGroup = trpc.familyPool.createGroup.useMutation({
     onSuccess: () => {
@@ -58,10 +61,9 @@ export function FamilyPoolCard() {
     onSuccess: () => {
       toast.success(t("familyPool.contributeSuccess"));
       utils.familyPool.myGroup.invalidate();
+      void utils.loyalty.myAccount.invalidate();
+      void utils.loyalty.myTransactions.invalidate();
       setContributeMiles("");
-    },
-    onError: error => {
-      toast.error(error.message);
     },
   });
 
@@ -86,6 +88,16 @@ export function FamilyPoolCard() {
     );
   }
 
+  if (error) {
+    return (
+      <Card className="p-6" role="alert">
+        <h3>{t("familyPool.title")}</h3>
+        <p>{error.message}</p>
+        <Button onClick={() => void refetch()}>{t("common.retry")}</Button>
+      </Card>
+    );
+  }
+
   // No group - show creation form
   if (!group) {
     return (
@@ -100,8 +112,12 @@ export function FamilyPoolCard() {
 
         <div className="space-y-3">
           <div>
-            <Label>{t("familyPool.groupName")}</Label>
+            <Label htmlFor="family-group-name">
+              {t("familyPool.groupName")}
+            </Label>
             <Input
+              id="family-group-name"
+              maxLength={100}
               value={groupName}
               onChange={e => setGroupName(e.target.value)}
               placeholder={t("familyPool.groupName")}
@@ -109,8 +125,8 @@ export function FamilyPoolCard() {
             />
           </div>
           <Button
-            onClick={() => createGroup.mutate({ name: groupName })}
-            disabled={!groupName.trim() || createGroup.isPending}
+            onClick={() => createGroup.mutate({ name: groupName.trim() })}
+            disabled={groupName.trim().length < 2 || createGroup.isPending}
             className="w-full"
           >
             {createGroup.isPending ? (
@@ -175,7 +191,7 @@ export function FamilyPoolCard() {
                     {member.userName || "User"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {member.currentMiles?.toLocaleString() || 0}{" "}
+                    {member.milesContributed.toLocaleString()}{" "}
                     {t("familyPool.miles")}
                     {member.tier && (
                       <Badge variant="secondary" className="ml-2 text-[10px]">
@@ -187,6 +203,9 @@ export function FamilyPoolCard() {
               </div>
               {group.myRole === "owner" && member.role !== "owner" && (
                 <Button
+                  aria-label={
+                    t("familyPool.removeMember") + " " + (member.userName ?? "")
+                  }
                   variant="ghost"
                   size="sm"
                   onClick={() =>
@@ -210,6 +229,7 @@ export function FamilyPoolCard() {
         <>
           <div className="flex gap-2 mb-4">
             <Input
+              aria-label={t("familyPool.memberEmail")}
               value={memberEmail}
               onChange={e => setMemberEmail(e.target.value)}
               placeholder={t("familyPool.memberEmail")}
@@ -223,7 +243,12 @@ export function FamilyPoolCard() {
                   memberEmail,
                 })
               }
-              disabled={!memberEmail.trim() || addMember.isPending}
+              aria-label={t("familyPool.addMember")}
+              disabled={
+                !memberEmail.trim() ||
+                addMember.isPending ||
+                group.members.length >= group.maxMembers
+              }
               size="sm"
             >
               {addMember.isPending ? (
@@ -240,23 +265,41 @@ export function FamilyPoolCard() {
       <Separator className="my-4" />
       <div className="flex gap-2">
         <Input
+          aria-label={t("familyPool.contribute")}
           value={contributeMiles}
           onChange={e => setContributeMiles(e.target.value)}
           placeholder={t("familyPool.contribute")}
           type="number"
           min={100}
+          max={100000}
+          step={1}
           className="flex-1"
         />
         <Button
-          onClick={() =>
-            contribute.mutate({
-              groupId: group.id,
-              miles: parseInt(contributeMiles),
-            })
-          }
+          onClick={async () => {
+            try {
+              const miles = Number(contributeMiles);
+              const intent = prepareValueIntent(
+                sessionStorage,
+                `ais:family:contribute:${userId}:${group.id}:${miles}`
+              );
+              if (!intent) return;
+              await contribute.mutateAsync({
+                groupId: group.id,
+                miles,
+                requestKey: intent.key,
+              });
+              intent.acknowledge();
+            } catch (error) {
+              toast.error(
+                error instanceof Error ? error.message : t("common.error")
+              );
+            }
+          }}
           disabled={
-            !contributeMiles ||
-            parseInt(contributeMiles) < 100 ||
+            !Number.isSafeInteger(Number(contributeMiles)) ||
+            Number(contributeMiles) < 100 ||
+            Number(contributeMiles) > 100000 ||
             contribute.isPending
           }
           variant="secondary"

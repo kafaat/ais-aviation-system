@@ -59,13 +59,19 @@ export const walletRouter = router({
     .input(
       z.object({
         bookingId: z.number().int().positive(),
+        expectedAmount: z.number().int().positive().optional(),
       })
     )
     .output(responseContracts["pay"])
     .mutation(async ({ ctx, input }) => {
       try {
-        return await payFromWallet(ctx.user.id, input.bookingId);
+        return await payFromWallet(
+          ctx.user.id,
+          input.bookingId,
+          input.expectedAmount
+        );
       } catch (error) {
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:

@@ -1895,6 +1895,7 @@ try {
         await import("../../server/services/loyalty.service");
       const {
         createFamilyGroup,
+        addFamilyMember,
         contributeMilesToPool,
         getMyFamilyGroup,
         deleteFamilyGroup,
@@ -1905,6 +1906,44 @@ try {
         .values({ id: ownerId, tenantId: id, openId: "audit-family-miles" });
       await awardBonusMiles(ownerId, 100, "Synthetic initial credit");
       const group = await createFamilyGroup(ownerId, "Synthetic family");
+      const memberEmail = (n: number) => `family-${n}@example.test`;
+      for (const n of [1, 2, 3, 4]) {
+        await db.insert(s.users).values({
+          id: id + 78000 + n,
+          tenantId: id,
+          openId: `family-admission-${n}`,
+          email: memberEmail(n),
+        });
+      }
+      const otherOwner = id + 78001;
+      const creation = await Promise.allSettled([
+        createFamilyGroup(otherOwner, "Second family"),
+        createFamilyGroup(otherOwner, "Duplicate family"),
+      ]);
+      assert.equal(creation.filter(r => r.status === "fulfilled").length, 1);
+      const otherGroup = await getMyFamilyGroup(otherOwner);
+      assert.ok(otherGroup);
+      assert.equal(otherGroup.members.length, 1);
+      const competingGroups = await Promise.allSettled([
+        addFamilyMember(ownerId, group.id, memberEmail(2)),
+        addFamilyMember(otherOwner, otherGroup.id, memberEmail(2)),
+      ]);
+      assert.equal(
+        competingGroups.filter(r => r.status === "fulfilled").length,
+        1
+      );
+      const groupBefore = await getMyFamilyGroup(ownerId);
+      assert.ok(groupBefore);
+      await db
+        .update(s.familyGroups)
+        .set({ maxMembers: groupBefore.members.length + 1 })
+        .where(eq(s.familyGroups.id, group.id));
+      const finalPlace = await Promise.allSettled(
+        [3, 4].map(n => addFamilyMember(ownerId, group.id, memberEmail(n)))
+      );
+      assert.equal(finalPlace.filter(r => r.status === "fulfilled").length, 1);
+      const groupAfter = await getMyFamilyGroup(ownerId);
+      assert.equal(groupAfter?.members.length, groupBefore.members.length + 1);
       const transfers = await Promise.allSettled([
         contributeMilesToPool(ownerId, group.id, 80),
         contributeMilesToPool(ownerId, group.id, 80),
@@ -1934,7 +1973,11 @@ try {
       assert.equal((await account()).currentMilesBalance, 20);
       const afterRollback = await getMyFamilyGroup(ownerId);
       assert.equal(afterRollback?.pooledMiles, 80);
-      assert.equal(afterRollback?.members[0].milesContributed, 80);
+      assert.equal(
+        afterRollback?.members.find(member => member.userId === ownerId)
+          ?.milesContributed,
+        80
+      );
       const concurrent = await Promise.allSettled([
         awardBonusMiles(ownerId, 30, "Concurrent bonus A"),
         awardBonusMiles(ownerId, 50, "Concurrent bonus B"),

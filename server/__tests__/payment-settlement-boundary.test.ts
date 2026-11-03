@@ -375,12 +375,30 @@ describe("verified payment settlement", () => {
       vi.useRealTimers();
     }
   });
+  it("blocks new wallet debits for a suspended airline", async () => {
+    fixture.rows("tenants")[0].status = "suspended";
+    await expect(payFromWallet(9, 7, 100000)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect(fixture.rows("wallets")[0].balance).toBe(150000);
+    expect(fixture.rows("wallet_transactions")).toHaveLength(0);
+    expect(fixture.rows("bookings")[0].paymentStatus).toBe("pending");
+  });
+
   it("debits the server price once and rejects another owner's booking", async () => {
     await expect(payFromWallet(8, 7)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+    await expect(payFromWallet(9, 7, 99000)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(fixture.rows("wallet_transactions")).toHaveLength(0);
+    await payFromWallet(9, 7, 100000);
+    fixture.rows("tenants")[0].status = "suspended";
     await payFromWallet(9, 7);
-    await payFromWallet(9, 7);
+    await expect(payFromWallet(9, 7, 99000)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
     expect(fixture.rows("wallets")[0].balance).toBe(50000);
     expect(fixture.rows("bookings")[0].status).toBe("confirmed");
     expect(fixture.rows("wallet_transactions")).toHaveLength(1);

@@ -1,5 +1,5 @@
 import { hasValidOptionalPassport } from "@shared/passport";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -49,6 +49,8 @@ import {
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+
+const AccountPrivacy = lazy(() => import("@/components/AccountPrivacy"));
 
 type SeatType = "window" | "aisle" | "middle";
 type CabinClass = "economy" | "business" | "first";
@@ -267,7 +269,7 @@ export default function Profile() {
           data-testid="profile-tabs"
         >
           {/* Improved Tabs */}
-          <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm shadow-md rounded-xl p-1.5 h-auto">
+          <TabsList className="grid w-full grid-cols-4 bg-white/80 backdrop-blur-sm shadow-md rounded-xl p-1.5 h-auto">
             <TabsTrigger
               value="travel"
               className={cn(
@@ -299,6 +301,21 @@ export default function Profile() {
               <Bell className="h-4 w-4" />
               <span className="hidden sm:inline">
                 {t("profile.tabs.notifications")}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="security"
+              aria-label={
+                i18n.language.startsWith("ar")
+                  ? "الأمان والخصوصية"
+                  : "Security and privacy"
+              }
+            >
+              <Shield className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                {i18n.language.startsWith("ar")
+                  ? "الأمان والخصوصية"
+                  : "Security and privacy"}
               </span>
             </TabsTrigger>
           </TabsList>
@@ -760,30 +777,37 @@ export default function Profile() {
             {/* Auto Check-In */}
             <AutoCheckInToggle className="mt-4" />
           </TabsContent>
+          <TabsContent value="security">
+            <Suspense fallback={<ProfileSkeleton />}>
+              <AccountPrivacy key={user?.id} />
+            </Suspense>
+          </TabsContent>
         </Tabs>
 
         {/* Save Button */}
-        <div className="flex justify-end mt-6">
-          <Button
-            onClick={handleSave}
-            disabled={updatePreferences.isPending}
-            size="lg"
-            className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg hover:shadow-xl transition-all px-8"
-            data-testid="save-button"
-          >
-            {updatePreferences.isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {t("profile.saving")}
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                {t("common.save")}
-              </>
-            )}
-          </Button>
-        </div>
+        {activeTab !== "security" && (
+          <div className="flex justify-end mt-6">
+            <Button
+              onClick={handleSave}
+              disabled={updatePreferences.isPending}
+              size="lg"
+              className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg hover:shadow-xl transition-all px-8"
+              data-testid="save-button"
+            >
+              {updatePreferences.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {t("profile.saving")}
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  {t("common.save")}
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

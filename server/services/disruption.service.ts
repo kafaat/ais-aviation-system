@@ -157,9 +157,13 @@ export async function getUserDisruptions(userId: number) {
   const memberships = userBookings.flatMap(b => {
     const itinerary = legs.filter(l => l.bookingId === b.bookingId);
     return itinerary.length
-      ? itinerary
-          .filter(l => l.status === "confirmed" || l.status === "pending")
-          .map(l => ({ ...b, flightId: l.flightId }))
+      ? [
+          ...new Set(
+            itinerary
+              .filter(l => l.status === "confirmed" || l.status === "pending")
+              .map(l => l.flightId)
+          ),
+        ].map(flightId => ({ ...b, flightId }))
       : [b];
   });
   const flightIds = [...new Set(memberships.map(b => b.flightId))];
@@ -192,15 +196,16 @@ export async function getUserDisruptions(userId: number) {
     )
     .orderBy(sql`${flightDisruptions.createdAt} DESC`);
 
-  // Enrich with booking references
-  return userFlightDisruptions.map(d => {
-    const booking = memberships.find(b => b.flightId === d.flightId);
-    return {
-      ...d,
-      bookingReference: booking?.bookingReference,
-      bookingId: booking?.bookingId,
-    };
-  });
+  // Each affected reservation needs its own reference, even for a shared flight.
+  return userFlightDisruptions.flatMap(disruption =>
+    memberships
+      .filter(booking => booking.flightId === disruption.flightId)
+      .map(booking => ({
+        ...disruption,
+        bookingId: booking.bookingId,
+        bookingReference: booking.bookingReference,
+      }))
+  );
 }
 
 /**

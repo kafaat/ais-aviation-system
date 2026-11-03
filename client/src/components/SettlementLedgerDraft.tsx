@@ -1,3 +1,4 @@
+import { ZatcaDraftPreview } from "./ZatcaDraftPreview";
 import { BspEvidenceReview } from "./BspEvidenceReview";
 import { PayoutComparison } from "./PayoutComparison";
 import { trpc } from "@/lib/trpc";
@@ -37,6 +38,7 @@ export function SettlementLedgerDraft() {
           )}
         </OperationalReadState>
       </section>
+      <ZatcaDraftPreview />
       <BspEvidenceReview />
       <PayoutComparison />
     </>

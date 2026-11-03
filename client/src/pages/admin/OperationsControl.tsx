@@ -1,3 +1,4 @@
+import { FlightWeatherAdvisory } from "@/components/FlightWeatherAdvisory";
 import { OperationsEvidence } from "@/components/OperationsEvidence";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -594,6 +595,7 @@ export default function OperationsControl() {
           </div>
         )}
       </Card>
+      <FlightWeatherAdvisory />
       <OperationsEvidence />
     </main>
   );

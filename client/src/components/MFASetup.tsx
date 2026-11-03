@@ -11,7 +11,8 @@
  * @version 1.0.0
  */
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
+import QRCode from "qrcode";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -138,90 +139,6 @@ const translations = {
 type Lang = "en" | "ar";
 
 // ============================================================================
-// QR Code Placeholder SVG
-// ============================================================================
-
-function QRCodePlaceholder({ url }: { url: string }) {
-  // Generate a deterministic pattern based on the URL for visual variety
-  const hash = url.split("").reduce((acc, char) => {
-    return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
-  }, 0);
-
-  const cells: { x: number; y: number }[] = [];
-  const size = 21; // Standard QR code size
-  let seed = Math.abs(hash);
-
-  // Simple pseudo-random generator for deterministic pattern
-  const nextRand = () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed;
-  };
-
-  // QR code finder patterns (top-left, top-right, bottom-left)
-  const addFinderPattern = (ox: number, oy: number) => {
-    for (let y = 0; y < 7; y++) {
-      for (let x = 0; x < 7; x++) {
-        if (
-          y === 0 ||
-          y === 6 ||
-          x === 0 ||
-          x === 6 ||
-          (y >= 2 && y <= 4 && x >= 2 && x <= 4)
-        ) {
-          cells.push({ x: ox + x, y: oy + y });
-        }
-      }
-    }
-  };
-
-  addFinderPattern(0, 0);
-  addFinderPattern(14, 0);
-  addFinderPattern(0, 14);
-
-  // Fill remaining area with pseudo-random data
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const inFinder =
-        (x < 8 && y < 8) || (x >= 13 && y < 8) || (x < 8 && y >= 13);
-      if (!inFinder && nextRand() % 3 === 0) {
-        cells.push({ x, y });
-      }
-    }
-  }
-
-  const cellSize = 8;
-  const padding = 16;
-  const svgSize = size * cellSize + padding * 2;
-
-  return (
-    <svg
-      width={svgSize}
-      height={svgSize}
-      viewBox={`0 0 ${svgSize} ${svgSize}`}
-      className="mx-auto"
-      role="img"
-      aria-label="QR Code for authenticator app"
-    >
-      <rect width={svgSize} height={svgSize} fill="white" rx="8" />
-      {cells.map((cell, i) => (
-        <rect
-          key={i}
-          x={padding + cell.x * cellSize}
-          y={padding + cell.y * cellSize}
-          width={cellSize}
-          height={cellSize}
-          fill="#1a1a2e"
-          rx="1"
-        />
-      ))}
-    </svg>
-  );
-}
-
-// ============================================================================
-// Component
-// ============================================================================
-
 export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
   const { i18n } = useTranslation();
   const lang: Lang = i18n.language?.startsWith("ar") ? "ar" : "en";
@@ -231,13 +148,19 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [setupData, setSetupData] = useState<SetupData | null>(null);
   const [verificationCode, setVerificationCode] = useState("");
+  const [qrImage, setQrImage] = useState("");
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [copiedBackup, setCopiedBackup] = useState(false);
 
   // tRPC mutations
   const setupMutation = trpc.mfa.setup.useMutation({
-    onSuccess: (data: SetupData) => {
+    gcTime: 0,
+    onSuccess: async (data: SetupData) => {
       setSetupData(data);
+      // Encode locally; the provisioning URI contains the TOTP secret.
+      setQrImage(
+        await QRCode.toDataURL(data.qrCodeUrl, { width: 224 }).catch(() => "")
+      );
     },
     onError: () => {
       toast.error(t.setupError);
@@ -255,18 +178,6 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
     },
   });
 
-  // Start setup on mount (step 1)
-  const handleStartSetup = useCallback(() => {
-    if (!setupData && !setupMutation.isPending) {
-      setupMutation.mutate();
-    }
-  }, [setupData, setupMutation]);
-
-  // Auto-trigger setup when component mounts
-  if (!setupData && !setupMutation.isPending && !setupMutation.isError) {
-    handleStartSetup();
-  }
-
   const handleCopySecret = async () => {
     if (!setupData) return;
     try {
@@ -281,7 +192,7 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
   };
 
   const handleVerify = () => {
-    if (verificationCode.length !== 6) return;
+    if (verificationCode.length !== 6 || verifyMutation.isPending) return;
     verifyMutation.mutate({ token: verificationCode });
   };
 
@@ -403,7 +314,9 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
             <>
               {/* QR Code */}
               <div className="rounded-lg border bg-white p-4 dark:border-gray-600 dark:bg-white">
-                <QRCodePlaceholder url={setupData.qrCodeUrl} />
+                {qrImage && (
+                  <img className="mx-auto" src={qrImage} alt={t.step1Title} />
+                )}
               </div>
 
               {/* Manual key entry */}
@@ -418,6 +331,11 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
                   <Button
                     variant="outline"
                     size="icon"
+                    aria-label={
+                      lang === "ar"
+                        ? "نسخ مفتاح المصادقة"
+                        : "Copy authenticator key"
+                    }
                     onClick={handleCopySecret}
                     className="shrink-0"
                   >
@@ -434,11 +352,16 @@ export function MFASetup({ onComplete, onCancel, className }: MFASetupProps) {
 
           {/* Actions */}
           <div className="flex justify-between pt-2">
-            <Button variant="ghost" onClick={onCancel}>
-              {t.cancel}
-            </Button>
-            <Button onClick={() => setStep(2)} disabled={!setupData}>
-              {t.next}
+            {onCancel && (
+              <Button variant="ghost" onClick={onCancel}>
+                {t.cancel}
+              </Button>
+            )}
+            <Button
+              onClick={() => (setupData ? setStep(2) : setupMutation.mutate())}
+              disabled={setupMutation.isPending}
+            >
+              {setupData ? t.next : t.title}
               {isRTL ? (
                 <ArrowLeft className="ms-2 h-4 w-4" />
               ) : (

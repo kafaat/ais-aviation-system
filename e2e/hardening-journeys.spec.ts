@@ -13,6 +13,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
 
 registerProviderCheckoutTests();
 
@@ -24,6 +25,47 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
   });
+  test("payment history shows an outage and recovers through the real reader", async ({
+    page,
+  }) => {
+    await useBrowserSession(page, "regular");
+    const historyEndpoint = "**/api/trpc/*payments.getHistory*";
+    await page.route(historyEndpoint, route => route.abort("failed"));
+    await page.goto("/payment-history");
+    const unavailable = page.getByRole("alert").filter({
+      hasText: "Payment history could not be loaded",
+    });
+    await expect(unavailable).toBeVisible({ timeout: 20000 });
+    await expect(
+      page.getByText("No payments found", { exact: true })
+    ).toHaveCount(0);
+
+    await page.unroute(historyEndpoint);
+    const recovered = page.waitForResponse(
+      response =>
+        new URL(response.url()).pathname.includes("payments.getHistory") &&
+        response.ok()
+    );
+    await unavailable.getByRole("button", { name: "Retry" }).click();
+    const reply = await recovered;
+    const paths = decodeURIComponent(
+      new URL(reply.url()).pathname.split("/").pop()!
+    ).split(",");
+    const result = (await reply.json())[paths.indexOf("payments.getHistory")];
+    const rows = result?.result?.data?.json;
+    expect(Array.isArray(rows)).toBe(true);
+    await expect(unavailable).toHaveCount(0);
+    if (rows.length) {
+      await expect(
+        page.getByText(rows[0].bookingReference, { exact: true }).first()
+      ).toBeVisible();
+    } else {
+      await expect(
+        page.getByText("No payments found", { exact: true })
+      ).toBeVisible();
+    }
+  });
+
   test("passenger-rights referral cites an official source and keeps follow-ups local", async ({
     page,
   }) => {
@@ -511,29 +553,53 @@ test.describe("Funded journeys and truthful operational reads", () => {
       )
     ).toHaveLength(0);
   });
-  test("privacy request reaches an authenticated download and a different account receives 404", async ({
+  test("a profile export reaches an authenticated browser download and a different account receives 404", async ({
     page,
   }) => {
-    await ownedBooking(page);
-    const exported = await rpc(page).gdpr.exportData.mutate({ format: "json" });
+    const { booking } = await ownedBooking(page);
+    await page.goto("/profile");
+    await page.getByRole("tab", { name: "Security and privacy" }).click();
+    await page.getByLabel("File format").selectOption("json");
+    await page.getByRole("button", { name: "Request export" }).click();
+
+    // Track the request the passenger can see, not a pre-existing export.
+    const pending = page
+      .getByRole("listitem")
+      .filter({ hasText: /#\d+ · JSON · .*pending/i });
+    await expect(pending).toHaveCount(1);
+    const requestId = (await pending.innerText()).match(/#(\d+)/)?.[1];
+    expect(requestId).toBeTruthy();
+    await expect(pending.getByRole("link", { name: "Download" })).toHaveCount(
+      0
+    );
+
     await promisify(execFile)(
       process.execPath,
       ["--import", "tsx", "scripts/e2e/process-privacy.ts"],
       { timeout: 30000 }
     );
-    const status = await rpc(page).gdpr.getExportStatus.query({
-      requestId: exported.requestId,
+    await page.getByRole("button", { name: "Refresh exports" }).click();
+    const row = page.getByRole("listitem").filter({
+      hasText: new RegExp("#" + requestId + " · JSON · .*completed", "i"),
     });
-    expect(status.status).toBe("completed");
-    expect(status.downloadUrl).toBeTruthy();
-    if (!status.downloadUrl) throw new Error("Download URL missing");
-    const response = await page.request.get(status.downloadUrl);
-    expect(response.status()).toBe(200);
-    const document = await response.json();
+    const link = row.getByRole("link", { name: "Download" });
+    const downloadUrl = "/api/gdpr/download/" + requestId;
+    await expect(link).toHaveAttribute("href", downloadUrl);
+    const downloaded = page.waitForEvent("download");
+    await link.click();
+    const file = await downloaded;
+    expect(file.suggestedFilename()).toBe("privacy-" + requestId + ".json");
+    const filePath = await file.path();
+    if (!filePath) throw new Error("Export download missing");
+    const document = JSON.parse(await readFile(filePath, "utf8"));
     expect(document.profile.email).toBe("test.user@example.com");
-    expect(document.bookings.length).toBeGreaterThan(0);
+    expect(document.bookings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ bookingReference: booking.bookingReference }),
+      ])
+    );
     await loginAsAdmin(page);
-    expect((await page.request.get(status.downloadUrl)).status()).toBe(404);
+    expect((await page.request.get(downloadUrl)).status()).toBe(404);
   });
   test("demonstrates operational booking values alongside unverified earned revenue", async ({
     page,
