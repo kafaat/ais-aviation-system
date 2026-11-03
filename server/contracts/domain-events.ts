@@ -341,7 +341,11 @@ export const eventPayloadContracts: Record<string, z.ZodType> = {
     previousTotal: z.number().int().nonnegative(),
     totalAmount: z.number().int().positive(),
     refundDue: z.number().int().nonnegative(),
-    fulfillment: z.enum(["awaiting_ticket_reissue", "entitlement_created"]),
+    fulfillment: z.enum([
+      "awaiting_ticket_reissue",
+      "entitlement_created",
+      "local_ticket_revalidated",
+    ]),
   }),
   "order.servicing_cancelled": z.looseObject({
     modificationId: id,

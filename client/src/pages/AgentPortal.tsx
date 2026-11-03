@@ -493,6 +493,18 @@ function AgencyWorkspace({
                   </strong>
                 </Card>
               </div>
+              {dashboard.data.credit?.settlementReview && (
+                <p role="status">{t("agencyCredit.settlementReview")}</p>
+              )}
+              {dashboard.data.credit?.limitMinor != null && (
+                <p aria-label={t("agencyCredit.title")}>
+                  {t("agencyCredit.balance", {
+                    limit: money(dashboard.data.credit.limitMinor),
+                    outstanding: money(dashboard.data.credit.outstandingMinor),
+                    available: money(dashboard.data.credit.availableMinor ?? 0),
+                  })}
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">
                 {t("agentPortal.statsHelp")}
               </p>

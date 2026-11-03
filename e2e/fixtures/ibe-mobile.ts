@@ -45,27 +45,48 @@ export function registerMobileIbeTests() {
       });
       if (!flight || !baseURL)
         throw new Error("Missing flight fixture or booking origin");
-      const embed = new URL("/embed/search", baseURL);
-      const parent = (port: number) => `https://127.0.0.1:${port}/corporate`;
-      // Intercept only the two corporate documents. AIS serves its real headers,
-      // scripts, public API and result page from the separate booking origin.
-      for (const port of [4173, 4174]) {
-        await page.route(parent(port), route =>
+      const bookingOrigin = "https://booking-fixture.invalid";
+      const embed = new URL("/embed/search", bookingOrigin);
+      const allowed = "https://airline-fixture.invalid/corporate";
+      const unlisted = "https://unlisted-fixture.invalid/corporate";
+      // Proxy the real application behind a distinct HTTPS origin, including its
+      // CSP. A public HTTPS page cannot navigate a frame into loopback in Chrome.
+      let embedPolicy: string | undefined;
+      await page.route(bookingOrigin + "/**", async route => {
+        const target = new URL(route.request().url());
+        const response = await route.fetch({
+          url: new URL(target.pathname + target.search, baseURL).href,
+          maxRedirects: 0,
+        });
+        try {
+          if (target.pathname === embed.pathname) {
+            expect(response.status()).toBe(200);
+            embedPolicy = response.headers()["content-security-policy"];
+          }
+          await route.fulfill({ response });
+        } finally {
+          await response.dispose();
+        }
+      });
+      for (const parent of [allowed, unlisted]) {
+        await page.route(parent, route =>
           route.fulfill({
             contentType: "text/html",
             body: `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Airline</title><iframe title="Find a flight" style="width:100%;height:1050px;border:0" sandbox="allow-scripts allow-forms allow-same-origin allow-top-navigation-by-user-activation" src="${embed.href}"></iframe>`,
           })
         );
       }
-      const rejected = page.waitForEvent("console", {
-        predicate: message => /frame-ancestors/i.test(message.text()),
-      });
-      await page.goto(parent(4174));
-      await rejected;
+      await page.goto(unlisted);
+      expect(
+        embedPolicy
+          ?.split(";")
+          .find(directive => directive.trim().startsWith("frame-ancestors"))
+          ?.trim()
+      ).toBe("frame-ancestors 'self' https://airline-fixture.invalid");
       const frame = page.frameLocator('iframe[title="Find a flight"]');
-      await expect(frame.locator("form")).toHaveCount(0);
+      await expect(frame.locator("main")).toHaveCount(0);
 
-      await page.goto(parent(4173));
+      await page.goto(allowed);
       await expect(frame.getByTestId("brand-identity")).toHaveText(
         "Fixture Airways"
       );

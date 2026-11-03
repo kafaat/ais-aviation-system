@@ -17,6 +17,8 @@ import {
   checkInDcsPassenger,
   getDcsDesk,
   transitionDcsPassenger,
+  returnDcsBag,
+  setBagReturnGrant,
   type DcsActor,
 } from "../services/dcs-operations.service";
 import { checkInPassengers } from "../services/departure-control.service";
@@ -27,6 +29,12 @@ import {
 import { changeSeat, undoCheckIn } from "../services/seat-map.service";
 import { paymentReceipts } from "../../drizzle/schema";
 import { settleVerifiedRefund } from "../services/payment-settlement.service";
+import { DepartureReleaseError } from "../services/booking-settlement.service";
+import { registerBaggage } from "../services/baggage-registration.service";
+import {
+  performCheckIn as kioskCheckIn,
+  selectSeat as kioskSelectSeat,
+} from "../services/kiosk.service";
 
 const actor: DcsActor = { userId: 20, role: "ops", tenantId: 1 };
 const key = { flightId: 11, bookingId: 3, passengerId: 4 };
@@ -50,6 +58,7 @@ const seatRow = () =>
 beforeEach(() => {
   serial = 0;
   fixture = transactionMemory({
+    users: [{ id: actor.userId, tenantId: actor.tenantId, role: "ops" }],
     tenants: [
       { id: 1, status: "active" },
       { id: 2, status: "active" },
@@ -647,7 +656,119 @@ describe("passenger attendance, denial and scan binding", () => {
     );
   });
 
-  it("refuses offload and legacy undo when physical baggage custody has no verified return workflow", async () => {
+  it("returns only the identified bag once and preserves other bags and their offload block", async () => {
+    await checkIn();
+    const bag = {
+      id: 70,
+      bookingId: 3,
+      passengerId: 4,
+      flightId: 11,
+      segmentId: 30,
+      tagNumber: "0123000070",
+      status: "checked_in",
+    };
+    fixture
+      .rows("baggage_items")
+      .push(bag, { ...bag, id: 71, tagNumber: "0123000071" });
+    const admin = { ...actor, userId: 99, role: "airline_admin" };
+    const grant = (flightId: number, airportId: number, enabled: boolean) => ({
+      flightId,
+      airlineId: 1,
+      airportId,
+      enabled,
+      staffId: actor.userId,
+      ...command(),
+    });
+    const input = {
+      ...key,
+      segmentId: 30,
+      tagNumber: bag.tagNumber,
+      ...command(),
+    };
+    await expect(returnDcsBag(input, actor)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      setBagReturnGrant(grant(11, 1, true), actor)
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      setBagReturnGrant(grant(11, 1, true), { ...admin, tenantId: 2 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(setBagReturnGrant(grant(11, 2, true), admin)).rejects.toThrow(
+      /station/i
+    );
+    await setBagReturnGrant(grant(12, 2, true), admin);
+    // Same carrier and tenant, but the operator only has a grant at the other origin.
+    await expect(returnDcsBag(input, actor)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    expect((await getDcsDesk(11, actor)).canReturnBags).toBe(false);
+    const commandGrant = grant(11, 1, true);
+    const granted = await setBagReturnGrant(commandGrant, admin);
+    expect(await setBagReturnGrant(commandGrant, admin)).toEqual(granted);
+    expect((await getDcsDesk(11, actor)).canReturnBags).toBe(true);
+    await setBagReturnGrant(grant(11, 1, false), admin);
+    await expect(returnDcsBag(input, actor)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await setBagReturnGrant(grant(11, 1, true), admin);
+    await expect(
+      returnDcsBag({ ...input, flightId: 12, segmentId: 31 }, actor)
+    ).rejects.toThrow(/sector/i);
+    await expect(
+      returnDcsBag({ ...input, passengerId: 5 }, actor)
+    ).rejects.toThrow(/sector/i);
+    await expect(
+      returnDcsBag(input, { ...actor, tenantId: 2 })
+    ).rejects.toThrow(/scope/i);
+    await transition("board");
+    await expect(returnDcsBag(input, actor)).rejects.toThrow(/deplaned/i);
+    await transition("deplane");
+    const first = await returnDcsBag(input, actor);
+    expect(await returnDcsBag(input, actor)).toEqual(first);
+    await setBagReturnGrant(grant(11, 1, false), admin);
+    await expect(returnDcsBag(input, actor)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await setBagReturnGrant(grant(11, 1, true), admin);
+    await expect(
+      returnDcsBag({ ...input, ...command() }, actor)
+    ).rejects.toThrow(/already returned/i);
+    expect(
+      fixture
+        .rows("dcs_operation_events")
+        .filter(e => e.action === "return_bag")
+    ).toMatchObject([
+      {
+        id: first.eventId,
+        actorId: actor.userId,
+        flightId: 11,
+        reason: input.reason,
+        details: {
+          baggageId: 70,
+          segmentId: 30,
+          tagNumber: bag.tagNumber,
+          stationId: 1,
+        },
+      },
+    ]);
+    expect(fixture.rows("baggage_tracking")).toHaveLength(1);
+    expect(fixture.rows("baggage_custody_events")).toHaveLength(0);
+    await expect(transition("offload")).rejects.toThrow(/baggage/i);
+    const second = { ...input, ...command(), tagNumber: "0123000071" };
+    fixture.rows("baggage_custody_events").push({
+      id: 90,
+      baggageId: 71,
+      flightId: 11,
+      stage: "loading",
+      airportId: 1,
+    });
+    await expect(returnDcsBag(second, actor)).rejects.toThrow(/custody/i);
+    expect(
+      fixture.rows("baggage_items").find(b => b.id === 71)?.returnEventId
+    ).toBeUndefined();
+  });
+  it("refuses offload and legacy undo when a legacy bag has no scoped handover receipt", async () => {
     await checkIn();
     const nonce = seatRow().checkInNonce;
     fixture
@@ -742,5 +863,402 @@ describe("passenger attendance, denial and scan binding", () => {
       action: "undo_check_in",
       toState: "offloaded",
     });
+  });
+});
+
+describe("station reports and controlled desk commands", () => {
+  it.each([
+    { label: "another open sector", targetFlightId: 12, reopen: false },
+    { label: "a supervised reopened sector", targetFlightId: 11, reopen: true },
+  ])(
+    "retains full-refund departure evidence without admitting travel on $label",
+    async ({ targetFlightId, reopen }) => {
+      await checkIn();
+      const target = { ...key, flightId: targetFlightId };
+      if (targetFlightId !== key.flightId)
+        await checkInDcsPassenger({ ...target, ...command() }, actor);
+      const pass = await issueBoardingPass(target, { userId: 7 });
+      await transition("board");
+      await changeDcsFlightState(
+        { flightId: key.flightId, action: "close", ...command() },
+        actor
+      );
+      // The live-MySQL acceptance exercises final close itself. This boundary
+      // fixture retains its persisted result without simulating its SQL joins.
+      fixture.rows("flights")[0].dcsClosedAt = new Date(Date.now() - 1000);
+      const original = structuredClone({
+        seats: fixture.rows("seat_inventory"),
+        states: fixture.rows("dcs_passenger_states"),
+        coupons: fixture.rows("ticket_coupons"),
+      });
+      await fixture.db.insert(paymentReceipts).values({
+        paymentIntentId: "pi_closed_departure_refund",
+        kind: "booking",
+        bookingId: 3,
+        userId: 7,
+        targetId: 3,
+        amount: 10000,
+        refundedAmount: 0,
+        currency: "SAR",
+        settlementStatus: "applied",
+      });
+      const refund = {
+        paymentIntentId: "pi_closed_departure_refund",
+        chargeId: "ch_closed_departure_refund",
+        eventId: "evt_closed_departure_refund",
+        amount: 10000,
+        amountRefunded: 10000,
+        currency: "sar",
+      };
+      for (let i = 0; i < 2; i++)
+        await fixture.db.transaction((tx: any) =>
+          settleVerifiedRefund(tx, refund)
+        );
+      expect(fixture.rows("payment_receipts")[0]).toMatchObject({
+        refundedAmount: 10000,
+        settlementStatus: "review_required",
+        settlementError: DepartureReleaseError.reason,
+      });
+      expect(fixture.rows("financial_ledger")).toMatchObject([
+        { type: "refund", amount: "100.00" },
+      ]);
+      expect(fixture.rows("bookings")[0]).toMatchObject({
+        status: "confirmed",
+        paymentStatus: "paid",
+        seatsReserved: true,
+      });
+      expect({
+        seats: fixture.rows("seat_inventory"),
+        states: fixture.rows("dcs_passenger_states"),
+        coupons: fixture.rows("ticket_coupons"),
+      }).toEqual(original);
+      expect(
+        (await getDcsDesk(key.flightId, actor)).passengers.find(
+          p => p.passengerId === key.passengerId
+        )?.attendanceState
+      ).toBe("boarded");
+      if (reopen) {
+        await caller("airline_admin").finalize({
+          flightId: key.flightId,
+          action: "reopen",
+          ...command(),
+        });
+        await changeDcsFlightState(
+          { flightId: key.flightId, action: "reopen", ...command() },
+          actor
+        );
+      }
+      const events = structuredClone(fixture.rows("dcs_operation_events"));
+      await expect(
+        checkInDcsPassenger({ ...target, passengerId: 5, ...command() }, actor)
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        checkInPassengers({
+          bookingId: key.bookingId,
+          flightId: targetFlightId,
+          assignments: [{ passengerId: 5 }],
+          owner: { userId: 7, tenantId: 1 },
+        })
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        kioskCheckIn(key.bookingId, 5, { flightId: targetFlightId })
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        kioskSelectSeat(key.bookingId, 5, "1B", targetFlightId)
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        transitionDcsPassenger(
+          { ...target, action: "board", ...command() },
+          actor
+        )
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(issueBoardingPass(target, { userId: 7 })).rejects.toThrow(
+        /departure reconciliation/i
+      );
+      expect((await verifyActiveBoardingPass(pass.token)).valid).toBe(false);
+      expect((await verifyActiveBoardingPass(pass.bcbp)).valid).toBe(false);
+      await expect(
+        changeSeat(targetFlightId, "1A", "2A", key.bookingId, key.passengerId)
+      ).rejects.toThrow(/departure reconciliation/i);
+      await expect(
+        registerBaggage(
+          {
+            ...target,
+            segmentId: targetFlightId === 11 ? 30 : 31,
+            weight: 10,
+            idempotencyKey: command().idempotencyKey,
+          },
+          { id: actor.userId, role: actor.role, tenantId: 1 }
+        )
+      ).rejects.toThrow(/departure reconciliation/i);
+      expect(fixture.rows("baggage_items")).toHaveLength(0);
+      expect(fixture.rows("dcs_operation_events")).toEqual(events);
+      expect({
+        seats: fixture.rows("seat_inventory"),
+        states: fixture.rows("dcs_passenger_states"),
+        coupons: fixture.rows("ticket_coupons"),
+      }).toEqual(original);
+      if (reopen) {
+        expect((await transition("deplane")).state).toBe("checked_in");
+        await expect(transition("board")).rejects.toThrow(
+          /departure reconciliation/i
+        );
+        expect((await transition("offload")).state).toBe("offloaded");
+        await expect(checkIn()).rejects.toThrow(/departure reconciliation/i);
+      }
+    }
+  );
+
+  it("does not revoke funded travel when a duplicate collection is refunded", async () => {
+    await fixture.db.insert(paymentReceipts).values([
+      {
+        paymentIntentId: "pi_original_departure_payment",
+        kind: "booking",
+        bookingId: 3,
+        userId: 7,
+        targetId: 3,
+        amount: 10000,
+        currency: "SAR",
+        settlementStatus: "applied",
+      },
+      {
+        paymentIntentId: "pi_duplicate_departure_payment",
+        kind: "booking",
+        bookingId: 3,
+        userId: 7,
+        targetId: 3,
+        amount: 10000,
+        currency: "SAR",
+        settlementStatus: "review_required",
+        settlementError: "Booking already has a different collected payment",
+      },
+    ]);
+    await fixture.db.transaction((tx: any) =>
+      settleVerifiedRefund(tx, {
+        paymentIntentId: "pi_duplicate_departure_payment",
+        chargeId: "ch_duplicate_departure_payment",
+        eventId: "evt_duplicate_departure_payment",
+        amount: 10000,
+        amountRefunded: 10000,
+        currency: "sar",
+      })
+    );
+    expect(fixture.rows("payment_receipts")[1]).toMatchObject({
+      settlementStatus: "review_refunded",
+      refundedAmount: 10000,
+    });
+    expect((await checkIn()).state).toBe("checked_in");
+    const pass = await issueBoardingPass(key, { userId: 7 });
+    expect((await verifyActiveBoardingPass(pass.token)).valid).toBe(true);
+    expect((await transition("board")).state).toBe("boarded");
+  });
+
+  it("reopens a cancelled final closure for supervised attendance recovery without admitting travel", async () => {
+    await checkIn();
+    await transition("board");
+    await changeDcsFlightState(
+      { flightId: key.flightId, action: "close", ...command() },
+      actor
+    );
+    // Persisted final closure is seeded here; the disposable-DB acceptance
+    // scenario exercises the actual close/reconcile/cancel/reopen sequence.
+    const closedAt = new Date(Date.now() - 1000);
+    Object.assign(fixture.rows("flights")[0], {
+      status: "cancelled",
+      dcsClosedAt: closedAt,
+      stationOffBlocksAt: null,
+    });
+    const supervisor = caller("airline_admin");
+    const reopen = {
+      flightId: key.flightId,
+      action: "reopen" as const,
+      ...command(),
+    };
+    await expect(transition("deplane")).rejects.toThrow(/final DCS closure/i);
+    await expect(caller().finalize(reopen)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(
+      caller("airline_admin", 2).finalize(reopen)
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    for (const action of ["close", "record_out"] as const) {
+      await expect(
+        supervisor.finalize({
+          flightId: key.flightId,
+          action,
+          ...(action === "record_out"
+            ? { offBlocksAt: new Date().toISOString() }
+            : {}),
+          ...command(),
+        })
+      ).rejects.toThrow(/outside active station operations/i);
+    }
+    const receipt = await supervisor.finalize(reopen);
+    expect(await supervisor.finalize(reopen)).toEqual(receipt);
+    expect(fixture.rows("flights")[0]).toMatchObject({
+      status: "cancelled",
+      dcsClosedAt: null,
+      stationOffBlocksAt: null,
+    });
+    expect(fixture.rows("dcs_flight_operations")[0].checkInState).toBe(
+      "closed"
+    );
+    expect(
+      fixture
+        .rows("dcs_operation_events")
+        .filter(e => e.action === "dcs_reopen")
+    ).toMatchObject([
+      {
+        id: receipt.eventId,
+        actorId: actor.userId,
+        actorRole: "airline_admin",
+        fromState: "closed",
+        toState: "open",
+        reason: reopen.reason,
+      },
+    ]);
+    expect((await transition("deplane")).state).toBe("checked_in");
+    await expect(transition("board")).rejects.toThrow();
+    expect((await transition("offload")).state).toBe("offloaded");
+    await expect(checkIn()).rejects.toThrow();
+    expect(fixture.rows("bookings")[0]).toMatchObject({
+      status: "confirmed",
+      paymentStatus: "paid",
+      seatsReserved: true,
+    });
+  });
+
+  it.each([
+    { status: "completed", observedOut: false },
+    { status: "cancelled", observedOut: true },
+    { status: "scheduled", observedOut: true },
+  ])(
+    "preserves final closure for $status with observed OUT=$observedOut",
+    async ({ status, observedOut }) => {
+      const closedAt = new Date(Date.now() - 2000);
+      const stationOffBlocksAt = observedOut
+        ? new Date(Date.now() - 1000)
+        : null;
+      Object.assign(fixture.rows("flights")[0], {
+        status,
+        dcsClosedAt: closedAt,
+        stationOffBlocksAt,
+      });
+      await expect(
+        caller("airline_admin").finalize({
+          flightId: key.flightId,
+          action: "reopen",
+          ...command(),
+        })
+      ).rejects.toThrow(
+        observedOut ? /OUT has already been recorded/ : /outside active station/
+      );
+      expect(fixture.rows("flights")[0]).toMatchObject({
+        status,
+        dcsClosedAt: closedAt,
+        stationOffBlocksAt,
+      });
+      expect(fixture.rows("dcs_operation_events")).toHaveLength(0);
+    }
+  );
+
+  it("refuses a saved station command after a staff or tenant change", async () => {
+    await expect(
+      caller().openCase({
+        flightId: 11,
+        kind: "no_rec",
+        stationReference: "NO-REC-17",
+        reason: "Station verification",
+        idempotencyKey: "no-rec-session-17",
+        expectedActorId: 987651,
+        expectedTenantId: 987652,
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+  it("opens an unresolved case and only links a funded passenger of the selected flight", async () => {
+    const station = caller(),
+      input = {
+        flightId: 11,
+        kind: "no_rec" as const,
+        stationReference: "ST-27",
+        ...command(),
+      };
+    const receipt = await station.openCase(input);
+    expect(await station.openCase(input)).toEqual(receipt);
+    await expect(station.openCase({ ...input, ...command() })).rejects.toThrow(
+      /already exists/i
+    );
+    await expect(
+      caller("ops", 2).openCase({ ...input, ...command() })
+    ).rejects.toThrow();
+    await expect(
+      station.resolveCase({
+        ...key,
+        caseId: receipt.eventId,
+        passengerId: 99,
+        ...command(),
+      })
+    ).rejects.toThrow();
+    await station.resolveCase({
+      ...key,
+      caseId: receipt.eventId,
+      ...command(),
+    });
+    expect((await station.stationReport({ flightId: 11 })).cases).toEqual([
+      {
+        id: receipt.eventId,
+        kind: "no_rec",
+        stationReference: "ST-27",
+        dismissed: false,
+        resolvedPassengerId: 4,
+      },
+    ]);
+    expect(
+      fixture.rows("seat_inventory").every(s => s.status === "available")
+    ).toBe(true);
+  });
+  it("shows only notes on the exact passenger and sector; repeated commands preserve one entry", async () => {
+    const note = { ...key, ...command(), reason: "Meet at the gate" };
+    await caller().addOsi(note);
+    await caller().addOsi(note);
+    const r = await caller().stationReport({ flightId: 11 });
+    expect(r.items).toEqual([
+      {
+        passengerId: 4,
+        name: "Sample Traveler",
+        seat: null,
+        category: "osi",
+        code: "OSI",
+        status: "recorded",
+        note: note.reason,
+      },
+    ]);
+    expect((await caller().stationReport({ flightId: 12 })).items).toEqual([]);
+    await expect(
+      caller("ops", 2).stationReport({ flightId: 11 })
+    ).rejects.toThrow();
+  });
+  it("refuses an occupied seat, an excessive range, duplicate seats and an unauthorized operator", async () => {
+    const flight = fixture.rows("flights")[0],
+      day = flight.departureTime.toISOString().slice(0, 10);
+    const req = {
+      flightId: 11,
+      startDate: day,
+      endDate: day,
+      seatNumbers: ["1A"],
+      ...command(),
+    };
+    await expect(caller().blockSeats(req)).rejects.toThrow(/administration/);
+    await expect(
+      caller("airline_admin").blockSeats({ ...req, seatNumbers: ["1A", "1A"] })
+    ).rejects.toThrow();
+    await expect(
+      caller("airline_admin").blockSeats({ ...req, endDate: "2050-01-01" })
+    ).rejects.toThrow();
+    fixture.rows("seat_inventory")[0].status = "held";
+    await expect(caller("airline_admin").blockSeats(req)).rejects.toThrow(
+      /available/
+    );
+    expect(fixture.rows("dcs_operation_events")).toHaveLength(0);
   });
 });

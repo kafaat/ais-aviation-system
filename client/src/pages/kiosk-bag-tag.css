@@ -1,0 +1,14 @@
+#kiosk-print-copy {
+  display: none;
+}
+
+@media print {
+  body:has(> #kiosk-print-copy) > :not(#kiosk-print-copy) {
+    display: none !important;
+  }
+  #kiosk-print-copy {
+    display: block;
+    color: black;
+    background: white;
+  }
+}

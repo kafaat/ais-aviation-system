@@ -1,3 +1,8 @@
+import { agencyCreditSummary } from "../contracts/agent-portal";
+import {
+  adminAgencyCredit,
+  approveAgencyCredit,
+} from "../services/agency-credit.service";
 import { responseContracts } from "../contracts/travel-agent";
 /**
  * Travel Agent Router
@@ -73,6 +78,31 @@ const apiCredentialsSchema = z.object({
 // ============ Router ============
 
 export const travelAgentRouter = router({
+  creditBalance: adminProcedure
+    .input(z.object({ agencyId: z.number().int().positive() }))
+    .output(agencyCreditSummary)
+    .query(({ input, ctx }) => adminAgencyCredit(input.agencyId, ctx.tenantId)),
+  approveCredit: adminProcedure
+    .input(
+      z.object({
+        agencyId: z.number().int().positive(),
+        expectedTermsId: z.number().int().positive().nullable(),
+        limitMinor: z
+          .number()
+          .int()
+          .nonnegative()
+          .max(2_147_483_647)
+          .nullable(),
+        reason: z.string().trim().min(1).max(255),
+      })
+    )
+    .output(agencyCreditSummary)
+    .mutation(({ input, ctx }) =>
+      approveAgencyCredit(input, {
+        userId: ctx.user.id,
+        tenantId: ctx.tenantId,
+      })
+    ),
   assignOwner: adminProcedure
     .input(
       z.object({

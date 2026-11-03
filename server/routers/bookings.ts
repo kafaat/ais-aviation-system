@@ -60,6 +60,7 @@ export const bookingsRouter = router({
       z.object({
         flightId: z.number().describe("Flight ID to book"),
         cabinClass: z.enum(["economy", "business"]).describe("Cabin class"),
+        codeshareAllotmentId: z.number().int().positive().optional(),
         fareClassCode: z
           .string()
           .trim()
@@ -117,6 +118,9 @@ export const bookingsRouter = router({
         tenantId: ctx.tenantId,
         flightId: input.flightId,
         cabinClass: input.cabinClass,
+        ...(input.codeshareAllotmentId && {
+          codeshareAllotmentId: input.codeshareAllotmentId,
+        }),
         fareClassCode: input.fareClassCode,
         passengers: input.passengers,
         sessionId: input.sessionId,

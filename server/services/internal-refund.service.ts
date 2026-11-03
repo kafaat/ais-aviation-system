@@ -25,6 +25,7 @@ import {
   cancelBookingResources,
 } from "./booking-settlement.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
+import { revalidationEvidence } from "./ticket-revalidation.service";
 import { recordEvent } from "./outbox.service";
 
 export const internalRefundInput = z.object({
@@ -182,16 +183,33 @@ export async function refundInternalFunding(
         throw blocked("A checked-in segment requires servicing review");
       await assertNoCollectionReview(tx, booking.id);
       await assertNoOrderRefundPending(tx, booking.id);
-      for (const [table, column] of [
-        [paymentReceipts, paymentReceipts.bookingId],
-        [bookingModifications, bookingModifications.bookingId],
-      ] as const) {
-        if (
-          (await tx.select().from(table).where(eq(column, booking.id)).limit(1))
-            .length
+      const [externalReceipt] = await tx
+        .select({ id: paymentReceipts.paymentIntentId })
+        .from(paymentReceipts)
+        .where(eq(paymentReceipts.bookingId, booking.id))
+        .limit(1);
+      const changes = await tx
+        .select()
+        .from(bookingModifications)
+        .where(eq(bookingModifications.bookingId, booking.id))
+        .for("update");
+      // A completed local date revalidation preserves the original charge and
+      // all fare components. Every other modification still requires review.
+      if (
+        externalReceipt ||
+        changes.some(
+          change =>
+            change.modificationType !== "change_date" ||
+            !["completed", "rejected"].includes(change.status) ||
+            change.totalCost !== 0 ||
+            change.modificationFee !== 0 ||
+            change.priceDifference !== 0 ||
+            !z
+              .object({ revalidation: revalidationEvidence })
+              .safeParse(change.servicingPayload).success
         )
-          throw blocked("External or modified funding requires reconciliation");
-      }
+      )
+        throw blocked("External or modified funding requires reconciliation");
       const ledger = await tx
         .select()
         .from(financialLedger)

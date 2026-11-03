@@ -107,6 +107,12 @@ async function readInputs(
       booking.checkedIn
     )
       throw new Error("Recovery requires a paid reservation before check-in");
+    if (booking.codeshareAllotmentId != null)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "The issuing channel must reaccommodate this codeshare booking",
+      });
     await assertTenantOperational(tx, booking.tenantId);
     await assertNoCollectionReview(tx, booking.id);
     await assertBaggageNotInCustody(tx, booking.id);

@@ -27,6 +27,7 @@ const CheckoutResume = lazy(() => import("./pages/CheckoutResume"));
 const MyBookings = lazy(() => import("./pages/MyBookings"));
 const ManageBooking = lazy(() => import("./pages/ManageBooking"));
 const AgentPortal = lazy(() => import("./pages/AgentPortal"));
+const KioskBagTag = lazy(() => import("./pages/KioskBagTag"));
 const CheckIn = lazy(() => import("./pages/CheckIn"));
 const Profile = lazy(() => import("./pages/Profile"));
 const LoyaltyDashboard = lazy(() => import("./pages/LoyaltyDashboard"));
@@ -281,6 +282,7 @@ function Router() {
               </Suspense>
             </ProtectedRoute>
           </Route>
+          <Route path="/kiosk" component={KioskBagTag} />
           <Route path="/check-in">
             <Suspense fallback={<PageLoadingFallback variant="form" />}>
               <CheckIn />

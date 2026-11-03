@@ -109,6 +109,11 @@ export const RATE_LIMIT_TIERS: Record<string, RateLimitTier> = {
 export const STRICT_RATE_LIMITS: Record<string, RateLimitTier> = {
   // Public reference/surname lookup: limit both IPs and references, regardless
   // of account/loyalty tier. Successes count as well as failed attempts.
+  kioskBagReceipt: {
+    name: "kioskBagReceipt",
+    requestsPerWindow: 30,
+    windowMs: 60 * 1000,
+  },
   manageBookingLookup: {
     name: "manageBookingLookup",
     requestsPerWindow: 10,

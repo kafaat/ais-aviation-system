@@ -1,9 +1,6 @@
 # Departure counter lifecycle and physical baggage registration
 
-This delivery implements the first operational slice from the VIDECOM DCS comparison
-against AIS main `26fd19b75112eb70d0d6950391c61500c71d6054`. It provides a tenant-scoped
-staff desk and closes the physical baggage registration boundary. The historical
-training manual is a workflow reference; it is not a current certification standard.
+This desk covers staff departure and counter baggage workflows from the VIDECOM DCS comparison. The training manual is a workflow reference. Operator acceptance is recorded separately.
 
 ## Operator workflow
 
@@ -120,9 +117,39 @@ preserve evidence; they do not invent deplaning, baggage retrieval or payment re
 The manifest also refuses a recorded boarded passenger omitted by reservation
 filtering, including a passenger who has no registered baggage.
 
-Counter registration and signed custody are separate records. This delivery does
-not synthesize airport/device signatures, loading scans, baggage return, rerouting,
-printer output, belt movement or dispatch release.
+### Passenger handover at the departure desk
+
+An airline administrator can call `dcsOperations.setBagReturnGrant` with a flight
+in their tenant, its operating airline ID and origin airport ID, the staff user
+ID, `enabled`, a reason and an idempotency key. A platform administrator may
+also provision a scoped staff account. The grant applies to this staff member
+at this carrier's origin station across its flights. Set `enabled: false` to
+revoke it. Both changes are recorded in the desk history.
+
+A granted operator deplanes a boarded passenger, verifies their identity and
+the physical tag, hands the bag to the passenger, then selects **Confirm bag
+handover** on that passenger's desk form. The receipt records the operator,
+airport, tag, passenger, booking segment, time and reason. Retrying the same
+command returns the receipt. Each other bag retains its own offload block.
+Historical device scans remain available. A loaded or onward bag requires
+independent unloading or rerouting evidence before this desk can release it.
+
+The handover records the operator's observation at the desk. Certified reader
+and printer output, belt movement and final dispatch release require their
+respective station integrations and operational acceptance.
+Before custody starts, an authorized counter employee can correct a received bag's weight with the original measured weight, replacement weight and reason. The operator must stay within the funded allowance. The correction keeps the original tag, acceptance receipt and tracking history.
+
+A handler with an authorized `baggage_recovery` source can submit signed `unloading` and `return` events for a scoped counter bag at its origin. Configure its operating tenant, airline IDs, airports, device IDs, secret reference and expiry in the existing aviation source registry. Returning a loaded bag requires an unloading scan first. A verified handback retires its tag from active allowance, manifest and closeout. To register the same bag on a different funded, checked-in sector for the same passenger and booking, enter the retired tag as the replacement reference at the handback airport. Either the signed handler return or the existing authorized staff handover must match the original bag, sector and departure station. Each channel rejects a bag already returned by the other. The new receipt carries its own tag and links back to the retired one. Only one replacement can consume a returned tag.
+
+## Station cases, seats and final closure
+
+Under **Station reports and actions**, an employee can open a No Rec or Go Show case with a station reference. Link the case to the passenger on a confirmed paid reservation or close it without travel. The normal booking and ticketing channel must establish the reservation before travel.
+
+An airline administrator can block up to 20 distinct available seats on matching flight instances over as many as 31 UTC dates. The range includes the selected flight, operating airline, route and flight number. A conflict on any instance rolls back the whole instruction and its availability adjustments. Removing a block via a legacy seat tool requires separate sales inventory reconciliation. To reload an aircraft layout, enter an active layout ID for the operating carrier and assigned type. Cabin counts must match and all assigned, held and blocked seats must keep their characteristics. Reconcile any issued passes or incompatible layouts before retrying.
+
+A supervisor can quote a business-to-economy change for one passenger on one sector before check-in, with no named fare bucket. Review the outstanding fare difference in SAR, then confirm the commercial exchange. Any refund due follows the existing financial workflow. Group, multi-sector, named-fare and issuing-channel restrictions remain subject to commercial servicing.
+
+Final closure requires explicitly closed check-in, at least one boarded passenger, reconciled attendance, resolved station cases and accounted-for bags belonging to boarded passengers. A reconciled flight with no bags can close. A supervisor can reopen before the observed OUT is recorded, or record the observed UTC off-blocks time at or after final closure. The system retains the actor, reason and event history. Dispatch release and independently verified aircraft movement require the operator's authorized systems.
 
 ## Passenger documents and APIS
 
@@ -153,18 +180,18 @@ requests stay on their own sector. An explicitly recorded flight on a supported
 legacy booking without a stored booking segment remains valid.
 
 Request storage and priority handling do not establish partner acknowledgement or
-delivery of the requested service. SSR/APFAX meal reports remain unimplemented.
+delivery of the requested service. The station APFAX report lists exact-sector SSRs, pending and confirmed meals, and staff OSI notes. The meal filter limits the report to meal requests. CSV export and browser printing require reconciliation of ambiguous service records. Local report printing and the kiosk's boarding pass and tag reprints require separate testing on the station's production devices.
 
 ## Rollout and compatibility
 
 - Apply committed migrations `0061_dcs_counter_lifecycle.sql`,
-  `0062_special_service_sector.sql`, then
-  `0063_baggage_flight_reconciliation.sql`, in journal order before deploying the
+  `0062_special_service_sector.sql`, `0063_baggage_flight_reconciliation.sql`,
+  `0064_vrs_local_service_acceptance.sql`, then `0065_station_departure_operations.sql`, in journal order before deploying the
   updated application. Migration 0061 adds the two nullable baggage fields, their lookup
   index, and flight state, passenger state and audit event tables. Migration 0062
   adds nullable original flight and booking-segment identifiers to special-service
   requests. Migration 0063 indexes baggage reconciliation reads by flight and bag
-  ID. These migrations do not invent historical scope or operational events.
+  ID. Migration 0065 adds station closure and observed OUT timestamps, signed bag return evidence, and a unique predecessor for a replacement tag. These migrations do not invent historical scope or operational events.
 - Review active historical assistance requests before using priority rankings or
   reaccommodation advice. Reconcile their original sector from verified request
   evidence; a deployment must not populate every request with the primary flight
@@ -174,9 +201,9 @@ delivery of the requested service. SSR/APFAX meal reports remain unimplemented.
 - Legacy bookings without a stored segment can use the existing supported check-in
   path, but the staff baggage form remains unavailable until an exact sector is
   established. More than one active segment matching a flight is an error.
-- Provision actual tenant-scoped operations accounts. This application has no
-  verified staff-to-airport grant model; the implementation does not claim station
-  authorization beyond its tenant and recorded flight origin.
+- Provision tenant-scoped operations accounts and assign the carrier and origin
+  station grant for manual bag handovers. The other desk commands retain
+  their tenant and flight authorization rules.
 - Set `BAGGAGE_AIRLINE_NUMERIC_CODE` to the carrier's configured three-digit numeric
   code. The synthetic `123` value exists only in disposable tests. Carrier allocation,
   station acceptance and hardware validation remain operator deployment work.

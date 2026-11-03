@@ -19,6 +19,7 @@ import {
   useOperationalLabels,
 } from "@/components/OperationalReadState";
 import { DcsBaggageRegistration } from "@/components/DcsBaggageRegistration";
+import { DcsStationPanel } from "@/components/DcsStationPanel";
 import { BaggageCloseout } from "@/components/BaggageCloseout";
 import { useCommandIdempotencyKey } from "@/hooks/useCommandIdempotencyKey";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,103 @@ import { toast } from "sonner";
 
 type Desk = inferRouterOutputs<AppRouter>["dcsOperations"]["getDesk"];
 type Passenger = Desk["passengers"][number];
+function ReturnBag({
+  flightId,
+  passenger,
+  segmentId,
+  disabled,
+}: {
+  flightId: number;
+  passenger: Passenger;
+  segmentId: number;
+  disabled: boolean;
+}) {
+  const l = useOperationalLabels();
+  const cache = useQueryClient();
+  const [tagNumber, setTag] = useState("");
+  const [reason, setReason] = useState("");
+  const key = useCommandIdempotencyKey();
+  const mutation = trpc.dcsOperations.returnBag.useMutation({
+    onSuccess: () => {
+      key.clear();
+      setTag("");
+      setReason("");
+      void cache.invalidateQueries({
+        queryKey: getQueryKey(trpc.dcsOperations.getDesk, { flightId }),
+      });
+      void cache.invalidateQueries({
+        queryKey: getQueryKey(trpc.baggage.registrationSummary, { flightId }),
+      });
+      void cache.invalidateQueries({
+        queryKey: getQueryKey(trpc.baggage.flightCloseout, { flightId }),
+      });
+    },
+  });
+  const locked = disabled || mutation.isPending;
+  const eligible =
+    !locked && /^\d{10}$/.test(tagNumber) && reason.trim().length >= 5;
+  return (
+    <form
+      className="space-y-3 rounded-lg border p-4"
+      onSubmit={event => {
+        event.preventDefault();
+        if (!eligible) return;
+        const payload = {
+          bookingId: passenger.bookingId,
+          passengerId: passenger.passengerId,
+          flightId,
+          segmentId,
+          tagNumber,
+          reason: reason.trim(),
+        };
+        mutation.mutate({
+          ...payload,
+          idempotencyKey: key.forPayload(payload),
+        });
+      }}
+    >
+      <h3 className="font-semibold">
+        {l("تسليم حقيبة للراكب", "Return bag to passenger")}
+      </h3>
+      <p>
+        {l(
+          "تحقق من هوية الراكب ورقم الوسم، ثم سجّل التسليم بعد أن يستلم الراكب الحقيبة في مكتب المغادرة.",
+          "Verify the passenger and physical tag. Record the handover after the passenger receives the bag at the departure desk."
+        )}
+      </p>
+      <label>
+        {l("رقم وسم الحقيبة المستردة", "Returned bag tag number")}
+        <Input
+          disabled={locked}
+          value={tagNumber}
+          maxLength={10}
+          inputMode="numeric"
+          onChange={e => setTag(e.target.value)}
+        />
+      </label>
+      <label>
+        {l("سبب تسليم الحقيبة", "Bag handover reason")}
+        <Input
+          disabled={locked}
+          value={reason}
+          maxLength={500}
+          onChange={e => setReason(e.target.value)}
+        />
+      </label>
+      <Button disabled={!eligible}>
+        {l("تأكيد تسليم الحقيبة للراكب", "Confirm bag handover")}
+      </Button>
+      {mutation.data && (
+        <p role="status">
+          {l("إيصال تسليم الحقيبة", "Bag handover receipt")}{" "}
+          {mutation.data.eventId} · {mutation.data.tagNumber}
+        </p>
+      )}
+      {mutation.error && <p role="alert">{mutation.error.message}</p>}
+    </form>
+  );
+}
+
 type PassengerAction =
   | "check_in"
   | "board"
@@ -51,6 +149,7 @@ function isRecoveryAction(action: PassengerAction) {
 }
 
 function flightAllowsPassengerAction(data: Desk, action: PassengerAction) {
+  if (data.flight.dcsClosedAt) return false;
   const active = ["scheduled", "delayed"].includes(data.flight.status);
   if (isRecoveryAction(action))
     return active || data.flight.status === "cancelled";
@@ -71,8 +170,19 @@ function useFlightNavigationLock(flightId: number) {
   const commandKeys = [
     getMutationKey(trpc.dcsOperations.checkIn),
     getMutationKey(trpc.dcsOperations.transition),
+    getMutationKey(trpc.dcsOperations.returnBag),
     getMutationKey(trpc.dcsOperations.changeFlightState),
     getMutationKey(trpc.baggage.register),
+    getMutationKey(trpc.baggage.correctWeight),
+    getMutationKey(trpc.dcsOperations.openCase),
+    getMutationKey(trpc.dcsOperations.resolveCase),
+    getMutationKey(trpc.dcsOperations.addOsi),
+    getMutationKey(trpc.dcsOperations.blockSeats),
+    getMutationKey(trpc.dcsOperations.remapSeats),
+    getMutationKey(trpc.dcsOperations.dismissCase),
+    getMutationKey(trpc.dcsOperations.finalize),
+    getMutationKey(trpc.dcsOperations.quoteDowngrade),
+    getMutationKey(trpc.dcsOperations.confirmDowngrade),
   ];
   const commands: MutationFilters = {
     predicate: mutation => {
@@ -91,6 +201,7 @@ function useFlightNavigationLock(flightId: number) {
   };
   const readKeys = [
     getQueryKey(trpc.dcsOperations.getDesk, { flightId }),
+    getQueryKey(trpc.dcsOperations.stationReport, { flightId }),
     getQueryKey(trpc.baggage.registrationSummary, { flightId }),
     getQueryKey(trpc.baggage.flightCloseout, { flightId }),
   ];
@@ -302,6 +413,12 @@ function FlightDesk({
     { flightId },
     { retry: false }
   );
+  const utils = trpc.useUtils();
+  const refreshDesk = () =>
+    Promise.all([
+      query.refetch(),
+      utils.dcsOperations.stationReport.invalidate({ flightId }),
+    ]);
   const data = query.data;
   const selected = data?.passengers.find(p => p.passengerId === passengerId);
   const needle = search.trim().toLocaleLowerCase();
@@ -312,7 +429,15 @@ function FlightDesk({
   );
   const flightActive =
     data?.flight.status === "scheduled" || data?.flight.status === "delayed";
-  const readReady = !!data && !query.error && !query.isFetching;
+  const canReopenCancelledFlight =
+    data?.flight.status === "cancelled" &&
+    !!data.flight.dcsClosedAt &&
+    !data.flight.stationOffBlocksAt;
+  const readReady =
+    !!data &&
+    !query.error &&
+    !query.isFetching &&
+    query.fetchStatus !== "paused";
   return (
     <OperationalReadState query={query}>
       {data && (
@@ -331,7 +456,7 @@ function FlightDesk({
               <Button
                 variant="outline"
                 disabled={query.isFetching}
-                onClick={() => void query.refetch()}
+                onClick={() => void refreshDesk()}
               >
                 {l("تحديث المكتب", "Refresh desk")}
               </Button>
@@ -373,8 +498,10 @@ function FlightDesk({
             )}
             <FlightStateControl
               data={data}
-              disabled={!readReady || !flightActive}
-              refresh={() => query.refetch()}
+              disabled={
+                !readReady || !flightActive || !!data.flight.dcsClosedAt
+              }
+              refresh={refreshDesk}
             />
           </section>
 
@@ -456,6 +583,15 @@ function FlightDesk({
             )}
           </section>
 
+          <DcsStationPanel
+            flightId={flightId}
+            passengers={data.passengers}
+            disabled={
+              !readReady || (!flightActive && !canReopenCancelledFlight)
+            }
+            reportReady={readReady && !navigationLocked}
+            reopenOnly={canReopenCancelledFlight}
+          />
           {selected && (
             <section
               className="grid gap-4 xl:grid-cols-2"
@@ -464,12 +600,25 @@ function FlightDesk({
                 "Selected passenger operations"
               )}
             >
+              {data.canReturnBags &&
+                selected.segmentId != null &&
+                selected.checkedIn &&
+                selected.attendanceState !== "boarded" &&
+                flightAllowsPassengerAction(data, "offload") && (
+                  <ReturnBag
+                    key={`${flightId}:${selected.passengerId}`}
+                    flightId={flightId}
+                    passenger={selected}
+                    segmentId={selected.segmentId}
+                    disabled={!readReady}
+                  />
+                )}
               <PassengerControl
                 key={`${selected.passengerId}:${selected.attendanceState}:${selected.boardingDenied}`}
                 passenger={selected}
                 data={data}
                 disabled={!readReady}
-                refresh={() => query.refetch()}
+                refresh={refreshDesk}
               />
               {selected.segmentId === null ? (
                 <div className="rounded-lg border p-4">
@@ -491,6 +640,7 @@ function FlightDesk({
                   disabled={
                     !readReady ||
                     !flightActive ||
+                    !!data.flight.dcsClosedAt ||
                     selected.departureState !== "checked_in" ||
                     data.checkInState !== "open" ||
                     !data.checkInWindowOpen

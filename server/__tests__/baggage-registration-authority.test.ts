@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTableName } from "drizzle-orm";
 import { transactionMemory } from "./helpers/transaction-memory";
@@ -30,6 +31,7 @@ function seed() {
   const departure = new Date(Date.now() + 3 * 3600000);
   return {
     tenants: [{ id: 3, status: "active" }],
+    baggage_custody_events: [] as Record<string, unknown>[],
     dcs_flight_operations: [] as Record<string, any>[],
     dcs_passenger_states: [] as Record<string, any>[],
     bookings: [
@@ -555,5 +557,60 @@ describe("physical baggage registration authority", () => {
       caller.register({ ...input, paymentStatus: "paid", actorId: 1 } as any)
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(fixture.rows("baggage_items")).toHaveLength(0);
+  });
+});
+
+describe("scoped counter weight correction", () => {
+  const staff = () =>
+    baggageRouter.createCaller({
+      user: actor,
+      tenantId: actor.tenantId,
+      req: { headers: {} },
+      res: {},
+    } as never);
+  it("corrects the canonical weight once and preserves the original acceptance and tag", async () => {
+    const bag = await registerBaggage(input, actor);
+    const fix = {
+      ...scope,
+      baggageId: bag.id,
+      previousWeight: 10,
+      weight: 9,
+      reason: "Verified on the counter scale",
+      expectedActorId: actor.id,
+      expectedTenantId: actor.tenantId,
+      idempotencyKey: randomUUID(),
+    };
+    const receipt = await staff().correctWeight(fix);
+    expect(await staff().correctWeight(fix)).toEqual(receipt);
+    expect(fixture.rows("baggage_items")).toMatchObject([
+      { id: bag.id, weight: "9.00", tagNumber: bag.tagNumber },
+    ]);
+    expect(fixture.rows("baggage_tracking")).toHaveLength(1);
+    await expect(staff().correctWeight({ ...fix, weight: 8 })).rejects.toThrow(
+      /different payload/
+    );
+    await expect(
+      staff().correctWeight({ ...fix, idempotencyKey: randomUUID() })
+    ).rejects.toThrow(/changed/);
+    expect(fixture.rows("dcs_operation_events")).toHaveLength(1);
+  });
+  it("blocks correction after custody starts or the authenticated actor changes", async () => {
+    const bag = await registerBaggage(input, actor);
+    const fix = {
+      ...scope,
+      baggageId: bag.id,
+      previousWeight: 10,
+      weight: 9,
+      reason: "Counter review",
+      expectedActorId: actor.id,
+      expectedTenantId: actor.tenantId,
+      idempotencyKey: randomUUID(),
+    };
+    await expect(
+      staff().correctWeight({ ...fix, expectedActorId: actor.id + 1 })
+    ).rejects.toThrow(/identity/);
+    fixture.rows("baggage_custody_events").push({ id: 1, baggageId: bag.id });
+    await expect(staff().correctWeight(fix)).rejects.toThrow(/custody/);
+    expect(fixture.rows("baggage_items")[0].weight).toBe("10.00");
   });
 });

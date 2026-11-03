@@ -36,7 +36,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language;
   const utils = trpc.useUtils();
-  const [mode, setMode] = useState<"date" | "upgrade">("date");
+  const [mode, setMode] = useState<"date" | "upgrade" | "revalidate">("date");
   const [sectorId, setSectorId] = useState<number | null>(null);
   const [date, setDate] = useState("");
   const [replacement, setReplacement] = useState<number | null>(null);
@@ -69,7 +69,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
       enabled:
         open &&
         !pending &&
-        mode === "date" &&
+        mode !== "upgrade" &&
         !!sector &&
         /^\d{4}-\d{2}-\d{2}$/.test(day),
     }
@@ -148,6 +148,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
       await change.mutateAsync({
         ...input,
         newFlightId: replacement,
+        ...(mode === "revalidate" ? { intent: "revalidate" as const } : {}),
         replaceFlightId: sector.flightId,
       });
     setConsent(null);
@@ -222,11 +223,22 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
           <div role="status" className="rounded border p-3">
             {latest.reviewRequired
               ? t("modifyBooking.exchange.review")
-              : t(`modifyBooking.exchange.status.${latest.status}`)}{" "}
+              : latest.revalidation && latest.status === "completed"
+                ? t("modifyBooking.revalidated")
+                : t(`modifyBooking.exchange.status.${latest.status}`)}{" "}
             · #{latest.modificationId}
+            {latest.revalidation && (
+              <p>
+                {t("modifyBooking.revalidationDocument", latest.revalidation)}
+              </p>
+            )}
             {latest.receiptId && (
               <p>
-                {t("modifyBooking.exchange.receipt")}{" "}
+                {t(
+                  latest.revalidation
+                    ? "modifyBooking.revalidationReceipt"
+                    : "modifyBooking.exchange.receipt"
+                )}{" "}
                 <bdi>{latest.receiptId}</bdi>
               </p>
             )}
@@ -246,6 +258,17 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
                 {t("modifyBooking.changeDateTab")}
               </Button>
               <Button
+                aria-pressed={mode === "revalidate"}
+                variant={mode === "revalidate" ? "default" : "outline"}
+                disabled={sectors.length !== 1}
+                onClick={() => {
+                  setMode("revalidate");
+                  setReplacement(null);
+                }}
+              >
+                {t("modifyBooking.revalidate")}
+              </Button>
+              <Button
                 aria-pressed={mode === "upgrade"}
                 disabled={
                   booking.cabinClass === "business" || sectors.length !== 1
@@ -256,8 +279,11 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
                 {t("modifyBooking.upgradeTab")}
               </Button>
             </div>
-            {mode === "date" && (
+            {mode !== "upgrade" && (
               <>
+                {mode === "revalidate" && (
+                  <p>{t("modifyBooking.revalidationTerms")}</p>
+                )}
                 <label className="block text-sm">
                   {t("modifyBooking.exchange.sector")}
                   <select
@@ -296,7 +322,12 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
                 {search.isLoading && <p>{t("common.loading")}</p>}
                 <div className="space-y-2">
                   {search.data
-                    ?.filter(f => f.id !== sector?.flightId)
+                    ?.filter(
+                      f =>
+                        f.id !== sector?.flightId &&
+                        (mode !== "revalidate" ||
+                          f.flightNumber === sector?.flightNumber)
+                    )
                     .map(f => (
                       <Button
                         key={f.id}
@@ -322,9 +353,12 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
                       </Button>
                     ))}
                   {search.data &&
-                    !search.data.some(f => f.id !== sector?.flightId) && (
-                      <p>{t("modifyBooking.exchange.noFlights")}</p>
-                    )}
+                    !search.data.some(
+                      f =>
+                        f.id !== sector?.flightId &&
+                        (mode !== "revalidate" ||
+                          f.flightNumber === sector?.flightNumber)
+                    ) && <p>{t("modifyBooking.exchange.noFlights")}</p>}
                 </div>
               </>
             )}
@@ -335,6 +369,11 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
             <p>
               {t("modifyBooking.exchange.quote")} #{pending.modificationId}
             </p>
+            {pending.revalidation && (
+              <p>
+                {t("modifyBooking.revalidationDocument", pending.revalidation)}
+              </p>
+            )}
             {pending.originalFlight && pending.replacementFlight && (
               <p dir="auto">
                 <bdi>{pending.originalFlight.flightNumber}</bdi> →{" "}
@@ -450,7 +489,7 @@ export function ModifyBookingDialog({ open, onOpenChange, booking }: Props) {
           ) : (
             <Button
               disabled={
-                disabled || !sector || (mode === "date" && !replacement)
+                disabled || !sector || (mode !== "upgrade" && !replacement)
               }
               onClick={() => void execute(request)}
             >

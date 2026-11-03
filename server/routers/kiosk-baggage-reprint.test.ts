@@ -8,6 +8,7 @@ import { transactionMemory } from "../__tests__/helpers/transaction-memory";
 import { issueSelfServiceCapability } from "../services/self-service-capability.service";
 import * as seatMap from "../services/seat-map.service";
 import { kioskRouter } from "./kiosk";
+import { printBagTag } from "../services/kiosk.service";
 import { readStationTag } from "../../scripts/acceptance/kiosk-printer";
 
 const state = vi.hoisted(() => ({ db: null as any }));
@@ -36,6 +37,7 @@ beforeEach(() => {
       {
         id: 1,
         bookingReference: "TRAVEL",
+        pnr: "FAMILY",
         status: "confirmed",
         paymentStatus: "paid",
         flightId: 4,
@@ -189,6 +191,35 @@ it("requires precise physical identities and passenger/sector check-in", async (
     await expect(caller.printBagTag({ ...input, ...patch })).rejects.toThrow();
   }
   expect(fixture.rows("kiosk_sessions")).toEqual([]);
+});
+
+it("rechecks the receipt identity and time window even if discovery preceded a passenger or flight correction", async () => {
+  const receipt = { bookingRef: "family", lastName: "journey", tagNumber: tag };
+  const prepare = () => printBagTag(1, 2, 1, 5, [tag], receipt);
+  await expect(prepare()).resolves.toMatchObject({
+    printStatus: "document_ready",
+  });
+  fixture.rows("passengers")[0].lastName = "Changed";
+  await expect(prepare()).rejects.toMatchObject({ code: "NOT_FOUND" });
+  fixture.rows("passengers")[0].lastName = "Journey";
+  fixture.rows("bookings")[0].pnr = "NEWPNR";
+  await expect(prepare()).rejects.toMatchObject({ code: "NOT_FOUND" });
+  fixture.rows("bookings")[0].pnr = "FAMILY";
+  fixture.rows("flights")[1].departureTime = new Date(
+    Date.now() + 30 * 3600000
+  );
+  await expect(prepare()).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  expect(fixture.rows("kiosk_sessions")).toHaveLength(0);
+});
+
+it("refuses to copy a bag after its handover receipt even if an old transfer status survives", async () => {
+  fixture.rows("baggage_items")[0].returnEventId = 17;
+  await expect(caller.printBagTag(input)).rejects.toMatchObject({
+    code: "PRECONDITION_FAILED",
+  });
+  expect(fixture.rows("baggage_items")).toHaveLength(1);
+  expect(fixture.rows("baggage_custody_events")).toHaveLength(1);
+  expect(fixture.rows("kiosk_sessions")).toHaveLength(0);
 });
 
 it.each(["loading", "arrival"])(

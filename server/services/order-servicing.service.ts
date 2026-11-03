@@ -6,6 +6,10 @@ import {
   transferExchangeSeats,
   seatExchangeSchema,
 } from "./seat-exchange.service";
+import {
+  checkTicketRevalidation,
+  revalidationEvidence,
+} from "./ticket-revalidation.service";
 import { exchangeLocalCoupons } from "./ticket-coupons.service";
 import { assertBaggageNotInCustody } from "./baggage-custody.service";
 import { calculateModificationFee } from "./modification-fee";
@@ -26,6 +30,7 @@ import {
   passengers,
   seatInventory,
   retailOffers,
+  ticketCoupons,
   type Booking,
 } from "../../drizzle/schema";
 import {
@@ -46,7 +51,7 @@ import {
   withTransactionalIdempotency,
 } from "./idempotency-v2.service";
 import {
-  hasPartnerBooking,
+  issuerMustService,
   quoteInvoiceAncillary,
   insertInvoiceAncillary,
   storedJson,
@@ -65,6 +70,7 @@ export const paidServiceInput = z
   .object({
     bookingId: z.number().int().positive(),
     idempotencyKey: z.string().min(8).max(128),
+    intent: z.literal("revalidate").optional(),
     replaceFlightId: z.number().int().positive().optional(),
     offerIds: z.array(z.string().uuid()).min(1).max(6).optional(),
     ancillaries: z.array(ancillaryInput).min(1).max(20).optional(),
@@ -74,7 +80,9 @@ export const paidServiceInput = z
     "Choose an itinerary exchange or additional services"
   )
   .refine(
-    i => i.replaceFlightId === undefined || i.offerIds?.length === 1,
+    i =>
+      (i.replaceFlightId === undefined || i.offerIds?.length === 1) &&
+      (!i.intent || i.replaceFlightId !== undefined),
     "A sector exchange requires exactly one replacement offer"
   );
 const segment = z.object({
@@ -102,6 +110,7 @@ const segment = z.object({
 export const planSchema = z.object({
   version: z.literal(1),
   fingerprint: z.string(),
+  revalidation: revalidationEvidence.optional(),
   seatExchange: seatExchangeSchema.optional(),
   termsHash: z.string().optional(),
   partyHash: z.string().optional(),
@@ -163,15 +172,15 @@ function fingerprint(
 }
 async function assertIssuingChannel(
   tx: SettlementTx,
-  bookingId: number,
+  booking: Booking,
   action: NdcAction
 ) {
-  if (await hasPartnerBooking(tx, bookingId))
+  if (await issuerMustService(tx, booking, action))
     throw unavailable("Issuing channel must service this booking");
   const orders = await tx
     .select()
     .from(ndcOrders)
-    .where(eq(ndcOrders.bookingId, bookingId))
+    .where(eq(ndcOrders.bookingId, booking.id))
     .for("update");
   if (orders.some(order => !canServiceOrder(order, action)))
     throw unavailable("Issuing channel must service this booking");
@@ -266,7 +275,7 @@ export async function quotePaidOrderService(
             throw unavailable("Resolve the existing servicing request first");
           await assertIssuingChannel(
             tx,
-            booking.id,
+            booking,
             input.offerIds ? "exchange" : "addAncillary"
           );
           const old = await itinerary(tx, booking);
@@ -283,6 +292,7 @@ export async function quotePaidOrderService(
             throw unavailable("Passenger mapping needs reconciliation");
           const segments: z.infer<typeof segment>[] = [];
           const additions: z.infer<typeof planSchema>["ancillaries"] = [];
+          let revalidation: z.infer<typeof revalidationEvidence> | undefined;
           let acceptedScheduleHash: string | undefined;
           let seatExchange: z.infer<typeof seatExchangeSchema> | undefined;
           let newAmount = booking.totalAmount;
@@ -535,6 +545,24 @@ export async function quotePaidOrderService(
               booking.totalAmount,
               originalChanged.departureTime
             );
+            if (input.intent === "revalidate") {
+              if (
+                old.length !== 1 ||
+                replacedIndex !== 0 ||
+                modificationFee ||
+                fareDifference
+              )
+                throw unavailable(
+                  "Local revalidation requires one sector with no fare difference or fee"
+                );
+              revalidation = await checkTicketRevalidation(
+                tx,
+                booking,
+                old[0],
+                [...heldFlights.values()],
+                input.offerIds[0]
+              );
+            }
             newAmount = fareAmount + modificationFee;
             if (replacedIndex >= 0) {
               segments[replacedIndex].amount += modificationFee;
@@ -565,6 +593,7 @@ export async function quotePaidOrderService(
             throw unavailable("Invalid replacement total");
           const plan: z.infer<typeof planSchema> = {
             version: 1,
+            revalidation,
             partyHash: partyHash(booking, pax),
             scheduleHash: acceptedScheduleHash,
             termsHash: quoteTermsHash(
@@ -583,9 +612,11 @@ export async function quotePaidOrderService(
           const [insert] = await tx.insert(bookingModifications).values({
             bookingId: booking.id,
             userId,
-            modificationType: segments.length
-              ? "change_flight"
-              : "add_services",
+            modificationType: revalidation
+              ? "change_date"
+              : segments.length
+                ? "change_flight"
+                : "add_services",
             originalFlightId: input.replaceFlightId ?? booking.flightId,
             originalCabinClass: booking.cabinClass,
             originalAmount: booking.totalAmount,
@@ -689,7 +720,7 @@ export async function validatePaidServiceQuote(
   await assertTenantOperational(tx, booking.tenantId);
   await assertIssuingChannel(
     tx,
-    booking.id,
+    booking,
     plan.segments.length ? "exchange" : "addAncillary"
   );
   if (plan.segments.length) {
@@ -728,6 +759,33 @@ export async function validatePaidServiceQuote(
     }
     if (plan.scheduleHash && scheduleHash(instances) !== plan.scheduleHash)
       throw unavailable("Itinerary schedule changed");
+    if (change.modificationType === "change_date" || plan.revalidation) {
+      const offerId = plan.segments[0]?.offerId;
+      if (
+        !plan.revalidation ||
+        change.modificationType !== "change_date" ||
+        change.totalCost ||
+        change.priceDifference ||
+        change.modificationFee ||
+        old.length !== 1 ||
+        plan.segments.length !== 1 ||
+        plan.replaceFlightId !== old[0].flightId ||
+        !offerId
+      )
+        throw unavailable("Invalid local ticket revalidation quote");
+      const current = await checkTicketRevalidation(
+        tx,
+        booking,
+        old[0],
+        instances,
+        offerId
+      );
+      if (
+        calculateRequestHash(current) !==
+        calculateRequestHash(plan.revalidation)
+      )
+        throw unavailable("Local ticket or fare evidence changed after quote");
+    }
     const current = await quoteSeatExchange(
       tx,
       booking,
@@ -812,13 +870,41 @@ export async function applyPaidOrderModification(
           booking.numberOfPassengers,
           leg.fareClassId
         );
-    const retainedDocuments = await exchangeLocalCoupons(
-      tx,
-      booking.id,
-      old.map(l => l.flightId),
-      plan.segments.map(l => l.flightId),
-      booking.cabinClass === cabin
-    );
+    if (plan.revalidation) {
+      const evidence = plan.revalidation;
+      const [updated] = await tx
+        .update(ticketCoupons)
+        .set({ flightId: evidence.toFlightId })
+        .where(
+          and(
+            eq(ticketCoupons.id, evidence.couponId),
+            eq(ticketCoupons.bookingId, booking.id),
+            eq(ticketCoupons.flightId, evidence.fromFlightId),
+            eq(ticketCoupons.status, "O")
+          )
+        );
+      if (updated.affectedRows !== 1)
+        throw unavailable("Open coupon changed after quote");
+      await tx
+        .update(bookingFareComponents)
+        .set({ flightId: evidence.toFlightId })
+        .where(
+          and(
+            eq(bookingFareComponents.bookingId, booking.id),
+            eq(bookingFareComponents.flightId, evidence.fromFlightId),
+            isNull(bookingFareComponents.reversedAt)
+          )
+        );
+    }
+    const retainedDocuments =
+      Boolean(plan.revalidation) ||
+      (await exchangeLocalCoupons(
+        tx,
+        booking.id,
+        old.map(l => l.flightId),
+        plan.segments.map(l => l.flightId),
+        booking.cabinClass === cabin
+      ));
     if (plan.seatExchange)
       await transferExchangeSeats(tx, booking, plan.seatExchange).catch(
         error => {
@@ -840,7 +926,7 @@ export async function applyPaidOrderModification(
           )
       )
       .map(l => l.flightId);
-    if (replacedFares.length)
+    if (!plan.revalidation && replacedFares.length)
       await tx
         .update(bookingFareComponents)
         .set({ reversedAt: sql`CURRENT_TIMESTAMP(0)` })
@@ -897,7 +983,7 @@ export async function applyPaidOrderModification(
           .values({ ...record, inventoryLockId: leg.holdId });
         segmentId = inserted.insertId;
       }
-      if (leg.offerId && segmentId) {
+      if (!plan.revalidation && leg.offerId && segmentId) {
         const quote = leg.commercialQuote;
         const seats =
           plan.seatExchange?.seats.filter(
@@ -1075,9 +1161,12 @@ export async function applyPaidOrderModification(
       previousTotal: booking.totalAmount,
       totalAmount: change.newAmount,
       refundDue: Math.max(0, -change.totalCost),
-      fulfillment: plan.segments.length
-        ? "awaiting_ticket_reissue"
-        : "entitlement_created",
+      ...(plan.revalidation ? { revalidation: plan.revalidation } : {}),
+      fulfillment: plan.revalidation
+        ? "local_ticket_revalidated"
+        : plan.segments.length
+          ? "awaiting_ticket_reissue"
+          : "entitlement_created",
     },
   });
   await tx
@@ -1121,18 +1210,19 @@ export async function applyPaidOrderModification(
 export async function confirmNoChargeService(
   modificationId: number,
   userId: number,
-  tenantId: number | null = null
+  tenantId: number | null = null,
+  transaction?: SettlementTx
 ) {
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
-  const [hint] = await db
+  const [hint] = await (transaction ?? db)
     .select()
     .from(bookingModifications)
     .where(eq(bookingModifications.id, modificationId))
     .limit(1);
   if (!hint || hint.userId !== userId)
     throw unavailable("Owned modification not found");
-  return db.transaction(async tx => {
+  const confirm = async (tx: SettlementTx) => {
     const [booking] = await tx
       .select()
       .from(bookings)
@@ -1162,5 +1252,6 @@ export async function confirmNoChargeService(
     return applyPaidOrderModification(tx, booking, change, {
       kind: "authorized_no_charge",
     });
-  });
+  };
+  return transaction ? confirm(transaction) : db.transaction(confirm);
 }

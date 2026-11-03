@@ -143,7 +143,7 @@ export default defineConfig({
   webServer: {
     command: process.env.CI ? "pnpm start" : "pnpm dev",
     env: {
-      IBE_EMBED_ALLOWED_ORIGINS: "https://127.0.0.1:4173",
+      IBE_EMBED_ALLOWED_ORIGINS: "https://airline-fixture.invalid",
       IBE_BRAND_NAME: "Fixture Airways",
       IBE_BRAND_LOGO_PATH: "/icon-192.png",
     },

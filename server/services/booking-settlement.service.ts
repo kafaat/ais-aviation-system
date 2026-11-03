@@ -34,6 +34,16 @@ export type SettlementTx = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 /** Expected business rejection, distinct from a database/outbox failure. */
 export class InventoryUnavailableError extends Error {}
 export class BookingNotPendingError extends Error {}
+export class DepartureReleaseError extends TRPCError {
+  static readonly reason =
+    "Final DCS closure requires departure reconciliation before booking resources can be released";
+  constructor() {
+    super({
+      code: "PRECONDITION_FAILED",
+      message: DepartureReleaseError.reason,
+    });
+  }
+}
 
 export async function assertNoCollectionReview(
   tx: SettlementTx,
@@ -112,15 +122,29 @@ async function applyFundedBooking(
     if (
       segment.seatsReserved ||
       (legacyPrimaryReserved && segment.flightId === booking.flightId)
-    )
+    ) {
+      // A legacy channel can reserve inventory before payment arrives.
+      const [flight] = await tx
+        .select({ closedAt: flights.dcsClosedAt })
+        .from(flights)
+        .where(eq(flights.id, segment.flightId))
+        .for("update");
+      if (!flight || flight.closedAt)
+        throw new InventoryUnavailableError(
+          "Flight is unavailable for settlement"
+        );
       continue;
+    }
     await reserveSeats(
       tx,
       segment.flightId,
       booking.cabinClass,
       booking.numberOfPassengers,
       segment.inventoryLockId,
-      segment.fareClassId
+      segment.fareClassId,
+      Boolean(
+        booking.codeshareAllotmentId && segment.flightId === booking.flightId
+      )
     );
   }
   if (segments.length)
@@ -280,7 +304,8 @@ export async function reserveSeats(
   cabin: "economy" | "business",
   count: number,
   ownLockId?: number | null,
-  fareClassId?: number | null
+  fareClassId?: number | null,
+  requireActiveHold = false
 ) {
   const [flight] = await tx
     .select()
@@ -288,8 +313,33 @@ export async function reserveSeats(
     .where(eq(flights.id, flightId))
     .limit(1)
     .for("update");
-  if (!flight || !["scheduled", "delayed"].includes(flight.status))
+  if (
+    !flight ||
+    flight.dcsClosedAt ||
+    !["scheduled", "delayed"].includes(flight.status)
+  )
     throw new InventoryUnavailableError("Flight is unavailable");
+  // A released marketing seat may already belong to another invoice. Check
+  // the original hold under the same flight lock used by new sales.
+  if (requireActiveHold) {
+    const [hold] = ownLockId
+      ? await tx
+          .select({ id: inventoryLocks.id })
+          .from(inventoryLocks)
+          .where(
+            and(
+              eq(inventoryLocks.id, ownLockId),
+              eq(inventoryLocks.flightId, flightId),
+              eq(inventoryLocks.cabinClass, cabin),
+              eq(inventoryLocks.status, "active"),
+              sql`${inventoryLocks.expiresAt} > CURRENT_TIMESTAMP`
+            )
+          )
+          .for("update")
+      : [];
+    if (!hold)
+      throw new InventoryUnavailableError("Codeshare seat hold expired");
+  }
   const heldSeats = await countActiveHolds(tx, flightId, cabin, ownLockId);
   const column =
     cabin === "business" ? flights.businessAvailable : flights.economyAvailable;
@@ -323,6 +373,32 @@ export async function reserveSeats(
     );
 }
 
+export async function assertBookingDepartureReleasable(
+  tx: SettlementTx,
+  booking: Booking,
+  legs?: { flightId: number }[]
+) {
+  // Preflight checks outside settlement are advisory. The release path repeats
+  // this check under the booking and flight locks in the write transaction.
+  const segments =
+    legs ??
+    (await tx
+      .select({ flightId: bookingSegments.flightId })
+      .from(bookingSegments)
+      .where(eq(bookingSegments.bookingId, booking.id)));
+  const itinerary = await tx
+    .select({ closedAt: flights.dcsClosedAt })
+    .from(flights)
+    .where(
+      inArray(flights.id, [
+        ...new Set([booking.flightId, ...segments.map(s => s.flightId)]),
+      ])
+    )
+    .orderBy(asc(flights.id))
+    .for("update");
+  if (itinerary.some(f => f.closedAt)) throw new DepartureReleaseError();
+}
+
 export async function releaseBookingSeats(
   tx: SettlementTx,
   booking: Booking,
@@ -334,6 +410,7 @@ export async function releaseBookingSeats(
     .where(eq(bookingSegments.bookingId, booking.id))
     .orderBy(asc(bookingSegments.flightId))
     .for("update");
+  await assertBookingDepartureReleasable(tx, booking, segments);
   const couponTransitions = await closeLocalCoupons(
     tx,
     booking.id,

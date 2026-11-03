@@ -577,6 +577,11 @@ export default function MyBookings() {
                               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                                 {booking.flight.flightNumber}
                               </h3>
+                              {booking.marketingFlightNumber && (
+                                <Badge variant="outline">
+                                  {booking.marketingFlightNumber}
+                                </Badge>
+                              )}
                               {/* Live Flight Status Badge */}
                               <FlightStatusBadge
                                 status={displayFlightStatus}

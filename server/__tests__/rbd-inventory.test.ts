@@ -57,6 +57,8 @@ beforeEach(() => {
         name: "Economy Flex",
         cabinClass: "economy",
         fareFamily: "Flex",
+        changeable: true,
+        changeFee: null,
         basePriceMultiplier: "1.000",
         priority: 100,
         active: true,

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getCheckedInPassengerContext } from "./boarding-pass.service";
 import { assertTenantOperational } from "./tenant.service";
 import { checkInPassengersTx } from "./departure-control.service";
@@ -35,7 +36,7 @@ import {
   ancillaryServices,
   bookingAncillaries,
 } from "../../drizzle/schema";
-import { eq, and, desc, inArray, sql, gte, lte } from "drizzle-orm";
+import { isNull, eq, and, desc, inArray, sql, gte, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
 // ============================================================================
@@ -54,6 +55,27 @@ export type InsertKioskAnalytic = typeof kioskAnalytics.$inferInsert;
 // ============================================================================
 // Passenger Authentication
 // ============================================================================
+
+function assertKioskWindow(departureTime: Date) {
+  const now = new Date();
+  const hoursUntilDeparture =
+    (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+  if (hoursUntilDeparture > 24) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Check-in is not yet available. Check-in opens 24 hours before departure (${departureTime.toISOString()}).`,
+    });
+  }
+
+  if (hoursUntilDeparture < 1) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Check-in is closed. Check-in closes 1 hour before departure. Please proceed to the airline counter.",
+    });
+  }
+}
 
 /**
  * Authenticate a passenger at a kiosk using booking reference and last name.
@@ -170,25 +192,7 @@ export async function authenticatePassenger(
     });
   }
 
-  const now = new Date();
-  const departureTime = new Date(flight.departureTime);
-  const hoursUntilDeparture =
-    (departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-  if (hoursUntilDeparture > 24) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `Check-in is not yet available. Check-in opens 24 hours before departure (${departureTime.toISOString()}).`,
-    });
-  }
-
-  if (hoursUntilDeparture < 1) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message:
-        "Check-in is closed. Check-in closes 1 hour before departure. Please proceed to the airline counter.",
-    });
-  }
+  assertKioskWindow(new Date(flight.departureTime));
 
   // Create kiosk session
   const [session] = await db.insert(kioskSessions).values({
@@ -198,12 +202,14 @@ export async function authenticatePassenger(
   });
 
   // Return all matched passengers for this booking
-  const allPassengers = matchedBookings.map(p => ({
-    id: p.passengerId,
-    firstName: p.passengerFirstName,
-    lastName: p.passengerLastName,
-    type: p.passengerType,
-  }));
+  const allPassengers = matchedBookings
+    .filter(p => p.bookingId === booking.bookingId)
+    .map(p => ({
+      id: p.passengerId,
+      firstName: p.passengerFirstName,
+      lastName: p.passengerLastName,
+      type: p.passengerType,
+    }));
 
   return {
     sessionId: Number(session.insertId),
@@ -226,7 +232,10 @@ export async function authenticatePassenger(
  * Get all check-in data for kiosk display: flight details, passengers,
  * available seats, and ancillary services.
  */
-export async function getCheckInData(bookingId: number) {
+export async function getCheckInData(
+  bookingId: number,
+  passengerIds: number[]
+) {
   const db = await getDb();
   if (!db)
     throw new TRPCError({
@@ -299,11 +308,16 @@ export async function getCheckInData(bookingId: number) {
     .where(eq(airports.id, flightRoute.destinationId))
     .limit(1);
 
-  // Get passengers for this booking
+  // A reference/surname session may cover only part of a family booking.
   const bookingPassengers = await db
     .select()
     .from(passengers)
-    .where(eq(passengers.bookingId, bookingId));
+    .where(
+      and(
+        eq(passengers.bookingId, bookingId),
+        inArray(passengers.id, passengerIds)
+      )
+    );
 
   // Get already-taken seats for this flight
   const takenSeats = await db
@@ -343,6 +357,7 @@ export async function getCheckInData(bookingId: number) {
     .where(
       and(
         eq(bookingAncillaries.bookingId, bookingId),
+        inArray(bookingAncillaries.passengerId, passengerIds),
         eq(bookingAncillaries.status, "active")
       )
     );
@@ -569,13 +584,92 @@ export async function printBoardingPass(
 // Bag Tag Generation
 // ============================================================================
 
+type TagReceipt = { bookingRef: string; lastName: string; tagNumber: string };
+
+function missingReceipt() {
+  return new TRPCError({
+    code: "NOT_FOUND",
+    message: "Registered tag unavailable for this passenger.",
+  });
+}
+
+/** Resolve just the bag identified by a passenger's receipt. No kiosk session is issued. */
+export async function reprintRegisteredTag(
+  receipt: TagReceipt & { expectedVersion?: string }
+) {
+  const db = getDb();
+  if (!db) throw new Error("Database unavailable");
+  const reference = receipt.bookingRef.trim().toUpperCase();
+  const surname = receipt.lastName.trim().toUpperCase();
+  const [observed] = await db
+    .select({
+      bookingId: baggageItems.bookingId,
+      passengerId: baggageItems.passengerId,
+      flightId: baggageCustodyEvents.flightId,
+    })
+    .from(baggageItems)
+    .innerJoin(bookings, eq(bookings.id, baggageItems.bookingId))
+    .innerJoin(
+      passengers,
+      and(
+        eq(passengers.id, baggageItems.passengerId),
+        eq(passengers.bookingId, bookings.id)
+      )
+    )
+    .innerJoin(
+      baggageCustodyEvents,
+      eq(baggageCustodyEvents.baggageId, baggageItems.id)
+    )
+    .where(
+      and(
+        eq(baggageItems.tagNumber, receipt.tagNumber),
+        sql`(UPPER(${bookings.bookingReference}) = ${reference} OR UPPER(${bookings.pnr}) = ${reference})`,
+        sql`UPPER(${passengers.lastName}) = ${surname}`
+      )
+    )
+    .orderBy(
+      desc(baggageCustodyEvents.observedAt),
+      desc(baggageCustodyEvents.id)
+    )
+    .limit(1);
+  if (!observed) throw missingReceipt();
+  const document = await printBagTag(
+    observed.bookingId,
+    observed.passengerId,
+    1,
+    observed.flightId,
+    [receipt.tagNumber],
+    receipt
+  );
+  // This version is an optimistic concurrency check, never an authorization.
+  // A custody move to another identically named flight requires a fresh lookup.
+  const documentVersion = createHash("sha256")
+    .update(
+      JSON.stringify([
+        observed.bookingId,
+        observed.passengerId,
+        observed.flightId,
+        document,
+      ])
+    )
+    .digest("hex");
+  if (receipt.expectedVersion && receipt.expectedVersion !== documentVersion)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message:
+        "The bag tag has changed. Review the current passenger and sector before reprinting.",
+    });
+  return { ...document, documentVersion };
+}
+
 /** Prepare copies of identified physical tags. Only the printer can confirm output. */
 export async function printBagTag(
   bookingId: number,
   passengerId: number,
   bagCount: number,
   flightId?: number,
-  tagNumbers?: string[]
+  tagNumbers?: string[],
+  receipt?: TagReceipt
 ) {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
@@ -603,6 +697,19 @@ export async function printBagTag(
       passengerId,
       flightId,
     });
+    if (receipt) {
+      // Recheck identity under the same locks as the actual document. The
+      // lookup can race a correction to the booking, passenger or station data.
+      const reference = receipt.bookingRef.trim().toUpperCase();
+      if (
+        (booking.bookingReference.toUpperCase() !== reference &&
+          booking.pnr.toUpperCase() !== reference) ||
+        passenger.lastName.toUpperCase() !==
+          receipt.lastName.trim().toUpperCase()
+      )
+        throw missingReceipt();
+      assertKioskWindow(new Date(flight.departureTime));
+    }
     if (
       (legs.length &&
         legs.filter(
@@ -641,6 +748,7 @@ export async function printBagTag(
         and(
           eq(baggageItems.bookingId, bookingId),
           eq(baggageItems.passengerId, passengerId),
+          isNull(baggageItems.returnEvidenceId),
           inArray(baggageItems.tagNumber, tagNumbers)
         )
       )
@@ -654,7 +762,7 @@ export async function printBagTag(
       });
     for (const tagNumber of tagNumbers) {
       const bag = bags.find(item => item.tagNumber === tagNumber);
-      if (!bag) throw unavailable();
+      if (!bag || bag.returnEventId != null) throw unavailable();
       const [latest] = await tx
         .select()
         .from(baggageCustodyEvents)

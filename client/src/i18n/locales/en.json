@@ -1,4 +1,14 @@
 {
+  "agencyCredit": {
+    "settlementReview": "Agency sales are on hold while a payment withdrawal is under review.",
+    "title": "Agency credit",
+    "balance": "Credit limit {{limit}} · Outstanding invoices {{outstanding}} · Available {{available}}",
+    "disabled": "Agency credit is disabled.",
+    "newLimit": "New credit limit (SAR)",
+    "reason": "Approval reason",
+    "approve": "Approve limit",
+    "disable": "Disable credit"
+  },
   "checkoutResume": {
     "title": "Booking payment",
     "chooseMethod": "Payment method",
@@ -537,6 +547,22 @@
     "airlinePerformance": "Airline Performance",
     "bookings": "Bookings",
     "revenue": "Revenue (SAR)"
+  },
+  "kioskBagTag": {
+    "noCopy": "No tag came out",
+    "reported": "You reported no printed copy. Check the printer or ask the airline desk before retrying this same tag.",
+    "title": "Kiosk bag tag reprint",
+    "help": "Enter the booking details and the number on your existing bag receipt. Check the passenger and flight before requesting a copy.",
+    "number": "10-digit bag tag number",
+    "find": "Find registered tag",
+    "document": "Registered bag tag copy",
+    "barcode": "Bag tag barcode",
+    "reprint": "Reprint this tag",
+    "finish": "Finish and clear",
+    "ready": "Copy ready. Check the passenger and route before opening the print dialog.",
+    "failed": "Could not open the print dialog. Check the printer and retry this same tag.",
+    "unknown": "Physical printing is unconfirmed. Check the printer for a copy before reprinting this tag.",
+    "unavailable": "This tag could not be verified for reprint. Check your details or contact the airline desk."
   },
   "footer": {
     "description": "Aviation Integrated System for ticket booking and flight management",
@@ -2527,6 +2553,11 @@
     },
     "title": "Modify Booking",
     "flightInfo": "Flight {{flightNumber}} - {{origin}} to {{destination}}",
+    "revalidated": "Local ticket revalidated",
+    "revalidationReceipt": "Local revalidation receipt",
+    "revalidate": "Revalidate local ticket",
+    "revalidationTerms": "Change the date on one open local coupon for the same flight number and fare, with no fee. Available for an individual direct booking funded with wallet or account credit.",
+    "revalidationDocument": "Local ticket {{ticketNumber}} · Coupon {{couponNumber}} retains its number.",
     "changeDateTab": "Change Date",
     "upgradeTab": "Upgrade Class",
     "dateChangePolicy": "Date Change Policy",
@@ -2749,7 +2780,9 @@
     "noMessages": "No GDS messages found"
   },
   "codeshare": {
-    "browseDescription": "Select a marketing carrier to see its partners’ flight schedules. Contact the marketing carrier for seat availability and booking.",
+    "browseDescription": "Select a marketing carrier to view its flights. You can book a cabin with a locally configured seat allotment.",
+    "localAvailability": "Seats available locally {{seats}}",
+    "bookService": "Book {{flight}}",
     "selectCarrier": "Select a carrier",
     "noFlights": "No codeshare flights for this carrier.",
     "carrierReadError": "The carrier list could not be loaded.",
