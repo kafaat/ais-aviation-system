@@ -185,8 +185,12 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const seats = page.getByRole("region", { name: "Seat Assignments" });
     await seats.getByRole("button", { name: "Select Your Seats" }).click();
     for (const index of [0, 1]) {
-      await seats.getByLabel("Flight sector").selectOption(String(index));
-      await seats.getByLabel("Passenger").selectOption(String(index));
+      await seats
+        .getByRole("combobox", { name: /^Flight sector/ })
+        .selectOption(String(index));
+      await seats
+        .getByRole("combobox", { name: /^Passenger/ })
+        .selectOption(String(index));
       await expect(
         seats.getByRole("button", { name: "12B available" })
       ).toBeDisabled();
