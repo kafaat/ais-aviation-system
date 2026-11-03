@@ -1,3 +1,4 @@
+import { saleFareRuleDigest } from "./sale-fare-rules";
 import {
   priceInitialAncillaries,
   persistInitialAncillaries,
@@ -65,6 +66,7 @@ export interface MultiCityPriceResult {
     basePrice: number;
     discountedPrice: number;
     fareLines?: OfferPayload["fareLines"];
+    fareRuleDigest?: string;
     cabinClass: "economy" | "business";
     fareClassCode?: string;
   }>;
@@ -283,6 +285,7 @@ export async function calculateMultiCityPrice(
         }
 
         let fareMultiplier = 1;
+        let fareRuleDigest: string | undefined;
         if (segment.fareClassCode) {
           const database = await db.getDb();
           if (!database)
@@ -304,6 +307,18 @@ export async function calculateMultiCityPrice(
               code: "BAD_REQUEST",
               message: `Booking class unavailable for segment ${index + 1}`,
             });
+          fareRuleDigest = await saleFareRuleDigest(
+            database,
+            {
+              ...flight,
+              originId: flight.origin.id,
+              destinationId: flight.destination.id,
+            },
+            rbd.fareClassId,
+            passengerTypes ??
+              Array.from({ length: passengerCount }, () => "adult"),
+            segments.length
+          );
           fareMultiplier = rbd.basePriceMultiplier;
         }
 
@@ -332,6 +347,7 @@ export async function calculateMultiCityPrice(
           : null;
         return {
           segmentIndex: index,
+          fareRuleDigest,
           flightId: segment.flightId,
           basePrice: adjusted?.totalAmount ?? pricingResult.price,
           fareLines:
@@ -509,6 +525,25 @@ export async function createMultiCityBooking(
               code: "CONFLICT",
               message: "Requested booking class is unavailable",
             });
+          if (selectedFareClass) {
+            const digest = await saleFareRuleDigest(
+              tx,
+              flight,
+              selectedFareClass.fareClass.id,
+              input.passengers.map(p => p.type),
+              input.segments.length
+            );
+            if (
+              digest !==
+              priceResult.segments.find(s => s.flightId === flight.id)
+                ?.fareRuleDigest
+            )
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message:
+                  "Fare conditions changed; request a new itinerary price",
+              });
+          }
           const hold = await createInventoryLock(
             flight.id,
             input.passengers.length,

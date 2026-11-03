@@ -50,6 +50,7 @@ export default function ReportsDashboard() {
     format(subDays(new Date(), 30), "yyyy-MM-dd")
   );
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [flightStatus, setFlightStatus] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
   const [isExporting, setIsExporting] = useState(false);
 
@@ -104,14 +105,22 @@ export default function ReportsDashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const filters = {
+    startDate: startDate || undefined,
+    endDate: endDate || undefined,
+  };
+  const bookingFilters = {
+    ...filters,
+    status: status === "all" ? undefined : status,
+  };
+  const flightFilters = {
+    ...filters,
+    status: flightStatus === "all" ? undefined : flightStatus,
+  };
+
   // Export handlers
   const handleExport = async (format: ExportFormat) => {
     setIsExporting(true);
-    const filters = {
-      startDate,
-      endDate,
-      status: status !== "all" ? status : undefined,
-    };
 
     try {
       let result: {
@@ -123,11 +132,11 @@ export default function ReportsDashboard() {
 
       if (activeTab === "bookings") {
         if (format === "csv") {
-          result = await exportBookingsCSV.mutateAsync(filters);
+          result = await exportBookingsCSV.mutateAsync(bookingFilters);
         } else if (format === "excel") {
-          result = await exportBookingsExcel.mutateAsync(filters);
+          result = await exportBookingsExcel.mutateAsync(bookingFilters);
         } else {
-          result = await generateBookingsPDF.mutateAsync(filters);
+          result = await generateBookingsPDF.mutateAsync(bookingFilters);
         }
       } else if (activeTab === "revenue") {
         if (format === "csv") {
@@ -139,11 +148,13 @@ export default function ReportsDashboard() {
         }
       } else if (activeTab === "flights") {
         if (format === "csv") {
-          result = await exportFlightPerformanceCSV.mutateAsync(filters);
+          result = await exportFlightPerformanceCSV.mutateAsync(flightFilters);
         } else if (format === "excel") {
-          result = await exportFlightPerformanceExcel.mutateAsync(filters);
+          result =
+            await exportFlightPerformanceExcel.mutateAsync(flightFilters);
         } else {
-          result = await generateFlightPerformancePDF.mutateAsync(filters);
+          result =
+            await generateFlightPerformancePDF.mutateAsync(flightFilters);
         }
       } else if (activeTab === "refunds") {
         if (format === "csv") {
@@ -191,46 +202,68 @@ export default function ReportsDashboard() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>{t("reports.startDate")}</Label>
+              <Label htmlFor="report-start">{t("reports.startDate")}</Label>
               <Input
                 type="date"
+                id="report-start"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label>{t("reports.endDate")}</Label>
+              <Label htmlFor="report-end">{t("reports.endDate")}</Label>
               <Input
                 type="date"
+                id="report-end"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t("reports.status")}</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    {t("reports.allStatuses")}
-                  </SelectItem>
-                  <SelectItem value="pending">
-                    {t("reports.pending")}
-                  </SelectItem>
-                  <SelectItem value="confirmed">
-                    {t("reports.confirmed")}
-                  </SelectItem>
-                  <SelectItem value="cancelled">
-                    {t("reports.cancelled")}
-                  </SelectItem>
-                  <SelectItem value="completed">
-                    {t("reports.completed")}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {(activeTab === "bookings" || activeTab === "flights") && (
+              <div className="space-y-2">
+                <Label htmlFor="report-status">{t("reports.status")}</Label>
+                <Select
+                  value={activeTab === "flights" ? flightStatus : status}
+                  onValueChange={
+                    activeTab === "flights" ? setFlightStatus : setStatus
+                  }
+                >
+                  <SelectTrigger id="report-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      {t("reports.allStatuses")}
+                    </SelectItem>
+                    {activeTab === "flights" ? (
+                      <>
+                        <SelectItem value="scheduled">
+                          {t("flightStatus.scheduled")}
+                        </SelectItem>
+                        <SelectItem value="delayed">
+                          {t("flightStatus.delayed")}
+                        </SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="pending">
+                          {t("reports.pending")}
+                        </SelectItem>
+                        <SelectItem value="confirmed">
+                          {t("reports.confirmed")}
+                        </SelectItem>
+                      </>
+                    )}
+                    <SelectItem value="cancelled">
+                      {t("reports.cancelled")}
+                    </SelectItem>
+                    <SelectItem value="completed">
+                      {t("reports.completed")}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -298,9 +331,9 @@ export default function ReportsDashboard() {
                   {t("reports.revenueIncludes")}:
                 </p>
                 <ul className="list-disc list-inside text-sm space-y-1">
-                  <li>{t("reports.dailyRevenue")}</li>
+                  <li>{t("reports.dailyBilling")}</li>
                   <li>{t("reports.totalBookings")}</li>
-                  <li>{t("reports.confirmedRevenue")}</li>
+                  <li>{t("reports.settlements")}</li>
                   <li>{t("reports.refundedAmount")}</li>
                 </ul>
               </div>
@@ -419,32 +452,28 @@ export default function ReportsDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <ExportReportButton
               reportType="bookings"
-              filters={{
-                startDate,
-                endDate,
-                status: status !== "all" ? status : undefined,
-              }}
+              filters={bookingFilters}
               showLabel={true}
               variant="outline"
               className="w-full justify-start"
             />
             <ExportReportButton
               reportType="revenue"
-              filters={{ startDate, endDate }}
+              filters={filters}
               showLabel={true}
               variant="outline"
               className="w-full justify-start"
             />
             <ExportReportButton
               reportType="flights"
-              filters={{ startDate, endDate }}
+              filters={flightFilters}
               showLabel={true}
               variant="outline"
               className="w-full justify-start"
             />
             <ExportReportButton
               reportType="refunds"
-              filters={{ startDate, endDate }}
+              filters={filters}
               showLabel={true}
               variant="outline"
               className="w-full justify-start"

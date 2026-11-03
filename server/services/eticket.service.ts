@@ -150,13 +150,10 @@ export async function generateETicketPDF(
         .text(`PNR: ${ticketData.pnr}`, { align: "center" })
         .moveDown(1.5);
 
-      // Passenger info box
-      doc.rect(50, doc.y, 495, 80).fillAndStroke("#f3f4f6", "#d1d5db");
-
       doc
         .fillColor("#000")
         .fontSize(10)
-        .text("PASSENGER INFORMATION", 60, doc.y - 70, { underline: true })
+        .text("PASSENGER INFORMATION", 60, doc.y, { underline: true })
         .moveDown(0.5);
 
       doc
@@ -166,13 +163,10 @@ export async function generateETicketPDF(
         .text(`Type: ${ticketData.passengerType.toUpperCase()}`, 60)
         .moveDown(1.5);
 
-      // Flight info box
-      doc.rect(50, doc.y, 495, 120).fillAndStroke("#eff6ff", "#bfdbfe");
-
       doc
         .fillColor("#1e40af")
         .fontSize(10)
-        .text("FLIGHT INFORMATION", 60, doc.y - 110, { underline: true })
+        .text("FLIGHT INFORMATION", 60, doc.y, { underline: true })
         .moveDown(0.5);
 
       doc
@@ -185,7 +179,7 @@ export async function generateETicketPDF(
       doc
         .fontSize(16)
         .text(
-          `${ticketData.originCode} → ${ticketData.destinationCode}`,
+          `${ticketData.originCode} to ${ticketData.destinationCode}`,
           60,
           undefined,
           { continued: true }
@@ -212,13 +206,10 @@ export async function generateETicketPDF(
         )
         .moveDown(1.5);
 
-      // Service details
-      doc.rect(50, doc.y, 495, 80).fillAndStroke("#f9fafb", "#e5e7eb");
-
       doc
         .fillColor("#000")
         .fontSize(10)
-        .text("SERVICE DETAILS", 60, doc.y - 70, { underline: true })
+        .text("SERVICE DETAILS", 60, doc.y, { underline: true })
         .moveDown(0.5);
 
       doc
@@ -248,8 +239,14 @@ export async function generateETicketPDF(
         .moveDown(1.5);
 
       // QR Code
-      doc.image(qrCodeDataURL, 220, doc.y, { width: 150, height: 150 });
-      doc.moveDown(10);
+      const qrSize = 110;
+      if (doc.y + qrSize + 40 > doc.page.height - doc.page.margins.bottom)
+        doc.addPage();
+      const qrTop = doc.y;
+      doc.image(qrCodeDataURL, (doc.page.width - qrSize) / 2, qrTop, {
+        width: qrSize,
+      });
+      doc.y = qrTop + qrSize + 6;
 
       // Footer
       doc

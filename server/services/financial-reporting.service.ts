@@ -281,11 +281,9 @@ export async function getFinancialDays(
   }
 }
 
-export async function getFinancialSummary(
-  period: FinancialPeriod = {}
-): Promise<FinancialAmounts> {
+export function summarizeFinancialDays(days: FinancialDay[]): FinancialAmounts {
   const summary = emptyAmounts();
-  for (const row of await getFinancialDays(period)) {
+  for (const row of days) {
     for (const key of [
       "billedAmount",
       "collectedAmount",
@@ -299,4 +297,10 @@ export async function getFinancialSummary(
   }
   summary.netCollectedAmount = summary.collectedAmount - summary.refundedAmount;
   return summary;
+}
+
+export async function getFinancialSummary(
+  period: FinancialPeriod = {}
+): Promise<FinancialAmounts> {
+  return summarizeFinancialDays(await getFinancialDays(period));
 }

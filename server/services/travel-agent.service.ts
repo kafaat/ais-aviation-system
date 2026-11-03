@@ -580,7 +580,8 @@ async function validateAgentOwner(ownerUserId: number) {
 export async function assignAgentOwner(
   agentId: number,
   ownerUserId: number,
-  actorId: number
+  actorId: number,
+  onlyIfUnlinked = false
 ) {
   const database = await getDb();
   if (!database) throw new Error("Database not available");
@@ -593,6 +594,15 @@ export async function assignAgentOwner(
       .for("update");
     if (!agency)
       throw new TRPCError({ code: "NOT_FOUND", message: "Agency not found" });
+    if (
+      onlyIfUnlinked &&
+      agency.ownerUserId != null &&
+      agency.ownerUserId !== ownerUserId
+    )
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Agency already has an owner",
+      });
     const [owner] = await tx
       .select()
       .from(users)
@@ -604,6 +614,38 @@ export async function assignAgentOwner(
         code: "NOT_FOUND",
         message: "Agency owner not found",
       });
+    if (agency.ownerUserId != null && agency.ownerUserId !== ownerUserId) {
+      const [previous] = await tx
+        .select({ tenantId: users.tenantId })
+        .from(users)
+        .where(eq(users.id, agency.ownerUserId))
+        .limit(1)
+        .for("share");
+      if (!previous || previous.tenantId !== owner.tenantId)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Cannot transfer agency ownership between tenants",
+        });
+    }
+    if (agency.ownerUserId == null) {
+      // An unlinked historical agency can already have sales. Preserve their tenant boundary.
+      const [foreignBooking] = await tx
+        .select({ id: bookings.id })
+        .from(agentBookings)
+        .innerJoin(bookings, eq(agentBookings.bookingId, bookings.id))
+        .where(
+          and(
+            eq(agentBookings.agentId, agentId),
+            sql`NOT (${bookings.tenantId} <=> ${owner.tenantId})`
+          )
+        )
+        .limit(1);
+      if (foreignBooking)
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Agency bookings belong to another tenant",
+        });
+    }
     await assertTenantOperational(tx, owner.tenantId);
     await tx
       .update(travelAgents)

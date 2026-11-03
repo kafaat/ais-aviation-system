@@ -298,8 +298,8 @@ describe.skipIf(!dbAvailable)("Special Services Service", () => {
       const newService = await specialServicesService.requestService({
         bookingId: testBookingId,
         passengerId: testPassengerId,
-        serviceType: "extra_legroom",
-        serviceCode: "EXST",
+        serviceType: "medical_assistance",
+        serviceCode: "MEDA",
       });
 
       const result = await specialServicesService.cancelService(

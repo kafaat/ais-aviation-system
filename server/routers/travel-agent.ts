@@ -78,6 +78,7 @@ export const travelAgentRouter = router({
       z.object({
         agentId: z.number().int().positive(),
         ownerUserId: z.number().int().positive(),
+        onlyIfUnlinked: z.boolean().optional(),
       })
     )
     .output(z.object({ success: z.literal(true) }))
@@ -85,7 +86,8 @@ export const travelAgentRouter = router({
       travelAgentService.assignAgentOwner(
         input.agentId,
         input.ownerUserId,
-        ctx.user.id
+        ctx.user.id,
+        input.onlyIfUnlinked
       )
     ),
 
