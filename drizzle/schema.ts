@@ -183,6 +183,8 @@ export const flights = mysqlTable(
     originId: int("originId").notNull(),
     destinationId: int("destinationId").notNull(),
     departureTime: timestamp("departureTime").notNull(),
+    dcsClosedAt: timestamp("dcsClosedAt", { fsp: 3 }),
+    stationOffBlocksAt: timestamp("stationOffBlocksAt", { fsp: 3 }),
     arrivalTime: timestamp("arrivalTime").notNull(),
     aircraftType: varchar("aircraftType", { length: 50 }), // e.g., "Boeing 777"
     aircraftRegistrationId: int("aircraftRegistrationId"),
@@ -260,6 +262,7 @@ export const bookings = mysqlTable(
     flightId: int("flightId").notNull(),
     // Null for pre-RBD and cabin-only bookings.
     fareClassId: int("fareClassId"),
+    codeshareAllotmentId: int("codeshareAllotmentId"),
     bookingReference: varchar("bookingReference", { length: 6 })
       .notNull()
       .unique(), // e.g., "ABC123"
@@ -303,6 +306,9 @@ export const bookings = mysqlTable(
     tenantIdx: index("bookings_tenant_idx").on(table.tenantId),
     // Index for flight-based queries (flight manifest, seat availability)
     flightIdIdx: index("bookings_flight_id_idx").on(table.flightId),
+    codeshareIdx: index("bookings_codeshare_allotment_idx").on(
+      table.codeshareAllotmentId
+    ),
     fareClassIdx: index("bookings_fare_class_idx").on(table.fareClassId),
     // Index for status filtering (admin panels, reports)
     statusIdx: index("bookings_status_idx").on(table.status),
@@ -2863,6 +2869,10 @@ export const baggageItems = mysqlTable(
     // nullable and require conservative attribution or operator review.
     flightId: int("flightId"),
     segmentId: int("segmentId"),
+    returnEventId: int("returnEventId"), // Append-only DCS handover receipt
+    // Verified handler evidence is distinct from a staff-attributed DCS receipt.
+    returnEvidenceId: int("returnEvidenceId"),
+    replacesBaggageId: int("replacesBaggageId").unique(),
     tagNumber: varchar("tagNumber", { length: 20 }).notNull().unique(), // Unique baggage tag (e.g., "AIS123456")
     weight: decimal("weight", { precision: 5, scale: 2 }).notNull(), // Weight in kg
     status: mysqlEnum("status", [
@@ -3326,6 +3336,38 @@ export const travelAgents = mysqlTable(
 
 export type TravelAgent = typeof travelAgents.$inferSelect;
 export type InsertTravelAgent = typeof travelAgents.$inferInsert;
+
+// Approval revisions and per-invoice obligations are immutable. Existing
+// agencies have no terms and continue to use their existing payment workflow.
+export const agencyCreditTerms = mysqlTable(
+  "agency_credit_terms",
+  {
+    id: int("id").primaryKey().autoincrement(),
+    agencyId: int("agencyId").notNull(),
+    ownerId: int("ownerId").notNull(),
+    tenantId: int("tenantId"),
+    limitMinor: int("limitMinor"),
+    approvedBy: int("approvedBy").notNull(),
+    reason: varchar("reason", { length: 255 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    latest: index("agency_credit_revision").on(table.agencyId, table.id),
+  })
+);
+
+export const agencyCreditObligations = mysqlTable(
+  "agency_credit_obligations",
+  {
+    bookingId: int("bookingId").primaryKey(),
+    termsId: int("termsId").notNull(),
+    amountMinor: int("amountMinor").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    terms: index("agency_credit_obligations_terms").on(table.termsId),
+  })
+);
 
 /**
  * Agent Bookings table
@@ -5384,6 +5426,28 @@ export const codeshareAgreements = mysqlTable(
   })
 );
 
+/** A marketing number and selling limit explicitly assigned to one operating service. */
+export const codeshareAllotments = mysqlTable(
+  "codeshare_allotments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    agreementId: int("agreementId").notNull(),
+    flightId: int("flightId").notNull(),
+    cabinClass: mysqlEnum("cabinClass", ["economy", "business"]).notNull(),
+    marketingFlightNumber: varchar("marketingFlightNumber", {
+      length: 10,
+    }).notNull(),
+    seatLimit: int("seatLimit", { unsigned: true }).notNull(),
+  },
+  table => ({
+    scope: uniqueIndex("codeshare_allotment_scope").on(
+      table.agreementId,
+      table.flightId,
+      table.cabinClass
+    ),
+  })
+);
+
 export type CodeshareAgreement = typeof codeshareAgreements.$inferSelect;
 export type InsertCodeshareAgreement = typeof codeshareAgreements.$inferInsert;
 
@@ -6292,6 +6356,8 @@ export const baggageCustodyEvents = mysqlTable(
       "loading",
       "transfer",
       "arrival",
+      "unloading",
+      "return",
     ]).notNull(),
     evidenceId: int("evidenceId").notNull().unique(),
     previousEvidenceId: int("previousEvidenceId"),
@@ -6863,6 +6929,27 @@ export const supplierFinanceEvents = mysqlTable(
   })
 );
 
+/** Explicit staff grants for passenger bag handovers at an airline station. */
+export const dcsBagReturnGrants = mysqlTable(
+  "dcs_bag_return_grants",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId").notNull(),
+    airlineId: int("airlineId").notNull(),
+    airportId: int("airportId").notNull(),
+    staffId: int("staffId").notNull(),
+    enabled: boolean("enabled").notNull(),
+  },
+  t => ({
+    staffStation: uniqueIndex("dcs_return_staff_station").on(
+      t.tenantId,
+      t.airlineId,
+      t.airportId,
+      t.staffId
+    ),
+  })
+);
+
 /** Local departure-control decisions; no airline/airport clearance is implied. */
 export const dcsFlightOperations = mysqlTable(
   "dcs_flight_operations",
@@ -6927,6 +7014,19 @@ export const dcsOperationEvents = mysqlTable(
       deniedBefore?: boolean;
       deniedAfter?: boolean;
       scanFormat?: string;
+      tagNumber?: string;
+      stationId?: number;
+      airlineId?: number;
+      staffId?: number;
+      stationReference?: string;
+      caseId?: number;
+      modificationId?: number;
+      refundDue?: number;
+      segmentId?: number | null;
+      seatNumbers?: string[];
+      baggageId?: number;
+      previousWeightGrams?: number;
+      correctedWeightGrams?: number;
     }>(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },

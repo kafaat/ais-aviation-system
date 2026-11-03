@@ -32,6 +32,7 @@ import {
   airports,
   flights,
   bookings,
+  codeshareAllotments,
   passengers,
   payments,
   type InsertFlight,
@@ -751,7 +752,13 @@ export async function getBookingsByUserId(
   const result = await db
     .select({
       seatsReserved: bookings.seatsReserved,
-      partnerIssued: sql<number>`EXISTS (SELECT 1 FROM ${agentBookings} WHERE ${agentBookings.bookingId} = ${bookings.id}) OR EXISTS (SELECT 1 FROM ${corporateBookings} WHERE ${corporateBookings.bookingId} = ${bookings.id})`,
+      partnerIssued: sql<number>`${bookings.codeshareAllotmentId} IS NOT NULL OR EXISTS (SELECT 1 FROM ${agentBookings} WHERE ${agentBookings.bookingId} = ${bookings.id}) OR EXISTS (SELECT 1 FROM ${corporateBookings} WHERE ${corporateBookings.bookingId} = ${bookings.id})`,
+      marketingFlightNumber: sql<
+        string | null
+      >`(select ${codeshareAllotments.marketingFlightNumber}
+        from ${codeshareAllotments} where ${codeshareAllotments.id} = ${bookings.codeshareAllotmentId}
+        and ${codeshareAllotments.flightId} = ${bookings.flightId}
+        and ${codeshareAllotments.cabinClass} = ${bookings.cabinClass})`,
       id: bookings.id,
       bookingReference: bookings.bookingReference,
       pnr: bookings.pnr,

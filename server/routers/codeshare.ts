@@ -1,3 +1,4 @@
+import { configureAllotment } from "../services/codeshare-allotment.service";
 import { responseContracts } from "../contracts/codeshare";
 import { z } from "zod";
 import { router, publicProcedure, adminProcedure } from "../_core/trpc";
@@ -8,6 +9,18 @@ import * as codeshareService from "../services/codeshare.service";
  * Handles codeshare agreement management between airlines
  */
 export const codeshareRouter = router({
+  configureAllotment: adminProcedure
+    .input(
+      z.object({
+        agreementId: z.number().int().positive(),
+        flightId: z.number().int().positive(),
+        cabinClass: z.enum(["economy", "business"]),
+        marketingFlightNumber: z.string().trim().toUpperCase().min(3).max(10),
+        seatLimit: z.number().int().min(0).max(65535),
+      })
+    )
+    .output(z.object({ allotmentId: z.number().int().positive() }))
+    .mutation(({ input, ctx }) => configureAllotment(input, ctx.tenantId)),
   // ============================================================================
   // Admin Procedures
   // ============================================================================

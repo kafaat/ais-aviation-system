@@ -141,13 +141,21 @@ try {
     .insert(schema.airlines)
     .values({ id, code: "ZX", name: "Acceptance" });
   await db.insert(schema.airports).values([
-    { id, code: "ZZZ", name: "Origin", city: "Test", country: "Test" },
+    {
+      id,
+      code: "ZZZ",
+      name: "Origin",
+      city: "Test",
+      country: "Test",
+      timezone: "UTC",
+    },
     {
       id: id + 1,
       code: "ZZY",
       name: "Destination",
       city: "Test",
       country: "Test",
+      timezone: "UTC",
     },
   ]);
   await db.insert(schema.flights).values(

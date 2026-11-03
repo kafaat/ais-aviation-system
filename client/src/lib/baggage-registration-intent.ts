@@ -34,6 +34,10 @@ const commandSchema = z
     idempotencyKey: z.string().uuid(),
     expectedActorId: identifier,
     expectedTenantId: identifier,
+    replacesTag: z
+      .string()
+      .regex(/^\d{10}$/)
+      .optional(),
     description: z.string().max(500).optional(),
     specialHandling: z.string().max(255).optional(),
   })

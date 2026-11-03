@@ -17,7 +17,7 @@ export function transactionMemory(seed: Record<string, any[]>) {
     let index = 0;
     const conditions = [
       ...query.sql.matchAll(
-        /`[^`]+`\.`([^`]+)`\s*(=|!=|<>|>=|<=|>|<|in)\s*(\?|\([^)]*\))/g
+        /`[^`]+`\.`([^`]+)`\s*(=|!=|<>|>=|<=|>|<|in)\s*(\?|\([^)]*\))/gi
       ),
     ];
     return conditions
@@ -26,7 +26,7 @@ export function transactionMemory(seed: Record<string, any[]>) {
         const params = query.params.slice(index, (index += count));
         const actual = row[column];
         const expected = params[0];
-        if (op === "in") return params.includes(actual);
+        if (op.toLowerCase() === "in") return params.includes(actual);
         if (op === "=")
           return actual === expected || Number(actual) === expected;
         if (op === "!=" || op === "<>") return actual !== expected;

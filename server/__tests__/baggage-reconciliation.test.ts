@@ -105,7 +105,9 @@ function unresolved(data: Record<string, any[]>, flightId = 31) {
       "flightId",
       "segmentId",
       "tagNumber",
+      "returnEvidenceId",
       "status",
+      "returnEventId",
     ],
   };
   try {

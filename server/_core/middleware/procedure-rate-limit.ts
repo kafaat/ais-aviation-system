@@ -9,6 +9,7 @@ export function sensitiveProcedureScope(
   type: ProcedureKind = "mutation"
 ): string | null {
   if (/^auth\..*(?:reset|forgot)/i.test(path)) return "passwordReset";
+  if (path === "kiosk.reprintRegisteredTag") return "kioskBagReceipt";
   if (path === "manageBooking.lookup") return "manageBookingLookup";
   if (
     /^auth\.(login|register|completeMfa)$/.test(path) ||
@@ -38,6 +39,7 @@ export async function enforceProcedureRateLimit(
     scope === "auth" ||
     scope === "passwordReset" ||
     scope === "manageBookingLookup" ||
+    scope === "kioskBagReceipt" ||
     !ctx.user
       ? `ip:${ip}`
       : `user:${ctx.user.id}`;

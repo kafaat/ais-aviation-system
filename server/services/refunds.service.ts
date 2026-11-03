@@ -1,3 +1,4 @@
+import { assertBookingDepartureReleasable } from "./booking-settlement.service";
 import { assertNoFlownCouponForCancellation } from "./ticket-coupons.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
 import { TRPCError } from "@trpc/server";
@@ -15,8 +16,10 @@ import { sendRefundConfirmation } from "./email.service";
 import { calculateCancellationFee } from "./cancellation-fees.service";
 import { trackRefundIssued } from "./metrics.service";
 import { notifyRefundProcessed } from "./notification.service";
-import { settleVerifiedRefund } from "./payment-settlement.service";
-import { cancelBookingResources } from "./booking-settlement.service";
+import {
+  settleVerifiedRefund,
+  cancelAfterPartialRefund,
+} from "./payment-settlement.service";
 import { stripe } from "../stripe";
 
 export interface CreateRefundInput {
@@ -265,6 +268,7 @@ export async function createRefund(
 
       // A new operation on this endpoint cancels the whole itinerary, including
       // a fee-bearing partial refund. Prior provider outcomes still reconcile.
+      await assertBookingDepartureReleasable(database, booking);
       await assertNoFlownCouponForCancellation(database, booking.id);
       const refundParams: Stripe.RefundCreateParams = {
         payment_intent: booking.stripePaymentIntentId,
@@ -314,11 +318,15 @@ export async function createRefund(
           .where(eq(bookings.id, booking.id))
           .for("update")
           .limit(1);
-        if (current && current.status !== "cancelled")
-          await cancelBookingResources(
+        if (
+          current &&
+          current.status !== "cancelled" &&
+          charge.amount_refunded < charge.amount
+        )
+          await cancelAfterPartialRefund(
             tx,
             current,
-            "Cancelled by customer with cancellation-fee refund",
+            paymentIntentId,
             input.userId
           );
       });
@@ -510,6 +518,7 @@ export async function isBookingRefundable(bookingId: number): Promise<{
       return { refundable: false, reason: splitRefundReason };
     }
 
+    await assertBookingDepartureReleasable(database, booking);
     await assertNoFlownCouponForCancellation(database, bookingId);
     const activeRefunds = await listActiveRefunds(
       booking.stripePaymentIntentId

@@ -1,3 +1,5 @@
+import { revalidationReceipt } from "./ticket-revalidation.service";
+import { z } from "zod";
 import { withInventoryTransaction } from "./inventory-capacity.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -20,6 +22,7 @@ export interface ChangeFlightDateInput {
   userId: number;
   tenantId?: number | null;
   newFlightId: number;
+  intent?: "revalidate";
   replaceFlightId?: number;
   reason?: string;
   idempotencyKey?: string;
@@ -125,6 +128,9 @@ async function requestService(
             {
               bookingId: booking.id,
               offerIds: [offer.id],
+              ...("intent" in input && input.intent
+                ? { intent: input.intent }
+                : {}),
               replaceFlightId:
                 "replaceFlightId" in input ? input.replaceFlightId : undefined,
               idempotencyKey: calculateRequestHash({ key }),
@@ -153,6 +159,13 @@ export const requestUpgradeCabin = (input: UpgradeCabinInput) =>
 /**
  * Get modification details
  */
+function withDocumentReceipt(change: typeof bookingModifications.$inferSelect) {
+  const evidence = z
+    .object({ revalidation: revalidationReceipt })
+    .safeParse(change.servicingPayload);
+  return evidence.success ? { ...change, ...evidence.data } : change;
+}
+
 export async function getModificationDetails(modificationId: number) {
   try {
     const database = await getDb();
@@ -171,7 +184,7 @@ export async function getModificationDetails(modificationId: number) {
       });
     }
 
-    return modification;
+    return withDocumentReceipt(modification);
   } catch (error) {
     if (error instanceof TRPCError) {
       throw error;
@@ -198,7 +211,7 @@ export async function getUserModifications(userId: number) {
       .where(eq(bookingModifications.userId, userId))
       .orderBy(bookingModifications.createdAt);
 
-    return modifications;
+    return modifications.map(withDocumentReceipt);
   } catch (error) {
     console.error("Error getting user modifications:", error);
     throw new TRPCError({

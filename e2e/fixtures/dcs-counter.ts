@@ -86,6 +86,23 @@ async function prepareCounterBooking(page: Page) {
   }
 }
 
+// Funding a booking does not issue its e-ticket. Follow the passenger's
+// authenticated issuance path and track the coupon on that specific document.
+async function issueCounterTicket(
+  page: Page,
+  scope: Awaited<ReturnType<typeof prepareCounterBooking>>
+) {
+  const { ticketNumber } = await rpc(page).eticket.generateETicket.mutate({
+    bookingId: scope.bookingId,
+    passengerId: scope.passengerId,
+  });
+  return () =>
+    sqlRows<RowDataPacket>(
+      "SELECT status FROM ticket_coupons WHERE flightId = ? AND bookingId = ? AND passengerId = ? AND ticketNumber = ?",
+      [scope.flightId, scope.bookingId, scope.passengerId, ticketNumber]
+    );
+}
+
 export function registerDcsCounterTests() {
   for (const status of ["delayed", "cancelled"] as const) {
     test(`scoped desk recovers a boarded passenger after departure on a ${status} flight`, async ({
@@ -94,17 +111,7 @@ export function registerDcsCounterTests() {
       test.setTimeout(120000);
       await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
       const scope = await prepareCounterBooking(page);
-      // Payment funds the reservation. Issue its local document before DCS
-      // changes the coupon from open to checked in and back to open.
-      const { ticketNumber } = await rpc(page).eticket.generateETicket.mutate({
-        bookingId: scope.bookingId,
-        passengerId: scope.passengerId,
-      });
-      const couponStatus = () =>
-        sqlRows<RowDataPacket>(
-          "SELECT status FROM ticket_coupons WHERE flightId = ? AND bookingId = ? AND passengerId = ? AND ticketNumber = ?",
-          [scope.flightId, scope.bookingId, scope.passengerId, ticketNumber]
-        );
+      const couponStatus = await issueCounterTicket(page, scope);
       expect(await couponStatus()).toEqual([{ status: "O" }]);
       await useBrowserSession(page, "ops");
       const client = rpc(page);
@@ -234,8 +241,26 @@ export function registerDcsCounterTests() {
     test.setTimeout(120000);
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
     const scope = await prepareCounterBooking(page);
+    const couponStatus = await issueCounterTicket(page, scope);
+    expect(await couponStatus()).toEqual([{ status: "O" }]);
     await useBrowserSession(page, "ops");
     const client = rpc(page);
+    const staff = await client.auth.me.query();
+    if (!staff) throw new Error("Scoped operator required");
+    const { flight } = await client.dcsOperations.getDesk.query({
+      flightId: scope.flightId,
+    });
+    await useBrowserSession(page, "admin");
+    await client.dcsOperations.setBagReturnGrant.mutate({
+      flightId: flight.id,
+      airlineId: flight.airlineId,
+      airportId: flight.originId,
+      staffId: staff.id,
+      enabled: true,
+      reason: "Authorize the synthetic departure station handover",
+      idempotencyKey: randomUUID(),
+    });
+    await useBrowserSession(page, "ops");
     await page.goto("/airline/dcs");
     await page
       .getByRole("combobox", { name: "Flight", exact: true })
@@ -252,6 +277,8 @@ export function registerDcsCounterTests() {
     await expect(
       page.getByRole("combobox", { name: "Passenger action", exact: true })
     ).toHaveValue("board");
+
+    expect(await couponStatus()).toEqual([{ status: "C" }]);
 
     // The server commits the real request; only its first response is lost.
     const registerEndpoint = "**/api/trpc/*baggage.register*";
@@ -290,7 +317,7 @@ export function registerDcsCounterTests() {
       "Registered bag tag"
     );
     const bags = await sqlRows<RowDataPacket>(
-      "SELECT id, flightId, segmentId FROM baggage_items WHERE bookingId = ?",
+      "SELECT id, flightId, segmentId, tagNumber FROM baggage_items WHERE bookingId = ?",
       [scope.bookingId]
     );
     expect(bags).toHaveLength(1);
@@ -311,6 +338,10 @@ export function registerDcsCounterTests() {
       baggage.getByRole("button", { name: "Register received bag" })
     ).toBeDisabled();
 
+    await useBrowserSession(page, "departurePassenger");
+    const pass = await client.boardingPass.issue.mutate(scope);
+    await useBrowserSession(page, "ops");
+    await page.getByLabel("Boarding pass token (optional)").fill(pass.bcbp);
     await page
       .getByLabel("Passenger action reason")
       .fill("Verified at the departure gate");
@@ -320,6 +351,15 @@ export function registerDcsCounterTests() {
     await expect(
       page.getByRole("combobox", { name: "Passenger action", exact: true })
     ).toHaveValue("deplane");
+    await expect(
+      client.dcsOperations.transition.mutate({
+        ...scope,
+        action: "board",
+        boardingPassToken: pass.bcbp,
+        reason: "Gate repeats same boarding scan",
+        idempotencyKey: randomUUID(),
+      })
+    ).rejects.toThrow(/has boarded|deplane/i);
     await expect(
       client.dcsOperations.transition.mutate({
         ...scope,
@@ -366,9 +406,76 @@ export function registerDcsCounterTests() {
     expect(desk.history.map(row => row.action)).toEqual(
       expect.arrayContaining(["check_in", "board", "deplane", "close"])
     );
+    expect(desk.history.filter(e => e.action === "board")).toHaveLength(1);
+    await page
+      .getByLabel("Returned bag tag number")
+      .fill(String(bags[0].tagNumber));
+    await page
+      .getByLabel("Bag handover reason")
+      .fill("Passenger identity and tag verified at handover");
+    const handover = page.getByRole("button", { name: "Confirm bag handover" });
+    await page.route(
+      "**/api/trpc/*dcsOperations.returnBag*",
+      async route => {
+        const committed = await route.fetch();
+        expect(committed.ok()).toBe(true);
+        await route.abort("failed");
+      },
+      { times: 1 }
+    );
+    await handover.click();
+    const returnEvents = () =>
+      sqlRows<RowDataPacket>(
+        "SELECT id FROM dcs_operation_events WHERE flightId=? AND passengerId=? AND action='return_bag'",
+        [scope.flightId, scope.passengerId]
+      );
+    await expect.poll(async () => (await returnEvents()).length).toBe(1);
+    await handover.click();
+    await expect(page.getByText(/Bag handover receipt/)).toContainText(
+      String(bags[0].tagNumber)
+    );
+    expect(await returnEvents()).toHaveLength(1);
+    await page
+      .getByLabel("Passenger action reason")
+      .fill("Handover receipt verified before offload");
+    await page
+      .getByRole("button", { name: "Offload passenger", exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await client.dcsOperations.getDesk.query({
+              flightId: scope.flightId,
+            })
+          ).passengers[0]?.attendanceState
+      )
+      .toBe("offloaded");
+    const receipt = await sqlRows<RowDataPacket>(
+      "SELECT b.status,b.tagNumber,e.action,e.actorRole,e.flightId FROM baggage_items b JOIN dcs_operation_events e ON e.id=b.returnEventId WHERE b.id=?",
+      [bags[0].id]
+    );
+    expect(receipt).toEqual([
+      {
+        status: "claimed",
+        tagNumber: bags[0].tagNumber,
+        action: "return_bag",
+        actorRole: "ops",
+        flightId: scope.flightId,
+      },
+    ]);
+    expect(await couponStatus()).toEqual([{ status: "O" }]);
+    expect(
+      await client.baggage.flightCloseout.query({ flightId: scope.flightId })
+    ).toMatchObject({
+      expectedBags: 0,
+      unexpectedBags: 0,
+      unresolvedRegistrations: [],
+      acceptanceState: "operator_station_acceptance_required",
+    });
   });
 
-  test("scoped desk recovers the same 5 kg bag receipt after reload without duplicate registration", async ({
+  test("scoped desk recovers the same 5 kg bag receipt after reload and registers a second equal-weight bag", async ({
     page,
   }) => {
     test.setTimeout(120000);
@@ -423,14 +530,15 @@ export function registerDcsCounterTests() {
       )
         throw new Error("Expected the actual baggage registration payload");
       commands.push(envelope.json as Record<string, unknown>);
-      if (commands.length > 1) {
+      if (commands.length === 2 || commands.length === 4) {
         expect(
           recoveryRequested,
           "A reload must not resubmit automatically"
         ).toBe(true);
         return route.continue();
       }
-      // Commit the real receipt, then lose only its response to the browser.
+      expect(recoveryRequested).toBe(false);
+      // Commit each new physical receipt, then lose only its first response.
       const response = await route.fetch();
       expect(response.ok()).toBe(true);
       await route.abort("failed");
@@ -538,6 +646,63 @@ export function registerDcsCounterTests() {
     ).toBeEnabled();
     expect(commands).toHaveLength(2);
     expect(await readBags()).toEqual(originalBags);
+    // Same passenger, weight and description: the explicit new registration
+    // gives the second physical bag its own tag and retry identity.
+    await baggage.getByLabel("Bag description (optional)").fill(description);
+    await baggage.getByLabel("Handling instructions (optional)").fill(handling);
+    await baggage
+      .getByRole("button", { name: "Register received bag" })
+      .click();
+    await expect(recover).toBeEnabled();
+    await expect(
+      baggage.getByRole("definition").filter({ hasText: /^13 kg$/ })
+    ).toBeVisible();
+    expect(commands).toHaveLength(3);
+    const secondCommand = commands[2];
+    expect(secondCommand).toEqual({
+      ...originalCommand,
+      idempotencyKey: expect.any(String),
+    });
+    expect(secondCommand.idempotencyKey).not.toBe(
+      originalCommand.idempotencyKey
+    );
+    const bothBags = await readBags();
+    expect(bothBags).toHaveLength(2);
+    expect(bothBags[0]).toEqual(originalBag);
+    const secondBag = bothBags[1];
+    expect(secondBag).toMatchObject({
+      passengerId: originalBag.passengerId,
+      flightId: originalBag.flightId,
+      segmentId: originalBag.segmentId,
+      weight: originalBag.weight,
+      description,
+      specialHandling: handling,
+    });
+    expect(secondBag.tagNumber).not.toBe(originalBag.tagNumber);
+
+    recoveryRequested = true;
+    await recover.click();
+    await expect(baggage.getByRole("status")).toContainText(
+      secondBag.tagNumber
+    );
+    await expect(recover).toBeHidden();
+    expect(commands).toHaveLength(4);
+    expect(commands[3]).toEqual(secondCommand);
+    await page.reload();
+    await selectPassenger();
+    await expect(recover).toBeHidden();
+    for (const bag of bothBags) {
+      await expect(
+        baggage.getByText(bag.tagNumber, { exact: true })
+      ).toBeVisible();
+    }
+    expect(await readBags()).toEqual(bothBags);
+    expect(
+      await sqlRows<RowDataPacket>(
+        "SELECT baggageId FROM baggage_tracking WHERE baggageId IN (?, ?) ORDER BY baggageId",
+        [originalBag.id, secondBag.id]
+      )
+    ).toEqual([{ baggageId: originalBag.id }, { baggageId: secondBag.id }]);
     await page.unroute(registerEndpoint);
   });
 }

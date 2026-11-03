@@ -45,9 +45,13 @@ export const kioskRouter = router({
   getCheckInData: publicProcedure
     .input(z.object({ capabilityToken: capabilityInput }))
     .output(responseContracts["getCheckInData"])
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      ctx.res?.setHeader("Cache-Control", "private, no-store");
       const capability = kioskCapability(input.capabilityToken);
-      return await kioskService.getCheckInData(capability.bookingId);
+      return await kioskService.getCheckInData(
+        capability.bookingId,
+        capability.passengerIds
+      );
     }),
 
   checkIn: publicProcedure
@@ -113,6 +117,26 @@ export const kioskRouter = router({
         input.passengerId,
         input.flightId
       );
+    }),
+
+  reprintRegisteredTag: publicProcedure
+    .input(
+      z
+        .object({
+          bookingRef: z.string().trim().min(1).max(6),
+          lastName: z.string().trim().min(1).max(100),
+          tagNumber: z.string().regex(/^\d{10}$/),
+          expectedVersion: z
+            .string()
+            .regex(/^[a-f0-9]{64}$/)
+            .optional(),
+        })
+        .strict()
+    )
+    .output(responseContracts["reprintRegisteredTag"])
+    .mutation(({ input, ctx }) => {
+      ctx.res?.setHeader("Cache-Control", "private, no-store");
+      return kioskService.reprintRegisteredTag(input);
     }),
 
   printBagTag: publicProcedure

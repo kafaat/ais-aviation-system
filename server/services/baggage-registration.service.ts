@@ -4,6 +4,9 @@ import { TRPCError } from "@trpc/server";
 import {
   baggageItems,
   baggageTracking,
+  baggageCustodyEvents,
+  dcsOperationEvents,
+  flights,
   bookings,
   passengers,
   seatInventory,
@@ -20,7 +23,10 @@ import {
   baggageEntitlementSnapshot,
   computeBaggageEntitlement,
 } from "./baggage-entitlement.service";
-import { withTransactionalIdempotency } from "./idempotency-v2.service";
+import {
+  calculateRequestHash,
+  withTransactionalIdempotency,
+} from "./idempotency-v2.service";
 import { generateBaggageTag } from "./baggage-license-plate";
 import { isAdmin } from "./rbac.service";
 import { assertTenantOperational } from "./tenant.service";
@@ -54,6 +60,10 @@ export const baggageRegistrationInput = baggageRegistrationScopeInput
     idempotencyKey: z.string().trim().min(8).max(128),
     description: z.string().trim().max(500).optional(),
     specialHandling: z.string().trim().max(255).optional(),
+    replacesTag: z
+      .string()
+      .regex(/^\d{10}$/)
+      .optional(),
     expectedActorId: z.number().int().positive().safe().optional(),
     expectedTenantId: z.number().int().positive().safe().optional(),
   })
@@ -171,6 +181,7 @@ async function registeredBagScope(
     .from(baggageItems)
     .where(
       and(
+        isNull(baggageItems.returnEvidenceId),
         eq(baggageItems.bookingId, scope.bookingId),
         eq(baggageItems.passengerId, scope.passengerId)
       )
@@ -189,6 +200,7 @@ async function registeredBagScope(
   }> = [];
   let weight = 0;
   for (const bag of all) {
+    if (bag.returnEventId != null) continue;
     const legacy = bag.flightId == null && bag.segmentId == null;
     if (legacy) {
       // A legacy bag might belong to any historical leg. Do not allocate it to
@@ -306,60 +318,14 @@ export async function registerBaggage(
           userId: actor.id,
           request: { ...input, tenantId: actor.tenantId },
           run: async tx => {
-            const context = await registrationContext(
-              tx,
-              input,
-              actor.tenantId
+            const { context, registeredWeightGrams, entitlement } =
+              await eligibleBagCounter(tx, input, actor.tenantId);
+            const cumulativeWeightGrams = checkCorrectedAllowance(
+              registeredWeightGrams,
+              0,
+              weightGrams,
+              entitlement
             );
-            assertDepartureOpen(context, "check_in");
-            await assertDcsPassengerCanAcceptBaggage(tx, input);
-            const seats = await tx
-              .select()
-              .from(seatInventory)
-              .where(
-                and(
-                  eq(seatInventory.bookingId, input.bookingId),
-                  eq(seatInventory.passengerId, input.passengerId),
-                  eq(seatInventory.flightId, input.flightId),
-                  eq(seatInventory.status, "checked_in")
-                )
-              )
-              .for("update");
-            const seat = seats[0];
-            if (
-              seats.length !== 1 ||
-              !seat?.checkInNonce ||
-              !seat.checkedInAt ||
-              !seat.boardingSequence ||
-              seat.cabinClass !== context.booking.cabinClass
-            )
-              throw new TRPCError({
-                code: "PRECONDITION_FAILED",
-                message:
-                  "Passenger must have a current checked-in seat on this flight",
-              });
-            const entitlement = await computeBaggageEntitlement(tx, input);
-            const registered = await registeredBagScope(tx, input, context);
-            if (
-              entitlement.requiresOperationalReview ||
-              registered.registeredWeightGrams === null
-            )
-              throw new TRPCError({
-                code: "PRECONDITION_FAILED",
-                message:
-                  "Baggage allowance or existing sector scope requires operator review",
-              });
-            const cumulativeWeightGrams =
-              registered.registeredWeightGrams + weightGrams;
-            if (
-              weightGrams > entitlement.maxBagWeightGrams ||
-              cumulativeWeightGrams > entitlement.totalWeightGrams
-            )
-              throw new TRPCError({
-                code: "PRECONDITION_FAILED",
-                message:
-                  "Registered baggage exceeds funded allowance; settle the exact passenger/sector entitlement before acceptance",
-              });
             let tagNumber: string | undefined;
             for (let attempt = 0; attempt < 10; attempt++) {
               const candidate = generateBaggageTag();
@@ -378,6 +344,100 @@ export async function registerBaggage(
                 code: "CONFLICT",
                 message: "Unable to allocate a baggage tag; retry this command",
               });
+            let replacesBaggageId: number | null = null;
+            if (input.replacesTag) {
+              const [original] = await tx
+                .select()
+                .from(baggageItems)
+                .where(
+                  and(
+                    eq(baggageItems.tagNumber, input.replacesTag),
+                    eq(baggageItems.bookingId, input.bookingId),
+                    eq(baggageItems.passengerId, input.passengerId)
+                  )
+                )
+                .for("update");
+              if (
+                !original ||
+                (original.returnEvidenceId == null &&
+                  original.returnEventId == null) ||
+                original.flightId == null ||
+                original.segmentId == null ||
+                original.flightId === input.flightId ||
+                original.segmentId === input.segmentId
+              )
+                throw new TRPCError({
+                  code: "PRECONDITION_FAILED",
+                  message:
+                    "Replacement requires this passenger's verified handback on a different flight",
+                });
+              let verifiedHandback = false;
+              if (
+                original.returnEvidenceId != null &&
+                original.returnEventId == null
+              ) {
+                const [scan] = await tx
+                  .select({ id: baggageCustodyEvents.id })
+                  .from(baggageCustodyEvents)
+                  .where(
+                    and(
+                      eq(
+                        baggageCustodyEvents.evidenceId,
+                        original.returnEvidenceId
+                      ),
+                      eq(baggageCustodyEvents.baggageId, original.id),
+                      eq(baggageCustodyEvents.flightId, original.flightId),
+                      eq(baggageCustodyEvents.stage, "return"),
+                      eq(
+                        baggageCustodyEvents.airportId,
+                        context.flight.originId
+                      )
+                    )
+                  );
+                verifiedHandback = !!scan;
+              } else if (
+                original.returnEventId != null &&
+                original.returnEvidenceId == null
+              ) {
+                const [handback] = await tx
+                  .select({ details: dcsOperationEvents.details })
+                  .from(dcsOperationEvents)
+                  .where(
+                    and(
+                      eq(dcsOperationEvents.id, original.returnEventId),
+                      eq(dcsOperationEvents.action, "return_bag"),
+                      eq(dcsOperationEvents.tenantId, actor.tenantId),
+                      eq(dcsOperationEvents.flightId, original.flightId),
+                      eq(dcsOperationEvents.bookingId, input.bookingId),
+                      eq(dcsOperationEvents.passengerId, input.passengerId)
+                    )
+                  );
+                verifiedHandback =
+                  handback?.details?.baggageId === original.id &&
+                  handback.details.segmentId === original.segmentId &&
+                  handback.details.stationId === context.flight.originId &&
+                  handback.details.tagNumber === original.tagNumber;
+              }
+              const [priorFlight] = await tx
+                .select({ tenantId: flights.tenantId })
+                .from(flights)
+                .where(eq(flights.id, original.flightId));
+              if (!verifiedHandback || priorFlight?.tenantId !== actor.tenantId)
+                throw new TRPCError({
+                  code: "PRECONDITION_FAILED",
+                  message: "No verified handback at this departure station",
+                });
+              const [existing] = await tx
+                .select({ id: baggageItems.id })
+                .from(baggageItems)
+                .where(eq(baggageItems.replacesBaggageId, original.id));
+              if (existing)
+                throw new TRPCError({
+                  code: "CONFLICT",
+                  message: "Returned tag already has a replacement",
+                });
+              replacesBaggageId = original.id;
+            }
             const location = `Airport ${context.flight.originId} Check-in Counter`;
             const [result] = await tx.insert(baggageItems).values({
               bookingId: input.bookingId,
@@ -386,6 +446,7 @@ export async function registerBaggage(
               segmentId: input.segmentId,
               tagNumber,
               weight: (weightGrams / 1000).toFixed(2),
+              replacesBaggageId,
               status: "checked_in",
               lastLocation: location,
               description: input.description || null,
@@ -415,6 +476,197 @@ export async function registerBaggage(
             if (!created)
               throw new Error("Registered baggage receipt is unavailable");
             return created;
+          },
+        },
+        tx
+      );
+    },
+    { isolationLevel: "read committed" }
+  );
+}
+
+async function eligibleBagCounter(
+  tx: SettlementTx,
+  input: RegistrationScope,
+  tenantId: number
+) {
+  const context = await registrationContext(tx, input, tenantId);
+  assertDepartureOpen(context, "check_in");
+  await assertDcsPassengerCanAcceptBaggage(tx, input);
+  const seats = await tx
+    .select()
+    .from(seatInventory)
+    .where(
+      and(
+        eq(seatInventory.bookingId, input.bookingId),
+        eq(seatInventory.passengerId, input.passengerId),
+        eq(seatInventory.flightId, input.flightId),
+        eq(seatInventory.status, "checked_in")
+      )
+    )
+    .for("update");
+  const seat = seats[0];
+  if (
+    seats.length !== 1 ||
+    !seat?.checkInNonce ||
+    !seat.checkedInAt ||
+    !seat.boardingSequence ||
+    seat.cabinClass !== context.booking.cabinClass
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Passenger must have a current checked-in seat on this flight",
+    });
+  const entitlement = await computeBaggageEntitlement(tx, input);
+  const registered = await registeredBagScope(tx, input, context);
+  if (
+    entitlement.requiresOperationalReview ||
+    registered.registeredWeightGrams === null
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Baggage allowance or existing sector scope requires operator review",
+    });
+
+  return {
+    context,
+    registered,
+    registeredWeightGrams: registered.registeredWeightGrams,
+    entitlement,
+  };
+}
+function checkCorrectedAllowance(
+  registeredWeightGrams: number,
+  previousWeightGrams: number,
+  weightGrams: number,
+  entitlement: Awaited<ReturnType<typeof computeBaggageEntitlement>>
+) {
+  const cumulativeWeightGrams =
+    registeredWeightGrams - previousWeightGrams + weightGrams;
+  if (
+    weightGrams > entitlement.maxBagWeightGrams ||
+    cumulativeWeightGrams > entitlement.totalWeightGrams
+  )
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Registered baggage exceeds funded allowance; settle the exact passenger/sector entitlement before acceptance",
+    });
+
+  return cumulativeWeightGrams;
+}
+
+export const baggageCorrectionInput = baggageRegistrationScopeInput.extend({
+  baggageId: z.number().int().positive(),
+  previousWeight: baggageRegistrationInput.shape.weight,
+  weight: baggageRegistrationInput.shape.weight,
+  reason: z.string().trim().min(5).max(500),
+  idempotencyKey: z.string().min(8).max(128),
+  expectedActorId: z.number().int().positive(),
+  expectedTenantId: z.number().int().positive(),
+});
+export async function correctCounterBag(
+  raw: z.infer<typeof baggageCorrectionInput>,
+  actor: BaggageRegistrationActor
+) {
+  requireRegistrationActor(actor);
+  const input = baggageCorrectionInput.parse(raw);
+  if (
+    input.expectedActorId !== actor.id ||
+    input.expectedTenantId !== actor.tenantId
+  )
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Counter staff identity changed",
+    });
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.transaction(
+    async tx => {
+      await lockAuthorizedBooking(tx, input.bookingId, actor.tenantId);
+      const request = { ...input, tenantId: actor.tenantId };
+      return withTransactionalIdempotency(
+        {
+          scope: "baggage.correct_weight",
+          key: input.idempotencyKey,
+          userId: actor.id,
+          request,
+          run: async tx => {
+            const { registered, registeredWeightGrams, entitlement } =
+              await eligibleBagCounter(tx, input, actor.tenantId);
+            const bag = registered.bags.find(b => b.id === input.baggageId);
+            const before = storedWeightGrams(input.previousWeight);
+            const after = storedWeightGrams(input.weight);
+            if (
+              before === null ||
+              after === null ||
+              !bag ||
+              bag.legacy ||
+              bag.flightId !== input.flightId ||
+              bag.segmentId !== input.segmentId ||
+              bag.status !== "checked_in" ||
+              bag.weightGrams !== before ||
+              before === after
+            )
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "The scoped counter bag or its weight has changed",
+              });
+            const [custody] = await tx
+              .select({ id: baggageCustodyEvents.id })
+              .from(baggageCustodyEvents)
+              .where(eq(baggageCustodyEvents.baggageId, bag.id))
+              .limit(1);
+            if (custody)
+              throw new TRPCError({
+                code: "PRECONDITION_FAILED",
+                message: "Bag already entered device custody",
+              });
+            checkCorrectedAllowance(
+              registeredWeightGrams,
+              before,
+              after,
+              entitlement
+            );
+            const [updated] = await tx
+              .update(baggageItems)
+              .set({ weight: input.weight.toFixed(2) })
+              .where(
+                and(
+                  eq(baggageItems.id, bag.id),
+                  eq(baggageItems.weight, input.previousWeight.toFixed(2)),
+                  eq(baggageItems.status, "checked_in")
+                )
+              );
+            if (updated.affectedRows !== 1)
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Bag changed during correction",
+              });
+            const [event] = await tx.insert(dcsOperationEvents).values({
+              tenantId: actor.tenantId,
+              bookingId: input.bookingId,
+              passengerId: input.passengerId,
+              flightId: input.flightId,
+              action: "bag_weight_corrected",
+              fromState: String(before),
+              toState: String(after),
+              reason: input.reason,
+              actorId: actor.id,
+              actorRole: actor.role,
+              idempotencyKey: input.idempotencyKey,
+              requestHash: calculateRequestHash(request),
+              details: {
+                baggageId: bag.id,
+                previousWeightGrams: before,
+                correctedWeightGrams: after,
+              },
+            });
+            return {
+              eventId: Number(event.insertId),
+              flightId: input.flightId,
+            };
           },
         },
         tx

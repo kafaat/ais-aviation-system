@@ -1,3 +1,4 @@
+import { revalidationReceipt } from "../services/ticket-revalidation.service";
 import { seatExchangeSchema } from "../services/seat-exchange.service";
 // Explicit response field allowlists. Review contract changes with producers and consumers.
 import { z } from "zod";
@@ -66,6 +67,8 @@ export const responseContracts = {
     adminNotes: z.union([z.null(), z.string()]),
     createdAt: z.date(),
     updatedAt: z.date(),
+    executionEventId: z.string().nullable().optional(),
+    revalidation: revalidationReceipt.optional(),
     completedAt: z.union([z.null(), z.date()]),
   }),
   myModifications: z.array(
@@ -108,6 +111,8 @@ export const responseContracts = {
       adminNotes: z.union([z.null(), z.string()]),
       createdAt: z.date(),
       updatedAt: z.date(),
+      executionEventId: z.string().nullable().optional(),
+      revalidation: revalidationReceipt.optional(),
       completedAt: z.union([z.null(), z.date()]),
     })
   ),

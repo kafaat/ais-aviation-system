@@ -27,8 +27,10 @@ vi.mock("../services/metrics.service", () => ({
 vi.mock("../services/flights.service", () => ({
   calculateFlightPrice: async () => ({ price: 100000 }),
 }));
+import { cancelAfterPartialRefund } from "../services/payment-settlement.service";
 import { processStripeEvent } from "../webhooks/stripe";
 import { topUpWallet, payFromWallet } from "../services/wallet.service";
+import { seatInventory } from "../../drizzle/schema";
 import { createBooking } from "../services/bookings.service";
 
 let fixture: ReturnType<typeof transactionMemory>;
@@ -250,39 +252,64 @@ describe("verified payment settlement", () => {
     });
     expect(fixture.rows("financial_ledger")).toHaveLength(0);
   });
-  it("processes a modification of an already paid booking and moves capacity once", async () => {
-    await event("checkout.session.completed", payment());
-    await fixture.db
-      .insert((await import("../../drizzle/schema")).bookingModifications)
-      .values({
-        id: 8,
-        bookingId: 7,
-        userId: 9,
-        status: "pending",
-        originalFlightId: 4,
-        originalCabinClass: "economy",
-        originalAmount: 100000,
-        newFlightId: 5,
-        newCabinClass: "business",
-        newAmount: 120000,
-        totalCost: 20000,
+  it.each([null, 4, 5])(
+    "settles a legacy modification exactly once with closed flight %s",
+    async closedFlight => {
+      await event("checkout.session.completed", payment());
+      await fixture.db
+        .insert((await import("../../drizzle/schema")).bookingModifications)
+        .values({
+          id: 8,
+          bookingId: 7,
+          userId: 9,
+          status: "pending",
+          originalFlightId: 4,
+          originalCabinClass: "economy",
+          originalAmount: 100000,
+          newFlightId: 5,
+          newCabinClass: "business",
+          newAmount: 120000,
+          totalCost: 20000,
+        });
+      if (closedFlight !== null) {
+        fixture.rows("flights").find(f => f.id === closedFlight)!.dcsClosedAt =
+          new Date();
+      }
+      const modification = payment(
+        { bookingId: "7", type: "modification", modificationId: "8" },
+        20000,
+        "pi_change"
+      );
+      await event("checkout.session.completed", modification);
+      await event("checkout.session.completed", modification);
+      if (closedFlight !== null) {
+        expect(
+          fixture
+            .rows("payment_receipts")
+            .filter(r => r.paymentIntentId === "pi_change")
+        ).toMatchObject([
+          { amount: 20000, settlementStatus: "review_required" },
+        ]);
+        expect(fixture.rows("booking_modifications")[0].status).toBe("pending");
+        expect(fixture.rows("bookings")[0]).toMatchObject({
+          flightId: 4,
+          cabinClass: "economy",
+          totalAmount: 100000,
+        });
+        expect(fixture.rows("flights")[0].economyAvailable).toBe(4);
+        expect(fixture.rows("flights")[1].businessAvailable).toBe(5);
+        return;
+      }
+      expect(fixture.rows("bookings")[0]).toMatchObject({
+        flightId: 5,
+        cabinClass: "business",
+        totalAmount: 120000,
       });
-    const modification = payment(
-      { bookingId: "7", type: "modification", modificationId: "8" },
-      20000,
-      "pi_change"
-    );
-    await event("checkout.session.completed", modification);
-    await event("checkout.session.completed", modification);
-    expect(fixture.rows("bookings")[0]).toMatchObject({
-      flightId: 5,
-      cabinClass: "business",
-      totalAmount: 120000,
-    });
-    expect(fixture.rows("booking_modifications")[0].status).toBe("completed");
-    expect(fixture.rows("flights")[0].economyAvailable).toBe(5);
-    expect(fixture.rows("flights")[1].businessAvailable).toBe(4);
-  });
+      expect(fixture.rows("booking_modifications")[0].status).toBe("completed");
+      expect(fixture.rows("flights")[0].economyAvailable).toBe(5);
+      expect(fixture.rows("flights")[1].businessAvailable).toBe(4);
+    }
+  );
   it("resolves metadata-free refunds by payment reference and books only cumulative deltas", async () => {
     await event("checkout.session.completed", payment());
     for (const amount of [40000, 60000, 60000, 100000, 100000])
@@ -305,6 +332,72 @@ describe("verified payment settlement", () => {
     });
     expect(fixture.rows("flights")[0].economyAvailable).toBe(5);
   });
+  it.each([60000, 100000])(
+    "preserves boarded travel and reconciles a verified refund of %i after OUT",
+    async firstRefund => {
+      await event("checkout.session.completed", payment());
+      Object.assign(fixture.rows("flights")[0], {
+        dcsClosedAt: new Date(),
+        stationOffBlocksAt: new Date(),
+      });
+      const seat = {
+        id: 12,
+        bookingId: 7,
+        passengerId: 14,
+        flightId: 4,
+        seatNumber: "2A",
+        status: "checked_in",
+      };
+      await fixture.db.insert(seatInventory).values(seat);
+      const refund = (amount: number) =>
+        event("charge.refunded", {
+          id: "ch_after_out",
+          payment_intent: "pi_1",
+          amount: 100000,
+          amount_refunded: amount,
+          currency: "sar",
+        });
+      await refund(firstRefund);
+      if (firstRefund < 100000) {
+        const cancel = () =>
+          fixture.db.transaction((tx: typeof fixture.db) =>
+            cancelAfterPartialRefund(tx, fixture.rows("bookings")[0], "pi_1", 9)
+          );
+        await cancel();
+        await cancel();
+      }
+      expect(fixture.rows("payment_receipts")[0]).toMatchObject({
+        refundedAmount: firstRefund,
+        settlementStatus: "review_required",
+        settlementError: expect.stringMatching(/departure reconciliation/i),
+      });
+      // Further cumulative provider deliveries update the financial record while retaining the departure review.
+      await refund(100000);
+      await refund(100000);
+      expect(fixture.rows("payment_receipts")[0]).toMatchObject({
+        refundedAmount: 100000,
+        settlementStatus: "review_required",
+      });
+      expect(
+        fixture
+          .rows("financial_ledger")
+          .filter(r => r.type !== "charge")
+          .map(r => r.amount)
+      ).toEqual(firstRefund === 100000 ? ["1000.00"] : ["600.00", "400.00"]);
+      expect(
+        fixture
+          .rows("outbox")
+          .filter(e => e.eventType === "payment.settlement_review_required")
+      ).toHaveLength(1);
+      expect(fixture.rows("bookings")[0]).toMatchObject({
+        status: "confirmed",
+        paymentStatus: "paid",
+        seatsReserved: true,
+      });
+      expect(fixture.rows("seat_inventory")).toMatchObject([seat]);
+      expect(fixture.rows("flights")[0].economyAvailable).toBe(4);
+    }
+  );
   it("locks refund owners before receipts and uses current reads for all booking receipts", async () => {
     await event("checkout.session.completed", payment());
     fixture.lockedTables.length = 0;

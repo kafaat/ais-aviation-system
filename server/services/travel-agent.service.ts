@@ -1,3 +1,7 @@
+import {
+  reserveAgencyCredit,
+  requireCreditDisabledForTransfer,
+} from "./agency-credit.service";
 import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { recordEvent } from "./outbox.service";
 import { assertTenantOperational, isTenantActive } from "./tenant.service";
@@ -486,7 +490,7 @@ export async function createAgentBooking(
       code: "BAD_REQUEST",
       message: "An idempotency key or unique external reference is required",
     });
-  const execute = (transaction?: SettlementTx) =>
+  const execute = (transaction: SettlementTx) =>
     withTransactionalIdempotency(
       {
         transactionConfig: inventoryTransactionConfig,
@@ -567,6 +571,13 @@ export async function createAgentBooking(
             },
             tx
           );
+          await reserveAgencyCredit(
+            tx,
+            agentId,
+            { userId: owner.id, tenantId: owner.tenantId },
+            booking.bookingId,
+            booking.totalAmount
+          );
           const commissionRate = Number(current.commissionRate);
           const commission = Math.round(
             (booking.totalAmount * commissionRate) / 100
@@ -596,12 +607,14 @@ export async function createAgentBooking(
       },
       transaction
     );
-  if (!expectedOwner) return execute();
-  // The owner guard runs before BOTH execution and cached replay, on the
-  // same connection/transaction as the idempotency claim. A relink cannot
-  // turn a session command into a booking for the replacement owner.
+  // An agency API credential can survive an ownership transfer. Both entry
+  // points must confirm the current debtor before replaying a cached result.
+  const bookingOwner = expectedOwner ?? {
+    userId: owner.id,
+    tenantId: owner.tenantId,
+  };
   return db.transaction(async tx => {
-    await requireOwnedAgency(tx, expectedOwner, agentId, true);
+    await requireOwnedAgency(tx, bookingOwner, agentId, true);
     const [previousOwner] = await tx
       .select({ userId: idempotencyRequests.userId })
       .from(idempotencyRequests)
@@ -609,7 +622,7 @@ export async function createAgentBooking(
         and(
           eq(idempotencyRequests.scope, `agent.booking.${agentId}`),
           eq(idempotencyRequests.idempotencyKey, key),
-          ne(idempotencyRequests.userId, expectedOwner.userId)
+          ne(idempotencyRequests.userId, bookingOwner.userId)
         )
       )
       .limit(1);
@@ -682,6 +695,7 @@ export async function assignAgentOwner(
         message: "Agency owner not found",
       });
     if (agency.ownerUserId != null && agency.ownerUserId !== ownerUserId) {
+      await requireCreditDisabledForTransfer(tx, agentId);
       const [previous] = await tx
         .select({ tenantId: users.tenantId })
         .from(users)
