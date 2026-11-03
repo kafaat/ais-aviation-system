@@ -471,7 +471,7 @@ it("does not display a cached printable pass when its verification is paused off
       screen.queryByRole("button", { name: "Print Boarding Pass" })
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("img", { name: "Boarding Pass", exact: true })
+      screen.queryByRole("img", { name: "Boarding Pass" })
     ).not.toBeInTheDocument();
   } finally {
     await act(async () => {
@@ -568,7 +568,6 @@ it.each(["acknowledged", "lost response"])(
       screen
         .queryByRole("img", {
           name: "Boarding Pass",
-          exact: true,
           hidden: true,
         })
         ?.getAttribute("src")
