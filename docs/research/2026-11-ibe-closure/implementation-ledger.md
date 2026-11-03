@@ -10,6 +10,17 @@ target are separate states. The PR records CI results against the published
 head; this ledger does not convert local component or memory-database tests
 into live database, provider or production acceptance.
 
+## What the booking-engine reference tells us about AIS
+
+We use Videcom's _Internet Booking Engine Integration_ (26 February 2018) to compare passenger and agent journeys. The inventory, booking record, sign-in and checkout in these journeys belong to AIS. An external booking host would be a separate product decision.
+
+| Reference journey                         | Native AIS change                                                                                                                                               | Acceptance                                                                                                                                                                                                                  |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Corporate website search (pp. 2–5)        | A tap on the embedded search opens the AIS results page in the top-level window and carries the route, date, country and currency.                              | Mobile Chromium exercises the production build from a synthetic permitted corporate origin and checks that a second origin is blocked by the browser. The operator checks the real corporate domain and ingress separately. |
+| Booking retrieval and agent access (p. 3) | The mobile home header links directly to public booking retrieval and the authenticated agency portal.                                                          | The browser follows both links and checks that an anonymous agent returns to the agency route after sign-in is requested.                                                                                                   |
+| Airline identity (pp. 6–8)                | The configured name and logo accompany the native booking journey through search results, sign-in, seat selection, invoice review, payment and payment history. | The funded journey checks the configured identity through checkout and reconciles the wallet debit in SAR.                                                                                                                  |
+| Country and currency (p. 4)               | Yemen (YE) and the Yemeni rial (YER) are display options. The estimate requires an active direct SAR quote from an approved source.                             | The browser and disposable MySQL test cover absent, stale, fallback, expired and current quotations. Arabic and English text explain SAR invoicing and payment.                                                             |
+
 ## Existing owners checked before implementation and integration
 
 | Scope                                                                                                            | Existing work and inspected head                                                                     | Treatment here                                                                                        |

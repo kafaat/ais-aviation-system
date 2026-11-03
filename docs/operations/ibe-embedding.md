@@ -58,8 +58,8 @@ the top level, where existing cookie/session rules apply.
 
 ## Reverse proxies
 
-The repository's `nginx.conf` keeps `X-Frame-Options: DENY` on the rest of the application except for the two optional Videcom brand documents below.
-The exact `/embed/search` URI takes XFO from the upstream app: SAMEORIGIN
+The repository's `nginx.conf` keeps `X-Frame-Options: DENY` for every other URI.
+Only the exact `/embed/search` URI takes XFO from the upstream app: SAMEORIGIN
 when disabled, absent when the configured CSP ancestor policy is enabled. It
 continues to forward the app's Content-Security-Policy. Its additional CSP does
 not set `frame-ancestors`, so it does not override the app's ancestor policy.
@@ -88,66 +88,25 @@ Also check an unlisted HTTPS parent is blocked, a listed parent can display the
 form, and a real click opens the normal search page with the chosen parameters.
 These checks are required after any CDN/proxy configuration change.
 
+## Display estimates
+
+Country and currency are independent display preferences. Selecting Yemen
+(`YE`) and the Yemeni rial (`YER`) carries those preferences through the
+native booking journey. Fares, invoices and wallet charges remain in SAR.
+
+`ibePublic.displayRate` reads the newest effective direct SAR quote for the
+selected currency from `exchange_rates`. The rate is target major units per
+one SAR. Operators may record a verified observation with source `manual`,
+`bank` or `openexchangerates`. Use the observation time for `validFrom` and
+the provider's earlier expiry, if any, for `validTo`. Quotes expire at the
+earlier of that expiry or 24 hours after observation. An edit to the row does
+not extend its validity. Without an eligible quote, AIS displays the SAR price
+and explains why no local estimate is shown. No YER quote is seeded.
+
 ## Verification limits
 
-Repository tests exercise actual Express/Helmet HTTP responses, invalid origin
-configuration, public config behavior, and the real React form's native GET/top
-navigation contract. They do not establish deployment-specific DNS, TLS, ingress
-controller behavior, browser sandbox acceptance, or provider acceptance. No
-infrastructure settings are mutated by enabling these source changes.
-
-## Videcom-hosted reservations
-
-Use the airline's assigned Videcom HTTPS booking host to offer its inventory
-and manage its reservations separately from AIS reservations. Set
-`VIDECOM_IBE_BASE_URL` to the assigned origin, with the airline prefix on a
-shared host (for example, `https://customer.example/yourairline`). Omit
-`VARS/Public/CustomerPanels` and the panel filename. Leave the variable empty
-to hide the homepage link and return 404 on the three dedicated documents.
-Set the same values on every API replica and restart them.
-
-A normal link from the corporate site to `/videcom` opens the bilingual entry
-page. Its public search and manage-booking panels are served directly by the
-configured provider. Each panel also has a direct link for browsers that block
-cross-site cookies or frames. The agent signs in on the provider's own page.
-Only a two-letter `country` and three-letter `currency` can be sent to the
-search panel, for example `?country=ye&currency=YER`. Videcom validates the
-market and currency it supports, receives the browser request directly and determines its
-own location, fares, currency policy and session. AIS never sends the booking
-reference, credentials or AIS session token in a launch URL. Use host-only
-session cookies on separate AIS and provider hosts.
-
-| Corporate site integration | Destination relative to the assigned base        |
-| -------------------------- | ------------------------------------------------ |
-| Public search              | `VARS/Public/CustomerPanels/requirementsBS.aspx` |
-| Manage booking             | `VARS/Public/CustomerPanels/MMBLoginbs.aspx`     |
-| Travel agent               | `VARS/Public/CustomerPanels/AgentLoginBS.aspx`   |
-
-The portal is a standalone top-level page. If the corporate CMS needs inline
-panels on its homepage, embed the provider panel URLs directly in the CMS
-and permit the assigned origin in the CMS frame policy. Request the provider
-to allow the corporate origin to frame its panels. On a shared host, preserve
-the airline prefix when copying URLs.
-
-### Provider setup and acceptance
-
-1. Obtain the assigned HTTPS URL and verify the three panel paths with Videcom.
-   If using the airline's own booking subdomain, have its DNS owner set the A
-   record to the IP supplied by Videcom and have Videcom provision the matching
-   TLS certificate. The dedicated booking host and the AIS corporate site must
-   be distinct origins.
-2. Set `IBE_BRAND_NAME`, `IBE_BRAND_LOGO_PATH` and optionally
-   `VIDECOM_BRAND_COLOR` (six-digit hex). Supply Videcom the absolute HTTPS URLs
-   for `/videcom/brand/header` and `/videcom/brand/footer` on the AIS site, or
-   supply equivalent documents from the airline's CMS. Ask Videcom to insert
-   them into its hosted pages and configure the provider's own content colors.
-   AIS serves the brand documents and cannot change provider-side templates.
-3. On the target domain, verify DNS and TLS, then use the provider's test
-   inventory and test accounts. Open the public panel, search, confirm that the
-   top-level address is the assigned host and select a seat on that itinerary.
-   Retrieve a test booking and sign in as a test agent. Verify the header and
-   footer inside the provider page and compare the quoted fare to the one on the
-   provider's own panel for the same market. Record date, origin, environment
-   and outcome using non-personal test references.
-4. To disable this entry, remove `VIDECOM_IBE_BASE_URL` on every replica and
-   restart. Native AIS itineraries and account routes remain available.
+The browser suite runs the built AIS application with an isolated MySQL database
+and two test corporate origins. It checks browser enforcement of the frame
+allowlist, a user-activated top-level search, mobile entry links, operator
+branding and display currency. DNS, TLS and the deployed proxy still require
+verification on each operator's own domain.

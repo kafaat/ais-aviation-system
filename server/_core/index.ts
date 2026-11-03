@@ -1,7 +1,6 @@
 import { assertIntegrationConfiguration } from "../services/integration-config.service";
 import { timingSafeEqual } from "node:crypto";
 import { initTracing, stopTracing } from "./telemetry";
-import { createVidecomRouter } from "../routes/videcom";
 import { privacyDownload } from "../routes/privacy-download";
 import {
   observeApiResponse,
@@ -166,7 +165,6 @@ async function startServer() {
 
   // Public search has an explicit, optional frame-ancestor policy.
   app.use(createSecurityHeaders());
-  app.use(createVidecomRouter());
 
   // No route accepts uploads through these parsers (documents are returned
   // base64, never received), and they run before any rate limiter, so a

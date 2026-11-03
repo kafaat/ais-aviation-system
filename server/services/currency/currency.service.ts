@@ -12,7 +12,12 @@
 
 import { getDb } from "../../db";
 import { exchangeRates } from "../../../drizzle/schema";
-import { eq, and, desc } from "drizzle-orm";
+import {
+  DISPLAY_RATE_MAX_AGE_MS,
+  DISPLAY_RATE_SOURCES,
+  type DisplayCurrency,
+} from "../../../shared/ibe-search";
+import { eq, and, desc, gt, lte, inArray, isNull, or } from "drizzle-orm";
 import { cacheService as CacheService } from "../cache.service";
 
 // ============================================================================
@@ -245,6 +250,49 @@ export async function getExchangeRate(
   }
 
   throw new Error(`Exchange rate not found: ${fromCurrency} to ${toCurrency}`);
+}
+
+/** Public fare estimates read only direct, currently effective observations. */
+export async function getDisplayExchangeRate(currency: DisplayCurrency) {
+  const db = await getDb();
+  if (!db || currency === "SAR") return null;
+  const now = new Date();
+  const [quote] = await db
+    .select({
+      rate: exchangeRates.rate,
+      source: exchangeRates.source,
+      validFrom: exchangeRates.validFrom,
+      validTo: exchangeRates.validTo,
+    })
+    .from(exchangeRates)
+    .where(
+      and(
+        eq(exchangeRates.fromCurrency, "SAR"),
+        eq(exchangeRates.toCurrency, currency),
+        inArray(exchangeRates.source, [...DISPLAY_RATE_SOURCES]),
+        gt(exchangeRates.rate, "0"),
+        gt(
+          exchangeRates.validFrom,
+          new Date(now.getTime() - DISPLAY_RATE_MAX_AGE_MS)
+        ),
+        lte(exchangeRates.validFrom, now),
+        or(isNull(exchangeRates.validTo), gt(exchangeRates.validTo, now))
+      )
+    )
+    .orderBy(desc(exchangeRates.validFrom), desc(exchangeRates.id))
+    .limit(1);
+  if (!quote?.source) return null;
+  const maxExpiry = quote.validFrom.getTime() + DISPLAY_RATE_MAX_AGE_MS;
+  return {
+    fromCurrency: "SAR",
+    toCurrency: currency,
+    rate: Number(quote.rate),
+    source: quote.source.toLowerCase(),
+    updatedAt: quote.validFrom,
+    expiresAt: new Date(
+      Math.min(maxExpiry, quote.validTo?.getTime() ?? maxExpiry)
+    ),
+  };
 }
 
 /**

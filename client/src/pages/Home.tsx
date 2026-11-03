@@ -73,10 +73,6 @@ export default function Home() {
   const { user } = useAuth();
   const { reducedMotion } = useAccessibility();
 
-  const { data: ibeConfig } = trpc.ibePublic.config.useQuery(undefined, {
-    staleTime: 300_000,
-    retry: false,
-  });
   const initialSearch = new URLSearchParams(useRawSearch());
   const [preferences, setPreferences] = useState(() =>
     searchPreferences(initialSearch.toString())
@@ -227,7 +223,7 @@ export default function Home() {
       >
         <div className="container py-4">
           <div className="flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3">
+            <Link href="/" className="flex min-w-0 items-center gap-3">
               <h1 className="text-xl font-bold text-primary">
                 <BrandIdentity />
               </h1>
@@ -307,6 +303,23 @@ export default function Home() {
               )}
             </div>
           </div>
+          <nav
+            aria-label={t("accessibility.mainNavigation")}
+            className="mt-2 grid grid-cols-2 gap-2 md:hidden"
+          >
+            <Link
+              href="/manage-booking"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border px-2 text-center text-sm font-medium hover:bg-muted"
+            >
+              {t("ibe.manageBooking")}
+            </Link>
+            <Link
+              href="/agent"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border px-2 text-center text-sm font-medium hover:bg-muted"
+            >
+              {t("ibe.agentPortal")}
+            </Link>
+          </nav>
         </div>
       </motion.header>
 
@@ -339,14 +352,6 @@ export default function Home() {
               >
                 {t("home.hero.subtitle")}
               </motion.p>
-              {ibeConfig?.videcomEnabled && (
-                <a
-                  className="inline-block mt-4 underline text-primary"
-                  href={`/videcom?lang=${i18n.language.startsWith("ar") ? "ar" : "en"}`}
-                >
-                  {t("ibe.hostedBooking")}
-                </a>
-              )}
             </motion.div>
 
             {/* Search Card */}

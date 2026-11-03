@@ -126,7 +126,23 @@ describe("public search context and price display", () => {
     rate: 0.082,
     source: "bank",
     updatedAt: new Date(now),
+    expiresAt: new Date(now + 60_000),
   };
+  it("accepts Yemen display preferences and requires an eligible SAR/YER quote", () => {
+    expect(searchPreferences("currency=yer&country=ye")).toMatchObject({
+      country: "YE",
+      currency: "YER",
+    });
+    expect(displayEstimate(100, "YER", null, now)).toBeNull();
+    expect(
+      displayEstimate(
+        100,
+        "YER",
+        { ...rate, toCurrency: "YER", rate: 2, source: "manual" },
+        now
+      )
+    ).toBe(2);
+  });
   it("converts SAR minor units to major units and respects three-decimal display currencies", () => {
     const result = displayEstimate(12345, "KWD", rate, now);
     expect(result).toBeCloseTo(10.1229);
@@ -140,6 +156,10 @@ describe("public search context and price display", () => {
   it.each([
     { source: "fallback" },
     { source: "cross_rate" },
+    { source: "unknown" },
+    { expiresAt: new Date(now) },
+    { expiresAt: "invalid" },
+    { fromCurrency: "USD" },
     { rate: NaN },
     { rate: -1 },
     { toCurrency: "USD" },
