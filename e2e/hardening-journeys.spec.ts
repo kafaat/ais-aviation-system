@@ -179,7 +179,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const user = await client.auth.me.query();
     if (!user) throw new Error("Authenticated passenger missing");
     const [booking] = await sqlRows<RowDataPacket>(
-      "SELECT id, totalAmount FROM bookings WHERE userId=? AND flightId=?",
+      "SELECT id, bookingReference, totalAmount FROM bookings WHERE userId=? AND flightId=?",
       [user.id, outboundId]
     );
     const passengers = await client.bookings.getPassengers.query({
@@ -188,6 +188,59 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const ahmed = passengers.find(p => p.firstName === "Ahmed");
     const sara = passengers.find(p => p.firstName === "Sara");
     if (!ahmed || !sara) throw new Error("Missing travellers");
+    const currentItems = () =>
+      client.ancillary.getBookingAncillaries.query({ bookingId: booking.id });
+    const invoiceTotal = async () =>
+      (await client.bookings.myBookings.query()).find(
+        row => row.id === booking.id
+      )?.totalAmount;
+    const purchased = await currentItems();
+    expect(purchased).toHaveLength(2);
+    const card = page.locator('[data-slot="card"]').filter({
+      hasText: booking.bookingReference,
+    });
+    await card.getByRole("button", { name: "Manage Services" }).click();
+    const dialog = page.getByRole("dialog");
+    const offer = dialog.getByTestId(`extra-offer-${meal.id}`);
+    await offer.getByLabel("Flight sector").selectOption(String(returnId));
+    await offer.getByLabel("Passenger").selectOption(String(sara.id));
+    await offer.getByRole("button", { name: "Add", exact: true }).click();
+    const addedLine = dialog
+      .locator('[data-testid^="extra-line-"]')
+      .filter({ hasText: "Sara Journey" })
+      .filter({ hasText: meal.name });
+    await expect(addedLine).toContainText(inbound.flightNumber);
+    const changed = await currentItems();
+    expect(changed).toHaveLength(3);
+    expect(await invoiceTotal()).toBe(booking.totalAmount + meal.price);
+    const added = changed.find(line => line.passengerId === sara.id);
+    expect(added).toMatchObject({
+      scopeState: "specific_segment",
+      segmentOrder: 2,
+      flightNumber: inbound.flightNumber,
+      quantity: 1,
+      totalPrice: meal.price,
+      status: "active",
+    });
+    if (!added) throw new Error("Return meal was not added");
+    await dialog
+      .getByTestId(`extra-line-${added.id}`)
+      .getByRole("button")
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (await currentItems()).find(line => line.id === added.id)?.status
+      )
+      .toBe("cancelled");
+    const remaining = (await currentItems()).filter(
+      line => line.status === "active"
+    );
+    expect(remaining).toHaveLength(2);
+    expect(remaining).toEqual(expect.arrayContaining(purchased));
+    expect(await invoiceTotal()).toBe(booking.totalAmount);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
     await sqlRows<RowDataPacket>(
       "INSERT INTO user_credits (userId, amount, source) VALUES (?, ?, 'promo')",
       [user.id, booking.totalAmount]
@@ -227,7 +280,10 @@ test.describe("Funded journeys and truthful operational reads", () => {
       .click();
     for (const item of [bag, meal]) {
       await expect(
-        page.getByTestId("booked-extra").filter({ hasText: item.name })
+        page
+          .getByTestId("booked-extra")
+          .filter({ hasText: item.name })
+          .filter({ hasText: "Ahmed Journey" })
       ).toContainText("Ahmed Journey · Sector 1");
     }
     for (const passenger of [ahmed, sara]) {

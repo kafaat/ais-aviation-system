@@ -228,6 +228,7 @@
         "reads": [
           "ancillaryServices",
           "bookingAncillaries",
+          "bookingFareComponents",
           "bookingSegments",
           "flights",
           "passengers"
@@ -2989,7 +2990,7 @@
           "kioskSessions",
           "passengers"
         ],
-        "writes": ["bookingAncillaries", "kioskDevices", "kioskSessions"]
+        "writes": ["kioskDevices", "kioskSessions"]
       },
       "replacement": null
     },

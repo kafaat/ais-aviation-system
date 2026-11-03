@@ -64,3 +64,9 @@ MySQL environment; schema generation and TypeScript checks do not replace it.
 - Legacy multi-passenger/multi-segment reconciliation: operator workflow.
 - Live kiosk, scale, printer, belt and provider acceptance: external evidence;
   this implementation does not close E01–E11.
+
+## Post-booking changes and kiosk handling
+
+On an editable invoice, My Bookings assigns new baggage and meals to the selected passenger and flight sector. Removal requires one matching, unreversed ancillary charge. Historical items with missing or conflicting charge evidence require reconciliation. Cancelled and refunded lines remain visible in the service history and are excluded from the active-services total.
+
+Kiosk check-in continues to show existing purchases. To purchase another service for a confirmed booking, the kiosk directs the passenger to airline servicing. Kiosk purchases need a verified payment and fulfillment path before they can be enabled.

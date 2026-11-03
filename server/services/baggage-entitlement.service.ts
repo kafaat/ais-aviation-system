@@ -107,6 +107,54 @@ type FundingReference = NonNullable<
   typeof bookingAncillaries.$inferSelect.fundingReference
 >;
 
+/** Internal funding remains intact only when each refund can be attributed to a separate card-paid modification. */
+async function refundsBelongToSeparateModifications(
+  tx: SettlementTx,
+  bookingId: number,
+  ownerId: number,
+  entries: (typeof financialLedger.$inferSelect)[]
+) {
+  const totals = new Map<string, number>();
+  for (const row of entries) {
+    if (row.type !== "refund" && row.type !== "partial_refund") continue;
+    // Internal refunds and unknown historical entries require allocation review.
+    if (
+      !row.stripePaymentIntentId ||
+      row.userId !== ownerId ||
+      row.currency !== "SAR" ||
+      row.metadata != null
+    )
+      return false;
+    const minor = Math.round(Number(row.amount) * 100);
+    if (!Number.isSafeInteger(minor) || minor <= 0) return false;
+    totals.set(
+      row.stripePaymentIntentId,
+      (totals.get(row.stripePaymentIntentId) ?? 0) + minor
+    );
+  }
+  if (!totals.size) return true;
+  const receipts = await tx
+    .select()
+    .from(paymentReceipts)
+    .where(
+      and(
+        eq(paymentReceipts.bookingId, bookingId),
+        eq(paymentReceipts.kind, "modification"),
+        eq(paymentReceipts.userId, ownerId)
+      )
+    );
+  return [...totals].every(([intent, amount]) =>
+    receipts.some(
+      receipt =>
+        receipt.paymentIntentId === intent &&
+        receipt.currency === "SAR" &&
+        receipt.settlementStatus === "applied" &&
+        receipt.refundedAmount === amount &&
+        receipt.amount >= amount
+    )
+  );
+}
+
 async function hasValidFundingEvidence(
   tx: SettlementTx,
   bookingId: number,
@@ -154,9 +202,12 @@ async function hasValidFundingEvidence(
         charge.currency === "SAR" &&
         charge.stripeEventId === prefixes[reference.tender] + ":" + bookingId &&
         Number(charge.amount) === reference.amountMinor / 100 &&
-        !entries.some(
-          row => row.type === "refund" || row.type === "partial_refund"
-        )
+        (await refundsBelongToSeparateModifications(
+          tx,
+          bookingId,
+          booking.userId,
+          entries
+        ))
       );
     }
     if (booking.stripePaymentIntentId !== reference.paymentIntentId)

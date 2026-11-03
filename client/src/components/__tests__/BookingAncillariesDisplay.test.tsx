@@ -44,3 +44,33 @@ it("labels each meal and bag by its own stored passenger and segment; unresolved
   ).toBeInTheDocument();
   expect(screen.getByText("Ali Saleh · All sectors")).toBeInTheDocument();
 });
+
+it("distinguishes inactive lines across categories and excludes their historical prices from the active total", () => {
+  query.mockReturnValue({
+    data: [
+      {
+        id: 1,
+        service: { name: "Meal", category: "meal" },
+        totalPrice: 100,
+        status: "active",
+      },
+      {
+        id: 2,
+        service: { name: "Seat", category: "seat" },
+        totalPrice: 2300,
+        status: "refunded",
+      },
+      { id: 3, service: null, totalPrice: 5100, status: "cancelled" },
+    ],
+  });
+  render(<BookingAncillariesDisplay bookingId={2} />);
+  expect(
+    screen.getByText("Refunded").closest('[data-testid="booked-extra"]')
+  ).toHaveTextContent("Seat");
+  expect(
+    screen.getByText("Cancelled").closest('[data-testid="booked-extra"]')
+  ).toHaveTextContent("Unidentified service");
+  expect(
+    screen.getByText("Active services total").parentElement
+  ).toHaveTextContent("1.00 common.sar");
+});

@@ -212,6 +212,70 @@ describe("unpaid NDC invoice commands", () => {
     });
     expect(fixture.rows("payments")).toHaveLength(0);
   });
+  const addMeal = () =>
+    addAncillaryToBooking(
+      {
+        bookingId: 7,
+        ancillaryServiceId: 1,
+        passengerId: 11,
+        flightId: 5,
+        idempotencyKey: "named-return-meal",
+      },
+      { userId: 9 }
+    );
+  it("binds a post-booking meal to the named passenger and charges only their selected sector", async () => {
+    fixture.rows("ancillary_services")[0].category = "meal";
+    const added = await addMeal();
+    expect(await addMeal()).toEqual(added);
+    expect(fixture.rows("booking_ancillaries")).toMatchObject([
+      {
+        passengerId: 11,
+        segmentId: 2,
+        scopeState: "specific_segment",
+        weightSnapshotGrams: null,
+      },
+    ]);
+    expect(fixture.rows("booking_fare_components")).toMatchObject([
+      {
+        passengerId: 11,
+        bookingSegmentId: 2,
+        flightId: 5,
+        amount: 500,
+      },
+    ]);
+    expect(fixture.rows("booking_segments").map(s => s.segmentAmount)).toEqual([
+      6000, 4500,
+    ]);
+    expect(fixture.rows("bookings")[0].totalAmount).toBe(10500);
+  });
+  it.each([
+    "replaced",
+    "ambiguous",
+    "cancelled",
+    "legacy",
+    "wrong passenger",
+  ] as const)(
+    "rejects a %s meal assignment before changing the invoice",
+    async reason => {
+      fixture.rows("ancillary_services")[0].category = "meal";
+      const legs = fixture.rows("booking_segments");
+      if (reason === "replaced") legs[1].flightId = 6;
+      if (reason === "ambiguous") legs[0].flightId = 5;
+      if (reason === "cancelled") legs[1].status = "cancelled";
+      if (reason === "legacy") {
+        legs.splice(0);
+        fixture.rows("bookings")[0].flightId = 5;
+      }
+      if (reason === "wrong passenger")
+        fixture.rows("passengers")[0].bookingId = 8;
+      await expect(addMeal()).rejects.toThrow(
+        /invoice passenger|Invoice segment|unique active booked flight segment/
+      );
+      expect(fixture.rows("booking_ancillaries")).toHaveLength(0);
+      expect(fixture.rows("booking_fare_components")).toHaveLength(0);
+      expect(fixture.rows("bookings")[0].totalAmount).toBe(10000);
+    }
+  );
   it("uses the same invoice authority for direct ancillary add/remove and prevents duplicate deductions", async () => {
     const input = {
       bookingId: 7,

@@ -56,7 +56,9 @@ export function BookingAncillariesDisplay({
     return null;
   }
 
-  const totalCost = ancillaries.reduce((sum, a) => sum + a.totalPrice, 0);
+  const activeTotal = ancillaries
+    .filter(item => item.status === "active")
+    .reduce((sum, item) => sum + item.totalPrice, 0);
 
   return (
     <Card className="p-4 bg-blue-50 border-blue-200">
@@ -71,8 +73,8 @@ export function BookingAncillariesDisplay({
 
       <div className="space-y-2">
         {ancillaries.map(ancillary => {
-          if (!ancillary.service) return null;
-          const Icon = categoryIcons[ancillary.service.category] || Package;
+          const category = ancillary.service?.category;
+          const Icon = (category && categoryIcons[category]) || Package;
           return (
             <div
               key={ancillary.id}
@@ -82,14 +84,15 @@ export function BookingAncillariesDisplay({
               <div className="flex items-center gap-2">
                 <Icon className="h-4 w-4 text-blue-600" />
                 <span className="text-gray-700">
-                  {ancillary.service.name}
+                  {ancillary.service?.name ??
+                    (ar ? "خدمة غير محددة" : "Unidentified service")}
                   {ancillary.quantity > 1 && (
                     <span className="text-muted-foreground">
                       {" "}
                       × {ancillary.quantity}
                     </span>
                   )}
-                  {["meal", "baggage"].includes(ancillary.service.category) && (
+                  {(category === "meal" || category === "baggage") && (
                     <small className="block">
                       {[
                         ancillary.passengerFirstName,
@@ -109,8 +112,17 @@ export function BookingAncillariesDisplay({
                           : ar
                             ? "المقطع غير محدد"
                             : "Sector not assigned"}
-                      {ancillary.status !== "active" &&
-                        " · " + ancillary.status}
+                    </small>
+                  )}
+                  {ancillary.status !== "active" && (
+                    <small className="block font-semibold">
+                      {ancillary.status === "refunded"
+                        ? ar
+                          ? "مستردة"
+                          : "Refunded"
+                        : ar
+                          ? "ملغاة"
+                          : "Cancelled"}
                     </small>
                   )}
                 </span>
@@ -123,9 +135,11 @@ export function BookingAncillariesDisplay({
         })}
 
         <div className="flex items-center justify-between text-sm font-semibold pt-2 border-t border-blue-200">
-          <span className="text-blue-900">{t("bookingAncillaries.total")}</span>
           <span className="text-blue-900">
-            {(totalCost / 100).toFixed(2)} {t("common.sar")}
+            {ar ? "إجمالي الخدمات النشطة" : "Active services total"}
+          </span>
+          <span className="text-blue-900">
+            {(activeTotal / 100).toFixed(2)} {t("common.sar")}
           </span>
         </div>
       </div>

@@ -141,6 +141,7 @@ export async function addAncillaryToBooking(
     metadata?: unknown;
     flightId?: number;
     seatNumber?: string;
+    expectedUnitPrice?: number;
     idempotencyKey: string;
   },
   actor: InvoiceActor
@@ -277,10 +278,10 @@ export async function removeAncillaryFromBooking(
       ancillary.totalPrice < 0
     )
       throw invoiceBlocked("Ancillary charge requires reconciliation");
-    await removeInvoiceSeat(tx, ancillary);
-    await tx
-      .update(bookingFareComponents)
-      .set({ reversedAt: sql`CURRENT_TIMESTAMP(0)` })
+    // Kiosk and historical rows may identify a service without ever charging this invoice.
+    const components = await tx
+      .select()
+      .from(bookingFareComponents)
       .where(
         and(
           eq(bookingFareComponents.bookingId, booking.id),
@@ -289,7 +290,23 @@ export async function removeAncillaryFromBooking(
           eq(bookingFareComponents.componentType, "ancillary"),
           isNull(bookingFareComponents.reversedAt)
         )
-      );
+      )
+      .limit(2)
+      .for("update");
+    const [charge] = components;
+    if (
+      components.length !== 1 ||
+      charge.amount !== ancillary.totalPrice ||
+      (charge.passengerId ?? null) !== (ancillary.passengerId ?? null) ||
+      (ancillary.segmentId != null &&
+        charge.bookingSegmentId !== ancillary.segmentId)
+    )
+      throw invoiceBlocked("Ancillary invoice charge requires reconciliation");
+    await removeInvoiceSeat(tx, ancillary);
+    await tx
+      .update(bookingFareComponents)
+      .set({ reversedAt: sql`CURRENT_TIMESTAMP(0)` })
+      .where(eq(bookingFareComponents.id, charge.id));
     await tx
       .update(bookingAncillaries)
       .set({ status: "cancelled", updatedAt: new Date() })

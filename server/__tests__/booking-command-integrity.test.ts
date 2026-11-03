@@ -320,6 +320,39 @@ describe("initial ancillary scope and pricing", () => {
     ).toEqual([10000, 9000]);
     expect(fixture.rows("bookings")[0].totalAmount).toBe(19000);
   });
+  it.each([
+    "missing",
+    "duplicate",
+    "wrong amount",
+    "wrong traveler",
+    "wrong sector",
+  ])(
+    "does not reduce the invoice when the linked charge is %s",
+    async corruption => {
+      const { removeAncillaryFromBooking } =
+        await import("../services/ancillary-services.service");
+      const sale = await createBooking({ ...input, ancillaries: [line] });
+      const [purchase] = fixture.rows("booking_ancillaries");
+      const rows = fixture.rows("booking_fare_components");
+      const charge = rows.find(row => row.componentType === "ancillary");
+      if (corruption === "missing") rows.splice(rows.indexOf(charge), 1);
+      if (corruption === "duplicate")
+        rows.push({ ...charge, id: charge.id + 50 });
+      if (corruption === "wrong amount") charge.amount--;
+      if (corruption === "wrong traveler") charge.passengerId++;
+      if (corruption === "wrong sector") charge.bookingSegmentId++;
+      await expect(
+        removeAncillaryFromBooking(purchase.id, { userId: input.userId })
+      ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+      expect(fixture.rows("bookings")[0].totalAmount).toBe(sale.totalAmount);
+      expect(fixture.rows("booking_ancillaries")[0].status).toBe("active");
+      expect(
+        fixture
+          .rows("booking_fare_components")
+          .some(row => row.reversedAt != null)
+      ).toBe(false);
+    }
+  );
   it("rejects removal when a scoped charge loses its segment reference", async () => {
     const { removeAncillaryFromBooking } =
       await import("../services/ancillary-services.service");

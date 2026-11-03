@@ -303,6 +303,70 @@ describe("baggage entitlement authority", () => {
     }
   );
 
+  it("keeps internally funded baggage after a verified refund of a separate card-paid modification", async () => {
+    Object.assign(seed.bookings[0], { paymentStatus: "paid" });
+    const charge = {
+      id: 88,
+      bookingId: 7,
+      userId: 1,
+      type: "charge",
+      amount: "50.00",
+      currency: "SAR",
+      stripeEventId: "wallet-credit:7",
+      metadata: JSON.stringify({ tender: "wallet" }),
+    };
+    const refund = {
+      id: 89,
+      bookingId: 7,
+      userId: 1,
+      type: "partial_refund",
+      amount: "2.50",
+      currency: "SAR",
+      stripePaymentIntentId: "pi_bag",
+      stripeEventId: "evt_bag_refund",
+      metadata: null,
+    };
+    const entries = [charge, refund];
+    Object.assign(seed, { financial_ledger: entries });
+    Object.assign(seed.payment_receipts[0], {
+      userId: 1,
+      amount: 5000,
+      currency: "SAR",
+      refundedAmount: 250,
+    });
+    seed.booking_ancillaries.push(
+      paidBaggage({
+        metadata: null,
+        fundingReference: {
+          kind: "internal_booking",
+          bookingId: 7,
+          ledgerId: 88,
+          tender: "wallet",
+          amountMinor: 5000,
+        },
+      })
+    );
+    expect(await entitlement()).toMatchObject({
+      totalWeightGrams: 33000,
+      requiresOperationalReview: false,
+    });
+    entries.push({
+      ...refund,
+      id: 90,
+      type: "refund",
+      amount: "47.50",
+      stripeEventId: "evt_bag_final_refund",
+    });
+    expect((await entitlement()).requiresOperationalReview).toBe(true);
+    seed.payment_receipts[0].refundedAmount = 5000;
+    expect((await entitlement()).totalWeightGrams).toBe(33000);
+    refund.stripePaymentIntentId = "pi_unverified";
+    expect(await entitlement()).toMatchObject({
+      totalWeightGrams: 23000,
+      requiresOperationalReview: true,
+    });
+  });
+
   it("requires every split receipt to remain fully collected", async () => {
     Object.assign(seed.bookings[0], {
       paymentStatus: "paid",
