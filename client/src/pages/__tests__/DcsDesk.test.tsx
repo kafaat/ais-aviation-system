@@ -23,6 +23,7 @@ import DcsDesk from "../DcsDesk";
 const api = vi.hoisted(() => ({
   role: "ops",
   liveTransport: false,
+  stationReport: vi.fn(),
   flights: vi.fn(),
   desk: vi.fn(),
   flightMutation: vi.fn(),
@@ -74,10 +75,23 @@ vi.mock("@/lib/trpc", async importOriginal => {
           useQuery: api.flights,
         }),
       },
+      useUtils: original.useUtils,
       dcsOperations: {
         returnBag: override(original.dcsOperations.returnBag, {
           useMutation: () => ({ isPending: false }),
         }),
+        openCase: original.dcsOperations.openCase,
+        resolveCase: original.dcsOperations.resolveCase,
+        stationReport: override(original.dcsOperations.stationReport, {
+          useQuery: api.stationReport,
+        }),
+        addOsi: original.dcsOperations.addOsi,
+        blockSeats: original.dcsOperations.blockSeats,
+        remapSeats: original.dcsOperations.remapSeats,
+        dismissCase: original.dcsOperations.dismissCase,
+        finalize: original.dcsOperations.finalize,
+        quoteDowngrade: original.dcsOperations.quoteDowngrade,
+        confirmDowngrade: original.dcsOperations.confirmDowngrade,
         getDesk: override(original.dcsOperations.getDesk, {
           useQuery: api.desk,
         }),
@@ -99,6 +113,7 @@ vi.mock("@/lib/trpc", async importOriginal => {
         }),
       },
       baggage: {
+        correctWeight: original.baggage.correctWeight,
         flightCloseout: override(original.baggage.flightCloseout, {
           useQuery: api.closeout,
         }),
@@ -124,9 +139,19 @@ function queryCache() {
 
 function render(element: ReactNode) {
   const cache = queryCache();
+  const client = trpc.createClient({
+    links: [
+      httpBatchLink({
+        url: "http://localhost/test-trpc",
+        transformer: superjson,
+      }),
+    ],
+  });
   return renderElement(element, {
     wrapper: ({ children }) => (
-      <QueryClientProvider client={cache}>{children}</QueryClientProvider>
+      <trpc.Provider client={client} queryClient={cache}>
+        <QueryClientProvider client={cache}>{children}</QueryClientProvider>
+      </trpc.Provider>
     ),
   });
 }
@@ -177,6 +202,11 @@ beforeEach(() => {
   api.transitionPending = false;
   api.transitionError = null;
   api.transitionOptions = null;
+  api.stationReport.mockReturnValue({
+    data: undefined,
+    fetchStatus: "idle",
+    refetch: vi.fn(),
+  });
   api.flights.mockReturnValue({
     data: [{ id: 41, flightNumber: "ZZ0041", departureTime }],
     isLoading: false,
@@ -1409,4 +1439,52 @@ it("keeps navigation locked while a post-command refresh is paused offline, then
       refresh.resolve();
     });
   }
+});
+
+it("filters meals and prevents printing or exporting an unresolved station report", () => {
+  api.stationReport.mockReturnValue({
+    data: {
+      flightId: 41,
+      flightNumber: "ZZ0041",
+      departureTime,
+      unresolvedServices: 1,
+      closedAt: null,
+      stationOffBlocksAt: null,
+      cases: [],
+      items: [
+        {
+          name: "Meal Passenger",
+          seat: "1A",
+          category: "meal",
+          code: "VGML",
+          status: "pending",
+          note: null,
+        },
+        {
+          name: "Assistance Passenger",
+          seat: "1B",
+          category: "ssr",
+          code: "WCHR",
+          status: "confirmed",
+          note: null,
+        },
+      ],
+    },
+    fetchStatus: "idle",
+    isFetching: false,
+    refetch: vi.fn(),
+  });
+  render(<DcsDesk />);
+  selectPassenger();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Station reports and actions" })
+  );
+  expect(screen.getByText("WCHR")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Meals only" }));
+  expect(screen.getByText("VGML")).toBeInTheDocument();
+  expect(screen.queryByText("WCHR")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Print report" })).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "Download CSV report" })
+  ).toBeDisabled();
 });

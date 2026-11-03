@@ -18,6 +18,7 @@ import {
 } from "./OperationalReadState";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { useCommandIdempotencyKey } from "@/hooks/useCommandIdempotencyKey";
 import { toast } from "sonner";
 
 type Props = {
@@ -103,6 +104,9 @@ function ScopedBaggageRegistration({
   const [specialHandling, setSpecialHandling] = useState(
     pendingReceipt?.specialHandling ?? ""
   );
+  const [replacesTag, setReplacesTag] = useState(
+    pendingReceipt?.replacesTag ?? ""
+  );
   const [lastTag, setLastTag] = useState<string | null>(null);
   useEffect(
     () =>
@@ -112,6 +116,7 @@ function ScopedBaggageRegistration({
           setReceipt({ command, storageError: false });
           setWeight(command ? String(command.weight) : "");
           setDescription(command?.description ?? "");
+          setReplacesTag(command?.replacesTag ?? "");
           setSpecialHandling(command?.specialHandling ?? "");
         } catch {
           setReceipt(current => ({ ...current, storageError: true }));
@@ -133,6 +138,7 @@ function ScopedBaggageRegistration({
       setWeight("");
       setDescription("");
       setSpecialHandling("");
+      setReplacesTag("");
       toast.success(l("سُجلت الحقيبة", "Bag registered"));
       void query.refetch();
     },
@@ -242,6 +248,24 @@ function ScopedBaggageRegistration({
                     </span>{" "}
                     · {bag.weightGrams === null ? "—" : bag.weightGrams / 1000}{" "}
                     {l("كجم", "kg")} · {bag.status}
+                    {!bag.legacy &&
+                      bag.weightGrams != null &&
+                      bag.status === "checked_in" && (
+                        <CorrectBagWeight
+                          key={bag.weightGrams}
+                          scope={scope}
+                          bagId={bag.id}
+                          previousWeight={bag.weightGrams / 1000}
+                          disabled={
+                            commandLocked ||
+                            disabled ||
+                            query.isFetching ||
+                            !!query.error ||
+                            summary.requiresOperationalReview
+                          }
+                          refresh={() => query.refetch()}
+                        />
+                      )}
                     {bag.legacy && (
                       <span> · {l("سجل سابق", "Legacy record")}</span>
                     )}
@@ -260,6 +284,7 @@ function ScopedBaggageRegistration({
           const payload = {
             ...context,
             weight: weightKg,
+            ...(replacesTag.trim() ? { replacesTag: replacesTag.trim() } : {}),
             description: description.trim() || undefined,
             specialHandling: specialHandling.trim() || undefined,
             expectedActorId: scope.actorId,
@@ -320,6 +345,19 @@ function ScopedBaggageRegistration({
             value={specialHandling}
             maxLength={255}
             onChange={e => setSpecialHandling(e.target.value)}
+          />
+        </label>
+        <label>
+          {l(
+            "رقم البطاقة السابقة عند إعادة التوجيه من هذه المحطة (اختياري)",
+            "Previous tag for same-station rerouting (optional)"
+          )}
+          <Input
+            disabled={commandLocked}
+            pattern="[0-9]{10}"
+            maxLength={10}
+            value={replacesTag}
+            onChange={e => setReplacesTag(e.target.value)}
           />
         </label>
         {!pendingReceipt && overAllowance && (
@@ -393,5 +431,87 @@ function ScopedBaggageRegistration({
         )}
       </form>
     </section>
+  );
+}
+
+function CorrectBagWeight({
+  scope,
+  bagId,
+  previousWeight,
+  disabled,
+  refresh,
+}: {
+  scope: BagRegistrationScope;
+  bagId: number;
+  previousWeight: number;
+  disabled: boolean;
+  refresh: () => Promise<unknown>;
+}) {
+  const l = useOperationalLabels(),
+    key = useCommandIdempotencyKey();
+  const [weight, setWeight] = useState(""),
+    [reason, setReason] = useState("");
+  const mutation = trpc.baggage.correctWeight.useMutation({
+    onSuccess: async () => {
+      key.clear();
+      await refresh();
+      toast.success(l("صُحّح وزن الحقيبة", "Bag weight corrected"));
+    },
+    onError: e => toast.error(e.message),
+  });
+  return (
+    <details>
+      <summary>
+        {l("تصحيح الوزن قبل التسليم للمناولة", "Correct counter weight")}
+      </summary>
+      <form
+        onSubmit={e => {
+          e.preventDefault();
+          if (disabled || mutation.isPending) return;
+          const { actorId, tenantId, ...sector } = scope;
+          const payload = {
+            ...sector,
+            expectedActorId: actorId,
+            expectedTenantId: tenantId,
+            baggageId: bagId,
+            previousWeight,
+            weight: Number(weight),
+            reason,
+          };
+          mutation.mutate({
+            ...payload,
+            idempotencyKey: key.forPayload(payload),
+          });
+        }}
+      >
+        <fieldset disabled={disabled || mutation.isPending}>
+          <label>
+            {l("الوزن المصحح بالكيلوجرام", "Corrected weight in kg")}
+            <Input
+              required
+              type="number"
+              min="0.01"
+              max="32"
+              step="0.01"
+              value={weight}
+              onChange={e => setWeight(e.target.value)}
+            />
+          </label>
+          <label>
+            {l("سبب تصحيح الوزن", "Weight correction reason")}
+            <Input
+              required
+              minLength={5}
+              maxLength={500}
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+            />
+          </label>
+          <Button type="submit">
+            {l("حفظ تصحيح الوزن", "Save weight correction")}
+          </Button>
+        </fieldset>
+      </form>
+    </details>
   );
 }

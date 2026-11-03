@@ -301,3 +301,56 @@ describe("baggage handover evidence", () => {
     ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
   });
 });
+
+describe("signed origin baggage recovery", () => {
+  function recoveryFixture() {
+    const sources = JSON.parse(process.env.AVIATION_SOURCE_REGISTRY!);
+    sources[0].capabilities.push("baggage_recovery");
+    sources[0].airlineIds = [8];
+    vi.stubEnv("AVIATION_SOURCE_REGISTRY", JSON.stringify(sources));
+    Object.assign(fixture.rows("flights")[0], {
+      airlineId: 8,
+      status: "scheduled",
+    });
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 11,
+      segmentId: 1,
+      createdAt: new Date(Date.now() - 3600000),
+    });
+    fixture.rows("booking_segments")[0].status = "confirmed";
+  }
+  it("requires signed unloading before returning a loaded bag, rejects reuse and then allows offload", async () => {
+    recoveryFixture();
+    const key = { flightId: 11, bookingId: 7, passengerId: 11 };
+    const accepted = await scan("acceptance", 11, 1, null);
+    const loaded = await scan("loading", 11, 1, accepted.result.evidenceId);
+    await expect(
+      scan("return", 11, 1, loaded.result.evidenceId)
+    ).rejects.toThrow(/handover/);
+    const unloaded = await scan("unloading", 11, 1, loaded.result.evidenceId);
+    await expect(
+      assertPassengerBaggageCanOffload(fixture.db, key)
+    ).rejects.toThrow();
+    const returned = await scan("return", 11, 1, unloaded.result.evidenceId);
+    expect(fixture.rows("baggage_items")[0].returnEvidenceId).toBe(
+      returned.result.evidenceId
+    );
+    await expect(
+      assertPassengerBaggageCanOffload(fixture.db, key)
+    ).resolves.toBeUndefined();
+    await expect(
+      ingestBaggageCustody(returned.e, returned.signature)
+    ).resolves.toMatchObject({ duplicate: true });
+    await expect(
+      scan("loading", 11, 1, returned.result.evidenceId)
+    ).rejects.toThrow(/retired/);
+  });
+  it("refuses ordinary scanners, the wrong airport and unscoped historical bags", async () => {
+    await expect(scan("return", 11, 1, null)).rejects.toThrow(/authorized/);
+    recoveryFixture();
+    await expect(scan("return", 11, 2, null)).rejects.toThrow();
+    fixture.rows("baggage_items")[0].segmentId = null;
+    await expect(scan("return", 11, 1, null)).rejects.toThrow();
+    expect(fixture.rows("baggage_custody_events")).toHaveLength(0);
+  });
+});

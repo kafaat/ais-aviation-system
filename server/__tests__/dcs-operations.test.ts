@@ -859,3 +859,105 @@ describe("passenger attendance, denial and scan binding", () => {
     });
   });
 });
+
+describe("station reports and controlled desk commands", () => {
+  it("refuses a saved station command after a staff or tenant change", async () => {
+    await expect(
+      caller().openCase({
+        flightId: 11,
+        kind: "no_rec",
+        stationReference: "NO-REC-17",
+        reason: "Station verification",
+        idempotencyKey: "no-rec-session-17",
+        expectedActorId: 987651,
+        expectedTenantId: 987652,
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+  it("opens an unresolved case and only links a funded passenger of the selected flight", async () => {
+    const station = caller(),
+      input = {
+        flightId: 11,
+        kind: "no_rec" as const,
+        stationReference: "ST-27",
+        ...command(),
+      };
+    const receipt = await station.openCase(input);
+    expect(await station.openCase(input)).toEqual(receipt);
+    await expect(station.openCase({ ...input, ...command() })).rejects.toThrow(
+      /already exists/i
+    );
+    await expect(
+      caller("ops", 2).openCase({ ...input, ...command() })
+    ).rejects.toThrow();
+    await expect(
+      station.resolveCase({
+        ...key,
+        caseId: receipt.eventId,
+        passengerId: 99,
+        ...command(),
+      })
+    ).rejects.toThrow();
+    await station.resolveCase({
+      ...key,
+      caseId: receipt.eventId,
+      ...command(),
+    });
+    expect((await station.stationReport({ flightId: 11 })).cases).toEqual([
+      {
+        id: receipt.eventId,
+        kind: "no_rec",
+        stationReference: "ST-27",
+        dismissed: false,
+        resolvedPassengerId: 4,
+      },
+    ]);
+    expect(
+      fixture.rows("seat_inventory").every(s => s.status === "available")
+    ).toBe(true);
+  });
+  it("shows only notes on the exact passenger and sector; repeated commands preserve one entry", async () => {
+    const note = { ...key, ...command(), reason: "Meet at the gate" };
+    await caller().addOsi(note);
+    await caller().addOsi(note);
+    const r = await caller().stationReport({ flightId: 11 });
+    expect(r.items).toEqual([
+      {
+        passengerId: 4,
+        name: "Sample Traveler",
+        seat: null,
+        category: "osi",
+        code: "OSI",
+        status: "recorded",
+        note: note.reason,
+      },
+    ]);
+    expect((await caller().stationReport({ flightId: 12 })).items).toEqual([]);
+    await expect(
+      caller("ops", 2).stationReport({ flightId: 11 })
+    ).rejects.toThrow();
+  });
+  it("refuses an occupied seat, an excessive range, duplicate seats and an unauthorized operator", async () => {
+    const flight = fixture.rows("flights")[0],
+      day = flight.departureTime.toISOString().slice(0, 10);
+    const req = {
+      flightId: 11,
+      startDate: day,
+      endDate: day,
+      seatNumbers: ["1A"],
+      ...command(),
+    };
+    await expect(caller().blockSeats(req)).rejects.toThrow(/administration/);
+    await expect(
+      caller("airline_admin").blockSeats({ ...req, seatNumbers: ["1A", "1A"] })
+    ).rejects.toThrow();
+    await expect(
+      caller("airline_admin").blockSeats({ ...req, endDate: "2050-01-01" })
+    ).rejects.toThrow();
+    fixture.rows("seat_inventory")[0].status = "held";
+    await expect(caller("airline_admin").blockSeats(req)).rejects.toThrow(
+      /available/
+    );
+    expect(fixture.rows("dcs_operation_events")).toHaveLength(0);
+  });
+});

@@ -82,7 +82,8 @@ function heldBag(bag: BaggageItem) {
   return and(
     eq(baggageItems.id, bag.id),
     eq(baggageItems.status, bag.status),
-    isNull(baggageItems.returnEventId)
+    isNull(baggageItems.returnEventId),
+    isNull(baggageItems.returnEvidenceId)
   );
 }
 function requireBaggageUpdate(affected: number) {
@@ -243,6 +244,8 @@ export async function getBookingBaggage(
       flightId: baggageItems.flightId,
       segmentId: baggageItems.segmentId,
       returnEventId: baggageItems.returnEventId,
+      returnEvidenceId: baggageItems.returnEvidenceId,
+      replacesBaggageId: baggageItems.replacesBaggageId,
       tagNumber: baggageItems.tagNumber,
       weight: baggageItems.weight,
       status: baggageItems.status,
@@ -268,6 +271,8 @@ export async function getBookingBaggage(
     flightId: item.flightId,
     segmentId: item.segmentId,
     returnEventId: item.returnEventId,
+    returnEvidenceId: item.returnEvidenceId,
+    replacesBaggageId: item.replacesBaggageId,
     tagNumber: item.tagNumber,
     weight: item.weight,
     status: item.status,
@@ -596,6 +601,8 @@ export async function getAllBaggage(filters?: {
       flightId: baggageItems.flightId,
       segmentId: baggageItems.segmentId,
       returnEventId: baggageItems.returnEventId,
+      returnEvidenceId: baggageItems.returnEvidenceId,
+      replacesBaggageId: baggageItems.replacesBaggageId,
       tagNumber: baggageItems.tagNumber,
       weight: baggageItems.weight,
       status: baggageItems.status,
@@ -633,6 +640,8 @@ export async function getAllBaggage(filters?: {
     flightId: item.flightId,
     segmentId: item.segmentId,
     returnEventId: item.returnEventId,
+    returnEvidenceId: item.returnEvidenceId,
+    replacesBaggageId: item.replacesBaggageId,
     tagNumber: item.tagNumber,
     weight: item.weight,
     status: item.status,

@@ -79,6 +79,8 @@ export const dcsDesk = z.object({
     originId: id,
     destinationId: id,
     departureTime: z.date(),
+    dcsClosedAt: z.date().nullable().optional(),
+    stationOffBlocksAt: z.date().nullable().optional(),
     status: z.enum(["scheduled", "delayed", "cancelled", "completed"]),
   }),
   checkInState: z.enum(["open", "closed"]),

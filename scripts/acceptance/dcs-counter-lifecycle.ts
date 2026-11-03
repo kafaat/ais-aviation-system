@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import * as s from "../../drizzle/schema";
 import type { SettlementTx } from "../../server/services/booking-settlement.service";
@@ -10,6 +10,8 @@ import {
 import { readTicketDocument } from "../../server/services/ticket-documents.service";
 import { checkInPassengers } from "../../server/services/departure-control.service";
 import {
+  setBagReturnGrant,
+  returnDcsBag,
   changeDcsFlightState,
   checkInDcsPassenger,
   getDcsDesk,
@@ -17,10 +19,28 @@ import {
   type DcsActor,
 } from "../../server/services/dcs-operations.service";
 import {
+  correctCounterBag,
   registerBaggage,
   type BaggageRegistrationActor,
 } from "../../server/services/baggage-registration.service";
-import { getFlightBaggageCloseout } from "../../server/services/baggage-custody.service";
+import {
+  addDeskNote,
+  blockDeskSeats,
+  confirmDeskDowngrade,
+  dismissDeskCase,
+  finalizeDesk,
+  getStationReport,
+  openDeskCase,
+  quoteDeskDowngrade,
+  remapDeskSeats,
+  resolveDeskCase,
+} from "../../server/services/dcs-station.service";
+import { calculateRequestHash } from "../../server/services/idempotency-v2.service";
+import type { EvidenceEnvelope } from "../../server/services/aviation-evidence.service";
+import {
+  getFlightBaggageCloseout,
+  ingestBaggageCustody,
+} from "../../server/services/baggage-custody.service";
 import { generateFlightManifest } from "../../server/services/dcs.service";
 import {
   changeSeat,
@@ -130,7 +150,11 @@ export async function verifyDcsCounterLifecycle(
     idempotencyKey: randomUUID(),
   });
 
-  async function journey(people = 1, sectors = 1) {
+  async function journey(
+    people = 1,
+    sectors = 1,
+    cabin: "economy" | "business" = "economy"
+  ) {
     const index = ++fixtureIndex;
     const departure = new Date(Date.now() + 6 * 3600000);
     const flightRows = await db
@@ -147,9 +171,9 @@ export async function verifyDcsCounterLifecycle(
           aircraftType: "DCS-FIXTURE",
           status: "scheduled" as const,
           economySeats: 4,
-          businessSeats: 0,
+          businessSeats: cabin === "business" ? 2 : 0,
           economyAvailable: 4,
-          businessAvailable: 0,
+          businessAvailable: cabin === "business" ? 2 : 0,
           economyPrice: 10000,
           businessPrice: 20000,
         }))
@@ -174,7 +198,8 @@ export async function verifyDcsCounterLifecycle(
     );
     const reference = `D${(seed + index).toString(36).toUpperCase().padStart(5, "0")}`;
     assert.equal(reference.length, 6);
-    const amount = 10000 * people * sectors;
+    const sectorAmount = (cabin === "business" ? 85000 : 10000) * people;
+    const amount = sectorAmount * sectors;
     const [{ id: bookingId }] = await db
       .insert(s.bookings)
       .values({
@@ -183,7 +208,7 @@ export async function verifyDcsCounterLifecycle(
         flightId: flightIds[0],
         bookingReference: reference,
         pnr: reference,
-        cabinClass: "economy",
+        cabinClass: cabin,
         numberOfPassengers: people,
         totalAmount: amount,
         status: "pending",
@@ -199,7 +224,7 @@ export async function verifyDcsCounterLifecycle(
           flightId,
           segmentOrder: i + 1,
           departureDate: new Date(departure.getTime() + i * 3 * 3600000),
-          segmentAmount: 10000 * people,
+          segmentAmount: sectorAmount,
           status: "pending" as const,
           seatsReserved: false,
         }))
@@ -1000,6 +1025,475 @@ export async function verifyDcsCounterLifecycle(
         "Readers must not invent a deplane or offload event"
       );
       assert.equal((await bags(j.bookingId))[0].id, bag.id);
+    }
+  );
+  const supervisor = { ...actor, role: "airline_admin" as const };
+  await check(
+    "DCS station: scoped APFAX, meal status and case resolution",
+    async () => {
+      const j = await journey(1, 2);
+      const key = j.key(),
+        onward = j.key(0, 1);
+      const commandInput = { ...key, ...command() };
+      const entry = await openDeskCase(
+        { ...commandInput, kind: "no_rec", stationReference: "DESK-9" },
+        actor
+      );
+      await resolveDeskCase(
+        { ...key, ...command(), caseId: entry.eventId },
+        actor
+      );
+      await addDeskNote(
+        { ...key, ...command(), reason: "Assistance requested at gate" },
+        actor
+      );
+      const meal = {
+        bookingId: j.bookingId,
+        passengerId: key.passengerId,
+        serviceType: "meal" as const,
+        serviceCode: "VGML",
+        status: "confirmed" as const,
+      };
+      await db.insert(s.specialServices).values([
+        {
+          ...meal,
+          flightId: key.flightId,
+          bookingSegmentId: j.bag(1).segmentId,
+        },
+        {
+          ...meal,
+          serviceType: "wheelchair",
+          serviceCode: "WCHR",
+          status: "pending",
+          flightId: key.flightId,
+          bookingSegmentId: j.bag(1).segmentId,
+        },
+        {
+          ...meal,
+          serviceCode: "GFML",
+          flightId: onward.flightId,
+          bookingSegmentId: j.bag(1, 0, 1).segmentId,
+        },
+        { ...meal, serviceCode: "AVML" },
+      ]);
+      const report = await getStationReport(key.flightId, actor);
+      assert.deepEqual(
+        report.items.map(i => [i.code, i.status]),
+        [
+          ["VGML", "confirmed"],
+          ["WCHR", "pending"],
+          ["OSI", "recorded"],
+        ]
+      );
+      assert.equal(report.unresolvedServices, 1);
+      assert.equal(report.cases[0].resolvedPassengerId, key.passengerId);
+      assert.deepEqual(
+        (await getStationReport(onward.flightId, actor)).items.map(i => i.code),
+        ["GFML"]
+      );
+      await assert.rejects(getStationReport(key.flightId, otherActor), {
+        code: "FORBIDDEN",
+      });
+    }
+  );
+  await check(
+    "DCS station: check-in close, final close, supervised reopening and observed OUT",
+    async () => {
+      const j = await journey(),
+        key = j.key(),
+        flightId = key.flightId;
+      const entry = await openDeskCase(
+        {
+          flightId,
+          ...command(),
+          kind: "go_show",
+          stationReference: "DESK-OUT",
+        },
+        actor
+      );
+      await staffCheckIn(key);
+      await changeDcsFlightState(
+        { flightId, action: "close", ...command() },
+        actor
+      );
+      await assert.rejects(
+        finalizeDesk({ flightId, action: "close", ...command() }, supervisor),
+        /checked-in passengers/
+      );
+      await transitionDcsPassenger(
+        { ...key, action: "board", ...command() },
+        actor
+      );
+      await assert.rejects(
+        finalizeDesk({ flightId, action: "close", ...command() }, supervisor),
+        /open station cases/
+      );
+      await dismissDeskCase(
+        { flightId, ...command(), caseId: entry.eventId },
+        actor
+      );
+      const close = { flightId, action: "close" as const, ...command() };
+      assert.deepEqual(
+        await finalizeDesk(close, supervisor),
+        await finalizeDesk(close, supervisor)
+      );
+      assert((await getStationReport(flightId, actor)).closedAt);
+      await assert.rejects(
+        transitionDcsPassenger(
+          { ...key, action: "deplane", ...command() },
+          actor
+        ),
+        /final DCS closure/i
+      );
+      await finalizeDesk(
+        { flightId, action: "reopen", ...command() },
+        supervisor
+      );
+      assert.equal((await getStationReport(flightId, actor)).closedAt, null);
+      await finalizeDesk(
+        { flightId, action: "close", ...command() },
+        supervisor
+      );
+      await finalizeDesk(
+        {
+          flightId,
+          action: "record_out",
+          offBlocksAt: new Date().toISOString(),
+          ...command(),
+        },
+        supervisor
+      );
+      assert((await getStationReport(flightId, actor)).stationOffBlocksAt);
+      await assert.rejects(
+        finalizeDesk({ flightId, action: "reopen", ...command() }, supervisor),
+        /OUT/
+      );
+    }
+  );
+  await check(
+    "DCS station: final closure rejects a registered bag without a boarded passenger",
+    async () => {
+      const j = await journey(2);
+      const first = j.key(),
+        second = j.key(1);
+      await staffCheckIn(first);
+      await staffCheckIn(second);
+      await registerBaggage(j.bag(2, 1), bagActor);
+      await transitionDcsPassenger(
+        { ...first, action: "board", ...command() },
+        actor
+      );
+      await changeDcsFlightState(
+        { flightId: first.flightId, action: "close", ...command() },
+        actor
+      );
+      // An inconsistent legacy seat release must not clear the passenger-to-bag check.
+      const secondSeat = await storedSeat(second);
+      await db
+        .update(s.seatInventory)
+        .set({
+          status: "available",
+          bookingId: null,
+          passengerId: null,
+          checkInNonce: null,
+        })
+        .where(eq(s.seatInventory.id, secondSeat.id));
+      await assert.rejects(
+        finalizeDesk(
+          { flightId: first.flightId, action: "close", ...command() },
+          supervisor
+        ),
+        /baggage for passengers who have not boarded/i
+      );
+      assert.equal(
+        (await getStationReport(first.flightId, actor)).closedAt,
+        null
+      );
+    }
+  );
+  await check(
+    "DCS station: range blocks roll back on conflict, preserve capacity and survive compatible remap",
+    async () => {
+      const a = await journey(),
+        b = await journey(),
+        idA = a.key().flightId,
+        idB = b.key().flightId;
+      const [source] = await db
+        .select()
+        .from(s.flights)
+        .where(eq(s.flights.id, idA));
+      await db
+        .update(s.flights)
+        .set({ flightNumber: source.flightNumber })
+        .where(eq(s.flights.id, idB));
+      const range = {
+        flightId: idA,
+        startDate: source.departureTime.toISOString().slice(0, 10),
+        endDate: source.departureTime.toISOString().slice(0, 10),
+        seatNumbers: ["2B"],
+        ...command(),
+      };
+      const row = (id: number) =>
+        and(
+          eq(s.seatInventory.flightId, id),
+          eq(s.seatInventory.seatNumber, "2B")
+        );
+      await db
+        .update(s.seatInventory)
+        .set({ status: "blocked" })
+        .where(row(idB));
+      await assert.rejects(blockDeskSeats(range, supervisor), /available/);
+      const [reverted] = await db
+        .select()
+        .from(s.seatInventory)
+        .where(row(idA));
+      assert.equal(reverted.status, "available");
+      await db
+        .update(s.seatInventory)
+        .set({ status: "available" })
+        .where(row(idB));
+      const result = await blockDeskSeats(range, supervisor);
+      assert.deepEqual(result, { flights: 2, seats: 2 });
+      assert.deepEqual(await blockDeskSeats(range, supervisor), result);
+      for (const id of [idA, idB]) {
+        const [f] = await db
+          .select()
+          .from(s.flights)
+          .where(eq(s.flights.id, id));
+        assert.equal(f.economyAvailable, source.economyAvailable - 1);
+      }
+      const [{ id: replacement }] = await db
+        .insert(s.seatMaps)
+        .values({
+          aircraftType: "DCS-FIXTURE",
+          airlineId: airline.id,
+          configName: "Replacement " + runId,
+          totalSeats: 4,
+          economySeats: 4,
+          cabinLayout: JSON.stringify({
+            rows: [1, 2].map(row => ({
+              row,
+              cabinClass: "economy",
+              seats: ["A", "B"].map(column => ({
+                column,
+                seatType: "window",
+                priceTier: "free",
+              })),
+            })),
+          }),
+        })
+        .$returningId();
+      await remapDeskSeats(
+        { flightId: idA, seatMapId: replacement, ...command() },
+        supervisor
+      );
+      const [protectedSeat] = await db
+        .select()
+        .from(s.seatInventory)
+        .where(row(idA));
+      assert.equal(protectedSeat.status, "blocked");
+      assert.equal(protectedSeat.seatMapId, replacement);
+    }
+  );
+  await check(
+    "DCS station: confirm quoted cabin exchange without inventing a refund",
+    async () => {
+      const j = await journey(1, 1, "business"),
+        key = j.key();
+      const quote = await quoteDeskDowngrade(
+        { ...key, ...command() },
+        supervisor
+      );
+      assert(quote.refundDue > 0);
+      await assert.rejects(
+        confirmDeskDowngrade(
+          {
+            ...key,
+            ...command(),
+            quoteEventId: quote.eventId,
+            expectedRefund: quote.refundDue - 1,
+          },
+          supervisor
+        ),
+        /quote/
+      );
+      const confirm = {
+        ...key,
+        ...command(),
+        quoteEventId: quote.eventId,
+        expectedRefund: quote.refundDue,
+      };
+      const receipt = await confirmDeskDowngrade(confirm, supervisor);
+      assert.equal(receipt.refundDue, quote.refundDue);
+      assert.deepEqual(
+        await confirmDeskDowngrade(confirm, supervisor),
+        receipt
+      );
+      const [changed] = await db
+        .select()
+        .from(s.bookings)
+        .where(eq(s.bookings.id, j.bookingId));
+      assert.equal(changed.cabinClass, "economy");
+      const [paid] = await db
+        .select()
+        .from(s.paymentReceipts)
+        .where(
+          eq(s.paymentReceipts.paymentIntentId, `pi_dcs_counter_${j.bookingId}`)
+        );
+      assert.equal(paid.refundedAmount, 0);
+    }
+  );
+  await check(
+    "DCS station: reweigh, signed handback and one linked replacement on a funded flight",
+    async () => {
+      const j = await journey(1, 2),
+        key = j.key(),
+        next = j.key(0, 1);
+      await staffCheckIn(key);
+      const input = j.bag(8),
+        bag = await registerBaggage(input, bagActor);
+      const correction = {
+        ...input,
+        ...command(),
+        baggageId: bag.id,
+        previousWeight: 8,
+        weight: 7,
+        expectedActorId: operatorId,
+        expectedTenantId: tenantId,
+      };
+      await correctCounterBag(correction, bagActor);
+      assert.equal(Number((await bags(j.bookingId))[0].weight), 7);
+      await staffCheckIn(next);
+      const replace = { ...j.bag(7, 0, 1), replacesTag: bag.tagNumber };
+      await assert.rejects(
+        registerBaggage(replace, bagActor),
+        /verified handback/
+      );
+      let staffReturnedTag: string;
+      const previous = process.env.AVIATION_SOURCE_REGISTRY;
+      const previousKey = process.env.DCS_FIXTURE_RECOVERY_KEY;
+      process.env.DCS_FIXTURE_RECOVERY_KEY = randomUUID();
+      process.env.AVIATION_SOURCE_REGISTRY = JSON.stringify([
+        {
+          sourceId: "disposable-handler",
+          tenantId,
+          capabilities: ["baggage_recovery"],
+          airlineIds: [airline.id],
+          airportIds: [origin.id],
+          deviceIds: ["fixture-reader"],
+          secretEnv: "DCS_FIXTURE_RECOVERY_KEY",
+          validUntil: new Date(Date.now() + 86400000).toISOString(),
+        },
+      ]);
+      try {
+        const e: EvidenceEnvelope = {
+          sourceId: "disposable-handler",
+          eventId: randomUUID(),
+          issuedAt: new Date().toISOString(),
+          observedAt: new Date().toISOString(),
+          flightId: key.flightId,
+          kind: "baggage_custody",
+          payload: {
+            tagNumber: bag.tagNumber,
+            stage: "return",
+            airportId: origin.id,
+            deviceId: "fixture-reader",
+            previousEvidenceId: null,
+          },
+        };
+        const sig = createHmac("sha256", process.env.DCS_FIXTURE_RECOVERY_KEY)
+          .update(calculateRequestHash(e))
+          .digest("hex");
+        await ingestBaggageCustody(e, sig);
+        await setBagReturnGrant(
+          {
+            flightId: key.flightId,
+            airlineId: airline.id,
+            airportId: origin.id,
+            staffId: operatorId,
+            enabled: true,
+            ...command(),
+          },
+          supervisor
+        );
+        await assert.rejects(
+          returnDcsBag(
+            {
+              ...key,
+              ...command(),
+              tagNumber: bag.tagNumber,
+              segmentId: input.segmentId,
+            },
+            actor
+          ),
+          /already returned/
+        );
+        const otherBag = await registerBaggage(j.bag(1), bagActor);
+        staffReturnedTag = otherBag.tagNumber;
+        await returnDcsBag(
+          {
+            ...key,
+            ...command(),
+            tagNumber: otherBag.tagNumber,
+            segmentId: input.segmentId,
+          },
+          actor
+        );
+        const duplicate = {
+          ...e,
+          eventId: randomUUID(),
+          payload: { ...e.payload, tagNumber: otherBag.tagNumber },
+        };
+        const duplicateSignature = createHmac(
+          "sha256",
+          process.env.DCS_FIXTURE_RECOVERY_KEY
+        )
+          .update(calculateRequestHash(duplicate))
+          .digest("hex");
+        await assert.rejects(
+          ingestBaggageCustody(duplicate, duplicateSignature),
+          /returned to the passenger/
+        );
+      } finally {
+        if (previous === undefined) delete process.env.AVIATION_SOURCE_REGISTRY;
+        else process.env.AVIATION_SOURCE_REGISTRY = previous;
+        if (previousKey === undefined)
+          delete process.env.DCS_FIXTURE_RECOVERY_KEY;
+        else process.env.DCS_FIXTURE_RECOVERY_KEY = previousKey;
+      }
+      await assert.rejects(
+        registerBaggage(replace, bagActor),
+        /departure station/
+      );
+      await db
+        .update(s.flights)
+        .set({ originId: origin.id, destinationId: destination.id })
+        .where(eq(s.flights.id, next.flightId));
+      const staffReissue = await registerBaggage(
+        { ...j.bag(1, 0, 1), replacesTag: staffReturnedTag },
+        bagActor
+      );
+      assert.notEqual(staffReissue.tagNumber, staffReturnedTag);
+      const replacement = await registerBaggage(replace, bagActor);
+      assert.notEqual(replacement.tagNumber, bag.tagNumber);
+      assert.deepEqual(await registerBaggage(replace, bagActor), replacement);
+      assert.equal(
+        (await bags(j.bookingId)).find(v => v.id === replacement.id)
+          ?.replacesBaggageId,
+        bag.id
+      );
+      await assert.rejects(
+        registerBaggage({ ...replace, idempotencyKey: randomUUID() }, bagActor),
+        /already has a replacement/
+      );
+      assert.equal(
+        (await getFlightBaggageCloseout(key.flightId, tenantId)).expectedBags,
+        0
+      );
+      assert.equal(
+        (await getFlightBaggageCloseout(next.flightId, tenantId)).expectedBags,
+        2
+      );
     }
   );
 }
