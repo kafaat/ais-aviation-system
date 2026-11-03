@@ -15,7 +15,10 @@ const api = vi.hoisted(() => ({
   register: vi.fn(),
 }));
 vi.mock("@/_core/hooks/useAuth", () => ({
-  useAuth: () => ({ user: { role: api.role }, loading: false }),
+  useAuth: () => ({
+    user: { id: 17, tenantId: 4, role: api.role },
+    loading: false,
+  }),
 }));
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ i18n: { language: "en" }, t: (key: string) => key }),
@@ -89,6 +92,7 @@ function deskData() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
   api.role = "ops";
   api.flights.mockReturnValue({
     data: [{ id: 41, flightNumber: "ZZ0041", departureTime }],
@@ -121,6 +125,23 @@ function selectPassenger() {
     screen.getByRole("button", { name: "Select Synthetic Passenger" })
   );
 }
+
+it.each(["Flight", "Passenger action"])(
+  "keeps the %s label independent of its selectable options",
+  name => {
+    render(<DcsDesk />);
+    if (name === "Passenger action") selectPassenger();
+    const control = screen.getByRole<HTMLSelectElement>("combobox", {
+      name,
+    });
+    // Browser label locators read the native label's full text. Option text
+    // inside that label must not change the control's exact visible label.
+    expect(
+      Array.from(control.labels ?? [], label => label.textContent?.trim())
+    ).toEqual([name]);
+    expect(control).toHaveAccessibleName(name);
+  }
+);
 
 it.each(["finance", "user"])("does not query operational data for %s", role => {
   api.role = role;

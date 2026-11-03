@@ -83,6 +83,24 @@ beforeEach(() => {
   mocks.createSessionToken.mockResolvedValue("test-cookie-token");
 });
 
+it("returns the authenticated tenant context for recovery isolation without exposing user secrets", async () => {
+  const context = anonymousContext();
+  context.tenantId = 4;
+  context.user = {
+    ...user,
+    tenantId: 4,
+    passwordHash: "not-for-the-browser",
+  } as NonNullable<TrpcContext["user"]>;
+  expect(await authRouter.createCaller(context).me()).toEqual({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    tenantId: 4,
+  });
+  expect(await authRouter.createCaller(anonymousContext()).me()).toBeNull();
+});
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });

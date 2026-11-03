@@ -111,9 +111,10 @@ function FlightSelector() {
         aria-label={l("اختيار الرحلة", "Flight selection")}
       >
         <OperationalReadState query={query}>
-          <label className="block space-y-1">
-            <span>{l("الرحلة", "Flight")}</span>
+          <div className="space-y-1">
+            <label htmlFor="dcs-flight">{l("الرحلة", "Flight")}</label>
             <select
+              id="dcs-flight"
               className="w-full rounded-md border bg-background p-2"
               value={flightId || ""}
               onChange={e => setFlightId(Number(e.target.value))}
@@ -126,7 +127,7 @@ function FlightSelector() {
                 </option>
               ))}
             </select>
-          </label>
+          </div>
           {flights?.length === 0 && <p>{l("لا توجد رحلات", "No flights")}</p>}
         </OperationalReadState>
         <div className="flex flex-wrap gap-2">
@@ -616,9 +617,12 @@ function PassengerControl({
           ` · ${labels.state(passenger.attendanceState)}`}{" "}
         · {l("المقعد", "Seat")}: {passenger.seatNumber ?? "—"}
       </p>
-      <label className="block space-y-1">
-        <span>{l("إجراء الراكب", "Passenger action")}</span>
+      <div className="space-y-1">
+        <label htmlFor="dcs-passenger-action">
+          {l("إجراء الراكب", "Passenger action")}
+        </label>
         <select
+          id="dcs-passenger-action"
           className="w-full rounded-md border bg-background p-2"
           value={action}
           onChange={event => setAction(event.target.value as PassengerAction)}
@@ -629,7 +633,7 @@ function PassengerControl({
             </option>
           ))}
         </select>
-      </label>
+      </div>
       {action === "check_in" && (
         <label className="block space-y-1">
           <span>

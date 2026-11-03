@@ -8,7 +8,7 @@ import {
   specialServices,
   bookingSegments,
 } from "../../drizzle/schema";
-import { eq, and, asc, desc, ne, inArray, sql } from "drizzle-orm";
+import { eq, and, asc, desc, ne, inArray, isNull, sql } from "drizzle-orm";
 import { flightBookingCondition } from "./flight-state.service";
 import type { SettlementTx } from "./booking-settlement.service";
 
@@ -369,6 +369,32 @@ async function calculateSpecialNeedsScore(
   flightId: number
 ): Promise<number> {
   try {
+    // Historical requests have no verified sector. Do not silently discard
+    // active assistance from a complete ranking or guess which flight needs it.
+    const [unresolvedAssistance] = await db
+      .select({ id: specialServices.id })
+      .from(specialServices)
+      .where(
+        and(
+          eq(specialServices.passengerId, passengerId),
+          eq(specialServices.bookingId, bookingId),
+          inArray(specialServices.serviceType, [
+            "wheelchair",
+            "medical_assistance",
+            "unaccompanied_minor",
+          ]),
+          inArray(specialServices.status, ["pending", "confirmed"]),
+          isNull(specialServices.flightId)
+        )
+      )
+      .limit(1);
+    if (unresolvedAssistance)
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message:
+          "Active assistance request has no verified flight sector; reconcile passenger service requests before calculating priority",
+      });
+
     // Check special services for this passenger
     const services = await db
       .select({

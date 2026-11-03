@@ -290,7 +290,11 @@ export async function verifyDcsCounterLifecycle(
     async () => {
       const j = await journey();
       await staffCheckIn(j.key());
-      const input = j.bag(10);
+      const input = {
+        ...j.bag(10),
+        expectedActorId: operatorId,
+        expectedTenantId: tenantId,
+      };
       const results = await Promise.all(
         Array.from({ length: 4 }, () => registerBaggage(input, bagActor))
       );
@@ -307,6 +311,51 @@ export async function verifyDcsCounterLifecycle(
         .where(eq(s.baggageTracking.baggageId, results[0].id));
       assert.equal(tracking.length, 1);
       assert.equal(tracking[0].scannedBy, operatorId);
+      // Reuse only the isolated fixture operators. A changed same-airline
+      // browser session must not turn the original key into a second receipt.
+      await db
+        .update(s.users)
+        .set({ tenantId })
+        .where(eq(s.users.id, otherOperatorId));
+      try {
+        await assert.rejects(
+          registerBaggage(input, { ...bagActor, id: otherOperatorId }),
+          { code: "FORBIDDEN", message: /identity changed/ }
+        );
+      } finally {
+        await db
+          .update(s.users)
+          .set({ tenantId: otherTenantId })
+          .where(eq(s.users.id, otherOperatorId));
+      }
+      await db
+        .update(s.users)
+        .set({ tenantId: otherTenantId })
+        .where(eq(s.users.id, operatorId));
+      try {
+        await assert.rejects(
+          registerBaggage(input, { ...bagActor, tenantId: otherTenantId }),
+          { code: "FORBIDDEN", message: /identity changed/ }
+        );
+      } finally {
+        await db
+          .update(s.users)
+          .set({ tenantId })
+          .where(eq(s.users.id, operatorId));
+      }
+      assert.equal((await bags(j.bookingId)).length, 1);
+      const commands = await db
+        .select()
+        .from(s.idempotencyRequests)
+        .where(
+          and(
+            eq(s.idempotencyRequests.scope, "baggage.register"),
+            eq(s.idempotencyRequests.idempotencyKey, input.idempotencyKey)
+          )
+        );
+      assert.equal(commands.length, 1);
+      assert.equal(commands[0].userId, operatorId);
+      assert.equal(commands[0].status, "COMPLETED");
       assert.equal(
         (
           await db
