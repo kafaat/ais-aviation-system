@@ -1,6 +1,6 @@
 import { assertCorporatePaymentApproved } from "./corporate-settlement.service";
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import type Stripe from "stripe";
 import { getDb } from "../db";
@@ -14,6 +14,8 @@ import {
   paymentReceipts,
   paymentSplits,
   bookingModifications,
+  vouchers,
+  voucherUsage,
 } from "../../drizzle/schema";
 import {
   assertNoCollectionReview,
@@ -74,7 +76,7 @@ export async function assertNoActiveCheckout(
       "Expire or reconcile the active checkout before another payment workflow"
     );
 }
-async function ownedPending(
+async function ownedBooking(
   tx: SettlementTx,
   bookingId: number,
   userId: number
@@ -84,11 +86,14 @@ async function ownedPending(
     .from(bookings)
     .where(eq(bookings.id, bookingId))
     .for("update");
-  if (!booking || booking.userId !== userId)
+  if (!booking || booking.userId !== userId || booking.deletedAt)
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Owned booking not found",
     });
+  return booking;
+}
+async function assertPendingInvoice(tx: SettlementTx, booking: Booking) {
   if (
     booking.status !== "pending" ||
     booking.paymentStatus !== "pending" ||
@@ -97,6 +102,14 @@ async function ownedPending(
     throw unavailable("Booking is not an unpaid pending invoice");
   await assertTenantOperational(tx, booking.tenantId);
   await assertNoCollectionReview(tx, booking.id);
+}
+async function ownedPending(
+  tx: SettlementTx,
+  bookingId: number,
+  userId: number
+) {
+  const booking = await ownedBooking(tx, bookingId, userId);
+  await assertPendingInvoice(tx, booking);
   return booking;
 }
 /** All invoice editors call this under the booking lock, including the initial checkout claim. */
@@ -216,12 +229,115 @@ function requestFor(
       "/my-bookings?session_id={CHECKOUT_SESSION_ID}&success=true",
       base
     ).href.replace("%7BCHECKOUT_SESSION_ID%7D", "{CHECKOUT_SESSION_ID}"),
-    cancel_url: new URL(`/booking/${booking.id}?canceled=true`, base).href,
+    cancel_url: new URL(`/checkout/${booking.id}?canceled=true`, base).href,
     customer_email: owner.email || undefined,
     client_reference_id: String(owner.userId),
     metadata,
     payment_intent_data: { metadata },
   };
+}
+
+type CheckoutResumeState =
+  | "pending"
+  | "expired"
+  | "paid"
+  | "refunded"
+  | "cancelled"
+  | "split"
+  | "unavailable";
+
+/** Owner-only snapshot. Reading a provider return must never create a claim,
+ * contact the payment provider or infer payment from query-string flags.
+ * The checkout mutation rechecks all authority under the booking lock.
+ */
+export async function getBookingCheckoutState(
+  bookingId: number,
+  userId: number
+) {
+  const db = getDb();
+  if (!db) throw unavailable("Database unavailable");
+  return await db.transaction(async tx => {
+    const booking = await ownedBooking(tx, bookingId, userId);
+    const [usage] = await tx
+      .select()
+      .from(voucherUsage)
+      .where(
+        and(
+          eq(voucherUsage.bookingId, booking.id),
+          isNull(voucherUsage.releasedAt)
+        )
+      )
+      .limit(1);
+    const [voucher] = usage
+      ? await tx
+          .select({ code: vouchers.code })
+          .from(vouchers)
+          .where(eq(vouchers.id, usage.voucherId))
+          .limit(1)
+      : [];
+    const snapshot = (state: CheckoutResumeState, invoiceEditable = false) => ({
+      bookingId: booking.id,
+      bookingReference: booking.bookingReference,
+      bookingStatus: booking.status,
+      totalAmount: booking.totalAmount,
+      currency: "SAR" as const,
+      state,
+      invoiceEditable,
+      appliedVoucher: usage
+        ? {
+            code: voucher?.code ?? null,
+            discountAmount: usage.discountApplied,
+          }
+        : null,
+    });
+    if (booking.paymentStatus === "refunded") return snapshot("refunded");
+    if (booking.paymentStatus === "paid") return snapshot("paid");
+    if (booking.status === "cancelled") return snapshot("cancelled");
+
+    try {
+      await assertPendingInvoice(tx, booking);
+      await assertCorporatePaymentApproved(tx, booking.id);
+      const [claim] = await tx
+        .select()
+        .from(bookingCheckoutRequests)
+        .where(eq(bookingCheckoutRequests.bookingId, booking.id))
+        .for("update");
+      const splits = await tx
+        .select()
+        .from(paymentSplits)
+        .where(eq(paymentSplits.bookingId, booking.id));
+      if (splits.some(isActiveSplitPayment))
+        return snapshot(
+          (claim && claim.status !== "expired") ||
+            booking.stripeCheckoutSessionId ||
+            booking.stripePaymentIntentId
+            ? "unavailable"
+            : "split"
+        );
+      if (claim && claim.status !== "expired") {
+        if (
+          claim.userId !== userId ||
+          claim.invoiceHash !== (await invoiceHash(tx, booking)) ||
+          (!claim.sessionId &&
+            Date.now() - new Date(claim.createdAt).getTime() >= 23 * 3600_000)
+        )
+          return snapshot("unavailable");
+      } else {
+        await assertInvoiceEditable(tx, booking);
+      }
+      return snapshot(
+        claim?.status === "expired" ? "expired" : "pending",
+        !claim || claim.status === "expired"
+      );
+    } catch (error) {
+      if (
+        error instanceof TRPCError &&
+        (error.code === "PRECONDITION_FAILED" || error.code === "FORBIDDEN")
+      )
+        return snapshot("unavailable");
+      throw error;
+    }
+  });
 }
 export async function reserveBookingCheckout(
   owner: CheckoutOwner

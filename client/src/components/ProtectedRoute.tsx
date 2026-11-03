@@ -1,7 +1,9 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
+import { loginPath } from "@shared/return-to";
+import { useRawSearch } from "@/lib/useRawSearch";
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -16,6 +18,8 @@ interface ProtectedRouteProps {
  */
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading, isAuthenticated } = useAuth();
+  const [pathname] = useLocation();
+  const search = useRawSearch();
 
   if (loading) {
     return (
@@ -26,7 +30,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated || !user) {
-    return <Redirect to="/login" />;
+    return (
+      <Redirect to={loginPath(`${pathname}${search ? `?${search}` : ""}`)} />
+    );
   }
 
   return <>{children}</>;

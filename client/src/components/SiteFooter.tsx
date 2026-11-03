@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
-import { Plane } from "lucide-react";
+import { BrandIdentity } from "./BrandIdentity";
 
 /**
  * Site-wide footer shared by the public pages (home, privacy policy, ...).
@@ -15,8 +15,9 @@ export function SiteFooter() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <Plane className="h-6 w-6" />
-              <h3 className="font-bold text-lg">{t("common.appName")}</h3>
+              <h3 className="font-bold text-lg">
+                <BrandIdentity />
+              </h3>
             </div>
             <p className="text-sm text-gray-400">{t("footer.description")}</p>
           </div>
@@ -79,10 +80,26 @@ export function SiteFooter() {
               </li>
               <li>
                 <Link
-                  href="/my-bookings"
+                  href="/manage-booking"
                   className="hover:text-white transition-colors"
                 >
                   {t("footer.manageBookings")}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/my-bookings"
+                  className="hover:text-white transition-colors"
+                >
+                  {t("nav.myBookings")}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/agent"
+                  className="hover:text-white transition-colors"
+                >
+                  {t("ibe.agentPortal")}
                 </Link>
               </li>
               <li>

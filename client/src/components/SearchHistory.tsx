@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
+import { isCivilDay } from "@shared/ibe-search";
 
 interface SearchEntry {
   id: string;
@@ -159,7 +160,9 @@ export function SearchHistory({
 
   const formatDate = (dateStr: string) => {
     try {
-      const date = new Date(dateStr);
+      const date = new Date(
+        isCivilDay(dateStr) ? dateStr + "T00:00:00" : dateStr
+      );
       return format(date, "EEE, d MMM", {
         locale: i18n.language === "ar" ? ar : undefined,
       });

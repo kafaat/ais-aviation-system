@@ -1,4 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
+import { safeReturnTo } from "@shared/return-to";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
@@ -15,6 +16,7 @@ export function registerOAuthRoutes(app: Express) {
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
     const state = getQueryParam(req, "state");
+    const returnTo = safeReturnTo(getQueryParam(req, "returnTo"));
 
     if (!code || !state) {
       res.status(400).json({ error: "code and state are required" });
@@ -42,10 +44,9 @@ export function registerOAuthRoutes(app: Express) {
       if (!user) throw new Error("OAuth user synchronization failed");
       if ((await getMfaSettings(user.id))?.isEnabled) {
         const challenge = await createMfaChallenge(user.id);
-        res.redirect(
-          302,
-          `/login?mfaChallenge=${encodeURIComponent(challenge)}`
-        );
+        const query = new URLSearchParams({ mfaChallenge: challenge });
+        if (returnTo !== "/") query.set("returnTo", returnTo);
+        res.redirect(302, `/login?${query}`);
         return;
       }
 
@@ -60,7 +61,7 @@ export function registerOAuthRoutes(app: Express) {
         maxAge: SESSION_MAX_AGE_MS,
       });
 
-      res.redirect(302, "/");
+      res.redirect(302, returnTo);
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

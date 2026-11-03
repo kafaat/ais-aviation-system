@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
+import { loginPath, safeReturnTo } from "@shared/return-to";
+import { useRawSearch } from "@/lib/useRawSearch";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,17 +24,19 @@ export default function Login() {
   const { t } = useTranslation();
   const { user, loading, refresh } = useAuth();
   const [, navigate] = useLocation();
+  const search = useRawSearch();
+  const returnTo = safeReturnTo(new URLSearchParams(search).get("returnTo"));
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [challengeToken, setChallengeToken] = useState<string | null>(() =>
-    new URLSearchParams(window.location.search).get("mfaChallenge")
+    new URLSearchParams(search).get("mfaChallenge")
   );
   const [loginError, setLoginError] = useState<string | null>(null);
 
-  const loginUrl = getLoginUrl();
+  const loginUrl = getLoginUrl(returnTo);
   const isOAuthConfigured =
     loginUrl !== "#login-not-configured" && loginUrl.startsWith("http");
 
@@ -45,7 +49,7 @@ export default function Login() {
         return;
       }
       await refresh();
-      navigate("/", { replace: true });
+      navigate(returnTo, { replace: true });
     },
     onError: error => {
       setLoginError(error.message || t("login.invalidCredentials"));
@@ -65,13 +69,16 @@ export default function Login() {
 
   useEffect(() => {
     if (!loading && user && !challengeToken) {
-      navigate("/", { replace: true });
+      navigate(returnTo, { replace: true });
     }
-  }, [user, loading, navigate, challengeToken]);
+  }, [user, loading, navigate, challengeToken, returnTo]);
 
   useEffect(() => {
-    if (challengeToken) window.history.replaceState(null, "", "/login");
-  }, [challengeToken]);
+    if (challengeToken && new URLSearchParams(search).has("mfaChallenge")) {
+      // Remove the one-time challenge from history without losing the journey.
+      navigate(loginPath(returnTo), { replace: true });
+    }
+  }, [challengeToken, navigate, returnTo, search]);
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,11 +115,11 @@ export default function Login() {
           onVerified={async () => {
             setChallengeToken(null);
             await refresh();
-            navigate("/", { replace: true });
+            navigate(returnTo, { replace: true });
           }}
           onBack={() => {
             setChallengeToken(null);
-            window.history.replaceState(null, "", "/login");
+            navigate(loginPath(returnTo), { replace: true });
           }}
         />
       </main>
