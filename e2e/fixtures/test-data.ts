@@ -3,6 +3,16 @@
  * Centralized test data to maintain consistency across tests
  */
 
+// Reporting and departure journeys share one scoped customer identity. Semantic
+// aliases must not create another registration or consume another IP login.
+const scopedPassenger = {
+  email: "test.reporting@example.com",
+  password: "TestPassword123!",
+  firstName: "Reporting",
+  lastName: "User",
+  phone: "+966501234568",
+};
+
 // Test user credentials
 export const testUsers = {
   regular: {
@@ -12,10 +22,8 @@ export const testUsers = {
     lastName: "User",
     phone: "+966501234567",
   },
-  departurePassenger: {
-    email: "test.departure@example.com",
-    password: "TestPassword123!",
-  },
+  departurePassenger: scopedPassenger,
+  reporting: scopedPassenger,
   admin: {
     email: "admin@ais-aviation.com",
     password: "AdminPassword123!",

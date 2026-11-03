@@ -94,9 +94,10 @@ export async function ownedBooking(
   return { booking, flightId, userId: user.id, command };
 }
 
-/** The scoped passenger owns the booking; the reporting administrator is a different account. */
+/** Report/export setup has its own customer quota and remains distinct from the
+ * administrator reading the results. Creation and funding still use real APIs. */
 export function reportBooking(page: Page, funded = false) {
-  return ownedBooking(page, funded, undefined, "departurePassenger");
+  return ownedBooking(page, funded, undefined, "reporting");
 }
 
 async function invalidateFlightSearchCache(): Promise<void> {

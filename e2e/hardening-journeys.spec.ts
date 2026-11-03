@@ -1086,7 +1086,7 @@ test.describe("Funded journeys and truthful operational reads", () => {
     const filePath = await file.path();
     if (!filePath) throw new Error("Export download missing");
     const document = JSON.parse(await readFile(filePath, "utf8"));
-    expect(document.profile.email).toBe(testUsers.departurePassenger.email);
+    expect(document.profile.email).toBe(testUsers.reporting.email);
     expect(document.bookings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ bookingReference: booking.bookingReference }),

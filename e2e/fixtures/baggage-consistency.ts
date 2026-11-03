@@ -10,10 +10,12 @@ export function registerBaggageConsistencyTest() {
     page,
   }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
-    await useBrowserSession(page, "departurePassenger");
+    await useBrowserSession(page, "reporting");
     const client = rpc(page);
     const user = await client.auth.me.query();
     if (!user) throw new Error("Passenger session missing");
+    expect(user.role).toBe("user");
+    expect(user.tenantId).toEqual(expect.any(Number));
     const bag = (await client.ancillary.getAvailable.query({})).find(
       item => item.code === "BAG_20KG"
     );

@@ -43,7 +43,7 @@ async function workbookAt(path: string) {
 test("booking downloads include the whole UTC creation day and only the selected status", async ({
   page,
 }, info) => {
-  await useBrowserSession(page, "departurePassenger");
+  await useBrowserSession(page, "reporting");
   const customer = await rpc(page).auth.me.query();
   if (!customer?.tenantId) throw new Error("Scoped report customer required");
   const db = await mysql.createConnection(disposableDatabaseUrl());
@@ -73,7 +73,7 @@ test("booking downloads include the whole UTC creation day and only the selected
           amount,
           day + " " + time,
           offset,
-          testUsers.departurePassenger.email,
+          testUsers.reporting.email,
         ]
       );
       expect(entry.affectedRows).toBe(1);
@@ -201,7 +201,7 @@ test("revenue downloads reconcile a paid ticket and a later partial refund by UT
   const passenger = rpc(page);
   expect(await passenger.auth.me.query()).toMatchObject({
     id: userId,
-    email: testUsers.departurePassenger.email,
+    email: testUsers.reporting.email,
     role: "user",
   });
   const db = await mysql.createConnection(disposableDatabaseUrl());

@@ -14,8 +14,10 @@ import { login } from "./test-helpers";
 import { rpc } from "./rpc";
 import { testUsers } from "./test-data";
 
-const accounts = ["regular", "admin", "ops", "departurePassenger"] as const;
-type Account = (typeof accounts)[number];
+// Four real logins leave the fifth IP attempt for the guest-to-checkout journey.
+// Departure and reporting names select the same scoped customer and session.
+const accounts = ["regular", "reporting", "admin", "ops"] as const;
+type Account = (typeof accounts)[number] | "departurePassenger";
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
 
 /** Real UI logins, then isolated contexts reuse their authenticated cookies.
@@ -81,8 +83,10 @@ export async function useBrowserSession(page: Page, account: Account) {
   disposableDatabaseUrl();
   const directory = process.env.AIS_E2E_SESSION_DIRECTORY;
   if (!directory) throw new Error("Authenticated E2E setup is missing");
+  const sessionAccount =
+    account === "departurePassenger" ? "reporting" : account;
   const state: StorageState = JSON.parse(
-    await readFile(join(directory, `${account}.json`), "utf8")
+    await readFile(join(directory, `${sessionAccount}.json`), "utf8")
   );
   await page.context().clearCookies();
   await page.context().addCookies(state.cookies);
