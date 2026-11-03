@@ -159,6 +159,52 @@ export async function verifySupplierFinance(db: SettlementTx) {
     1
   );
   assert.equal(latest.invoice?.bankVersion, 2);
+  const [profile] = await db
+    .select()
+    .from(s.supplierBankProfiles)
+    .where(eq(s.supplierBankProfiles.supplierRef, supplierRef));
+  const matches = (text: string) => (err: unknown) =>
+    String((err as Error & { cause?: Error }).cause?.message ?? err).includes(
+      text
+    );
+  await assert.rejects(
+    db
+      .delete(s.supplierBankProfiles)
+      .where(eq(s.supplierBankProfiles.id, profile.id)),
+    matches("cannot be deleted")
+  );
+  for (const edit of [
+    { tenantId: id + 1 },
+    { supplierRef: randomUUID() },
+    { id: profile.id + 9999 },
+  ]) {
+    await assert.rejects(
+      db
+        .update(s.supplierBankProfiles)
+        .set(edit)
+        .where(eq(s.supplierBankProfiles.id, profile.id)),
+      matches("identity is immutable")
+    );
+  }
+  // Reject skips, rewinds, and even the next version without its bank-change receipt.
+  for (const bankVersion of [0, 3, 4])
+    await assert.rejects(
+      db
+        .update(s.supplierBankProfiles)
+        .set({ bankVersion })
+        .where(eq(s.supplierBankProfiles.id, profile.id)),
+      matches("next bank change receipt")
+    );
+  await assert.rejects(
+    db.insert(s.supplierFinanceEvents).values({
+      profileId: profile.id + 9999,
+      bankVersion: 1,
+      actorId: id,
+      action: "bank_approved",
+    }),
+    matches("existing profile")
+  );
+  assert.deepEqual(await checker.review({ supplierRef, invoiceRef }), latest);
   await db
     .update(s.users)
     .set({ role: "ops" })

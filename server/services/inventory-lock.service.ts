@@ -1,4 +1,7 @@
-import { countActiveHolds } from "./inventory-capacity.service";
+import {
+  countActiveHolds,
+  withInventoryTransaction,
+} from "./inventory-capacity.service";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import {
@@ -105,7 +108,7 @@ export async function createInventoryLock(
     };
     const result = transaction
       ? await create(transaction)
-      : await database.transaction(create);
+      : await withInventoryTransaction(database, create);
 
     return {
       lockId: result.lockId,

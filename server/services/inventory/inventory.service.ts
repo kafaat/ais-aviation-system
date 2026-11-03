@@ -1,5 +1,8 @@
 import { createInventoryLock } from "../inventory-lock.service";
-import { countActiveHolds } from "../inventory-capacity.service";
+import {
+  countActiveHolds,
+  withInventoryTransaction,
+} from "../inventory-capacity.service";
 /**
  * Advanced Inventory Management Service
  *
@@ -285,7 +288,7 @@ async function createSeatHold(
     throw new Error("Database connection not available");
   }
 
-  return database.transaction(async tx => {
+  return withInventoryTransaction(database, async tx => {
     const { lockId, expiresAt } = await createInventoryLock(
       flightId,
       seats,

@@ -30,3 +30,36 @@ FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier finance eviden
 --> statement-breakpoint
 CREATE TRIGGER supplier_finance_no_delete BEFORE DELETE ON supplier_finance_events
 FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier finance evidence is append-only';
+--> statement-breakpoint
+CREATE TRIGGER supplier_profile_initial BEFORE INSERT ON supplier_bank_profiles
+FOR EACH ROW BEGIN
+  IF NEW.bankVersion <> 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier bank profile must start at version zero';
+  END IF;
+END;
+--> statement-breakpoint
+CREATE TRIGGER supplier_profile_identity BEFORE UPDATE ON supplier_bank_profiles
+FOR EACH ROW BEGIN
+  IF NEW.id <> OLD.id OR NEW.tenantId <> OLD.tenantId OR CAST(NEW.supplierRef AS BINARY) <> CAST(OLD.supplierRef AS BINARY) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier bank profile identity is immutable';
+  END IF;
+  IF NEW.bankVersion <> OLD.bankVersion AND (
+    NEW.bankVersion <> OLD.bankVersion + 1 OR NOT EXISTS (
+      SELECT 1 FROM supplier_finance_events
+      WHERE profileId = OLD.id AND bankVersion = NEW.bankVersion AND action = 'bank_change'
+        AND invoiceRef = '' AND (supersedesBankVersion <=> NULLIF(OLD.bankVersion, 0))
+    )
+  ) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier version requires the next bank change receipt';
+  END IF;
+END;
+--> statement-breakpoint
+CREATE TRIGGER supplier_profile_no_delete BEFORE DELETE ON supplier_bank_profiles
+FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier bank profile cannot be deleted';
+--> statement-breakpoint
+CREATE TRIGGER supplier_event_parent BEFORE INSERT ON supplier_finance_events
+FOR EACH ROW BEGIN
+  IF NOT EXISTS (SELECT 1 FROM supplier_bank_profiles WHERE id = NEW.profileId) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Supplier finance evidence requires an existing profile';
+  END IF;
+END;

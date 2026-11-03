@@ -1,3 +1,4 @@
+import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import { selectSeat } from "./seat-map.service";
 import { assertTenantOperational } from "./tenant.service";
 import { TRPCError } from "@trpc/server";
@@ -178,6 +179,7 @@ export async function createBooking(
     if (!database) throw new Error("Database unavailable");
     const result = await withTransactionalIdempotency(
       {
+        transactionConfig: inventoryTransactionConfig,
         scope: "booking.create.atomic",
         key: input.idempotencyKey ?? input.sessionId,
         userId: input.userId,

@@ -162,10 +162,6 @@ export function recordSupplierDecision(
                 "Each bank change requires a new immutable vault reference."
               );
             version++;
-            await current
-              .update(profiles)
-              .set({ bankVersion: version })
-              .where(eq(profiles.id, profile.id));
           } else {
             const [change] = await current
               .select()
@@ -244,6 +240,12 @@ export function recordSupplierDecision(
             amountMinor: "amountMinor" in input ? input.amountMinor : null,
             actorId,
           });
+          if (input.action === "bank_change") {
+            await current
+              .update(profiles)
+              .set({ bankVersion: version })
+              .where(eq(profiles.id, profile.id));
+          }
           return {
             receiptId: Number(row.insertId),
             bankVersion: version,

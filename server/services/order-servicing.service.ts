@@ -1,3 +1,4 @@
+import { withInventoryTransaction } from "./inventory-capacity.service";
 import {
   quoteSeatExchange,
   transferExchangeSeats,
@@ -587,7 +588,7 @@ export async function quotePaidOrderService(
   };
   return transaction
     ? quoteInTransaction(transaction)
-    : db.transaction(quoteInTransaction);
+    : withInventoryTransaction(db, quoteInTransaction);
 }
 /** Lock and validate the same version before creating checkout and again after verified collection. */
 export async function validatePaidServiceQuote(

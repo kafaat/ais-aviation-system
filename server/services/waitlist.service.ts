@@ -3,7 +3,10 @@ import {
   createInventoryLock,
   releaseInventoryLock,
 } from "./inventory-lock.service";
-import { countActiveHolds } from "./inventory-capacity.service";
+import {
+  countActiveHolds,
+  withInventoryTransaction,
+} from "./inventory-capacity.service";
 import { recordEvent } from "./outbox.service";
 import type { SettlementTx } from "./booking-settlement.service";
 import { TRPCError } from "@trpc/server";
@@ -235,7 +238,7 @@ export async function processWaitlist(
 }> {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
-  return await db.transaction(async tx => {
+  return await withInventoryTransaction(db, async tx => {
     const [flight] = await tx
       .select()
       .from(flights)
@@ -307,7 +310,7 @@ async function lockedEntry(tx: SettlementTx, id: number, userId?: number) {
 export async function offerSeat(waitlistId: number) {
   const db = getDb();
   if (!db) throw new Error("Database unavailable");
-  return await db.transaction(async tx => {
+  return await withInventoryTransaction(db, async tx => {
     const entry = await lockedEntry(tx, waitlistId);
     if (entry.status !== "waiting")
       throw new Error("Waitlist entry is not waiting");

@@ -47,16 +47,17 @@ export function SupplierFinanceControl() {
   }
   async function submit() {
     if (!review || busy) return;
-    const base = {
-      supplierRef,
-      bankVersion: review.bankVersion,
-      requestId: crypto.randomUUID(),
-    };
-    if (!pending.current) {
+    setMessage("");
+    let command = pending.current;
+    if (!command) {
+      const base = {
+        supplierRef,
+        bankVersion: review.bankVersion,
+        requestId: crypto.randomUUID(),
+      };
       if (action === "bank_change")
-        pending.current = { ...base, action, vaultRef, lastFour };
-      else if (action === "bank_approved")
-        pending.current = { ...base, action };
+        command = { ...base, action, vaultRef, lastFour };
+      else if (action === "bank_approved") command = { ...base, action };
       else {
         const amountMinor =
           action === "payout_approved"
@@ -76,11 +77,13 @@ export function SupplierFinanceControl() {
           );
           return;
         }
-        pending.current = { ...base, action, invoiceRef, amountMinor };
+        command = { ...base, action, invoiceRef, amountMinor };
       }
+      pending.current = command;
     }
+    if (!command) return;
     try {
-      const result = await mutate.mutateAsync(pending.current);
+      const result = await mutate.mutateAsync(command);
       pending.current = null;
       setRetry(false);
       setVault("");
@@ -180,7 +183,10 @@ export function SupplierFinanceControl() {
               <select
                 disabled={locked}
                 value={action}
-                onChange={e => setAction(e.target.value as Command["action"])}
+                onChange={e => {
+                  setAction(e.target.value as Command["action"]);
+                  setMessage("");
+                }}
               >
                 <option value="bank_change">
                   {l("تسجيل تغيير الحساب", "Record bank change")}

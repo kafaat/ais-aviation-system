@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   bookings,
+  bookingSegments,
   users,
   financialLedger,
   userCredits,
@@ -25,7 +26,6 @@ import {
 } from "./booking-settlement.service";
 import { assertNoOrderRefundPending } from "./order-refunds.service";
 import { recordEvent } from "./outbox.service";
-import { flightBookingCondition } from "./flight-state.service";
 
 export const internalRefundInput = z.object({
   bookingId: z.number().int().positive(),
@@ -121,19 +121,44 @@ export async function refundInternalFunding(
         throw blocked(
           "Only an unflown funded booking can receive an internal refund"
         );
+      // Credit funding and refunds must lock the owner before inventory or
+      // ledger ranges, even for different bookings belonging to that owner.
+      await tx
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, booking.userId))
+        .for("update");
+      // Lock these flights by primary key. A correlated join with FOR UPDATE
+      // can lock unrelated flights, including ones another customer is funding.
+      const segments = await tx
+        .select({
+          flightId: bookingSegments.flightId,
+          status: bookingSegments.status,
+        })
+        .from(bookingSegments)
+        .where(eq(bookingSegments.bookingId, booking.id));
+      if (segments.some(leg => leg.status === "completed"))
+        throw blocked("A completed sector requires servicing review");
+      const flightIds = [
+        ...new Set(
+          segments.length
+            ? segments
+                .filter(leg => leg.status !== "cancelled")
+                .map(leg => leg.flightId)
+            : [booking.flightId]
+        ),
+      ];
+      if (!flightIds.length) throw blocked("A current itinerary is required");
       const itinerary = await tx
-        .select({ flight: flights })
+        .select()
         .from(flights)
-        .innerJoin(
-          bookings,
-          and(eq(bookings.id, booking.id), flightBookingCondition(flights.id))
-        )
+        .where(inArray(flights.id, flightIds))
         .orderBy(asc(flights.id))
         .for("update");
       if (
-        !itinerary.length ||
+        itinerary.length !== flightIds.length ||
         itinerary.some(
-          ({ flight }) =>
+          flight =>
             flight.tenantId !== booking.tenantId ||
             flight.status === "completed" ||
             (flight.status !== "cancelled" &&
@@ -215,11 +240,6 @@ export async function refundInternalFunding(
         );
       const restorations: Array<{ creditId: number; amount: number }> = [];
       if (origin.data.tender === "user_credit") {
-        await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.id, booking.userId))
-          .for("update");
         const usages = await tx
           .select()
           .from(creditUsage)

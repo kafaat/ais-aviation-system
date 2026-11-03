@@ -1,3 +1,4 @@
+import { inventoryTransactionConfig } from "./inventory-capacity.service";
 import {
   createRetailOffer,
   lockRetailOffer,
@@ -938,6 +939,7 @@ export async function createOrder(
     });
   const userId = params.userId;
   return withTransactionalIdempotency({
+    transactionConfig: inventoryTransactionConfig,
     scope: "ndc.order.create",
     key: params.offerId,
     userId,

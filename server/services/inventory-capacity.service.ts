@@ -3,6 +3,22 @@ import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { inventoryLocks, seatHolds } from "../../drizzle/schema";
 import type { SettlementTx } from "./booking-settlement.service";
 
+/** Range locks on an absent child hold under REPEATABLE READ can cover another
+ * flight's insertion gap. Writers serialize on the existing flight primary key
+ * before checking its capacity. READ COMMITTED at the transaction boundary
+ * keeps hold scans current without locking unrelated insertion gaps.
+ * Existing caller-owned transactions retain their isolation and locking reads. */
+export const inventoryTransactionConfig = {
+  isolationLevel: "read committed",
+} as const;
+
+export function withInventoryTransaction<T>(
+  db: SettlementTx,
+  run: (tx: SettlementTx) => Promise<T>
+): Promise<T> {
+  return db.transaction(run, inventoryTransactionConfig);
+}
+
 function canonicalHoldCondition(
   flightId: number | AnyMySqlColumn,
   cabin: "economy" | "business",

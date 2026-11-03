@@ -1,3 +1,4 @@
+import { withInventoryTransaction } from "./inventory-capacity.service";
 import { randomUUID } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
@@ -36,7 +37,7 @@ async function requestService(
   const key = input.idempotencyKey ?? randomUUID();
   const db = await getDb();
   if (!db) throw new Error("Servicing storage unavailable");
-  return db.transaction(async tx => {
+  return withInventoryTransaction(db, async tx => {
     const [booking] = await tx
       .select()
       .from(bookings)
