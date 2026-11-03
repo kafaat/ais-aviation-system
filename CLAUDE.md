@@ -575,6 +575,7 @@ Deployment receipts are tracked separately in [provider acceptance](docs/operati
 | apisSubmission | blocked | Authority transport, credentials, acknowledgement and rejection fixtures |
 | alternatePayments | blocked | Invoice/session binding, amount/currency verification, settlement and refund acceptance for each provider |
 | bagDropHardware | demo | Certified scale, printer, conveyor and device heartbeat adapter |
+| bcbpBoardingPass | implemented | IATA Resolution 792 M1 string (BCBP version 6 conditional items, HMAC security data) rendered as PDF417 beside the signed QR, round-trip tested with committed sample vectors; acceptance by the airport's CUSS/CUPPS/gate readers and independently captured scanner reads remain external evidence |
 | weightBalance | demo | Approved aircraft data, calculation validation and operational sign-off |
 | loadPlanning | demo | Aircraft configuration, measured cargo and approved dispatch workflow |
 | disasterRecovery | demo | Infrastructure adapter and observed restore/failover exercise |

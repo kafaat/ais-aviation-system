@@ -60,6 +60,7 @@ export const eticketRouter = router({
       const pdf = await generateBoardingPassPDF({
         ...leg,
         signedToken: issued.token,
+        bcbp: issued.bcbp,
         passengerName: issued.payload.passengerName,
         seatNumber: issued.payload.seatNumber,
         departureTime: new Date(issued.payload.departureTime),
@@ -69,6 +70,7 @@ export const eticketRouter = router({
         pdf: pdf.toString("base64"),
         ticketNumber: leg.ticketNumber,
         filename: `boarding_${input.bookingId}_${input.passengerId}_${issued.payload.flightId}.pdf`,
+        bcbp: issued.bcbp,
       };
     }),
   generateCalendarEvent: protectedProcedure

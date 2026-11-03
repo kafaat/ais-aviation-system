@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
+import bwipjs from "bwip-js/node";
 import { TRPCError } from "@trpc/server";
 import { randomInt } from "node:crypto";
 
@@ -48,10 +49,27 @@ export interface TicketData {
 }
 
 export interface BoardingPassData extends TicketData {
+  /** Signed AIS token, rendered as the QR (online verification layer). */
   signedToken: string;
+  /** IATA Resolution 792 BCBP M1 string, rendered as PDF417 for airport readers. */
+  bcbp: string;
   gate?: string;
   boardingTime?: Date;
   sequence?: string;
+}
+
+/** PDF417 PNG of a BCBP string; error correction level 5 as commonly used for boarding passes. */
+export function renderBcbpPdf417(bcbp: string): Promise<Buffer> {
+  return bwipjs.toBuffer({
+    bcid: "pdf417",
+    text: bcbp,
+    scale: 3,
+    height: 4,
+    columns: 12,
+    eclevel: 5,
+    paddingwidth: 2,
+    paddingheight: 2,
+  } as Parameters<typeof bwipjs.toBuffer>[0]);
 }
 
 /**
@@ -304,13 +322,16 @@ export async function generateETicketPDF(
 export async function generateBoardingPassPDF(
   passData: BoardingPassData
 ): Promise<Buffer> {
-  // Generate barcode data first (async operation)
+  // Generate both barcodes first (async operations)
   if (!passData.signedToken)
     throw new Error("Signed boarding authorization required");
+  if (!passData.bcbp) throw new Error("IATA BCBP string required");
   const barcodeData = passData.signedToken;
   let barcodeDataURL: string;
+  let pdf417: Buffer;
   try {
     barcodeDataURL = await QRCode.toDataURL(barcodeData);
+    pdf417 = await renderBcbpPdf417(passData.bcbp);
   } catch (error) {
     console.error("Error generating barcode:", error);
     throw new TRPCError({
@@ -321,7 +342,7 @@ export async function generateBoardingPassPDF(
 
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: [600, 250], margin: 20 });
+      const doc = new PDFDocument({ size: [600, 340], margin: 20 });
       const buffers: Buffer[] = [];
 
       doc.on("data", buffers.push.bind(buffers));
@@ -371,14 +392,33 @@ export async function generateBoardingPassPDF(
         .text(`Seat: ${passData.seatNumber || "TBA"}`, 20, 180)
         .text(`Class: ${passData.cabinClass.toUpperCase()}`, 20, 195);
 
-      // Barcode
-      doc.image(barcodeDataURL, 350, 50, { width: 150, height: 150 });
+      // Second layer: signed AIS QR (online verification)
+      doc.image(barcodeDataURL, 440, 45, { width: 120, height: 120 });
+      doc
+        .fontSize(7)
+        .fillColor("#6b7280")
+        .text("Signed AIS QR (online check)", 420, 168, {
+          width: 160,
+          align: "center",
+        });
 
       // Booking reference
       doc
         .fontSize(10)
-        .text(`PNR: ${passData.pnr}`, 350, 210)
-        .text(`Seq: ${passData.sequence || "001"}`, 480, 210);
+        .fillColor("#000")
+        .text(`PNR: ${passData.pnr}`, 350, 120)
+        .text(`Seq: ${passData.sequence || "001"}`, 350, 135);
+
+      // Primary layer: IATA BCBP (Resolution 792) as PDF417
+      doc.image(pdf417, 20, 220, { fit: [560, 70] });
+      doc
+        .fontSize(7)
+        .fillColor("#6b7280")
+        .text("IATA BCBP M1 (Resolution 792) - PDF417", 20, 294)
+        .font("Courier")
+        .fontSize(6)
+        .fillColor("#374151")
+        .text(passData.bcbp, 20, 306, { width: 560, lineBreak: true });
 
       doc.end();
     } catch (error) {

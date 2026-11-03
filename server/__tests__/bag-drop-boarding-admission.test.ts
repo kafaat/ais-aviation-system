@@ -29,19 +29,23 @@ function itinerary() {
         paymentStatus: "paid",
         cabinClass: "economy",
         bookingReference: "TR1234",
+        pnr: "TR1234",
       },
     ],
     passengers: [
       { id: 4, bookingId: 3, firstName: "Sample", lastName: "Traveler" },
     ],
+    // Carrier and airport codes feed the IATA BCBP leg issued with each pass.
+    airlines: [{ id: 1, code: "SV", name: "Sample Carrier" }],
     airports: [
-      { id: 1, country: "SA" },
-      { id: 2, country: "SA" },
-      { id: 3, country: "SA" },
+      { id: 1, code: "RUH", country: "SA", timezone: "Asia/Riyadh" },
+      { id: 2, code: "JED", country: "SA", timezone: "Asia/Riyadh" },
+      { id: 3, code: "DMM", country: "SA", timezone: "Asia/Riyadh" },
     ],
     flights: flightIds.map((id, i) => ({
       id,
       flightNumber: "SV" + id,
+      airlineId: 1,
       originId: i + 1,
       destinationId: i + 2,
       status: "scheduled",

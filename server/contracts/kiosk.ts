@@ -157,6 +157,7 @@ export const responseContracts = {
       sequence: z.string(),
       gate: z.string().nullable(),
       barcodeData: z.string(),
+      bcbp: z.string(),
       printedAt: z.string(),
     }),
   }),

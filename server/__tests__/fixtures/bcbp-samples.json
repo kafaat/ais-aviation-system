@@ -1,0 +1,102 @@
+{
+  "provenance": [
+    "Sample IATA BCBP (Resolution 792) M1 strings for server/services/bcbp.service.ts.",
+    "The three 'encoded' vectors were produced on 2026-11-03 by running encodeBcbpM1 from this repository on the listed inputs, then checked by hand against the BCBP field layout: positions 0-1 format/legs, 2-21 passenger name, 22 E, 23-29 PNR, 30-32/33-35 airports, 36-38 carrier, 39-43 flight number, 44-46 Julian date, 47 compartment, 48-51 seat, 52-56 sequence, 57 status, 58-59 conditional size (hex), then '>' + version 6, section A (0B = 11 chars) and section B (00 or 0D), then '^' + type '1' + hex length + security data.",
+    "securityData is HMAC-SHA256 (hex) over base + '\\n' + a placeholder pass digest of 64 'd' characters, keyed with the literal secret 'fixture-secret'. Production passes bind to the real pass digest and BOARDING_PASS_SECRET.",
+    "The 'iataGuideExample' string is the single-leg example that the bcbp library README reproduces from the IATA BCBP Implementation Guide (DESMARAIS/LUC, YUL-FRA, AC 0834); it is used as an independent decode vector only.",
+    "None of these strings has been read by an airport CUSS/CUPPS/gate scanner. Reader acceptance on the target device is an external acceptance step and is not claimed here."
+  ],
+  "secret": "fixture-secret",
+  "passDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "encoded": [
+    {
+      "name": "riyadh_new_year",
+      "note": "Departure 2026-12-31T22:30Z is 01:30 on 1 January 2027 in Asia/Riyadh, so the Julian date is 001 while the issuance date (UTC 31 Dec 2026) is 6365.",
+      "input": {
+        "lastName": "Alqahtani",
+        "firstName": "Mohammed",
+        "pnr": "TR1234",
+        "departureAirport": "RUH",
+        "arrivalAirport": "JED",
+        "carrier": "SV",
+        "flightNumber": "SV123",
+        "departureTime": "2026-12-31T22:30:00.000Z",
+        "departureTimeZone": "Asia/Riyadh",
+        "cabinClass": "economy",
+        "seatNumber": "12A",
+        "sequence": 1,
+        "passengerType": "adult",
+        "issuedAt": "2026-12-31T20:00:00.000Z",
+        "source": "W"
+      },
+      "base": "M1ALQAHTANI/MOHAMMED  ETR1234 RUHJEDSV 0123 001Y012A0001 111>60B0WW6365BSV 00",
+      "securityData": "484d3f31be41cb328a4f936fac4db903f89ff1741e2937d67c3eadd192be11fd",
+      "bcbp": "M1ALQAHTANI/MOHAMMED  ETR1234 RUHJEDSV 0123 001Y012A0001 111>60B0WW6365BSV 00^140484d3f31be41cb328a4f936fac4db903f89ff1741e2937d67c3eadd192be11fd"
+    },
+    {
+      "name": "long_name_business_ticket",
+      "note": "Surname of 20 letters is cut to 18 so that '/' and one given-name letter fit; hyphen dropped; business maps to compartment J; 13-digit ticket fills section B (airline numeric code + serial).",
+      "input": {
+        "lastName": "Al-Shammari Alqahtani",
+        "firstName": "Abdulrahman Mohammed",
+        "pnr": "QZ9K2P",
+        "departureAirport": "JED",
+        "arrivalAirport": "DXB",
+        "carrier": "SV",
+        "flightNumber": "SV 0556",
+        "departureTime": "2026-06-15T01:15:00.000Z",
+        "departureTimeZone": "Asia/Riyadh",
+        "cabinClass": "business",
+        "seatNumber": "2C",
+        "sequence": 125,
+        "passengerType": "adult",
+        "ticketNumber": "0651234567890",
+        "issuedAt": "2026-06-14T09:00:00.000Z",
+        "source": "K"
+      },
+      "base": "M1ALSHAMMARI ALQAHTA/AEQZ9K2P JEDDXBSV 0556 166J002C0125 11E>60B0KK6165BSV 0D0651234567890",
+      "securityData": "36408aa4bcb88bdf1faaeced65ec38ef825b80b8568d2801ed82d9ab6354dad2",
+      "bcbp": "M1ALSHAMMARI ALQAHTA/AEQZ9K2P JEDDXBSV 0556 166J002C0125 11E>60B0KK6165BSV 0D0651234567890^14036408aa4bcb88bdf1faaeced65ec38ef825b80b8568d2801ed82d9ab6354dad2"
+    },
+    {
+      "name": "la_previous_day_child",
+      "note": "Departure 2026-01-01T06:30Z is 22:30 on 31 December 2025 in America/Los_Angeles, so the Julian date is 365 of the previous year; flight suffix A kept; child passenger description 3; mobile source M.",
+      "input": {
+        "lastName": "Ortiz",
+        "firstName": "Lucía",
+        "pnr": "AB12CD",
+        "departureAirport": "LAX",
+        "arrivalAirport": "JFK",
+        "carrier": "XX",
+        "flightNumber": "XX7A",
+        "departureTime": "2026-01-01T06:30:00.000Z",
+        "departureTimeZone": "America/Los_Angeles",
+        "cabinClass": "economy",
+        "seatNumber": "34K",
+        "sequence": 9999,
+        "passengerType": "child",
+        "issuedAt": "2025-12-31T18:00:00.000Z",
+        "source": "M"
+      },
+      "base": "M1ORTIZ/LUCIA         EAB12CD LAXJFKXX 0007A365Y034K9999 111>60B3MM5365BXX 00",
+      "securityData": "6ae2ed6f8c4720aa469934b9d72400a50df1f503db891cb645646bfb7909cf33",
+      "bcbp": "M1ORTIZ/LUCIA         EAB12CD LAXJFKXX 0007A365Y034K9999 111>60B3MM5365BXX 00^1406ae2ed6f8c4720aa469934b9d72400a50df1f503db891cb645646bfb7909cf33"
+    }
+  ],
+  "iataGuideExample": {
+    "bcbp": "M1DESMARAIS/LUC       EABC123 YULFRAAC 0834 226F001A0025 100",
+    "expected": {
+      "passengerName": "DESMARAIS/LUC",
+      "pnr": "ABC123",
+      "departureAirport": "YUL",
+      "arrivalAirport": "FRA",
+      "carrier": "AC",
+      "flightNumber": "0834",
+      "julianDate": "226",
+      "compartmentCode": "F",
+      "seatNumber": "001A",
+      "sequence": 25,
+      "passengerStatus": "1"
+    }
+  }
+}

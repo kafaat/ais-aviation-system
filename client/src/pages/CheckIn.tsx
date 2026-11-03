@@ -27,6 +27,9 @@ function BoardingPass({
     { retry: false, refetchOnWindowFocus: true, staleTime: 0 }
   );
   const [qr, setQr] = useState<{ token: string; image: string }>();
+  // IATA BCBP (Resolution 792) PDF417 for airport readers; rendered lazily so
+  // the barcode library stays out of the main bundle.
+  const [pdf417, setPdf417] = useState<{ bcbp: string; image: string }>();
   useEffect(() => {
     let active = true;
     if (data)
@@ -40,6 +43,32 @@ function BoardingPass({
         })
         .catch(() => {
           if (active) setQr(undefined);
+        });
+    return () => {
+      active = false;
+    };
+  }, [data]);
+  useEffect(() => {
+    let active = true;
+    if (data)
+      import("bwip-js/browser")
+        .then(({ toSVG }) => {
+          const svg = toSVG({
+            bcid: "pdf417",
+            text: data.bcbp,
+            scale: 2,
+            height: 4,
+            columns: 12,
+            eclevel: 5,
+          } as Parameters<typeof toSVG>[0]);
+          if (active)
+            setPdf417({
+              bcbp: data.bcbp,
+              image: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+            });
+        })
+        .catch(() => {
+          if (active) setPdf417(undefined);
         });
     return () => {
       active = false;
@@ -73,13 +102,36 @@ function BoardingPass({
           ? new Date(data.boardingTime).toLocaleTimeString()
           : "—"}
       </p>
-      <img
-        src={qr.image}
-        width={420}
-        height={420}
-        alt={t("checkIn.boardingPass")}
-        className="max-w-full mx-auto"
-      />
+      <figure className="space-y-1">
+        {pdf417?.bcbp === data.bcbp && (
+          <img
+            src={pdf417.image}
+            alt={t("checkIn.bcbpBarcode")}
+            className="w-full max-w-xl mx-auto bg-white"
+          />
+        )}
+        <figcaption className="text-xs text-muted-foreground text-center">
+          {t("checkIn.bcbpBarcode")}
+        </figcaption>
+        <code
+          className="block font-mono text-[10px] break-all text-center"
+          data-testid="bcbp-string"
+        >
+          {data.bcbp}
+        </code>
+      </figure>
+      <figure className="space-y-1">
+        <img
+          src={qr.image}
+          width={320}
+          height={320}
+          alt={t("checkIn.boardingPass")}
+          className="max-w-full mx-auto"
+        />
+        <figcaption className="text-xs text-muted-foreground text-center">
+          {t("checkIn.signedQr")}
+        </figcaption>
+      </figure>
       <BaggageEntitlement
         bookingId={bookingId}
         passengerId={passengerId}
