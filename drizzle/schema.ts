@@ -6345,3 +6345,99 @@ export const ticketCoupons = mysqlTable(
     ),
   })
 );
+
+/**
+ * Type B station file: who receives which operational messages. One row per
+ * seven-character Type B address (city + department + company). `stationCode`
+ * NULL means the address receives the subscribed types for every station
+ * (an OCC or a central load control). Transport acceptance is recorded
+ * separately; a row here is a routing instruction, not proof of connectivity.
+ */
+export const typebAddresses = mysqlTable(
+  "typeb_addresses",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    address: varchar("address", { length: 7 }).notNull(),
+    stationCode: varchar("stationCode", { length: 3 }),
+    handlerName: varchar("handlerName", { length: 120 }).notNull(),
+    /** Subscribed message types, e.g. ["PNL","ADL","MVT"]. */
+    messageTypes: json("messageTypes").$type<string[]>().notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    notes: varchar("notes", { length: 500 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    tenantAddress: uniqueIndex("typeb_address_tenant_idx").on(
+      table.tenantId,
+      table.address
+    ),
+    stationIdx: index("typeb_address_station_idx").on(
+      table.stationCode,
+      table.enabled
+    ),
+  })
+);
+
+export type TypeBAddress = typeof typebAddresses.$inferSelect;
+
+/**
+ * Type B message queue and archive. Outbound rows move queued → sent → acked
+ * (or failed after the retry budget); inbound rows are stored raw with their
+ * parsed record or parse error. `dedupKey` makes trigger-generated and
+ * re-ingested messages idempotent.
+ */
+export const typebMessages = mysqlTable(
+  "typeb_messages",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    tenantId: int("tenantId"),
+    direction: mysqlEnum("direction", ["outbound", "inbound"]).notNull(),
+    messageType: varchar("messageType", { length: 8 }).notNull(),
+    flightId: int("flightId"),
+    /** Carrier + number without padding, e.g. XY123. */
+    flightDesignator: varchar("flightDesignator", { length: 10 }),
+    /** UTC calendar day of the flight, ISO yyyy-mm-dd. */
+    flightDate: varchar("flightDate", { length: 10 }),
+    station: varchar("station", { length: 3 }),
+    priority: varchar("priority", { length: 2 }),
+    originAddress: varchar("originAddress", { length: 7 }),
+    addresses: json("addresses").$type<string[]>().notNull(),
+    /** Full message text (header, text, trailer), LF separated. */
+    body: text("body").notNull(),
+    /** Parsed inbound record (typed by messageType). */
+    parsed: json("parsed").$type<Record<string, unknown>>(),
+    status: mysqlEnum("status", [
+      "queued",
+      "sent",
+      "acked",
+      "failed",
+      "received",
+    ]).notNull(),
+    attempts: int("attempts").default(0).notNull(),
+    lastError: varchar("lastError", { length: 500 }),
+    transportId: varchar("transportId", { length: 40 }),
+    transportReference: varchar("transportReference", { length: 255 }),
+    dedupKey: varchar("dedupKey", { length: 128 }),
+    leaseToken: varchar("leaseToken", { length: 36 }),
+    lockedAt: timestamp("lockedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    sentAt: timestamp("sentAt"),
+    ackedAt: timestamp("ackedAt"),
+  },
+  table => ({
+    dedupIdx: uniqueIndex("typeb_message_dedup_idx").on(table.dedupKey),
+    statusIdx: index("typeb_message_status_idx").on(
+      table.direction,
+      table.status,
+      table.createdAt
+    ),
+    flightIdx: index("typeb_message_flight_idx").on(
+      table.flightId,
+      table.messageType
+    ),
+  })
+);
+
+export type TypeBMessage = typeof typebMessages.$inferSelect;
