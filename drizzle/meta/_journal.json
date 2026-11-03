@@ -428,6 +428,20 @@
       "when": 1793696285071,
       "tag": "0060_aircraft_assignment_and_bsp_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "5",
+      "when": 1793720937087,
+      "tag": "0061_dcs_counter_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "5",
+      "when": 1793722383348,
+      "tag": "0062_special_service_sector",
+      "breakpoints": true
     }
   ]
 }

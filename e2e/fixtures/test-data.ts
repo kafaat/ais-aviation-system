@@ -19,6 +19,13 @@ export const testUsers = {
     lastName: "User",
     phone: "+966509876543",
   },
+  ops: {
+    email: "test.ops@example.com",
+    password: "TestPassword123!",
+    firstName: "Operations",
+    lastName: "User",
+    phone: "+966509876544",
+  },
   newUser: {
     email: `new.user.${Date.now()}@example.com`,
     password: "NewUserPass123!",

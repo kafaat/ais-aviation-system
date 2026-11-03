@@ -1,3 +1,6 @@
+import { manifestBaggageFlightCondition } from "./baggage-sector-scope";
+import { assertFlightBaggageReconciled } from "./baggage-reconciliation.service";
+import type { SettlementTx } from "./booking-settlement.service";
 import { lockSimulatedLoadPlanFlight } from "./load-sheet-lifecycle.service";
 import { manifestBookingCondition } from "./flight-state.service";
 import { assignCrewWithRules } from "./crew-rule.service";
@@ -210,6 +213,10 @@ export async function getFlightCrew(flightId: number) {
       message: "Database not available",
     });
 
+  return readFlightCrew(db, flightId);
+}
+
+async function readFlightCrew(db: SettlementTx, flightId: number) {
   return await db
     .select({
       assignmentId: crewAssignments.id,
@@ -259,6 +266,14 @@ export async function generateFlightManifest(flightId: number) {
       message: "Database not available",
     });
 
+  // Financial reversals and physical inventory must describe one snapshot.
+  // A separate preflight check could race a refund before the totals query.
+  return db.transaction(tx => readFlightManifest(tx, flightId), {
+    isolationLevel: "repeatable read",
+  });
+}
+
+async function readFlightManifest(db: SettlementTx, flightId: number) {
   // Get flight details with airline and airports
   const [flight] = await db
     .select({
@@ -285,6 +300,7 @@ export async function generateFlightManifest(flightId: number) {
 
   if (!flight)
     throw new TRPCError({ code: "NOT_FOUND", message: "Flight not found" });
+  await assertFlightBaggageReconciled(db, flightId);
 
   // Get destination airport separately
   const [destFlight] = await db
@@ -331,7 +347,7 @@ export async function generateFlightManifest(flightId: number) {
     .where(membership);
 
   // Get crew assignments
-  const crew = await getFlightCrew(flightId);
+  const crew = await readFlightCrew(db, flightId);
 
   // Get baggage count
   const baggageResult = await db
@@ -344,15 +360,9 @@ export async function generateFlightManifest(flightId: number) {
     .where(
       and(
         membership,
-        // A legacy booking-level bag can be attributed to its sole flight.
-        // On multi-flight bookings require custody evidence for this sector.
-        sql`(EXISTS (SELECT 1 FROM baggage_custody_events bc
-        WHERE bc.baggageId = ${baggageItems.id} AND bc.flightId = ${flightId})
-        OR (${bookings.flightId} = ${flightId}
-          AND NOT EXISTS (SELECT 1 FROM booking_segments bs
-            WHERE bs.bookingId = ${bookings.id} AND bs.flightId <> ${flightId})
-          AND NOT EXISTS (SELECT 1 FROM baggage_custody_events bc
-            WHERE bc.baggageId = ${baggageItems.id})))`
+        // Exact registered sectors take precedence; legacy bags retain the
+        // prior sole-flight/custody attribution rules.
+        manifestBaggageFlightCondition(flightId)
       )
     );
 

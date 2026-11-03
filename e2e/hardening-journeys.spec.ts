@@ -1,6 +1,7 @@
 import { registerCodeshareTests } from "./fixtures/codeshare";
 import { passengerRightsSource } from "../shared/passenger-policy";
 import { registerProviderCheckoutTests } from "./fixtures/provider-checkout";
+import { registerDcsCounterTests } from "./fixtures/dcs-counter";
 import { test, expect } from "./fixtures/base-test";
 import { useBrowserSession } from "./fixtures/browser-session";
 import type { Page } from "@playwright/test";
@@ -18,6 +19,7 @@ import { readFile } from "node:fs/promises";
 
 registerProviderCheckoutTests();
 registerCodeshareTests();
+registerDcsCounterTests();
 
 async function loginAsAdmin(page: Page) {
   await useBrowserSession(page, "admin");
@@ -27,6 +29,116 @@ test.describe("Funded journeys and truthful operational reads", () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("i18nextLng", "en"));
   });
+  test("wheelchair assistance selected in My Bookings stays on its requested sector", async ({
+    page,
+  }) => {
+    await useBrowserSession(page, "regular");
+    const client = rpc(page);
+    const outboundId = await fixtureFlight();
+    const returnId = await fixtureFlight();
+    const outbound = await client.flights.getById.query({ id: outboundId });
+    if (!outbound) throw new Error("Missing outbound flight");
+    await sqlRows<RowDataPacket>(
+      "UPDATE flights SET originId=?,destinationId=?,departureTime=DATE_ADD(departureTime,INTERVAL 1 DAY), arrivalTime=DATE_ADD(arrivalTime,INTERVAL 1 DAY) WHERE id=?",
+      [outbound.destination.id, outbound.origin.id, returnId]
+    );
+    const inbound = await client.flights.getById.query({ id: returnId });
+    if (!inbound) throw new Error("Missing return flight");
+    const journey = await client.multiCity.create.mutate({
+      segments: [outbound, inbound].map(f => ({
+        flightId: f.id,
+        departureDate: f.departureTime,
+      })),
+      cabinClass: "economy",
+      passengers: [{ firstName: "Mona", lastName: "Sector", type: "adult" }],
+      sessionId: randomUUID(),
+    });
+    const [pax] = await client.bookings.getPassengers.query({
+      bookingId: journey.bookingId,
+    });
+    const input = {
+      bookingId: journey.bookingId,
+      passengerId: pax.id,
+      serviceType: "wheelchair" as const,
+      serviceCode: "WCHR",
+    };
+    await expect(
+      client.specialServices.requestService.mutate(input)
+    ).rejects.toThrow(/unique active flight sector/);
+    await page.goto("/my-bookings");
+    const card = page
+      .locator('[data-slot="card"]')
+      .filter({ hasText: journey.bookingReference });
+    await card
+      .getByRole("button", { name: "Special Services", exact: true })
+      .click();
+    await card
+      .getByRole("button", { name: "Add Service", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await dialog
+      .getByRole("combobox", { name: "Flight sector" })
+      .selectOption(String(returnId));
+    await dialog
+      .getByRole("combobox", { name: "Passenger", exact: true })
+      .click();
+    await page.getByRole("option", { name: /Mona Sector/ }).click();
+    await dialog
+      .getByRole("combobox", { name: "Service Type", exact: true })
+      .click();
+    await page.getByRole("option", { name: "Wheelchair Assistance" }).click();
+    await dialog
+      .getByRole("combobox", { name: "Service", exact: true })
+      .click();
+    await page.getByRole("option", { name: /Wheelchair - Ramp/ }).click();
+    await dialog.getByRole("button", { name: "Submit Request" }).click();
+    await expect(dialog).toHaveCount(0);
+    await card.getByRole("button", { name: /Wheelchair Assistance/ }).click();
+    await expect(card).toContainText(
+      "Requested flight " + inbound.flightNumber
+    );
+    const services = await client.specialServices.getBookingServices.query({
+      bookingId: journey.bookingId,
+    });
+    expect(services).toHaveLength(1);
+    const [record] = await sqlRows<RowDataPacket>(
+      "SELECT s.flightId,s.passengerId,bs.flightId AS segmentFlight FROM special_services s JOIN booking_segments bs ON bs.id=s.bookingSegmentId AND bs.bookingId=s.bookingId WHERE s.id=?",
+      [services[0].id]
+    );
+    expect(record).toMatchObject({
+      flightId: returnId,
+      segmentFlight: returnId,
+      passengerId: pax.id,
+    });
+    await expect(
+      client.specialServices.requestService.mutate({
+        ...input,
+        flightId: returnId,
+      })
+    ).rejects.toThrow(/already exists/);
+    const separate = await client.specialServices.requestService.mutate({
+      ...input,
+      flightId: outboundId,
+    });
+    expect(separate.service.flightId).toBe(outboundId);
+    expect(separate.service.bookingSegmentId).not.toBe(
+      services[0].bookingSegmentId
+    );
+    await client.specialServices.cancelService.mutate({
+      serviceId: separate.service.id,
+    });
+    await loginAsAdmin(page);
+    const operator = rpc(page);
+    const sectorNeedsScore = async (flightId: number) => {
+      const rank = await operator.passengerPriority.rankPassengers.query({
+        flightId,
+      });
+      return rank.find(row => row.passengerId === pax.id)?.specialNeedsScore;
+    };
+    expect(await sectorNeedsScore(returnId)).toBeGreaterThan(0);
+    expect(await sectorNeedsScore(outboundId)).toBe(0);
+  });
+
   test("payment history shows an outage and recovers through the real reader", async ({
     page,
   }) => {

@@ -485,6 +485,7 @@ jobs:
 
       - name: Run E2E smoke and funded journey tests
         env:
+          BAGGAGE_AIRLINE_NUMERIC_CODE: "123"
           DATABASE_URL: mysql://root:test_password@127.0.0.1:3306/ais_test
           REDIS_URL: redis://127.0.0.1:6379
           NODE_ENV: test

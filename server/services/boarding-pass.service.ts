@@ -30,6 +30,7 @@ import {
   documentContext,
 } from "./travel-clearance.service";
 import type { SettlementTx } from "./booking-settlement.service";
+import { assertDcsPassengerCanBoard } from "./dcs-state.service";
 import {
   appendBcbpSecurityData,
   BCBP_SECURITY_DATA_TYPE,
@@ -147,6 +148,11 @@ async function activePayload(
     )
     .for("update");
   if (!p) throw new Error("Passenger not found on this booking");
+  await assertDcsPassengerCanBoard(tx, {
+    bookingId: input.bookingId,
+    passengerId: input.passengerId,
+    flightId: c.flight.id,
+  });
   await assertTravelClearance(tx, input.bookingId, input.passengerId);
   const docs = await documentContext(tx, input.bookingId, input.passengerId);
   const [seat] = await tx
@@ -318,6 +324,67 @@ export async function assertCurrentPassDigest(
       message: "Boarding pass revoked or itinerary changed",
     });
   return payload;
+}
+
+/** Manual desk boarding still rechecks funding, clearance, seat and nonce. */
+export function assertDcsBoardingEligibility(
+  tx: SettlementTx,
+  scope: { bookingId: number; passengerId: number; flightId: number }
+) {
+  return activePayload(tx, scope);
+}
+
+/** Bind a scan to the selected manifest row inside the boarding transaction. */
+export async function assertScopedBoardingPass(
+  tx: SettlementTx,
+  scope: { bookingId: number; passengerId: number; flightId: number },
+  token: string
+): Promise<BoardingPassFormat> {
+  if (!isBcbpBarcode(token)) {
+    const signed = verifyBoardingPass(token);
+    if (
+      !signed.valid ||
+      signed.data.bookingId !== scope.bookingId ||
+      signed.data.passengerId !== scope.passengerId ||
+      signed.data.flightId !== scope.flightId
+    )
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Boarding pass does not match this passenger and flight",
+      });
+    await assertCurrentPassDigest(tx, {
+      ...scope,
+      passDigest: boardingPassDigest(signed.data),
+    });
+    return "jwt";
+  }
+  let scan: ReturnType<typeof decodeBcbpM1>;
+  try {
+    scan = decodeBcbpM1(token);
+  } catch {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Unreadable boarding pass barcode",
+    });
+  }
+  const active = await activePayload(tx, scope);
+  const expected = bcbpMandatoryItems(await bcbpFields(tx, active, "W"));
+  const signature = Buffer.from(
+    bcbpSecurityData(scan.base, boardingPassDigest(active.payload))
+  );
+  const presented = Buffer.from(scan.securityData ?? "");
+  if (
+    scan.securityDataType !== BCBP_SECURITY_DATA_TYPE ||
+    !active.seat.boardingPassIssued ||
+    expected !== scan.mandatory ||
+    signature.length !== presented.length ||
+    !timingSafeEqual(signature, presented)
+  )
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Boarding pass revoked, altered or bound to another passenger",
+    });
+  return "bcbp";
 }
 function failureReason(error: unknown): string {
   return error instanceof TRPCError && error.code === "UNAUTHORIZED"

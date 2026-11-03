@@ -12,6 +12,7 @@ import { SeatMap } from "@/components/SeatMap";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { BaggageEntitlement } from "@/components/BaggageEntitlement";
+import { PassengerTravelDocuments } from "@/components/PassengerTravelDocuments";
 
 function BoardingPass({
   bookingId,
@@ -23,10 +24,11 @@ function BoardingPass({
   passengerId: number;
 }) {
   const { t } = useTranslation();
-  const { data, error, isLoading } = trpc.seatMap.getBoardingPass.useQuery(
-    { flightId, passengerId },
-    { retry: false, refetchOnWindowFocus: true, staleTime: 0 }
-  );
+  const { data, error, isFetching, isPaused } =
+    trpc.seatMap.getBoardingPass.useQuery(
+      { flightId, passengerId },
+      { retry: false, refetchOnWindowFocus: true, staleTime: 0 }
+    );
   const [qr, setQr] = useState<{ token: string; image: string }>();
   // IATA BCBP (Resolution 792) PDF417 for airport readers; rendered lazily so
   // the barcode library stays out of the main bundle.
@@ -68,7 +70,7 @@ function BoardingPass({
       active = false;
     };
   }, [data]);
-  if (isLoading) return <p role="status">{t("common.loading")}</p>;
+  if (isFetching || isPaused) return <p role="status">{t("common.loading")}</p>;
   if (error || !data || qr?.token !== data.barcodeData)
     return <p role="alert">{error?.message || t("checkIn.passUnavailable")}</p>;
   return (
@@ -252,6 +254,16 @@ export default function CheckIn() {
                   </p>
                 ))}
               </div>
+              {passengers.data && (
+                <PassengerTravelDocuments
+                  key={`${booking.data.id}:${leg.flightId}`}
+                  bookingId={booking.data.id}
+                  flightId={leg.flightId}
+                  passengers={passengers.data.filter(passenger =>
+                    leg.passengers.some(row => row.passengerId === passenger.id)
+                  )}
+                />
+              )}
               {leg.passengers.some(p => !p.checkedIn) && (
                 <section className="space-y-4 print:hidden">
                   {leg.open ? (

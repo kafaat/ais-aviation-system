@@ -9,6 +9,7 @@ import {
   getBaggageCustody,
   validateCustodyTransition,
   assertBaggageNotInCustody,
+  assertPassengerBaggageCanOffload,
 } from "../services/baggage-custody.service";
 import type { EvidenceEnvelope } from "../services/aviation-evidence.service";
 let fixture: ReturnType<typeof transactionMemory>;
@@ -42,7 +43,9 @@ beforeEach(() => {
         paymentStatus: "paid",
       },
     ],
-    baggage_items: [{ id: 1, bookingId: 7, tagNumber: "AIS-BAG" }],
+    baggage_items: [
+      { id: 1, bookingId: 7, passengerId: 11, tagNumber: "AIS-BAG" },
+    ],
     booking_segments: [
       { id: 1, bookingId: 7, flightId: 11, segmentOrder: 1 },
       { id: 2, bookingId: 7, flightId: 12, segmentOrder: 2 },
@@ -182,5 +185,119 @@ describe("baggage handover evidence", () => {
     expect(
       await getBaggageCustody("AIS-BAG", { id: 1, role: "user", tenantId: 3 })
     ).toMatchObject({ complete: false, verifiedPoints: 0 });
+  });
+  it("does not silently extend a scoped registration onto an onward flight", async () => {
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 11,
+      segmentId: 1,
+    });
+    fixture.rows("booking_segments").forEach(leg => {
+      leg.status = "confirmed";
+    });
+    let receipt = (await scan("acceptance", 11, 1, null)).result;
+    receipt = (await scan("loading", 11, 1, receipt.evidenceId)).result;
+    receipt = (await scan("arrival", 11, 2, receipt.evidenceId)).result;
+    expect(
+      await getBaggageCustody("AIS-BAG", { id: 1, role: "user", tenantId: 3 })
+    ).toMatchObject({ complete: true, requiredPoints: 3, verifiedPoints: 3 });
+    await expect(scan("transfer", 12, 2, receipt.evidenceId)).rejects.toThrow(
+      /not routed/
+    );
+    expect(fixture.rows("baggage_custody_events")).toHaveLength(3);
+  });
+  it("accepts a second-sector-only bag at that sector's origin", async () => {
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 12,
+      segmentId: 2,
+    });
+    fixture.rows("booking_segments").forEach(leg => {
+      leg.status = "confirmed";
+    });
+    await scan("acceptance", 12, 2, null);
+    const custody = await getBaggageCustody("AIS-BAG", {
+      id: 1,
+      role: "user",
+      tenantId: 3,
+    });
+    expect(custody.required).toEqual([
+      { flightId: 12, stage: "acceptance", observed: true },
+      { flightId: 12, stage: "loading", observed: false },
+      { flightId: 12, stage: "arrival", observed: false },
+    ]);
+  });
+  it("rejects partial physical baggage scope before persisting source evidence", async () => {
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 11,
+      segmentId: null,
+    });
+    await expect(scan("acceptance", 11, 1, null)).rejects.toThrow(/scope/);
+    expect(fixture.rows("aviation_evidence")).toHaveLength(0);
+  });
+  it("rejects a bag whose segment and flight no longer match", async () => {
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 11,
+      segmentId: 2,
+    });
+    await expect(scan("acceptance", 11, 1, null)).rejects.toThrow(/scope/);
+    expect(fixture.rows("aviation_evidence")).toHaveLength(0);
+  });
+  it("blocks passenger offload after physical counter receipt without requiring a device scan", async () => {
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 11,
+      segmentId: 1,
+      status: "checked_in",
+    });
+    await expect(
+      assertPassengerBaggageCanOffload(fixture.db, {
+        bookingId: 7,
+        passengerId: 11,
+        flightId: 11,
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    expect(fixture.rows("baggage_custody_events")).toHaveLength(0);
+  });
+  it("does not interpret a mutable claimed/lost status as a verified return", async () => {
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 11,
+      segmentId: 1,
+      status: "claimed",
+    });
+    await expect(
+      assertPassengerBaggageCanOffload(fixture.db, {
+        bookingId: 7,
+        passengerId: 11,
+        flightId: 11,
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+  });
+  it("allows another passenger and an explicitly different flight while refusing ambiguous legacy baggage", async () => {
+    const key = { bookingId: 7, passengerId: 11, flightId: 11 };
+    await expect(
+      assertPassengerBaggageCanOffload(fixture.db, key)
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+    await expect(
+      assertPassengerBaggageCanOffload(fixture.db, { ...key, passengerId: 12 })
+    ).resolves.toBeUndefined();
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 12,
+      segmentId: 2,
+    });
+    await expect(
+      assertPassengerBaggageCanOffload(fixture.db, key)
+    ).resolves.toBeUndefined();
+  });
+  it("does not hide current-flight custody behind inconsistent other-flight metadata", async () => {
+    await scan("acceptance", 11, 1, null);
+    Object.assign(fixture.rows("baggage_items")[0], {
+      flightId: 12,
+      segmentId: 2,
+    });
+    await expect(
+      assertPassengerBaggageCanOffload(fixture.db, {
+        bookingId: 7,
+        passengerId: 11,
+        flightId: 11,
+      })
+    ).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
   });
 });

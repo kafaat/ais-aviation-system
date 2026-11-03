@@ -4,7 +4,7 @@
  * Registers test users via auth service (creates DB rows with passwordHash),
  * then promotes the admin user's role via direct SQL.
  */
-import mysql from "mysql2/promise";
+import mysql, { type RowDataPacket } from "mysql2/promise";
 import { disposableDatabaseUrl } from "./disposable-database";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -27,6 +27,12 @@ const TEST_USERS = [
     email: "admin@ais-aviation.com",
     password: "AdminPassword123!",
     role: "admin" as const,
+  },
+  {
+    name: "Operations User",
+    email: "test.ops@example.com",
+    password: "TestPassword123!",
+    role: "ops" as const,
   },
 ];
 
@@ -69,6 +75,19 @@ async function promoteAdminUsers() {
         [user.email]
       );
     }
+    // One isolated, synthetic airline account exercises actual tenant guards.
+    // Never change the shared regular/admin actors used by other parallel tests.
+    await connection.execute(
+      "INSERT IGNORE INTO tenants (slug, name, status) VALUES ('e2e-dcs-operations', 'Synthetic DCS E2E airline', 'active')"
+    );
+    const [tenants] = await connection.execute<
+      (RowDataPacket & { id: number })[]
+    >("SELECT id FROM tenants WHERE slug = 'e2e-dcs-operations'");
+    if (tenants.length !== 1) throw new Error("DCS E2E tenant unavailable");
+    await connection.execute(
+      "UPDATE users SET role = 'ops', tenantId = ? WHERE email = 'test.ops@example.com'",
+      [tenants[0].id]
+    );
     console.info("[e2e-setup] Admin roles promoted");
   } finally {
     await connection.end();
@@ -81,7 +100,7 @@ export default async function globalSetup(config: FullConfig) {
   await registerWithAuthService();
   await promoteAdminUsers();
   // Authenticated consent is server-authoritative; localStorage only dismisses
-  // the anonymous banner. Use the real writer for the two synthetic accounts.
+  // the anonymous banner. Use the real writer for the synthetic accounts.
   // The child compiles the server graph through tsx from a cold cache, which
   // on a busy runner has exceeded 30 seconds; a timeout kills it silently,
   // so the failure names the exit code, the signal and the child's stderr.
@@ -103,8 +122,8 @@ export default async function globalSetup(config: FullConfig) {
       { cause: error }
     );
   }
-  console.info("[e2e-setup] Consent recorded for both accounts");
+  console.info("[e2e-setup] Consent recorded for all accounts");
   const cleanup = await prepareBrowserSessions(config);
-  console.info("[e2e-setup] Real user/admin UI logins complete");
+  console.info("[e2e-setup] Real user/admin/ops UI logins complete");
   return cleanup;
 }
