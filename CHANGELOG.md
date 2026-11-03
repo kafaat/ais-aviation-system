@@ -1,5 +1,19 @@
 # Changelog
 
+## What's Changed in v1.34.0
+
+### Features
+
+- feat: correct AIS pricing, Saudi claim adjudication and operational acceptance gaps (#236) (1b15916)
+
+### Documentation
+
+- docs(research): market gap analysis of AIS against 2024-2026 airline systems (#235) (fa4d609)
+
+**Full Changelog**: https://github.com/kafaat/ais-aviation-system/compare/v1.33.5...v1.34.0
+
+---
+
 ## What's Changed in v1.33.5
 
 ### Bug Fixes
